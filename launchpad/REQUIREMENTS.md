@@ -44,12 +44,22 @@ prevent.
 
 The requirement objects carry the metadata shape used by the reference corpus at
 [`tucktuck101/ForgePilot` `docs/business-analysis/`](https://github.com/tucktuck101/ForgePilot/tree/main/docs/business-analysis)
-— an identifier, a MoSCoW priority, a source, a `shall`-form summary with one dominant
-obligation, and an observable verification method for every non-functional requirement,
-after that corpus's
-[`requirements/quality-and-verification-baseline.md`](https://github.com/tucktuck101/ForgePilot/blob/main/docs/business-analysis/requirements/quality-and-verification-baseline.md).
+— an identifier, a MoSCoW priority, a source, and a summary carrying one dominant
+obligation — and take the idea of a stated verification method from that corpus's
+[`requirements/quality-and-verification-baseline.md`](https://github.com/tucktuck101/ForgePilot/blob/main/docs/business-analysis/requirements/quality-and-verification-baseline.md),
+which supplies an observable method for every non-functional requirement it holds.
+
+Where this document departs from that corpus, it does so deliberately. It states every
+obligation with `shall`; the corpus does that for its business requirements but not
+throughout, also using `must`, `should` and `may`, and its baseline treats `shall` and
+`must` as mandatory and `should` as preferred. It also cites sources directly instead of
+modelling stakeholder needs and evidence as separately addressable objects, which
+[#91](https://github.com/launchpad-26/buzz/issues/91) records as a deliberate non-goal at
+this cohort's size.
+
 That corpus makes no reference to ISO/IEC/IEEE 29148 and is not offered as evidence of
-conformance to it. It was read on 2026-08-12.
+conformance to it. It was read on 2026-08-12, and the metadata claims above were checked
+against every requirement object in its requirements collections rather than sampled.
 
 ---
 
@@ -157,7 +167,7 @@ and is not met yet, exactly as in
 | BR-002 | The coordination that previously happened on Discord happens in relay channels, and the cohort's dependence on Discord ends by a recorded decision rather than by drift. |
 | BR-003 | A member and an agent each answer one question about a recent upstream change and one about how a part of the system works, starting from Buzz, without first being told which repository holds the answer. |
 | BR-004 | An agent initiated on the relay produces reviewable work against `launchpad-26/rhizomorph`, and no such agent has executed on a contributor's machine before NFR-012 holds. |
-| BR-005 | A documented command applied to a fresh supported Ubuntu host produces a working configuration with no manual steps, and the security controls arrive from the same version-controlled automation as the rest of the host configuration. |
+| BR-005 | A documented command applied to a fresh supported Ubuntu host produces a working configuration with no manual step outside the controlled bootstrap that [#5](https://github.com/launchpad-26/buzz/issues/5) Ruling 2 defines as the deployment's input, and the security controls arrive from the same version-controlled automation as the rest of the host configuration. Ruling 1 requires that "where practical", so anything that cannot be expressed as automation is declared rather than left as an undocumented requirement of the running host. |
 | BR-006 | Cohort changes land under `launchpad/`, `.github/workflows/launchpad-*` and cohort process files; defects in the product appear as issues on `block/buzz` rather than as patches to upstream directories in this fork. |
 | BR-007 | A contributor joining later can state what the system is, and the access an agent workflow needs together with its blast radius, from the documents in `launchpad/` alone. |
 
@@ -178,7 +188,7 @@ follows.
 | NFR-005 | Minimal exposure | Only the services intended to be public **shall** be reachable from the internet. | `Must` | `DECIDED` | [milestone M0](https://github.com/launchpad-26/buzz/milestone/1); [#5](https://github.com/launchpad-26/buzz/issues/5) Ruling 5 |
 | NFR-006 | Transport protection | Public Buzz traffic **shall** be TLS-protected. | `Must` | `DECIDED` | [#5](https://github.com/launchpad-26/buzz/issues/5); [#2](https://github.com/launchpad-26/buzz/issues/2) |
 | NFR-007 | Credential handling | A routine deployment **shall** complete without a root credential being distributed to any cohort member. | `Must` | `DECIDED` | [milestone M0](https://github.com/launchpad-26/buzz/milestone/1); [#5](https://github.com/launchpad-26/buzz/issues/5) Rulings 6 and 7 |
-| NFR-008 | Secret containment | Secret material **shall** be kept out of tracked files by a check rather than by attention. | `Must` | `OPEN` | [#62](https://github.com/launchpad-26/buzz/issues/62), [#67](https://github.com/launchpad-26/buzz/issues/67); [`AGENTS.md` §8](AGENTS.md) |
+| NFR-008 | Secret containment | Secret material **shall** be kept out of tracked files by a check rather than by attention. | `Must` | `OPEN` | [#67](https://github.com/launchpad-26/buzz/issues/67) for detection in diffs and history, [#68](https://github.com/launchpad-26/buzz/issues/68) for the ignore-pattern and tracked-file assertions, both under [#62](https://github.com/launchpad-26/buzz/issues/62); [`AGENTS.md` §8](AGENTS.md) |
 | NFR-009 | Security maintenance | Supported Ubuntu security updates **shall** stay applied on the running host, with reboot-required state visible rather than assumed. | `Must` | `DECIDED` | [#5](https://github.com/launchpad-26/buzz/issues/5) Ruling 10 |
 | NFR-010 | Observability of failure | Security-relevant failures **shall** remain observable to authorised operators after hardening. | `Should` | `OPEN` | [#34](https://github.com/launchpad-26/buzz/issues/34); [#5](https://github.com/launchpad-26/buzz/issues/5) Ruling 13 |
 | NFR-011 | External verification | A deployment **shall** be declared healthy only after a machine-checkable suite verifies it from an untrusted client's position, not because the configuration run succeeded. | `Must` | `DECIDED` | [#5](https://github.com/launchpad-26/buzz/issues/5) Ruling 12; the minimum set is `OPEN` — [#47](https://github.com/launchpad-26/buzz/issues/47) |
@@ -242,7 +252,7 @@ titles are as filed.
 | BR-003 | [#3](https://github.com/launchpad-26/buzz/issues/3) — prd-01 — upstream intelligence: Buzz keeps the cohort aware of upstream; [#4](https://github.com/launchpad-26/buzz/issues/4) — # prd 02— human + agent knowledge layer: one coherent surface for Buzz | [M1](https://github.com/launchpad-26/buzz/milestone/2) |
 | BR-004 | No work item owns the agent workflows; the direction is recorded in [#42](https://github.com/launchpad-26/buzz/issues/42) and is blocked by [#43](https://github.com/launchpad-26/buzz/issues/43) | [M0](https://github.com/launchpad-26/buzz/milestone/1) for [#43](https://github.com/launchpad-26/buzz/issues/43) |
 | BR-005 | [#5](https://github.com/launchpad-26/buzz/issues/5) — # prd-03 — reproducible and hardened Buzz deployment: rebuild the cohort server from a bare Ubuntu host | [M0](https://github.com/launchpad-26/buzz/milestone/1) |
-| BR-006 | None — the boundary is in force as a rule, [`AGENTS.md` §1](AGENTS.md) | — |
+| BR-006 | No work item — the boundary is in force as a rule, [`AGENTS.md` §1](AGENTS.md) | — |
 | BR-007 | [#42](https://github.com/launchpad-26/buzz/issues/42) — prd-06 — capture the cohort's vision, architecture and operating documentation | [M0](https://github.com/launchpad-26/buzz/milestone/1) |
 | NFR-001 | [#5](https://github.com/launchpad-26/buzz/issues/5) | [M0](https://github.com/launchpad-26/buzz/milestone/1) |
 | NFR-002 | [#5](https://github.com/launchpad-26/buzz/issues/5) | [M0](https://github.com/launchpad-26/buzz/milestone/1) |
@@ -259,8 +269,11 @@ titles are as filed.
 | NFR-013 | [#41](https://github.com/launchpad-26/buzz/issues/41) — prd-05 — internal performance and agent-workload testing harness | — |
 
 A row carries no milestone where the work is not on one:
-[#41](https://github.com/launchpad-26/buzz/issues/41) was filed without a milestone, and
-BR-002 and BR-006 have no work item to place on one.
+[#41](https://github.com/launchpad-26/buzz/issues/41) was filed without a milestone, and a
+requirement with no work item has nothing to place on one. **Every requirement that nobody
+currently owns says so in its `Satisfying work` cell, which begins "No work item".** Read
+that column to find them all — a list here would leave a later addition out, and an
+unowned obligation going unnoticed is the problem this document exists to prevent.
 Every issue state and milestone in this table was read from the live issues with `gh` on
 2026-08-12; if any has since closed or moved, this section is stale — correct it in the
 same pull request that changes it. That reading covers only the rows present when this
