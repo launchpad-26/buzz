@@ -219,9 +219,11 @@ gh pr create --base launchpad
   creates no link from a reference inside code, so one written there closes nothing.
 - **The `launchpad` branch is protected.** PRs require **at least two approving reviews
   from reviewers with write access**, and you cannot approve your own. The ruleset that
-  enforces this is not readable without `admin:org` — `rules/branches/launchpad` returns
-  `[]` — so confirm it from a live PR's `reviewDecision` rather than from the
-  configuration endpoints.
+  enforces this is not readable without `admin:org` — `rules/branches/launchpad`,
+  `rulesets` and `branches/launchpad/protection` all report nothing. A live PR's
+  `reviewDecision` confirms that review is *required* (`REVIEW_REQUIRED`) but exposes no
+  count; the figure of two comes from GitHub's merge box on an open PR, which is the only
+  place it is stated without admin.
 - **Do not force-push during review.** Push new commits instead — force-pushing hides
   what changed from the reviewer.
 
