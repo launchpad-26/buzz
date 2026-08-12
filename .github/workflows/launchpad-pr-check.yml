@@ -27,6 +27,18 @@ jobs:
           # Strip HTML comments so unfilled placeholders never count as content.
           visible = re.sub(r"<!--.*?-->", "", body, flags=re.S)
 
+          # Prose only — `visible` minus code. GitHub does not create an issue link
+          # from a keyword inside code, so a check asserting "the board updates on
+          # merge" must not count one either. Fenced blocks are stripped BEFORE
+          # inline spans, or the inline pattern consumes a fence's backticks
+          # piecemeal and leaves its body behind as prose.
+          #
+          # Do NOT use `prose` for the by:agent fenced-output check below: that one
+          # requires a fence to be present, and would become unsatisfiable.
+          prose = re.sub(r"```.*?```", "", visible, flags=re.S)
+          prose = re.sub(r"~~~.*?~~~", "", prose, flags=re.S)
+          prose = re.sub(r"`[^`\n]*`", "", prose)
+
           def section(name):
               """Text under a '### name' heading, up to the next heading."""
               m = re.search(rf"^#+\s*{re.escape(name)}\s*$(.*?)(?=^#+\s|\Z)",
@@ -36,9 +48,18 @@ jobs:
           if not visible.strip():
               errors.append("PR body is empty. Use the PR template.")
 
-          if not re.search(r"\b(Closes|Fixes|Resolves)\s+#\d+", visible, re.I):
+          # Every PR names an issue. It closes one, or it references one without
+          # closing it — a plan, a partial step, a docs correction. Only a closing
+          # keyword moves the board, so the two forms are not interchangeable, but
+          # a PR that completes nothing must still say what it belongs to.
+          closes = re.search(r"\b(Closes|Fixes|Resolves)\s+#\d+", prose, re.I)
+          refs = re.search(r"\bRefs\s+#\d+", prose, re.I)
+          if not closes and not refs:
               errors.append(
-                  "No closing keyword found. Add 'Closes #<n>' so the board updates on merge.")
+                  "No issue reference found. Use 'Closes #<n>' when this PR completes the "
+                  "issue so the board updates on merge, or 'Refs #<n>' when it does not. "
+                  "A reference inside a code span or fenced block does not count — GitHub "
+                  "ignores those, so no link is created.")
 
           itype = section("Issue type")
           valid = {"PRD", "Task", "Enhancement", "Bug", "ADR"}
