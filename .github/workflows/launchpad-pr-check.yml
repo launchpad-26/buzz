@@ -2,100 +2,58 @@ name: launchpad — PR body check
 
 on:
   pull_request:
-    types: [opened, edited, reopened, labeled, unlabeled, synchronize]
+    types: [opened, edited, reopened, labeled, unlabeled, synchronize, ready_for_review]
 
 permissions:
   contents: read
+  pull-requests: read
 
 jobs:
   check:
     runs-on: ubuntu-latest
     steps:
+      # Check out the BASE commit, never the PR head. The check's logic must be
+      # the trunk's logic: a PR that could supply its own copy of the checker
+      # could make it pass unconditionally. For same-repo PRs the workflow file
+      # itself comes from the head, so this only closes the gap for forks — but
+      # it closes it, and it costs nothing.
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.base.sha }}
+          persist-credentials: false
+
+      # GitHub already knows whether this PR will close an issue. Asking it is the
+      # only reliable answer: a regex over the body cannot tell a real reference
+      # from one written inside code, and CommonMark has more code forms than a
+      # pattern enumerates — four of them defeated the previous version (#125).
+      #
+      # On failure CLOSING_REFS stays empty, which the script reads as "unknown"
+      # rather than "none", and it says so in its output instead of guessing.
+      - name: Ask GitHub which issues this PR closes
+        id: closing
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          OWNER: ${{ github.repository_owner }}
+          REPO: ${{ github.event.repository.name }}
+          NUMBER: ${{ github.event.pull_request.number }}
+        run: |
+          set -uo pipefail
+          refs="$(gh api graphql \
+            -f query='query($owner:String!,$repo:String!,$num:Int!){
+                repository(owner:$owner,name:$repo){
+                  pullRequest(number:$num){
+                    closingIssuesReferences(first:50){nodes{number}}}}}' \
+            -F owner="$OWNER" -F repo="$REPO" -F num="$NUMBER" \
+            --jq '[.data.repository.pullRequest.closingIssuesReferences.nodes[].number]' \
+            2>/dev/null)" || refs=""
+          echo "refs=${refs}" >> "$GITHUB_OUTPUT"
+          if [ -z "$refs" ]; then
+            echo "::warning::Could not read closingIssuesReferences; the check will degrade to a text search and will not verify that the board updates on merge."
+          fi
+
       - name: Validate PR body
         env:
           BODY: ${{ github.event.pull_request.body }}
           LABELS: ${{ toJSON(github.event.pull_request.labels.*.name) }}
-        run: |
-          python3 - <<'PY'
-          import json, os, re, sys
-
-          body = os.environ.get("BODY") or ""
-          labels = json.loads(os.environ.get("LABELS") or "[]")
-          is_agent = "by:agent" in labels
-          errors = []
-
-          # Strip HTML comments so unfilled placeholders never count as content.
-          visible = re.sub(r"<!--.*?-->", "", body, flags=re.S)
-
-          # Prose only — `visible` minus code. GitHub does not create an issue link
-          # from a keyword inside code, so a check asserting "the board updates on
-          # merge" must not count one either. Fenced blocks are stripped BEFORE
-          # inline spans, or the inline pattern consumes a fence's backticks
-          # piecemeal and leaves its body behind as prose.
-          #
-          # Do NOT use `prose` for the by:agent fenced-output check below: that one
-          # requires a fence to be present, and would become unsatisfiable.
-          prose = re.sub(r"```.*?```", "", visible, flags=re.S)
-          prose = re.sub(r"~~~.*?~~~", "", prose, flags=re.S)
-          prose = re.sub(r"`[^`\n]*`", "", prose)
-
-          def section(name):
-              """Text under a '### name' heading, up to the next heading."""
-              m = re.search(rf"^#+\s*{re.escape(name)}\s*$(.*?)(?=^#+\s|\Z)",
-                            visible, flags=re.M | re.S)
-              return m.group(1).strip() if m else None
-
-          if not visible.strip():
-              errors.append("PR body is empty. Use the PR template.")
-
-          # Every PR names an issue. It closes one, or it references one without
-          # closing it — a plan, a partial step, a docs correction. Only a closing
-          # keyword moves the board, so the two forms are not interchangeable, but
-          # a PR that completes nothing must still say what it belongs to.
-          closes = re.search(r"\b(Closes|Fixes|Resolves)\s+#\d+", prose, re.I)
-          refs = re.search(r"\bRefs\s+#\d+", prose, re.I)
-          if not closes and not refs:
-              errors.append(
-                  "No issue reference found. Use 'Closes #<n>' when this PR completes the "
-                  "issue so the board updates on merge, or 'Refs #<n>' when it does not. "
-                  "A reference inside a code span or fenced block does not count — GitHub "
-                  "ignores those, so no link is created.")
-
-          itype = section("Issue type")
-          valid = {"PRD", "Task", "Enhancement", "Bug", "ADR"}
-          if not itype:
-              errors.append("Missing '### Issue type' section.")
-          elif not any(v.lower() in itype.lower() for v in valid):
-              errors.append(
-                  f"Issue type must be one of {sorted(valid)}. Found: {itype!r}")
-
-          if is_agent:
-              for field in ("Harness / provider", "Model", "Initiating human"):
-                  # Table rows: | Field | Value |
-                  m = re.search(rf"\|\s*{re.escape(field)}\s*\|(.*?)\|", visible)
-                  if not m or not m.group(1).strip():
-                      errors.append(
-                          f"by:agent PR missing provenance value for '{field}'.")
-
-              nv = section("Not verified")
-              if not nv:
-                  errors.append("by:agent PR missing '### Not verified' section.")
-              elif nv.lower().strip(" .") in {"nothing", "none", "n/a", ""}:
-                  errors.append(
-                      "'Not verified' must name something specific. "
-                      "There is always something that was not checked.")
-
-              if "```" not in visible:
-                  errors.append(
-                      "by:agent PR must paste raw command output in a fenced code block.")
-
-          if errors:
-              print("PR body check failed:\n")
-              for e in errors:
-                  print(f"  - {e}")
-              print("\nHuman PRs: .github/PULL_REQUEST_TEMPLATE.md")
-              print("Agent PRs: launchpad/AGENT_PR_TEMPLATE.md")
-              sys.exit(1)
-
-          print("PR body check passed." + (" (agent)" if is_agent else " (human)"))
-          PY
+          CLOSING_REFS: ${{ steps.closing.outputs.refs }}
+        run: python3 launchpad/scripts/pr_body_check.py
