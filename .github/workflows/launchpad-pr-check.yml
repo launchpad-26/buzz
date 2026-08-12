@@ -12,15 +12,36 @@ jobs:
   check:
     runs-on: ubuntu-latest
     steps:
-      # Check out the BASE commit, never the PR head. The check's logic must be
-      # the trunk's logic: a PR that could supply its own copy of the checker
-      # could make it pass unconditionally. For same-repo PRs the workflow file
-      # itself comes from the head, so this only closes the gap for forks — but
-      # it closes it, and it costs nothing.
+      # WHICH COMMIT SUPPLIES THE CHECKER IS A TRUST DECISION, NOT A DETAIL.
+      #
+      # A PR that supplies its own copy of the checker can make it pass
+      # unconditionally, so the head is only used where it is already trusted:
+      #
+      #   same-repo PR — head. For these GitHub already runs the workflow file
+      #     from the head, so head code executes either way; taking the script
+      #     from the base would add no safety and would mean a PR that changes
+      #     the checker cannot test its own change.
+      #   fork PR — base. GitHub runs the BASE workflow for forks, so the fork's
+      #     code never executes today, and it must not start now.
+      #
+      # A fork PR is therefore checked by the trunk's checker, which is the point.
       - uses: actions/checkout@v4
         with:
-          ref: ${{ github.event.pull_request.base.sha }}
+          ref: >-
+            ${{ github.event.pull_request.head.repo.full_name == github.repository
+                && github.event.pull_request.head.sha
+                || github.event.pull_request.base.sha }}
           persist-credentials: false
+
+      # A fork PR opened before this script reaches `launchpad` would find no
+      # checker at the base. Failing loudly is correct: a missing checker is not a
+      # passing body, and this resolves itself the moment the script is on trunk.
+      - name: Confirm the checker exists
+        run: |
+          test -f launchpad/scripts/pr_body_check.py || {
+            echo "::error::launchpad/scripts/pr_body_check.py is missing from the commit under check."
+            exit 1
+          }
 
       # GitHub already knows whether this PR will close an issue. Asking it is the
       # only reliable answer: a regex over the body cannot tell a real reference
