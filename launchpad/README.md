@@ -157,3 +157,5 @@ Two consequences that are easy to skip, both spelled out in
 - **Closing an ADR means writing `decisions/ADR-XXXX-slug.md` in the same PR.** A decision
   recorded only in a closed issue is lost. The issue is where it gets argued; the document
   is where it survives.
+
+<!-- throwaway fixture branch; never merged -->
