@@ -12,30 +12,27 @@ jobs:
   check:
     runs-on: ubuntu-latest
     steps:
-      # WHICH COMMIT SUPPLIES THE CHECKER IS A TRUST DECISION, NOT A DETAIL.
+      # THIS CHECK IS NOT A SECURITY BOUNDARY, AND MUST NOT BE DESCRIBED AS ONE.
       #
-      # A PR that supplies its own copy of the checker can make it pass
-      # unconditionally, so the head is only used where it is already trusted:
+      # An earlier version of this file pinned the checkout to the base commit and
+      # claimed that stopped a fork from supplying the checker that judges it. That
+      # was wrong. `on: pull_request` runs the workflow from the PR's own merge ref
+      # — for forks too — so a fork PR already owns every step in this file and can
+      # overwrite or skip the script whichever commit is checked out. Pinning the
+      # ref bought nothing and made a change to the checker unable to test itself.
+      # (Running the BASE workflow for forks is `pull_request_target` behaviour,
+      # which this workflow deliberately does not use.)
       #
-      #   same-repo PR — head. For these GitHub already runs the workflow file
-      #     from the head, so head code executes either way; taking the script
-      #     from the base would add no safety and would mean a PR that changes
-      #     the checker cannot test its own change.
-      #   fork PR — base. GitHub runs the BASE workflow for forks, so the fork's
-      #     code never executes today, and it must not start now.
-      #
-      # A fork PR is therefore checked by the trunk's checker, which is the point.
+      # The real boundary is elsewhere, and it is enough: a fork-triggered run gets
+      # a read-only GITHUB_TOKEN with no repository secrets, and merging needs two
+      # approving reviews from people with write access. A defeated body check
+      # misleads a reviewer; it cannot merge anything or write anywhere.
       - uses: actions/checkout@v4
         with:
-          ref: >-
-            ${{ github.event.pull_request.head.repo.full_name == github.repository
-                && github.event.pull_request.head.sha
-                || github.event.pull_request.base.sha }}
           persist-credentials: false
 
-      # A fork PR opened before this script reaches `launchpad` would find no
-      # checker at the base. Failing loudly is correct: a missing checker is not a
-      # passing body, and this resolves itself the moment the script is on trunk.
+      # A missing checker is not a passing body. Cheap insurance against a partial
+      # checkout, or a branch that predates the script.
       - name: Confirm the checker exists
         run: |
           test -f launchpad/scripts/pr_body_check.py || {

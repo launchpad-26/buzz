@@ -70,7 +70,13 @@ def strip_comments(body: str) -> str:
     return re.sub(r"<!--.*?-->", "", body, flags=re.S)
 
 
+BLOCKQUOTE = re.compile(r"^(?: {0,3}>)+ ?")
 FENCE_OPEN = re.compile(r"^ {0,3}(`{3,}|~{3,})")
+# A closing fence carries nothing but its run and trailing whitespace. An opener
+# may carry an info string (```python); a closer may not, so they need different
+# patterns — accepting junk after a closing run ends the block early and starts a
+# spurious new one, which both leaks code as prose and swallows real prose as code.
+FENCE_CLOSE = re.compile(r"^ {0,3}(`{3,}|~{3,})[ \t]*$")
 
 
 def _strip_fences(text: str) -> str:
@@ -81,18 +87,26 @@ def _strip_fences(text: str) -> str:
     ```` ```.*?``` ```` closes early on any shorter run inside a longer fence, which
     is how a ````quad fence```` wrapping a ``` example leaked a keyword into prose.
     An unterminated fence runs to the end of the document, so it consumes the rest.
+
+    A fence must also close with the character it opened with: ``` is not closed by
+    ~~~, however long the run.
+
+    Blockquote markers are stripped before matching, so a fence quoted with `> `
+    is recognised. Without that, quoting someone else's fenced output left its
+    contents standing as prose.
     """
     out: list[str] = []
     fence: str | None = None
     for line in text.splitlines(keepends=True):
+        probe = BLOCKQUOTE.sub("", line)
         if fence is None:
-            m = FENCE_OPEN.match(line)
+            m = FENCE_OPEN.match(probe)
             if m:
                 fence = m.group(1)
                 continue
             out.append(line)
         else:
-            closer = FENCE_OPEN.match(line)
+            closer = FENCE_CLOSE.match(probe)
             if closer and closer.group(1)[0] == fence[0] and len(closer.group(1)) >= len(fence):
                 fence = None
     return "".join(out)
@@ -103,14 +117,28 @@ def strip_code(text: str) -> str:
 
     Fences go first: run the inline-span pattern first and it eats a fence's
     delimiters piecemeal, leaving the fence body behind as prose.
+
+    DELIBERATELY NOT HANDLED: four-space indented code blocks. Stripping every
+    line that starts with four spaces looked right and was worse than the bug it
+    was meant to help — CommonMark ties the four-space rule to the *container's*
+    content column, so ordinary markdown that GitHub renders as prose was being
+    deleted:
+
+        - part of a larger plan:
+            - Refs #116 covers the follow-up
+
+    That reference vanished and the check rejected a compliant PR for having no
+    reference at all. A false block is worse than the false pass this file exists
+    to fix: the false pass merely failed to catch something, while this actively
+    obstructed an author who had done nothing wrong. Since the closing question is
+    now answered by GitHub, the only cost of not stripping indented code is a
+    `Refs` written inside an indented block being counted, which claims nothing
+    about the board.
     """
     out = _strip_fences(text)
     # Run-length matched spans: the backreference forces the closing run to equal
     # the opening one, so ``x`` is one span rather than two empty ones around x.
-    out = re.sub(r"(`+)([^\n]*?)\1", "", out)
-    # Indented code blocks: four spaces or a tab at the start of a line.
-    out = re.sub(r"^(?: {4}|\t).*$", "", out, flags=re.M)
-    return out
+    return re.sub(r"(`+)([^\n]*?)\1", "", out)
 
 
 def section(visible: str, name: str) -> str | None:
@@ -137,7 +165,10 @@ def parse_closing_refs(raw: str | None) -> list[int] | None:
         return None
     if not isinstance(parsed, list):
         return None
-    return [n for n in parsed if isinstance(n, int)]
+    # `bool` subclasses `int`, so a JSON `true` would otherwise survive as 1 and be
+    # printed as "#True". Not reachable through the workflow's jq expression today,
+    # which yields plain integers, but a hand-set CLOSING_REFS could hit it.
+    return [n for n in parsed if isinstance(n, int) and not isinstance(n, bool)]
 
 
 def check_reference(prose: str, closing_refs: list[int] | None) -> tuple[list[str], str]:
@@ -146,11 +177,19 @@ def check_reference(prose: str, closing_refs: list[int] | None) -> tuple[list[st
 
     if closing_refs is None:
         # Degraded: no authoritative answer, so fall back to the text search that
-        # this script exists to stop relying on. Say so out loud.
-        if CLOSING_RE.search(prose) or refs:
+        # this script exists to stop relying on. Say so out loud, and say WHICH form
+        # matched — one identical note for both was untestable and told a reader
+        # less than it appeared to.
+        if CLOSING_RE.search(prose):
             return [], (
-                "reference: found by text search only — GitHub's closing-reference "
-                "answer was unavailable, so 'the board updates on merge' is NOT verified"
+                "reference: a closing keyword was found by text search only — "
+                "GitHub's answer was unavailable, so 'the board updates on merge' "
+                "is NOT verified"
+            )
+        if refs:
+            return [], (
+                "reference: 'Refs' found by text search; GitHub's answer was "
+                "unavailable, but nothing was expected to close anyway"
             )
         return [
             "No issue reference found. Use 'Closes #<n>' when this PR completes the "
