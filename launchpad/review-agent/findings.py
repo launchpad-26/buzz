@@ -179,6 +179,10 @@ def _validate_finding(
 
     violations: list[str] = []
 
+    dimension_field = finding.get("dimension")
+    if not isinstance(dimension_field, str) or not dimension_field:
+        violations.append(f"{label}: dimension must be a non-empty string")
+
     anchor = finding.get("anchor")
     file = finding.get("file")
     line = finding.get("line")
@@ -202,10 +206,16 @@ def _validate_finding(
         violations.append(f"{label}: anchor must be one of 'line', 'file', 'pr', got {anchor!r}")
 
     severity = finding.get("severity")
-    if severity not in SEVERITY_ORDER:
+    if not isinstance(severity, str):
+        # ``severity not in SEVERITY_ORDER`` requires a hashable value, same as the
+        # entry_point guard above — an unhashable severity (a dict, a list) would
+        # raise TypeError before this function could report it.
+        violations.append(f"{label}: severity must be a string, got {type(severity).__name__}")
+    elif severity not in SEVERITY_ORDER:
         violations.append(f"{label}: severity {severity!r} is not a key of SEVERITY_ORDER")
 
-    if not finding.get("defect"):
+    defect_field = finding.get("defect")
+    if not defect_field:
         violations.append(f"{label}: defect must be non-empty")
     if not finding.get("failure"):
         violations.append(f"{label}: failure must be non-empty")
@@ -232,6 +242,25 @@ def _validate_finding(
             )
     elif evidence is not None:
         violations.append(f"{label}: evidence must be null when entry_point is null")
+
+    finding_id_field = finding.get("finding_id")
+    if not isinstance(finding_id_field, str) or not finding_id_field:
+        violations.append(f"{label}: finding_id must be a non-empty string")
+    else:
+        # The stronger check FINDINGS.md's stability claim actually rests on:
+        # #118 attaches one verdict per finding_id, so an id that does not match
+        # what its own seven fields hash to is not stable, it is just present.
+        # ``finding_id()`` is safe to call on raw, unvalidated field values here —
+        # it only ever feeds them through ``repr()`` before hashing, so it cannot
+        # raise regardless of what type any of them turned out to be.
+        expected_id = finding_id(
+            dimension_field, anchor, file, line, entry_point, defect_field, evidence
+        )
+        if finding_id_field != expected_id:
+            violations.append(
+                f"{label}: finding_id {finding_id_field!r} does not match the id "
+                f"recomputed from this finding's own fields ({expected_id!r})"
+            )
 
     return violations
 
@@ -355,7 +384,7 @@ def validate(document: dict) -> list[str]:
     entry_points = frozenset(contain.ENTRY_POINTS)
     violations: list[str] = []
 
-    for key in ("pr", "merge_base_sha", "head_sha"):
+    for key in ("pr", "merge_base_sha", "head_sha", "reports"):
         if key not in document:
             violations.append(f"document: missing required key {key!r}")
 
@@ -408,7 +437,14 @@ def validate(document: dict) -> list[str]:
                     )
                     continue
                 kind = cf.get("kind")
-                if kind not in _CONTAINMENT_KINDS:
+                if not isinstance(kind, str):
+                    # Same unhashable-crash class as severity/entry_point: ``kind not
+                    # in _CONTAINMENT_KINDS`` needs a hashable value first.
+                    violations.append(
+                        f"document.containment.findings[{index}]: kind must be a string, "
+                        f"got {type(kind).__name__}"
+                    )
+                elif kind not in _CONTAINMENT_KINDS:
                     violations.append(
                         f"document.containment.findings[{index}]: kind {kind!r} is not one of "
                         f"{sorted(_CONTAINMENT_KINDS)}"
@@ -418,6 +454,13 @@ def validate(document: dict) -> list[str]:
     if not isinstance(reports_raw, list):
         violations.append(f"document.reports: expected an array, got {type(reports_raw).__name__}")
     else:
+        if not reports_raw:
+            # Indistinguishable from "every dimension ran and found nothing" if left
+            # unchecked — exactly the reads-as-clean-when-incomplete ambiguity
+            # FINDINGS.md argues against for outcome/findings, applied one level up:
+            # zero reports means no dimension ran at all, not that all of them ran
+            # clean.
+            violations.append("document.reports: must not be empty — a run produces at least one report")
         for index, report in enumerate(reports_raw):
             violations.extend(_validate_report(report, index, nonce, entry_points))
 
