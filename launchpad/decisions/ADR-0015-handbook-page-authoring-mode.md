@@ -66,10 +66,11 @@ choice. A recorded authoring mode also invites the wrong inference if one is lat
 that handwritten pages need less checking. They do not: the gate's secret scan and #7's
 claim rule apply identically regardless of who wrote the page.
 
-**Deferred, not decided here.** An explicit `authoring: handwritten | synthesized | hybrid`
-frontmatter field was raised as a way to make this decision checkable per page rather than
-only stated in this record. It is worth its own issue, with the provenance gate as the
-thing that would enforce it — this ADR does not require it to close, and none exists yet.
+**Deferred, not decided here.** Jeff's suggestion of an explicit
+`authoring: handwritten | synthesized | hybrid` frontmatter field would make this decision
+checkable per page rather than only stated in this record. It is worth its own issue, with
+the provenance gate as the thing that would enforce it — this ADR does not require it to
+close, and none exists yet.
 
 ## Security implications
 

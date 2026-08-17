@@ -52,7 +52,7 @@ dupes=$(ls "${DECISIONS_DIR}" | grep -oE '^ADR-[0-9]{4}' | sort | uniq -d)
 check "no duplicate ADR numbers on this branch (found: ${dupes:-none})" "${status}"
 
 status=1
-grep -q "30 pages" "${FILE}" && grep -q "second author" "${FILE}" && status=0
+grep -q "the corpus reaching 30 pages, or a second author starting to" "${FILE}" && status=0
 check "the sampling trigger (30 pages or second author) is stated" "${status}"
 
 echo ""
