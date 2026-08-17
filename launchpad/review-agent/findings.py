@@ -167,8 +167,16 @@ def parse(text: str) -> Report:
     return Report.from_dict(json.loads(text))
 
 
-def _validate_finding(finding: dict, dimension: str, index: int, entry_points: frozenset[str]) -> list[str]:
-    label = f"report {dimension!r} finding[{index}]"
+def _validate_finding(
+    finding: object, report_label: str, index: int, entry_points: frozenset[str]
+) -> list[str]:
+    label = f"{report_label} finding[{index}]"
+    # A malformed document may hold anything where a finding object belongs (a bare
+    # string, a number). Every field access below assumes a dict, so that assumption
+    # is checked once, here, rather than trusted at each of the six call sites below.
+    if not isinstance(finding, dict):
+        return [f"{label}: expected an object, got {type(finding).__name__}"]
+
     violations: list[str] = []
 
     anchor = finding.get("anchor")
@@ -219,15 +227,41 @@ def _validate_finding(finding: dict, dimension: str, index: int, entry_points: f
     return violations
 
 
-def _validate_report(report: dict, document_nonce: object, entry_points: frozenset[str]) -> list[str]:
-    dimension = report.get("dimension", "<missing dimension>")
-    label = f"report {dimension!r}"
-    violations: list[str] = []
+def _validate_report(
+    report: object, index: int, document_nonce: object, entry_points: frozenset[str]
+) -> list[str]:
+    if not isinstance(report, dict):
+        return [f"document.reports[{index}]: expected an object, got {type(report).__name__}"]
+
+    dimension = report.get("dimension")
+    if dimension is None:
+        # No dimension to name the report by, so the label falls back to its
+        # position — and the missing key is its own violation, not just a symptom
+        # readers would otherwise have to infer from a confusing marker mismatch
+        # further down.
+        label = f"document.reports[{index}]"
+        violations: list[str] = [f"{label}: missing required key 'dimension'"]
+    else:
+        label = f"report {dimension!r}"
+        violations = []
+
+    for key in ("schema_version", "pr", "merge_base_sha", "head_sha"):
+        if key not in report:
+            violations.append(f"{label}: missing required key {key!r}")
 
     if dimension == "containment":
         violations.append(f"{label}: dimension may not be the reserved slug 'containment'")
 
-    findings = report.get("findings", [])
+    findings_raw = report.get("findings", [])
+    if not isinstance(findings_raw, list):
+        # ``report["findings"]: null`` is the confirmed crash: ``.get(..., [])``
+        # only substitutes the default for an ABSENT key, not an explicit null, so
+        # ``len(findings)`` below would raise on anything but a real list.
+        violations.append(f"{label}: findings must be an array, got {type(findings_raw).__name__}")
+        findings: list = []
+    else:
+        findings = findings_raw
+
     findings_count = report.get("findings_count")
     if findings_count != len(findings):
         violations.append(
@@ -241,6 +275,13 @@ def _validate_report(report: dict, document_nonce: object, entry_points: frozens
     if status == "complete":
         if outcome is None or error is not None:
             violations.append(f"{label}: status 'complete' requires outcome set and error null")
+        # Independent of the mutual-exclusivity check above: outcome may be SET
+        # (so the check above passes) and still be neither legal value.
+        if outcome is not None and outcome not in ("clean", "findings"):
+            violations.append(
+                f"{label}: outcome must be 'clean' or 'findings' when status is "
+                f"'complete', got {outcome!r}"
+            )
     elif status == "failed":
         if error is None or outcome is not None:
             violations.append(f"{label}: status 'failed' requires error set and outcome null")
@@ -274,8 +315,8 @@ def _validate_report(report: dict, document_nonce: object, entry_points: frozens
             if marker_nonce != document_nonce:
                 violations.append(f"{label}: completion_marker nonce does not match document nonce")
 
-    for index, finding in enumerate(findings):
-        violations.extend(_validate_finding(finding, dimension, index, entry_points))
+    for finding_index, finding in enumerate(findings):
+        violations.extend(_validate_finding(finding, label, finding_index, entry_points))
 
     return violations
 
@@ -292,11 +333,22 @@ def validate(document: dict) -> list[str]:
     has no other reason to import it, and the constraint on this file is that
     ``contain``/``fetch`` are not module-scope dependencies of it. ``contain.py``'s
     own ``render()`` does the same local-import for the same reason.
+
+    Every container assumed below (``containment``, ``states``, ``reports``, a
+    finding array, an array entry) is type-checked before being treated as its
+    expected shape. A malformed document is exactly the input this function exists
+    to describe with a violation string, not the input it crashes on — the
+    docstring's "never raises" is a contract on every branch, not just the obvious
+    ones.
     """
     import contain
 
     entry_points = frozenset(contain.ENTRY_POINTS)
     violations: list[str] = []
+
+    for key in ("pr", "merge_base_sha", "head_sha"):
+        if key not in document:
+            violations.append(f"document: missing required key {key!r}")
 
     nonce = document.get("nonce")
     if not nonce:
@@ -305,10 +357,18 @@ def validate(document: dict) -> list[str]:
     containment = document.get("containment")
     if containment is None:
         violations.append("document: missing 'containment' key")
+    elif not isinstance(containment, dict):
+        violations.append(
+            f"document.containment: expected an object, got {type(containment).__name__}"
+        )
     else:
         states = containment.get("states")
         if states is None:
             violations.append("document.containment: missing 'states' key")
+        elif not isinstance(states, dict):
+            violations.append(
+                f"document.containment.states: expected an object, got {type(states).__name__}"
+            )
         else:
             actual = set(states.keys())
             if actual != entry_points:
@@ -324,15 +384,32 @@ def validate(document: dict) -> list[str]:
                     f"contain.ENTRY_POINTS values ({'; '.join(detail)})"
                 )
 
-        for index, cf in enumerate(containment.get("findings", [])):
-            kind = cf.get("kind")
-            if kind not in _CONTAINMENT_KINDS:
-                violations.append(
-                    f"document.containment.findings[{index}]: kind {kind!r} is not one of "
-                    f"{sorted(_CONTAINMENT_KINDS)}"
-                )
+        containment_findings = containment.get("findings", [])
+        if not isinstance(containment_findings, list):
+            violations.append(
+                "document.containment.findings: expected an array, got "
+                f"{type(containment_findings).__name__}"
+            )
+        else:
+            for index, cf in enumerate(containment_findings):
+                if not isinstance(cf, dict):
+                    violations.append(
+                        f"document.containment.findings[{index}]: expected an object, got "
+                        f"{type(cf).__name__}"
+                    )
+                    continue
+                kind = cf.get("kind")
+                if kind not in _CONTAINMENT_KINDS:
+                    violations.append(
+                        f"document.containment.findings[{index}]: kind {kind!r} is not one of "
+                        f"{sorted(_CONTAINMENT_KINDS)}"
+                    )
 
-    for report in document.get("reports", []):
-        violations.extend(_validate_report(report, nonce, entry_points))
+    reports_raw = document.get("reports", [])
+    if not isinstance(reports_raw, list):
+        violations.append(f"document.reports: expected an array, got {type(reports_raw).__name__}")
+    else:
+        for index, report in enumerate(reports_raw):
+            violations.extend(_validate_report(report, index, nonce, entry_points))
 
     return violations
