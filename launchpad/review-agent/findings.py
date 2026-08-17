@@ -213,7 +213,16 @@ def _validate_finding(
     entry_point = finding.get("entry_point")
     evidence = finding.get("evidence")
     if entry_point is not None:
-        if entry_point not in entry_points:
+        if not isinstance(entry_point, str):
+            # ``entry_point not in entry_points`` requires a hashable value —
+            # an unhashable entry_point (a dict, a list) would raise TypeError
+            # before this function could report it, the same "never raises on
+            # malformed input" contract as the container-shape guards above.
+            violations.append(
+                f"{label}: entry_point must be a string or null, got "
+                f"{type(entry_point).__name__}"
+            )
+        elif entry_point not in entry_points:
             violations.append(
                 f"{label}: entry_point {entry_point!r} is not one of contain.ENTRY_POINTS"
             )
