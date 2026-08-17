@@ -57,7 +57,7 @@ fi
 # check one line down -- a STEP-based plan still has no `.superpowers/sdd/.../
 # progress.md` to find, so `record ready` on one still correctly refuses. This
 # only makes the refusal name its real cause.
-mapfile -t plan_tasks < <(grep -oE '^#{1,4} Task [0-9]+|^STEP [0-9]+' "$plan" | grep -oE '[0-9]+' | sort -n -u)
+mapfile -t plan_tasks < <(grep -oE '^#{1,4} Task [0-9]+|^STEP [0-9]+' "$plan" | grep -oE '[0-9]+$' | sort -n -u)
 
 if [[ ${#plan_tasks[@]} -eq 0 ]]; then
   # THE VACUITY GUARD. Without this the script "passes" any file with no task
