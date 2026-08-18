@@ -32,7 +32,9 @@ EdgeType = Literal[
 
 @dataclass(frozen=True)
 class Edge:
-    source: str  # symbol_id or a synthetic node id (e.g. a config key, a doc path)
+    source: str  # qualified_name of a Symbol, or a synthetic node id ("config:KEY",
+    # "doc:PATH", "extern:NAME") -- NOT symbol_id; two Symbols sharing a
+    # qualified_name would silently merge onto the same node, a known limitation.
     target: str
     edge_type: EdgeType
     evidence: str  # what produced this edge, e.g. "Symbol.calls[]", "Symbol.tests[]"
@@ -43,11 +45,13 @@ class ProjectGraph:
     #206 Symbol records -- the ones already present on each Symbol
     (calls/called_by, tests[], config_dependencies[], documentation_links[]).
     Nodes are addressed by qualified_name (matching #206's own resolved
-    representation for calls/called_by); config keys and doc paths are
-    synthetic node ids with no corresponding Symbol, namespaced as
-    "config:KEY" / "doc:PATH" so they can never collide with a real symbol's
+    representation for calls/called_by); config keys, doc paths, and
+    unresolved external call targets are synthetic node ids with no
+    corresponding Symbol, namespaced as "config:KEY" / "doc:PATH" /
+    "extern:NAME" so they can never collide with a real symbol's
     qualified_name (e.g. a symbol literally named the same as an env var it
-    reads) -- caught in review, not by a test.
+    reads, or the same as an unresolved external callee) -- caught in review,
+    not by a test.
     """
 
     def __init__(self) -> None:
@@ -57,14 +61,32 @@ class ProjectGraph:
     @classmethod
     def from_symbols(cls, symbols: list[Symbol]) -> "ProjectGraph":
         graph = cls()
+        qualified_names = {sym.qualified_name for sym in symbols}
         for sym in symbols:
             for target in sym.calls:
+                # #206 resolves calls[] on a best-effort basis: a std-lib or
+                # other-crate callee (e.g. "contains") has no matching Symbol and
+                # is left as a bare short name. Namespaced ("extern:NAME") so it
+                # can't collide with a real symbol's qualified_name -- the same
+                # hazard config:/doc: namespacing below already guards against.
+                resolved = target in qualified_names
+                call_target = target if resolved else f"extern:{target}"
+                graph._add(Edge(sym.qualified_name, call_target, "calls", "Symbol.calls[]"))
                 # "called_by" is derived as this edge's own structural inverse, not
                 # re-read from Symbol.called_by[] -- that field is itself computed
                 # from calls[] in #206 (with_called_by()), so treating both as
                 # independent sources would double the edge from the same fact.
-                graph._add(Edge(sym.qualified_name, target, "calls", "Symbol.calls[]"))
-                graph._add(Edge(target, sym.qualified_name, "called_by", "Symbol.calls[] (inverse)"))
+                #
+                # Only added when the target resolved to a real Symbol. An
+                # unresolved external name has no Symbol behind it, so it can't
+                # meaningfully "call back" -- adding the inverse edge anyway would
+                # fan every caller of the same external name into each other
+                # through one synthetic hub node, making two otherwise-unrelated
+                # symbols falsely reachable from each other (verified: two callers
+                # of the same unresolved name became 2-hop reachable via
+                # ("calls", "called_by") before this fix).
+                if resolved:
+                    graph._add(Edge(target, sym.qualified_name, "called_by", "Symbol.calls[] (inverse)"))
             for test in sym.tests:
                 # Edge direction reads "sym IS tested_by test" -- same convention
                 # as configured_by below (symbol as source, describing itself),
@@ -153,9 +175,10 @@ if __name__ == "__main__":
     from indexer import build_index
 
     crate = _sys.argv[1] if len(_sys.argv) > 1 else "buzz-core"
-    graph = ProjectGraph.from_symbols(build_index(crate))
+    symbols = build_index(crate)
+    graph = ProjectGraph.from_symbols(symbols)
 
-    print(f"=== STEP 6: every edge for one chosen real symbol ===\n")
+    print("=== STEP 6: every edge for one chosen real symbol ===\n")
     node = "is_shared_gated_kind"
     edges = graph.edges_from(node)
     if not edges:
@@ -163,13 +186,17 @@ if __name__ == "__main__":
     for e in edges:
         print(f"{e.source} --{e.edge_type}--> {e.target}  ({e.evidence})")
 
-    print(f"\n=== STEP 4: a 2-hop relationship the flat Symbol record alone cannot show ===\n")
+    print("\n=== STEP 4: a 2-hop relationship the flat Symbol record alone cannot show ===\n")
     two_hop_start = "tests::is_unshared_gated_event_author_always_allowed"
+    target_symbol = next((s for s in symbols if s.qualified_name == node), None)
+    flat_called_by = target_symbol.called_by if target_symbol else ()
+    print(f"{node}'s own flat Symbol.called_by[]: {flat_called_by}")
+    print(f"  (does not include {two_hop_start!r} -- it is two hops away, not one)")
     result = reachable(graph, two_hop_start, ("calls",), max_hops=2)
     hop2 = [r for r in result if r.node == node]
     print(f"reachable({two_hop_start!r}, max_hops=2) includes {node!r}: {bool(hop2)}")
     if hop2:
         print(f"  path: {' -> '.join(hop2[0].path)}")
 
-    print(f"\n=== STEP 5: the negative case -- vague questions need a starting symbol ===\n")
+    print("\n=== STEP 5: the negative case -- vague questions need a starting symbol ===\n")
     _demo_negative_case(graph)
