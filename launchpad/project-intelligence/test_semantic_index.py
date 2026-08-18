@@ -8,9 +8,11 @@ from __future__ import annotations
 
 import unittest
 
+from graph import ProjectGraph
 from semantic_index import (
     ConceptEntry,
     SemanticIndex,
+    confirm_via_graph,
     cosine_similarity,
     embed_symbol,
     embed_text,
@@ -176,6 +178,27 @@ class TwoStageSearchTest(unittest.TestCase):
         self.assertEqual(top.candidate.scope, _IS_SHARED_GATED_KIND.symbol_id)
         # The unrelated file's symbol never appears as the top result.
         self.assertNotEqual(top.candidate.scope, _ENCODE_V2_CODE.symbol_id)
+
+
+class ConfirmViaGraphTest(unittest.TestCase):
+    def test_returns_real_tested_by_and_called_by_edges(self) -> None:
+        # Cross-checked against #207's own already-proven demo output for
+        # this exact symbol (graph.py's __main__, STEP 6): is_shared_gated_kind
+        # --called_by--> tests::shared_gated_kinds_membership and
+        # --called_by--> is_unshared_gated_event; --tested_by--> the same test.
+        graph = ProjectGraph.from_symbols([_IS_SHARED_GATED_KIND, _IS_UNSHARED_GATED_EVENT])
+        confirmation = confirm_via_graph(graph, "is_shared_gated_kind")
+
+        test_targets = {e.target for e in confirmation.tests}
+        caller_targets = {e.target for e in confirmation.callers}
+        self.assertEqual(test_targets, {"tests::shared_gated_kinds_membership"})
+        self.assertEqual(caller_targets, {"is_unshared_gated_event"})
+
+    def test_an_uncalled_untested_symbol_returns_empty_not_hidden(self) -> None:
+        graph = ProjectGraph.from_symbols([_ENCODE_V2_CODE])
+        confirmation = confirm_via_graph(graph, "encode_v2_code")
+        self.assertEqual(confirmation.tests, ())
+        self.assertEqual(confirmation.callers, ())
 
 
 class FromSymbolsTest(unittest.TestCase):
