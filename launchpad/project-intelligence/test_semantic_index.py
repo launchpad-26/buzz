@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import unittest
 
-from semantic_index import ConceptEntry, SemanticIndex, summarize_symbol
+from semantic_index import ConceptEntry, SemanticIndex, cosine_similarity, embed_text, summarize_symbol, tokenize
 from symbol import DefinedAt, Symbol
 
 # A real Symbol from buzz-core, constructed by hand from fields already
@@ -75,6 +75,47 @@ class SummarizeSymbolTest(unittest.TestCase):
         self.assertNotIn("configured by", summary)
         self.assertNotIn("documented in", summary)
         self.assertNotIn("calls", summary)
+
+
+class TokenizeTest(unittest.TestCase):
+    def test_splits_snake_case_identifiers(self) -> None:
+        self.assertEqual(tokenize("is_shared_gated_kind"), ["is", "shared", "gated", "kind"])
+
+    def test_splits_camel_case_identifiers(self) -> None:
+        self.assertEqual(tokenize("sendWelcomeEmail"), ["send", "welcome", "email"])
+
+    def test_splits_natural_language_text_too(self) -> None:
+        self.assertEqual(tokenize("Where's the code?"), ["where", "s", "the", "code"])
+
+
+class EmbedAndCosineSimilarityTest(unittest.TestCase):
+    # Hand-computed inputs, not real symbols -- proves the math itself is
+    # correct independent of any indexing behavior (per #210's plan STEP 3
+    # done-when).
+    def test_embedding_of_a_vector_against_itself_is_one(self) -> None:
+        vec = embed_text("kind gated shared kind")
+        self.assertAlmostEqual(cosine_similarity(vec, vec), 1.0, places=9)
+
+    def test_disjoint_vocabularies_have_zero_similarity(self) -> None:
+        a = embed_text("apples bananas")
+        b = embed_text("rockets moons")
+        self.assertEqual(cosine_similarity(a, b), 0.0)
+
+    def test_hand_computed_partial_overlap(self) -> None:
+        # "a a b" -> {a: 2/3, b: 1/3}; "a c c" -> {a: 1/3, c: 2/3}
+        # numerator = (2/3 * 1/3) = 2/9
+        # norm_a = sqrt((2/3)^2 + (1/3)^2) = sqrt(5)/3
+        # norm_b = sqrt((1/3)^2 + (2/3)^2) = sqrt(5)/3
+        # cosine = (2/9) / (5/9) = 2/5 = 0.4
+        a = embed_text("a a b")
+        b = embed_text("a c c")
+        self.assertAlmostEqual(cosine_similarity(a, b), 0.4, places=9)
+
+    def test_a_zero_vector_has_zero_similarity_not_a_division_error(self) -> None:
+        empty = ()
+        non_empty = embed_text("kind")
+        self.assertEqual(cosine_similarity(empty, non_empty), 0.0)
+        self.assertEqual(cosine_similarity(empty, empty), 0.0)
 
 
 if __name__ == "__main__":
