@@ -23,6 +23,7 @@ subprocess runs and carries it on the returned CommandResult, not silently
 from __future__ import annotations
 
 import json
+import re
 import subprocess
 from dataclasses import dataclass
 from pathlib import Path
@@ -33,9 +34,23 @@ SideEffect = Literal["READ_ONLY", "EXECUTE"]
 REPO_ROOT = Path(__file__).resolve().parents[2]
 
 
+def _resolve_within_repo(path: str) -> Path:
+    """Resolve a caller-supplied path and reject it unless it stays under
+    REPO_ROOT. `REPO_ROOT / path` alone does not enforce this: pathlib's `/`
+    discards the left side entirely when `path` is itself absolute (e.g.
+    "/etc/passwd"), and a relative path containing ".." can walk out via
+    resolve() regardless. Every tool taking a repo-relative path routes
+    through this, closing off host-file reads a "repo-relative contract"
+    alone does not prevent."""
+    candidate = (REPO_ROOT / path).resolve()
+    if candidate != REPO_ROOT and REPO_ROOT not in candidate.parents:
+        raise ValueError(f"path escapes the repository root: {path!r}")
+    return candidate
+
+
 def read_file(path: str, start_line: int | None = None, end_line: int | None = None) -> str:
     """Read a file, or a line range of one, relative to the repo root."""
-    text = (REPO_ROOT / path).read_text()
+    text = _resolve_within_repo(path).read_text()
     if start_line is None and end_line is None:
         return text
     lines = text.splitlines()
@@ -44,13 +59,13 @@ def read_file(path: str, start_line: int | None = None, end_line: int | None = N
 
 def list_directory(path: str = ".") -> list[str]:
     """List immediate entries of a directory, relative to the repo root."""
-    return sorted(p.name + ("/" if p.is_dir() else "") for p in (REPO_ROOT / path).iterdir())
+    return sorted(p.name + ("/" if p.is_dir() else "") for p in _resolve_within_repo(path).iterdir())
 
 
 def inspect_logs(path: str, tail_lines: int | None = None) -> str:
     """Read a log file. A log is just a file; no separate mechanism from
     read_file, but named distinctly per the design doc's tool table."""
-    text = (REPO_ROOT / path).read_text()
+    text = _resolve_within_repo(path).read_text()
     if tail_lines is None:
         return text
     return "\n".join(text.splitlines()[-tail_lines:])
@@ -72,7 +87,9 @@ def search_text(pattern: str, regex: bool = False, glob: str = "*") -> list[Text
     cmd = ["grep", "-rn", "--include", glob]
     if not regex:
         cmd.append("-F")
-    cmd += [pattern, "."]
+    # "--" terminates option parsing so a pattern starting with "-" (e.g.
+    # "--help") is treated as the search text, not another grep flag.
+    cmd += ["--", pattern, "."]
     result = subprocess.run(cmd, capture_output=True, text=True, cwd=REPO_ROOT)
     matches = []
     for line in result.stdout.splitlines():
@@ -126,15 +143,22 @@ def find_references(qualified_name: str, crate: str) -> list[Reference]:
     mentions, and unrelated identifiers sharing the name. This instead:
     1. Enumerates every OTHER function in the crate via search_symbols
        (structured data, not text).
-    2. Reads each candidate's own source range (read_file) and checks for a
-       real call-site pattern -- the short name immediately followed by `(`
-       -- not just the name appearing anywhere in the file.
+    2. Reads each candidate's own source range (read_file) and checks each
+       line for a real call-site pattern: the short name (word-bounded, so
+       "shared_gated_kind" cannot match inside "is_shared_gated_kind"),
+       optionally followed by whitespace and/or a turbofish (`::<T>`), then
+       `(`. Lines that are pure `//` comments are skipped, and every
+       matching line in a candidate is reported, not just the first.
     This is the same distinction #206's with_called_by() drew (a resolved
     call-site match, not a bare grep), reimplemented here since #208 has no
     dependency on #206's branch-local code.
+
+    Best-effort, not a Rust parser: does not track block comments (/* */),
+    string/byte-string literals, or macro-generated calls -- a call-site
+    pattern inside one of those would still be reported as a reference.
     """
     short_name = qualified_name.rsplit("::", 1)[-1]
-    call_pattern = f"{short_name}("
+    call_pattern = re.compile(rf"\b{re.escape(short_name)}\s*(?:::<[^>]*>)?\s*\(")
 
     sql = (
         "SELECT qualified_name, file, start_line, end_line FROM Functions "
@@ -147,11 +171,12 @@ def find_references(qualified_name: str, crate: str) -> list[Reference]:
     for c in candidates:
         file_rel = c["file"].removeprefix("file:///")
         body = read_file(file_rel, c["start_line"], c["end_line"])
-        line_offset = body.find(call_pattern)
-        if line_offset == -1:
-            continue
-        line_number = c["start_line"] + body[:line_offset].count("\n")
-        references.append(Reference(caller_qualified_name=c["qualified_name"], file=file_rel, line=line_number))
+        for offset, line_text in enumerate(body.splitlines()):
+            if line_text.strip().startswith("//"):
+                continue
+            if call_pattern.search(line_text):
+                line_number = c["start_line"] + offset
+                references.append(Reference(caller_qualified_name=c["qualified_name"], file=file_rel, line=line_number))
     return references
 
 
@@ -212,6 +237,13 @@ def inspect_dependency(crate: str, name: str) -> Dependency | None:
     crates declare deps this way (crates/buzz-core/Cargo.toml), so returning
     the bare `{"workspace": true}` without resolving it would not actually
     answer the question "what version does this crate depend on".
+
+    A crate-local entry can add its own keys alongside `workspace = true`
+    (e.g. crates/buzz-agent/Cargo.toml adds `features = ["io-std", ...]` to
+    tokio's workspace entry) -- Cargo merges these into the workspace
+    dependency rather than the crate-local entry replacing it wholesale.
+    `features` unions (Cargo's own merge behavior); any other crate-local
+    key (`optional`, `default-features`, ...) overrides the workspace value.
     """
     import tomllib
 
@@ -223,7 +255,13 @@ def inspect_dependency(crate: str, name: str) -> Dependency | None:
     resolved = declared
     if isinstance(declared, dict) and declared.get("workspace") is True:
         root_manifest = tomllib.loads((REPO_ROOT / "Cargo.toml").read_text())
-        resolved = root_manifest.get("workspace", {}).get("dependencies", {}).get(name, declared)
+        workspace_entry = root_manifest.get("workspace", {}).get("dependencies", {}).get(name, {})
+        resolved = dict(workspace_entry)
+        local_extra = {k: v for k, v in declared.items() if k != "workspace"}
+        local_features = local_extra.pop("features", None)
+        if local_features is not None:
+            resolved["features"] = sorted(set(resolved.get("features", [])) | set(local_features))
+        resolved.update(local_extra)
 
     return Dependency(name=name, declared=declared, resolved=resolved)
 
@@ -251,12 +289,20 @@ def query_build_system(crate: str) -> BuildInfo:
     (verified: a directory snapshot of target/ before and after this call is
     identical, see the commit message). --no-deps limits the resolved graph
     to this workspace's own packages, not third-party dependency metadata.
+
+    --locked is required for the same READ_ONLY guarantee: without it, cargo
+    metadata will silently rewrite Cargo.lock if it is out of date relative
+    to a manifest, even with --no-deps -- a real mutation this registered
+    READ_ONLY tool must not perform. With --locked the call fails loudly
+    instead of writing, which is the correct behavior for a tool that
+    promises not to change the checkout.
     """
     result = subprocess.run(
         [
             "cargo",
             "metadata",
             "--no-deps",
+            "--locked",
             "--format-version",
             "1",
             "--manifest-path",
@@ -294,7 +340,12 @@ def run_command(command: list[str]) -> CommandResult:
     own Definition of done: the caller must see EXECUTE before consequences,
     not buried after them or only inferred from a registry lookup.
     """
-    print(f"[EXECUTE] run_command: {' '.join(command)}")
+    # flush=True: stdout is block-buffered (not line-buffered) whenever it is
+    # piped rather than a terminal -- the normal case for an agent harness
+    # capturing this tool's output. Without an explicit flush, the caller
+    # would not see this line until the subprocess below had already
+    # finished (or Python exited), which fails "surfaced before execution".
+    print(f"[EXECUTE] run_command: {' '.join(command)}", flush=True)
     result = subprocess.run(command, capture_output=True, text=True, cwd=REPO_ROOT)
     return CommandResult(
         side_effect="EXECUTE",
@@ -311,7 +362,7 @@ def run_test(crate: str, test_name: str | None = None) -> CommandResult:
     cmd = ["cargo", "test", "-p", crate]
     if test_name:
         cmd.append(test_name)
-    print(f"[EXECUTE] run_test: {' '.join(cmd)}")
+    print(f"[EXECUTE] run_test: {' '.join(cmd)}", flush=True)  # same buffering reason as run_command
     result = subprocess.run(cmd, capture_output=True, text=True, cwd=REPO_ROOT)
     return CommandResult(
         side_effect="EXECUTE",
