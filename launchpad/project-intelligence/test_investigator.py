@@ -77,6 +77,22 @@ class InspectDependencyTest(unittest.TestCase):
         self.assertIsNone(investigator.inspect_dependency("buzz-core", "no-such-crate-xyz"))
 
 
+class QueryBuildSystemTest(unittest.TestCase):
+    def test_resolves_real_crate_targets_with_no_build_artifacts(self) -> None:
+        before = subprocess.run(
+            ["find", "target", "-maxdepth", "2"], capture_output=True, text=True, cwd=investigator.REPO_ROOT
+        ).stdout
+        info = investigator.query_build_system("buzz-core")
+        after = subprocess.run(
+            ["find", "target", "-maxdepth", "2"], capture_output=True, text=True, cwd=investigator.REPO_ROOT
+        ).stdout
+        self.assertEqual(before, after, "query_build_system must not produce build artifacts")
+
+        self.assertEqual(info.crate, "buzz-core")
+        target_names = {t.name for t in info.targets}
+        self.assertIn("buzz_core", target_names)
+
+
 # search_symbols() shells out to the rql CLI, same as indexer.py's index_crate() --
 # not given a test here, same reasoning as test_indexer.py's docstring: verified
 # live against the real repo instead (see the commit message), so a RepoQL host
