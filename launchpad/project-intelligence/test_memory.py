@@ -174,5 +174,35 @@ class RecordCodeContradictionTest(unittest.TestCase):
         )
 
 
+class RecordTeamStatementTest(unittest.TestCase):
+    def test_supersedes_a_team_knowledge_entry(self) -> None:
+        store = ProjectMemory()
+        store.add(
+            MemoryEntry(
+                id="t1",
+                entry_class="TEAM_KNOWLEDGE",
+                statement="OrderRepository.legacyExport is being migrated off; do not add new callers.",
+                provided_by="developer, migration issue #482",
+            )
+        )
+
+        new_entry = store.record_team_statement(
+            "t1", "migration #482 complete, legacyExport removed", "developer, migration issue #482"
+        )
+
+        self.assertEqual(new_entry.entry_class, "TEAM_KNOWLEDGE")
+        self.assertEqual(new_entry.statement, "migration #482 complete, legacyExport removed")
+
+        old_entry = store.get("t1")
+        self.assertEqual(old_entry.superseded_by, new_entry.id)
+        # the original wording is preserved, not rewritten
+        self.assertEqual(old_entry.statement, "OrderRepository.legacyExport is being migrated off; do not add new callers.")
+
+    def test_unknown_entry_id_raises(self) -> None:
+        store = ProjectMemory()
+        with self.assertRaises(KeyError):
+            store.record_team_statement("no-such-id", "new", "someone")
+
+
 if __name__ == "__main__":
     unittest.main()

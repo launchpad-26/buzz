@@ -132,3 +132,24 @@ class ProjectMemory:
         )
         self._supersede(old, new_entry)
         return new_entry
+
+    def record_team_statement(self, entry_id: str, new_statement: str, provided_by: str) -> MemoryEntry:
+        """An explicit new statement from a person -- the one thing that CAN
+        supersede a TEAM_KNOWLEDGE entry, since it carries the same kind of
+        provenance the original entry did (a person said so), not a code
+        observation. Applies to any entry class: a person's later word is at
+        least as strong evidence as what STEP 3 accepts from code alone.
+        """
+        old = self._entries.get(entry_id)
+        if old is None:
+            raise KeyError(entry_id)
+
+        new_entry = MemoryEntry(
+            id=str(uuid.uuid4()),
+            entry_class="TEAM_KNOWLEDGE",
+            statement=new_statement,
+            provided_by=provided_by,
+            temporal_state=old.temporal_state,
+        )
+        self._supersede(old, new_entry)
+        return new_entry
