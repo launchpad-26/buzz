@@ -70,7 +70,7 @@ launchpad/
 **Never move or rename upstream files.** Upstream is ~3,800 files and we merge from it
 regularly; a rename turns every future merge into manual work.
 
-Three deliberate exceptions, all accepted knowingly:
+Four deliberate exceptions, all accepted knowingly:
 
 - `.github/ISSUE_TEMPLATE/` — our templates replace upstream's, which pointed
   contributors at `block/buzz`.
@@ -78,9 +78,16 @@ Three deliberate exceptions, all accepted knowingly:
 - **Deployment image provenance** — five named files (`deploy/compose/compose.yml`,
   `deploy/compose/.env.example`, `deploy/compose/README.md`, `Dockerfile`,
   `.github/workflows/docker.yml`) carry Launchpad values so the fork deploys its own
-  build rather than Block's. The list is closed; the reasoning and the rejected
-  alternative are in
+  build rather than Block's. Reasoning and the rejected alternative are in
   [`decisions/ADR-0005-launchpad-deployment-boundary.md`](decisions/ADR-0005-launchpad-deployment-boundary.md).
+- **Hermit lefthook pin** — `bin/lefthook` and `bin/.lefthook-*.pkg` diverge from
+  upstream's pinned version because lefthook 2.1.3's own `@{push}`-fallback crashes on
+  every branch's first push here, since this fork's branch name collides with the
+  `launchpad/` directory. A standing divergence, not a temporary one — the cohort is
+  not currently sending fixes upstream. Reasoning and the rejected alternatives are in
+  [`decisions/ADR-0017-lefthook-pin-upstream-boundary-exception.md`](decisions/ADR-0017-lefthook-pin-upstream-boundary-exception.md).
+
+The list is closed; any further exception needs its own ADR.
   **This is settled — do not raise it as a §3 violation in review.** Adding a sixth file
   is a change to that record, not a call to make in a pull request.
 
