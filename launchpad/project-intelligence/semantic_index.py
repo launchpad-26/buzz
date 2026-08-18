@@ -17,6 +17,13 @@ from dataclasses import dataclass
 from graph import Edge, ProjectGraph
 from symbol import Symbol
 
+# STEP 8's positive worked example: a genuinely vague, terminology-free
+# question that resolves to is_shared_gated_kind via subsystem -> candidate ->
+# confirmed-reference, not a plain keyword match on the literal function
+# name -- it contains no contiguous substring match of "is_shared_gated_kind"
+# (checked directly in test_semantic_index.py, not just by eye).
+WORKED_EXAMPLE_CONCEPT = "which function decides if a kind is gated for shared visibility"
+
 _WORD_RE = re.compile(r"[a-zA-Z]+")
 _CAMEL_BOUNDARY_RE = re.compile(r"(?<=[a-z0-9])(?=[A-Z])")
 
