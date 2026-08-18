@@ -6,12 +6,15 @@ Run:  python3 -m unittest test_semantic_index    (from launchpad/project-intelli
 
 from __future__ import annotations
 
+import dataclasses
 import unittest
 
-from graph import ProjectGraph
+from graph import ProjectGraph, reachable
 from semantic_index import (
     WORKED_EXAMPLE_CONCEPT,
     ConceptEntry,
+    Confirmation,
+    PipelineResult,
     SemanticIndex,
     confirm_via_graph,
     cosine_similarity,
@@ -44,6 +47,20 @@ _ENCODE_V2_CODE = Symbol(
     qualified_name="encode_v2_code",
     defined_at=DefinedAt(file="crates/buzz-core/src/invite.rs", start_line=34, end_line=36, temporal_state="WORKING"),
     signature="pub fn encode_v2_code(secret: &[u8; V2_SECRET_LEN]) -> String",
+)
+
+# A third real symbol in kind.rs (lines 997-1007, cross-checked against the
+# real source, which does call is_unshared_gated_event at line 1006) -- the
+# same 2-hop relationship #207's own reachable() demo already proves
+# (tests::is_unshared_gated_event_author_always_allowed -> is_unshared_gated_event
+# -> is_shared_gated_kind), reused here for STEP 9's negative case.
+_TEST_AUTHOR_ALWAYS_ALLOWED = Symbol(
+    symbol_id="crates/buzz-core/src/kind.rs::tests::is_unshared_gated_event_author_always_allowed",
+    kind="function",
+    qualified_name="tests::is_unshared_gated_event_author_always_allowed",
+    defined_at=DefinedAt(file="crates/buzz-core/src/kind.rs", start_line=997, end_line=1007, temporal_state="WORKING"),
+    signature="fn is_unshared_gated_event_author_always_allowed()",
+    calls=("is_unshared_gated_event",),
 )
 
 # A real Symbol from buzz-core, constructed by hand from fields already
@@ -241,6 +258,48 @@ class PositiveWorkedExampleTest(unittest.TestCase):
 
         self.assertEqual(result.qualified_name, "is_shared_gated_kind")
         self.assertGreater(len(result.confirmation.callers) + len(result.confirmation.tests), 0)
+
+
+class NegativeFlowTracingCaseTest(unittest.TestCase):
+    # STEP 9: confirming the documented boundary from #210's own side --
+    # #207's graph.py (_demo_negative_case) already showed a vague
+    # description has no symbol_id for reachable() to start from; this is
+    # the mirror: a flow-tracing question has no verified multi-hop answer
+    # from THIS pipeline, only ever a single-hop confirmation at best.
+    def test_pipeline_result_and_confirmation_have_no_hop_or_path_concept_at_all(self) -> None:
+        result_fields = {f.name for f in dataclasses.fields(PipelineResult)}
+        confirmation_fields = {f.name for f in dataclasses.fields(Confirmation)}
+        for fields in (result_fields, confirmation_fields):
+            self.assertNotIn("hop", fields)
+            self.assertNotIn("hops", fields)
+            self.assertNotIn("path", fields)
+
+    def test_this_pipeline_never_surfaces_the_2hop_symbol_reachable_finds_exactly(self) -> None:
+        symbols = [_IS_SHARED_GATED_KIND, _IS_UNSHARED_GATED_EVENT, _ENCODE_V2_CODE, _TEST_AUTHOR_ALWAYS_ALLOWED]
+        index = SemanticIndex.from_symbols(symbols)
+        graph = ProjectGraph.from_symbols(symbols)
+
+        # Pose the SAME flow-tracing relationship #207 already answers exactly.
+        result = find_it_for_me(index, graph, "what does the author-always-allowed test call, two calls deep")
+        self.assertIsNotNone(result.confirmation, "the pipeline still returns SOME candidate -- that's the point")
+
+        # Whatever it resolved to, confirm_via_graph() only ever asks
+        # edges_from() for DIRECT edges -- it can never surface
+        # is_shared_gated_kind as a verified 2-hop consequence, because
+        # nothing in this pipeline expresses "2 hops" at all.
+        one_hop_targets = {e.target for e in result.confirmation.callers} | {e.target for e in result.confirmation.tests}
+        self.assertNotIn("is_shared_gated_kind", one_hop_targets)
+
+        # Contrast: ProjectGraph.reachable() answers the IDENTICAL
+        # relationship exactly, with a real verified path -- #207's own
+        # already-proven capability, confirming the documented boundary.
+        two_hop = reachable(graph, "tests::is_unshared_gated_event_author_always_allowed", ("calls",), max_hops=2)
+        hop_2_match = [r for r in two_hop if r.node == "is_shared_gated_kind"]
+        self.assertTrue(hop_2_match, "ProjectGraph DOES verify this 2-hop relationship exactly")
+        self.assertEqual(
+            hop_2_match[0].path,
+            ("tests::is_unshared_gated_event_author_always_allowed", "is_unshared_gated_event", "is_shared_gated_kind"),
+        )
 
 
 class FromSymbolsTest(unittest.TestCase):
