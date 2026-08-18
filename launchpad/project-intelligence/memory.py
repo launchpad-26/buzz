@@ -51,14 +51,33 @@ class MemoryEntry:
         if self.entry_class == "INFERENCE":
             if self.confidence is None:
                 raise ValueError("confidence is required for an INFERENCE entry")
+            # bool is a subclass of int in Python, so an explicit bool check
+            # is needed or True/False would silently pass as 0/1.
+            if isinstance(self.confidence, bool) or not isinstance(self.confidence, (int, float)):
+                raise ValueError(f"confidence must be a float, got {self.confidence!r}")
+            # NaN fails every comparison, so `not (0.0 <= NaN <= 1.0)` is
+            # already True -- no separate isnan() check needed.
+            if not (0.0 <= self.confidence <= 1.0):
+                raise ValueError(f"confidence must be within [0.0, 1.0], got {self.confidence!r}")
         elif self.confidence is not None:
             raise ValueError(f"confidence is only valid on INFERENCE entries, not {self.entry_class}")
 
         if self.entry_class == "TEAM_KNOWLEDGE":
-            if self.provided_by is None:
-                raise ValueError("provided_by is required for a TEAM_KNOWLEDGE entry")
+            if not isinstance(self.provided_by, str) or not self.provided_by.strip():
+                raise ValueError("provided_by is required for a TEAM_KNOWLEDGE entry and must be non-empty")
         elif self.provided_by is not None:
             raise ValueError(f"provided_by is only valid on TEAM_KNOWLEDGE entries, not {self.entry_class}")
+
+        # Normalize evidence to a real tuple regardless of what was passed in
+        # (a list would defeat the frozen dataclass's immutability guarantee
+        # by giving the caller a live mutable reference to stored provenance)
+        # -- but only for genuine sequences; a bare string is rejected rather
+        # than silently exploded into a tuple of its characters.
+        if isinstance(self.evidence, str) or not isinstance(self.evidence, (list, tuple)):
+            raise ValueError(f"evidence must be a list or tuple of strings, got {self.evidence!r}")
+        if any(not isinstance(e, str) or not e.strip() for e in self.evidence):
+            raise ValueError(f"every evidence item must be a non-empty string, got {self.evidence!r}")
+        object.__setattr__(self, "evidence", tuple(self.evidence))
 
         if self.entry_class in ("FACT", "INFERENCE") and not self.evidence:
             raise ValueError(f"evidence is required for a {self.entry_class} entry")
@@ -95,7 +114,19 @@ class ProjectMemory:
         the mechanism the reconciliation rule depends on: the old entry's
         statement, evidence, and every other field stay byte-for-byte what
         they were -- get(old.id) never returns something silently rewritten.
+
+        Refuses to supersede an entry that is already superseded: doing so
+        would overwrite the existing superseded_by pointer, orphaning
+        whatever it pointed at -- the chain would silently lose a link
+        rather than extend it. Callers must reconcile the current leaf entry
+        (follow superseded_by until it is None), not a stale link in the
+        chain.
         """
+        if old.superseded_by is not None:
+            raise ValueError(
+                f"entry {old.id!r} is already superseded by {old.superseded_by!r} -- "
+                "reconcile that entry instead, not this now-stale one"
+            )
         self.add(new)
         self._entries[old.id] = replace(old, superseded_by=new.id)
 
@@ -128,7 +159,11 @@ class ProjectMemory:
             entry_class="FACT",
             statement=new_statement,
             evidence=tuple(new_evidence),
-            temporal_state=old.temporal_state,
+            # WORKING, not old.temporal_state: this entry records what the
+            # LIVE current tree shows right now (per the design doc's own
+            # WORKING definition), regardless of what temporal state the
+            # claim it supersedes was about.
+            temporal_state="WORKING",
         )
         self._supersede(old, new_entry)
         return new_entry

@@ -61,6 +61,45 @@ class MemoryEntryValidationTest(unittest.TestCase):
         with self.assertRaises(ValueError):
             MemoryEntry(id="9", entry_class="OPINION", statement="x")
 
+    # Codex review findings on PR #219 -- all verified against the actual
+    # code (see the fix commit's message) before being fixed.
+    def test_a_list_of_evidence_is_normalized_to_a_tuple_not_kept_mutable(self) -> None:
+        entry = MemoryEntry(id="ev1", entry_class="FACT", statement="s", evidence=["ref"])
+        self.assertEqual(entry.evidence, ("ref",))
+        self.assertIsInstance(entry.evidence, tuple)
+
+    def test_a_bare_string_evidence_is_rejected_not_exploded_into_characters(self) -> None:
+        with self.assertRaises(ValueError):
+            MemoryEntry(id="ev2", entry_class="FACT", statement="s", evidence="ref")
+
+    def test_an_empty_string_evidence_item_is_rejected(self) -> None:
+        with self.assertRaises(ValueError):
+            MemoryEntry(id="ev3", entry_class="FACT", statement="s", evidence=("",))
+
+    def test_non_numeric_confidence_is_rejected(self) -> None:
+        with self.assertRaises(ValueError):
+            MemoryEntry(id="conf1", entry_class="INFERENCE", statement="s", evidence=("e",), confidence="high")
+
+    def test_a_bool_confidence_is_rejected(self) -> None:
+        with self.assertRaises(ValueError):
+            MemoryEntry(id="conf2", entry_class="INFERENCE", statement="s", evidence=("e",), confidence=True)
+
+    def test_out_of_range_confidence_is_rejected(self) -> None:
+        with self.assertRaises(ValueError):
+            MemoryEntry(id="conf3", entry_class="INFERENCE", statement="s", evidence=("e",), confidence=5.0)
+
+    def test_nan_confidence_is_rejected(self) -> None:
+        with self.assertRaises(ValueError):
+            MemoryEntry(id="conf4", entry_class="INFERENCE", statement="s", evidence=("e",), confidence=float("nan"))
+
+    def test_empty_provided_by_on_a_team_knowledge_entry_is_rejected(self) -> None:
+        with self.assertRaises(ValueError):
+            MemoryEntry(id="pb1", entry_class="TEAM_KNOWLEDGE", statement="s", provided_by="")
+
+    def test_whitespace_only_provided_by_is_rejected(self) -> None:
+        with self.assertRaises(ValueError):
+            MemoryEntry(id="pb2", entry_class="TEAM_KNOWLEDGE", statement="s", provided_by="   ")
+
     def test_invalid_temporal_state_is_rejected(self) -> None:
         with self.assertRaises(ValueError):
             MemoryEntry(
@@ -147,6 +186,31 @@ class RecordCodeContradictionTest(unittest.TestCase):
         store = ProjectMemory()
         with self.assertRaises(KeyError):
             store.record_code_contradiction("no-such-id", "new", ("e",))
+
+    def test_reconciling_an_already_superseded_entry_is_rejected_not_silently_orphaning(self) -> None:
+        # Codex review finding on PR #219: superseding an already-superseded
+        # entry used to silently overwrite its superseded_by pointer,
+        # orphaning the first superseding entry -- the chain lost a link
+        # instead of extending it.
+        store = ProjectMemory()
+        store.add(MemoryEntry(id="f1", entry_class="FACT", statement="v1", evidence=("e1",)))
+        first = store.record_code_contradiction("f1", "v2", ("e2",))
+
+        with self.assertRaises(ValueError):
+            store.record_code_contradiction("f1", "v3", ("e3",))
+
+        # f1's link to `first` must survive the rejected second attempt.
+        self.assertEqual(store.get("f1").superseded_by, first.id)
+        self.assertIsNone(store.get(first.id).superseded_by)
+
+    def test_new_fact_entry_is_marked_working_regardless_of_the_old_entrys_temporal_state(self) -> None:
+        # Codex review finding on PR #219: a code contradiction observes the
+        # LIVE current tree, so the new entry must be WORKING even when the
+        # entry it supersedes was BASE or HISTORY.
+        store = ProjectMemory()
+        store.add(MemoryEntry(id="h1", entry_class="FACT", statement="old", evidence=("e1",), temporal_state="HISTORY"))
+        new_entry = store.record_code_contradiction("h1", "new", ("e2",))
+        self.assertEqual(new_entry.temporal_state, "WORKING")
 
     def test_team_knowledge_entry_is_not_superseded_by_a_code_contradiction(self) -> None:
         # One test exercising BOTH: the same function supersedes a FACT entry
