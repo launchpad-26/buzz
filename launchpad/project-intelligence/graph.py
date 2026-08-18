@@ -44,7 +44,10 @@ class ProjectGraph:
     (calls/called_by, tests[], config_dependencies[], documentation_links[]).
     Nodes are addressed by qualified_name (matching #206's own resolved
     representation for calls/called_by); config keys and doc paths are
-    synthetic node ids with no corresponding Symbol.
+    synthetic node ids with no corresponding Symbol, namespaced as
+    "config:KEY" / "doc:PATH" so they can never collide with a real symbol's
+    qualified_name (e.g. a symbol literally named the same as an env var it
+    reads) -- caught in review, not by a test.
     """
 
     def __init__(self) -> None:
@@ -69,9 +72,15 @@ class ProjectGraph:
                 # method got backwards.
                 graph._add(Edge(sym.qualified_name, test, "tested_by", "Symbol.tests[]"))
             for key in sym.config_dependencies:
-                graph._add(Edge(sym.qualified_name, key, "configured_by", "Symbol.config_dependencies[]"))
+                # Namespaced ("config:KEY"), not the bare key -- a config key or
+                # doc path with the same text as a real symbol's qualified_name
+                # would otherwise collide onto the same graph node, letting a
+                # traversal that permits multiple edge types wander from a
+                # config key straight into that symbol's own outgoing edges.
+                # Caught in review, not by a test.
+                graph._add(Edge(sym.qualified_name, f"config:{key}", "configured_by", "Symbol.config_dependencies[]"))
             for doc in sym.documentation_links:
-                graph._add(Edge(sym.qualified_name, doc, "documented_by", "Symbol.documentation_links[]"))
+                graph._add(Edge(sym.qualified_name, f"doc:{doc}", "documented_by", "Symbol.documentation_links[]"))
         return graph
 
     def _add(self, edge: Edge) -> None:
@@ -102,13 +111,16 @@ def reachable(
     max_hops. Returns every node found, nearest first; the start node itself
     is never included (hop 0 would be the trivial, uninteresting case).
     """
+    if max_hops < 0:
+        raise ValueError(f"max_hops must be >= 0, got {max_hops}")
+
     visited = {from_node}
     frontier: deque[tuple[str, int, tuple[str, ...]]] = deque([(from_node, 0, (from_node,))])
     found: list[Reachable] = []
 
     while frontier:
         node, hop, path = frontier.popleft()
-        if hop == max_hops:
+        if hop >= max_hops:
             continue
         for edge in graph.edges_from(node, edge_types):
             if edge.target in visited:
