@@ -7,6 +7,7 @@ Run:  python3 -m unittest test_graph    (from launchpad/project-intelligence/)
 from __future__ import annotations
 
 import unittest
+from dataclasses import replace
 
 from graph import Edge, ProjectGraph, reachable
 from symbol import DefinedAt, Symbol
@@ -53,6 +54,42 @@ class ProjectGraphFromSymbolsTest(unittest.TestCase):
 
         self.assertEqual(len(graph.edges_from("caller", ("calls",))), 1)
         self.assertEqual(len(graph.edges_from("callee", ("called_by",))), 1)
+
+
+class EdgeDirectionTest(unittest.TestCase):
+    """Every edge_type's direction must read "source IS edge_type target" --
+    e.g. "is_shared_gated_kind IS tested_by tests::foo", not the reverse. A
+    first version of tested_by/documented_by got this backwards; caught only
+    by reading the printed CLI output, not by any test, which is why this
+    test exists now.
+    """
+
+    def test_tested_by_reads_symbol_is_tested_by_test(self) -> None:
+        target = replace(_sym("is_shared_gated_kind"), tests=("tests::shared_gated_kinds_membership",))
+        graph = ProjectGraph.from_symbols([target])
+
+        edges = graph.edges_from("is_shared_gated_kind", ("tested_by",))
+        self.assertEqual(len(edges), 1)
+        self.assertEqual(edges[0].source, "is_shared_gated_kind")
+        self.assertEqual(edges[0].target, "tests::shared_gated_kinds_membership")
+
+    def test_documented_by_reads_symbol_is_documented_by_doc(self) -> None:
+        target = replace(_sym("is_private_ip"), documentation_links=("ARCHITECTURE.md",))
+        graph = ProjectGraph.from_symbols([target])
+
+        edges = graph.edges_from("is_private_ip", ("documented_by",))
+        self.assertEqual(len(edges), 1)
+        self.assertEqual(edges[0].source, "is_private_ip")
+        self.assertEqual(edges[0].target, "ARCHITECTURE.md")
+
+    def test_configured_by_reads_symbol_is_configured_by_key(self) -> None:
+        target = replace(_sym("service_resource"), config_dependencies=("OTEL_SERVICE_NAME",))
+        graph = ProjectGraph.from_symbols([target])
+
+        edges = graph.edges_from("service_resource", ("configured_by",))
+        self.assertEqual(len(edges), 1)
+        self.assertEqual(edges[0].source, "service_resource")
+        self.assertEqual(edges[0].target, "OTEL_SERVICE_NAME")
 
 
 class ReachableTest(unittest.TestCase):
