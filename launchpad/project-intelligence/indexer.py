@@ -35,6 +35,7 @@ _NOT_A_CALL = frozenset(
     }
 )
 _CALL_SITE = re.compile(r"\b([a-zA-Z_][a-zA-Z0-9_]*)\s*\(")
+_ENV_VAR_READ = re.compile(r'env::var(?:_os)?\s*\(\s*"([A-Za-z_][A-Za-z0-9_]*)"')
 
 
 def run_rql_query(sql: str) -> list[dict]:
@@ -48,7 +49,16 @@ def run_rql_query(sql: str) -> list[dict]:
     return json.loads(result.stdout)
 
 
-def _best_effort_calls(file_rel: str, start_line: int, end_line: int, own_name: str) -> tuple[str, ...]:
+def _read_body(file_rel: str, start_line: int, end_line: int) -> str:
+    path = REPO_ROOT / file_rel
+    try:
+        lines = path.read_text().splitlines()
+    except OSError:
+        return ""
+    return "\n".join(lines[start_line - 1 : end_line])
+
+
+def _best_effort_calls(body: str, own_name: str) -> tuple[str, ...]:
     """Scan the symbol's own source lines for call-like identifiers.
 
     Best-effort by design (#206's plan, LEFT OUT): no type resolution, no
@@ -56,12 +66,6 @@ def _best_effort_calls(file_rel: str, start_line: int, end_line: int, own_name: 
     Precision belongs to #207 (ProjectGraph), which builds real edges once
     symbols exist to link.
     """
-    path = REPO_ROOT / file_rel
-    try:
-        lines = path.read_text().splitlines()
-    except OSError:
-        return ()
-    body = "\n".join(lines[start_line - 1 : end_line])
     found = []
     seen = set()
     for match in _CALL_SITE.finditer(body):
@@ -71,6 +75,18 @@ def _best_effort_calls(file_rel: str, start_line: int, end_line: int, own_name: 
         seen.add(name)
         found.append(name)
     return tuple(found)
+
+
+def _best_effort_config_deps(body: str) -> tuple[str, ...]:
+    """STEP 6: scan the symbol's own source lines for env-var reads.
+
+    Best-effort: only the literal-string-argument form of `env::var`/
+    `env::var_os` is recognised (`env::var("SOME_VAR")`); a variable name
+    built dynamically would not be caught. Config keys read some other way
+    (a config struct field, a CLI flag) are out of this task's scope too.
+    """
+    seen = dict.fromkeys(m.group(1) for m in _ENV_VAR_READ.finditer(body))
+    return tuple(seen)
 
 
 def index_crate(crate_name: str) -> list[Symbol]:
@@ -85,7 +101,9 @@ def index_crate(crate_name: str) -> list[Symbol]:
     for row in rows:
         file_rel = row["file"].removeprefix("file:///")
         kind = "method" if row.get("declaring_type") else "function"
-        calls = _best_effort_calls(file_rel, row["start_line"], row["end_line"], row["name"])
+        body = _read_body(file_rel, row["start_line"], row["end_line"])
+        calls = _best_effort_calls(body, row["name"])
+        config_deps = _best_effort_config_deps(body)
         symbols.append(
             Symbol(
                 symbol_id=row["uri"],
@@ -99,6 +117,7 @@ def index_crate(crate_name: str) -> list[Symbol]:
                 ),
                 signature=row["signature"],
                 calls=calls,
+                config_dependencies=config_deps,
                 git_ownership=GitOwnership(),
             )
         )
@@ -126,6 +145,21 @@ def with_called_by(symbols: list[Symbol]) -> list[Symbol]:
 
     return [
         replace(sym, called_by=tuple(dict.fromkeys(called_by[sym.qualified_name])))
+        for sym in symbols
+    ]
+
+
+_TEST_LIKE = re.compile(r"(^|::)tests?::|^test_|_test$")
+
+
+def with_tests(symbols: list[Symbol]) -> list[Symbol]:
+    """STEP 5: derive tests[] as the subset of each symbol's called_by[] whose
+    qualified_name looks like a test (Rust's own `tests::` module convention,
+    or a test_/_test name), rather than a second, separate search pass --
+    the calling relationship already found in STEP 3 is the same evidence.
+    """
+    return [
+        replace(sym, tests=tuple(caller for caller in sym.called_by if _TEST_LIKE.search(caller)))
         for sym in symbols
     ]
 
@@ -176,6 +210,7 @@ def _print_symbol(sym: Symbol) -> None:
     print(f"Calls: {', '.join(sym.calls) if sym.calls else '(none found)'}")
     print(f"Called by: {', '.join(sym.called_by) if sym.called_by else '(not yet populated -- STEP 3)'}")
     print(f"Tests: {', '.join(sym.tests) if sym.tests else '(not yet populated -- STEP 5)'}")
+    print(f"Config dependencies: {', '.join(sym.config_dependencies) if sym.config_dependencies else '(none found)'}")
     if sym.git_ownership.history:
         print(f"Primary authors: {', '.join(sym.git_ownership.primary_authors)}")
         print("Git history:")
@@ -187,7 +222,7 @@ def _print_symbol(sym: Symbol) -> None:
 
 if __name__ == "__main__":
     crate = sys.argv[1] if len(sys.argv) > 1 else "buzz-core"
-    symbols = with_called_by(index_crate(crate))
+    symbols = with_tests(with_called_by(index_crate(crate)))
     print(f"Indexed {len(symbols)} symbols from crates/{crate}\n")
     for sym in symbols:
         if sym.qualified_name == "is_shared_gated_kind":
