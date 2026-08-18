@@ -11,6 +11,8 @@ import unittest
 
 from graph import ProjectGraph, reachable
 from semantic_index import (
+    NEGATIVE_EXAMPLE_FLOW_QUESTION,
+    NEGATIVE_EXAMPLE_START_SYMBOL,
     WORKED_EXAMPLE_CONCEPT,
     ConceptEntry,
     Confirmation,
@@ -280,7 +282,7 @@ class NegativeFlowTracingCaseTest(unittest.TestCase):
         graph = ProjectGraph.from_symbols(symbols)
 
         # Pose the SAME flow-tracing relationship #207 already answers exactly.
-        result = find_it_for_me(index, graph, "what does the author-always-allowed test call, two calls deep")
+        result = find_it_for_me(index, graph, NEGATIVE_EXAMPLE_FLOW_QUESTION)
         self.assertIsNotNone(result.confirmation, "the pipeline still returns SOME candidate -- that's the point")
 
         # Whatever it resolved to, confirm_via_graph() only ever asks
@@ -293,7 +295,7 @@ class NegativeFlowTracingCaseTest(unittest.TestCase):
         # Contrast: ProjectGraph.reachable() answers the IDENTICAL
         # relationship exactly, with a real verified path -- #207's own
         # already-proven capability, confirming the documented boundary.
-        two_hop = reachable(graph, "tests::is_unshared_gated_event_author_always_allowed", ("calls",), max_hops=2)
+        two_hop = reachable(graph, NEGATIVE_EXAMPLE_START_SYMBOL, ("calls",), max_hops=2)
         hop_2_match = [r for r in two_hop if r.node == "is_shared_gated_kind"]
         self.assertTrue(hop_2_match, "ProjectGraph DOES verify this 2-hop relationship exactly")
         self.assertEqual(
