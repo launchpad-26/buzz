@@ -15,8 +15,9 @@ which does not exist yet):
   4. Construct the explanation only after 1-3, labeling non-FACT claims.
 
 Every tool in TOOL_REGISTRY is READ_ONLY except run_command and run_test,
-which are EXECUTE -- calling either must surface that flag to the caller
-before the subprocess actually runs, not silently (see run_tool()).
+which are EXECUTE -- calling either prints the EXECUTE flag before the
+subprocess runs and carries it on the returned CommandResult, not silently
+(see run_command/run_test).
 """
 
 from __future__ import annotations
@@ -275,6 +276,52 @@ def query_build_system(crate: str) -> BuildInfo:
     return BuildInfo(crate=pkg["name"], version=pkg["version"], edition=pkg["edition"], targets=targets)
 
 
+@dataclass(frozen=True)
+class CommandResult:
+    side_effect: SideEffect  # always "EXECUTE" -- carried on the result itself,
+    # not just printed, so a caller inspecting the return value (not stdout)
+    # still cannot miss that a subprocess actually ran.
+    command: str
+    returncode: int
+    stdout: str
+    stderr: str
+
+
+def run_command(command: list[str]) -> CommandResult:
+    """Run an arbitrary command. EXECUTE -- has real side effects, unlike
+    every other tool in this registry. The EXECUTE flag is surfaced (printed)
+    before the subprocess runs, and again on the returned result, per #208's
+    own Definition of done: the caller must see EXECUTE before consequences,
+    not buried after them or only inferred from a registry lookup.
+    """
+    print(f"[EXECUTE] run_command: {' '.join(command)}")
+    result = subprocess.run(command, capture_output=True, text=True, cwd=REPO_ROOT)
+    return CommandResult(
+        side_effect="EXECUTE",
+        command=" ".join(command),
+        returncode=result.returncode,
+        stdout=result.stdout,
+        stderr=result.stderr,
+    )
+
+
+def run_test(crate: str, test_name: str | None = None) -> CommandResult:
+    """Run a crate's test suite, or one named test within it, via
+    `cargo test`. EXECUTE -- same surfacing contract as run_command."""
+    cmd = ["cargo", "test", "-p", crate]
+    if test_name:
+        cmd.append(test_name)
+    print(f"[EXECUTE] run_test: {' '.join(cmd)}")
+    result = subprocess.run(cmd, capture_output=True, text=True, cwd=REPO_ROOT)
+    return CommandResult(
+        side_effect="EXECUTE",
+        command=" ".join(cmd),
+        returncode=result.returncode,
+        stdout=result.stdout,
+        stderr=result.stderr,
+    )
+
+
 TOOL_REGISTRY: dict[str, tuple[Callable, SideEffect]] = {
     "read_file": (read_file, "READ_ONLY"),
     "list_directory": (list_directory, "READ_ONLY"),
@@ -286,4 +333,6 @@ TOOL_REGISTRY: dict[str, tuple[Callable, SideEffect]] = {
     "git_blame": (git_blame, "READ_ONLY"),
     "inspect_dependency": (inspect_dependency, "READ_ONLY"),
     "query_build_system": (query_build_system, "READ_ONLY"),
+    "run_command": (run_command, "EXECUTE"),
+    "run_test": (run_test, "EXECUTE"),
 }
