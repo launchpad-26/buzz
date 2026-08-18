@@ -10,6 +10,7 @@ import unittest
 
 from graph import ProjectGraph
 from semantic_index import (
+    WORKED_EXAMPLE_CONCEPT,
     ConceptEntry,
     SemanticIndex,
     confirm_via_graph,
@@ -208,7 +209,7 @@ class FindItForMeTest(unittest.TestCase):
         index = SemanticIndex.from_symbols(symbols)
         graph = ProjectGraph.from_symbols(symbols)
 
-        result = find_it_for_me(index, graph, "which function decides if a kind is gated for shared visibility")
+        result = find_it_for_me(index, graph, WORKED_EXAMPLE_CONCEPT)
 
         self.assertEqual(result.qualified_name, "is_shared_gated_kind")
         self.assertEqual(result.subsystem.scope, "crates/buzz-core/src/kind.rs")
@@ -222,6 +223,24 @@ class FindItForMeTest(unittest.TestCase):
         self.assertEqual(result.concept, "anything")
         self.assertIsNone(result.candidate)
         self.assertIsNone(result.confirmation)
+
+
+class PositiveWorkedExampleTest(unittest.TestCase):
+    # STEP 8: the worked example must be a genuine concept match, not an
+    # accidental literal substring hit on the target function's own name.
+    def test_worked_example_concept_contains_no_substring_of_the_target_name(self) -> None:
+        self.assertNotIn("is_shared_gated_kind", WORKED_EXAMPLE_CONCEPT)
+        self.assertNotIn("is shared gated kind", WORKED_EXAMPLE_CONCEPT)  # underscores-as-spaces form too
+
+    def test_worked_example_resolves_to_the_real_target_with_confirmation(self) -> None:
+        symbols = [_IS_SHARED_GATED_KIND, _IS_UNSHARED_GATED_EVENT, _ENCODE_V2_CODE]
+        index = SemanticIndex.from_symbols(symbols)
+        graph = ProjectGraph.from_symbols(symbols)
+
+        result = find_it_for_me(index, graph, WORKED_EXAMPLE_CONCEPT)
+
+        self.assertEqual(result.qualified_name, "is_shared_gated_kind")
+        self.assertGreater(len(result.confirmation.callers) + len(result.confirmation.tests), 0)
 
 
 class FromSymbolsTest(unittest.TestCase):
