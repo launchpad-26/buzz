@@ -27,9 +27,13 @@ class EdgeFieldsTest(unittest.TestCase):
             ),
         ]
         self.assertEqual({e.edge_type for e in edges}, {"calls", "called_by", "tested_by", "configured_by"})
-        self.assertEqual(edges[0].source, "a")
-        self.assertEqual(edges[0].target, "b")
-        self.assertEqual(edges[0].evidence, "Symbol.calls[]")
+        expected = [
+            ("a", "b", "calls", "Symbol.calls[]"),
+            ("b", "a", "called_by", "Symbol.called_by[]"),
+            ("t", "a", "tested_by", "Symbol.tests[]"),
+            ("a", "OTEL_SERVICE_NAME", "configured_by", "Symbol.config_dependencies[]"),
+        ]
+        self.assertEqual([(e.source, e.target, e.edge_type, e.evidence) for e in edges], expected)
 
 
 def _sym(qualified_name: str, calls: tuple[str, ...] = (), called_by: tuple[str, ...] = ()) -> Symbol:
@@ -113,6 +117,27 @@ class SyntheticNodeNamespacingTest(unittest.TestCase):
         # symbol node ("RUST_LOG").
         self.assertEqual(graph.edges_from("config:RUST_LOG", ("calls",)), [])
         self.assertEqual(len(graph.edges_from("RUST_LOG", ("calls",))), 1)
+
+    def test_unresolved_call_targets_do_not_create_a_false_reachability_hub(self) -> None:
+        # Two unrelated symbols that both call the same unresolved external
+        # name (e.g. a std-lib/other-crate function #206 couldn't resolve,
+        # like "contains") must not become falsely reachable from each other.
+        # Before this fix, the bare unresolved name became a shared node, and
+        # the inverse "called_by" edge fanned every caller of that name into
+        # each other -- reproduced directly: reachable() with ("calls",
+        # "called_by") reported one caller reachable from the other.
+        symbol_a = _sym("moduleA::check_thing", calls=("contains",))
+        symbol_b = _sym("moduleB::totally_unrelated_thing", calls=("contains",))
+        graph = ProjectGraph.from_symbols([symbol_a, symbol_b])
+
+        result = reachable(graph, "moduleA::check_thing", ("calls", "called_by"), max_hops=2)
+        nodes = [r.node for r in result]
+
+        self.assertIn("extern:contains", nodes)
+        self.assertNotIn("moduleB::totally_unrelated_thing", nodes)
+        # The synthetic external node is a pure sink -- no "called_by" edges
+        # fan back out of it, unlike a real resolved symbol.
+        self.assertEqual(graph.edges_from("extern:contains", ("called_by",)), [])
 
 
 class ReachableRejectsInvalidBoundsTest(unittest.TestCase):
