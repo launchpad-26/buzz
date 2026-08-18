@@ -6,7 +6,7 @@ decided_in: launchpad-26/buzz#190
 supersedes: none
 ---
 
-# ADR-0015 — Project Intelligence Layer becomes PRD #4 scope, not a new PRD
+# ADR-0016 — Project Intelligence Layer becomes PRD #4 scope, not a new PRD
 
 ## Decision
 
