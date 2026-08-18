@@ -8,7 +8,15 @@ from __future__ import annotations
 
 import unittest
 
-from semantic_index import ConceptEntry, SemanticIndex, cosine_similarity, embed_text, summarize_symbol, tokenize
+from semantic_index import (
+    ConceptEntry,
+    SemanticIndex,
+    cosine_similarity,
+    embed_symbol,
+    embed_text,
+    summarize_symbol,
+    tokenize,
+)
 from symbol import DefinedAt, Symbol
 
 # A second real Symbol from the SAME file (crates/buzz-core/src/kind.rs:232-236),
@@ -21,6 +29,17 @@ _IS_UNSHARED_GATED_EVENT = Symbol(
     defined_at=DefinedAt(file="crates/buzz-core/src/kind.rs", start_line=232, end_line=236, temporal_state="WORKING"),
     signature="pub fn is_unshared_gated_event(event: &nostr::Event, requester_pubkey_bytes: &[u8]) -> bool",
     calls=("is_shared_gated_kind",),
+)
+
+# A real symbol from a DIFFERENT file with clearly unrelated vocabulary
+# (crates/buzz-core/src/invite.rs:34-36, cross-checked via `rql query`) -- used
+# to prove the two-stage search discriminates by subsystem, not just symbol.
+_ENCODE_V2_CODE = Symbol(
+    symbol_id="crates/buzz-core/src/invite.rs::encode_v2_code",
+    kind="function",
+    qualified_name="encode_v2_code",
+    defined_at=DefinedAt(file="crates/buzz-core/src/invite.rs", start_line=34, end_line=36, temporal_state="WORKING"),
+    signature="pub fn encode_v2_code(secret: &[u8; V2_SECRET_LEN]) -> String",
 )
 
 # A real Symbol from buzz-core, constructed by hand from fields already
@@ -128,6 +147,35 @@ class EmbedAndCosineSimilarityTest(unittest.TestCase):
         non_empty = embed_text("kind")
         self.assertEqual(cosine_similarity(empty, non_empty), 0.0)
         self.assertEqual(cosine_similarity(empty, empty), 0.0)
+
+
+class EmbedSymbolTest(unittest.TestCase):
+    def test_identity_tokens_are_weighted_more_than_context_tokens(self) -> None:
+        # is_unshared_gated_event's own summary mentions is_shared_gated_kind
+        # (via "calls") -- without identity-weighting, a query sharing
+        # vocabulary with that mention could make the CALLER outscore the
+        # callee itself. Confirmed this was a real risk (not hypothetical)
+        # by first observing it with plain embed_text(summary), before
+        # embed_symbol() was written -- see the fix commit's message.
+        vec = dict(embed_symbol(_IS_UNSHARED_GATED_EVENT))
+        # "event" (identity, weight 2.0/total) must outweigh "kind" (context,
+        # weight 1.0/total, absorbed from the "calls is_shared_gated_kind" mention).
+        self.assertGreater(vec["event"], vec["kind"])
+
+
+class TwoStageSearchTest(unittest.TestCase):
+    def test_ranks_the_correct_subsystem_then_the_correct_candidate_within_it(self) -> None:
+        index = SemanticIndex.from_symbols([_IS_SHARED_GATED_KIND, _IS_UNSHARED_GATED_EVENT, _ENCODE_V2_CODE])
+        results = index.search("which function decides if a kind is gated for shared visibility")
+
+        self.assertGreater(len(results), 0)
+        top = results[0]
+        # Stage 1: the correct subsystem (file) won.
+        self.assertEqual(top.subsystem.scope, "crates/buzz-core/src/kind.rs")
+        # Stage 2: the correct candidate symbol within it won.
+        self.assertEqual(top.candidate.scope, _IS_SHARED_GATED_KIND.symbol_id)
+        # The unrelated file's symbol never appears as the top result.
+        self.assertNotEqual(top.candidate.scope, _ENCODE_V2_CODE.symbol_id)
 
 
 class FromSymbolsTest(unittest.TestCase):
