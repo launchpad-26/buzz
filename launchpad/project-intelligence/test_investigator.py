@@ -64,6 +64,19 @@ class SearchTextTest(unittest.TestCase):
         self.assertEqual({m.file for m in matches}, grep_files)
 
 
+class InspectDependencyTest(unittest.TestCase):
+    def test_resolves_a_real_workspace_inherited_dependency(self) -> None:
+        dep = investigator.inspect_dependency("buzz-core", "nostr")
+        self.assertIsNotNone(dep)
+        self.assertEqual(dep.declared, {"workspace": True})
+        # Cross-checked directly against Cargo.toml:70's real entry.
+        self.assertEqual(dep.resolved["version"], "0.44")
+        self.assertIn("nip44", dep.resolved["features"])
+
+    def test_unknown_dependency_returns_none(self) -> None:
+        self.assertIsNone(investigator.inspect_dependency("buzz-core", "no-such-crate-xyz"))
+
+
 # search_symbols() shells out to the rql CLI, same as indexer.py's index_crate() --
 # not given a test here, same reasoning as test_indexer.py's docstring: verified
 # live against the real repo instead (see the commit message), so a RepoQL host

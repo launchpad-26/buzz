@@ -198,6 +198,35 @@ def git_blame(file: str, start_line: int, end_line: int) -> list[BlameLine]:
     ]
 
 
+@dataclass(frozen=True)
+class Dependency:
+    name: str
+    declared: dict  # the crate's own manifest entry, e.g. {"workspace": True}
+    resolved: dict  # the actual version/source, following workspace inheritance if present
+
+
+def inspect_dependency(crate: str, name: str) -> Dependency | None:
+    """A named dependency's declared version/source, resolved through
+    Cargo's `workspace = true` inheritance -- most of this workspace's
+    crates declare deps this way (crates/buzz-core/Cargo.toml), so returning
+    the bare `{"workspace": true}` without resolving it would not actually
+    answer the question "what version does this crate depend on".
+    """
+    import tomllib
+
+    crate_manifest = tomllib.loads((REPO_ROOT / "crates" / crate / "Cargo.toml").read_text())
+    declared = crate_manifest.get("dependencies", {}).get(name)
+    if declared is None:
+        return None
+
+    resolved = declared
+    if isinstance(declared, dict) and declared.get("workspace") is True:
+        root_manifest = tomllib.loads((REPO_ROOT / "Cargo.toml").read_text())
+        resolved = root_manifest.get("workspace", {}).get("dependencies", {}).get(name, declared)
+
+    return Dependency(name=name, declared=declared, resolved=resolved)
+
+
 TOOL_REGISTRY: dict[str, tuple[Callable, SideEffect]] = {
     "read_file": (read_file, "READ_ONLY"),
     "list_directory": (list_directory, "READ_ONLY"),
@@ -207,4 +236,5 @@ TOOL_REGISTRY: dict[str, tuple[Callable, SideEffect]] = {
     "find_references": (find_references, "READ_ONLY"),
     "inspect_git_history": (inspect_git_history, "READ_ONLY"),
     "git_blame": (git_blame, "READ_ONLY"),
+    "inspect_dependency": (inspect_dependency, "READ_ONLY"),
 }
