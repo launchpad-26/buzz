@@ -71,6 +71,11 @@ class MemoryEntryValidationTest(unittest.TestCase):
                 temporal_state="FUTURE",
             )
 
+    def test_all_three_valid_temporal_states_construct(self) -> None:
+        for i, state in enumerate(("BASE", "WORKING", "HISTORY")):
+            entry = MemoryEntry(id=f"temporal-{i}", entry_class="FACT", statement="x", evidence=("e",), temporal_state=state)
+            self.assertEqual(entry.temporal_state, state)
+
 
 class ProjectMemoryStoreTest(unittest.TestCase):
     def _store_with_one_of_each_class(self) -> ProjectMemory:
