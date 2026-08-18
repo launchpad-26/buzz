@@ -259,6 +259,42 @@ class SearchResult:
     candidate_score: float
 
 
+@dataclass(frozen=True)
+class PipelineResult:
+    concept: str
+    candidate: ConceptEntry | None
+    qualified_name: str | None
+    subsystem: ConceptEntry | None
+    candidate_score: float | None
+    subsystem_score: float | None
+    confirmation: Confirmation | None
+
+
+def find_it_for_me(index: SemanticIndex, graph: ProjectGraph, concept: str, top_k: int = 3) -> PipelineResult:
+    """The full Concept Retrieval pipeline in one call: concept -> subsystem
+    -> candidate symbols -> confirm via ProjectGraph -> present. Returns the
+    top-ranked candidate together with its structural confirmation, or an
+    empty result (every field None except concept) if the index has nothing
+    to rank at all -- never fabricates a candidate when there is none.
+    """
+    results = index.search(concept, top_k=top_k)
+    if not results:
+        return PipelineResult(concept, None, None, None, None, None, None)
+
+    top = results[0]
+    qualified_name = index.qualified_name_for(top.candidate.scope)
+    confirmation = confirm_via_graph(graph, qualified_name) if qualified_name else None
+    return PipelineResult(
+        concept=concept,
+        candidate=top.candidate,
+        qualified_name=qualified_name,
+        subsystem=top.subsystem,
+        candidate_score=top.candidate_score,
+        subsystem_score=top.subsystem_score,
+        confirmation=confirmation,
+    )
+
+
 def summarize_symbol(sym: Symbol) -> str:
     """A short natural-language gloss of a symbol, generated ONCE from #206's
     already-extracted structural facts -- never guessed fresh per query, per
