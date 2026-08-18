@@ -6,6 +6,7 @@ Run:  python3 -m unittest test_investigator    (from launchpad/project-intellige
 
 from __future__ import annotations
 
+import subprocess
 import unittest
 
 import investigator
@@ -43,6 +44,31 @@ class ListDirectoryTest(unittest.TestCase):
         entries = investigator.list_directory("launchpad/project-intelligence")
         self.assertIn("investigator.py", entries)
         self.assertIn("test_investigator.py", entries)
+
+
+class SearchTextTest(unittest.TestCase):
+    def test_finds_a_real_known_string(self) -> None:
+        matches = investigator.search_text("TOOL_REGISTRY", glob="*.py")
+        files = {m.file for m in matches}
+        self.assertIn("launchpad/project-intelligence/investigator.py", files)
+
+    def test_cross_checked_against_plain_grep(self) -> None:
+        matches = investigator.search_text("is_shared_gated_kind", glob="*.rs")
+        grep_result = subprocess.run(
+            ["grep", "-rln", "--include", "*.rs", "is_shared_gated_kind", "."],
+            capture_output=True,
+            text=True,
+            cwd=investigator.REPO_ROOT,
+        )
+        grep_files = {line.removeprefix("./") for line in grep_result.stdout.splitlines()}
+        self.assertEqual({m.file for m in matches}, grep_files)
+
+
+# search_symbols() shells out to the rql CLI, same as indexer.py's index_crate() --
+# not given a test here, same reasoning as test_indexer.py's docstring: verified
+# live against the real repo instead (see the commit message), so a RepoQL host
+# lock conflict (hit twice already building #206/#207) can never block this
+# committed, hermetic suite.
 
 
 if __name__ == "__main__":

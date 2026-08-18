@@ -21,6 +21,9 @@ before the subprocess actually runs, not silently (see run_tool()).
 
 from __future__ import annotations
 
+import json
+import subprocess
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Callable, Literal
 
@@ -52,8 +55,65 @@ def inspect_logs(path: str, tail_lines: int | None = None) -> str:
     return "\n".join(text.splitlines()[-tail_lines:])
 
 
+@dataclass(frozen=True)
+class TextMatch:
+    file: str
+    line: int
+    text: str
+
+
+def search_text(pattern: str, regex: bool = False, glob: str = "*") -> list[TextMatch]:
+    """Literal or regex text search across the repo. Uses plain `grep`, not
+    RepoQL -- this is the one tool with no structural need for the index, and
+    avoiding the dependency here means one less tool affected if the RepoQL
+    host is unavailable.
+    """
+    cmd = ["grep", "-rn", "--include", glob]
+    if not regex:
+        cmd.append("-F")
+    cmd += [pattern, "."]
+    result = subprocess.run(cmd, capture_output=True, text=True, cwd=REPO_ROOT)
+    matches = []
+    for line in result.stdout.splitlines():
+        # grep -n output: "./path/to/file:LINE:text"
+        path, lineno, text = line.split(":", 2)
+        matches.append(TextMatch(file=path.removeprefix("./"), line=int(lineno), text=text))
+    return matches
+
+
+@dataclass(frozen=True)
+class SymbolMatch:
+    qualified_name: str
+    kind: str
+    file: str
+    signature: str
+
+
+def search_symbols(name: str, crate: str | None = None) -> list[SymbolMatch]:
+    """Find symbols by name via RepoQL's Functions view -- structured data
+    (kind, declaring type, signature) a text search alone cannot give.
+    """
+    where = f"name = '{name}'"
+    if crate:
+        where += f" AND file LIKE '%crates/{crate}/%'"
+    sql = f"SELECT qualified_name, function_kind, declaring_type, file, signature FROM Functions WHERE {where}"
+    result = subprocess.run(["rql", "query", sql, "--json"], capture_output=True, text=True, check=True, cwd=REPO_ROOT)
+    rows = json.loads(result.stdout)
+    return [
+        SymbolMatch(
+            qualified_name=r["qualified_name"],
+            kind="method" if r.get("declaring_type") else "function",
+            file=r["file"].removeprefix("file:///"),
+            signature=r["signature"],
+        )
+        for r in rows
+    ]
+
+
 TOOL_REGISTRY: dict[str, tuple[Callable, SideEffect]] = {
     "read_file": (read_file, "READ_ONLY"),
     "list_directory": (list_directory, "READ_ONLY"),
     "inspect_logs": (inspect_logs, "READ_ONLY"),
+    "search_text": (search_text, "READ_ONLY"),
+    "search_symbols": (search_symbols, "READ_ONLY"),
 }
