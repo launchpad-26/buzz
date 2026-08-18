@@ -130,6 +130,44 @@ def with_called_by(symbols: list[Symbol]) -> list[Symbol]:
     ]
 
 
+def _rql_read_json(uri_with_modifier: str) -> dict:
+    result = subprocess.run(
+        ["rql", "read", uri_with_modifier, "--json"],
+        capture_output=True,
+        text=True,
+        check=True,
+        cwd=REPO_ROOT,
+    )
+    return json.loads(result.stdout)
+
+
+def enrich_git_ownership(sym: Symbol) -> Symbol:
+    """STEP 4: populate git_ownership via RepoQL's history/blame, for one symbol.
+
+    Not run eagerly over a whole crate in this task -- each call shells out to
+    `rql read` and costs roughly a second; batching/parallelizing that for
+    hundreds of symbols is a real performance concern this task's scope
+    (prove the schema and pipeline once) deliberately leaves for later.
+    """
+    base_uri = sym.symbol_id.split("#", 1)[0] + "#symbol=" + sym.qualified_name
+
+    history = _rql_read_json(f"{base_uri} => history")
+    history_lines = tuple(
+        f"{c['hash'][:7]} {c['date'][:10]} {c['author']} | {c['message']}"
+        for c in history.get("commits", [])
+    )
+
+    blame = _rql_read_json(f"{base_uri} => blame")
+    author_line_counts: dict[str, int] = {}
+    for line in blame.get("lines", ()):
+        author_line_counts[line["author"]] = author_line_counts.get(line["author"], 0) + 1
+    primary_authors = tuple(
+        author for author, _ in sorted(author_line_counts.items(), key=lambda kv: -kv[1])
+    )
+
+    return replace(sym, git_ownership=GitOwnership(primary_authors=primary_authors, history=history_lines))
+
+
 def _print_symbol(sym: Symbol) -> None:
     print(f"Symbol: {sym.qualified_name}")
     print(f"Defined: {sym.defined_at.file}:{sym.defined_at.start_line}-{sym.defined_at.end_line} "
@@ -138,6 +176,13 @@ def _print_symbol(sym: Symbol) -> None:
     print(f"Calls: {', '.join(sym.calls) if sym.calls else '(none found)'}")
     print(f"Called by: {', '.join(sym.called_by) if sym.called_by else '(not yet populated -- STEP 3)'}")
     print(f"Tests: {', '.join(sym.tests) if sym.tests else '(not yet populated -- STEP 5)'}")
+    if sym.git_ownership.history:
+        print(f"Primary authors: {', '.join(sym.git_ownership.primary_authors)}")
+        print("Git history:")
+        for line in sym.git_ownership.history:
+            print(f"  {line}")
+    else:
+        print("Git ownership: (not yet populated -- STEP 4)")
 
 
 if __name__ == "__main__":
@@ -146,7 +191,7 @@ if __name__ == "__main__":
     print(f"Indexed {len(symbols)} symbols from crates/{crate}\n")
     for sym in symbols:
         if sym.qualified_name == "is_shared_gated_kind":
-            _print_symbol(sym)
+            _print_symbol(enrich_git_ownership(sym))
             break
     else:
         print("(worked-example symbol 'is_shared_gated_kind' not found in this crate)")
