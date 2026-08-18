@@ -110,10 +110,55 @@ def search_symbols(name: str, crate: str | None = None) -> list[SymbolMatch]:
     ]
 
 
+@dataclass(frozen=True)
+class Reference:
+    caller_qualified_name: str
+    file: str
+    line: int
+
+
+def find_references(qualified_name: str, crate: str) -> list[Reference]:
+    """Real callers of a symbol, not just text matches on its name --
+    #208's own Definition of done draws this distinction explicitly.
+
+    A plain text search on the short name alone would match comments, doc
+    mentions, and unrelated identifiers sharing the name. This instead:
+    1. Enumerates every OTHER function in the crate via search_symbols
+       (structured data, not text).
+    2. Reads each candidate's own source range (read_file) and checks for a
+       real call-site pattern -- the short name immediately followed by `(`
+       -- not just the name appearing anywhere in the file.
+    This is the same distinction #206's with_called_by() drew (a resolved
+    call-site match, not a bare grep), reimplemented here since #208 has no
+    dependency on #206's branch-local code.
+    """
+    short_name = qualified_name.rsplit("::", 1)[-1]
+    call_pattern = f"{short_name}("
+
+    sql = (
+        "SELECT qualified_name, file, start_line, end_line FROM Functions "
+        f"WHERE file LIKE '%crates/{crate}/%' AND qualified_name != '{qualified_name}'"
+    )
+    result = subprocess.run(["rql", "query", sql, "--json"], capture_output=True, text=True, check=True, cwd=REPO_ROOT)
+    candidates = json.loads(result.stdout)
+
+    references = []
+    for c in candidates:
+        file_rel = c["file"].removeprefix("file:///")
+        body = read_file(file_rel, c["start_line"], c["end_line"])
+        line_offset = body.find(call_pattern)
+        if line_offset == -1:
+            continue
+        line_number = c["start_line"] + body[:line_offset].count("\n")
+        references.append(Reference(caller_qualified_name=c["qualified_name"], file=file_rel, line=line_number))
+    return references
+
+
 TOOL_REGISTRY: dict[str, tuple[Callable, SideEffect]] = {
     "read_file": (read_file, "READ_ONLY"),
     "list_directory": (list_directory, "READ_ONLY"),
     "inspect_logs": (inspect_logs, "READ_ONLY"),
     "search_text": (search_text, "READ_ONLY"),
     "search_symbols": (search_symbols, "READ_ONLY"),
+    "find_references": (find_references, "READ_ONLY"),
 }
