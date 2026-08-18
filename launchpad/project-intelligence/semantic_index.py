@@ -11,6 +11,8 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
+from symbol import Symbol
+
 
 @dataclass(frozen=True)
 class ConceptEntry:
@@ -46,3 +48,26 @@ class SemanticIndex:
 
     def get(self, scope: str) -> ConceptEntry | None:
         return self._entries.get(scope)
+
+
+def summarize_symbol(sym: Symbol) -> str:
+    """A short natural-language gloss of a symbol, generated ONCE from #206's
+    already-extracted structural facts -- never guessed fresh per query, per
+    the design doc's own stated constraint on ConceptEntry.summary.
+
+    Deliberately a deterministic template, not an LLM call: every other
+    module built this session (#206-#209) has no LLM/API dependency, and
+    #210's own issue text scopes "embedding model selection" as out of
+    scope beyond what demonstrates the pipeline once -- the same reasoning
+    extends to summary generation.
+    """
+    parts = [f"{sym.kind} {sym.qualified_name}", sym.signature]
+    if sym.calls:
+        parts.append("calls " + ", ".join(sym.calls))
+    if sym.tests:
+        parts.append("tested by " + ", ".join(sym.tests))
+    if sym.config_dependencies:
+        parts.append("configured by " + ", ".join(sym.config_dependencies))
+    if sym.documentation_links:
+        parts.append("documented in " + ", ".join(sym.documentation_links))
+    return "; ".join(parts)

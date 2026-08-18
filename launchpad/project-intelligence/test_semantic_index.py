@@ -8,7 +8,25 @@ from __future__ import annotations
 
 import unittest
 
-from semantic_index import ConceptEntry, SemanticIndex
+from semantic_index import ConceptEntry, SemanticIndex, summarize_symbol
+from symbol import DefinedAt, Symbol
+
+# A real Symbol from buzz-core, constructed by hand from fields already
+# cross-checked against the live repo in #206/#207 (crates/buzz-core/src/kind.rs)
+# -- not built via indexer.build_index(), which shells out to rql and is
+# deliberately kept out of this committed, hermetic suite (same reasoning as
+# test_indexer.py/test_graph.py).
+_IS_SHARED_GATED_KIND = Symbol(
+    symbol_id="crates/buzz-core/src/kind.rs::is_shared_gated_kind",
+    kind="function",
+    qualified_name="is_shared_gated_kind",
+    defined_at=DefinedAt(file="crates/buzz-core/src/kind.rs", start_line=219, end_line=221, temporal_state="WORKING"),
+    signature="pub fn is_shared_gated_kind(kind: u32) -> bool",
+    calls=("contains",),
+    called_by=("is_unshared_gated_event", "tests::shared_gated_kinds_membership"),
+    tests=("tests::shared_gated_kinds_membership",),
+    documentation_links=("ARCHITECTURE.md",),
+)
 
 
 class ConceptEntryStoreTest(unittest.TestCase):
@@ -31,6 +49,32 @@ class ConceptEntryStoreTest(unittest.TestCase):
         index.add(ConceptEntry(scope="s1", embedding=(), summary="a"))
         with self.assertRaises(ValueError):
             index.add(ConceptEntry(scope="s1", embedding=(), summary="b"))
+
+
+class SummarizeSymbolTest(unittest.TestCase):
+    def test_includes_the_qualified_name_and_a_real_test(self) -> None:
+        summary = summarize_symbol(_IS_SHARED_GATED_KIND)
+        self.assertIn("is_shared_gated_kind", summary)
+        self.assertIn("tests::shared_gated_kinds_membership", summary)  # a real entry from tests[]
+
+    def test_includes_signature_and_calls(self) -> None:
+        summary = summarize_symbol(_IS_SHARED_GATED_KIND)
+        self.assertIn("pub fn is_shared_gated_kind(kind: u32) -> bool", summary)
+        self.assertIn("contains", summary)
+
+    def test_omits_empty_fields_rather_than_printing_them_blank(self) -> None:
+        bare = Symbol(
+            symbol_id="x",
+            kind="function",
+            qualified_name="bare_fn",
+            defined_at=DefinedAt(file="x.rs", start_line=1, end_line=2, temporal_state="WORKING"),
+            signature="fn bare_fn()",
+        )
+        summary = summarize_symbol(bare)
+        self.assertNotIn("tested by", summary)
+        self.assertNotIn("configured by", summary)
+        self.assertNotIn("documented in", summary)
+        self.assertNotIn("calls", summary)
 
 
 if __name__ == "__main__":
