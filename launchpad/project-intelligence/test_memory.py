@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import unittest
 
-from memory import MemoryEntry
+from memory import MemoryEntry, ProjectMemory
 
 
 class MemoryEntryValidationTest(unittest.TestCase):
@@ -70,6 +70,44 @@ class MemoryEntryValidationTest(unittest.TestCase):
                 provided_by="someone",
                 temporal_state="FUTURE",
             )
+
+
+class ProjectMemoryStoreTest(unittest.TestCase):
+    def _store_with_one_of_each_class(self) -> ProjectMemory:
+        store = ProjectMemory()
+        store.add(MemoryEntry(id="f1", entry_class="FACT", statement="fact", evidence=("e1",)))
+        store.add(
+            MemoryEntry(id="i1", entry_class="INFERENCE", statement="inference", evidence=("e1", "e2"), confidence=0.6)
+        )
+        store.add(
+            MemoryEntry(id="t1", entry_class="TEAM_KNOWLEDGE", statement="team knowledge", provided_by="someone")
+        )
+        return store
+
+    def test_query_by_class_returns_only_that_class(self) -> None:
+        store = self._store_with_one_of_each_class()
+
+        team_knowledge = store.query_by_class("TEAM_KNOWLEDGE")
+        self.assertEqual([e.id for e in team_knowledge], ["t1"])
+
+        facts = store.query_by_class("FACT")
+        self.assertEqual([e.id for e in facts], ["f1"])
+
+        inferences = store.query_by_class("INFERENCE")
+        self.assertEqual([e.id for e in inferences], ["i1"])
+
+    def test_get_returns_the_stored_entry(self) -> None:
+        store = self._store_with_one_of_each_class()
+        self.assertEqual(store.get("f1").statement, "fact")
+
+    def test_get_returns_none_for_an_unknown_id(self) -> None:
+        store = ProjectMemory()
+        self.assertIsNone(store.get("no-such-id"))
+
+    def test_add_rejects_a_duplicate_id(self) -> None:
+        store = self._store_with_one_of_each_class()
+        with self.assertRaises(ValueError):
+            store.add(MemoryEntry(id="f1", entry_class="FACT", statement="different", evidence=("e",)))
 
 
 if __name__ == "__main__":

@@ -61,3 +61,26 @@ class MemoryEntry:
 
         if self.entry_class in ("FACT", "INFERENCE") and not self.evidence:
             raise ValueError(f"evidence is required for a {self.entry_class} entry")
+
+
+class ProjectMemory:
+    """An in-process MemoryEntry store.
+
+    `class` is a real structural field on every stored entry, queryable
+    directly (query_by_class) -- never a note embedded in `statement` that a
+    caller would have to parse back out.
+    """
+
+    def __init__(self) -> None:
+        self._entries: dict[str, MemoryEntry] = {}
+
+    def add(self, entry: MemoryEntry) -> None:
+        if entry.id in self._entries:
+            raise ValueError(f"an entry with id {entry.id!r} already exists")
+        self._entries[entry.id] = entry
+
+    def get(self, entry_id: str) -> MemoryEntry | None:
+        return self._entries.get(entry_id)
+
+    def query_by_class(self, entry_class: EntryClass) -> list[MemoryEntry]:
+        return [e for e in self._entries.values() if e.entry_class == entry_class]
