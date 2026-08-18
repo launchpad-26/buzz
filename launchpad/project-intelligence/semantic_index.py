@@ -11,7 +11,7 @@ from __future__ import annotations
 
 import math
 import re
-from collections import Counter
+from collections import Counter, defaultdict
 from dataclasses import dataclass
 
 from symbol import Symbol
@@ -92,6 +92,7 @@ class SemanticIndex:
 
     def __init__(self) -> None:
         self._entries: dict[str, ConceptEntry] = {}
+        self._qualified_name_by_symbol_id: dict[str, str] = {}
 
     def add(self, entry: ConceptEntry) -> None:
         if entry.scope in self._entries:
@@ -100,6 +101,50 @@ class SemanticIndex:
 
     def get(self, scope: str) -> ConceptEntry | None:
         return self._entries.get(scope)
+
+    def qualified_name_for(self, symbol_id: str) -> str | None:
+        """The qualified_name a per-symbol ConceptEntry's scope (symbol_id)
+        came from -- needed because #207's ProjectGraph addresses nodes by
+        qualified_name, not symbol_id (see graph.py's own docstring), so the
+        pipeline's confirmation step (STEP 6) must translate between the
+        two, not assume they're interchangeable.
+        """
+        return self._qualified_name_by_symbol_id.get(symbol_id)
+
+    @classmethod
+    def from_symbols(cls, symbols: list[Symbol]) -> "SemanticIndex":
+        """Builds TWO levels of ConceptEntry from real Symbol records:
+
+        1. One per symbol (scope=symbol_id) -- the "candidate symbols" level
+           of the pipeline. symbol_id, not qualified_name: a real crate can
+           have multiple symbols sharing one short qualified_name (e.g. a
+           method name repeated across different impls/modules) -- found by
+           running this against real buzz-core data, not assumed -- so
+           qualified_name is not safe as a unique scope key. symbol_id (a
+           real RepoQL URI, from #206's index_crate()) is.
+        2. One per FILE (scope=file path, aggregating that file's symbols'
+           summaries into one combined summary/embedding) -- the "candidate
+           subsystem(s)" level. The design doc's own ConceptEntry schema
+           names file as a valid scope kind alongside symbol_id, so this is
+           the schema's own coarser level, not invented machinery.
+
+        Both are generated once here, at index time, from #206's already-
+        extracted structural facts -- never guessed fresh per query.
+        """
+        index = cls()
+        file_symbols: dict[str, list[Symbol]] = defaultdict(list)
+
+        for sym in symbols:
+            summary = summarize_symbol(sym)
+            index.add(ConceptEntry(scope=sym.symbol_id, embedding=embed_text(summary), summary=summary))
+            index._qualified_name_by_symbol_id[sym.symbol_id] = sym.qualified_name
+            file_symbols[sym.defined_at.file].append(sym)
+
+        for file, syms_in_file in file_symbols.items():
+            file_summary = "; ".join(summarize_symbol(s) for s in syms_in_file)
+            index.add(ConceptEntry(scope=file, embedding=embed_text(file_summary), summary=file_summary))
+
+        return index
 
 
 def summarize_symbol(sym: Symbol) -> str:

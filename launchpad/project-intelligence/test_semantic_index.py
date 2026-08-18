@@ -11,6 +11,18 @@ import unittest
 from semantic_index import ConceptEntry, SemanticIndex, cosine_similarity, embed_text, summarize_symbol, tokenize
 from symbol import DefinedAt, Symbol
 
+# A second real Symbol from the SAME file (crates/buzz-core/src/kind.rs:232-236),
+# cross-checked directly against the real source -- used to demonstrate STEP 4's
+# per-file aggregation with more than one real symbol from the same file.
+_IS_UNSHARED_GATED_EVENT = Symbol(
+    symbol_id="crates/buzz-core/src/kind.rs::is_unshared_gated_event",
+    kind="function",
+    qualified_name="is_unshared_gated_event",
+    defined_at=DefinedAt(file="crates/buzz-core/src/kind.rs", start_line=232, end_line=236, temporal_state="WORKING"),
+    signature="pub fn is_unshared_gated_event(event: &nostr::Event, requester_pubkey_bytes: &[u8]) -> bool",
+    calls=("is_shared_gated_kind",),
+)
+
 # A real Symbol from buzz-core, constructed by hand from fields already
 # cross-checked against the live repo in #206/#207 (crates/buzz-core/src/kind.rs)
 # -- not built via indexer.build_index(), which shells out to rql and is
@@ -116,6 +128,51 @@ class EmbedAndCosineSimilarityTest(unittest.TestCase):
         non_empty = embed_text("kind")
         self.assertEqual(cosine_similarity(empty, non_empty), 0.0)
         self.assertEqual(cosine_similarity(empty, empty), 0.0)
+
+
+class FromSymbolsTest(unittest.TestCase):
+    def test_builds_one_concept_entry_per_symbol_keyed_by_symbol_id(self) -> None:
+        index = SemanticIndex.from_symbols([_IS_SHARED_GATED_KIND, _IS_UNSHARED_GATED_EVENT])
+        self.assertIsNotNone(index.get(_IS_SHARED_GATED_KIND.symbol_id))
+        self.assertIsNotNone(index.get(_IS_UNSHARED_GATED_EVENT.symbol_id))
+
+    def test_symbol_id_not_qualified_name_avoids_a_real_collision(self) -> None:
+        # Two distinct real symbols sharing one qualified_name (a realistic
+        # shape found live against buzz-core -- multiple symbols named
+        # "build_event" in different modules) must not collide, since
+        # qualified_name is not a safe unique key but symbol_id is.
+        a = Symbol(
+            symbol_id="file:///crates/buzz-core/src/a.rs#symbol=build_event",
+            kind="function",
+            qualified_name="build_event",
+            defined_at=DefinedAt(file="crates/buzz-core/src/a.rs", start_line=1, end_line=2, temporal_state="WORKING"),
+            signature="fn build_event() -> Event",
+        )
+        b = Symbol(
+            symbol_id="file:///crates/buzz-core/src/b.rs#symbol=build_event",
+            kind="function",
+            qualified_name="build_event",
+            defined_at=DefinedAt(file="crates/buzz-core/src/b.rs", start_line=1, end_line=2, temporal_state="WORKING"),
+            signature="fn build_event() -> Event",
+        )
+        index = SemanticIndex.from_symbols([a, b])  # must not raise
+        self.assertIsNotNone(index.get(a.symbol_id))
+        self.assertIsNotNone(index.get(b.symbol_id))
+
+    def test_qualified_name_for_translates_symbol_id_back(self) -> None:
+        index = SemanticIndex.from_symbols([_IS_SHARED_GATED_KIND])
+        self.assertEqual(index.qualified_name_for(_IS_SHARED_GATED_KIND.symbol_id), "is_shared_gated_kind")
+
+    def test_builds_a_file_level_entry_aggregating_more_than_one_real_symbol(self) -> None:
+        index = SemanticIndex.from_symbols([_IS_SHARED_GATED_KIND, _IS_UNSHARED_GATED_EVENT])
+        file_entry = index.get("crates/buzz-core/src/kind.rs")
+        self.assertIsNotNone(file_entry)
+        # Both real symbols' own qualified names appear in the aggregated summary.
+        self.assertIn("is_shared_gated_kind", file_entry.summary)
+        self.assertIn("is_unshared_gated_event", file_entry.summary)
+        # The aggregated embedding is not just one symbol's alone.
+        single_symbol_entry = index.get(_IS_SHARED_GATED_KIND.symbol_id)
+        self.assertNotEqual(file_entry.embedding, single_symbol_entry.embedding)
 
 
 if __name__ == "__main__":
