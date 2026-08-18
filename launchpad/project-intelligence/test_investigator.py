@@ -77,6 +77,35 @@ class InspectDependencyTest(unittest.TestCase):
         self.assertIsNone(investigator.inspect_dependency("buzz-core", "no-such-crate-xyz"))
 
 
+class RunCommandAndRunTestTest(unittest.TestCase):
+    def test_run_command_surfaces_execute_flag_before_output(self) -> None:
+        with self.subTest("printed"):
+            proc = subprocess.run(
+                [
+                    "python3",
+                    "-c",
+                    "import investigator; r = investigator.run_command(['echo', 'hi']); print('AFTER:', r.stdout.strip())",
+                ],
+                capture_output=True,
+                text=True,
+                cwd=investigator.REPO_ROOT / "launchpad" / "project-intelligence",
+            )
+            lines = proc.stdout.splitlines()
+            self.assertTrue(lines[0].startswith("[EXECUTE] run_command:"))
+            self.assertEqual(lines[1], "AFTER: hi")
+
+        with self.subTest("on the returned result"):
+            result = investigator.run_command(["echo", "hi"])
+            self.assertEqual(result.side_effect, "EXECUTE")
+            self.assertEqual(result.returncode, 0)
+            self.assertEqual(result.stdout.strip(), "hi")
+
+    def test_run_test_surfaces_execute_flag_and_runs_a_real_fast_test(self) -> None:
+        result = investigator.run_test("buzz-core", "kind::tests::")
+        self.assertEqual(result.side_effect, "EXECUTE")
+        self.assertIn("test result:", result.stdout)
+
+
 class QueryBuildSystemTest(unittest.TestCase):
     def test_resolves_real_crate_targets_with_no_build_artifacts(self) -> None:
         before = subprocess.run(
