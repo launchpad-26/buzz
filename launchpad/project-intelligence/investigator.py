@@ -154,6 +154,50 @@ def find_references(qualified_name: str, crate: str) -> list[Reference]:
     return references
 
 
+def _rql_read_json(uri_with_modifier: str) -> dict:
+    result = subprocess.run(
+        ["rql", "read", uri_with_modifier, "--json"], capture_output=True, text=True, check=True, cwd=REPO_ROOT
+    )
+    return json.loads(result.stdout)
+
+
+@dataclass(frozen=True)
+class CommitSummary:
+    hash: str
+    date: str
+    author: str
+    message: str
+
+
+def inspect_git_history(file: str, start_line: int, end_line: int) -> list[CommitSummary]:
+    """Commits touching a file range -- a thin wrapper over RepoQL's `=> history`
+    modifier, the same primitive #206 already proved (enrich_git_ownership())."""
+    data = _rql_read_json(f"file:///{file}#line={start_line},{end_line} => history")
+    return [
+        CommitSummary(hash=c["hash"], date=c["date"], author=c["author"], message=c["message"])
+        for c in data.get("commits", [])
+    ]
+
+
+@dataclass(frozen=True)
+class BlameLine:
+    line: int
+    content: str
+    hash: str
+    author: str
+    date: str
+
+
+def git_blame(file: str, start_line: int, end_line: int) -> list[BlameLine]:
+    """Line-level authorship -- a thin wrapper over RepoQL's `=> blame` modifier,
+    the same primitive #206 already proved."""
+    data = _rql_read_json(f"file:///{file}#line={start_line},{end_line} => blame")
+    return [
+        BlameLine(line=ln["lineNumber"], content=ln["content"], hash=ln["hash"], author=ln["author"], date=ln["date"])
+        for ln in data.get("lines", [])
+    ]
+
+
 TOOL_REGISTRY: dict[str, tuple[Callable, SideEffect]] = {
     "read_file": (read_file, "READ_ONLY"),
     "list_directory": (list_directory, "READ_ONLY"),
@@ -161,4 +205,6 @@ TOOL_REGISTRY: dict[str, tuple[Callable, SideEffect]] = {
     "search_text": (search_text, "READ_ONLY"),
     "search_symbols": (search_symbols, "READ_ONLY"),
     "find_references": (find_references, "READ_ONLY"),
+    "inspect_git_history": (inspect_git_history, "READ_ONLY"),
+    "git_blame": (git_blame, "READ_ONLY"),
 }
