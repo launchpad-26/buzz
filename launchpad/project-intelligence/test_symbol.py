@@ -12,7 +12,7 @@ from __future__ import annotations
 
 import unittest
 
-from symbol import DefinedAt, GitOwnership, Symbol
+from symbol import CommitSummary, DefinedAt, GitOwnership, Symbol
 
 
 class SymbolFieldsTest(unittest.TestCase):
@@ -35,7 +35,14 @@ class SymbolFieldsTest(unittest.TestCase):
             documentation_links=("launchpad/AGENTS.md#kind-registry",),
             git_ownership=GitOwnership(
                 primary_authors=("alice",),
-                history=("f4e1c9 add moderation-kind gating",),
+                history=(
+                    CommitSummary(
+                        hash="f4e1c9d",
+                        date="2026-05-02T00:00:00+00:00",
+                        author="alice",
+                        message="add moderation-kind gating",
+                    ),
+                ),
             ),
         )
 
@@ -52,7 +59,11 @@ class SymbolFieldsTest(unittest.TestCase):
         self.assertEqual(sym.config_dependencies, ())
         self.assertEqual(sym.documentation_links, ("launchpad/AGENTS.md#kind-registry",))
         self.assertEqual(sym.git_ownership.primary_authors, ("alice",))
-        self.assertEqual(sym.git_ownership.history, ("f4e1c9 add moderation-kind gating",))
+        self.assertEqual(len(sym.git_ownership.history), 1)
+        commit = sym.git_ownership.history[0]
+        self.assertEqual(commit.hash, "f4e1c9d")
+        self.assertEqual(commit.author, "alice")
+        self.assertEqual(commit.message, "add moderation-kind gating")
 
     def test_defaults_are_empty_not_none(self) -> None:
         sym = Symbol(

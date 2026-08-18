@@ -19,9 +19,22 @@ class DefinedAt:
 
 
 @dataclass(frozen=True)
+class CommitSummary:
+    """One commit touching a symbol's range -- kept structured (not a single
+    formatted string) so a consumer can read the hash, date, author, or
+    message independently, per the design doc's "hash/date/author/message"
+    schema (Data Model, item 1)."""
+
+    hash: str
+    date: str
+    author: str
+    message: str
+
+
+@dataclass(frozen=True)
 class GitOwnership:
     primary_authors: tuple[str, ...] = ()
-    history: tuple[str, ...] = ()  # one summary line per commit touching this symbol
+    history: tuple[CommitSummary, ...] = ()
 
 
 @dataclass(frozen=True)

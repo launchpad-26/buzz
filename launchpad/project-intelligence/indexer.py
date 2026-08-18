@@ -22,7 +22,7 @@ import sys
 from dataclasses import replace
 from pathlib import Path
 
-from symbol import DefinedAt, GitOwnership, Symbol
+from symbol import CommitSummary, DefinedAt, GitOwnership, Symbol
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 
@@ -128,9 +128,21 @@ def with_called_by(symbols: list[Symbol]) -> list[Symbol]:
     """STEP 3: materialize called_by[] as a real inverse index, once, over the
     already-indexed set -- not recomputed per query.
 
-    Matches each symbol's calls[] entries against the indexed set's own `name`
-    (the short, unqualified identifier calls[] holds), same best-effort scope as
-    step 2: a name match, not type-resolved call-graph precision.
+    Also resolves each symbol's own calls[] from the bare short names STEP 2
+    could only scan for, to the same qualified-name representation called_by[]
+    uses -- both fields are symbol references (design doc, Data Model item 1)
+    and one holding short names while the other held qualified names was an
+    internal inconsistency, caught in review. A call to something not in the
+    indexed set (a std-lib method, another crate) has no qualified name to
+    resolve to and keeps its bare short name, marked as such by the absence of
+    "::" -- there is nothing more precise to offer without indexing that
+    target too.
+
+    Same best-effort scope as step 2: a name match, not type-resolved
+    call-graph precision. A short name shared by more than one indexed symbol
+    resolves to ALL of them, which can attach a caller to the wrong target --
+    an accepted limitation of this task's scope (see the plan's LEFT OUT);
+    real precision is #207's (ProjectGraph) job once symbols exist to link.
     """
     by_name: dict[str, list[str]] = {}
     for sym in symbols:
@@ -143,8 +155,19 @@ def with_called_by(symbols: list[Symbol]) -> list[Symbol]:
                 if target_qname != sym.qualified_name:
                     called_by[target_qname].append(sym.qualified_name)
 
+    def resolve_calls(calls: tuple[str, ...], own_qname: str) -> tuple[str, ...]:
+        resolved = []
+        for name in calls:
+            targets = [t for t in by_name.get(name, ()) if t != own_qname]
+            resolved.extend(targets or [name])
+        return tuple(dict.fromkeys(resolved))
+
     return [
-        replace(sym, called_by=tuple(dict.fromkeys(called_by[sym.qualified_name])))
+        replace(
+            sym,
+            calls=resolve_calls(sym.calls, sym.qualified_name),
+            called_by=tuple(dict.fromkeys(called_by[sym.qualified_name])),
+        )
         for sym in symbols
     ]
 
@@ -175,12 +198,18 @@ def _repo_markdown_files() -> list[Path]:
 
 
 def with_documentation_links(symbols: list[Symbol]) -> list[Symbol]:
-    """STEP 7: attach markdown docs that mention each symbol's qualified name.
+    """STEP 7: attach markdown docs that mention each symbol's qualified name
+    OR its source file (either is real evidence the doc discusses it).
 
-    Best-effort: a name match (word-boundary), not a semantic check that the
-    doc is actually ABOUT this symbol -- a name shared with an unrelated
-    concept would false-positive. Scoped to this repo's root-level and
-    launchpad/ markdown, not every markdown file in the tree.
+    Best-effort: a name/path match, not a semantic check that the doc is
+    actually ABOUT this symbol -- a name shared with an unrelated concept, or
+    a file mentioned for an unrelated reason, would false-positive. Scoped to
+    this repo's root-level and launchpad/ markdown, not every markdown file
+    in the tree. Does not attach a `#section` fragment -- doing that requires
+    parsing each doc's heading structure to know which section a match falls
+    under, a bigger lift than this task's own done-when asked for (a symbol
+    documented "somewhere" showing that doc's *path*); left for whoever needs
+    section-level granularity next.
     """
     doc_files = _repo_markdown_files()
     doc_texts = [(f, f.read_text(errors="ignore")) for f in doc_files]
@@ -188,9 +217,12 @@ def with_documentation_links(symbols: list[Symbol]) -> list[Symbol]:
     result = []
     for sym in symbols:
         short_name = sym.qualified_name.rsplit("::", 1)[-1]
-        pattern = re.compile(r"\b" + re.escape(short_name) + r"\b")
+        name_pattern = re.compile(r"\b" + re.escape(short_name) + r"\b")
+        file_pattern = re.compile(re.escape(sym.defined_at.file))
         links = tuple(
-            str(f.relative_to(REPO_ROOT)) for f, text in doc_texts if pattern.search(text)
+            str(f.relative_to(REPO_ROOT))
+            for f, text in doc_texts
+            if name_pattern.search(text) or file_pattern.search(text)
         )
         result.append(replace(sym, documentation_links=links))
     return result
@@ -218,8 +250,8 @@ def enrich_git_ownership(sym: Symbol) -> Symbol:
     base_uri = sym.symbol_id.split("#", 1)[0] + "#symbol=" + sym.qualified_name
 
     history = _rql_read_json(f"{base_uri} => history")
-    history_lines = tuple(
-        f"{c['hash'][:7]} {c['date'][:10]} {c['author']} | {c['message']}"
+    commits = tuple(
+        CommitSummary(hash=c["hash"], date=c["date"], author=c["author"], message=c["message"])
         for c in history.get("commits", [])
     )
 
@@ -231,13 +263,20 @@ def enrich_git_ownership(sym: Symbol) -> Symbol:
         author for author, _ in sorted(author_line_counts.items(), key=lambda kv: -kv[1])
     )
 
-    return replace(sym, git_ownership=GitOwnership(primary_authors=primary_authors, history=history_lines))
+    return replace(sym, git_ownership=GitOwnership(primary_authors=primary_authors, history=commits))
 
 
 def build_index(crate_name: str) -> list[Symbol]:
     """The full pipeline, steps 2-3 and 5-7 -- everything except git_ownership
-    (STEP 4), which is applied selectively via enrich_git_ownership() rather
-    than eagerly for a whole crate (see that function's docstring)."""
+    (STEP 4). Every returned Symbol has an EMPTY GitOwnership by default; call
+    enrich_git_ownership() per symbol to populate it. This is deliberate, not
+    partial: #206's own Definition of done requires git_ownership verified
+    "for at least one symbol" (a chosen worked example), not eagerly for a
+    whole crate -- each rql read call costs roughly a second, and batching
+    that for hundreds of symbols is a real performance concern this task's
+    scope leaves for later. A caller of this function alone gets no ownership
+    data; that is the contract, not a bug.
+    """
     symbols = index_crate(crate_name)
     symbols = with_called_by(symbols)
     symbols = with_tests(symbols)
@@ -249,6 +288,8 @@ def _print_symbol(sym: Symbol) -> None:
     """STEP 8: one full Symbol record, matching the design doc's
     PaymentService.processPayment worked-example shape -- every field
     populated or explicitly empty, never silently omitted."""
+    print(f"Symbol ID: {sym.symbol_id}")
+    print(f"Kind: {sym.kind}")
     print(f"Symbol: {sym.qualified_name}")
     print(f"Defined: {sym.defined_at.file}:{sym.defined_at.start_line}-{sym.defined_at.end_line} "
           f"({sym.defined_at.temporal_state})")
@@ -261,8 +302,8 @@ def _print_symbol(sym: Symbol) -> None:
     if sym.git_ownership.history:
         print(f"Primary authors: {', '.join(sym.git_ownership.primary_authors)}")
         print("Git history:")
-        for line in sym.git_ownership.history:
-            print(f"  {line}")
+        for c in sym.git_ownership.history:
+            print(f"  {c.hash[:7]} {c.date[:10]} {c.author} | {c.message}")
     else:
         print("Git ownership: (none found)")
 
