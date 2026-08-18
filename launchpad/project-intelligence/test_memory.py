@@ -110,5 +110,39 @@ class ProjectMemoryStoreTest(unittest.TestCase):
             store.add(MemoryEntry(id="f1", entry_class="FACT", statement="different", evidence=("e",)))
 
 
+class RecordCodeContradictionTest(unittest.TestCase):
+    def test_supersedes_a_fact_entry_without_overwriting_it(self) -> None:
+        store = ProjectMemory()
+        original = MemoryEntry(
+            id="f1", entry_class="FACT", statement="is_shared_gated_kind gates only KIND_PERSONA", evidence=("e1",)
+        )
+        store.add(original)
+
+        new_entry = store.record_code_contradiction(
+            "f1", "is_shared_gated_kind gates KIND_PERSONA and KIND_TEAM_CATALOG", ("crates/buzz-core/src/kind.rs:219",)
+        )
+
+        self.assertEqual(new_entry.entry_class, "FACT")
+        self.assertEqual(new_entry.statement, "is_shared_gated_kind gates KIND_PERSONA and KIND_TEAM_CATALOG")
+
+        old_still_in_store = store.get("f1")
+        self.assertEqual(old_still_in_store.statement, original.statement)  # never silently overwritten
+        self.assertEqual(old_still_in_store.evidence, original.evidence)
+        self.assertEqual(old_still_in_store.superseded_by, new_entry.id)  # but flagged stale
+
+    def test_new_entry_is_queryable_alongside_the_old_one(self) -> None:
+        store = ProjectMemory()
+        store.add(MemoryEntry(id="f1", entry_class="FACT", statement="old", evidence=("e1",)))
+        new_entry = store.record_code_contradiction("f1", "new", ("e2",))
+
+        facts = {e.id for e in store.query_by_class("FACT")}
+        self.assertEqual(facts, {"f1", new_entry.id})
+
+    def test_unknown_entry_id_raises(self) -> None:
+        store = ProjectMemory()
+        with self.assertRaises(KeyError):
+            store.record_code_contradiction("no-such-id", "new", ("e",))
+
+
 if __name__ == "__main__":
     unittest.main()

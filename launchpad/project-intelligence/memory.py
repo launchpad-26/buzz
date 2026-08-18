@@ -11,7 +11,8 @@ statement from a person, never a code-only observation, supersedes it.
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+import uuid
+from dataclasses import dataclass, replace
 from typing import Literal
 
 EntryClass = Literal["FACT", "INFERENCE", "TEAM_KNOWLEDGE"]
@@ -84,3 +85,41 @@ class ProjectMemory:
 
     def query_by_class(self, entry_class: EntryClass) -> list[MemoryEntry]:
         return [e for e in self._entries.values() if e.entry_class == entry_class]
+
+    def _supersede(self, old: MemoryEntry, new: MemoryEntry) -> None:
+        """Store the new entry, and mark the old one superseded by it.
+
+        MemoryEntry is frozen -- "setting" superseded_by means storing a
+        REPLACEMENT instance with that one field changed via
+        dataclasses.replace(), never mutating the original in place. This is
+        the mechanism the reconciliation rule depends on: the old entry's
+        statement, evidence, and every other field stay byte-for-byte what
+        they were -- get(old.id) never returns something silently rewritten.
+        """
+        self.add(new)
+        self._entries[old.id] = replace(old, superseded_by=new.id)
+
+    def record_code_contradiction(self, entry_id: str, new_statement: str, new_evidence: tuple[str, ...]) -> MemoryEntry | None:
+        """Live repository evidence contradicts a stored entry.
+
+        For FACT/INFERENCE: create a new FACT entry from the new evidence and
+        flag the old entry stale via superseded_by -- never delete or
+        silently overwrite the old statement; the repository wins, but the
+        old claim's own record stays intact for anyone auditing why the
+        agent used to believe it. Returns the new entry.
+
+        STEP 4 adds this function's TEAM_KNOWLEDGE exception.
+        """
+        old = self._entries.get(entry_id)
+        if old is None:
+            raise KeyError(entry_id)
+
+        new_entry = MemoryEntry(
+            id=str(uuid.uuid4()),
+            entry_class="FACT",
+            statement=new_statement,
+            evidence=tuple(new_evidence),
+            temporal_state=old.temporal_state,
+        )
+        self._supersede(old, new_entry)
+        return new_entry
