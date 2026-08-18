@@ -32,7 +32,7 @@ class EdgeFieldsTest(unittest.TestCase):
         self.assertEqual(edges[0].evidence, "Symbol.calls[]")
 
 
-def _sym(qualified_name: str, calls: tuple[str, ...] = ()) -> Symbol:
+def _sym(qualified_name: str, calls: tuple[str, ...] = (), called_by: tuple[str, ...] = ()) -> Symbol:
     return Symbol(
         symbol_id=f"file:///f.rs#symbol={qualified_name}",
         kind="function",
@@ -40,16 +40,22 @@ def _sym(qualified_name: str, calls: tuple[str, ...] = ()) -> Symbol:
         defined_at=DefinedAt("f.rs", 1, 2, "WORKING"),
         signature=f"fn {qualified_name}()",
         calls=calls,
+        called_by=called_by,
     )
 
 
 class ProjectGraphFromSymbolsTest(unittest.TestCase):
     def test_calls_and_called_by_are_structural_inverses_not_double_counted(self) -> None:
         # Mirrors the real shape: #206 already resolves calls[] to qualified
-        # names, and called_by[] is that same fact from the other side --
-        # ProjectGraph must not read both and double the edge.
+        # names, and called_by[] is that same fact from the other side.
+        # callee.called_by is populated here (not left empty) specifically so
+        # an implementation that incorrectly reads BOTH calls[] and
+        # called_by[] as independent sources -- doubling this edge from the
+        # same underlying fact -- would fail this test. Caught in review: an
+        # earlier version of this fixture left called_by empty, which could
+        # not have caught that regression.
         caller = _sym("caller", calls=("callee",))
-        callee = _sym("callee", calls=(), )
+        callee = _sym("callee", called_by=("caller",))
         graph = ProjectGraph.from_symbols([caller, callee])
 
         self.assertEqual(len(graph.edges_from("caller", ("calls",))), 1)
@@ -80,7 +86,7 @@ class EdgeDirectionTest(unittest.TestCase):
         edges = graph.edges_from("is_private_ip", ("documented_by",))
         self.assertEqual(len(edges), 1)
         self.assertEqual(edges[0].source, "is_private_ip")
-        self.assertEqual(edges[0].target, "ARCHITECTURE.md")
+        self.assertEqual(edges[0].target, "doc:ARCHITECTURE.md")
 
     def test_configured_by_reads_symbol_is_configured_by_key(self) -> None:
         target = replace(_sym("service_resource"), config_dependencies=("OTEL_SERVICE_NAME",))
@@ -89,7 +95,35 @@ class EdgeDirectionTest(unittest.TestCase):
         edges = graph.edges_from("service_resource", ("configured_by",))
         self.assertEqual(len(edges), 1)
         self.assertEqual(edges[0].source, "service_resource")
-        self.assertEqual(edges[0].target, "OTEL_SERVICE_NAME")
+        self.assertEqual(edges[0].target, "config:OTEL_SERVICE_NAME")
+
+
+class SyntheticNodeNamespacingTest(unittest.TestCase):
+    def test_config_key_and_symbol_with_same_name_do_not_collide(self) -> None:
+        # A config key and a symbol could plausibly share literal text (e.g. a
+        # symbol named the same as an env var it reads). Without namespacing,
+        # both become the same graph node and a traversal could wander from
+        # the config key straight into the symbol's own outgoing edges.
+        symbol_named_like_a_key = _sym("RUST_LOG", calls=("downstream",))
+        reader = replace(_sym("reader"), config_dependencies=("RUST_LOG",))
+        graph = ProjectGraph.from_symbols([symbol_named_like_a_key, reader])
+
+        # The config-key node is namespaced ("config:RUST_LOG"), so it has no
+        # outgoing "calls" edges of its own -- those belong only to the real
+        # symbol node ("RUST_LOG").
+        self.assertEqual(graph.edges_from("config:RUST_LOG", ("calls",)), [])
+        self.assertEqual(len(graph.edges_from("RUST_LOG", ("calls",))), 1)
+
+
+class ReachableRejectsInvalidBoundsTest(unittest.TestCase):
+    def test_negative_max_hops_is_rejected(self) -> None:
+        graph = ProjectGraph.from_symbols([_sym("a", calls=("b",))])
+        with self.assertRaises(ValueError):
+            reachable(graph, "a", ("calls",), max_hops=-1)
+
+    def test_zero_max_hops_finds_nothing(self) -> None:
+        graph = ProjectGraph.from_symbols([_sym("a", calls=("b",))])
+        self.assertEqual(reachable(graph, "a", ("calls",), max_hops=0), [])
 
 
 class ReachableTest(unittest.TestCase):
