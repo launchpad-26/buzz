@@ -108,11 +108,20 @@ class ProjectMemory:
         old claim's own record stays intact for anyone auditing why the
         agent used to believe it. Returns the new entry.
 
-        STEP 4 adds this function's TEAM_KNOWLEDGE exception.
+        TEAM_KNOWLEDGE exception: a code-only observation -- even one that
+        directly contradicts the statement, e.g. no corroborating annotation
+        anywhere in the source -- never supersedes a TEAM_KNOWLEDGE entry.
+        "OrderRepository.legacyExport is being migrated off" can remain true
+        while the code that runs it is untouched; only a person's later,
+        explicit statement can retire it (record_team_statement). Returns
+        None here and leaves the entry exactly as stored.
         """
         old = self._entries.get(entry_id)
         if old is None:
             raise KeyError(entry_id)
+
+        if old.entry_class == "TEAM_KNOWLEDGE":
+            return None
 
         new_entry = MemoryEntry(
             id=str(uuid.uuid4()),

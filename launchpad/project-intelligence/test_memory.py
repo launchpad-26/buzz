@@ -143,6 +143,36 @@ class RecordCodeContradictionTest(unittest.TestCase):
         with self.assertRaises(KeyError):
             store.record_code_contradiction("no-such-id", "new", ("e",))
 
+    def test_team_knowledge_entry_is_not_superseded_by_a_code_contradiction(self) -> None:
+        # One test exercising BOTH: the same function supersedes a FACT entry
+        # (STEP 3) but is a no-op against a TEAM_KNOWLEDGE entry -- proving
+        # the exception is about the class, not the function doing nothing.
+        store = ProjectMemory()
+        store.add(MemoryEntry(id="f1", entry_class="FACT", statement="fact", evidence=("e1",)))
+        store.add(
+            MemoryEntry(
+                id="t1",
+                entry_class="TEAM_KNOWLEDGE",
+                statement="OrderRepository.legacyExport is being migrated off; do not add new callers.",
+                provided_by="developer, migration issue #482",
+            )
+        )
+
+        fact_result = store.record_code_contradiction("f1", "new fact", ("e2",))
+        team_knowledge_result = store.record_code_contradiction(
+            "t1", "code shows legacyExport is unused", ("crates/whatever/src/lib.rs:1",)
+        )
+
+        self.assertIsNotNone(fact_result)  # the FACT case still supersedes
+        self.assertIsNone(team_knowledge_result)  # the TEAM_KNOWLEDGE case does not
+
+        team_knowledge_entry = store.get("t1")
+        self.assertIsNone(team_knowledge_entry.superseded_by)
+        self.assertEqual(
+            team_knowledge_entry.statement,
+            "OrderRepository.legacyExport is being migrated off; do not add new callers.",
+        )
+
 
 if __name__ == "__main__":
     unittest.main()
