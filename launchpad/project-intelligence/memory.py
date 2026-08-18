@@ -153,3 +153,61 @@ class ProjectMemory:
         )
         self._supersede(old, new_entry)
         return new_entry
+
+
+def _print_entry(label: str, entry: MemoryEntry | None) -> None:
+    if entry is None:
+        print(f"  {label}: None")
+        return
+    print(f"  {label}: [{entry.entry_class}] {entry.statement!r} (superseded_by={entry.superseded_by})")
+
+
+if __name__ == "__main__":
+    print("ProjectMemory -- the design doc's legacyExport worked example, end to end\n")
+    store = ProjectMemory()
+    store.add(
+        MemoryEntry(
+            id="legacy-export-warning",
+            entry_class="TEAM_KNOWLEDGE",
+            statement="OrderRepository.legacyExport is being migrated off; do not add new callers.",
+            provided_by="developer, migration issue #482",
+        )
+    )
+    print("1. Added TEAM_KNOWLEDGE entry:")
+    _print_entry("legacy-export-warning", store.get("legacy-export-warning"))
+
+    no_op = store.record_code_contradiction(
+        "legacy-export-warning",
+        "no deprecation marker found on legacyExport in the current source",
+        ("grep: no match for 'deprecated' near legacyExport",),
+    )
+    print(f"\n2. record_code_contradiction() against it -> {no_op!r} (no-op: code alone cannot supersede TEAM_KNOWLEDGE)")
+    _print_entry("legacy-export-warning (unchanged)", store.get("legacy-export-warning"))
+
+    retirement = store.record_team_statement(
+        "legacy-export-warning", "migration #482 complete, legacyExport removed", "developer, migration issue #482"
+    )
+    print("\n3. record_team_statement() retires it:")
+    _print_entry("legacy-export-warning (now superseded)", store.get("legacy-export-warning"))
+    _print_entry("new entry", retirement)
+
+    print("\nProjectMemory -- a separate FACT reconciliation example\n")
+    store.add(
+        MemoryEntry(
+            id="kind-gating-fact",
+            entry_class="FACT",
+            statement="is_shared_gated_kind gates only KIND_PERSONA",
+            evidence=("crates/buzz-core/src/kind.rs:219",),
+        )
+    )
+    print("1. Added FACT entry:")
+    _print_entry("kind-gating-fact", store.get("kind-gating-fact"))
+
+    superseding = store.record_code_contradiction(
+        "kind-gating-fact",
+        "is_shared_gated_kind gates KIND_PERSONA and KIND_TEAM_CATALOG",
+        ("crates/buzz-core/src/kind.rs:219-221",),
+    )
+    print("\n2. record_code_contradiction() supersedes it (repository wins):")
+    _print_entry("kind-gating-fact (now superseded)", store.get("kind-gating-fact"))
+    _print_entry("new entry", superseding)
