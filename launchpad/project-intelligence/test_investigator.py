@@ -13,16 +13,32 @@ import investigator
 
 
 class ToolRegistrySideEffectTest(unittest.TestCase):
-    # Only three tools are registered as of STEP 1 (run_command/run_test are
-    # STEP 7's job) -- assert the invariant that holds at every step: no tool
-    # other than those two named ones is ever EXECUTE. The stronger claim
-    # ("exactly these two ARE registered as EXECUTE") belongs to STEP 8's
-    # test, once every tool actually exists.
-    def test_no_tool_other_than_run_command_or_run_test_is_execute(self) -> None:
-        for name, (_, effect) in investigator.TOOL_REGISTRY.items():
-            if name in ("run_command", "run_test"):
-                continue
-            self.assertEqual(effect, "READ_ONLY", f"{name} should be READ_ONLY")
+    # STEP 8: every one of the twelve tools now exists, so the strong claim
+    # can finally be made -- exactly {run_command, run_test} are EXECUTE, and
+    # nothing else. Superseded weaker version (kept true throughout STEP 1-7:
+    # "no tool other than those two is ever EXECUTE") is now implied by this.
+    def test_exactly_run_command_and_run_test_are_execute(self) -> None:
+        execute_tools = {name for name, (_, effect) in investigator.TOOL_REGISTRY.items() if effect == "EXECUTE"}
+        self.assertEqual(execute_tools, {"run_command", "run_test"})
+
+    def test_all_twelve_tools_from_the_design_doc_are_registered(self) -> None:
+        self.assertEqual(
+            set(investigator.TOOL_REGISTRY.keys()),
+            {
+                "read_file",
+                "list_directory",
+                "inspect_logs",
+                "search_text",
+                "search_symbols",
+                "find_references",
+                "inspect_git_history",
+                "git_blame",
+                "inspect_dependency",
+                "query_build_system",
+                "run_command",
+                "run_test",
+            },
+        )
 
 
 class ReadFileTest(unittest.TestCase):

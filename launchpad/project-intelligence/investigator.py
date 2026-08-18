@@ -336,3 +336,33 @@ TOOL_REGISTRY: dict[str, tuple[Callable, SideEffect]] = {
     "run_command": (run_command, "EXECUTE"),
     "run_test": (run_test, "EXECUTE"),
 }
+
+
+def _demo_invocations() -> dict[str, Callable[[], object]]:
+    """One real, working call per registered tool -- the CLI trace below prints
+    each one's actual result, not a stub. Worked examples reuse #206/#207's
+    own known-good symbol (is_shared_gated_kind) and dependency (nostr) so
+    the trace is cross-checkable against those tasks' own verification."""
+    return {
+        "read_file": lambda: read_file("launchpad/project-intelligence/investigator.py", 1, 1),
+        "list_directory": lambda: list_directory("launchpad/project-intelligence"),
+        "inspect_logs": lambda: inspect_logs("launchpad/project-intelligence/investigator.py", tail_lines=1),
+        "search_text": lambda: search_text("TOOL_REGISTRY", glob="*.py")[:1],
+        "search_symbols": lambda: search_symbols("is_shared_gated_kind", crate="buzz-core"),
+        "find_references": lambda: find_references("is_shared_gated_kind", crate="buzz-core"),
+        "inspect_git_history": lambda: inspect_git_history("crates/buzz-core/src/kind.rs", 219, 221)[:1],
+        "git_blame": lambda: git_blame("crates/buzz-core/src/kind.rs", 219, 221)[:1],
+        "inspect_dependency": lambda: inspect_dependency("buzz-core", "nostr"),
+        "query_build_system": lambda: query_build_system("buzz-core"),
+        "run_command": lambda: run_command(["echo", "investigator-cli-demo"]),
+        "run_test": lambda: run_test("buzz-core", "kind::tests::"),
+    }
+
+
+if __name__ == "__main__":
+    print("Investigator tool surface -- every tool, its side-effect marker, one real result\n")
+    demos = _demo_invocations()
+    for name, (_, effect) in TOOL_REGISTRY.items():
+        result = demos[name]()
+        line = f"[{effect}] {name} -> {result!r}"
+        print(line if len(line) <= 220 else line[:217] + "...")
