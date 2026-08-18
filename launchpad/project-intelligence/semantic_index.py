@@ -14,6 +14,7 @@ import re
 from collections import Counter, defaultdict
 from dataclasses import dataclass
 
+from graph import Edge, ProjectGraph
 from symbol import Symbol
 
 _WORD_RE = re.compile(r"[a-zA-Z]+")
@@ -228,6 +229,26 @@ class SemanticIndex:
 
         results.sort(key=lambda r: r.candidate_score, reverse=True)
         return results
+
+
+@dataclass(frozen=True)
+class Confirmation:
+    tests: tuple[Edge, ...]
+    callers: tuple[Edge, ...]
+
+
+def confirm_via_graph(graph: ProjectGraph, qualified_name: str) -> Confirmation:
+    """The pipeline's final step: real structural confirmation via #207's
+    ProjectGraph, not semantic similarity alone. Returns the candidate's
+    real tested_by and called_by edges -- empty tuples if none, still
+    returned rather than hidden, so a caller can see an unconfirmed
+    candidate for what it is instead of a confirmation that silently looks
+    the same as a confirmed one.
+    """
+    return Confirmation(
+        tests=tuple(graph.edges_from(qualified_name, ("tested_by",))),
+        callers=tuple(graph.edges_from(qualified_name, ("called_by",))),
+    )
 
 
 @dataclass(frozen=True)
