@@ -164,6 +164,38 @@ def with_tests(symbols: list[Symbol]) -> list[Symbol]:
     ]
 
 
+_DOC_GLOBS = ("*.md", "launchpad/**/*.md")
+
+
+def _repo_markdown_files() -> list[Path]:
+    files: list[Path] = []
+    for pattern in _DOC_GLOBS:
+        files.extend(REPO_ROOT.glob(pattern))
+    return files
+
+
+def with_documentation_links(symbols: list[Symbol]) -> list[Symbol]:
+    """STEP 7: attach markdown docs that mention each symbol's qualified name.
+
+    Best-effort: a name match (word-boundary), not a semantic check that the
+    doc is actually ABOUT this symbol -- a name shared with an unrelated
+    concept would false-positive. Scoped to this repo's root-level and
+    launchpad/ markdown, not every markdown file in the tree.
+    """
+    doc_files = _repo_markdown_files()
+    doc_texts = [(f, f.read_text(errors="ignore")) for f in doc_files]
+
+    result = []
+    for sym in symbols:
+        short_name = sym.qualified_name.rsplit("::", 1)[-1]
+        pattern = re.compile(r"\b" + re.escape(short_name) + r"\b")
+        links = tuple(
+            str(f.relative_to(REPO_ROOT)) for f, text in doc_texts if pattern.search(text)
+        )
+        result.append(replace(sym, documentation_links=links))
+    return result
+
+
 def _rql_read_json(uri_with_modifier: str) -> dict:
     result = subprocess.run(
         ["rql", "read", uri_with_modifier, "--json"],
@@ -202,27 +234,42 @@ def enrich_git_ownership(sym: Symbol) -> Symbol:
     return replace(sym, git_ownership=GitOwnership(primary_authors=primary_authors, history=history_lines))
 
 
+def build_index(crate_name: str) -> list[Symbol]:
+    """The full pipeline, steps 2-3 and 5-7 -- everything except git_ownership
+    (STEP 4), which is applied selectively via enrich_git_ownership() rather
+    than eagerly for a whole crate (see that function's docstring)."""
+    symbols = index_crate(crate_name)
+    symbols = with_called_by(symbols)
+    symbols = with_tests(symbols)
+    symbols = with_documentation_links(symbols)
+    return symbols
+
+
 def _print_symbol(sym: Symbol) -> None:
+    """STEP 8: one full Symbol record, matching the design doc's
+    PaymentService.processPayment worked-example shape -- every field
+    populated or explicitly empty, never silently omitted."""
     print(f"Symbol: {sym.qualified_name}")
     print(f"Defined: {sym.defined_at.file}:{sym.defined_at.start_line}-{sym.defined_at.end_line} "
           f"({sym.defined_at.temporal_state})")
     print(f"Signature: {sym.signature}")
     print(f"Calls: {', '.join(sym.calls) if sym.calls else '(none found)'}")
-    print(f"Called by: {', '.join(sym.called_by) if sym.called_by else '(not yet populated -- STEP 3)'}")
-    print(f"Tests: {', '.join(sym.tests) if sym.tests else '(not yet populated -- STEP 5)'}")
+    print(f"Called by: {', '.join(sym.called_by) if sym.called_by else '(none found)'}")
+    print(f"Tests: {', '.join(sym.tests) if sym.tests else '(none found)'}")
     print(f"Config dependencies: {', '.join(sym.config_dependencies) if sym.config_dependencies else '(none found)'}")
+    print(f"Documentation: {', '.join(sym.documentation_links) if sym.documentation_links else '(none found)'}")
     if sym.git_ownership.history:
         print(f"Primary authors: {', '.join(sym.git_ownership.primary_authors)}")
         print("Git history:")
         for line in sym.git_ownership.history:
             print(f"  {line}")
     else:
-        print("Git ownership: (not yet populated -- STEP 4)")
+        print("Git ownership: (none found)")
 
 
 if __name__ == "__main__":
     crate = sys.argv[1] if len(sys.argv) > 1 else "buzz-core"
-    symbols = with_tests(with_called_by(index_crate(crate)))
+    symbols = build_index(crate)
     print(f"Indexed {len(symbols)} symbols from crates/{crate}\n")
     for sym in symbols:
         if sym.qualified_name == "is_shared_gated_kind":
