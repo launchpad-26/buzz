@@ -227,6 +227,54 @@ def inspect_dependency(crate: str, name: str) -> Dependency | None:
     return Dependency(name=name, declared=declared, resolved=resolved)
 
 
+@dataclass(frozen=True)
+class BuildTarget:
+    name: str
+    kind: list[str]  # e.g. ["lib"], ["bin"], ["test"]
+    src_path: str
+
+
+@dataclass(frozen=True)
+class BuildInfo:
+    crate: str
+    version: str
+    edition: str
+    targets: list[BuildTarget]
+
+
+def query_build_system(crate: str) -> BuildInfo:
+    """What the build system would do for a crate, without doing it.
+
+    `cargo metadata --no-deps` resolves and prints the manifest graph -- it
+    does not invoke rustc, so it produces no build artifacts under target/
+    (verified: a directory snapshot of target/ before and after this call is
+    identical, see the commit message). --no-deps limits the resolved graph
+    to this workspace's own packages, not third-party dependency metadata.
+    """
+    result = subprocess.run(
+        [
+            "cargo",
+            "metadata",
+            "--no-deps",
+            "--format-version",
+            "1",
+            "--manifest-path",
+            str(REPO_ROOT / "crates" / crate / "Cargo.toml"),
+        ],
+        capture_output=True,
+        text=True,
+        check=True,
+        cwd=REPO_ROOT,
+    )
+    data = json.loads(result.stdout)
+    pkg = next(p for p in data["packages"] if p["name"] == crate)
+    targets = [
+        BuildTarget(name=t["name"], kind=t["kind"], src_path=t["src_path"].removeprefix(str(REPO_ROOT) + "/"))
+        for t in pkg["targets"]
+    ]
+    return BuildInfo(crate=pkg["name"], version=pkg["version"], edition=pkg["edition"], targets=targets)
+
+
 TOOL_REGISTRY: dict[str, tuple[Callable, SideEffect]] = {
     "read_file": (read_file, "READ_ONLY"),
     "list_directory": (list_directory, "READ_ONLY"),
@@ -237,4 +285,5 @@ TOOL_REGISTRY: dict[str, tuple[Callable, SideEffect]] = {
     "inspect_git_history": (inspect_git_history, "READ_ONLY"),
     "git_blame": (git_blame, "READ_ONLY"),
     "inspect_dependency": (inspect_dependency, "READ_ONLY"),
+    "query_build_system": (query_build_system, "READ_ONLY"),
 }
