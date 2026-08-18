@@ -39,7 +39,16 @@ def fetch_upstream_paths(repo_root: Path, timeout: int = 30) -> Optional[Set[str
             timeout=timeout,
         )
         result = subprocess.run(
-            ["git", "ls-tree", "-r", "--name-only", "FETCH_HEAD"],
+            # -z, not the default newline-separated output: git's default quoting
+            # (core.quotepath, on by default) C-style-escapes any path containing a
+            # non-ASCII or otherwise "unusual" byte, e.g. `"caf\303\251.md"` for
+            # `café.md`. classify() compares raw strings against this set, so a
+            # quoted path would never match its own unquoted form and would be
+            # misclassified fork-added instead of inherited. -z sidesteps quoting
+            # entirely rather than disabling it with a config flag, which also
+            # covers a filename containing a literal newline that plain
+            # newline-splitting would silently corrupt.
+            ["git", "ls-tree", "-r", "-z", "--name-only", "FETCH_HEAD"],
             cwd=repo_root,
             check=True,
             capture_output=True,
@@ -48,7 +57,7 @@ def fetch_upstream_paths(repo_root: Path, timeout: int = 30) -> Optional[Set[str
         )
     except (subprocess.CalledProcessError, subprocess.TimeoutExpired, OSError):
         return None
-    return set(result.stdout.splitlines())
+    return set(filter(None, result.stdout.split("\0")))
 
 
 def classify(path: str, upstream_paths: Optional[Set[str]]) -> str:
