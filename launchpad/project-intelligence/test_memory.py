@@ -174,6 +174,48 @@ class RecordCodeContradictionTest(unittest.TestCase):
         )
 
 
+class LegacyExportWorkedExampleTest(unittest.TestCase):
+    # The design doc's own worked TEAM_KNOWLEDGE example
+    # (launchpad/Research/project-intelligence-layer-design.md lines 208-218),
+    # reproduced verbatim end to end: added, surfaced despite no corroborating
+    # code, immune to a code-only contradiction attempt, then correctly
+    # superseded once a person makes it explicit.
+    def test_legacy_export_survives_no_corroboration_then_is_superseded_by_a_person(self) -> None:
+        store = ProjectMemory()
+        legacy_export_entry = MemoryEntry(
+            id="legacy-export-warning",
+            entry_class="TEAM_KNOWLEDGE",
+            statement="OrderRepository.legacyExport is being migrated off; do not add new callers.",
+            provided_by="developer, migration issue #482",
+        )
+        store.add(legacy_export_entry)
+
+        # "Nothing in the code marks legacyExport deprecated -- no comment, no
+        # annotation." Simulate the agent checking the live repo and finding
+        # exactly that absence, then attempting a code-only contradiction.
+        no_corroboration_result = store.record_code_contradiction(
+            "legacy-export-warning",
+            "no deprecation marker found on legacyExport in the current source",
+            ("grep: no match for 'deprecated' near legacyExport",),
+        )
+        self.assertIsNone(no_corroboration_result)
+
+        # Still surfaces, unchanged, exactly as the doc describes: "Surfaced
+        # anyway, every time legacyExport comes up, because a human said so."
+        still_active = store.get("legacy-export-warning")
+        self.assertIsNone(still_active.superseded_by)
+        self.assertEqual(
+            still_active.statement, "OrderRepository.legacyExport is being migrated off; do not add new callers."
+        )
+        self.assertIn(still_active, store.query_by_class("TEAM_KNOWLEDGE"))
+
+        # Only a person's later explicit statement retires it.
+        retirement = store.record_team_statement(
+            "legacy-export-warning", "migration #482 complete, legacyExport removed", "developer, migration issue #482"
+        )
+        self.assertEqual(store.get("legacy-export-warning").superseded_by, retirement.id)
+
+
 class RecordTeamStatementTest(unittest.TestCase):
     def test_supersedes_a_team_knowledge_entry(self) -> None:
         store = ProjectMemory()
