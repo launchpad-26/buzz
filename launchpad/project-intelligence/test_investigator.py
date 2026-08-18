@@ -7,6 +7,7 @@ Run:  python3 -m unittest test_investigator    (from launchpad/project-intellige
 from __future__ import annotations
 
 import subprocess
+import time
 import unittest
 
 import investigator
@@ -62,9 +63,42 @@ class ListDirectoryTest(unittest.TestCase):
         self.assertIn("test_investigator.py", entries)
 
 
+class PathContainmentTest(unittest.TestCase):
+    # Codex review finding (P1): `REPO_ROOT / path` alone does not stop an
+    # absolute or ".."-laden path from escaping the repo -- pathlib's `/`
+    # discards REPO_ROOT entirely when `path` is itself absolute.
+    def test_read_file_rejects_an_absolute_path_outside_the_repo(self) -> None:
+        with self.assertRaises(ValueError):
+            investigator.read_file("/etc/hostname")
+
+    def test_read_file_rejects_dotdot_traversal_outside_the_repo(self) -> None:
+        with self.assertRaises(ValueError):
+            investigator.read_file("../../../../../../../etc/hostname")
+
+    def test_list_directory_rejects_an_absolute_path_outside_the_repo(self) -> None:
+        with self.assertRaises(ValueError):
+            investigator.list_directory("/etc")
+
+    def test_inspect_logs_rejects_an_absolute_path_outside_the_repo(self) -> None:
+        with self.assertRaises(ValueError):
+            investigator.inspect_logs("/etc/hostname")
+
+    def test_a_path_that_stays_inside_the_repo_still_works(self) -> None:
+        # The containment check must not be so strict it breaks ordinary use.
+        content = investigator.read_file("launchpad/project-intelligence/../project-intelligence/investigator.py")
+        self.assertIn("TOOL_REGISTRY", content)
+
+
 class SearchTextTest(unittest.TestCase):
     def test_finds_a_real_known_string(self) -> None:
         matches = investigator.search_text("TOOL_REGISTRY", glob="*.py")
+        files = {m.file for m in matches}
+        self.assertIn("launchpad/project-intelligence/investigator.py", files)
+
+    def test_pattern_starting_with_a_dash_is_treated_as_search_text_not_a_flag(self) -> None:
+        # Codex review finding (P2): without a "--" terminator, grep reads a
+        # leading "-" as another option instead of the search pattern.
+        matches = investigator.search_text("--include", glob="*.py")
         files = {m.file for m in matches}
         self.assertIn("launchpad/project-intelligence/investigator.py", files)
 
@@ -91,6 +125,22 @@ class InspectDependencyTest(unittest.TestCase):
 
     def test_unknown_dependency_returns_none(self) -> None:
         self.assertIsNone(investigator.inspect_dependency("buzz-core", "no-such-crate-xyz"))
+
+    def test_merges_crate_local_feature_additions_into_the_workspace_entry(self) -> None:
+        # Codex review finding (P2): crates/buzz-agent/Cargo.toml adds
+        # features (e.g. "io-std") to tokio's workspace-inherited entry --
+        # replacing wholesale with the root entry silently drops them.
+        dep = investigator.inspect_dependency("buzz-agent", "tokio")
+        self.assertIsNotNone(dep)
+        self.assertIn("features", dep.declared)  # the crate-local addition is present in `declared`
+        self.assertIn("io-std", dep.declared["features"])
+        # The merged `resolved` view must carry both the crate-local addition
+        # AND the workspace's own base features -- neither side silently
+        # lost. Cross-checked directly against Cargo.toml:45's real entry
+        # (rt-multi-thread, macros, net, time, sync, io-util, signal, process).
+        self.assertIn("io-std", dep.resolved["features"])
+        for base_feature in ("rt-multi-thread", "macros", "net", "time", "sync", "io-util", "signal", "process"):
+            self.assertIn(base_feature, dep.resolved["features"])
 
 
 class RunCommandAndRunTestTest(unittest.TestCase):
@@ -120,6 +170,30 @@ class RunCommandAndRunTestTest(unittest.TestCase):
         result = investigator.run_test("buzz-core", "kind::tests::")
         self.assertEqual(result.side_effect, "EXECUTE")
         self.assertIn("test result:", result.stdout)
+
+    def test_execute_notice_is_visible_before_the_subprocess_finishes_not_only_after(self) -> None:
+        # Codex review finding (P1): the earlier test only checked final
+        # ordering in fully-captured stdout, which print's block-buffering
+        # (the normal mode whenever stdout is piped, as an agent harness
+        # would) can still satisfy by coincidence even if the line only
+        # becomes visible after the subprocess has already completed. This
+        # proves the notice is actually flushed and readable *during* a
+        # command that is still running, using a wall-clock margin.
+        proc = subprocess.Popen(
+            ["python3", "-c", "import investigator; investigator.run_command(['sleep', '2'])"],
+            cwd=investigator.REPO_ROOT / "launchpad" / "project-intelligence",
+            stdout=subprocess.PIPE,
+            text=True,
+        )
+        started = time.monotonic()
+        try:
+            line = proc.stdout.readline()
+            elapsed = time.monotonic() - started
+        finally:
+            proc.wait(timeout=10)
+            proc.stdout.close()
+        self.assertTrue(line.startswith("[EXECUTE] run_command:"), line)
+        self.assertLess(elapsed, 1.0, "EXECUTE notice should be flushed well before the 2s sleep finishes")
 
 
 class QueryBuildSystemTest(unittest.TestCase):
