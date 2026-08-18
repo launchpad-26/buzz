@@ -16,6 +16,7 @@ from semantic_index import (
     cosine_similarity,
     embed_symbol,
     embed_text,
+    find_it_for_me,
     summarize_symbol,
     tokenize,
 )
@@ -199,6 +200,28 @@ class ConfirmViaGraphTest(unittest.TestCase):
         confirmation = confirm_via_graph(graph, "encode_v2_code")
         self.assertEqual(confirmation.tests, ())
         self.assertEqual(confirmation.callers, ())
+
+
+class FindItForMeTest(unittest.TestCase):
+    def test_ties_concept_subsystem_candidate_and_confirmation_together(self) -> None:
+        symbols = [_IS_SHARED_GATED_KIND, _IS_UNSHARED_GATED_EVENT, _ENCODE_V2_CODE]
+        index = SemanticIndex.from_symbols(symbols)
+        graph = ProjectGraph.from_symbols(symbols)
+
+        result = find_it_for_me(index, graph, "which function decides if a kind is gated for shared visibility")
+
+        self.assertEqual(result.qualified_name, "is_shared_gated_kind")
+        self.assertEqual(result.subsystem.scope, "crates/buzz-core/src/kind.rs")
+        self.assertEqual({e.target for e in result.confirmation.callers}, {"is_unshared_gated_event"})
+        self.assertEqual({e.target for e in result.confirmation.tests}, {"tests::shared_gated_kinds_membership"})
+
+    def test_empty_index_returns_a_result_with_no_candidate_not_a_crash(self) -> None:
+        index = SemanticIndex()
+        graph = ProjectGraph.from_symbols([])
+        result = find_it_for_me(index, graph, "anything")
+        self.assertEqual(result.concept, "anything")
+        self.assertIsNone(result.candidate)
+        self.assertIsNone(result.confirmation)
 
 
 class FromSymbolsTest(unittest.TestCase):
