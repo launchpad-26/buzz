@@ -14,7 +14,7 @@ import re
 from collections import Counter, defaultdict
 from dataclasses import dataclass
 
-from graph import Edge, ProjectGraph
+from graph import Edge, ProjectGraph, reachable
 from symbol import Symbol
 
 # STEP 8's positive worked example: a genuinely vague, terminology-free
@@ -323,3 +323,50 @@ def summarize_symbol(sym: Symbol) -> str:
     if sym.documentation_links:
         parts.append("documented in " + ", ".join(sym.documentation_links))
     return "; ".join(parts)
+
+
+# STEP 9's negative worked example: the SAME 2-hop relationship #207's own
+# reachable() demo proves (tests::is_unshared_gated_event_author_always_allowed
+# -> is_unshared_gated_event -> is_shared_gated_kind), posed to THIS pipeline
+# instead, to show it cannot express or verify a multi-hop path.
+NEGATIVE_EXAMPLE_FLOW_QUESTION = "what does the author-always-allowed test call, two calls deep"
+NEGATIVE_EXAMPLE_START_SYMBOL = "tests::is_unshared_gated_event_author_always_allowed"
+
+
+if __name__ == "__main__":
+    from indexer import build_index
+
+    crate = "buzz-core"
+    symbols = build_index(crate)
+    index = SemanticIndex.from_symbols(symbols)
+    graph = ProjectGraph.from_symbols(symbols)
+
+    print("=== Positive worked example: concept -> subsystem -> candidate -> confirmation ===\n")
+    print(f"Concept: {WORKED_EXAMPLE_CONCEPT!r}")
+    result = find_it_for_me(index, graph, WORKED_EXAMPLE_CONCEPT)
+    print(f"  Subsystem: {result.subsystem.scope} (score={result.subsystem_score:.4f})")
+    print(f"  Candidate: {result.qualified_name} (score={result.candidate_score:.4f})")
+    for e in result.confirmation.callers:
+        print(f"    confirmed called_by: {e.target}")
+    for e in result.confirmation.tests:
+        print(f"    confirmed tested_by: {e.target}")
+
+    print("\n=== Negative worked example: flow-tracing boundary ===\n")
+    print(f"Concept posed to THIS pipeline (which it should NOT be used for): {NEGATIVE_EXAMPLE_FLOW_QUESTION!r}")
+    flow_result = find_it_for_me(index, graph, NEGATIVE_EXAMPLE_FLOW_QUESTION)
+    one_hop_targets: set[str] = set()
+    if flow_result.confirmation is not None:
+        one_hop_targets = {e.target for e in flow_result.confirmation.callers} | {
+            e.target for e in flow_result.confirmation.tests
+        }
+    print(f"  This pipeline resolved to: {flow_result.qualified_name!r}")
+    print(f"  One-hop confirmation targets: {one_hop_targets or '(none)'}")
+    print(f"  is_shared_gated_kind (the real 2-hop answer) never appears above: {'is_shared_gated_kind' not in one_hop_targets}")
+
+    print(f"\n  Contrast -- ProjectGraph.reachable() answers the IDENTICAL relationship exactly:")
+    two_hop = reachable(graph, NEGATIVE_EXAMPLE_START_SYMBOL, ("calls",), max_hops=2)
+    hop_2_match = [r for r in two_hop if r.node == "is_shared_gated_kind"]
+    if hop_2_match:
+        print(f"    verified path: {' -> '.join(hop_2_match[0].path)}")
+    else:
+        print("    (no path found -- unexpected)")
