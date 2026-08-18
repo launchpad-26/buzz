@@ -19,6 +19,7 @@ import json
 import re
 import subprocess
 import sys
+from dataclasses import replace
 from pathlib import Path
 
 from symbol import DefinedAt, GitOwnership, Symbol
@@ -104,6 +105,31 @@ def index_crate(crate_name: str) -> list[Symbol]:
     return symbols
 
 
+def with_called_by(symbols: list[Symbol]) -> list[Symbol]:
+    """STEP 3: materialize called_by[] as a real inverse index, once, over the
+    already-indexed set -- not recomputed per query.
+
+    Matches each symbol's calls[] entries against the indexed set's own `name`
+    (the short, unqualified identifier calls[] holds), same best-effort scope as
+    step 2: a name match, not type-resolved call-graph precision.
+    """
+    by_name: dict[str, list[str]] = {}
+    for sym in symbols:
+        by_name.setdefault(sym.qualified_name.rsplit("::", 1)[-1], []).append(sym.qualified_name)
+
+    called_by: dict[str, list[str]] = {sym.qualified_name: [] for sym in symbols}
+    for sym in symbols:
+        for called_name in sym.calls:
+            for target_qname in by_name.get(called_name, ()):
+                if target_qname != sym.qualified_name:
+                    called_by[target_qname].append(sym.qualified_name)
+
+    return [
+        replace(sym, called_by=tuple(dict.fromkeys(called_by[sym.qualified_name])))
+        for sym in symbols
+    ]
+
+
 def _print_symbol(sym: Symbol) -> None:
     print(f"Symbol: {sym.qualified_name}")
     print(f"Defined: {sym.defined_at.file}:{sym.defined_at.start_line}-{sym.defined_at.end_line} "
@@ -116,7 +142,7 @@ def _print_symbol(sym: Symbol) -> None:
 
 if __name__ == "__main__":
     crate = sys.argv[1] if len(sys.argv) > 1 else "buzz-core"
-    symbols = index_crate(crate)
+    symbols = with_called_by(index_crate(crate))
     print(f"Indexed {len(symbols)} symbols from crates/{crate}\n")
     for sym in symbols:
         if sym.qualified_name == "is_shared_gated_kind":
