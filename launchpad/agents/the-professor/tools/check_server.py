@@ -23,6 +23,25 @@ known to exist in block/buzz at that commit, and a fabricated path that
 does not. A check that only tried the happy path would not catch a version
 of the tool that always returns True regardless of the path.
 
+check_page's check runs two REAL fixtures from launchpad-26/handbook's own
+tests/fixtures/ through the tool over stdio, not synthetic input this file
+invents:
+
+  - tests/fixtures/compliant.md must come back with zero findings AND zero
+    skipped (both -- a tool that silently skipped everything would also
+    report zero findings, and only checking findings would not catch that).
+  - tests/fixtures/broken-03-prefix-repo-mismatch.md must come back with a
+    finding whose rule is exactly "prefix-repo-mismatch".
+
+broken-01-behaviour-claim-unsourced.md is deliberately NOT used as a negative
+control here: tests/fixtures/README.md's own engine column marks it a
+judgement-engine fixture, and check_provenance.py's own docstring says the
+judgement rules (unsourced behaviour claims, unattributed opinion,
+self-contradiction) are "a separate engine and deliberately not in this
+script" -- so that fixture returns zero findings regardless of whether
+check_page works, and a check built on it could never fail. broken-03 is a
+script-engine rule (prefix_repo.py) and fires deterministically.
+
 Named check_server.py (not test_server.py) so verify-gate.sh's naming
 convention recognizes it and this repo's pre-commit hook stamps a real
 pass, matching launchpad/review-agent/check_*.py precedent.
@@ -32,6 +51,8 @@ naming the failing check otherwise.
 """
 
 import asyncio
+import base64
+import json
 import subprocess
 import sys
 from pathlib import Path
@@ -40,6 +61,31 @@ from mcp import ClientSession, StdioServerParameters
 from mcp.client.stdio import stdio_client
 
 SERVER_PATH = Path(__file__).parent / "server.py"
+HANDBOOK_REPO = "launchpad-26/handbook"
+
+
+def _fetch_handbook_fixture(name: str) -> str:
+    """Fetch one tests/fixtures/*.md file from launchpad-26/handbook, live.
+
+    Same `gh api` + base64-decode convention server.py's own
+    `_fetch_handbook_file` uses -- this check does not hardcode fixture text
+    into this file either, so it always exercises check_page against
+    whatever the handbook's fixtures currently say.
+    """
+    result = subprocess.run(
+        [
+            "gh",
+            "api",
+            f"repos/{HANDBOOK_REPO}/contents/tests/fixtures/{name}",
+            "-q",
+            ".content",
+        ],
+        capture_output=True,
+        text=True,
+        check=True,
+        timeout=30,
+    )
+    return base64.b64decode(result.stdout.strip()).decode("utf-8")
 
 
 async def main() -> int:
@@ -58,6 +104,7 @@ async def main() -> int:
                 "list_categories",
                 "resolve_pin",
                 "path_exists_at",
+                "check_page",
             }
             if tool_names != expected:
                 print(
@@ -170,6 +217,72 @@ async def main() -> int:
                 print(
                     f"FAIL: path_exists_at(fabricated path) did not return False: "
                     f"{missing!r}"
+                )
+                return 1
+
+            # --- check_page: compliant fixture, must be clean ---
+            compliant_content = _fetch_handbook_fixture("compliant.md")
+            compliant_result = await session.call_tool(
+                "check_page", {"draft_content": compliant_content}
+            )
+            if compliant_result.is_error:
+                print(
+                    "FAIL: check_page errored on compliant.md: "
+                    f"{compliant_result.content}"
+                )
+                return 1
+            # check_page returns a plain `dict`, which the mcp SDK does not
+            # populate `structured_content` for (unlike the `bool`/`list[str]`
+            # tools above) -- parsed from the text content instead, same as
+            # read_contract's check does.
+            compliant_text = "".join(
+                block.text for block in compliant_result.content if hasattr(block, "text")
+            )
+            compliant_report = json.loads(compliant_text)
+            print(f"check_page(compliant.md) -> {compliant_report}")
+
+            if compliant_report.get("findings"):
+                print(
+                    "FAIL: check_page(compliant.md) reported findings, expected "
+                    f"none: {compliant_report['findings']!r}"
+                )
+                return 1
+            if compliant_report.get("skipped"):
+                print(
+                    "FAIL: check_page(compliant.md) reported skipped pages, "
+                    f"expected none: {compliant_report['skipped']!r}"
+                )
+                return 1
+
+            # --- check_page: broken-03, must report prefix-repo-mismatch ---
+            #
+            # NOT broken-01-behaviour-claim-unsourced.md -- see this file's module
+            # docstring for why that fixture cannot serve as a negative control.
+            broken03_content = _fetch_handbook_fixture(
+                "broken-03-prefix-repo-mismatch.md"
+            )
+            broken03_result = await session.call_tool(
+                "check_page", {"draft_content": broken03_content}
+            )
+            if broken03_result.is_error:
+                print(
+                    "FAIL: check_page errored on broken-03: "
+                    f"{broken03_result.content}"
+                )
+                return 1
+            broken03_text = "".join(
+                block.text for block in broken03_result.content if hasattr(block, "text")
+            )
+            broken03_report = json.loads(broken03_text)
+            print(f"check_page(broken-03) -> {broken03_report}")
+
+            broken03_rules = {
+                finding.get("rule") for finding in broken03_report.get("findings", [])
+            }
+            if "prefix-repo-mismatch" not in broken03_rules:
+                print(
+                    "FAIL: check_page(broken-03) did not report a "
+                    f"prefix-repo-mismatch finding. Rules seen: {broken03_rules!r}"
                 )
                 return 1
 

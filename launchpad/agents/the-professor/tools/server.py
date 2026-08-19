@@ -20,13 +20,27 @@ Step 5 adds a fourth:
 
   - path_exists_at()   does a path exist at a pinned commit? (bool)
 
-One more tool (check_page) is a later plan step and is deliberately not
-built here.
+Step 6 adds the fifth and last:
+
+  - check_page()       runs the handbook's own provenance gate against a
+                        draft page's content
 
 The handbook tools fetch from launchpad-26/handbook at call time and never
 bake its text into this file — per the design's own default: "nothing is
 quoted from a document that changes... A quoted contract goes stale silently;
 a read one cannot" (design doc, section "How the next agent gets built").
+
+check_page() cannot follow the same "fetch one file via `gh api`" pattern the
+other four tools use: the gate it must run (`scripts/check_provenance.py`)
+imports a local `provenance` package -- several files, not one -- so it needs
+a real directory tree on disk, not a single file's content. Design doc open
+question 5 answers directly what check_page must do about this: "Does
+`check_page` call the gate directly, or reimplement it? Reimplementing would
+produce a second parser that drifts from the first -- the exact failure the
+gate's own modules are structured to avoid." So check_page keeps a local git
+checkout of launchpad-26/handbook and shells out to its real scripts as real
+subprocesses, exactly as CI does -- it never re-parses the page contract's
+rules in Python.
 
 Runs as `uv run --script`, which is why the dependencies above are declared
 inline (PEP 723) rather than via a requirements file or a checked-in venv:
@@ -38,12 +52,23 @@ the first time this shebang line runs.
 
 import base64
 import json
+import os
 import subprocess
+import tempfile
+from pathlib import Path
 
 import yaml
 from mcp.server.mcpserver import MCPServer
 
 HANDBOOK_REPO = "launchpad-26/handbook"
+HANDBOOK_CLONE_URL = f"https://github.com/{HANDBOOK_REPO}"
+HANDBOOK_DEFAULT_BRANCH = "main"
+
+# Where the local checkout used by check_page() lives, persisted across calls
+# (and across server restarts) so every call is not a full re-clone. Under
+# the system temp dir, not this repo's working tree -- it is a runtime cache
+# of another repository's content, not something to commit here.
+HANDBOOK_CLONE_DIR = Path(tempfile.gettempdir()) / "the-professor-handbook-checkout"
 
 # Entries in the live mkdocs.yml `nav:` list that are excluded from
 # list_categories(). Judgement call, stated here and in the report:
@@ -230,6 +255,188 @@ def path_exists_at(repo: str, commit: str, path: str) -> bool:
         f"path_exists_at({repo!r}, {commit!r}, {path!r}) failed "
         f"(HTTP {status or 'unknown'}): {message}"
     )
+
+
+def _refresh_handbook_checkout() -> Path:
+    """Ensure a local, up-to-date checkout of launchpad-26/handbook exists on
+    disk and return its root path.
+
+    Refreshed on every call rather than cloned once and left to age: this
+    file's whole convention (see the other four tools) is that nothing about
+    the handbook is ever read from a copy that could have gone stale. A
+    `fetch` + hard `reset` against a persistent clone gets the same freshness
+    guarantee as re-cloning from scratch, for a fraction of the cost -- so
+    there is no "refresh mechanism to build later" TODO here; refreshing IS
+    the mechanism, run inline on every check_page() call.
+
+    A prior clone missing its `.git` directory (e.g. the temp dir was cleared
+    but partially recreated) is treated as absent and re-cloned from scratch,
+    rather than trying to repair a half-present checkout in place.
+    """
+    if (HANDBOOK_CLONE_DIR / ".git").is_dir():
+        fetch = subprocess.run(
+            ["git", "fetch", "--depth", "1", "origin", HANDBOOK_DEFAULT_BRANCH],
+            cwd=HANDBOOK_CLONE_DIR,
+            capture_output=True,
+            text=True,
+            timeout=60,
+        )
+        if fetch.returncode != 0:
+            raise RuntimeError(
+                "check_page: could not refresh the handbook checkout at "
+                f"{HANDBOOK_CLONE_DIR} (`git fetch` exit {fetch.returncode}): "
+                f"{fetch.stderr.strip()}"
+            )
+        reset = subprocess.run(
+            ["git", "reset", "--hard", f"origin/{HANDBOOK_DEFAULT_BRANCH}"],
+            cwd=HANDBOOK_CLONE_DIR,
+            capture_output=True,
+            text=True,
+            timeout=30,
+        )
+        if reset.returncode != 0:
+            raise RuntimeError(
+                "check_page: could not fast-forward the handbook checkout at "
+                f"{HANDBOOK_CLONE_DIR} (`git reset` exit {reset.returncode}): "
+                f"{reset.stderr.strip()}"
+            )
+    else:
+        HANDBOOK_CLONE_DIR.parent.mkdir(parents=True, exist_ok=True)
+        clone = subprocess.run(
+            ["git", "clone", "--depth", "1", HANDBOOK_CLONE_URL, str(HANDBOOK_CLONE_DIR)],
+            capture_output=True,
+            text=True,
+            timeout=120,
+        )
+        if clone.returncode != 0:
+            raise RuntimeError(
+                f"check_page: could not clone {HANDBOOK_CLONE_URL} to "
+                f"{HANDBOOK_CLONE_DIR} (exit {clone.returncode}): {clone.stderr.strip()}"
+            )
+    return HANDBOOK_CLONE_DIR
+
+
+def _subprocess_env_with_github_token() -> dict[str, str]:
+    """The gate scripts (`provenance/github.py`) make their own GitHub API
+    calls for pin verification and read `GITHUB_TOKEN`/`GH_TOKEN` from *their*
+    process environment to do it -- `gh`'s own stored auth does not become
+    that env var for a child process automatically, so it must be exported
+    here explicitly.
+
+    Never logs or returns the token itself -- only ever places it directly
+    into the env mapping handed to `subprocess.run`.
+    """
+    result = subprocess.run(
+        ["gh", "auth", "token"], capture_output=True, text=True, timeout=15
+    )
+    if result.returncode != 0:
+        raise RuntimeError(
+            "check_page: `gh auth token` failed "
+            f"(exit {result.returncode}): {result.stderr.strip()}. The gate "
+            "scripts need GITHUB_TOKEN/GH_TOKEN for their own pin-verification "
+            "calls to the GitHub API -- check `gh auth status`."
+        )
+    env = dict(os.environ)
+    env["GITHUB_TOKEN"] = result.stdout.strip()
+    return env
+
+
+@mcp.tool()
+def check_page(draft_content: str) -> dict:
+    """Run the handbook's real provenance gate against a draft page's content.
+
+    Writes `draft_content` into an isolated scratch directory containing
+    nothing else, then runs `scripts/check_provenance.py <dir> --format json`
+    and `scripts/page_index.py <dir> -o /dev/null` from a local checkout of
+    launchpad-26/handbook as real subprocesses -- the same two commands the
+    handbook's own CI runs -- and returns their combined result.
+
+    This deliberately does not re-parse the page contract's rules in Python.
+    Design doc open question 5: reimplementing the gate "would produce a
+    second parser that drifts from the first -- the exact failure the gate's
+    own modules are structured to avoid." Calling the real scripts is the only
+    way this tool's verdict can never disagree with CI's.
+
+    Isolation matters because `check_provenance.py` takes a directory and
+    `rglob`s it for every `*.md` file: pointing it at a directory holding any
+    other page (or a fixture, or a stray file) would check all of them at
+    once and blur which findings belong to this draft. Each call gets its own
+    fresh temporary directory, used for nothing else and removed immediately
+    after.
+
+    Returns a dict with `findings`, `unchecked`, and `skipped` -- exactly the
+    three keys `check_provenance.py --format json` reports, defined in that
+    script's own docstring (a finding fails the build; unchecked is reported
+    but blocks nothing because CI cannot read the private cohort repos;
+    skipped means the page had no valid frontmatter so no rule ran on it at
+    all) -- plus a `page_index` key reporting `page_index.py`'s own verdict:
+    it independently validates required frontmatter fields and pin shape
+    (e.g. a truncated commit SHA) that `check_provenance.py` does not check
+    itself, so `page_index`'s errors are additional signal, not a duplicate
+    of `findings`.
+    """
+    handbook_dir = _refresh_handbook_checkout()
+    env = _subprocess_env_with_github_token()
+
+    with tempfile.TemporaryDirectory(prefix="the-professor-check-page-") as scratch:
+        scratch_dir = Path(scratch)
+        (scratch_dir / "draft.md").write_text(draft_content, encoding="utf-8")
+
+        provenance_run = subprocess.run(
+            [
+                "uv",
+                "run",
+                "--with",
+                "pyyaml",
+                "python3",
+                str(handbook_dir / "scripts" / "check_provenance.py"),
+                str(scratch_dir),
+                "--format",
+                "json",
+            ],
+            capture_output=True,
+            text=True,
+            timeout=60,
+            env=env,
+        )
+        try:
+            provenance_data = json.loads(provenance_run.stdout)
+        except json.JSONDecodeError as exc:
+            raise RuntimeError(
+                "check_page: check_provenance.py did not produce parseable "
+                f"JSON (exit {provenance_run.returncode}). stdout="
+                f"{provenance_run.stdout!r} stderr={provenance_run.stderr!r}"
+            ) from exc
+
+        index_run = subprocess.run(
+            [
+                "uv",
+                "run",
+                "--with",
+                "pyyaml",
+                "python3",
+                str(handbook_dir / "scripts" / "page_index.py"),
+                str(scratch_dir),
+                "-o",
+                "/dev/null",
+            ],
+            capture_output=True,
+            text=True,
+            timeout=60,
+            env=env,
+        )
+
+    return {
+        "findings": provenance_data.get("findings", []),
+        "unchecked": provenance_data.get("unchecked", []),
+        "skipped": provenance_data.get("skipped", []),
+        "page_index": {
+            "ok": index_run.returncode == 0,
+            "errors": [
+                line for line in index_run.stderr.splitlines() if line.strip()
+            ],
+        },
+    }
 
 
 if __name__ == "__main__":
