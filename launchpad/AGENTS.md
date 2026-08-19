@@ -61,11 +61,14 @@ launchpad/
   AGENT_PR_TEMPLATE.md  PR body schema for agent-authored PRs
   labels.yml           label source of truth
   sync-labels.sh       applies labels.yml
+  agents/              persona packs for Buzz-native agents (see launchpad/Research/the-professor-design.md)
   decisions/           ADRs, once accepted
   docs/                MkDocs knowledge layer
   deploy/              host configuration and hardening
   upstream-intel/      upstream tracking tooling
 ```
+
+Note: `launchpad/AGENTS.md` (contributor guide) and `launchpad/agents/` (persona packs) are different things with adjacent names. No bare `.md` file may sit directly in `launchpad/agents/`—this session's `check-models.sh` hook scans that exact shape as a Claude Code subagent roster and blocks the commit. Pack documentation belongs inside each pack's own subdirectory (e.g., `launchpad/agents/the-professor/README.md`), never at the top level.
 
 **Never move or rename upstream files.** Upstream is ~3,800 files and we merge from it
 regularly; a rename turns every future merge into manual work.
