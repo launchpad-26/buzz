@@ -17,6 +17,12 @@ against the real block/buzz repo, so a plausible-looking but wrong SHA
 (e.g. a stale or truncated response that happened to still be 40 hex chars)
 would still be caught.
 
+path_exists_at's check exercises both the true and false cases against a
+real pinned commit (resolved via resolve_pin, not hardcoded): a real path
+known to exist in block/buzz at that commit, and a fabricated path that
+does not. A check that only tried the happy path would not catch a version
+of the tool that always returns True regardless of the path.
+
 Named check_server.py (not test_server.py) so verify-gate.sh's naming
 convention recognizes it and this repo's pre-commit hook stamps a real
 pass, matching launchpad/review-agent/check_*.py precedent.
@@ -47,7 +53,12 @@ async def main() -> int:
             tool_names = {tool.name for tool in tools_result.tools}
             print(f"tools/list -> {sorted(tool_names)}")
 
-            expected = {"read_contract", "list_categories", "resolve_pin"}
+            expected = {
+                "read_contract",
+                "list_categories",
+                "resolve_pin",
+                "path_exists_at",
+            }
             if tool_names != expected:
                 print(
                     f"FAIL: expected exactly {expected}, server exposes {tool_names}"
@@ -114,6 +125,51 @@ async def main() -> int:
                 print(
                     f"FAIL: resolve_pin's SHA {sha!r} does not match "
                     f"git ls-remote's {remote_sha!r}"
+                )
+                return 1
+
+            # --- path_exists_at: true case (real path, pinned commit) ---
+            true_result = await session.call_tool(
+                "path_exists_at",
+                {
+                    "repo": "block/buzz",
+                    "commit": sha,
+                    "path": "crates/buzz-persona/PERSONA_PACK_SPEC.md",
+                },
+            )
+            if true_result.is_error:
+                print(
+                    "FAIL: path_exists_at errored on a real path: "
+                    f"{true_result.content}"
+                )
+                return 1
+            exists = true_result.structured_content
+            print(f"path_exists_at(real path) -> {exists}")
+            if exists.get("result") is not True:
+                print(f"FAIL: path_exists_at(real path) did not return True: {exists!r}")
+                return 1
+
+            # --- path_exists_at: false case (fabricated path, same commit) ---
+            false_result = await session.call_tool(
+                "path_exists_at",
+                {
+                    "repo": "block/buzz",
+                    "commit": sha,
+                    "path": "crates/buzz-persona/THIS_FILE_DOES_NOT_EXIST_9f8e7d6c.md",
+                },
+            )
+            if false_result.is_error:
+                print(
+                    "FAIL: path_exists_at errored on a fabricated path (should "
+                    f"return False, not error): {false_result.content}"
+                )
+                return 1
+            missing = false_result.structured_content
+            print(f"path_exists_at(fabricated path) -> {missing}")
+            if missing.get("result") is not False:
+                print(
+                    f"FAIL: path_exists_at(fabricated path) did not return False: "
+                    f"{missing!r}"
                 )
                 return 1
 

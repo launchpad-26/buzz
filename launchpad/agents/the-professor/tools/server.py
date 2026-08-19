@@ -16,8 +16,12 @@ Step 4 adds a third:
 
   - resolve_pin()      resolves a repo ref to its full 40-char commit SHA
 
-Two more tools (path_exists_at, check_page) are later plan steps and are
-deliberately not built here.
+Step 5 adds a fourth:
+
+  - path_exists_at()   does a path exist at a pinned commit? (bool)
+
+One more tool (check_page) is a later plan step and is deliberately not
+built here.
 
 The handbook tools fetch from launchpad-26/handbook at call time and never
 bake its text into this file — per the design's own default: "nothing is
@@ -169,6 +173,63 @@ def resolve_pin(repo: str, ref: str) -> str:
             "response slips past error detection."
         )
     return sha
+
+
+@mcp.tool()
+def path_exists_at(repo: str, commit: str, path: str) -> bool:
+    """Return whether `path` exists in `repo` at `commit`.
+
+    Calls `GET /repos/{repo}/contents/{path}?ref={commit}` live via `gh api`
+    -- same fetch convention as `resolve_pin` above. A 404 from GitHub is
+    this tool's normal negative answer (`False`), not an error: a missing
+    path is an expected result this tool exists to report, so it must not
+    raise just because the file isn't there.
+
+    That is deliberately narrower than "any non-zero exit is False". The
+    same trap `resolve_pin` guards against applies here: an unauthenticated
+    or rate-limited response is also a non-zero exit with a JSON error body,
+    and it must not be allowed to look like an ordinary 404 -- that would
+    silently misreport a real auth/rate-limit failure as "path does not
+    exist". Only a response whose `status` field is literally "404" is
+    treated as a real negative; auth/rate-limit statuses and anything else
+    raise instead.
+    """
+    result = subprocess.run(
+        ["gh", "api", f"repos/{repo}/contents/{path}?ref={commit}"],
+        capture_output=True,
+        text=True,
+        timeout=30,
+    )
+
+    if result.returncode == 0:
+        return True
+
+    status = None
+    message = result.stderr.strip() or result.stdout.strip()
+    try:
+        error_body = json.loads(result.stdout)
+        status = error_body.get("status")
+        message = error_body.get("message", message)
+    except json.JSONDecodeError:
+        pass
+
+    if status == "404":
+        return False
+
+    if status in _RATE_LIMIT_OR_AUTH_STATUSES:
+        raise RuntimeError(
+            f"path_exists_at({repo!r}, {commit!r}, {path!r}): GitHub API "
+            f"returned HTTP {status} ({message}). This looks like a rate "
+            "limit or an authentication problem, not a real answer about "
+            "whether the path exists -- check `gh auth status` and GitHub's "
+            "current rate limit before treating this as 'path does not "
+            "exist'."
+        )
+
+    raise RuntimeError(
+        f"path_exists_at({repo!r}, {commit!r}, {path!r}) failed "
+        f"(HTTP {status or 'unknown'}): {message}"
+    )
 
 
 if __name__ == "__main__":
