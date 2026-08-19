@@ -35,13 +35,46 @@ ALREADY TRUE  (verified against git and the live repos, not notes)
   Current branch `task/9-the-professor-persona` is freshly cut off `origin/launchpad` — no
     Professor-related files exist anywhere in the tree yet (confirmed: no `*.persona.md` for
     a Professor, no `launchpad/personas/` directory).
+  `buzz` is not on PATH in a fresh checkout — it must be built first: `cargo build --release
+    -p buzz-cli`, then invoke `./target/release/buzz`.
+  `buzz pack validate` only checks frontmatter shape (required identity fields, behavioral
+    config types) — it does NOT check that `skills:` paths resolve to a real directory, and
+    it does NOT check that the markdown body (the persona prompt) is non-empty. A pack with
+    a dangling skill path or a zero-length prompt still validates clean.
+  Per `PERSONA_PACK_SPEC.md` §7 and `crates/buzz-persona/src/resolve.rs`, MCP `${VAR_NAME}`
+    env interpolation is "planned but not yet implemented" — such strings are passed through
+    as **literal text** to the agent runtime today. A `.mcp.json` written now cannot actually
+    authenticate; it can only be validated as well-formed and secret-free.
+  Per `PERSONA_PACK_SPEC.md` §10, `triggers: {}` is NOT "off" — an empty object still
+    overrides the pack default, but each sub-field then falls to ITS OWN built-in default,
+    and `triggers.mentions`'s built-in default is `true`. The off state is
+    `triggers: {mentions: false, keywords: [], all_messages: false}`, written explicitly.
+  The page contract's frontmatter completeness (all required fields present, non-empty) is
+    NOT checked by `check_provenance.py` — that script only checks claim-level rules (source
+    refs, origin prefixes, secrets, structure). Frontmatter completeness is
+    `launchpad-26/handbook/scripts/page_index.py`'s job; it refuses to emit an index and
+    reports `missing required field: <name>` per missing field, exiting non-zero, for any
+    page missing one of `title, summary, category, author, runnable, last_verified`.
+  `check_provenance.py` reports a network failure or exhausted GitHub rate limit as a
+    `finding` (not `unchecked`) — its own module docstring: "unavailable -> FINDING... Re-run
+    it; do not merge past it." Running it without `GITHUB_TOKEN`/`GH_TOKEN` exported risks
+    exactly this, indistinguishable in the findings array from a real page defect unless the
+    message text is read.
+  `check_provenance.py` is not self-contained — it imports a local `provenance` package (7
+    modules) and, transitively, `page_index.py`. Running it requires a checkout of
+    `launchpad-26/handbook`'s `scripts/` directory, not just the one file.
+  A page whose YAML frontmatter fails to parse, or a docs directory containing no pages at
+    all, produces `findings: []` from `check_provenance.py` — an empty `findings` array alone
+    does not prove a page was checked. Proof requires `skipped: []` too, plus confirming the
+    run actually saw the one page (e.g. asserting the scratch directory's page count).
 
 STEP 1  Scaffold the `the-professor` pack directory and manifest.            [independent]
         what: `launchpad/personas/the-professor/.plugin/plugin.json` (id, name, version,
         description, `personas: ["agents/the-professor.persona.md"]`, no `defaults` needed
         for a single-persona pack); the persona file's frontmatter complete but its markdown
         body a one-line stub marked `<!-- VOICE: Serina writes this -->`.
-        done when: `buzz pack validate launchpad/personas/the-professor` exits 0.
+        done when: `cargo build --release -p buzz-cli` has produced `./target/release/buzz`,
+        AND `./target/release/buzz pack validate launchpad/personas/the-professor` exits 0.
 
 STEP 2  Set identity + `temperature` with a written reason.                  [needs 1]
         what: fill `name`, `display_name`, `description`, `author`, `model`, `temperature`
@@ -52,12 +85,15 @@ STEP 2  Set identity + `temperature` with a written reason.                  [ne
         `launchpad/personas/the-professor/README.md` states the chosen value and the
         one-paragraph reason; `buzz pack validate` still exits 0.
 
-STEP 3  Wire the `github` MCP server for reading the five source repos.  [needs 1] ← RUNS HERE
+STEP 3  Wire the `github` MCP server config for reading the five source repos. [needs 1] ← RUNS HERE
         what: `.mcp.json` with a `github` entry (stdio, `GITHUB_PERSONAL_ACCESS_TOKEN` via
-        `${VAR_NAME}`, never a literal), scoped to read access.
+        `${VAR_NAME}`, never a literal), scoped to read access. Per ALREADY TRUE, `${VAR_NAME}`
+        interpolation is not implemented yet — this step produces well-formed, secret-free
+        config, NOT working authentication; record that limitation in step 10's README rather
+        than treating this as functional end-to-end wiring.
         done when: `launchpad/personas/the-professor/.mcp.json` parses as valid JSON, contains
         no literal secret, and `buzz pack validate` still exits 0 — first point the pack is a
-        demonstrable, loadable artifact end to end.
+        loadable artifact, not a proof that it can authenticate.
 
 STEP 4  Write the drafting skill `skills/draft-page/SKILL.md`.               [needs 1]
         what: required `name:` + `description:` frontmatter per the pack spec; body walks the
@@ -68,49 +104,75 @@ STEP 4  Write the drafting skill `skills/draft-page/SKILL.md`.               [ne
         done when: the SKILL.md file exists with non-empty `name:` and `description:`
         frontmatter, and is listed in the Professor persona's `skills:` array.
 
-STEP 5  Set `skills:`, `subscribe: []`, `triggers: {}` on the persona.       [needs 4]
-        what: list `draft-page` in `skills:`; per issue #9's non-goal ("The Professor running
-        live inside Buzz... is not required by #4"), set `subscribe: []` and `triggers: {}`
-        explicitly rather than omitting them — the pack spec treats empty containers as a
-        deliberate override, not "absent".
-        done when: frontmatter has `subscribe: []` and `triggers: {}` (not omitted), and
-        `buzz pack validate` exits 0.
+STEP 5  Set `skills:`, `subscribe: []`, and `triggers` fully off.            [needs 4]
+        what: list `draft-page` in `skills:` using the exact pack-relative path step 4 wrote
+        it to (e.g. `./skills/draft-page/`); per issue #9's non-goal ("The Professor running
+        live inside Buzz... is not required by #4"), set `subscribe: []` and
+        `triggers: {mentions: false, keywords: [], all_messages: false}` explicitly —
+        per ALREADY TRUE, `triggers: {}` alone resolves `mentions` back to its built-in
+        default of `true`, which is not "off".
+        done when: frontmatter has `subscribe: []` and the fully-off `triggers` object above;
+        `buzz pack validate` exits 0; `buzz pack inspect launchpad/personas/the-professor`
+        lists `draft-page` under skills AND `Triggers:` shows no active trigger; AND
+        `test -f launchpad/personas/the-professor/skills/draft-page/SKILL.md` succeeds (the
+        path in frontmatter actually resolves — `pack validate` does not check this).
 
 STEP 6  Hand the persona voice to Serina to write.                          [needs 1]
         what: replace the `<!-- VOICE -->` stub in `agents/the-professor.persona.md`'s
         markdown body with the real prompt. NOT done by whoever implements this plan — per
         issue #9's explicit exclusion and the standing rule that creative/voice content here
         is Serina's to write.
-        done when: the markdown body no longer contains the stub comment, and `buzz pack
-        validate` still exits 0 against the replaced body.
+        done when: the markdown body no longer contains the stub comment, `buzz pack validate`
+        still exits 0, AND `buzz pack inspect launchpad/personas/the-professor` reports a
+        non-zero `System prompt` character count — `validate` alone does not check the body
+        is non-empty, so this second check is required to prove step 6 actually happened.
 
 STEP 7  Draft ONE real page using the persona + skill as instructions.        [needs 2, 6]
-        what: pick the smallest defensible target — e.g. `[launchpad] Persona Pack format` —
-        citing `block/buzz` (`crates/buzz-persona/PERSONA_PACK_SPEC.md`, pinned to current
-        `block/buzz` main SHA) and `launchpad-26/buzz` (this repo, this plan's own commit SHA
-        once committed). Write to a scratch path, not into the live handbook nav yet.
+        what: pick the smallest defensible target — `[upstream] Persona Pack format` (NOT
+        `[launchpad]` — `PERSONA_PACK_SPEC.md` is upstream product behaviour in `block/buzz`,
+        and the gate's `prefix-repo-mismatch` rule rejects a `[launchpad]` prefix citing
+        `block/buzz`), citing `block/buzz` (`crates/buzz-persona/PERSONA_PACK_SPEC.md`, pinned
+        to current `block/buzz` main SHA). Add one `[launchpad]` claim citing
+        `launchpad-26/buzz` (this repo, this plan's own commit SHA once committed) about this
+        cohort's specific pack layout under `launchpad/personas/`, so the page demonstrates
+        multi-prefix synthesis, not just one. Write to a scratch path, not the live handbook
+        nav yet.
         done when: a markdown file with complete frontmatter (all required #7 fields) and at
         least one behaviour claim carrying an origin prefix and a full-SHA source link exists
         at a known scratch path.
 
-STEP 8  Run the real gate against the draft.                                [needs 7]
-        what: `python3 check_provenance.py <scratch-docs-dir> --format json` using
-        `launchpad-26/handbook`'s actual `scripts/check_provenance.py`.
-        done when: the JSON output's `findings` array is empty (exit 0) for the drafted page —
-        `unchecked` entries are acceptable (private-repo citations the gate cannot verify over
-        the network, by its own documented design) but `findings` must be `[]`.
+STEP 8  Run the real gate AND the index build against the draft.            [needs 7]
+        what: obtain a checkout of `launchpad-26/handbook`'s `scripts/` directory (it is not
+        self-contained — `check_provenance.py` imports the local `provenance` package and
+        `page_index.py`), export `GITHUB_TOKEN` before running (an unauthenticated run risks
+        rate-limit findings indistinguishable from real defects unless read closely — see
+        step 9), then run BOTH `python3 check_provenance.py <scratch-docs-dir> --format json`
+        AND `python3 page_index.py <scratch-docs-dir> -o /dev/null` against a scratch
+        directory containing EXACTLY the one drafted page (confirm the page count, so an
+        empty or wrong directory cannot masquerade as a clean run).
+        done when: `check_provenance.py`'s JSON shows `findings: []` AND `skipped: []` (a
+        `skipped` page was never checked at all — not a pass) — `unchecked` entries remain
+        acceptable — AND `page_index.py` exits 0 (confirms all required frontmatter fields
+        are present and non-empty, which `check_provenance.py` does not check).
 
 STEP 9  Fix any finding directly in the draft page.                         [needs 8]
-        what: if step 8 reports a finding, fix the page itself — do not hand-edit around the
-        gate, and do not weaken the skill's instructions just to dodge one rule.
-        done when: re-running step 8's exact command reports zero findings with no manual
-        exception added to the gate.
+        what: if step 8 reports a `check_provenance.py` finding, first read its message —
+        one whose text contains "could not be checked" or names a network/rate-limit failure
+        means the CHECK failed, not the page; fix the token/network and re-run step 8 exactly,
+        do not touch the page. For every other finding, or any `page_index.py` missing-field
+        report, fix the page itself — do not hand-edit around the gate, and do not weaken the
+        skill's instructions just to dodge one rule.
+        done when: re-running step 8's exact commands reports zero findings, zero skipped,
+        and a zero exit from `page_index.py`, with no manual exception added to either gate.
 
-STEP 10 Write `launchpad/personas/the-professor/README.md`.                  [needs 2, 9]
-        what: what The Professor is, the `temperature` decision from step 2, what is/isn't in
-        scope per issue #9 (no live-channel operation), and a pointer to the step 7-9 proof.
-        done when: the README exists and names the exact scratch path of the passing draft
-        page as evidence.
+STEP 10 Extend the README.md step 2 started — do not overwrite it.          [needs 2, 9]
+        what: step 2 already created `launchpad/personas/the-professor/README.md` with the
+        `temperature` rationale; ADD to that same file (not a fresh write that could drop
+        step 2's paragraph): what The Professor is, what is/isn't in scope per issue #9 (no
+        live-channel operation, `.mcp.json` is config-only per step 3's limitation note), and
+        a pointer to the step 7-9 proof.
+        done when: the README contains BOTH step 2's temperature paragraph AND the new
+        sections, and names the exact scratch path of the passing draft page as evidence.
 
 STEP 11 Open the PR against `launchpad-26/buzz` closing #9.                [needs 10]
         what: follow `launchpad/AGENT_PR_TEMPLATE.md`'s provenance table; link the draft
