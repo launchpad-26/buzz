@@ -3,13 +3,19 @@
 # requires-python = ">=3.11"
 # dependencies = ["mcp"]
 # ///
-"""Test harness for server.py -- Step 3 of launchpad/plans/2026-08-19-issue-9-the-professor-persona.md.
+"""Test harness for server.py -- Steps 3-4 of launchpad/plans/2026-08-19-issue-9-the-professor-persona.md.
 
 This spawns `server.py` as a real subprocess (exactly how buzz-acp will
 later spawn it: one bare executable path, no arguments) and talks to it
 over stdio using the official MCP client, so this exercises the running
 MCP server -- the JSON-RPC framing, the initialize handshake, tool
 discovery, tool invocation -- not just the Python functions inside it.
+
+resolve_pin's check goes one step further than "did it return 40 hex
+characters": it independently cross-checks the SHA against `git ls-remote`
+against the real block/buzz repo, so a plausible-looking but wrong SHA
+(e.g. a stale or truncated response that happened to still be 40 hex chars)
+would still be caught.
 
 Named check_server.py (not test_server.py) so verify-gate.sh's naming
 convention recognizes it and this repo's pre-commit hook stamps a real
@@ -20,6 +26,7 @@ naming the failing check otherwise.
 """
 
 import asyncio
+import subprocess
 import sys
 from pathlib import Path
 
@@ -40,7 +47,7 @@ async def main() -> int:
             tool_names = {tool.name for tool in tools_result.tools}
             print(f"tools/list -> {sorted(tool_names)}")
 
-            expected = {"read_contract", "list_categories"}
+            expected = {"read_contract", "list_categories", "resolve_pin"}
             if tool_names != expected:
                 print(
                     f"FAIL: expected exactly {expected}, server exposes {tool_names}"
@@ -71,6 +78,43 @@ async def main() -> int:
 
             if "The claim rule" not in contract_text:
                 print("FAIL: read_contract text does not contain 'The claim rule'")
+                return 1
+
+            # --- resolve_pin ---
+            pin_result = await session.call_tool(
+                "resolve_pin", {"repo": "block/buzz", "ref": "main"}
+            )
+            if pin_result.is_error:
+                print(f"FAIL: resolve_pin errored: {pin_result.content}")
+                return 1
+            sha = "".join(
+                block.text for block in pin_result.content if hasattr(block, "text")
+            ).strip()
+            print(f"resolve_pin('block/buzz', 'main') -> {sha}")
+
+            if len(sha) != 40 or any(c not in "0123456789abcdef" for c in sha):
+                print(f"FAIL: resolve_pin did not return a 40-char hex SHA: {sha!r}")
+                return 1
+
+            # Independently confirm the SHA against the real remote -- not
+            # just "is it 40 hex chars", but "is it the actual current main".
+            ls_remote = subprocess.run(
+                ["git", "ls-remote", "https://github.com/block/buzz", "main"],
+                capture_output=True,
+                text=True,
+                timeout=30,
+            )
+            if ls_remote.returncode != 0:
+                print(f"FAIL: git ls-remote failed: {ls_remote.stderr}")
+                return 1
+            remote_sha = ls_remote.stdout.split()[0] if ls_remote.stdout.split() else ""
+            print(f"git ls-remote block/buzz main -> {remote_sha}")
+
+            if sha != remote_sha:
+                print(
+                    f"FAIL: resolve_pin's SHA {sha!r} does not match "
+                    f"git ls-remote's {remote_sha!r}"
+                )
                 return 1
 
     print("ALL CHECKS PASSED")

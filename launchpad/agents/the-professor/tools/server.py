@@ -7,18 +7,22 @@
 launchpad/Research/the-professor-design.md.
 
 An MCP server (stdio transport) exposing the facts this agent must not
-recall from memory. Step 3 of the plan builds exactly two tools:
+recall from memory. Step 3 of the plan built two tools:
 
   - read_contract()    the handbook's page contract, fetched live
   - list_categories()  the handbook's live navigation categories
 
-Three more tools (resolve_pin, path_exists_at, check_page) are later plan
-steps and are deliberately not built here.
+Step 4 adds a third:
 
-Both tools fetch from launchpad-26/handbook at call time and never bake its
-text into this file — per the design's own default: "nothing is quoted from
-a document that changes... A quoted contract goes stale silently; a read one
-cannot" (design doc, section "How the next agent gets built").
+  - resolve_pin()      resolves a repo ref to its full 40-char commit SHA
+
+Two more tools (path_exists_at, check_page) are later plan steps and are
+deliberately not built here.
+
+The handbook tools fetch from launchpad-26/handbook at call time and never
+bake its text into this file — per the design's own default: "nothing is
+quoted from a document that changes... A quoted contract goes stale silently;
+a read one cannot" (design doc, section "How the next agent gets built").
 
 Runs as `uv run --script`, which is why the dependencies above are declared
 inline (PEP 723) rather than via a requirements file or a checked-in venv:
@@ -29,6 +33,7 @@ the first time this shebang line runs.
 """
 
 import base64
+import json
 import subprocess
 
 import yaml
@@ -101,6 +106,69 @@ def list_categories() -> list[str]:
     nav_entries = yaml.safe_load(raw_yaml)["nav"]
     titles = [next(iter(entry.keys())) for entry in nav_entries]
     return [title for title in titles if title not in EXCLUDED_NAV_TITLES]
+
+
+_RATE_LIMIT_OR_AUTH_STATUSES = {"401", "403", "429"}
+
+
+@mcp.tool()
+def resolve_pin(repo: str, ref: str) -> str:
+    """Resolve `ref` (branch, tag, or SHA) on `repo` to its full 40-character commit SHA.
+
+    Calls `GET /repos/{repo}/commits/{ref}` live via `gh api` -- same fetch
+    convention as `_fetch_handbook_file` above: `gh` is already authenticated
+    in this environment, so this never hand-rolls an HTTP call with a token
+    pulled from the environment.
+
+    A prior review round on this plan flagged a real trap: an unauthenticated
+    or rate-limited GitHub API response is an ordinary-looking JSON body (a
+    "message" and a "status" field) that can be mistaken for a genuine bad
+    ref/repo if it's allowed to fall through undetected. This tool reads that
+    "status" field before deciding what happened, and raises an error that
+    names auth/rate-limiting explicitly rather than letting it look like "no
+    such ref". It also refuses to return anything that isn't exactly 40 hex
+    characters, so a truncated or malformed response can never masquerade as
+    a real SHA.
+    """
+    result = subprocess.run(
+        ["gh", "api", f"repos/{repo}/commits/{ref}", "-q", ".sha"],
+        capture_output=True,
+        text=True,
+        timeout=30,
+    )
+
+    if result.returncode != 0:
+        status = None
+        message = result.stderr.strip() or result.stdout.strip()
+        try:
+            error_body = json.loads(result.stdout)
+            status = error_body.get("status")
+            message = error_body.get("message", message)
+        except json.JSONDecodeError:
+            pass
+
+        if status in _RATE_LIMIT_OR_AUTH_STATUSES:
+            raise RuntimeError(
+                f"resolve_pin({repo!r}, {ref!r}): GitHub API returned HTTP "
+                f"{status} ({message}). This looks like a rate limit or an "
+                "authentication problem, not a bad repo/ref -- check "
+                "`gh auth status` and GitHub's current rate limit before "
+                "treating this as a real defect."
+            )
+        raise RuntimeError(
+            f"resolve_pin({repo!r}, {ref!r}) failed "
+            f"(HTTP {status or 'unknown'}): {message}"
+        )
+
+    sha = result.stdout.strip()
+    if len(sha) != 40 or any(c not in "0123456789abcdef" for c in sha):
+        raise RuntimeError(
+            f"resolve_pin({repo!r}, {ref!r}): gh api reported success but "
+            f"returned {sha!r}, which is not a 40-character hex SHA. Refusing "
+            "to return it -- this can happen when a rate-limited or partial "
+            "response slips past error detection."
+        )
+    return sha
 
 
 if __name__ == "__main__":
