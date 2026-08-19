@@ -67,6 +67,42 @@ records what was observed — whether `0.4` produced accurate, consistently
 voiced drafts, or needs to move. Nothing in this document should be read as
 that observation; it is the reasoning that precedes it.
 
+## Observed Behaviour (Step 16)
+
+A real drafting attempt happened: `[upstream] Persona Pack format`, citing
+`block/buzz` (`crates/buzz-persona/PERSONA_PACK_SPEC.md`) pinned at `main` via
+`resolve_pin`, plus `[launchpad]` claims citing `launchpad-26/buzz` at `refs/heads/launchpad`
+(`AGENTS.md` §3 and `launchpad/review-agent/`'s existence), both resolved to real
+full-SHA commits rather than recalled from memory. The draft passed `check_page`
+clean — zero findings, `page_index.ok: true` — independently re-verified against
+the real tool after the fact, not just trusted from the transcript.
+
+**`temperature: 0.4` looks right.** The prose is accurate, consistently voiced, and
+explicitly honest about its own limits — e.g. "I have a tool that can confirm a
+path exists at a pinned commit, and none that reads a file's contents — so I
+checked that the spec file is there and pinned it; I did not read what it says."
+That is exactly the claim-fidelity-over-flourish behaviour §6's reasoning aimed
+for. No real evidence yet that a different value would do better or worse — this
+confirms the starting choice was reasonable, not that it is optimal.
+
+**A genuine capability gap surfaced, and it is not a persona defect.** The
+drafting reasoning and tool use (`read_contract`, `resolve_pin`, `path_exists_at`,
+`check_page`) all worked correctly end-to-end. But once the draft was composed and
+validated, the agent had no tool that could write it to disk or post the reply —
+only this pack's five read-only MCP tools were ever wired into the runtime; goose's
+own built-in shell/file-write extension was never enabled during setup. The agent
+correctly recognised it needed to "write the finished draft to disk," said so, and
+then looped indefinitely re-verifying with the only tools available, since none of
+them could finish the job. The controller extracted the already-validated draft
+content from the ACP wire log, independently re-ran `check_page` against it to
+confirm the result still holds, and placed it at the scratch path by hand.
+
+**This means Step 16 was not a fully autonomous, one-mention-to-finished-file
+proof.** The reasoning and validation are real and the agent's own work; the save
+step was not. That gap is exactly why Route 3 (below) has to define a real write
+path before this pack is genuinely load-bearing — a scribe that cannot write is
+not yet the thing being built toward.
+
 ## Runtime Route: Plain `buzz-acp` configured from the environment (Route 2)
 
 The Professor runs as a plain `buzz-acp` process with environment variables
@@ -97,6 +133,33 @@ the pack and emits `buzz-acp` configuration deterministically, making the pack
 genuinely load-bearing. That closes the gap between "pack is validated" and
 "pack is what runs". For now, the pack is the source document, and the
 environment is the runtime configuration.
+
+## Credential Policy: Bring Your Own Key
+
+Route 2 (above) already puts credential custody one layer below the pack: whoever's
+environment launches `buzz-acp` supplies the provider and key via
+`GOOSE_PROVIDER`/`GOOSE_MODEL`/the provider's own API-key env var (e.g.
+`ANTHROPIC_API_KEY`). The pack itself never touches a credential — it only declares the
+model shape it wants (`provider:model-id` in the persona frontmatter). This isn't a new
+mechanism added for this decision; it's simply naming, explicitly, what Route 2 already
+does by construction.
+
+**Decision:** each person running The Professor locally uses their own key. There is no
+shared cohort credential for this pack, and none is planned for the interactive Route 2
+runtime — consistent with Ruling 5's substitutability requirement (no model, and by
+extension no credential, gets to be load-bearing for the pack itself).
+
+This differs in shape from `launchpad-26/buzz#53` / ADR-0012 (the upstream-synthesis
+inference credential): that ADR governs a *shared*, unattended CI credential with its
+own custody, spend, and rotation obligations. BYOK carries none of that weight — there's
+no shared secret to fund, rotate, or leak across two systems, because there isn't a
+shared one at all.
+
+**Carve-out for Route 3.** Bring-your-own-key only works while a person is present to
+start the process and supply it. If The Professor ever runs unattended (Route 3, the
+projector — filed as its own follow-up issue at Step 20), there's no individual in the
+loop to bring a key, and that runtime will need its own credential decision. This
+section does not answer that question and should not be read as having answered it.
 
 ## Draft Output: Scratch Path (Not a Pull Request)
 
