@@ -3,7 +3,9 @@
 
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
+import security_audit_core
 from security_audit_core import CheckResult, Status, exit_code, format_report, run_all
 from security_audit_selftest_check import run as harness_self_test
 
@@ -87,6 +89,28 @@ class SelfTestCheckTest(unittest.TestCase):
     def test_self_test_check_passes_against_the_real_harness(self):
         result = harness_self_test(Path("."))
         self.assertEqual(result.status, Status.PASS, result.detail)
+
+    def test_self_test_fails_when_indeterminate_collides_with_pass(self):
+        # Proves the self-test can actually fail, not just pass by construction:
+        # without this, a self-test rewritten to unconditionally `return
+        # CheckResult(NAME, Status.PASS, "ok")` would pass every test in this
+        # file. Patching the real _MARKERS dict forces format_report itself to
+        # render two statuses identically, so this exercises the self-test's
+        # actual detection path, not a mock standing in for it.
+        with patch.dict(security_audit_core._MARKERS, {Status.INDETERMINATE: "PASS"}):
+            result = harness_self_test(Path("."))
+        self.assertEqual(result.status, Status.FAIL)
+        self.assertIn("indeterminate", result.detail)
+
+    def test_self_test_fails_when_two_non_pass_statuses_collide(self):
+        # The pairwise check (not just each-status-vs-pass) is what this test
+        # exercises: FAIL and WARN colliding never touches PASS at all, so a
+        # self-test that only compared against pass would miss it.
+        with patch.dict(security_audit_core._MARKERS, {Status.WARN: "FAIL"}):
+            result = harness_self_test(Path("."))
+        self.assertEqual(result.status, Status.FAIL)
+        self.assertIn("fail", result.detail)
+        self.assertIn("warn", result.detail)
 
 
 if __name__ == "__main__":
