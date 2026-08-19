@@ -66,3 +66,34 @@ step) will exercise this persona against actual pages, and the step after that
 records what was observed — whether `0.4` produced accurate, consistently
 voiced drafts, or needs to move. Nothing in this document should be read as
 that observation; it is the reasoning that precedes it.
+
+## Runtime Route: Plain `buzz-acp` configured from the environment (Route 2)
+
+The Professor runs as a plain `buzz-acp` process with environment variables
+configured to match the pack's resolved values — values that `buzz pack inspect`
+displays as a final checklist. This is Route 2 of three candidates
+(`the-professor-design.md` §8 lays out the full reasoning).
+
+**Why Route 2 over Route 1 (desktop app recreation):** The desktop app is a GUI,
+and GUI actions are neither scriptable nor testable in an agent session. Route 2
+uses environment configuration, which is testable and repeatable in a CI/CD
+pipeline or a local agent-driven setup. A change to the environment is visible;
+a manual recreation in a desktop UI is not. This makes the persona pack
+reviewable in its actual runtime context.
+
+**The specification-vs-configuration distinction:** Until something reads the
+pack at runtime and automatically configures the agent from it, **this pack is a
+specification the runtime is configured to match, not configuration the runtime
+reads**. The CLI validates and inspects the pack, and the values it prints are
+the source of truth for how to set up the agent's environment. If the pack
+changes, the runtime must be reconfigured separately by a human or a script
+reading the pack's output. This is a defensible design choice — it puts the
+decision about how the pack is consumed into a separate issue — but it must be
+stated rather than implied.
+
+**Route 3 (the projector) is filed separately.** A future step in this plan
+(Step 20, tracked as a GitHub issue) will propose a small tool that resolves
+the pack and emits `buzz-acp` configuration deterministically, making the pack
+genuinely load-bearing. That closes the gap between "pack is validated" and
+"pack is what runs". For now, the pack is the source document, and the
+environment is the runtime configuration.
