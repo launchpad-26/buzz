@@ -97,3 +97,23 @@ the pack and emits `buzz-acp` configuration deterministically, making the pack
 genuinely load-bearing. That closes the gap between "pack is validated" and
 "pack is what runs". For now, the pack is the source document, and the
 environment is the runtime configuration.
+
+## Draft Output: Scratch Path (Not a Pull Request)
+
+For #9's bounded acceptance criteria — *"drafts a page, passes the gate without hand-editing"* — a scratch-path draft (stored in a temporary directory, not committed to the handbook, not opened as a pull request) is sufficient.
+
+**This diverges from the design doc's own conclusion.** Section "Also unspecified: where drafts go" argues that the enforcement boundary (the gate) decides where output goes, and since the gate runs **on pull requests**, drafts should go to pull requests to be checked. By that principle, a scratch draft is "a draft nothing checks."
+
+**Why this divergence is acceptable here:** #9's acceptance does not itself require a pull request — it requires only that a drafted page passes the gate when run manually (Steps 16-17 in the plan). A real write-path against a private repository (the handbook) is a separate permission-boundary decision; the design doc names it as Open Question 2 and explicitly excludes it from #9's scope. Backing into write capability by expanding this issue's scope would be the wrong way to settle that question. Instead, a scratch draft lets #9 deliver its bounded deliverable (a persona that drafts and validates) without making write-permission decisions that belong elsewhere.
+
+### Tool Server: Read-Only Confirmed
+
+All five tools in `launchpad/agents/the-professor/tools/server.py` are read-only. Confirmed review:
+
+- **`read_contract()`** (lines 112–121): Fetches the handbook's page contract from GitHub via `gh api`. Reads and returns; no writes.
+- **`list_categories()`** (lines 124–137): Fetches and parses mkdocs.yml from the handbook. Reads and returns a list; no writes.
+- **`resolve_pin(repo, ref)`** (lines 143–200): Resolves a branch/tag/SHA to a full 40-character commit SHA via `gh api`. Reads and returns; no writes, no commits, no pushes.
+- **`path_exists_at(repo, commit, path)`** (lines 203–257): Checks if a path exists at a given commit via `gh api`. Reads and returns a boolean; no writes.
+- **`check_page(draft_content)`** (lines 344–439): Runs the handbook's provenance gate against a draft page. Refreshes a local handbook checkout via `git fetch` and `git reset` (read operations), writes the draft to an isolated scratch temp directory for testing only, shells out to the handbook's real gate scripts, and returns their results. No pushes, commits, or PR creation. The only write is to a temporary isolated directory with no persistence beyond the call.
+
+None of the five tools performs a write, push, commit, or PR-create call to GitHub or the handbook repository. The tool surface is entirely read-only.
