@@ -54,9 +54,14 @@ ALREADY TRUE  (verified against git, the working trees and the GitHub API, not n
   `findings.py`, `run_dimensions.py`, `contain.py`, `fetch.py`, `review.py`,
   `FINDINGS.md`, `CONTAINMENT.md`, three files under `dimensions/`, five under
   `fixtures/dimensions/`, and (on this branch only, pending #252) fifteen under
-  `recordings/`. `find . -iname "*adjudic*"` still returns nothing anywhere in
-  the tree — of everything above, only #118 itself remains unbuilt, which is
-  the one claim from the struck-through block that still holds. **The defining
+  `recordings/` — a summary count, not an exhaustive inventory: it omits
+  `run_controls.py`, the `check_*.py` control scripts, and the `test_*.py` suites
+  also present in the tree. `find . -iname "*adjudic*"` still returns nothing
+  anywhere in the tree — of everything above, only #118 itself remains unbuilt,
+  which is the one claim from the struck-through block that still holds.
+  **Further corrected 2026-08-21: PR #252 merged to `origin/launchpad` the same
+  day this was written (2026-08-20T19:25:57Z) — #117 is now fully merged, all
+  twelve of its steps included, not "pending".** **The defining
   risk BUDGET names below (a contract with no producer) is now a non-issue**:
   15 real recorded dimension reports already exist and are the right input for
   STEP 8/9's fixtures, not a document-only synthesis. See BUDGET's own
@@ -249,9 +254,11 @@ STEP 1  launchpad/review-agent/ADJUDICATION.md — the verdict contract,   [inde
         stage does so: `run_adjudication.py`'s `main` runs #117's own
         `findings.validate` against the input document BEFORE any adjudication
         logic touches it, and exits non-zero, adjudicating nothing, when it
-        fails — the same input `reported_severity: "Info"` fails #117's
-        validator on its own severity check, so it never reaches this stage's
-        re-rating logic at all. This is stronger than "this stage is agnostic
+        fails — a finding whose `severity` value arrives out-of-ladder (an
+        "Info", say — this is the dimension's own report, not a field literally
+        named `reported_severity`, which does not exist on input at all) fails
+        #117's validator on its own severity check, so it never reaches this
+        stage's re-rating logic at all. This is stronger than "this stage is agnostic
         about its producer": #119 is agnostic about ITS producer because #119
         cannot re-validate a document it did not build from parts; this stage
         CAN, because the input document is exactly #117's own output shape, and
@@ -347,8 +354,10 @@ STEP 1  launchpad/review-agent/ADJUDICATION.md — the verdict contract,   [inde
         relies on its consumer's default has moved the failure rather than
         removed it; it states that the `containment` block passes through
         unadjudicated and cites CONTAINMENT.md § Severity contract; and it is
-        referenced from a new row in CONTAINMENT.md's "Contract for later stages"
-        table so the two documents point at each other rather than diverging quietly.
+        referenced from CONTAINMENT.md's "Contract for later stages" table — annotating
+        the table's existing #118 row rather than adding a duplicate, since one row per
+        stage is the table's own convention — so the two documents point at each other
+        rather than diverging quietly.
 
 STEP 2  launchpad/review-agent/verdicts.py — the contract in code.           [needs 1]
         Pure functions and dataclasses over an already-parsed document. No
@@ -481,7 +490,7 @@ STEP 3  launchpad/review-agent/run_adjudication.py — the CLI,  [needs 2]  <- R
         fixture carrying all three containment kinds emits them unchanged with
         severity Blocker and no verdict field added to any of them; malformed JSON on
         stdin exits non-zero and prints no document; a fixture whose one finding
-        arrives with `reported_severity: "Info"` exits non-zero and prints no
+        arrives with an out-of-ladder `severity` value (an "Info", say) exits non-zero and prints no
         document at all — validated and refused before adjudication, not
         adjudicated into a best-effort output; a judge injected to REFUTE that
         same finding is never called, asserted on the injected judge's own call
@@ -633,10 +642,10 @@ STEP 6  Escalate-only, enforced in code, and the total-refutation flag.      [ne
         document still passes `verdicts.validate` — this is the case STEP 3's
         input validation does NOT catch, because the input was legal and only
         this stage's own re-rating produced the bad value; the SIBLING case — a
-        fixture whose finding ARRIVES with `reported_severity: "Info"` already —
-        is STEP 3's job, not this control's: `run_adjudication.py` exits non-zero
-        on it before any judge runs, so it is asserted there and not repeated
-        here as a per-finding UNPROVEN case, since there is no legal
+        fixture whose finding ARRIVES with an out-of-ladder `severity` value
+        already — is STEP 3's job, not this control's: `run_adjudication.py`
+        exits non-zero on it before any judge runs, so it is asserted there and
+        not repeated here as a per-finding UNPROVEN case, since there is no legal
         `reported_severity` for such a finding to have been emitted WITH; a BARE
         `review.SEVERITY_ORDER[f["severity"]]` subscript
         succeeds for every finding in every output above, used bare on purpose so
@@ -1044,8 +1053,9 @@ BUDGET  ~~STEP 9 eats the budget. The thing most likely to derail the issue is
   they land.~~
   **Corrected 2026-08-20 (struck through, not deleted — see ALREADY TRUE's own
   correction above, same date).** #120 and #117 are BOTH MERGED to `origin/launchpad`
-  (every step except #117's own STEP 8, which is committed on the branch this plan
-  is written from, PR #252 open). This branch needed no rebase to get
+  ~~(every step except #117's own STEP 8, which is committed on the branch this plan
+  is written from, PR #252 open)~~ **— further corrected 2026-08-21: PR #252 merged
+  the same day, so #117 is fully merged, all twelve steps.** This branch needed no rebase to get
   `launchpad/review-agent/` — it was already there, cloned from `origin/launchpad`
   plus one commit. The precondition chain is DISCHARGED, not pending.
   **The actual risk STEP 8/9 now carry is the opposite of the one described above:**

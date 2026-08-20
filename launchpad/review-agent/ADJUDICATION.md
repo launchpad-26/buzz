@@ -45,7 +45,7 @@ confirmed findings would leave `REFUTED` findings carrying an unexamined severit
 ### `severity` and `reported_severity` must both be in `review.SEVERITY_ORDER`
 
 Stated as a guarantee this stage makes to #119, and as **defence in depth** rather than
-#119's only defence: #119 sorts with `.get(severity, 9)` and routes an unrecognised
+#119's only defence: #119's plan states it sorts with `.get(severity, 9)` and routes an unrecognised
 severity to its own malformed-finding heading, so a bad value is survivable there — but
 this stage is the one that **creates** bad values by re-rating, and a producer that
 relies on its consumer's default has moved the failure rather than removed it.
@@ -59,8 +59,13 @@ copied into `severity` untouched.
 **This cannot happen if the input document is validated first, and this stage does so.**
 `run_adjudication.py`'s `main` runs #117's own `findings.validate` against the input
 document *before* any adjudication logic touches it, and exits non-zero — adjudicating
-nothing — when validation fails. An input carrying `reported_severity: "Info"` fails
-`FINDINGS.md`'s own severity rule and never reaches this stage's re-rating logic at all.
+nothing — when validation fails. A finding whose `severity` value arrives out-of-ladder
+(an `"Info"`, say — this is the dimension's own report, before this stage has re-rated
+anything) fails `FINDINGS.md`'s own severity rule and never reaches this stage's
+re-rating logic at all. Note the field name: `reported_severity` does not exist on
+input at all — #117 emits only `severity` — so this guarantee rests on that field, not
+on a field literally named `reported_severity`, which is a name this stage's own
+*output* introduces.
 This is stronger than "this stage is agnostic about its producer": #119 is agnostic
 about *its* producer because #119 cannot re-validate a document it did not assemble from
 parts, while this stage *can*, because its input document is exactly #117's own output
@@ -71,11 +76,14 @@ stage silently deciding what the dimension actually meant.
 
 So an out-of-ladder **effective** severity this stage can still produce — one its own
 re-rating created from a legal `reported_severity` — is an adjudication **failure** for
-that finding: `UNPROVEN`, `severity` set to the nearest legal value with the refusal
-stated in `severity_reason`, and `reported_severity` left unchanged (input validation
-already guarantees it was legal to begin with). This stage may not silently decide an
-unrateable finding is a small one, and it is never asked to invent a value for a field
-that arrived already broken.
+that finding: `UNPROVEN`, with the refusal stated in `severity_reason`, and
+`reported_severity` left unchanged (input validation already guarantees it was legal to
+begin with). `severity` falls back to `reported_severity` when that is in the ladder,
+and to `Blocker` when it is not — the second branch is defence in depth only, since
+input validation already guarantees `reported_severity` arrives legal, but there is no
+safe value to copy if that guarantee were ever bypassed. This stage may not silently
+decide an unrateable finding is a small one, and it is never asked to invent a value for
+a field that arrived already broken.
 
 ## Escalate, never approve
 
@@ -145,6 +153,25 @@ substituted, count unchanged). The binding guarantee is the stronger one stated 
 § The verdict: the input and output `finding_id` **sets** are equal, which a
 drop-and-invent swap violates even though the count survives it.
 
+## The `stages` entry
+
+#117 does not emit a top-level `stages` array — it is the manifest #119's plan reads
+for stages that produce no envelope of their own (#116's pre-flight, and this one). This
+stage adds exactly one entry, `{name: "adjudication", status, reason}`, to whatever
+`stages` array arrived (empty, or already carrying #116's entry), and passes every
+existing entry through unchanged.
+
+**It never overwrites an existing `adjudication` entry.** A second one on input means a
+re-run against a document this stage has already adjudicated, and this stage exits
+non-zero rather than silently repeating itself.
+
+`status` is `"complete"` only when every finding received a verdict, the top-level
+`nonce` was established (see § The `adjudication` block, above), and § Total
+refutation's flag is false.
+Otherwise it names the specific reason: `"total_refutation"`, a nonce disagreement, a
+missing top-level `nonce`, or (via `run_adjudication.py` exiting before this stage runs
+at all) an input that already fails #117's `findings.validate`.
+
 ## Dedupe
 
 Findings describing the same defect in different words are grouped, and the grouping
@@ -196,8 +223,10 @@ The `containment` block is emitted byte-identically to what arrived. Three reaso
 `CONTAINMENT.md`'s "Contract for later stages" table literally binds this stage to call
 `contain.findings_for(surfaces, nonce)`, which needs the `Surface` dict and the nonce —
 this stage receives a JSON document on stdin and has neither. #117 already places
-exactly what that function returns into the merged document's `containment` key, so this
-stage consumes that block verbatim instead of re-deriving it (re-fetching the surfaces
+exactly what that function returns into the merged document's `containment.findings`
+key — not the whole `containment` key, which also carries the `states` map #117 builds
+separately — so this stage consumes that block verbatim instead of re-deriving it
+(re-fetching the surfaces
 here would be a second source of truth for one fact, and a second reason for this stage
 to touch author text at all — the opposite of what the table's own "must never" column
 requires). The pass-through above honours the *intent* of the table's row, but the
