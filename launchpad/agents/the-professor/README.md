@@ -5,7 +5,7 @@ tags claims with provenance, and writes them up in a single consistent voice.
 
 ## Model
 
-`anthropic:claude-sonnet-4-20250514` (`model` field, `provider:model-id` format
+`anthropic:claude-sonnet-5` (`model` field, `provider:model-id` format
 per `PERSONA_PACK_SPEC.md` §4/§10). The Professor's `draft-page` skill is a
 multi-tool-call job — resolving pins, fetching source content, checking claims
 against it — before it ever writes a sentence, so it needs a model capable of
@@ -95,7 +95,8 @@ correctly recognised it needed to "write the finished draft to disk," said so, a
 then looped indefinitely re-verifying with the only tools available, since none of
 them could finish the job. The controller extracted the already-validated draft
 content from the ACP wire log, independently re-ran `check_page` against it to
-confirm the result still holds, and placed it at the scratch path by hand.
+confirm the result still holds, and placed it by hand at
+`/tmp/the-professor-scratch-drafts/persona-packs-upstream-spec-fork-local-tooling.md`.
 
 **This means Step 16 was not a fully autonomous, one-mention-to-finished-file
 proof.** The reasoning and validation are real and the agent's own work; the save
