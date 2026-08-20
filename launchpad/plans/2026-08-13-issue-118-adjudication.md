@@ -21,12 +21,10 @@ each observable on its own — splitting is the reader's call, not this plan's:
 Planned as written below.
 
 ALREADY TRUE  (verified against git, the working trees and the GitHub API, not notes)
-  Nothing of #118 is built. Branch feat/review-agent-adjudication is at e14f5fafb
+  ~~Nothing of #118 is built. Branch feat/review-agent-adjudication is at e14f5fafb
   and `git rev-list --left-right --count origin/launchpad...HEAD` reports 0 0.
-  `git ls-files | grep -iE 'adjudic|review-agent'` matches nothing.
-  `launchpad/plans/` does not exist on this branch — it is created by this plan.
-  Toolchain present: python3 3.12.3, gh 2.93.0.
-  THIS ISSUE SITS AT THE END OF A THREE-LINK CHAIN, AND NONE OF IT IS MERGED.
+  `git ls-files | grep -iE 'adjudic|review-agent'` matches nothing.~~
+  ~~THIS ISSUE SITS AT THE END OF A THREE-LINK CHAIN, AND NONE OF IT IS MERGED.
   #120's containment tree — contain.py, fetch.py, review.py, run_controls.py and
   CONTAINMENT.md — is three pushed commits on `feat/review-agent-untrusted-input`
   (618789584, e072fba55, c64ff7958) and `git rev-list --left-right --count
@@ -41,7 +39,33 @@ ALREADY TRUE  (verified against git, the working trees and the GitHub API, not n
   no dimension definition anywhere on it. So the
   contract this stage consumes exists ONLY as a normative plan document, and no
   producer of it has ever run. See BUDGET — this is the defining risk of #118 and
-  it is different in kind from the one #117 carried.
+  it is different in kind from the one #117 carried.~~
+  **Corrected 2026-08-20, one week after the above was written — struck through,
+  not deleted, per this plan's own citation-rot discipline below.** #120's
+  containment tree and every one of #117's 12 steps are now BUILT AND MERGED to
+  `origin/launchpad`, except #117's own STEP 8 (15 recorded reviewer outputs),
+  which is committed and pushed on `feat/review-agent-recordings-v2` (PR #252,
+  open) — this plan is written from a worktree branched off that exact tip, so
+  STEP 8's recordings are directly available to this issue's own STEP 8/9 as real
+  producer output, not a hypothetical. Verified today, not assumed: `git
+  rev-list --left-right --count origin/launchpad...HEAD` from this worktree
+  reports `0 1` — this branch is `origin/launchpad` plus exactly that one
+  commit. `git ls-tree -r origin/launchpad -- launchpad/review-agent/` lists
+  `findings.py`, `run_dimensions.py`, `contain.py`, `fetch.py`, `review.py`,
+  `FINDINGS.md`, `CONTAINMENT.md`, three files under `dimensions/`, five under
+  `fixtures/dimensions/`, and (on this branch only, pending #252) fifteen under
+  `recordings/` — a summary count, not an exhaustive inventory: it omits
+  `run_controls.py`, the `check_*.py` control scripts, and the `test_*.py` suites
+  also present in the tree. `find . -iname "*adjudic*"` still returns nothing
+  anywhere in the tree — of everything above, only #118 itself remains unbuilt,
+  which is the one claim from the struck-through block that still holds.
+  **Further corrected 2026-08-21: PR #252 merged to `origin/launchpad` the same
+  day this was written (2026-08-20T19:25:57Z) — #117 is now fully merged, all
+  twelve of its steps included, not "pending".** **The defining
+  risk BUDGET names below (a contract with no producer) is now a non-issue**:
+  15 real recorded dimension reports already exist and are the right input for
+  STEP 8/9's fixtures, not a document-only synthesis. See BUDGET's own
+  correction for what that changes.
   #117's contract is settled at its fourth revision and this plan honours it
   without renegotiating. Ten finding fields — dimension, severity, anchor, file,
   line, defect, failure, finding_id, entry_point, evidence. Eleven envelope
@@ -104,8 +128,10 @@ ALREADY TRUE  (verified against git, the working trees and the GitHub API, not n
   with `review.SEVERITY_ORDER.get(finding["severity"], 9)` and renders an
   out-of-ladder severity under its "malformed finding" heading, sorting it last and
   triggering the incomplete banner — its review's finding 2 raised the bare
-  subscript and its Outcomes table records the fix. `review.py:62` uses `.get(
-  f.severity, 9)` for the same reason.
+  subscript and its Outcomes table records the fix. ~~`review.py:62`~~
+  **(corrected 2026-08-20: `review.py:86`, per this plan's own citation-rot
+  rule — checked against the actual file, not the working line number pinned
+  when this was written)** uses `.get(f.severity, 9)` for the same reason.
   This plan cited the bare subscript as live, and that citation was true when
   written and false forty minutes later: `feat/review-agent-publish` committed
   47482549e at 2026-08-13 08:48:13 revising the plan under this plan's feet. The
@@ -228,9 +254,11 @@ STEP 1  launchpad/review-agent/ADJUDICATION.md — the verdict contract,   [inde
         stage does so: `run_adjudication.py`'s `main` runs #117's own
         `findings.validate` against the input document BEFORE any adjudication
         logic touches it, and exits non-zero, adjudicating nothing, when it
-        fails — the same input `reported_severity: "Info"` fails #117's
-        validator on its own severity check, so it never reaches this stage's
-        re-rating logic at all. This is stronger than "this stage is agnostic
+        fails — a finding whose `severity` value arrives out-of-ladder (an
+        "Info", say — this is the dimension's own report, not a field literally
+        named `reported_severity`, which does not exist on input at all) fails
+        #117's validator on its own severity check, so it never reaches this
+        stage's re-rating logic at all. This is stronger than "this stage is agnostic
         about its producer": #119 is agnostic about ITS producer because #119
         cannot re-validate a document it did not build from parts; this stage
         CAN, because the input document is exactly #117's own output shape, and
@@ -326,8 +354,10 @@ STEP 1  launchpad/review-agent/ADJUDICATION.md — the verdict contract,   [inde
         relies on its consumer's default has moved the failure rather than
         removed it; it states that the `containment` block passes through
         unadjudicated and cites CONTAINMENT.md § Severity contract; and it is
-        referenced from a new row in CONTAINMENT.md's "Contract for later stages"
-        table so the two documents point at each other rather than diverging quietly.
+        referenced from CONTAINMENT.md's "Contract for later stages" table — annotating
+        the table's existing #118 row rather than adding a duplicate, since one row per
+        stage is the table's own convention — so the two documents point at each other
+        rather than diverging quietly.
 
 STEP 2  launchpad/review-agent/verdicts.py — the contract in code.           [needs 1]
         Pure functions and dataclasses over an already-parsed document. No
@@ -460,7 +490,7 @@ STEP 3  launchpad/review-agent/run_adjudication.py — the CLI,  [needs 2]  <- R
         fixture carrying all three containment kinds emits them unchanged with
         severity Blocker and no verdict field added to any of them; malformed JSON on
         stdin exits non-zero and prints no document; a fixture whose one finding
-        arrives with `reported_severity: "Info"` exits non-zero and prints no
+        arrives with an out-of-ladder `severity` value (an "Info", say) exits non-zero and prints no
         document at all — validated and refused before adjudication, not
         adjudicated into a best-effort output; a judge injected to REFUTE that
         same finding is never called, asserted on the injected judge's own call
@@ -612,10 +642,10 @@ STEP 6  Escalate-only, enforced in code, and the total-refutation flag.      [ne
         document still passes `verdicts.validate` — this is the case STEP 3's
         input validation does NOT catch, because the input was legal and only
         this stage's own re-rating produced the bad value; the SIBLING case — a
-        fixture whose finding ARRIVES with `reported_severity: "Info"` already —
-        is STEP 3's job, not this control's: `run_adjudication.py` exits non-zero
-        on it before any judge runs, so it is asserted there and not repeated
-        here as a per-finding UNPROVEN case, since there is no legal
+        fixture whose finding ARRIVES with an out-of-ladder `severity` value
+        already — is STEP 3's job, not this control's: `run_adjudication.py`
+        exits non-zero on it before any judge runs, so it is asserted there and
+        not repeated here as a per-finding UNPROVEN case, since there is no legal
         `reported_severity` for such a finding to have been emitted WITH; a BARE
         `review.SEVERITY_ORDER[f["severity"]]` subscript
         succeeds for every finding in every output above, used bare on purpose so
@@ -1004,7 +1034,7 @@ GATES  No verify gate is installed in this checkout — .claude/settings.json an
   harness. STEP 11 now pairs each control with a named, targeted mutation of
   the production code it will eventually test, on that harness's model.
 
-BUDGET  STEP 9 eats the budget. The thing most likely to derail the issue is
+BUDGET  ~~STEP 9 eats the budget. The thing most likely to derail the issue is
   STEP 8, and it is a different risk from the one #117 carried.
   THE PRODUCER OF THIS STAGE'S INPUT DOES NOT EXIST. #117 depended on #120's tree,
   which was at least written and pushed — signatures could be re-verified against
@@ -1020,14 +1050,32 @@ BUDGET  STEP 9 eats the budget. The thing most likely to derail the issue is
   branch with review.py, contain.py, run_controls.py AND #117's findings.py,
   obtained by those issues merging to launchpad and this branch rebasing — never by
   copying, which creates a second source of truth and a guaranteed conflict when
-  they land. Before STEP 2, re-verify review.SEVERITY_ORDER's location and #117's
+  they land.~~
+  **Corrected 2026-08-20 (struck through, not deleted — see ALREADY TRUE's own
+  correction above, same date).** #120 and #117 are BOTH MERGED to `origin/launchpad`
+  ~~(every step except #117's own STEP 8, which is committed on the branch this plan
+  is written from, PR #252 open)~~ **— further corrected 2026-08-21: PR #252 merged
+  the same day, so #117 is fully merged, all twelve steps.** This branch needed no rebase to get
+  `launchpad/review-agent/` — it was already there, cloned from `origin/launchpad`
+  plus one commit. The precondition chain is DISCHARGED, not pending.
+  **The actual risk STEP 8/9 now carry is the opposite of the one described above:**
+  not "no producer exists to synthesize fixtures from," but "real recorded dimension
+  output already exists (#117's own STEP 8, 15 files under `recordings/`) and STEP
+  8/9 below must be built to CONSUME it as the primary input, not to re-synthesize
+  fixtures from ADJUDICATION.md alone as originally planned." Re-read STEP 8/9 below
+  with that in mind before implementing; if their text still describes
+  document-only synthesis, that text is what needs updating, not this correction.
+  Before STEP 2, re-verify review.SEVERITY_ORDER's location and #117's
   field names against what has actually been committed by then rather than trusting
-  the citations in ALREADY TRUE. That instruction paid for itself twice on #117,
-  where a stale measurement and a moved symbol both invalidated a step's
-  specification between drafts.
+  the citations in ALREADY TRUE — worth repeating even though the chain is now
+  merged, since a field could still move before this plan's own STEP 2 lands.
   STEP 9 is five recordings plus four before-and-after pairs, each needing a real
   run against a real model, and it is the step where "recorded from a real run"
-  quietly becomes "hand-written to look like one". STEP 3 decides its cost: if the
+  quietly becomes "hand-written to look like one" — #117's own STEP 8 found exactly
+  this failure mode in its own first draft (a review caught byte-identical prose
+  across three supposedly-independent dimension recordings) and fixed it by
+  disclosing the sampling method honestly rather than fabricating variation; the
+  same discipline applies here. STEP 3 decides its cost: if the
   judge is not an injected callable — if a model call is hardcoded at its call site
   — then STEP 9 stops being recording and becomes a rewrite of STEPs 3, 6 and 7.
 
