@@ -1,0 +1,59 @@
+name: launchpad — security audit
+
+# The harness for #62's repository-security checks. This file adds no detection
+# of its own — it runs whatever is registered in
+# launchpad/scripts/security_audit_registry.py and reports the result. Adding a
+# check is a new file plus one registration line in that registry; this workflow
+# does not change when a check is added.
+#
+# Triggers:
+#   schedule          catches drift nothing else would notice — a setting
+#                      disabled after merge, an upstream file that stopped
+#                      matching. Off the hour to avoid GitHub's top-of-hour queue.
+#   workflow_dispatch  manual reruns, and the mechanism used to capture the
+#                       self-test evidence this task's PR links to.
+#   pull_request       filtered to the paths the audit can actually be affected
+#                       by — the audit scripts themselves, any workflow, and
+#                       .gitignore, which the (future) ignore-coverage check
+#                       reads. Unfiltered would run on every unrelated PR for no
+#                       benefit; too narrow risks a check landing that no PR
+#                       trigger ever exercises.
+on:
+  schedule:
+    - cron: "17 3 * * *"
+  workflow_dispatch: {}
+  pull_request:
+    paths:
+      - ".github/**"
+      - "launchpad/**"
+      - "**/.gitignore"
+
+# Read-only, and nothing more. No repository secret is referenced anywhere in
+# this file — a check that needed one would be a check this workflow cannot run
+# on a fork pull request, which is the majority of what triggers it.
+permissions:
+  contents: read
+
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    steps:
+      # fetch-depth: 0, not the default shallow checkout — the fork/inherited
+      # classifier (security_audit_classifier.py) runs its own `git fetch` of
+      # block/buzz into this checkout afterwards, and fetching a second remote
+      # into a depth-1 clone is a documented source of confusing git failures.
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+
+      # The harness's own controls, scoped to this task's tests only — the
+      # unfiltered `unittest discover` other launchpad-*.yml checks use would
+      # also run every unrelated script's test suite in this directory, which
+      # is duplicate work this workflow doesn't own and would blow the 3-minute
+      # budget #66 sets for no benefit.
+      - name: Run the harness's controls
+        run: python3 -m unittest discover -s launchpad/scripts -p "test_security_audit*.py"
+
+      - name: Run the security audit
+        run: python3 launchpad/scripts/security_audit.py .

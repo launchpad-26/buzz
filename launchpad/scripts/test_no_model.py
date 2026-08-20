@@ -79,6 +79,16 @@ NOT_OURS = {
     "pr_body_check.py": "the PR-body check from #126; its imports are that task's business",
     "mutation_harness.py": "the evidence generator — it rewrites source by design, and "
     "its own imports are not part of the no-model claim",
+    "security_audit.py": "the #62 security-audit harness entrypoint; a separate task, "
+    "not part of the pre-flight stage this allowlist covers",
+    "security_audit_core.py": "the #62 security-audit harness's report contract and runner; "
+    "same reason as security_audit.py",
+    "security_audit_classifier.py": "the #62 fork-added/inherited classifier; "
+    "same reason as security_audit.py",
+    "security_audit_registry.py": "the #62 security-audit check registry; "
+    "same reason as security_audit.py",
+    "security_audit_selftest_check.py": "the #62 security-audit self-test check; "
+    "same reason as security_audit.py",
 }
 
 
