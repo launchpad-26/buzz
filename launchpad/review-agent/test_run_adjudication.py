@@ -206,6 +206,18 @@ class MalformedJsonTests(unittest.TestCase):
         self.assertEqual(stdout, "")
         self.assertTrue(stderr)
 
+    def test_valid_json_non_object_exits_nonzero_and_prints_no_document(self):
+        # `[]`, a bare string, and a bare number are all VALID JSON but not
+        # objects -- json.loads succeeds on each, so this is not caught by
+        # the JSONDecodeError branch above. Refused cleanly before reaching
+        # findings.validate, which assumes a dict.
+        for stdin_text in ("[]", '"just a string"', "42"):
+            with self.subTest(stdin_text=stdin_text):
+                exit_code, stdout, stderr = self._run_main_with_stdin(stdin_text)
+                self.assertNotEqual(exit_code, 0)
+                self.assertEqual(stdout, "")
+                self.assertTrue(stderr)
+
 
 class IllegalInputSeverityTests(unittest.TestCase):
     """A fixture whose one finding arrives with an out-of-ladder `severity` --

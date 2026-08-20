@@ -305,6 +305,19 @@ def main(argv: list[str] | None = None) -> int:
         print(f"run_adjudication: malformed JSON on stdin: {exc}", file=sys.stderr)
         return 1
 
+    # Valid JSON does not imply a JSON *object*: `[]`, `"x"`, `42` all parse.
+    # findings.validate assumes a dict (document.get(...), key not in document)
+    # and is not guaranteed to raise cleanly on other JSON types -- reachable
+    # directly from this CLI's untrusted stdin, so it is refused here, before
+    # that assumption is ever exercised, the same way malformed JSON is.
+    if not isinstance(input_document, dict):
+        print(
+            "run_adjudication: input must be a JSON object, got "
+            f"{type(input_document).__name__}",
+            file=sys.stderr,
+        )
+        return 1
+
     judge: Judge = make_replay_judge(args.replay) if args.replay is not None else stub_judge
 
     try:
