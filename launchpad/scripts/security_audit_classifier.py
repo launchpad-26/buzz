@@ -21,7 +21,7 @@ blind to exactly the files #62 exists to watch.
 """
 
 import subprocess
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 from typing import Optional, Set
 
 UPSTREAM_URL = "https://github.com/block/buzz.git"
@@ -64,4 +64,13 @@ def classify(path: str, upstream_paths: Optional[Set[str]]) -> str:
     """'fork-added', 'inherited', or 'indeterminate' when upstream_paths is None."""
     if upstream_paths is None:
         return "indeterminate"
-    return "inherited" if path.replace("\\", "/") in upstream_paths else "fork-added"
+    normalized = path.replace("\\", "/")
+    if normalized.startswith("./"):
+        normalized = normalized[2:]
+    # git ls-tree's output (what upstream_paths is built from) is always relative.
+    # An absolute path can't be safely compared against it without knowing the
+    # repo root, and guessing fork-added for it is exactly the wrong-direction
+    # guess this module's docstring warns against — indeterminate is honest.
+    if PurePosixPath(normalized).is_absolute():
+        return "indeterminate"
+    return "inherited" if normalized in upstream_paths else "fork-added"
