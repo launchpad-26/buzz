@@ -4,6 +4,8 @@ date: 2026-08-15
 issue: launchpad-26/buzz#53
 decided_in: launchpad-26/buzz#53
 supersedes: none
+amendments:
+  - "2026-08-20: extended to the judgement engine (#74) -- see Amendment 1 below"
 ---
 
 # ADR-0012 — Inference provider boundary and credential handling for upstream synthesis
@@ -102,6 +104,47 @@ Whatever provider arrangement is used must preserve source links through synthes
 provider integration that returns prose without carrying evidence identifiers through
 would remove the only mechanism that makes the output checkable.
 
+## Amendment 1 — 2026-08-20: extending to the judgement engine (#74)
+
+**Why an amendment, not an assumption.** [launchpad-26/buzz#74](https://github.com/launchpad-26/buzz/issues/74)
+(the handbook's judgement engine, in `launchpad-26/handbook`) named this ADR as its own
+blocker. This ADR's Decision above is scoped explicitly "for upstream synthesis," and
+Contingency 1 already establishes the discipline that applies here by the same logic: a
+new consumer of this credential is a new instance of the question this ADR answered, not
+an automatic inheritance of the answer. Raised during #74's scoping
+(`launchpad-26/handbook` plan `plans/2026-08-20-issue-74-judgement-engine.md`) rather than
+assumed either way.
+
+**1. The architecture extends; nothing new is decided there.** One HTTP endpoint plus a
+model identifier as configuration, OpenRouter as the MVP value, credential in Actions
+secrets or an Environment, never a tracked file — the same architecture this ADR already
+decided, now covering the judgement engine as a second, independent consumer. This part
+is inheritance of an already-decided pattern, not a fresh commitment.
+
+**2. A disclosure question this ADR did not anticipate, decided here explicitly.** The
+judgement engine sends a model the whole page under review, frontmatter included. Two of
+the handbook's five source repositories are private
+(`launchpad-26/launchpad`, `launchpad-26/skills`), and `docs/page-contract.md` explicitly
+permits citing them. A page that does is disclosed to a fourth party — the model
+provider — beyond the org-restricted site and published index that page-contract.md's own
+privacy invariant is built around. This ADR's "Phase 1's public-content egress only"
+framing did not cover this, because upstream synthesis only ever touches the public
+`block/buzz`.
+
+**Decided: accept this disclosure.** `docs/page-contract.md` itself already classifies a
+cited file path as "reconnaissance, not a secret" — the same information is already
+visible to anyone with the private-repo access the citation requires to verify in the
+first place. Stripping it before judgement would leave the engine unable to judge those
+pages at all, and no new provider-trust decision is introduced: the disclosure is
+constrained to the same OpenRouter choice this ADR already made for Phase 1.
+
+**Consequences of this amendment.** Good: the judgement engine's credential/architecture
+question is answered without re-litigating Phase 1's own decision. Bad, stated honestly:
+this normalises sending page content — including any private-repo path a page cites — to
+a third-party inference provider on every judged page, a broader and more frequent
+disclosure than Phase 1's occasional synthesis run. Revisit if either private source
+repository's access terms would prohibit this.
+
 ## Provenance
 
 Decided directly in conversation with the repository owner (@serina-mcfall) on
@@ -116,3 +159,7 @@ Not verified independently in this document: OpenRouter's API shape, terms, or
 data-retention policy, and whether the cohort's OpenRouter account and spend limit exist
 yet at the time of writing — recorded as the account owner's responsibility going
 forward, not verified as already in place.
+
+Amendment 1 proposed by an AI agent (Claude Sonnet 5) during #74's scoping, raised as an
+open question on #74 rather than assumed either way, and decided directly in
+conversation with the repository owner (@serina-mcfall) on 2026-08-20.
