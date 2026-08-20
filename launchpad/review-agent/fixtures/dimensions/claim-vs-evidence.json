@@ -1,0 +1,22 @@
+{
+  "_comment": "STEP 7 (launchpad-26/buzz#117) fixture: a PR body asserting a done-criterion the diff does not satisfy (claims a validated, choices-restricted flag; the diff adds a plain boolean flag with no validation), plus a cited path (scripts/config_schema.py) that does not exist anywhere in this repository.",
+  "_fixture": {
+    "planted_entry_point": "pr_diff",
+    "planted_file": "scripts/config_loader.py",
+    "planted_line": 23,
+    "must_find": [
+      "claim-vs-evidence"
+    ],
+    "must_not_find": [
+      "secrets-and-access",
+      "correctness-and-failure-modes"
+    ]
+  },
+  "pr_title": "feat(config): add validated --verbose level to config_loader",
+  "pr_body": "Closes #302.\n\nAdds a `--verbose` flag whose value is restricted to `debug`, `info`, or `warn` via `argparse`'s `choices=`, matching the validation contract described in `scripts/config_schema.py`. All existing tests still pass.",
+  "pr_diff": "diff --git a/scripts/config_loader.py b/scripts/config_loader.py\nindex 3333333..4444444 100644\n--- a/scripts/config_loader.py\n+++ b/scripts/config_loader.py\n@@ -20,4 +20,5 @@\n def parse_args():\n     parser = argparse.ArgumentParser()\n     parser.add_argument(\"--config\", required=True)\n+    parser.add_argument(\"--verbose\", action=\"store_true\")\n     return parser.parse_args()",
+  "pr_issue_comments": "Thanks for adding this, will be useful for debugging.",
+  "pr_review_comments": "LGTM.",
+  "pr_review_bodies": "Approved.",
+  "linked_issue": "config_loader has no way to increase log verbosity from the CLI."
+}
