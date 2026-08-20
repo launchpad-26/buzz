@@ -110,7 +110,10 @@ of a finding record.
 Do not read `file` or `line` for a `pr`-anchored finding — both are null, and treating a
 missing location as "unverifiable, therefore refuted" is exactly exclusion 4 above, wearing
 a different cause. This is the rule `run_adjudication.py`'s `_location_description`
-already enforces in code, on the sibling branch that implements it: it branches on
+already enforces in code, verified at `2be90c629` on the unmerged sibling branch
+`feat/review-agent-adjudication-nonce` (STEPs 3–4; PR #264) — cited by commit rather than
+by branch name alone, per this plan's own citation-rot rule, since that branch is still
+under active revision until it merges: it branches on
 `anchor` *first*, before ever touching `file` or `line`, never the reverse, so that a
 `pr`-anchored finding is described by what it is ("the whole pull request, no file or line
 anchor") rather than falling through to a format string that would print `None:None`. This
