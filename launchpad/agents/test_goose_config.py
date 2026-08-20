@@ -17,6 +17,7 @@ from __future__ import annotations
 
 import importlib.util
 import os
+import stat
 import tempfile
 import unittest
 from pathlib import Path
@@ -37,11 +38,14 @@ class GooseConfigPathTests(unittest.TestCase):
         path = m.goose_config_path({})
         self.assertEqual(path, Path.home() / ".config" / "goose" / "config.yaml")
 
-    def test_empty_goose_path_root_is_treated_as_unset(self):
-        # An operator with GOOSE_PATH_ROOT="" in their env should not get a
-        # path rooted at "/config/config.yaml".
+    def test_empty_goose_path_root_mirrors_rust_treating_it_as_set(self):
+        # Rust's std::env::var("GOOSE_PATH_ROOT") returns Ok("") for a
+        # set-but-empty variable, so goose.rs's own resolution does NOT
+        # treat empty as unset. This module mirrors that exactly, even
+        # though it is arguably a footgun -- diverging would mean this
+        # script patches a different file than the one goose itself reads.
         path = m.goose_config_path({"GOOSE_PATH_ROOT": ""})
-        self.assertEqual(path, Path.home() / ".config" / "goose" / "config.yaml")
+        self.assertEqual(path, Path("config/config.yaml"))
 
 
 class ReadConfigTests(unittest.TestCase):
@@ -60,6 +64,34 @@ class ReadConfigTests(unittest.TestCase):
             path = Path(d) / "config.yaml"
             path.write_text("", encoding="utf-8")
             self.assertEqual(m.read_config(path), {})
+
+    def test_invalid_yaml_raises_goose_config_error(self):
+        with tempfile.TemporaryDirectory() as d:
+            path = Path(d) / "config.yaml"
+            path.write_text("{{{{not valid", encoding="utf-8")
+            with self.assertRaises(m.GooseConfigError):
+                m.read_config(path)
+
+    def test_non_mapping_top_level_raises_goose_config_error(self):
+        with tempfile.TemporaryDirectory() as d:
+            path = Path(d) / "config.yaml"
+            path.write_text("- just\n- a\n- list\n", encoding="utf-8")
+            with self.assertRaises(m.GooseConfigError):
+                m.read_config(path)
+
+    def test_preserves_comments_on_round_trip(self):
+        with tempfile.TemporaryDirectory() as d:
+            path = Path(d) / "config.yaml"
+            path.write_text(
+                "# managed by ansible -- do not edit by hand\n"
+                'active_provider: databricks_v2  # production creds\n',
+                encoding="utf-8",
+            )
+            cfg = m.read_config(path)
+            m.write_config_atomic(path, cfg)
+            written = path.read_text(encoding="utf-8")
+            self.assertIn("# managed by ansible -- do not edit by hand", written)
+            self.assertIn("# production creds", written)
 
 
 class MergeDeveloperExtensionTests(unittest.TestCase):
@@ -109,6 +141,10 @@ class MergeDeveloperExtensionTests(unittest.TestCase):
             merged["extensions"]["developer"], {"type": "builtin", "enabled": True}
         )
 
+    def test_non_mapping_extensions_key_raises_goose_config_error(self):
+        with self.assertRaises(m.GooseConfigError):
+            m.merge_developer_extension({"extensions": ["not", "a", "mapping"]})
+
 
 class WriteConfigAtomicTests(unittest.TestCase):
     def test_creates_parent_directory_and_file(self):
@@ -130,6 +166,27 @@ class WriteConfigAtomicTests(unittest.TestCase):
             path.write_text("stale: true\n", encoding="utf-8")
             m.write_config_atomic(path, {"fresh": True})
             self.assertEqual(m.read_config(path), {"fresh": True})
+
+    def test_preserves_existing_file_permissions(self):
+        with tempfile.TemporaryDirectory() as d:
+            path = Path(d) / "config.yaml"
+            path.write_text("a: 1\n", encoding="utf-8")
+            os.chmod(path, 0o644)
+            m.write_config_atomic(path, {"a": 2})
+            self.assertEqual(stat.S_IMODE(path.stat().st_mode), 0o644)
+
+    def test_writes_through_a_symlink_rather_than_replacing_it(self):
+        with tempfile.TemporaryDirectory() as d:
+            real_path = Path(d) / "real-config.yaml"
+            m.write_config_atomic(real_path, {"stale": True})
+            link_path = Path(d) / "config.yaml"
+            link_path.symlink_to(real_path)
+
+            m.write_config_atomic(link_path, {"fresh": True})
+
+            self.assertTrue(link_path.is_symlink(), "the symlink must survive the write")
+            self.assertEqual(link_path.resolve(), real_path)
+            self.assertEqual(m.read_config(real_path), {"fresh": True})
 
 
 class EnableDeveloperExtensionEndToEndTests(unittest.TestCase):
