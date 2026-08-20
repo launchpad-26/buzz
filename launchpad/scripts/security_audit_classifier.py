@@ -20,9 +20,20 @@ files nobody here wrote, and calling a fork-added file inherited makes the audit
 blind to exactly the files #62 exists to watch.
 """
 
+import re
 import subprocess
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 from typing import Optional, Set
+
+#: Matches a Windows drive letter root ("C:/", "d:/") after backslash-to-slash
+#: normalization. PurePosixPath.is_absolute() only recognizes a leading "/" --
+#: it has no concept of a drive letter, so "C:/Users/x/buzz/foo.py" reads as
+#: NOT absolute to it and would otherwise fall through to the plain membership
+#: check below, almost certainly returning the wrong-direction "fork-added"
+#: guess this function exists to avoid. This repo already treats Windows-style
+#: paths as a real input class (the backslash normalization two lines below
+#: predates this check), so the absolute-path guard must catch this form too.
+_WINDOWS_DRIVE_ROOT = re.compile(r"^[A-Za-z]:/")
 
 UPSTREAM_URL = "https://github.com/block/buzz.git"
 UPSTREAM_REF = "main"
@@ -64,4 +75,13 @@ def classify(path: str, upstream_paths: Optional[Set[str]]) -> str:
     """'fork-added', 'inherited', or 'indeterminate' when upstream_paths is None."""
     if upstream_paths is None:
         return "indeterminate"
-    return "inherited" if path.replace("\\", "/") in upstream_paths else "fork-added"
+    normalized = path.replace("\\", "/")
+    if normalized.startswith("./"):
+        normalized = normalized[2:]
+    # git ls-tree's output (what upstream_paths is built from) is always relative.
+    # An absolute path can't be safely compared against it without knowing the
+    # repo root, and guessing fork-added for it is exactly the wrong-direction
+    # guess this module's docstring warns against — indeterminate is honest.
+    if PurePosixPath(normalized).is_absolute() or _WINDOWS_DRIVE_ROOT.match(normalized):
+        return "indeterminate"
+    return "inherited" if normalized in upstream_paths else "fork-added"

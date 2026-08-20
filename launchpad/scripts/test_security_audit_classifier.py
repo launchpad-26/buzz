@@ -60,6 +60,53 @@ class ClassifyTest(unittest.TestCase):
             "inherited",
         )
 
+    def test_dot_slash_prefixed_path_is_normalized(self):
+        self.assertEqual(
+            classify("./.github/workflows/ci.yml", _SYNTHETIC_UPSTREAM_PATHS),
+            "inherited",
+        )
+
+    def test_absolute_path_is_indeterminate_not_a_guess(self):
+        self.assertEqual(
+            classify(
+                "/home/serina/Launchpad/buzz/.github/workflows/ci.yml",
+                _SYNTHETIC_UPSTREAM_PATHS,
+            ),
+            "indeterminate",
+        )
+
+    def test_absolute_path_to_a_fork_only_file_is_still_indeterminate(self):
+        # A caller bug that computes absolute paths should never resolve to a
+        # guess in either direction, not just for genuinely-inherited files.
+        self.assertEqual(
+            classify("/home/serina/Launchpad/buzz/launchpad/deploy/README.md", _SYNTHETIC_UPSTREAM_PATHS),
+            "indeterminate",
+        )
+
+    def test_windows_absolute_path_is_indeterminate_not_a_guess(self):
+        # PurePosixPath.is_absolute() has no concept of a drive letter, so
+        # "C:/Users/.../ci.yml" is NOT absolute to it -- without a dedicated
+        # check this falls through to the plain membership test and returns
+        # the wrong-direction "fork-added" guess for a genuinely inherited
+        # file, exactly the failure mode the POSIX-absolute check exists to
+        # prevent for forward-slash-rooted paths.
+        self.assertEqual(
+            classify(
+                "C:\\Users\\serina\\Launchpad\\buzz\\.github\\workflows\\ci.yml",
+                _SYNTHETIC_UPSTREAM_PATHS,
+            ),
+            "indeterminate",
+        )
+
+    def test_windows_absolute_path_to_a_fork_only_file_is_still_indeterminate(self):
+        self.assertEqual(
+            classify(
+                "C:\\Users\\serina\\Launchpad\\buzz\\launchpad\\deploy\\README.md",
+                _SYNTHETIC_UPSTREAM_PATHS,
+            ),
+            "indeterminate",
+        )
+
 
 class FetchUpstreamPathsTest(unittest.TestCase):
     def test_returns_none_on_called_process_error(self):
