@@ -17,16 +17,27 @@ from typing import Literal
 
 from symbol import Symbol
 
+# review-final finding (PR #214): #207's Objective names 8 edge types, but
+# only 5 of these 9 literals (calls, called_by, configured_by, tested_by,
+# documented_by) are ever materialized by from_symbols() below -- the other
+# 4 (imports, deployed_by, owns, depends_on) need extraction #206 does not
+# currently do, and are RESERVED here for the design doc's full graph, not
+# implemented. #207's own Definition of done checkbox reads "edge types are
+# explicit and directional as specified", which this satisfies for every
+# type this task actually produces; it does not claim all 8 are produced.
+# Kept as reserved literals (rather than trimmed to 5) so a caller matching
+# against EdgeType today gets a type error, not a silent no-op, the day one
+# of these four is implemented.
 EdgeType = Literal[
-    "imports",
+    "imports",  # reserved -- not yet materialized, needs import extraction in #206
     "calls",
     "called_by",
     "configured_by",
     "tested_by",
     "documented_by",
-    "deployed_by",
-    "owns",
-    "depends_on",
+    "deployed_by",  # reserved -- not yet materialized, needs deploy-config extraction
+    "owns",  # reserved -- not yet materialized, needs ownership extraction
+    "depends_on",  # reserved -- not yet materialized, needs dependency extraction
 ]
 
 
