@@ -53,6 +53,7 @@ the first time this shebang line runs.
 import base64
 import json
 import os
+import shutil
 import subprocess
 import tempfile
 from pathlib import Path
@@ -204,11 +205,29 @@ def resolve_pin(repo: str, ref: str) -> str:
 def path_exists_at(repo: str, commit: str, path: str) -> bool:
     """Return whether `path` exists in `repo` at `commit`.
 
-    Calls `GET /repos/{repo}/contents/{path}?ref={commit}` live via `gh api`
+    Calls `GET /repos/{repo}/contents/{path}` with `ref={commit}` passed as
+    a separate `gh api -f` parameter (never hand-concatenated into the URL)
     -- same fetch convention as `resolve_pin` above. A 404 from GitHub is
     this tool's normal negative answer (`False`), not an error: a missing
     path is an expected result this tool exists to report, so it must not
     raise just because the file isn't there.
+
+    `commit` is validated as a real 40-character hex SHA before any request
+    is made, same as `resolve_pin`'s own output check -- this tool exists to
+    verify a claim is pinned to a real commit, and it must not silently
+    accept a branch name or other moving ref in that argument's place.
+
+    `path` is rejected outright if it contains `?` or `&`: a real repository
+    path can never contain those characters, and a prior version of this
+    tool built the request as an f-string
+    (`f"repos/{repo}/contents/{path}?ref={commit}"`), which let a `path`
+    value like `"docs/x.md?ref=main&"` inject its own `ref` query parameter
+    and override the pinned `commit` this function was asked to check --
+    exactly the floating-ref risk `resolve_pin` exists to close, reintroduced
+    at this tool's own boundary. Passing `ref` via `-f` instead of the URL
+    string closes that regardless, but the explicit rejection here means a
+    caller gets a clear error instead of a request that silently succeeds
+    against the wrong ref.
 
     That is deliberately narrower than "any non-zero exit is False". The
     same trap `resolve_pin` guards against applies here: an unauthenticated
@@ -219,8 +238,31 @@ def path_exists_at(repo: str, commit: str, path: str) -> bool:
     treated as a real negative; auth/rate-limit statuses and anything else
     raise instead.
     """
+    if len(commit) != 40 or any(c not in "0123456789abcdef" for c in commit):
+        raise RuntimeError(
+            f"path_exists_at({repo!r}, {commit!r}, {path!r}): `commit` is not "
+            "a 40-character hex SHA. This tool checks existence at a pinned "
+            "commit, not a branch or tag -- resolve it with resolve_pin() "
+            "first."
+        )
+    if "?" in path or "&" in path:
+        raise RuntimeError(
+            f"path_exists_at({repo!r}, {commit!r}, {path!r}): `path` contains "
+            "'?' or '&', which cannot appear in a real repository path. "
+            "Refusing rather than risk it being interpreted as part of the "
+            "request's query string."
+        )
+
     result = subprocess.run(
-        ["gh", "api", f"repos/{repo}/contents/{path}?ref={commit}"],
+        [
+            "gh",
+            "api",
+            f"repos/{repo}/contents/{path}",
+            "--method",
+            "GET",
+            "-f",
+            f"ref={commit}",
+        ],
         capture_output=True,
         text=True,
         timeout=30,
@@ -272,8 +314,25 @@ def _refresh_handbook_checkout() -> Path:
     A prior clone missing its `.git` directory (e.g. the temp dir was cleared
     but partially recreated) is treated as absent and re-cloned from scratch,
     rather than trying to repair a half-present checkout in place.
+
+    `HANDBOOK_CLONE_DIR` is a fixed, predictable path under the shared system
+    temp directory. On a multi-user machine that directory is world-writable,
+    so another local process could create a `.git` there before this server
+    ever runs and plant a hostile repository -- including hostile scripts
+    where `check_provenance.py`/`page_index.py` are expected, which this
+    function's caller then executes as a real subprocess believing them to
+    be the handbook's own gate. Ownership is checked before anything existing
+    there is trusted; anything not owned by this process is wiped and
+    re-cloned from scratch rather than reused.
     """
-    if (HANDBOOK_CLONE_DIR / ".git").is_dir():
+    owned_by_us = (
+        HANDBOOK_CLONE_DIR.is_dir()
+        and HANDBOOK_CLONE_DIR.stat().st_uid == os.getuid()
+    )
+    if HANDBOOK_CLONE_DIR.exists() and not owned_by_us:
+        shutil.rmtree(HANDBOOK_CLONE_DIR)
+
+    if (HANDBOOK_CLONE_DIR / ".git").is_dir() and owned_by_us:
         fetch = subprocess.run(
             ["git", "fetch", "--depth", "1", "origin", HANDBOOK_DEFAULT_BRANCH],
             cwd=HANDBOOK_CLONE_DIR,
@@ -407,6 +466,25 @@ def check_page(draft_content: str) -> dict:
                 f"JSON (exit {provenance_run.returncode}). stdout="
                 f"{provenance_run.stdout!r} stderr={provenance_run.stderr!r}"
             ) from exc
+
+        # Valid JSON is not the same as a completed run: a script that exits
+        # non-zero for its OWN internal-error reasons (not "findings exist")
+        # can still print a syntactically valid, empty-looking body. Only
+        # trust a non-zero exit as a real, explicable outcome if the JSON
+        # itself reports something -- otherwise this would silently report
+        # "zero findings" for a gate run that actually failed to run at all.
+        if provenance_run.returncode != 0 and not (
+            provenance_data.get("findings")
+            or provenance_data.get("unchecked")
+            or provenance_data.get("skipped")
+        ):
+            raise RuntimeError(
+                "check_page: check_provenance.py exited "
+                f"{provenance_run.returncode} and reported no findings, "
+                "unchecked items, or skipped pages -- treating this as a "
+                "failed gate run, not a clean pass. stdout="
+                f"{provenance_run.stdout!r} stderr={provenance_run.stderr!r}"
+            )
 
         index_run = subprocess.run(
             [
