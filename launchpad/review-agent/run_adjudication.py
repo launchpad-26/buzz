@@ -65,18 +65,20 @@ guarantees above, both implemented in this module because STEP 3 and STEP 4
 are two facets of one CLI:
 
 The top-level ``nonce`` is checked and passed through, **never generated**.
-#117's own ``findings.validate`` -- which ``adjudicate()`` already runs first
--- rejects a document whose marker disagrees with the top-level key, so in
-practice a document that clears that gate today already agrees everywhere.
-This module checks it again anyway, for ADJUDICATION.md's own reason: this
-stage is agnostic about its producer and may not inherit a guarantee it did
-not watch being made. ``_verify_nonce`` below is that check, kept as its own
-function precisely so it is testable directly against hand-built documents --
-the same reason ``verdicts.validate`` is tested against hand-built documents
-rather than only against this module's own output -- since #117's validator
-being this thorough today means the three refusals below are not otherwise
-reachable through ``main()`` with a document that still satisfies #117's own
-contract.
+``_verify_nonce`` runs BEFORE #117's own ``findings.validate`` -- deliberately
+reordered from STEP 3's original sequence, and this is why: ``findings.
+validate`` independently rejects a document whose marker disagrees with the
+top-level key too, but it does so with one generic per-report message,
+identical whether the reports disagree with EACH OTHER or merely with the
+top-level key. Running it first would mean ``_verify_nonce``'s three distinct
+refusals below could never actually surface through ``main()`` -- every
+document that would trigger one of them already fails ``findings.validate``
+first, so the operator would only ever see the generic message and never the
+category. Checking the nonce first makes the three refusals genuinely
+observable end to end, which is what ADJUDICATION.md's "own reason, distinct
+from the first" requirement means in practice. ``findings.validate`` still
+runs -- second now, but still before a single finding reaches the judge loop,
+which is STEP 3's actual guarantee, not "first" in an absolute sense.
 
 Three refusals, checked in this fixed order because one document can satisfy
 more than one at once:
@@ -186,8 +188,9 @@ def _verify_nonce(document: dict) -> str:
     nonce and never accepts one from anywhere but ``document`` itself.
 
     Reads ``document`` directly rather than trusting ``findings.validate``
-    already ran (see the module docstring's STEP 4 section): a stage
-    agnostic about its producer verifies this itself.
+    to have run first -- it runs BEFORE ``findings.validate`` in
+    ``adjudicate()`` (see the module docstring's STEP 4 section for why): a
+    stage agnostic about its producer verifies this itself.
     """
     top_nonce = document.get("nonce")
     reports_raw = document.get("reports")
@@ -365,19 +368,19 @@ def adjudicate(input_document: dict, judge: Judge) -> dict:
     """Adjudicate every finding in ``input_document`` with ``judge`` and
     return the adjudicated output document. Never mutates ``input_document``.
 
+    Raises ``AlreadyAdjudicatedError`` when ``input_document["stages"]``
+    already carries an ``adjudication`` entry (a re-run), and
+    ``NonceVerificationError`` when the top-level ``nonce`` cannot be
+    established against every report's completion marker (STEP 4; see the
+    module docstring for why these run BEFORE ``findings.validate`` now).
+
     Raises ``InputValidationError`` -- adjudicating nothing, calling ``judge``
     zero times -- when ``input_document`` fails #117's own
     ``findings.validate``. This is the boundary STEP 1/STEP 2 call load-bearing:
     a finding whose ``severity`` already arrived illegal is refused here,
     wholesale, rather than reaching a per-finding fallback with no good answer.
-
-    Raises ``AlreadyAdjudicatedError`` when ``input_document["stages"]``
-    already carries an ``adjudication`` entry (a re-run), and
-    ``NonceVerificationError`` when the top-level ``nonce`` cannot be
-    established against every report's completion marker (STEP 4; see the
-    module docstring). Both checks run after #117's own ``findings.validate``
-    and before any finding is adjudicated -- input validation stays the first
-    gate, unchanged from STEP 3.
+    Checked after the two STEP 4 gates above, but still before any finding
+    reaches the judge loop -- STEP 3's actual guarantee.
 
     Pass-through fields (``pr``, ``merge_base_sha``, ``head_sha``,
     ``containment``) are never touched: the output starts as a
@@ -387,12 +390,12 @@ def adjudicate(input_document: dict, judge: Judge) -> dict:
     here is left exactly equal to its ``reported_severity``, and
     ``duplicate_of`` is always null.
     """
+    _check_not_already_adjudicated(input_document)
+    nonce = _verify_nonce(input_document)
+
     violations = findings.validate(input_document)
     if violations:
         raise InputValidationError(violations)
-
-    _check_not_already_adjudicated(input_document)
-    nonce = _verify_nonce(input_document)
 
     output_document = copy.deepcopy(input_document)
 

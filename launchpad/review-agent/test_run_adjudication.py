@@ -424,13 +424,12 @@ class SubprocessInvocationTests(unittest.TestCase):
 
 
 class NonceVerificationDirectTests(unittest.TestCase):
-    """Direct tests of ``_verify_nonce``, bypassing ``findings.validate``
-    entirely. This is the only way to observe the three refusals' distinct
-    reasons and their fixed precedence: any document exhibiting one of them
-    also already fails #117's own ``findings.validate`` -- which
-    ``adjudicate`` runs first -- so ``main``/``adjudicate`` end to end never
-    reaches ``_verify_nonce`` with a genuinely disagreeing document today
-    (see ``NonceVerificationEndToEndTests`` below for that half).
+    """Direct, unit-level tests of ``_verify_nonce`` in isolation -- the
+    three refusals' distinct reasons and their fixed precedence, without the
+    rest of ``adjudicate`` around them. ``NonceVerificationEndToEndTests``
+    below proves the same three reasons surface through the real CLI, now
+    that ``_verify_nonce`` runs before ``findings.validate`` in
+    ``adjudicate`` (see the module docstring's STEP 4 section).
     """
 
     def test_no_top_level_nonce_is_absent_provenance(self):
@@ -497,12 +496,18 @@ class NonceVerificationDirectTests(unittest.TestCase):
 
 
 class NonceVerificationEndToEndTests(unittest.TestCase):
-    """The same three refusals, but through `main` with realistic fixtures.
-    Every one of these ALSO already fails #117's own `findings.validate`
-    (run first, per STEP 3), so what is actually asserted here is `main`'s
-    contract -- exits non-zero, prints no document at all -- not that the
-    stderr text is `_verify_nonce`'s own. See `NonceVerificationDirectTests`
-    above for the distinct-reason proof.
+    """The same three refusals, through `main` with realistic fixtures --
+    proving the DISTINCT reason each one names is actually observable end to
+    end, not just from calling `_verify_nonce` directly.
+
+    This is only true because `adjudicate()` runs `_verify_nonce` BEFORE
+    #117's own `findings.validate`. `findings.validate` independently rejects
+    the same documents, but with one generic per-report message that does not
+    distinguish "reports disagree with each other" from "reports agree with
+    each other but not the top-level key" -- see the module docstring's STEP 4
+    section. Checking the ordering here, not just the exit code, is the whole
+    point of this class: a regression that reverts the ordering would still
+    pass a test that only asserts `stdout == ""`.
     """
 
     def _run_main_with_document(self, document: dict) -> tuple[int, str, str]:
@@ -520,7 +525,7 @@ class NonceVerificationEndToEndTests(unittest.TestCase):
         exit_code, stdout, stderr = self._run_main_with_document(doc)
         self.assertNotEqual(exit_code, 0)
         self.assertEqual(stdout, "")
-        self.assertTrue(stderr)
+        self.assertIn("mixed document", stderr, stderr)
 
     def test_reports_agreeing_but_not_top_level_exits_nonzero_no_document(self):
         doc = make_document(
@@ -530,7 +535,8 @@ class NonceVerificationEndToEndTests(unittest.TestCase):
         exit_code, stdout, stderr = self._run_main_with_document(doc)
         self.assertNotEqual(exit_code, 0)
         self.assertEqual(stdout, "")
-        self.assertTrue(stderr)
+        self.assertIn("mismatched envelope", stderr, stderr)
+        self.assertNotIn("mixed document", stderr, stderr)
 
     def test_no_top_level_nonce_exits_nonzero_and_invents_nothing(self):
         doc = make_document(reports=[make_report(nonce=NONCE)], nonce=NONCE)
@@ -538,6 +544,7 @@ class NonceVerificationEndToEndTests(unittest.TestCase):
         exit_code, stdout, stderr = self._run_main_with_document(doc)
         self.assertNotEqual(exit_code, 0)
         self.assertEqual(stdout, "")  # nothing printed means no nonce was invented
+        self.assertIn("absent provenance", stderr, stderr)
 
     def test_report_with_no_marker_exits_nonzero_and_never_reports_complete(self):
         report = make_report(nonce=NONCE)
@@ -548,6 +555,7 @@ class NonceVerificationEndToEndTests(unittest.TestCase):
         # No document at all is printed, so no stage status is ever emitted --
         # "complete" in particular is never among them.
         self.assertEqual(stdout, "")
+        self.assertIn("absent provenance", stderr, stderr)
 
 
 class StagesManifestTests(unittest.TestCase):
