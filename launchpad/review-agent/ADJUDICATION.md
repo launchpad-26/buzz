@@ -1,0 +1,206 @@
+# ADJUDICATION.md — the adjudication stage's verdict contract
+
+Normative, and a sibling to `CONTAINMENT.md` and to `FINDINGS.md` in the same voice.
+This is the document [#119](https://github.com/launchpad-26/buzz/issues/119) reads to
+know what arrives once [#118](https://github.com/launchpad-26/buzz/issues/118)
+(adjudication) has run.
+
+## The verdict
+
+Exactly one verdict per finding, from `CONFIRMED | REFUTED | UNPROVEN`. "Exactly one" is
+the whole criterion: a finding present on input and absent from output is a defect in
+this stage, not a tidy-up — the contract states that the input and output `finding_id`
+sets are **equal**, not that output is a subset of input.
+
+**The default is `UNPROVEN`, never `REFUTED`.** Absence of confirmation is not
+refutation. An adjudicator that cannot reach the location a finding names, cannot parse
+the finding, times out, or returns unusable output yields `UNPROVEN` with a reason. This
+is the fail-closed direction: a wrongly-`UNPROVEN` finding still reaches a human; a
+wrongly-`REFUTED` one reaches them wearing a dismissal.
+
+## The added finding fields
+
+On top of `FINDINGS.md`'s ten. Names are final here:
+
+| field | meaning |
+|---|---|
+| `verdict` | `CONFIRMED \| REFUTED \| UNPROVEN` |
+| `verdict_evidence` | what the adjudicator established, in its own words — required and non-empty on **all three** verdicts, including `REFUTED` and `UNPROVEN`. An `UNPROVEN` with no reason is indistinguishable from a stage that skipped the finding. |
+| `reported_severity` | the reporting dimension's value, preserved verbatim |
+| `severity` | the **re-rated** value — `FINDINGS.md`'s field, overwritten here |
+| `severity_reason` | required whenever `severity != reported_severity` |
+| `duplicate_of` | `finding_id` of the survivor, or null — see § Dedupe, below |
+
+`severity` carries the re-rating and `reported_severity` preserves the original because
+#119 ranks by `finding["severity"]`, so this field name decides what the published review
+leads with. The dimension's original value stays readable beside it, which is what
+#118's issue requires — "readable", not merely "recoverable from history" — and the two
+are only the same field if #119 changes what it renders.
+
+**Severity is re-rated on every finding, including `REFUTED` ones.** The rating answers
+"how bad if true", which is a separate question from "is it true". Rating only the
+confirmed findings would leave `REFUTED` findings carrying an unexamined severity into
+#119's sort.
+
+### `severity` and `reported_severity` must both be in `review.SEVERITY_ORDER`
+
+Stated as a guarantee this stage makes to #119, and as **defence in depth** rather than
+#119's only defence: #119 sorts with `.get(severity, 9)` and routes an unrecognised
+severity to its own malformed-finding heading, so a bad value is survivable there — but
+this stage is the one that **creates** bad values by re-rating, and a producer that
+relies on its consumer's default has moved the failure rather than removed it.
+
+The guarantee is on the **effective** severity — the re-rating where one was made,
+`reported_severity` where none was. Both must be checked: a finding arriving with an
+out-of-ladder `reported_severity` that the judge happens to agree with is never
+re-rated at all, so a guard watching only re-ratings never fires and the bad value is
+copied into `severity` untouched.
+
+**This cannot happen if the input document is validated first, and this stage does so.**
+`run_adjudication.py`'s `main` runs #117's own `findings.validate` against the input
+document *before* any adjudication logic touches it, and exits non-zero — adjudicating
+nothing — when validation fails. An input carrying `reported_severity: "Info"` fails
+`FINDINGS.md`'s own severity rule and never reaches this stage's re-rating logic at all.
+This is stronger than "this stage is agnostic about its producer": #119 is agnostic
+about *its* producer because #119 cannot re-validate a document it did not assemble from
+parts, while this stage *can*, because its input document is exactly #117's own output
+shape and the validator that checks it already exists. Refusing outright is also the
+only answer that needs no invention: there is no legal value to preserve
+`reported_severity` *as*, once it already arrived broken, and inventing one would be this
+stage silently deciding what the dimension actually meant.
+
+So an out-of-ladder **effective** severity this stage can still produce — one its own
+re-rating created from a legal `reported_severity` — is an adjudication **failure** for
+that finding: `UNPROVEN`, `severity` set to the nearest legal value with the refusal
+stated in `severity_reason`, and `reported_severity` left unchanged (input validation
+already guarantees it was legal to begin with). This stage may not silently decide an
+unrateable finding is a small one, and it is never asked to invent a value for a field
+that arrived already broken.
+
+## Escalate, never approve
+
+Stated as three concrete prohibitions rather than a slogan, because a slogan is not
+checkable:
+
+1. **No field in this contract can carry an approval, a merge recommendation, or a
+   pass.** There is no `approved`, no `mergeable`, no `verdict: OK`. A judge cannot emit
+   what the record cannot hold. This binds field names and enumerated values, **not free
+   text**, and the limit is stated because it is otherwise invisible: `verdict_evidence`,
+   `severity_reason`, and `notes` are free strings, and nothing mechanical stops a judge
+   writing "this looks fine to me, recommend merge" into one. A control that grepped
+   them for approving phrasing would itself be a keyword filter — the kind of narrow
+   guard the review dimensions exist to find in other people's code. Today the exposure
+   is nil: #119 renders none of the three free-text fields. It stops being nil the
+   moment #119 renders `verdict_evidence`. The mitigation is placed where it can work —
+   the adjudicator's own prompt forbids this phrasing, a recorded before/after pair
+   measures whether that prohibition makes a difference, and this is a condition on
+   #119 ever rendering that field, not a solved problem independent of it.
+2. **A `REFUTED` finding is still published, with its verdict beside it.** This stage
+   removes nothing from `reports[].findings`, and `findings_count` is unchanged by
+   adjudication.
+3. **A downgrade is allowed and must be visible.** `severity` may fall below
+   `reported_severity` — an overstated true finding is its own error — but it carries
+   `severity_reason`, and the finding is additionally listed in
+   `adjudication.downgrades`, so the movement is legible even where a consumer renders
+   only `severity`.
+
+The reasoning is #109's, in #122's corrected wording: judges ruling on adversarial
+safety claims perform "on average only slightly better than a random coin-flip" against
+6,642 human-verified labels, and the AUROC 0.48–0.64 range is one judge on one victim
+model under two attacks — not quoted here as anything broader. The phrase "despite high
+performance on standard validation sets" is not used, because it is not in the paper.
+
+## The `adjudication` block
+
+A top-level sibling of `reports` and `containment` in the merged document. **Nine keys**,
+and the count is load-bearing for the same reason `FINDINGS.md`'s ten finding fields
+are: the control suite builds one control per key, so a key present in the output but
+not in this list gets no control at all.
+
+| key | meaning |
+|---|---|
+| `schema_version` | integer, starts at 1 |
+| `verdict_counts` | `{CONFIRMED, REFUTED, UNPROVEN}` — integers |
+| `findings_in` | count of findings received |
+| `findings_out` | count of findings emitted; **must equal** `findings_in` |
+| `duplicate_groups` | array of `{survivor, duplicates: [finding_id]}` |
+| `downgrades` | array of `{finding_id, from, to, reason}` |
+| `total_refutation` | boolean — see § Total refutation |
+| `notes` | array of free-text notes |
+| `completion_marker` | **last** key: `BUZZ-ADJUDICATION-COMPLETE:{nonce}`, using the document's own top-level `nonce` — #117's sixth key, passed through unchanged and never re-generated here |
+
+The block carries **no nonce of its own**: a second copy in one document is a second
+thing that can disagree, and there is no question a copy would answer that reading the
+top-level key does not.
+
+The marker is last and carries the nonce for the same two reasons `FINDINGS.md` gives:
+a marker at the end cannot survive truncation, and a fixed string published in a public
+repository is one a PR author can type into their own diff. This stage never accepts a
+caller-supplied nonce — it verifies the nonce it receives against every report's own
+marker and passes the same value through, exactly as it received it.
+
+`findings_out == findings_in` is a necessary but not sufficient check on its own — it
+would not catch a drop-and-invent swap (one real finding removed, one fabricated one
+substituted, count unchanged). The binding guarantee is the stronger one stated in
+§ The verdict: the input and output `finding_id` **sets** are equal, which a
+drop-and-invent swap violates even though the count survives it.
+
+## Dedupe
+
+Findings describing the same defect in different words are grouped, and the grouping
+is in the output rather than in the stage's head. `finding_id` cannot do this work: it
+is not stable across a model rewording `defect`, and two findings from *different*
+dimensions describing one defect have different ids by construction, since `dimension`
+is a hash input.
+
+A group is `{survivor, duplicates: [finding_id]}` in `adjudication.duplicate_groups`,
+and every duplicate **also** carries `duplicate_of` naming its survivor. Both
+directions, so the grouping is discoverable from the finding itself as well as from the
+block — a consumer holding one finding should not have to scan a top-level array to
+learn it is a duplicate.
+
+**A duplicate still receives its own verdict and is still emitted.** Dedupe changes
+presentation, never the count: it groups findings, it does not remove them. Removing a
+duplicate's own record would breach the "every finding receives exactly one verdict"
+requirement while looking like tidiness.
+
+The survivor is chosen **deterministically**: highest adjudicated severity, then
+`CONFIRMED` before `UNPROVEN` before `REFUTED`, then lowest `finding_id`. Stated
+explicitly because "the best one" is not a rule, and two runs over the same input must
+agree on the same survivor. A run that dedupes nothing emits an **empty**
+`duplicate_groups` array rather than omitting the key — the same "empty, not missing"
+discipline `FINDINGS.md` uses for `findings` on a clean dimension report.
+
+A finding whose `duplicate_of` names a `finding_id` absent from the document, or names
+itself, is invalid.
+
+## Total refutation
+
+`total_refutation` is `true` if and only if `findings_in > 0` and every finding's
+verdict is `REFUTED`. Refuting everything is flagged rather than published as a clean
+PR — total refutation is likelier a broken adjudicator than a flawless diff, and #109's
+own scepticism about this stage exists precisely so a suspicious result gets a second
+look rather than a pass.
+
+## Containment findings are passed through, not adjudicated
+
+The `containment` block is emitted byte-identically to what arrived. Three reasons:
+
+1. Containment findings are deterministic catches, not claims needing a judge.
+2. An adjudicator able to `REFUTE` one could erase a detected attack, which
+   `CONTAINMENT.md` § Severity contract calls worse than never detecting it.
+3. Their severity is fixed at `Blocker` by that same contract, so re-rating them here
+   would contradict a document this one is a sibling to, not an authority over.
+
+**A known, deliberately unresolved mismatch, not silently fixed here.**
+`CONTAINMENT.md`'s "Contract for later stages" table literally binds this stage to call
+`contain.findings_for(surfaces, nonce)`, which needs the `Surface` dict and the nonce —
+this stage receives a JSON document on stdin and has neither. #117 already places
+exactly what that function returns into the merged document's `containment` key, so this
+stage consumes that block verbatim instead of re-deriving it (re-fetching the surfaces
+here would be a second source of truth for one fact, and a second reason for this stage
+to touch author text at all — the opposite of what the table's own "must never" column
+requires). The pass-through above honours the *intent* of the table's row, but the
+table's own literal wording is not corrected by this document — that edit is left for
+whoever owns #120, since `CONTAINMENT.md` is a cross-cutting contract this document does
+not have unilateral authority to amend.
