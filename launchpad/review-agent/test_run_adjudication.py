@@ -558,6 +558,47 @@ class NonceVerificationEndToEndTests(unittest.TestCase):
         self.assertIn("absent provenance", stderr, stderr)
 
 
+class MalformedReportsDefersToFindingsValidateTests(unittest.TestCase):
+    """A `reports`-shape defect (missing, non-list, empty) is not a nonce
+    problem -- `_verify_nonce` would call it "absent provenance", which
+    buries `findings.validate`'s more specific, more useful message. These
+    three shapes must all defer to that message instead.
+    """
+
+    def _run_main_with_document(self, document: dict) -> tuple[int, str, str]:
+        stdout, stderr = io.StringIO(), io.StringIO()
+        with mock.patch.object(sys, "stdin", io.StringIO(json.dumps(document))), \
+             contextlib.redirect_stdout(stdout), contextlib.redirect_stderr(stderr):
+            exit_code = run_adjudication.main([])
+        return exit_code, stdout.getvalue(), stderr.getvalue()
+
+    def test_missing_reports_key_names_the_missing_key_not_provenance(self):
+        doc = make_document(reports=[make_report(nonce=NONCE)], nonce=NONCE)
+        del doc["reports"]
+        exit_code, stdout, stderr = self._run_main_with_document(doc)
+        self.assertNotEqual(exit_code, 0)
+        self.assertEqual(stdout, "")
+        self.assertIn("missing required key 'reports'", stderr, stderr)
+        self.assertNotIn("absent provenance", stderr, stderr)
+
+    def test_empty_reports_array_names_the_empty_array_not_provenance(self):
+        doc = make_document(reports=[], nonce=NONCE)
+        exit_code, stdout, stderr = self._run_main_with_document(doc)
+        self.assertNotEqual(exit_code, 0)
+        self.assertEqual(stdout, "")
+        self.assertIn("must not be empty", stderr, stderr)
+        self.assertNotIn("absent provenance", stderr, stderr)
+
+    def test_non_list_reports_names_the_wrong_type_not_provenance(self):
+        doc = make_document(reports=[make_report(nonce=NONCE)], nonce=NONCE)
+        doc["reports"] = "not-a-list"
+        exit_code, stdout, stderr = self._run_main_with_document(doc)
+        self.assertNotEqual(exit_code, 0)
+        self.assertEqual(stdout, "")
+        self.assertIn("expected an array", stderr, stderr)
+        self.assertNotIn("absent provenance", stderr, stderr)
+
+
 class StagesManifestTests(unittest.TestCase):
     """The top-level `stages` array STEP 4 adds: every entry already on
     input, in order, plus exactly one new `adjudication` entry.

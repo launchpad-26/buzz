@@ -80,6 +80,13 @@ from the first" requirement means in practice. ``findings.validate`` still
 runs -- second now, but still before a single finding reaches the judge loop,
 which is STEP 3's actual guarantee, not "first" in an absolute sense.
 
+One exception: a document whose ``reports`` key is missing, non-list, or
+empty defers straight to ``findings.validate`` instead of ``_verify_nonce``
+-- there is nothing for nonce verification to compare against, and calling
+that "absent provenance" would bury ``findings.validate``'s more specific,
+more useful message for exactly that shape defect. See ``adjudicate``'s own
+body for the precise condition.
+
 Three refusals, checked in this fixed order because one document can satisfy
 more than one at once:
   1. ``"absent provenance"`` -- no top-level ``nonce``, or no report carries a
@@ -391,11 +398,34 @@ def adjudicate(input_document: dict, judge: Judge) -> dict:
     ``duplicate_of`` is always null.
     """
     _check_not_already_adjudicated(input_document)
-    nonce = _verify_nonce(input_document)
 
-    violations = findings.validate(input_document)
-    if violations:
-        raise InputValidationError(violations)
+    # `_verify_nonce`'s job is provenance, not `reports`'s basic shape. A
+    # document whose `reports` key is missing, non-list, or empty has nothing
+    # for nonce verification to compare against -- `_verify_nonce` would call
+    # that "absent provenance", which is technically true but masks the more
+    # specific, more useful message findings.validate already gives for
+    # exactly this ("missing required key 'reports'", "must not be empty",
+    # "expected an array"). So a document this malformed defers straight to
+    # findings.validate instead of being told the wrong subsystem is broken.
+    reports_raw = input_document.get("reports")
+    reports_present_and_nonempty = isinstance(reports_raw, list) and len(reports_raw) > 0
+
+    if reports_present_and_nonempty:
+        nonce = _verify_nonce(input_document)
+        violations = findings.validate(input_document)
+        if violations:
+            raise InputValidationError(violations)
+    else:
+        violations = findings.validate(input_document)
+        if violations:
+            raise InputValidationError(violations)
+        # Unreachable in practice: a missing, non-list, or empty `reports`
+        # always fails findings.validate above, on one of the three grounds
+        # named in this branch's comment. Kept as a real call, not asserted
+        # away, the same "real branch" discipline `stage_complete`'s
+        # nonce_established condition already uses below for STEP 6's
+        # not-yet-built flag.
+        nonce = _verify_nonce(input_document)
 
     output_document = copy.deepcopy(input_document)
 
