@@ -545,6 +545,87 @@ class HungReviewerDaemonThreadTests(unittest.TestCase):
             )
 
 
+class DimensionFailureExitCodeWiringTests(unittest.TestCase):
+    """STEP 6 (#117): the PROCESS exits non-zero when a dimension fails, not only
+    ``build_document``'s returned document.
+
+    ``main()`` exposes no way to inject a reviewer via ``argv`` (choosing a model
+    stays out of #117's scope), so these use the CLI-invisible ``reviewer=``
+    keyword ``main()`` accepts for exactly this reason -- see its own docstring.
+    Everything else about the run (arg parsing, ``--payload`` loading, dimension
+    discovery, exit-code selection) goes through the real, unmocked ``main()``.
+    """
+
+    def _with_fake_dimensions_dir(self):
+        tmp = tempfile.TemporaryDirectory()
+        directory = Path(tmp.name)
+        for slug in ("dim-one", "dim-two", "dim-three"):
+            (directory / f"{slug}.py").write_text("# stub dimension\n")
+        self.addCleanup(tmp.cleanup)
+        return mock.patch.object(run_dimensions, "DIMENSIONS_DIR", directory)
+
+    def test_main_exits_dimension_failed_when_one_reviewer_raises(self):
+        def ok():
+            return {"outcome": "clean", "findings": []}
+
+        def boom():
+            raise RuntimeError("boom")
+
+        reviewer = indexed_reviewer([ok, boom, ok])
+        with self._with_fake_dimensions_dir():
+            buf = io.StringIO()
+            with contextlib.redirect_stdout(buf):
+                exit_code = run_dimensions.main(
+                    ["--payload", PAYLOAD_PATH, "--seed", "step6-main-failure"],
+                    reviewer=reviewer,
+                )
+        self.assertEqual(exit_code, run_dimensions.EXIT_DIMENSION_FAILED)
+        doc = json.loads(buf.getvalue())
+        statuses = [r["status"] for r in doc["reports"]]
+        self.assertEqual(statuses.count("failed"), 1)
+        self.assertEqual(statuses.count("complete"), 2)
+        self.assertEqual(findings.validate(doc), [])
+
+    def test_main_exits_dimension_failed_and_does_not_hang_when_one_reviewer_times_out(self):
+        def ok():
+            return {"outcome": "clean", "findings": []}
+
+        def slow():
+            time.sleep(2.0)
+            return {"outcome": "clean", "findings": []}  # pragma: no cover
+
+        reviewer = indexed_reviewer([ok, slow, ok])
+        with self._with_fake_dimensions_dir():
+            buf = io.StringIO()
+            start = time.monotonic()
+            with contextlib.redirect_stdout(buf):
+                exit_code = run_dimensions.main(
+                    ["--payload", PAYLOAD_PATH, "--seed", "step6-main-timeout", "--timeout", "0.1"],
+                    reviewer=reviewer,
+                )
+            elapsed = time.monotonic() - start
+        self.assertLess(elapsed, 1.0, "main() should not block on the slow reviewer")
+        self.assertEqual(exit_code, run_dimensions.EXIT_DIMENSION_FAILED)
+        doc = json.loads(buf.getvalue())
+        statuses = [r["status"] for r in doc["reports"]]
+        self.assertEqual(statuses.count("failed"), 1)
+        self.assertEqual(statuses.count("complete"), 2)
+
+    def test_main_exits_ok_when_all_reviewers_succeed(self):
+        # The control case: exit code stays OK unless something actually failed --
+        # otherwise a run of nothing but clean reports would prove nothing about
+        # the branch under test above.
+        with self._with_fake_dimensions_dir():
+            buf = io.StringIO()
+            with contextlib.redirect_stdout(buf):
+                exit_code = run_dimensions.main(
+                    ["--payload", PAYLOAD_PATH, "--seed", "step6-main-clean"]
+                )
+        self.assertEqual(exit_code, run_dimensions.EXIT_OK)
+        doc = json.loads(buf.getvalue())
+        self.assertTrue(all(r["status"] == "complete" for r in doc["reports"]))
+
+
 class LiveModeExitCodeWiringTests(unittest.TestCase):
     """The live (non-``--payload``) branch's exit-code wiring, with
     ``probe_credential_and_pr`` mocked -- no network, no ``gh`` call.
