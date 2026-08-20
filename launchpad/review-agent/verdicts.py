@@ -201,8 +201,16 @@ def _find_forbidden_keys(value: object, path: str) -> list[str]:
 
 
 def validate(input_document: dict, output_document: dict) -> list[str]:
-    """Every violation of ADJUDICATION.md, per this stage's contract -- never
-    raises, never stops early.
+    """Every violation of ADJUDICATION.md that STEP 2's own done-when requires
+    this function to catch -- never raises, never stops early.
+
+    NOT yet a check of every one of the nine ``adjudication`` block keys.
+    ``schema_version``, ``verdict_counts`` and ``notes`` are unchecked here on
+    purpose: ADJUDICATION.md's own STEP 1 text assigns "one control per key"
+    to STEP 10's separate ``check_adjudication.py`` suite, and STEP 2's
+    done-when never names these three. A document with a fabricated
+    ``verdict_counts`` or a wrong-typed ``schema_version`` passes this
+    function with zero violations today; STEP 10 is where that gap closes.
 
     Takes **both** documents, not one. An earlier revision declared
     ``validate(document) -> list[str]`` and separately required it to report
