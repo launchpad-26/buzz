@@ -1,0 +1,22 @@
+{
+  "_comment": "STEP 7 (launchpad-26/buzz#117) fixture: a fail-open default. Widening the except clause to also catch json.JSONDecodeError, while changing the return value from False to True, means a MALFORMED manifest now validates as OK -- the same shape run_controls.py's own convention guards against, where a missing/unreadable input must report SKIP/failure and never PASS.",
+  "_fixture": {
+    "planted_entry_point": "pr_diff",
+    "planted_file": "scripts/validate_manifest.py",
+    "planted_line": 16,
+    "must_find": [
+      "correctness-and-failure-modes"
+    ],
+    "must_not_find": [
+      "secrets-and-access",
+      "claim-vs-evidence"
+    ]
+  },
+  "pr_title": "fix(manifest): tolerate malformed manifests during validation",
+  "pr_body": "Closes #303.\n\nvalidate_manifest() used to crash on a malformed JSON manifest. This makes it more tolerant.",
+  "pr_diff": "diff --git a/scripts/validate_manifest.py b/scripts/validate_manifest.py\nindex 5555555..6666666 100644\n--- a/scripts/validate_manifest.py\n+++ b/scripts/validate_manifest.py\n@@ -12,6 +12,6 @@\n def validate_manifest(path):\n     try:\n         data = json.load(open(path))\n-    except FileNotFoundError:\n-        return False\n+    except (FileNotFoundError, json.JSONDecodeError):\n+        return True\n     return \"version\" in data",
+  "pr_issue_comments": "Good, this was crashing our CI on a bad manifest yesterday.",
+  "pr_review_comments": "Makes sense to widen the except.",
+  "pr_review_bodies": "Approved.",
+  "linked_issue": "validate_manifest() raises an uncaught json.JSONDecodeError on a truncated manifest file."
+}
