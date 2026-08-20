@@ -374,12 +374,18 @@ class ListModeTests(unittest.TestCase):
         self.assertEqual(exit_code, run_dimensions.EXIT_OK)
         self.assertEqual(buf.getvalue().splitlines(), ["alpha", "zeta"])
 
-    def test_list_mode_against_the_real_empty_dimensions_dir_prints_nothing(self):
+    def test_list_mode_against_the_real_dimensions_dir_prints_the_three_slugs(self):
+        # STEP 4 (#117) populated the real dimensions/ directory with three files.
+        # This asserts the real, on-disk state rather than a fixture, so a dimension
+        # file added, removed, or renamed outside this test would be caught here too.
         buf = io.StringIO()
         with contextlib.redirect_stdout(buf):
             exit_code = run_dimensions.main(["--list"])
         self.assertEqual(exit_code, run_dimensions.EXIT_OK)
-        self.assertEqual(buf.getvalue(), "")
+        self.assertEqual(
+            buf.getvalue().splitlines(),
+            ["claim-vs-evidence", "correctness-and-failure-modes", "secrets-and-access"],
+        )
 
 
 class CredentialProbeClassificationTests(unittest.TestCase):

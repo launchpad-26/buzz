@@ -1,6 +1,0 @@
-This directory holds one .py file per dimension reviewer prompt/module.
-
-It is intentionally empty as of STEP 3 (launchpad-26/buzz#117) -- STEP 4 adds the
-three dimension files. run_dimensions.py --list discovers slugs by listing *.py
-files here (sorted, stem only), never from a hardcoded list, so this file itself
-must not end in .py or it would be discovered as a fake dimension.
