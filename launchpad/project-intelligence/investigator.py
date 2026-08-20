@@ -48,6 +48,36 @@ def _resolve_within_repo(path: str) -> Path:
     return candidate
 
 
+# review-code finding (PR #217, must-fix #2): search_symbols/find_references
+# f-string caller-supplied identifiers straight into an `rql query` SQL WHERE
+# clause, and inspect_git_history/git_blame f-string a caller-supplied file
+# path straight into an `rql read` URI. A value containing "'" breaks or
+# redirects the SQL; a value containing "#" or "=>" injects a different
+# fragment or modifier into the URI. Reject anything outside a safe charset
+# up front rather than attempt to escape it -- the same "reject, don't
+# escape" choice The Professor's server.py made for the same class of bug.
+_SAFE_IDENTIFIER = re.compile(r"^[A-Za-z0-9_.:\-]+$")
+
+
+def _validate_identifier(value: str, label: str) -> str:
+    if not value or not _SAFE_IDENTIFIER.match(value):
+        raise ValueError(
+            f"{label} must be a plain identifier (letters, digits, '_', ':', '.', '-'), got {value!r}"
+        )
+    return value
+
+
+_SAFE_REPO_RELATIVE_PATH = re.compile(r"^[A-Za-z0-9_./\-]+$")
+
+
+def _validate_repo_relative_path(value: str, label: str) -> str:
+    if not value or not _SAFE_REPO_RELATIVE_PATH.match(value) or ".." in value.split("/"):
+        raise ValueError(
+            f"{label} must be a plain repo-relative path with no '..' segments, got {value!r}"
+        )
+    return value
+
+
 def read_file(path: str, start_line: int | None = None, end_line: int | None = None) -> str:
     """Read a file, or a line range of one, relative to the repo root."""
     text = _resolve_within_repo(path).read_text()
@@ -84,17 +114,37 @@ def search_text(pattern: str, regex: bool = False, glob: str = "*") -> list[Text
     avoiding the dependency here means one less tool affected if the RepoQL
     host is unavailable.
     """
-    cmd = ["grep", "-rn", "--include", glob]
+    # review-code finding (PR #217, must-fix #1): the default glob "*" walks
+    # .git/ and target/, and a binary match under the old command printed
+    # "Binary file X matches" -- a line with no ":" separators at all, which
+    # `line.split(":", 2)` below raised ValueError on. "-I" tells grep to
+    # treat binary files as non-matching instead of reporting them; the two
+    # --exclude-dir flags keep the walk out of .git and build artifacts,
+    # which are irrelevant to a source-text search and expensive to walk.
+    cmd = ["grep", "-rn", "-I", "--exclude-dir=.git", "--exclude-dir=target", "--include", glob]
     if not regex:
         cmd.append("-F")
     # "--" terminates option parsing so a pattern starting with "-" (e.g.
     # "--help") is treated as the search text, not another grep flag.
     cmd += ["--", pattern, "."]
     result = subprocess.run(cmd, capture_output=True, text=True, cwd=REPO_ROOT)
+    # grep's exit code is part of its contract, not noise: 0 = matches found,
+    # 1 = no matches (a normal, expected outcome, not an error), 2+ = a real
+    # error (bad pattern, unreadable file, ...). The old code never checked
+    # this, so a real grep failure was silently indistinguishable from "no
+    # results" -- the caller would just get an empty list either way.
+    if result.returncode not in (0, 1):
+        raise RuntimeError(f"search_text: grep exited {result.returncode}: {result.stderr!r}")
     matches = []
     for line in result.stdout.splitlines():
-        # grep -n output: "./path/to/file:LINE:text"
-        path, lineno, text = line.split(":", 2)
+        # grep -n output: "./path/to/file:LINE:text". "-I" above means this
+        # should never see a binary-file notice line, but the split is kept
+        # defensive (skip, don't crash) for any other unparseable line grep
+        # might still emit.
+        parts = line.split(":", 2)
+        if len(parts) != 3:
+            continue
+        path, lineno, text = parts
         matches.append(TextMatch(file=path.removeprefix("./"), line=int(lineno), text=text))
     return matches
 
@@ -111,6 +161,9 @@ def search_symbols(name: str, crate: str | None = None) -> list[SymbolMatch]:
     """Find symbols by name via RepoQL's Functions view -- structured data
     (kind, declaring type, signature) a text search alone cannot give.
     """
+    _validate_identifier(name, "name")
+    if crate:
+        _validate_identifier(crate, "crate")
     where = f"name = '{name}'"
     if crate:
         where += f" AND file LIKE '%crates/{crate}/%'"
@@ -157,6 +210,8 @@ def find_references(qualified_name: str, crate: str) -> list[Reference]:
     string/byte-string literals, or macro-generated calls -- a call-site
     pattern inside one of those would still be reported as a reference.
     """
+    _validate_identifier(qualified_name, "qualified_name")
+    _validate_identifier(crate, "crate")
     short_name = qualified_name.rsplit("::", 1)[-1]
     call_pattern = re.compile(rf"\b{re.escape(short_name)}\s*(?:::<[^>]*>)?\s*\(")
 
@@ -198,6 +253,7 @@ class CommitSummary:
 def inspect_git_history(file: str, start_line: int, end_line: int) -> list[CommitSummary]:
     """Commits touching a file range -- a thin wrapper over RepoQL's `=> history`
     modifier, the same primitive #206 already proved (enrich_git_ownership())."""
+    _validate_repo_relative_path(file, "file")
     data = _rql_read_json(f"file:///{file}#line={start_line},{end_line} => history")
     return [
         CommitSummary(hash=c["hash"], date=c["date"], author=c["author"], message=c["message"])
@@ -217,6 +273,7 @@ class BlameLine:
 def git_blame(file: str, start_line: int, end_line: int) -> list[BlameLine]:
     """Line-level authorship -- a thin wrapper over RepoQL's `=> blame` modifier,
     the same primitive #206 already proved."""
+    _validate_repo_relative_path(file, "file")
     data = _rql_read_json(f"file:///{file}#line={start_line},{end_line} => blame")
     return [
         BlameLine(line=ln["lineNumber"], content=ln["content"], hash=ln["hash"], author=ln["author"], date=ln["date"])
@@ -247,7 +304,15 @@ def inspect_dependency(crate: str, name: str) -> Dependency | None:
     """
     import tomllib
 
-    crate_manifest = tomllib.loads((REPO_ROOT / "crates" / crate / "Cargo.toml").read_text())
+    # review-code finding (PR #217, must-fix #3): this built its path directly
+    # from REPO_ROOT / "crates" / crate / ..., bypassing _resolve_within_repo
+    # entirely -- crate="../../etc" walked straight out of the repo, the same
+    # bug class the second commit on this PR already fixed for
+    # read_file/list_directory/inspect_logs. _validate_identifier rejects any
+    # "/" or ".." up front; _resolve_within_repo is the second, independent
+    # layer, same as every other repo-relative tool here.
+    _validate_identifier(crate, "crate")
+    crate_manifest = tomllib.loads(_resolve_within_repo(f"crates/{crate}/Cargo.toml").read_text())
     declared = crate_manifest.get("dependencies", {}).get(name)
     if declared is None:
         return None
@@ -297,6 +362,11 @@ def query_build_system(crate: str) -> BuildInfo:
     instead of writing, which is the correct behavior for a tool that
     promises not to change the checkout.
     """
+    # review-code finding (PR #217, must-fix #3): same path-containment bypass
+    # as inspect_dependency above -- crate went straight into a manifest path
+    # with no validation and no _resolve_within_repo call.
+    _validate_identifier(crate, "crate")
+    manifest_path = _resolve_within_repo(f"crates/{crate}/Cargo.toml")
     result = subprocess.run(
         [
             "cargo",
@@ -306,7 +376,7 @@ def query_build_system(crate: str) -> BuildInfo:
             "--format-version",
             "1",
             "--manifest-path",
-            str(REPO_ROOT / "crates" / crate / "Cargo.toml"),
+            str(manifest_path),
         ],
         capture_output=True,
         text=True,

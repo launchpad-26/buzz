@@ -88,6 +88,18 @@ class PathContainmentTest(unittest.TestCase):
         content = investigator.read_file("launchpad/project-intelligence/../project-intelligence/investigator.py")
         self.assertIn("TOOL_REGISTRY", content)
 
+    def test_inspect_dependency_rejects_a_crate_that_escapes_the_repo(self) -> None:
+        # review-code finding (PR #217, must-fix #3): this built its manifest
+        # path directly from REPO_ROOT / "crates" / crate / ..., bypassing
+        # _resolve_within_repo entirely -- the exact P1 class the second
+        # commit on this PR fixed everywhere else.
+        with self.assertRaises(ValueError):
+            investigator.inspect_dependency("../../../../../../../etc", "passwd")
+
+    def test_query_build_system_rejects_a_crate_that_escapes_the_repo(self) -> None:
+        with self.assertRaises(ValueError):
+            investigator.query_build_system("../../../../../../../etc")
+
 
 class SearchTextTest(unittest.TestCase):
     def test_finds_a_real_known_string(self) -> None:
@@ -112,6 +124,63 @@ class SearchTextTest(unittest.TestCase):
         )
         grep_files = {line.removeprefix("./") for line in grep_result.stdout.splitlines()}
         self.assertEqual({m.file for m in matches}, grep_files)
+
+    def test_default_glob_does_not_crash_walking_git_and_target(self) -> None:
+        # review-code finding (PR #217, must-fix #1): the default glob="*"
+        # walked .git/ (and target/, if present) and crashed on the first
+        # binary match -- "Binary file X matches" has no ":" separators, so
+        # `line.split(":", 2)` raised ValueError. Reproduces the real
+        # trigger: no glob narrowing at all, from the repo root, which
+        # .git/ guarantees contains binary pack data.
+        matches = investigator.search_text("TOOL_REGISTRY")
+        files = {m.file for m in matches}
+        self.assertIn("launchpad/project-intelligence/investigator.py", files)
+        self.assertTrue(all(not f.startswith(".git/") and not f.startswith("target/") for f in files))
+
+    def test_no_matches_returns_empty_not_an_error(self) -> None:
+        # grep exits 1 (not 0) when nothing matches -- a normal result, not
+        # the "real grep failure" case returncode-checking now guards
+        # against, and must not raise. Built by concatenation so this test's
+        # own source line is not itself a match for the pattern it searches.
+        needle = "no_such_string_exists" + "_anywhere_zzy987"
+        self.assertEqual(investigator.search_text(needle), [])
+
+
+class InjectionRejectionTest(unittest.TestCase):
+    # review-code finding (PR #217, must-fix #2): search_symbols/
+    # find_references f-string caller input into an rql SQL WHERE clause,
+    # and inspect_git_history/git_blame f-string it into an rql URI.
+    # Validation runs before any subprocess call, so these are hermetic --
+    # no live `rql` binary needed to prove the rejection happens.
+    def test_search_symbols_rejects_a_name_with_a_sql_quote(self) -> None:
+        with self.assertRaises(ValueError):
+            investigator.search_symbols("x' OR '1'='1")
+
+    def test_search_symbols_rejects_a_crate_with_a_sql_quote(self) -> None:
+        with self.assertRaises(ValueError):
+            investigator.search_symbols("is_shared_gated_kind", crate="buzz-core' --")
+
+    def test_find_references_rejects_a_qualified_name_with_a_sql_quote(self) -> None:
+        with self.assertRaises(ValueError):
+            investigator.find_references("x' OR '1'='1", crate="buzz-core")
+
+    def test_find_references_rejects_a_crate_with_a_sql_quote(self) -> None:
+        with self.assertRaises(ValueError):
+            investigator.find_references("is_shared_gated_kind", crate="buzz-core' --")
+
+    def test_inspect_git_history_rejects_a_file_with_a_uri_modifier_injection(self) -> None:
+        with self.assertRaises(ValueError):
+            investigator.inspect_git_history("f.rs#symbol=x => write:evil", 1, 2)
+
+    def test_git_blame_rejects_a_file_with_a_uri_fragment_injection(self) -> None:
+        with self.assertRaises(ValueError):
+            investigator.git_blame("f.rs#line=1,2 => blame; DROP", 1, 2)
+
+    def test_inspect_git_history_accepts_an_ordinary_repo_relative_path(self) -> None:
+        # The validation must not be so strict it rejects real, ordinary
+        # paths -- confirmed by construction (no exception), not by calling
+        # through to a live rql (see the module docstring's reasoning).
+        investigator._validate_repo_relative_path("crates/buzz-core/src/kind.rs", "file")
 
 
 class InspectDependencyTest(unittest.TestCase):
