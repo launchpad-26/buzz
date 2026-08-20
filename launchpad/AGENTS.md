@@ -61,28 +61,38 @@ launchpad/
   AGENT_PR_TEMPLATE.md  PR body schema for agent-authored PRs
   labels.yml           label source of truth
   sync-labels.sh       applies labels.yml
+  agents/              persona packs for Buzz-native agents (see launchpad/Research/the-professor-design.md)
   decisions/           ADRs, once accepted
   docs/                MkDocs knowledge layer
   deploy/              host configuration and hardening
   upstream-intel/      upstream tracking tooling
 ```
 
+Note: `launchpad/AGENTS.md` (contributor guide) and `launchpad/agents/` (persona packs) are different things with adjacent names. No bare `.md` file may sit directly in `launchpad/agents/`—this session's `check-models.sh` hook scans that exact shape as a Claude Code subagent roster and blocks the commit. Pack documentation belongs inside each pack's own subdirectory (e.g., `launchpad/agents/the-professor/README.md`), never at the top level.
+
 **Never move or rename upstream files.** Upstream is ~3,800 files and we merge from it
 regularly; a rename turns every future merge into manual work.
 
-Three deliberate exceptions, all accepted knowingly:
+Four deliberate exceptions, all accepted knowingly:
 
 - `.github/ISSUE_TEMPLATE/` — our templates replace upstream's, which pointed
   contributors at `block/buzz`.
 - `.github/PULL_REQUEST_TEMPLATE.md` — one added section.
+- **Hermit lefthook pin** — `bin/lefthook` and `bin/.lefthook-*.pkg` diverge from
+  upstream's pinned version because lefthook 2.1.3's own `@{push}`-fallback crashes on
+  every branch's first push here, since this fork's branch name collides with the
+  `launchpad/` directory. A standing divergence, not a temporary one — the cohort is
+  not currently sending fixes upstream. Reasoning and the rejected alternatives are in
+  [`decisions/ADR-0017-lefthook-pin-upstream-boundary-exception.md`](decisions/ADR-0017-lefthook-pin-upstream-boundary-exception.md).
 - **Deployment image provenance** — five named files (`deploy/compose/compose.yml`,
   `deploy/compose/.env.example`, `deploy/compose/README.md`, `Dockerfile`,
   `.github/workflows/docker.yml`) carry Launchpad values so the fork deploys its own
-  build rather than Block's. The list is closed; the reasoning and the rejected
-  alternative are in
+  build rather than Block's. Reasoning and the rejected alternative are in
   [`decisions/ADR-0005-launchpad-deployment-boundary.md`](decisions/ADR-0005-launchpad-deployment-boundary.md).
   **This is settled — do not raise it as a §3 violation in review.** Adding a sixth file
-  is a change to that record, not a call to make in a pull request.
+  to this exception is a change to that record, not a call to make in a pull request.
+
+The list itself is closed; any further exception needs its own ADR.
 
 New workflows go in `.github/workflows/` (GitHub requires it) and **must** be named
 `launchpad-*.yml` so they never collide with upstream's.
