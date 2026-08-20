@@ -174,6 +174,8 @@ def _severity_fell(reported_severity: object, severity: object) -> bool:
     Both must already be legal ladder values -- an out-of-ladder value is
     reported as its own violation elsewhere, not treated as a fall here.
     """
+    if not isinstance(reported_severity, str) or not isinstance(severity, str):
+        return False
     if reported_severity not in SEVERITY_ORDER or severity not in SEVERITY_ORDER:
         return False
     return SEVERITY_ORDER[severity] > SEVERITY_ORDER[reported_severity]
@@ -250,7 +252,7 @@ def validate(input_document: dict, output_document: dict) -> list[str]:
             finding_label = f"{finding_label} (finding_id={fid!r})"
 
         verdict = finding.get("verdict")
-        if verdict not in VERDICTS:
+        if not isinstance(verdict, str) or verdict not in VERDICTS:
             violations.append(
                 f"{finding_label}: verdict must be one of {sorted(VERDICTS)}, got {verdict!r}"
             )
@@ -260,12 +262,12 @@ def validate(input_document: dict, output_document: dict) -> list[str]:
 
         reported_severity = finding.get("reported_severity")
         severity = finding.get("severity")
-        if reported_severity not in SEVERITY_ORDER:
+        if not isinstance(reported_severity, str) or reported_severity not in SEVERITY_ORDER:
             violations.append(
                 f"{finding_label}: reported_severity {reported_severity!r} is not a key of "
                 "review.SEVERITY_ORDER"
             )
-        if severity not in SEVERITY_ORDER:
+        if not isinstance(severity, str) or severity not in SEVERITY_ORDER:
             violations.append(
                 f"{finding_label}: severity {severity!r} is not a key of review.SEVERITY_ORDER"
             )
@@ -278,7 +280,12 @@ def validate(input_document: dict, output_document: dict) -> list[str]:
 
         dup = finding.get("duplicate_of")
         if dup is not None:
-            if dup == fid:
+            if not isinstance(dup, str):
+                violations.append(
+                    f"{finding_label}: duplicate_of must be a string or null, got "
+                    f"{type(dup).__name__}"
+                )
+            elif dup == fid:
                 violations.append(f"{finding_label}: duplicate_of names itself")
             elif dup not in output_ids:
                 violations.append(
@@ -335,6 +342,12 @@ def validate(input_document: dict, output_document: dict) -> list[str]:
             )
             continue
         entry_fid = entry.get("finding_id")
+        if not isinstance(entry_fid, str):
+            violations.append(
+                f"document.adjudication.downgrades[{index}]: finding_id must be a string, "
+                f"got {type(entry_fid).__name__}"
+            )
+            continue
         downgrade_ids.add(entry_fid)
         finding = findings_by_id.get(entry_fid)
         if finding is None:
@@ -410,6 +423,12 @@ def validate(input_document: dict, output_document: dict) -> list[str]:
             )
             continue
         for dup_id in duplicates:
+            if not isinstance(dup_id, str):
+                violations.append(
+                    f"document.adjudication.duplicate_groups[{index}]: duplicates entries "
+                    f"must be strings, got {type(dup_id).__name__}"
+                )
+                continue
             grouped_as[dup_id] = survivor
             finding = findings_by_id.get(dup_id)
             if finding is None:
