@@ -46,20 +46,32 @@ pub fn cmd_validate(path: &str) -> Result<(), CliError> {
     Ok(())
 }
 
-/// Mask MCP server env values before they reach `--format json`'s stdout.
+/// Mask MCP server env values and args before they reach `--format json`'s
+/// stdout.
 ///
-/// The human printer only ever prints an MCP server count, never `env` — so
-/// without this, JSON format would be the first thing in the repo to print
-/// literal env values a pack author wrote directly into `mcp_servers[].env`
-/// (they're passed through unresolved, not interpolated from real secrets,
-/// but a pack author can still write a real-looking value there). Nothing
-/// in buzz-acp or the #239 projector reads this field — it's dead weight
-/// the `Serialize` derive picked up — so masking it costs nothing.
-fn redact_mcp_env(pack: &mut buzz_persona::resolve::ResolvedPack) {
+/// The human printer only ever prints an MCP server count, never `command`,
+/// `args`, or `env` — so without this, JSON format would be the first thing
+/// in the repo to print either literal env values or CLI arguments a pack
+/// author wrote directly into `mcp_servers[]` (they're passed through
+/// unresolved, not interpolated from real secrets, but a pack author can
+/// write a real-looking value into either — a bare `env` map or an
+/// `--api-key sk-...`-shaped arg are equally easy mistakes). Nothing in
+/// buzz-acp or the #239 projector reads either field — buzz-acp's
+/// `build_mcp_servers()` always spawns with an empty arg list regardless of
+/// what a pack declares, and the projector script refuses to project a
+/// persona whose MCP server has any args at all rather than silently
+/// dropping them — so masking both costs nothing. `env` keeps its keys
+/// (masks only the value half of each pair); `args` has no such non-secret
+/// half, so every element is masked, with the array's length left intact so
+/// a reader can still see how many there are.
+fn redact_mcp_secrets(pack: &mut buzz_persona::resolve::ResolvedPack) {
     for persona in &mut pack.personas {
         for server in &mut persona.mcp_servers {
             for (_, value) in &mut server.env {
                 *value = "***".to_string();
+            }
+            for arg in &mut server.args {
+                *arg = "***".to_string();
             }
         }
     }
@@ -71,7 +83,7 @@ fn redact_mcp_env(pack: &mut buzz_persona::resolve::ResolvedPack) {
 /// summary of each persona's effective configuration, unchanged from before
 /// this flag existed. `format: Json` emits the full `ResolvedPack` as JSON —
 /// the shape a projector script (issue #239) consumes — with MCP server env
-/// values redacted (see `redact_mcp_env`).
+/// values and args redacted (see `redact_mcp_secrets`).
 pub fn cmd_inspect(path: &str, format: &PackInspectFormat) -> Result<(), CliError> {
     let pack_dir = Path::new(path);
     if !pack_dir.exists() {
@@ -87,7 +99,7 @@ pub fn cmd_inspect(path: &str, format: &PackInspectFormat) -> Result<(), CliErro
 
     if matches!(format, PackInspectFormat::Json) {
         let mut pack = pack;
-        redact_mcp_env(&mut pack);
+        redact_mcp_secrets(&mut pack);
         let json = serde_json::to_string_pretty(&pack)
             .map_err(|e| CliError::Other(format!("failed to serialize pack: {e}")))?;
         println!("{json}");
@@ -230,7 +242,7 @@ mod tests {
     }
 
     #[test]
-    fn redact_mcp_env_masks_values_keeps_keys() {
+    fn redact_mcp_secrets_masks_env_values_and_args_keeps_env_keys() {
         let tmp = tempfile::tempdir().unwrap();
         std::fs::create_dir_all(tmp.path().join(".plugin")).unwrap();
         std::fs::create_dir_all(tmp.path().join("agents")).unwrap();
@@ -246,15 +258,16 @@ mod tests {
         .unwrap();
         std::fs::write(
             tmp.path().join("agents/bot.persona.md"),
-            "---\nname: bot\ndisplay_name: Bot\ndescription: A test bot.\nmodel: anthropic:claude-sonnet-5\nmcp_servers:\n  - name: my-mcp\n    command: npx\n    env:\n      TOKEN: abc123\n---\nYou are Bot.\n",
+            "---\nname: bot\ndisplay_name: Bot\ndescription: A test bot.\nmodel: anthropic:claude-sonnet-5\nmcp_servers:\n  - name: my-mcp\n    command: npx\n    args: ['--api-key', 'sk-abc123']\n    env:\n      TOKEN: abc123\n---\nYou are Bot.\n",
         )
         .unwrap();
 
         let mut pack = buzz_persona::resolve::resolve_pack(tmp.path()).unwrap();
-        redact_mcp_env(&mut pack);
+        redact_mcp_secrets(&mut pack);
 
-        let env = &pack.personas[0].mcp_servers[0].env;
-        assert_eq!(env[0].0, "TOKEN");
-        assert_eq!(env[0].1, "***");
+        let server = &pack.personas[0].mcp_servers[0];
+        assert_eq!(server.env[0].0, "TOKEN");
+        assert_eq!(server.env[0].1, "***");
+        assert_eq!(server.args, vec!["***".to_string(), "***".to_string()]);
     }
 }
