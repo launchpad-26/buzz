@@ -1,4 +1,5 @@
-"""The adjudication stage's CLI. Implements launchpad-26/buzz#118 STEP 3.
+"""The adjudication stage's CLI. Implements launchpad-26/buzz#118 STEP 3 and
+STEP 4 (the nonce check and the `stages` manifest -- see that section below).
 
 Reads one #117 **merged document** on stdin, adjudicates every finding with an
 **injected judge callable** -- defaulting to a stub that returns ``UNPROVEN``
@@ -57,6 +58,51 @@ are STEP 6/7's job, layered on top of this module later. This step leaves
 every finding's ``severity`` exactly equal to its ``reported_severity`` --
 the honest behaviour for a judge (the stub) that never rates anything -- and
 ``duplicate_of`` always null.
+
+**STEP 4 -- the nonce check and the `stages` manifest.** Two more things
+``adjudicate()`` does, on top of STEP 3's pass-through/anchor/validation-order
+guarantees above, both implemented in this module because STEP 3 and STEP 4
+are two facets of one CLI:
+
+The top-level ``nonce`` is checked and passed through, **never generated**.
+#117's own ``findings.validate`` -- which ``adjudicate()`` already runs first
+-- rejects a document whose marker disagrees with the top-level key, so in
+practice a document that clears that gate today already agrees everywhere.
+This module checks it again anyway, for ADJUDICATION.md's own reason: this
+stage is agnostic about its producer and may not inherit a guarantee it did
+not watch being made. ``_verify_nonce`` below is that check, kept as its own
+function precisely so it is testable directly against hand-built documents --
+the same reason ``verdicts.validate`` is tested against hand-built documents
+rather than only against this module's own output -- since #117's validator
+being this thorough today means the three refusals below are not otherwise
+reachable through ``main()`` with a document that still satisfies #117's own
+contract.
+
+Three refusals, checked in this fixed order because one document can satisfy
+more than one at once:
+  1. ``"absent provenance"`` -- no top-level ``nonce``, or no report carries a
+     parseable completion marker. Checked first because the other two need a
+     value to compare against.
+  2. ``"mixed document"`` -- the reports disagree with EACH OTHER. Checked
+     second, and wins over 3 when a document exhibits both: a mixed document
+     is the larger fact and a header mismatch is its consequence.
+  3. ``"mismatched envelope"`` -- the reports agree with each other but not
+     with the top-level key.
+This module never picks a winner among disagreeing nonces and never accepts
+a caller-supplied one -- ``_verify_nonce`` reads only ``document`` itself.
+
+The ``stages`` manifest. #117 emits no top-level ``stages`` array; it is the
+manifest #119 reads for stages -- #116's pre-flight, this one -- that produce
+no envelope of their own. ``adjudicate()`` copies through every entry already
+present on input and appends exactly one new ``{name: "adjudication", status,
+reason}`` entry. An input already carrying an ``adjudication`` entry is a
+re-run against an already-adjudicated document, and is refused outright
+(``AlreadyAdjudicatedError``) rather than silently overwritten.
+
+``status`` is ``"complete"`` only when every finding received a verdict and
+the nonce was established. STEP 6's total-refutation flag does not exist yet
+-- when it lands it becomes a third condition ANDed into ``adjudicate()``'s
+``stage_complete`` computation below, not a rewrite of it.
 """
 
 from __future__ import annotations
@@ -89,6 +135,124 @@ class InputValidationError(ValueError):
     def __init__(self, violations: list[str]):
         self.violations = violations
         super().__init__("input document fails findings.validate: " + "; ".join(violations))
+
+
+class NonceVerificationError(ValueError):
+    """Raised by ``_verify_nonce`` when the document's provenance cannot be
+    established -- one of the three refusals ADJUDICATION.md § The
+    ``adjudication`` block names. ``reason`` is one of ``"absent provenance"``,
+    ``"mixed document"`` or ``"mismatched envelope"``; ``detail`` is the
+    human-readable specifics. Kept as two separate attributes (rather than one
+    formatted string) so a caller -- ``main`` below, or a future control --
+    can assert on the *category* without parsing prose.
+    """
+
+    def __init__(self, reason: str, detail: str):
+        self.reason = reason
+        self.detail = detail
+        super().__init__(f"{reason}: {detail}")
+
+
+class AlreadyAdjudicatedError(ValueError):
+    """Raised when ``input_document["stages"]`` already carries an
+    ``"adjudication"`` entry. That shape means this exact document has
+    already been through this stage once -- a re-run -- and ADJUDICATION.md
+    § The ``stages`` entry requires refusing it outright rather than
+    silently overwriting the earlier result.
+    """
+
+
+def _report_marker_nonce(report: dict) -> str | None:
+    """Extract the nonce embedded in one report's ``completion_marker``, or
+    ``None`` when the marker is missing, non-string, or does not parse as
+    ``BUZZ-DIMENSION-COMPLETE:{dimension}:{nonce}`` -- the exact format
+    ``findings.py``'s own ``_validate_report`` parses, matched here rather
+    than re-invented, since #117 is this format's one producer.
+    """
+    marker = report.get("completion_marker")
+    if not isinstance(marker, str):
+        return None
+    parts = marker.split(":", 2)
+    if len(parts) != 3 or parts[0] != "BUZZ-DIMENSION-COMPLETE":
+        return None
+    return parts[2]
+
+
+def _verify_nonce(document: dict) -> str:
+    """Verify the document's top-level ``nonce`` against every report's own
+    completion marker and return it. Raises ``NonceVerificationError`` --
+    naming exactly one of the three refusals, in the fixed order
+    ADJUDICATION.md states -- when it cannot be established. Never invents a
+    nonce and never accepts one from anywhere but ``document`` itself.
+
+    Reads ``document`` directly rather than trusting ``findings.validate``
+    already ran (see the module docstring's STEP 4 section): a stage
+    agnostic about its producer verifies this itself.
+    """
+    top_nonce = document.get("nonce")
+    reports_raw = document.get("reports")
+    reports = reports_raw if isinstance(reports_raw, list) else []
+    report_nonces = [
+        _report_marker_nonce(report) if isinstance(report, dict) else None for report in reports
+    ]
+
+    # Refusal 1: ABSENT PROVENANCE. No top-level nonce, or at least one
+    # report's marker does not parse -- "must equal the nonce embedded in
+    # EVERY report's completion marker" cannot be checked for a report whose
+    # marker cannot even be read, so one unparseable report is enough to
+    # withhold provenance for the whole document, not just that report.
+    # Checked first: refusals 2 and 3 both need a value to compare against.
+    if not top_nonce:
+        raise NonceVerificationError("absent provenance", "no top-level `nonce` is present")
+    if not report_nonces or any(n is None for n in report_nonces):
+        raise NonceVerificationError(
+            "absent provenance",
+            "at least one report carries no parseable completion marker to compare against",
+        )
+
+    # Refusal 2: MIXED DOCUMENT. The reports disagree with each other. Wins
+    # over refusal 3 even when every report also disagrees with the
+    # top-level key: a mixed document is the larger fact, and the header
+    # mismatch that also follows from it is that fact's consequence, not a
+    # second, independent finding.
+    distinct_report_nonces = set(report_nonces)
+    if len(distinct_report_nonces) > 1:
+        raise NonceVerificationError(
+            "mixed document",
+            "reports carry different nonces in their completion markers: "
+            f"{sorted(distinct_report_nonces)}",
+        )
+
+    # Refusal 3: MISMATCHED ENVELOPE. The reports agree with each other but
+    # not with the top-level key -- one run's reports under another run's
+    # header.
+    (agreed_nonce,) = distinct_report_nonces
+    if agreed_nonce != top_nonce:
+        raise NonceVerificationError(
+            "mismatched envelope",
+            f"every report's completion marker carries nonce {agreed_nonce!r}, which does "
+            f"not match the top-level nonce {top_nonce!r}",
+        )
+
+    return top_nonce
+
+
+def _check_not_already_adjudicated(document: dict) -> None:
+    """Raise ``AlreadyAdjudicatedError`` when ``document["stages"]`` already
+    carries an entry named ``"adjudication"``. Run before ``_verify_nonce``
+    in ``adjudicate()`` -- a re-run is a structural defect in the request
+    itself, independent of whether this particular re-run's nonce happens to
+    check out.
+    """
+    stages = document.get("stages")
+    if not isinstance(stages, list):
+        return
+    for entry in stages:
+        if isinstance(entry, dict) and entry.get("name") == "adjudication":
+            raise AlreadyAdjudicatedError(
+                "input document's `stages` array already carries an `adjudication` entry -- "
+                "refusing to re-run adjudication over an already-adjudicated document"
+            )
 
 
 def _location_description(finding: dict) -> str:
@@ -207,6 +371,14 @@ def adjudicate(input_document: dict, judge: Judge) -> dict:
     a finding whose ``severity`` already arrived illegal is refused here,
     wholesale, rather than reaching a per-finding fallback with no good answer.
 
+    Raises ``AlreadyAdjudicatedError`` when ``input_document["stages"]``
+    already carries an ``adjudication`` entry (a re-run), and
+    ``NonceVerificationError`` when the top-level ``nonce`` cannot be
+    established against every report's completion marker (STEP 4; see the
+    module docstring). Both checks run after #117's own ``findings.validate``
+    and before any finding is adjudicated -- input validation stays the first
+    gate, unchanged from STEP 3.
+
     Pass-through fields (``pr``, ``merge_base_sha``, ``head_sha``,
     ``containment``) are never touched: the output starts as a
     ``copy.deepcopy`` of the input, and only a finding dict's own six new keys
@@ -219,8 +391,10 @@ def adjudicate(input_document: dict, judge: Judge) -> dict:
     if violations:
         raise InputValidationError(violations)
 
+    _check_not_already_adjudicated(input_document)
+    nonce = _verify_nonce(input_document)
+
     output_document = copy.deepcopy(input_document)
-    nonce = output_document.get("nonce")
 
     verdict_counts = {"CONFIRMED": 0, "REFUTED": 0, "UNPROVEN": 0}
     findings_in = 0
@@ -258,6 +432,49 @@ def adjudicate(input_document: dict, judge: Judge) -> dict:
         notes=[],
         completion_marker=f"BUZZ-ADJUDICATION-COMPLETE:{nonce}",
     ).as_dict()
+
+    # The `stages` manifest (STEP 4). Every entry already on input, in order,
+    # plus exactly one new `adjudication` entry -- `_check_not_already_
+    # adjudicated` above already guarantees none of the input entries is
+    # itself named `adjudication`.
+    input_stages_raw = input_document.get("stages")
+    input_stages = copy.deepcopy(input_stages_raw) if isinstance(input_stages_raw, list) else []
+
+    # `status` is "complete" only when every finding received a verdict AND
+    # the nonce was established. The nonce condition is always True here --
+    # `_verify_nonce` above would have raised otherwise -- named explicitly
+    # anyway so the AND reads as the real, multi-condition guarantee
+    # ADJUDICATION.md states rather than a constant. `every_finding_has_
+    # verdict` is read back off `output_document` itself (not tracked as a
+    # separate counter through the loop above) so it is a check ON the
+    # produced data rather than a second bookkeeping path that could drift
+    # from it. STEP 6's total-refutation flag is a third condition this stage
+    # does not build yet -- its absence must not make `stage_complete` wrongly
+    # unconditional, which is why it is named as its own boolean rather than
+    # inlined into one `and` chain that silently drops it.
+    nonce_established = True
+    every_finding_has_verdict = all(
+        finding.get("verdict") in verdicts.VERDICTS
+        for report in output_document.get("reports", [])
+        for finding in report.get("findings", [])
+    )
+    stage_complete = every_finding_has_verdict and nonce_established
+
+    if stage_complete:
+        stage_status, stage_reason = "complete", None
+    else:
+        # Unreachable today: `_run_judge_safely` always returns a legal
+        # verdict, so `every_finding_has_verdict` is always True by the time
+        # this runs, and a False `nonce_established` would already have
+        # raised above. Kept as a real branch, not asserted away, so STEP 6
+        # can add its own condition here without restructuring this function.
+        stage_status = "incomplete"
+        stage_reason = "not every finding received a verdict"
+
+    output_document["stages"] = [
+        *input_stages,
+        {"name": "adjudication", "status": stage_status, "reason": stage_reason},
+    ]
 
     return output_document
 
@@ -325,6 +542,12 @@ def main(argv: list[str] | None = None) -> int:
     except InputValidationError as exc:
         for violation in exc.violations:
             print(f"run_adjudication: {violation}", file=sys.stderr)
+        return 1
+    except AlreadyAdjudicatedError as exc:
+        print(f"run_adjudication: {exc}", file=sys.stderr)
+        return 1
+    except NonceVerificationError as exc:
+        print(f"run_adjudication: {exc.reason}: {exc.detail}", file=sys.stderr)
         return 1
 
     print(json.dumps(output_document))

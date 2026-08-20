@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Controls for run_adjudication.py -- issue #118 STEP 3's CLI.
+"""Controls for run_adjudication.py -- issue #118 STEP 3 and STEP 4's CLI.
 
 Exercises every behaviour named in STEP 3's own done-when list in
 launchpad/plans/2026-08-13-issue-118-adjudication.md: byte-identical
@@ -10,13 +10,25 @@ already-illegal input ``severity`` both refused before a single finding is
 adjudicated (the injected judge's own call count proves the refusal happens
 first), and no ``gh`` subprocess or HTTP client invoked during a stub run.
 
+Also exercises STEP 4's own done-when: the nonce check (three refusals --
+``"absent provenance"``, ``"mixed document"``, ``"mismatched envelope"`` --
+in that fixed order) and the ``stages`` manifest. The three refusals are
+proven two ways: directly against ``_verify_nonce`` with hand-built
+documents (``NonceVerificationDirectTests`` below), which is the only way to
+observe their distinct reasons at all, and end to end through ``main`` with
+realistic fixtures (``NonceVerificationEndToEndTests``), where every one of
+them is ALSO already caught by #117's own ``findings.validate`` -- which
+``adjudicate`` runs first -- with its own, less specific, message. Both are
+tested because both are true: the dedicated check is real defence in depth,
+per ADJUDICATION.md's own reasoning, and it does not change what ``main``
+reports for any fixture that also happens to fail #117's own contract, which
+is every reachable fixture today.
+
 Deliberately NOT exercised here (later steps' territory, per the plan):
-the nonce three-way disagreement diagnosis and the ``stages`` manifest
-(STEP 4), the escalate-only guard and downgrade recording for a judge that
-actually re-rates severity (STEP 6), and dedupe (STEP 7). Every fixture
-below either omits a re-rating entirely or only ever asserts that this
-stage's own severity pass-through (``severity == reported_severity``,
-always) holds.
+the escalate-only guard and downgrade recording for a judge that actually
+re-rates severity (STEP 6), and dedupe (STEP 7). Every fixture below either
+omits a re-rating entirely or only ever asserts that this stage's own
+severity pass-through (``severity == reported_severity``, always) holds.
 
 This file is scoped to `run_adjudication.py` alone and is deliberately not
 wired into `run_controls.py`'s CONTROLS list -- that is STEP 10's control
@@ -409,6 +421,234 @@ class SubprocessInvocationTests(unittest.TestCase):
         )
         self.assertNotEqual(proc.returncode, 0)
         self.assertEqual(proc.stdout, "")
+
+
+class NonceVerificationDirectTests(unittest.TestCase):
+    """Direct tests of ``_verify_nonce``, bypassing ``findings.validate``
+    entirely. This is the only way to observe the three refusals' distinct
+    reasons and their fixed precedence: any document exhibiting one of them
+    also already fails #117's own ``findings.validate`` -- which
+    ``adjudicate`` runs first -- so ``main``/``adjudicate`` end to end never
+    reaches ``_verify_nonce`` with a genuinely disagreeing document today
+    (see ``NonceVerificationEndToEndTests`` below for that half).
+    """
+
+    def test_no_top_level_nonce_is_absent_provenance(self):
+        doc = make_document(reports=[make_report(nonce=NONCE)], nonce=NONCE)
+        del doc["nonce"]
+        with self.assertRaises(run_adjudication.NonceVerificationError) as ctx:
+            run_adjudication._verify_nonce(doc)
+        self.assertEqual(ctx.exception.reason, "absent provenance")
+
+    def test_report_with_no_parseable_marker_is_absent_provenance(self):
+        report = make_report(nonce=NONCE)
+        del report["completion_marker"]
+        doc = make_document(reports=[report], nonce=NONCE)
+        with self.assertRaises(run_adjudication.NonceVerificationError) as ctx:
+            run_adjudication._verify_nonce(doc)
+        self.assertEqual(ctx.exception.reason, "absent provenance")
+
+    def test_one_unparseable_marker_among_otherwise_agreeing_reports_is_absent_provenance(self):
+        # "must equal EVERY report's completion marker" cannot be checked for
+        # a report whose marker cannot be read -- one bad report withholds
+        # provenance for the whole document, it does not just drop out of
+        # the comparison.
+        good = make_report(dimension="a", nonce=NONCE)
+        unreadable = make_report(dimension="b", nonce=NONCE)
+        del unreadable["completion_marker"]
+        doc = make_document(reports=[good, unreadable], nonce=NONCE)
+        with self.assertRaises(run_adjudication.NonceVerificationError) as ctx:
+            run_adjudication._verify_nonce(doc)
+        self.assertEqual(ctx.exception.reason, "absent provenance")
+
+    def test_reports_disagreeing_with_each_other_is_mixed_document(self):
+        doc = make_document(
+            reports=[make_report(dimension="a", nonce="N1"), make_report(dimension="b", nonce="N2")],
+            nonce=NONCE,
+        )
+        with self.assertRaises(run_adjudication.NonceVerificationError) as ctx:
+            run_adjudication._verify_nonce(doc)
+        self.assertEqual(ctx.exception.reason, "mixed document")
+
+    def test_reports_agreeing_but_not_with_top_level_is_mismatched_envelope(self):
+        doc = make_document(
+            reports=[make_report(dimension="a", nonce="N1"), make_report(dimension="b", nonce="N1")],
+            nonce=NONCE,  # top-level differs from both reports' shared "N1"
+        )
+        with self.assertRaises(run_adjudication.NonceVerificationError) as ctx:
+            run_adjudication._verify_nonce(doc)
+        self.assertEqual(ctx.exception.reason, "mismatched envelope")
+
+    def test_mixed_document_wins_over_mismatched_envelope_when_both_apply(self):
+        # Every report disagrees with the top-level key AND with each other:
+        # satisfies both "mixed document" and "mismatched envelope" at once.
+        # ADJUDICATION.md states the mixed document wins.
+        doc = make_document(
+            reports=[make_report(dimension="a", nonce="N1"), make_report(dimension="b", nonce="N2")],
+            nonce="N3",
+        )
+        with self.assertRaises(run_adjudication.NonceVerificationError) as ctx:
+            run_adjudication._verify_nonce(doc)
+        self.assertEqual(ctx.exception.reason, "mixed document")
+
+    def test_matching_nonce_is_returned_unchanged_and_never_invented(self):
+        doc = make_document(reports=[make_report(nonce=NONCE)], nonce=NONCE)
+        self.assertEqual(run_adjudication._verify_nonce(doc), NONCE)
+
+
+class NonceVerificationEndToEndTests(unittest.TestCase):
+    """The same three refusals, but through `main` with realistic fixtures.
+    Every one of these ALSO already fails #117's own `findings.validate`
+    (run first, per STEP 3), so what is actually asserted here is `main`'s
+    contract -- exits non-zero, prints no document at all -- not that the
+    stderr text is `_verify_nonce`'s own. See `NonceVerificationDirectTests`
+    above for the distinct-reason proof.
+    """
+
+    def _run_main_with_document(self, document: dict) -> tuple[int, str, str]:
+        stdout, stderr = io.StringIO(), io.StringIO()
+        with mock.patch.object(sys, "stdin", io.StringIO(json.dumps(document))), \
+             contextlib.redirect_stdout(stdout), contextlib.redirect_stderr(stderr):
+            exit_code = run_adjudication.main([])
+        return exit_code, stdout.getvalue(), stderr.getvalue()
+
+    def test_two_reports_with_different_nonces_exits_nonzero_no_document(self):
+        doc = make_document(
+            reports=[make_report(dimension="a", nonce="N1"), make_report(dimension="b", nonce="N2")],
+            nonce=NONCE,
+        )
+        exit_code, stdout, stderr = self._run_main_with_document(doc)
+        self.assertNotEqual(exit_code, 0)
+        self.assertEqual(stdout, "")
+        self.assertTrue(stderr)
+
+    def test_reports_agreeing_but_not_top_level_exits_nonzero_no_document(self):
+        doc = make_document(
+            reports=[make_report(dimension="a", nonce="N1"), make_report(dimension="b", nonce="N1")],
+            nonce=NONCE,
+        )
+        exit_code, stdout, stderr = self._run_main_with_document(doc)
+        self.assertNotEqual(exit_code, 0)
+        self.assertEqual(stdout, "")
+        self.assertTrue(stderr)
+
+    def test_no_top_level_nonce_exits_nonzero_and_invents_nothing(self):
+        doc = make_document(reports=[make_report(nonce=NONCE)], nonce=NONCE)
+        del doc["nonce"]
+        exit_code, stdout, stderr = self._run_main_with_document(doc)
+        self.assertNotEqual(exit_code, 0)
+        self.assertEqual(stdout, "")  # nothing printed means no nonce was invented
+
+    def test_report_with_no_marker_exits_nonzero_and_never_reports_complete(self):
+        report = make_report(nonce=NONCE)
+        del report["completion_marker"]
+        doc = make_document(reports=[report], nonce=NONCE)
+        exit_code, stdout, stderr = self._run_main_with_document(doc)
+        self.assertNotEqual(exit_code, 0)
+        # No document at all is printed, so no stage status is ever emitted --
+        # "complete" in particular is never among them.
+        self.assertEqual(stdout, "")
+
+
+class StagesManifestTests(unittest.TestCase):
+    """The top-level `stages` array STEP 4 adds: every entry already on
+    input, in order, plus exactly one new `adjudication` entry.
+    """
+
+    def test_happy_path_output_nonce_unchanged_and_marker_is_last_key(self):
+        reports = [make_report(dimension=d, nonce=NONCE) for d in ("a", "b", "c")]
+        input_doc = make_document(reports=reports, nonce=NONCE)
+
+        output_doc = run_adjudication.adjudicate(input_doc, run_adjudication.stub_judge)
+
+        self.assertEqual(output_doc["nonce"], NONCE)
+        adjudication = output_doc["adjudication"]
+        keys = list(adjudication.keys())
+        self.assertEqual(keys[-1], "completion_marker")
+        self.assertEqual(adjudication["completion_marker"], f"BUZZ-ADJUDICATION-COMPLETE:{NONCE}")
+
+    def test_output_stages_carries_input_entries_plus_one_new_adjudication_entry(self):
+        input_doc = make_document()
+        input_doc["stages"] = [{"name": "preflight", "status": "complete", "reason": None}]
+
+        output_doc = run_adjudication.adjudicate(input_doc, run_adjudication.stub_judge)
+
+        self.assertEqual(
+            output_doc["stages"],
+            [
+                {"name": "preflight", "status": "complete", "reason": None},
+                {"name": "adjudication", "status": "complete", "reason": None},
+            ],
+        )
+
+    def test_output_stages_is_just_the_new_entry_when_input_has_none(self):
+        input_doc = make_document()
+        self.assertNotIn("stages", input_doc)
+
+        output_doc = run_adjudication.adjudicate(input_doc, run_adjudication.stub_judge)
+
+        self.assertEqual(
+            output_doc["stages"],
+            [{"name": "adjudication", "status": "complete", "reason": None}],
+        )
+
+    def test_input_stages_list_is_not_mutated(self):
+        input_doc = make_document()
+        input_stages = [{"name": "preflight", "status": "complete", "reason": None}]
+        input_doc["stages"] = input_stages
+
+        run_adjudication.adjudicate(input_doc, run_adjudication.stub_judge)
+
+        self.assertEqual(input_stages, [{"name": "preflight", "status": "complete", "reason": None}])
+
+
+class AlreadyAdjudicatedTests(unittest.TestCase):
+    """An input already carrying an `adjudication` entry in `stages` is a
+    re-run against an already-adjudicated document -- refused outright,
+    never silently overwritten.
+    """
+
+    def test_adjudicate_raises_and_never_calls_the_judge(self):
+        input_doc = make_document()
+        input_doc["stages"] = [{"name": "adjudication", "status": "complete", "reason": None}]
+        judge = CountingJudge()
+
+        with self.assertRaises(run_adjudication.AlreadyAdjudicatedError):
+            run_adjudication.adjudicate(input_doc, judge)
+
+        self.assertEqual(judge.call_count, 0, judge.calls)
+
+    def test_main_exits_nonzero_and_prints_no_document(self):
+        input_doc = make_document()
+        input_doc["stages"] = [{"name": "adjudication", "status": "complete", "reason": None}]
+        stdout, stderr = io.StringIO(), io.StringIO()
+        with mock.patch.object(sys, "stdin", io.StringIO(json.dumps(input_doc))), \
+             contextlib.redirect_stdout(stdout), contextlib.redirect_stderr(stderr):
+            exit_code = run_adjudication.main([])
+        self.assertNotEqual(exit_code, 0)
+        self.assertEqual(stdout.getvalue(), "")
+        self.assertTrue(stderr.getvalue())
+
+
+class PublishIncompleteRuleTests(unittest.TestCase):
+    """#119's own rule -- "any status other than 'complete' is incomplete
+    and banners the whole review" -- run here as an assertion against the
+    output, since #119's own code does not exist to run against (STEP 4's
+    own done-when names this explicitly).
+    """
+
+    def test_happy_path_stage_status_is_complete_so_119_would_not_banner_it(self):
+        input_doc = make_document()
+
+        output_doc = run_adjudication.adjudicate(input_doc, run_adjudication.stub_judge)
+
+        adjudication_stage = next(
+            entry for entry in output_doc["stages"] if entry["name"] == "adjudication"
+        )
+        # #119's stated rule, applied directly: only "complete" reads as
+        # complete: anything else -- any other string -- banners the review.
+        self.assertEqual(adjudication_stage["status"], "complete")
+        self.assertIsNone(adjudication_stage["reason"])
 
 
 if __name__ == "__main__":
