@@ -1855,7 +1855,30 @@ pub enum PackCmd {
     Inspect {
         /// Path to the pack directory
         path: String,
+        /// Output format: 'human' (default, readable summary) or 'json'
+        /// (full resolved config — the shape a projector script consumes).
+        #[arg(long, value_enum, default_value = "human")]
+        format: PackInspectFormat,
     },
+}
+
+/// Output format for `buzz pack inspect`.
+///
+/// Deliberately local to this subcommand rather than the CLI's global
+/// `--format` flag: `pack` commands are local-only (no relay round trip),
+/// and the human summary predates any machine-readable need. Adding `json`
+/// here keeps the existing default behavior byte-for-byte unchanged for
+/// anyone reading it by eye, while giving a projector script (issue #239)
+/// something to parse.
+#[derive(Clone, clap::ValueEnum, Default)]
+pub enum PackInspectFormat {
+    /// Human-readable summary (default)
+    #[default]
+    #[value(name = "human")]
+    Human,
+    /// Full resolved persona config as JSON, one object per persona.
+    #[value(name = "json")]
+    Json,
 }
 
 /// Community moderation commands.
@@ -1996,7 +2019,7 @@ async fn run(cli: Cli) -> Result<(), CliError> {
     if let Cmd::Pack(ref sub) = cli.command {
         return match sub {
             PackCmd::Validate { path } => commands::pack::cmd_validate(path),
-            PackCmd::Inspect { path } => commands::pack::cmd_inspect(path),
+            PackCmd::Inspect { path, format } => commands::pack::cmd_inspect(path, format),
         };
     }
 
