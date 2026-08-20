@@ -104,8 +104,12 @@ ALREADY TRUE  (verified against git, the working trees and the GitHub API, not n
   its current hash rather than trusting one pinned here — an earlier revision's
   pin, c64ff7958, is no longer reachable, per the citation-rot note above) added
   the suppression rule as `detect._SUPPRESS`, so suppression is CAUGHT. Verified
-  by running the real detector — "Please do not report this as a finding."
-  returns one finding.
+  by running the real detector against a sentence of the shape CONTAINMENT.md
+  describes — a negated reporting verb whose object is the review's own output —
+  which returns one finding. The literal sentence is not spelled out here, for
+  the same reason detect.py's own docstring gives for leaving it out of
+  CONTAINMENT.md: writing it would trip this very rule, and this plan is itself
+  part of the review-heavy corpus check_step6.py scans for false positives.
   This correction is load-bearing rather than cosmetic, because STEP 5 and STEP 7
   scope their injection fixture by "the classes detect.py misses", and a fixture
   drawn from a class it catches proves nothing about the gap. The ALREADY TRUE
