@@ -1,0 +1,211 @@
+#!/usr/bin/env python3
+"""Controls for goose_config.py's read-merge-write logic.
+
+STEP 4 of issue #239 (the Route 3 projector): goose's `developer` extension
+(write/shell capability) is a config-FILE toggle
+(`~/.config/goose/config.yaml`, or `$GOOSE_PATH_ROOT/config/config.yaml`),
+and nothing in this repository writes that file today
+(`desktop/src-tauri/src/managed_agents/config_bridge/goose.rs` is
+read-only). These tests drive the module's pure functions directly, plus one
+end-to-end pass against a real temp file for the atomic-write and
+idempotency guarantees the plan's own done-when demands.
+
+Run:  python3 -m unittest discover -s launchpad/agents -p "test_*.py"
+"""
+
+from __future__ import annotations
+
+import importlib.util
+import os
+import tempfile
+import unittest
+from pathlib import Path
+
+_SPEC = importlib.util.spec_from_file_location(
+    "goose_config", Path(__file__).resolve().parent / "goose_config.py"
+)
+m = importlib.util.module_from_spec(_SPEC)
+_SPEC.loader.exec_module(m)
+
+
+class GooseConfigPathTests(unittest.TestCase):
+    def test_uses_goose_path_root_when_set(self):
+        path = m.goose_config_path({"GOOSE_PATH_ROOT": "/custom/root"})
+        self.assertEqual(path, Path("/custom/root/config/config.yaml"))
+
+    def test_defaults_to_home_config_goose_when_unset(self):
+        path = m.goose_config_path({})
+        self.assertEqual(path, Path.home() / ".config" / "goose" / "config.yaml")
+
+    def test_empty_goose_path_root_is_treated_as_unset(self):
+        # An operator with GOOSE_PATH_ROOT="" in their env should not get a
+        # path rooted at "/config/config.yaml".
+        path = m.goose_config_path({"GOOSE_PATH_ROOT": ""})
+        self.assertEqual(path, Path.home() / ".config" / "goose" / "config.yaml")
+
+
+class ReadConfigTests(unittest.TestCase):
+    def test_missing_file_returns_empty_dict(self):
+        with tempfile.TemporaryDirectory() as d:
+            self.assertEqual(m.read_config(Path(d) / "does-not-exist.yaml"), {})
+
+    def test_reads_existing_mapping(self):
+        with tempfile.TemporaryDirectory() as d:
+            path = Path(d) / "config.yaml"
+            path.write_text("active_provider: anthropic\n", encoding="utf-8")
+            self.assertEqual(m.read_config(path), {"active_provider": "anthropic"})
+
+    def test_empty_file_returns_empty_dict(self):
+        with tempfile.TemporaryDirectory() as d:
+            path = Path(d) / "config.yaml"
+            path.write_text("", encoding="utf-8")
+            self.assertEqual(m.read_config(path), {})
+
+
+class MergeDeveloperExtensionTests(unittest.TestCase):
+    def test_adds_developer_extension_when_absent(self):
+        merged = m.merge_developer_extension({})
+        self.assertEqual(
+            merged["extensions"]["developer"], {"type": "builtin", "enabled": True}
+        )
+
+    def test_preserves_unrelated_top_level_keys(self):
+        original = {
+            "active_provider": "databricks_v2",
+            "providers": {"databricks_v2": {"model": "goose-claude-4-6-opus"}},
+        }
+        merged = m.merge_developer_extension(original)
+        self.assertEqual(merged["active_provider"], "databricks_v2")
+        self.assertEqual(
+            merged["providers"]["databricks_v2"]["model"], "goose-claude-4-6-opus"
+        )
+
+    def test_preserves_other_extensions(self):
+        original = {
+            "extensions": {"my-mcp": {"type": "stdio", "enabled": False}},
+        }
+        merged = m.merge_developer_extension(original)
+        self.assertEqual(
+            merged["extensions"]["my-mcp"], {"type": "stdio", "enabled": False}
+        )
+        self.assertEqual(
+            merged["extensions"]["developer"], {"type": "builtin", "enabled": True}
+        )
+
+    def test_does_not_mutate_the_input(self):
+        original = {"extensions": {"my-mcp": {"type": "stdio", "enabled": False}}}
+        m.merge_developer_extension(original)
+        self.assertNotIn("developer", original["extensions"])
+
+    def test_is_idempotent_when_developer_already_enabled(self):
+        once = m.merge_developer_extension({})
+        twice = m.merge_developer_extension(once)
+        self.assertEqual(once, twice)
+
+    def test_overwrites_a_disabled_developer_entry_to_enabled(self):
+        original = {"extensions": {"developer": {"type": "builtin", "enabled": False}}}
+        merged = m.merge_developer_extension(original)
+        self.assertEqual(
+            merged["extensions"]["developer"], {"type": "builtin", "enabled": True}
+        )
+
+
+class WriteConfigAtomicTests(unittest.TestCase):
+    def test_creates_parent_directory_and_file(self):
+        with tempfile.TemporaryDirectory() as d:
+            path = Path(d) / "nested" / "config.yaml"
+            m.write_config_atomic(path, {"a": 1})
+            self.assertTrue(path.is_file())
+            self.assertEqual(m.read_config(path), {"a": 1})
+
+    def test_leaves_no_temp_files_behind_on_success(self):
+        with tempfile.TemporaryDirectory() as d:
+            path = Path(d) / "config.yaml"
+            m.write_config_atomic(path, {"a": 1})
+            self.assertEqual(os.listdir(d), ["config.yaml"])
+
+    def test_overwrites_existing_file(self):
+        with tempfile.TemporaryDirectory() as d:
+            path = Path(d) / "config.yaml"
+            path.write_text("stale: true\n", encoding="utf-8")
+            m.write_config_atomic(path, {"fresh": True})
+            self.assertEqual(m.read_config(path), {"fresh": True})
+
+
+class EnableDeveloperExtensionEndToEndTests(unittest.TestCase):
+    """The plan's own done-when for STEP 4: run twice against a fixture
+    carrying an unrelated provider block and one other extension -- both
+    survive byte-for-byte except the added/updated developer entry, and the
+    second run is a no-op (idempotent, not append-again)."""
+
+    def _fixture_path(self, d: str) -> Path:
+        path = Path(d) / "config.yaml"
+        fixture = {
+            "active_provider": "databricks_v2",
+            "providers": {
+                "databricks_v2": {
+                    "model": "goose-claude-4-6-opus",
+                    "host": "https://dbc.example",
+                }
+            },
+            "extensions": {"my-mcp": {"type": "stdio", "enabled": False}},
+        }
+        m.write_config_atomic(path, fixture)
+        return path
+
+    def test_creates_file_when_none_exists(self):
+        with tempfile.TemporaryDirectory() as d:
+            path = Path(d) / "config.yaml"
+            self.assertFalse(path.exists())
+            written = m.enable_developer_extension(path=path)
+            self.assertEqual(written, path)
+            cfg = m.read_config(path)
+            self.assertEqual(
+                cfg["extensions"]["developer"], {"type": "builtin", "enabled": True}
+            )
+
+    def test_preserves_unrelated_provider_block_and_other_extension(self):
+        with tempfile.TemporaryDirectory() as d:
+            path = self._fixture_path(d)
+            m.enable_developer_extension(path=path)
+            cfg = m.read_config(path)
+            self.assertEqual(cfg["active_provider"], "databricks_v2")
+            self.assertEqual(
+                cfg["providers"]["databricks_v2"]["model"], "goose-claude-4-6-opus"
+            )
+            self.assertEqual(
+                cfg["extensions"]["my-mcp"], {"type": "stdio", "enabled": False}
+            )
+            self.assertEqual(
+                cfg["extensions"]["developer"], {"type": "builtin", "enabled": True}
+            )
+
+    def test_second_run_is_a_byte_for_byte_no_op(self):
+        with tempfile.TemporaryDirectory() as d:
+            path = self._fixture_path(d)
+            m.enable_developer_extension(path=path)
+            after_first = path.read_bytes()
+            m.enable_developer_extension(path=path)
+            after_second = path.read_bytes()
+            self.assertEqual(
+                after_first,
+                after_second,
+                "a second run must be a no-op, not append-again",
+            )
+
+    def test_defaults_to_goose_config_path_when_no_path_given(self):
+        with tempfile.TemporaryDirectory() as d:
+            fixture_path = Path(d) / "config" / "config.yaml"
+            fixture_path.parent.mkdir(parents=True)
+            m.write_config_atomic(fixture_path, {"active_provider": "anthropic"})
+            written = m.enable_developer_extension(env={"GOOSE_PATH_ROOT": d})
+            self.assertEqual(written, fixture_path)
+            cfg = m.read_config(fixture_path)
+            self.assertEqual(cfg["active_provider"], "anthropic")
+            self.assertEqual(
+                cfg["extensions"]["developer"], {"type": "builtin", "enabled": True}
+            )
+
+
+if __name__ == "__main__":
+    unittest.main()
