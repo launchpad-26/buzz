@@ -1,5 +1,7 @@
-"""The adjudication stage's CLI. Implements launchpad-26/buzz#118 STEP 3 and
-STEP 4 (the nonce check and the `stages` manifest -- see that section below).
+"""The adjudication stage's CLI. Implements launchpad-26/buzz#118 STEP 3,
+STEP 4 (the nonce check and the `stages` manifest) and STEP 6 (severity
+re-rating, the out-of-ladder guard, downgrade recording and the
+total-refutation status) -- see those sections below.
 
 Reads one #117 **merged document** on stdin, adjudicates every finding with an
 **injected judge callable** -- defaulting to a stub that returns ``UNPROVEN``
@@ -53,11 +55,60 @@ STEP 9's future recorded judge outputs). This is also what keeps "choosing the
 model" out of scope here, per #117's own framing and #118's issue: this module
 never names one, and neither flag lets a caller supply one.
 
-Severity re-rating, the escalate-only guard, downgrade recording and dedupe
-are STEP 6/7's job, layered on top of this module later. This step leaves
-every finding's ``severity`` exactly equal to its ``reported_severity`` --
-the honest behaviour for a judge (the stub) that never rates anything -- and
-``duplicate_of`` always null.
+Dedupe is STEP 7's job, layered on top of this module later --
+``duplicate_of`` is always null here. Severity re-rating and the
+escalate-only guard are STEP 6, below.
+
+**STEP 6 -- severity re-rating and the out-of-ladder guard.** A judge's
+return dict MAY now also carry a ``severity`` key and, when re-rating, a
+``severity_reason``. ``_run_judge_safely`` forwards both from a *usable*
+result only -- a judge whose output already failed closed to ``UNPROVEN``
+(a crash, a missing/illegal ``verdict``, empty ``verdict_evidence``) never
+gets to re-rate severity too; failing closed means failing closed on both.
+
+``_apply_severity_rerating`` (below) is the guard, run once per finding:
+
+* No ``severity`` key, or one equal to the finding's own
+  ``reported_severity``: unchanged from STEP 3/4 -- ``severity ==
+  reported_severity``, ``severity_reason`` stays ``None``.
+* A **legal** (in ``review.SEVERITY_ORDER``) severity that differs: it
+  becomes the finding's ``severity``, with a reason -- the judge's own if it
+  gave one, else a generated default, since ``verdicts.validate`` requires a
+  reason whenever ``severity != reported_severity`` regardless of direction.
+  If it is a genuine **fall** (worse ``SEVERITY_ORDER`` index than
+  ``reported_severity``), it is appended to ``adjudication.downgrades`` --
+  ``{finding_id, from, to, reason}`` -- right there, at the moment the
+  re-rating is applied, never by a later sweep over the finished document (a
+  sweep is a second place the two could disagree). An **upgrade** (more
+  severe) is not a downgrade and is never added to that list.
+* An **illegal** (out-of-ladder) severity: refused, not published. This is
+  the one place this stage can still *create* an out-of-ladder value -- the
+  input arriving illegal is already caught upstream by STEP 3's
+  ``findings.validate`` call, before any judge runs -- so this is defence in
+  depth over this stage's own re-rating, not a repeat of that guard. The
+  finding's ``verdict`` becomes ``UNPROVEN`` regardless of what the judge
+  said for ``verdict``, ``severity`` falls back to ``reported_severity``
+  (guaranteed legal at this point by STEP 3's input validation) or, purely
+  as a second layer should that guarantee ever be bypassed, to ``"Blocker"``
+  when even ``reported_severity`` is not in the ladder, and
+  ``severity_reason`` names the refusal. Never added to ``downgrades``:
+  nothing legally fell -- the value was refused, not accepted-then-compared.
+
+**Total refutation now reaches the ``stages`` status, not only
+``adjudication.total_refutation``.** When every finding is ``REFUTED`` and
+at least one finding was received, the ``adjudication`` stage entry's own
+``status`` is ``"total_refutation"`` -- checked ahead of the "every finding
+has a verdict" condition below, so it wins whenever it applies. A document
+with zero findings is never total refutation (the existing ``findings_in >
+0`` condition already excludes it), so it keeps reporting ``"complete"``.
+
+**Nothing is removed, reasserted inside this module.** ``adjudicate()``
+compares the ``finding_id`` set of ``output_document`` against
+``input_document`` immediately before returning and raises
+``FindingSetIntegrityError`` if they differ -- belt-and-braces, since this
+function does not drop or invent one by construction, but a stage that can
+print a lossy document and rely on a downstream ``verdicts.validate`` call
+to catch it has already lost the document once.
 
 **STEP 4 -- the nonce check and the `stages` manifest.** Two more things
 ``adjudicate()`` does, on top of STEP 3's pass-through/anchor/validation-order
@@ -124,13 +175,18 @@ from pathlib import Path
 from typing import Callable
 
 import findings
+import review
 import verdicts
 
 #: The judge protocol: ``judge(finding, input_document) -> dict`` with at
-#: least ``{"verdict": ..., "verdict_evidence": ...}``. Anything else --
-#: a raised exception, a missing/illegal ``verdict``, empty
-#: ``verdict_evidence`` -- is treated as unusable output and fails closed to
-#: UNPROVEN, per ADJUDICATION.md's own default.
+#: least ``{"verdict": ..., "verdict_evidence": ...}``, and MAY also carry
+#: ``severity`` (STEP 6's re-rating) plus, when re-rating, ``severity_reason``
+#: -- omitted, or equal to the finding's own ``reported_severity``, means no
+#: re-rating at all. Anything else -- a raised exception, a missing/illegal
+#: ``verdict``, empty ``verdict_evidence`` -- is treated as unusable output
+#: and fails closed to UNPROVEN, per ADJUDICATION.md's own default, and no
+#: severity re-rating is attempted from output this module could not use in
+#: the first place.
 Judge = Callable[[dict, dict], dict]
 
 
@@ -168,6 +224,19 @@ class AlreadyAdjudicatedError(ValueError):
     already been through this stage once -- a re-run -- and ADJUDICATION.md
     § The ``stages`` entry requires refusing it outright rather than
     silently overwriting the earlier result.
+    """
+
+
+class FindingSetIntegrityError(RuntimeError):
+    """Raised by ``adjudicate()`` if the ``finding_id`` set of the document it
+    is about to return would differ from the set it was given -- STEP 6's
+    "nothing is removed" reassertion. By construction this function never
+    drops or invents a finding_id, so this is belt-and-braces: a stage that
+    can print a lossy document and rely on a downstream ``verdicts.validate``
+    call to catch it has already lost the document once. Deliberately a bare
+    ``RuntimeError`` subclass rather than a caller-input error like the three
+    above -- this names a bug in this module, not a defect in the document it
+    was handed.
     """
 
 
@@ -343,6 +412,14 @@ def _run_judge_safely(judge: Judge, finding: dict, input_document: dict) -> dict
     empty ``verdict_evidence``. ADJUDICATION.md's own words: "An adjudicator
     that cannot reach the location, cannot parse the finding, times out, or
     returns unusable output yields UNPROVEN with a reason."
+
+    Returns a dict carrying at least ``verdict``/``verdict_evidence``, and --
+    only when the judge's own output was usable -- ``severity``/
+    ``severity_reason`` when the judge's return dict carried them (STEP 6's
+    re-rating; see ``_apply_severity_rerating``). A judge whose output failed
+    closed never gets to re-rate severity too: the two failure keys below
+    never include a ``severity`` key, on purpose, so failing closed means
+    failing closed on both.
     """
     try:
         result = judge(finding, input_document)
@@ -368,7 +445,109 @@ def _run_judge_safely(judge: Judge, finding: dict, input_document: dict) -> dict
                 "ADJUDICATION.md's default."
             ),
         }
-    return {"verdict": verdict, "verdict_evidence": evidence}
+
+    safe_result = {"verdict": verdict, "verdict_evidence": evidence}
+    if "severity" in result:
+        safe_result["severity"] = result["severity"]
+    if "severity_reason" in result:
+        safe_result["severity_reason"] = result["severity_reason"]
+    return safe_result
+
+
+def _apply_severity_rerating(
+    finding_id: object,
+    reported_severity: str,
+    verdict: str,
+    proposed_severity: object,
+    proposed_reason: object,
+    downgrades: list[dict],
+) -> tuple[str, str, str | None]:
+    """STEP 6's severity re-rating guard, applied to one finding. Returns the
+    ``(verdict, severity, severity_reason)`` that should actually be
+    emitted -- ``verdict`` is returned rather than assumed unchanged because
+    the illegal-severity branch overrides it.
+
+    ``proposed_severity``/``proposed_reason`` are exactly what
+    ``_run_judge_safely`` forwarded from the judge's own return dict --
+    ``None`` when the judge did not re-rate, or when its output already
+    failed closed (in which case no re-rating is attempted at all).
+
+    Mutates ``downgrades`` in place by appending an entry at the moment a
+    genuine fall is applied -- never by a later sweep over the finished
+    document, per ADJUDICATION.md's "record it here, not by a later sweep"
+    reasoning: a sweep is a second place the two could disagree.
+    """
+    if proposed_severity is None or proposed_severity == reported_severity:
+        # No re-rating: unchanged from STEP 3/4's behaviour.
+        return verdict, reported_severity, None
+
+    if proposed_severity not in review.SEVERITY_ORDER:
+        # ILLEGAL re-rating: refused, not published. This is the one place
+        # this stage can still *create* an out-of-ladder value -- an input
+        # finding arriving illegal is already caught upstream by STEP 3's
+        # findings.validate call, before any judge runs at all -- so this is
+        # defence in depth over this stage's OWN re-rating, not a repeat of
+        # that upstream guard.
+        fallback_severity = (
+            reported_severity if reported_severity in review.SEVERITY_ORDER else "Blocker"
+        )
+        reason = (
+            f"judge returned an out-of-ladder severity {proposed_severity!r} for finding "
+            f"{finding_id!r}; refused, falling back to the reported severity "
+            f"{fallback_severity!r}"
+        )
+        # Not appended to `downgrades`: nothing legally fell -- the value was
+        # refused, not accepted and then compared.
+        return "UNPROVEN", fallback_severity, reason
+
+    # LEGAL re-rating that differs from reported_severity. verdicts.validate
+    # requires severity_reason whenever severity != reported_severity
+    # regardless of direction, so a reason is generated even for an upgrade,
+    # which is not itself a downgrade.
+    reason = proposed_reason if proposed_reason else (
+        f"judge re-rated severity from {reported_severity!r} to {proposed_severity!r} "
+        "with no reason given"
+    )
+    if review.SEVERITY_ORDER[proposed_severity] > review.SEVERITY_ORDER[reported_severity]:
+        downgrades.append(
+            {
+                "finding_id": finding_id,
+                "from": reported_severity,
+                "to": proposed_severity,
+                "reason": reason,
+            }
+        )
+    return verdict, proposed_severity, reason
+
+
+def _collect_finding_ids(document: dict) -> set[str]:
+    """The set of every ``finding_id`` present across ``document``'s
+    ``reports[].findings``.
+
+    A small, local walk -- not a call into ``verdicts._finding_ids`` -- on
+    purpose: this function backs STEP 6's "nothing is removed" reassertion
+    inside ``adjudicate()`` itself, and a bug shared between the producer and
+    its own belt-and-braces check would prove nothing. Every container is
+    type-checked before being treated as its expected shape, same discipline
+    ``verdicts.py`` and ``findings.py`` both already use for a document that
+    might be malformed.
+    """
+    ids: set[str] = set()
+    reports = document.get("reports")
+    if not isinstance(reports, list):
+        return ids
+    for report in reports:
+        if not isinstance(report, dict):
+            continue
+        findings_list = report.get("findings")
+        if not isinstance(findings_list, list):
+            continue
+        for finding in findings_list:
+            if isinstance(finding, dict):
+                fid = finding.get("finding_id")
+                if isinstance(fid, str):
+                    ids.add(fid)
+    return ids
 
 
 def adjudicate(input_document: dict, judge: Judge) -> dict:
@@ -392,10 +571,17 @@ def adjudicate(input_document: dict, judge: Judge) -> dict:
     Pass-through fields (``pr``, ``merge_base_sha``, ``head_sha``,
     ``containment``) are never touched: the output starts as a
     ``copy.deepcopy`` of the input, and only a finding dict's own six new keys
-    are ever written. Severity re-rating, the escalate-only guard, downgrade
-    recording and dedupe are later steps' job -- every finding's ``severity``
-    here is left exactly equal to its ``reported_severity``, and
-    ``duplicate_of`` is always null.
+    are ever written. Dedupe is a later step's job -- ``duplicate_of`` is
+    always null here. Severity re-rating and the out-of-ladder guard are
+    STEP 6 (see the module docstring's STEP 6 section and
+    ``_apply_severity_rerating``); a judge that never re-rates leaves every
+    finding's ``severity`` exactly equal to its ``reported_severity``, same
+    as STEP 3/4.
+
+    Before returning, asserts (raising ``FindingSetIntegrityError`` on
+    failure) that ``output_document``'s ``finding_id`` set equals
+    ``input_document``'s -- STEP 6's "nothing is removed" reassertion, run
+    here rather than left to a downstream ``verdicts.validate`` call.
     """
     _check_not_already_adjudicated(input_document)
 
@@ -431,21 +617,28 @@ def adjudicate(input_document: dict, judge: Judge) -> dict:
 
     verdict_counts = {"CONFIRMED": 0, "REFUTED": 0, "UNPROVEN": 0}
     findings_in = 0
+    downgrades: list[dict] = []
 
     for report in output_document.get("reports", []):
         for finding in report.get("findings", []):
             findings_in += 1
             result = _run_judge_safely(judge, finding, input_document)
             reported_severity = finding["severity"]
-            finding["verdict"] = result["verdict"]
+            verdict, severity, severity_reason = _apply_severity_rerating(
+                finding_id=finding.get("finding_id"),
+                reported_severity=reported_severity,
+                verdict=result["verdict"],
+                proposed_severity=result.get("severity"),
+                proposed_reason=result.get("severity_reason"),
+                downgrades=downgrades,
+            )
+            finding["verdict"] = verdict
             finding["verdict_evidence"] = result["verdict_evidence"]
             finding["reported_severity"] = reported_severity
-            # No re-rating in this stage: `severity` (#117's own field, already
-            # present on `finding`) is left exactly as reported. STEP 6 adds
-            # the guard that lets a judge's re-rating land here safely.
-            finding["severity_reason"] = None
+            finding["severity"] = severity
+            finding["severity_reason"] = severity_reason
             finding["duplicate_of"] = None
-            verdict_counts[result["verdict"]] += 1
+            verdict_counts[verdict] += 1
 
     # Nothing is dropped or invented at this stage, so the two counts are the
     # same number by construction -- kept as two separate values (rather than
@@ -460,7 +653,7 @@ def adjudicate(input_document: dict, judge: Judge) -> dict:
         findings_in=findings_in,
         findings_out=findings_out,
         duplicate_groups=[],
-        downgrades=[],
+        downgrades=downgrades,
         total_refutation=total_refutation,
         notes=[],
         completion_marker=f"BUZZ-ADJUDICATION-COMPLETE:{nonce}",
@@ -473,34 +666,43 @@ def adjudicate(input_document: dict, judge: Judge) -> dict:
     input_stages_raw = input_document.get("stages")
     input_stages = copy.deepcopy(input_stages_raw) if isinstance(input_stages_raw, list) else []
 
-    # `status` is "complete" only when every finding received a verdict AND
-    # the nonce was established. The nonce condition is always True here --
-    # `_verify_nonce` above would have raised otherwise -- named explicitly
-    # anyway so the AND reads as the real, multi-condition guarantee
-    # ADJUDICATION.md states rather than a constant. `every_finding_has_
-    # verdict` is read back off `output_document` itself (not tracked as a
-    # separate counter through the loop above) so it is a check ON the
-    # produced data rather than a second bookkeeping path that could drift
-    # from it. STEP 6's total-refutation flag is a third condition this stage
-    # does not build yet -- its absence must not make `stage_complete` wrongly
-    # unconditional, which is why it is named as its own boolean rather than
-    # inlined into one `and` chain that silently drops it.
+    # `status` is "complete" only when every finding received a verdict, the
+    # nonce was established, AND `total_refutation` is false. The nonce
+    # condition is always True here -- `_verify_nonce` above would have
+    # raised otherwise -- named explicitly anyway so the AND reads as the
+    # real, multi-condition guarantee ADJUDICATION.md states rather than a
+    # constant. `every_finding_has_verdict` is read back off
+    # `output_document` itself (not tracked as a separate counter through the
+    # loop above) so it is a check ON the produced data rather than a second
+    # bookkeeping path that could drift from it.
     nonce_established = True
     every_finding_has_verdict = all(
         finding.get("verdict") in verdicts.VERDICTS
         for report in output_document.get("reports", [])
         for finding in report.get("findings", [])
     )
-    stage_complete = every_finding_has_verdict and nonce_established
+    stage_complete = every_finding_has_verdict and nonce_established and not total_refutation
 
-    if stage_complete:
+    # `total_refutation` is checked FIRST and wins whenever it applies --
+    # ADJUDICATION.md § The `stages` entry names "total_refutation" as one of
+    # the specific reasons `status` carries when it is not "complete", and
+    # the zero-findings case never reaches here with `total_refutation` true
+    # (the `findings_in > 0` condition above already excludes it), so a
+    # document with no findings still falls through to "complete" below.
+    if total_refutation:
+        stage_status = "total_refutation"
+        stage_reason = (
+            "every finding was REFUTED; see adjudication.total_refutation and "
+            "adjudication.verdict_counts"
+        )
+    elif stage_complete:
         stage_status, stage_reason = "complete", None
     else:
         # Unreachable today: `_run_judge_safely` always returns a legal
         # verdict, so `every_finding_has_verdict` is always True by the time
         # this runs, and a False `nonce_established` would already have
-        # raised above. Kept as a real branch, not asserted away, so STEP 6
-        # can add its own condition here without restructuring this function.
+        # raised above. Kept as a real branch, not asserted away, same
+        # discipline as `nonce_established` above.
         stage_status = "incomplete"
         stage_reason = "not every finding received a verdict"
 
@@ -508,6 +710,20 @@ def adjudicate(input_document: dict, judge: Judge) -> dict:
         *input_stages,
         {"name": "adjudication", "status": stage_status, "reason": stage_reason},
     ]
+
+    # STEP 6's "nothing is removed" reassertion: this function does not drop
+    # or invent a finding_id by construction, but a stage that can print a
+    # lossy document and rely on a downstream `verdicts.validate` call to
+    # catch it has already lost the document once. Checked here, inside the
+    # runner itself, immediately before the document it guards is returned.
+    input_ids = _collect_finding_ids(input_document)
+    output_ids = _collect_finding_ids(output_document)
+    if input_ids != output_ids:
+        raise FindingSetIntegrityError(
+            "adjudicate() would drop or invent a finding_id -- input and output finding_id "
+            f"sets differ: dropped={sorted(input_ids - output_ids)}, "
+            f"invented={sorted(output_ids - input_ids)}"
+        )
 
     return output_document
 

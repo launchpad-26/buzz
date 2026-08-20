@@ -24,11 +24,22 @@ per ADJUDICATION.md's own reasoning, and it does not change what ``main``
 reports for any fixture that also happens to fail #117's own contract, which
 is every reachable fixture today.
 
+Also exercises STEP 6's own done-when: a judge that REFUTEs every finding
+(membership/length/`findings_count` unchanged, `total_refutation` true, the
+`adjudication` stage status not "complete") and the same judge against zero
+findings (`total_refutation` false, status "complete"); a judge returning
+the out-of-ladder severity "Info" over a legally in-ladder
+`reported_severity` (UNPROVEN at the reported severity, with a reason, and
+the document still passes `verdicts.validate`) -- the sibling case, a
+finding ARRIVING with an illegal `reported_severity`, stays
+`IllegalInputSeverityTests`' job above, not repeated here; a bare
+`review.SEVERITY_ORDER[f["severity"]]` subscript over every finding in
+every output; and a judge that downgrades a Blocker to Low
+(`adjudication.downgrades` names it with from/to/reason). See
+`SeverityRerateTests` and `TotalRefutationStatusTests` below.
+
 Deliberately NOT exercised here (later steps' territory, per the plan):
-the escalate-only guard and downgrade recording for a judge that actually
-re-rates severity (STEP 6), and dedupe (STEP 7). Every fixture below either
-omits a re-rating entirely or only ever asserts that this stage's own
-severity pass-through (``severity == reported_severity``, always) holds.
+dedupe (STEP 7).
 
 This file is scoped to `run_adjudication.py` alone and is deliberately not
 wired into `run_controls.py`'s CONTROLS list -- that is STEP 10's control
@@ -52,6 +63,7 @@ from unittest import mock
 
 import contain
 import findings
+import review
 import run_adjudication
 import verdicts
 
@@ -358,9 +370,11 @@ class JudgeFailsClosedTests(unittest.TestCase):
 
 
 class NoRerateInThisStepTests(unittest.TestCase):
-    """This step performs no re-rating at all (STEP 6's job): every finding's
-    `severity` equals its `reported_severity`, even when the injected judge
-    returns a verdict -- the judge protocol here carries no severity field.
+    """The stub judge never re-rates: every finding's `severity` equals its
+    `reported_severity`, even though `stub_judge` returns a verdict --
+    it simply never includes a `severity` key in its return dict, which
+    STEP 6's guard (see `SeverityRerateTests` below) treats identically to a
+    `severity` equal to `reported_severity`: no re-rating at all.
     """
 
     def test_severity_always_equals_reported_severity(self):
@@ -698,6 +712,256 @@ class PublishIncompleteRuleTests(unittest.TestCase):
         # complete: anything else -- any other string -- banners the review.
         self.assertEqual(adjudication_stage["status"], "complete")
         self.assertIsNone(adjudication_stage["reason"])
+
+
+def _make_judge(verdict="CONFIRMED", **overrides):
+    """A judge returning ``verdict`` (default CONFIRMED) plus whatever keys
+    ``overrides`` supplies -- used throughout STEP 6's tests to inject a
+    judge that re-rates, refuses, or refutes without hand-writing a callable
+    per test.
+    """
+
+    def _judge(finding: dict, document: dict) -> dict:
+        result = {"verdict": verdict, "verdict_evidence": "judge examined it directly"}
+        result.update(overrides)
+        return result
+
+    return _judge
+
+
+class SeverityRerateTests(unittest.TestCase):
+    """STEP 6's severity re-rating guard: legal re-ratings (both directions),
+    illegal ones (refused), and the no-op case, all against `adjudicate()`
+    directly.
+    """
+
+    def test_no_severity_key_is_unchanged_from_step_3_4(self):
+        finding = make_raw_finding(severity="High")
+        input_doc = make_document(reports=[make_report(findings_list=[finding])])
+
+        output_doc = run_adjudication.adjudicate(input_doc, _make_judge())
+
+        adjudicated = output_doc["reports"][0]["findings"][0]
+        self.assertEqual(adjudicated["severity"], "High")
+        self.assertEqual(adjudicated["reported_severity"], "High")
+        self.assertIsNone(adjudicated["severity_reason"])
+        self.assertEqual(output_doc["adjudication"]["downgrades"], [])
+
+    def test_severity_equal_to_reported_is_treated_as_no_rerating(self):
+        finding = make_raw_finding(severity="High")
+        input_doc = make_document(reports=[make_report(findings_list=[finding])])
+
+        output_doc = run_adjudication.adjudicate(input_doc, _make_judge(severity="High"))
+
+        adjudicated = output_doc["reports"][0]["findings"][0]
+        self.assertEqual(adjudicated["severity"], "High")
+        self.assertIsNone(adjudicated["severity_reason"])
+        self.assertEqual(output_doc["adjudication"]["downgrades"], [])
+
+    def test_legal_downgrade_blocker_to_low_is_recorded_with_reason(self):
+        finding = make_raw_finding(severity="Blocker")
+        input_doc = make_document(reports=[make_report(findings_list=[finding])])
+        fid = finding["finding_id"]
+
+        output_doc = run_adjudication.adjudicate(
+            input_doc,
+            _make_judge(severity="Low", severity_reason="on inspection this is cosmetic"),
+        )
+
+        adjudicated = output_doc["reports"][0]["findings"][0]
+        self.assertEqual(adjudicated["reported_severity"], "Blocker")
+        self.assertEqual(adjudicated["severity"], "Low")
+        self.assertEqual(adjudicated["severity_reason"], "on inspection this is cosmetic")
+        self.assertEqual(
+            output_doc["adjudication"]["downgrades"],
+            [
+                {
+                    "finding_id": fid,
+                    "from": "Blocker",
+                    "to": "Low",
+                    "reason": "on inspection this is cosmetic",
+                }
+            ],
+        )
+        self.assertEqual(verdicts.validate(input_doc, output_doc), [])
+
+    def test_downgrade_with_no_judge_reason_gets_a_generated_default(self):
+        finding = make_raw_finding(severity="Blocker")
+        input_doc = make_document(reports=[make_report(findings_list=[finding])])
+
+        output_doc = run_adjudication.adjudicate(input_doc, _make_judge(severity="Low"))
+
+        adjudicated = output_doc["reports"][0]["findings"][0]
+        self.assertTrue(adjudicated["severity_reason"])
+        self.assertEqual(len(output_doc["adjudication"]["downgrades"]), 1)
+        self.assertEqual(output_doc["adjudication"]["downgrades"][0]["reason"], adjudicated["severity_reason"])
+        self.assertEqual(verdicts.validate(input_doc, output_doc), [])
+
+    def test_legal_upgrade_is_not_a_downgrade_but_still_needs_a_reason(self):
+        finding = make_raw_finding(severity="Low")
+        input_doc = make_document(reports=[make_report(findings_list=[finding])])
+
+        output_doc = run_adjudication.adjudicate(
+            input_doc, _make_judge(severity="Blocker", severity_reason="worse than reported")
+        )
+
+        adjudicated = output_doc["reports"][0]["findings"][0]
+        self.assertEqual(adjudicated["reported_severity"], "Low")
+        self.assertEqual(adjudicated["severity"], "Blocker")
+        self.assertEqual(adjudicated["severity_reason"], "worse than reported")
+        self.assertEqual(output_doc["adjudication"]["downgrades"], [])
+        self.assertEqual(verdicts.validate(input_doc, output_doc), [])
+
+    def test_illegal_severity_over_legal_reported_severity_is_unproven_at_reported(self):
+        # The scenario STEP 6's own done-when names precisely: a judge
+        # re-rates a LEGALLY in-ladder reported_severity to an out-of-ladder
+        # value. STEP 3's input validation does not catch this -- the input
+        # was legal -- only this stage's own re-rating guard does.
+        finding = make_raw_finding(severity="Medium")
+        input_doc = make_document(reports=[make_report(findings_list=[finding])])
+
+        output_doc = run_adjudication.adjudicate(
+            input_doc, _make_judge(verdict="CONFIRMED", severity="Info")
+        )
+
+        adjudicated = output_doc["reports"][0]["findings"][0]
+        self.assertEqual(adjudicated["verdict"], "UNPROVEN")
+        self.assertEqual(adjudicated["reported_severity"], "Medium")
+        self.assertEqual(adjudicated["severity"], "Medium")
+        self.assertTrue(adjudicated["severity_reason"])
+        self.assertIn("Info", adjudicated["severity_reason"])
+        self.assertEqual(output_doc["adjudication"]["downgrades"], [])
+        self.assertEqual(verdicts.validate(input_doc, output_doc), [])
+        # The positive form, used bare on purpose: #119's own `.get(sev, 9)`
+        # default would silently mask an out-of-ladder emission here.
+        for report in output_doc["reports"]:
+            for f in report["findings"]:
+                review.SEVERITY_ORDER[f["severity"]]
+
+    def test_illegal_severity_is_never_added_to_downgrades(self):
+        finding = make_raw_finding(severity="High")
+        input_doc = make_document(reports=[make_report(findings_list=[finding])])
+
+        output_doc = run_adjudication.adjudicate(input_doc, _make_judge(severity="Info"))
+
+        self.assertEqual(output_doc["adjudication"]["downgrades"], [])
+
+
+class BareSeverityOrderSubscriptTests(unittest.TestCase):
+    """The positive form of the out-of-ladder guard, run over every finding
+    in a document containing every re-rating shape at once: a bare
+    `review.SEVERITY_ORDER[f["severity"]]` subscript must succeed for all of
+    them. Bare on purpose -- #119 defends itself with `.get(severity, 9)`,
+    and a control borrowing that default would pass on exactly the output
+    this stage must not emit.
+    """
+
+    def test_bare_subscript_succeeds_for_every_finding_across_every_rerating_shape(self):
+        no_rerate = make_raw_finding(dimension="a", severity="Medium")
+        downgraded = make_raw_finding(dimension="b", severity="Blocker")
+        upgraded = make_raw_finding(dimension="c", severity="Low")
+        refused = make_raw_finding(dimension="d", severity="High")
+        report = make_report(
+            dimension="mixed",
+            findings_list=[no_rerate, downgraded, upgraded, refused],
+        )
+        input_doc = make_document(reports=[report])
+
+        def judge(finding: dict, document: dict) -> dict:
+            by_id = {
+                no_rerate["finding_id"]: {},
+                downgraded["finding_id"]: {"severity": "Low"},
+                upgraded["finding_id"]: {"severity": "Blocker"},
+                refused["finding_id"]: {"severity": "Info"},
+            }
+            extra = by_id[finding["finding_id"]]
+            result = {"verdict": "CONFIRMED", "verdict_evidence": "checked"}
+            result.update(extra)
+            if "severity" in extra and extra["severity"] in review.SEVERITY_ORDER:
+                result["severity_reason"] = "re-rated for this test"
+            return result
+
+        output_doc = run_adjudication.adjudicate(input_doc, judge)
+
+        for r in output_doc["reports"]:
+            for f in r["findings"]:
+                review.SEVERITY_ORDER[f["severity"]]  # must not raise
+
+        self.assertEqual(verdicts.validate(input_doc, output_doc), [])
+        self.assertEqual(len(output_doc["adjudication"]["downgrades"]), 1)
+        self.assertEqual(output_doc["adjudication"]["downgrades"][0]["finding_id"], downgraded["finding_id"])
+
+
+class TotalRefutationStatusTests(unittest.TestCase):
+    """STEP 6's total-refutation status: the `stages` adjudication entry
+    reports `"total_refutation"` (never "complete") when every finding is
+    REFUTED, and the zero-findings case is never flagged.
+    """
+
+    def test_every_finding_refuted_is_flagged_and_stage_status_is_not_complete(self):
+        findings_list = [
+            make_raw_finding(dimension="a"),
+            make_raw_finding(dimension="b"),
+        ]
+        report = make_report(dimension="mixed", findings_list=findings_list)
+        input_doc = make_document(reports=[report])
+
+        output_doc = run_adjudication.adjudicate(input_doc, _make_judge(verdict="REFUTED"))
+
+        self.assertEqual(
+            [f["finding_id"] for f in output_doc["reports"][0]["findings"]],
+            [f["finding_id"] for f in findings_list],
+        )
+        self.assertEqual(output_doc["reports"][0]["findings_count"], 2)
+        self.assertTrue(output_doc["adjudication"]["total_refutation"])
+        adjudication_stage = next(
+            entry for entry in output_doc["stages"] if entry["name"] == "adjudication"
+        )
+        self.assertNotEqual(adjudication_stage["status"], "complete")
+        self.assertEqual(adjudication_stage["status"], "total_refutation")
+        self.assertTrue(adjudication_stage["reason"])
+        self.assertEqual(verdicts.validate(input_doc, output_doc), [])
+
+    def test_zero_findings_is_not_total_refutation_and_stage_is_complete(self):
+        report = make_report(dimension="clean", findings_list=[])
+        input_doc = make_document(reports=[report])
+
+        output_doc = run_adjudication.adjudicate(input_doc, _make_judge(verdict="REFUTED"))
+
+        self.assertFalse(output_doc["adjudication"]["total_refutation"])
+        adjudication_stage = next(
+            entry for entry in output_doc["stages"] if entry["name"] == "adjudication"
+        )
+        self.assertEqual(adjudication_stage["status"], "complete")
+        self.assertEqual(verdicts.validate(input_doc, output_doc), [])
+
+
+class NothingRemovedAssertionTests(unittest.TestCase):
+    """STEP 6's "nothing is removed" reassertion inside `adjudicate()`
+    itself -- proven here by monkeypatching `_collect_finding_ids` to lie
+    about the output set, since the function does not otherwise ever drop or
+    invent a finding_id by construction. This is deliberately a whitebox
+    test of a belt-and-braces check that has no other way to fail.
+    """
+
+    def test_a_finding_id_mismatch_raises_before_returning(self):
+        input_doc = make_document()
+        real_collect = run_adjudication._collect_finding_ids
+        calls = {"n": 0}
+
+        def lying_collect(document: dict) -> set[str]:
+            calls["n"] += 1
+            ids = real_collect(document)
+            # Lie only on the SECOND call (the output-document call) so the
+            # input-side call still reflects the truth, matching what a real
+            # drop/invent defect would look like.
+            if calls["n"] == 2:
+                return ids | {"invented-id-not-really-present"}
+            return ids
+
+        with mock.patch.object(run_adjudication, "_collect_finding_ids", lying_collect):
+            with self.assertRaises(run_adjudication.FindingSetIntegrityError):
+                run_adjudication.adjudicate(input_doc, run_adjudication.stub_judge)
 
 
 if __name__ == "__main__":
