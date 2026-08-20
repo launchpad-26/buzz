@@ -672,7 +672,22 @@ def build_arg_parser() -> argparse.ArgumentParser:
     return parser
 
 
-def main(argv: list[str] | None = None) -> int:
+def main(argv: list[str] | None = None, *, reviewer: Reviewer = default_reviewer) -> int:
+    """``reviewer`` is a testability seam only, never exposed via ``argv`` --
+
+    #117 puts choosing the model out of scope, and this keeps that true of the CLI
+    surface: there is no flag that lets a caller select one. Without this seam,
+    ``main()``'s own exit-code wiring (the ``all(...)`` check below, and its
+    connection to the process's actual exit status) has no way to be exercised
+    end-to-end -- ``build_document``'s ``reviewer`` parameter is bound to
+    ``default_reviewer`` at function-definition time, so patching the module-level
+    ``default_reviewer`` name after the fact does not reach a call that already
+    defaulted to the original object -- Python binds a default argument value once,
+    at function-definition time, not on each call (the same rule behind the classic
+    mutable-default-argument pitfall). STEP 6 (launchpad-26/buzz#117) needs a real
+    test of "the process exits non-zero when a dimension fails", not only of
+    ``build_document``'s return value, and this is the minimal way to give it one.
+    """
     parser = build_arg_parser()
     args = parser.parse_args(argv)
 
@@ -732,7 +747,8 @@ def main(argv: list[str] | None = None) -> int:
         return EXIT_NO_DIMENSIONS
 
     document = build_document(
-        pr_number, merge_base_sha, head_sha, surfaces, dimensions, nonce, timeout=args.timeout
+        pr_number, merge_base_sha, head_sha, surfaces, dimensions, nonce,
+        reviewer=reviewer, timeout=args.timeout
     )
 
     print(json.dumps(document, indent=2))
