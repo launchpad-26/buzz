@@ -846,6 +846,25 @@ class SeverityRerateTests(unittest.TestCase):
 
         self.assertEqual(output_doc["adjudication"]["downgrades"], [])
 
+    def test_unhashable_severity_fails_closed_instead_of_crashing(self):
+        # A judge (or a malformed --replay recording) returning a severity
+        # that isn't even a string -- a list or dict -- must fail closed the
+        # same as any other unusable output, never raise TypeError from
+        # `proposed_severity not in review.SEVERITY_ORDER`'s `in` check.
+        finding = make_raw_finding(severity="High")
+        input_doc = make_document(reports=[make_report(findings_list=[finding])])
+
+        for bad_severity in (["Blocker"], {"value": "Blocker"}):
+            with self.subTest(bad_severity=bad_severity):
+                output_doc = run_adjudication.adjudicate(
+                    input_doc, _make_judge(severity=bad_severity)
+                )
+                adjudicated = output_doc["reports"][0]["findings"][0]
+                self.assertEqual(adjudicated["severity"], "High")
+                self.assertEqual(adjudicated["reported_severity"], "High")
+                self.assertEqual(output_doc["adjudication"]["downgrades"], [])
+                self.assertEqual(verdicts.validate(input_doc, output_doc), [])
+
 
 class BareSeverityOrderSubscriptTests(unittest.TestCase):
     """The positive form of the out-of-ladder guard, run over every finding

@@ -447,10 +447,17 @@ def _run_judge_safely(judge: Judge, finding: dict, input_document: dict) -> dict
         }
 
     safe_result = {"verdict": verdict, "verdict_evidence": evidence}
-    if "severity" in result:
+    # A judge-supplied `severity` must be a string before it is ever compared
+    # against `review.SEVERITY_ORDER` (a dict) with `in` -- an unhashable
+    # value (a list, a dict) raises TypeError there rather than failing
+    # closed, exactly the crash-instead-of-UNPROVEN outcome this function
+    # exists to prevent. Same type discipline `verdict`/`evidence` already
+    # get above; a non-string severity is treated as no re-rating at all,
+    # never forwarded to _apply_severity_rerating.
+    if isinstance(result.get("severity"), str):
         safe_result["severity"] = result["severity"]
-    if "severity_reason" in result:
-        safe_result["severity_reason"] = result["severity_reason"]
+        if "severity_reason" in result:
+            safe_result["severity_reason"] = result["severity_reason"]
     return safe_result
 
 
