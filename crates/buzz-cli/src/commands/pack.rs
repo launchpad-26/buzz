@@ -5,6 +5,7 @@
 use std::path::Path;
 
 use crate::error::CliError;
+use crate::PackInspectFormat;
 
 /// Run `buzz pack validate <path>`.
 ///
@@ -47,9 +48,11 @@ pub fn cmd_validate(path: &str) -> Result<(), CliError> {
 
 /// Run `buzz pack inspect <path>`.
 ///
-/// Loads and resolves a pack, then pretty-prints a summary of each persona's
-/// effective configuration.
-pub fn cmd_inspect(path: &str) -> Result<(), CliError> {
+/// Loads and resolves a pack. `format: Human` (default) pretty-prints a
+/// summary of each persona's effective configuration, unchanged from before
+/// this flag existed. `format: Json` emits the full `ResolvedPack` as JSON —
+/// the shape a projector script (issue #239) consumes.
+pub fn cmd_inspect(path: &str, format: &PackInspectFormat) -> Result<(), CliError> {
     let pack_dir = Path::new(path);
     if !pack_dir.exists() {
         return Err(CliError::Usage(format!("path does not exist: {path}")));
@@ -61,6 +64,13 @@ pub fn cmd_inspect(path: &str) -> Result<(), CliError> {
     // Resolve the pack — shows fully effective config (post-merge, post-split).
     let pack = buzz_persona::resolve::resolve_pack(pack_dir)
         .map_err(|e| CliError::Other(format!("failed to resolve pack: {e}")))?;
+
+    if matches!(format, PackInspectFormat::Json) {
+        let json = serde_json::to_string_pretty(&pack)
+            .map_err(|e| CliError::Other(format!("failed to serialize pack: {e}")))?;
+        println!("{json}");
+        return Ok(());
+    }
 
     // Header
     println!("Pack: {} ({})", pack.name, pack.id);
@@ -148,4 +158,52 @@ pub fn cmd_inspect(path: &str) -> Result<(), CliError> {
     }
 
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn write_minimal_pack(dir: &std::path::Path) {
+        std::fs::create_dir_all(dir.join(".plugin")).unwrap();
+        std::fs::create_dir_all(dir.join("agents")).unwrap();
+        std::fs::write(
+            dir.join(".plugin/plugin.json"),
+            r#"{
+                "id": "com.test.cli",
+                "name": "CLI Test Pack",
+                "version": "0.1.0",
+                "personas": ["agents/bot.persona.md"]
+            }"#,
+        )
+        .unwrap();
+        std::fs::write(
+            dir.join("agents/bot.persona.md"),
+            "---\nname: bot\ndisplay_name: Bot\ndescription: A test bot.\nmodel: anthropic:claude-sonnet-5\n---\nYou are Bot.\n",
+        )
+        .unwrap();
+    }
+
+    #[test]
+    fn cmd_inspect_human_format_unchanged_default() {
+        let tmp = tempfile::tempdir().unwrap();
+        write_minimal_pack(tmp.path());
+        // Default format (Human) must still succeed against a valid pack —
+        // this is the pre-existing behavior every doc/example demonstrates.
+        assert!(cmd_inspect(tmp.path().to_str().unwrap(), &PackInspectFormat::Human).is_ok());
+    }
+
+    #[test]
+    fn cmd_inspect_json_format_succeeds() {
+        let tmp = tempfile::tempdir().unwrap();
+        write_minimal_pack(tmp.path());
+        assert!(cmd_inspect(tmp.path().to_str().unwrap(), &PackInspectFormat::Json).is_ok());
+    }
+
+    #[test]
+    fn cmd_inspect_missing_path_errors_for_both_formats() {
+        let missing = "/nonexistent/pack/path/for/this/test";
+        assert!(cmd_inspect(missing, &PackInspectFormat::Human).is_err());
+        assert!(cmd_inspect(missing, &PackInspectFormat::Json).is_err());
+    }
 }
