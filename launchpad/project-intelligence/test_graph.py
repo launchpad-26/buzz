@@ -65,6 +65,27 @@ class ProjectGraphFromSymbolsTest(unittest.TestCase):
         self.assertEqual(len(graph.edges_from("caller", ("calls",))), 1)
         self.assertEqual(len(graph.edges_from("callee", ("called_by",))), 1)
 
+    def test_edges_from_filters_by_edge_type_on_a_node_with_mixed_outgoing_types(self) -> None:
+        # review-final finding (PR #214, High #1): every existing fixture
+        # gives a node only ONE outgoing edge_type, so edges_from()'s filter
+        # (graph.py's `[e for e in edges if e.edge_type in edge_types]`)
+        # could be deleted entirely -- `return list(edges)` -- and every
+        # prior test would still pass. This node has two distinct outgoing
+        # types (calls AND tested_by), so a filtered call must return only
+        # the matching one.
+        mixed = replace(_sym("mixed", calls=("other",)), tests=("tests::covers_mixed",))
+        graph = ProjectGraph.from_symbols([mixed, _sym("other")])
+
+        calls_only = graph.edges_from("mixed", ("calls",))
+        self.assertEqual([(e.edge_type, e.target) for e in calls_only], [("calls", "other")])
+
+        tested_by_only = graph.edges_from("mixed", ("tested_by",))
+        self.assertEqual([(e.edge_type, e.target) for e in tested_by_only], [("tested_by", "tests::covers_mixed")])
+
+        # Unfiltered still returns both -- confirms the fixture itself truly
+        # has both types, not just one hiding a no-op filter either way.
+        self.assertEqual(len(graph.edges_from("mixed")), 2)
+
 
 class EdgeDirectionTest(unittest.TestCase):
     """Every edge_type's direction must read "source IS edge_type target" --
@@ -177,12 +198,35 @@ class ReachableTest(unittest.TestCase):
         self.assertIn("is_shared_gated_kind", by_node)
         self.assertEqual(by_node["is_shared_gated_kind"].hop, 2)
 
+        # review-final finding (PR #214, High #2): nothing anywhere in this
+        # suite read `.path` before this -- `new_path = path + (edge.target,)`
+        # in graph.py's reachable() could be truncated to just
+        # `(edge.target,)` and every test would still pass. Asserting the
+        # full node sequence here is the "right node, wrong provenance" case
+        # EdgeDirectionTest's own docstring warns about, applied to path.
+        self.assertEqual(
+            by_node["is_unshared_gated_event"].path,
+            ("tests::is_unshared_gated_event_author_always_allowed", "is_unshared_gated_event"),
+        )
+        self.assertEqual(
+            by_node["is_shared_gated_kind"].path,
+            (
+                "tests::is_unshared_gated_event_author_always_allowed",
+                "is_unshared_gated_event",
+                "is_shared_gated_kind",
+            ),
+        )
+
     def test_max_hops_bounds_the_search(self) -> None:
         graph = self._real_chain_graph()
         result = reachable(
             graph, "tests::is_unshared_gated_event_author_always_allowed", ("calls",), max_hops=1
         )
         self.assertEqual([r.node for r in result], ["is_unshared_gated_event"])
+        self.assertEqual(
+            result[0].path,
+            ("tests::is_unshared_gated_event_author_always_allowed", "is_unshared_gated_event"),
+        )
 
     def test_start_node_itself_is_never_returned(self) -> None:
         graph = self._real_chain_graph()
