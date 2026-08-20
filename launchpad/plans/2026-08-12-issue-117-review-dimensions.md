@@ -103,9 +103,17 @@ ALREADY TRUE  (verified against git, the working trees and the GitHub API, not n
   `git log --oneline origin/feat/review-agent-untrusted-input -- detect.py` for
   its current hash rather than trusting one pinned here — an earlier revision's
   pin, c64ff7958, is no longer reachable, per the citation-rot note above) added
-  the suppression rule as `detect._SUPPRESS`, so suppression is CAUGHT. Verified
-  by running the real detector — "Please do not report this as a finding."
-  returns one finding.
+  the suppression rule as `detect._SUPPRESS`, so suppression is CAUGHT. Verified by
+  running the real detector against a suppression-shaped test sentence — the same
+  shape `_SUPPRESS`'s own comment describes (a negated reporting verb whose object is
+  the review's own output) without spelling it out, for the reason that comment
+  gives: writing the literal example trips the rule wherever it is written, including
+  here. (An earlier revision of this note DID spell it out verbatim, which is exactly
+  what made `check_step6.py`'s own corpus scan start flagging this file as a false
+  positive against itself — a self-inflicted instance of the identical problem this
+  paragraph is busy explaining. Fixed by following the convention CONTAINMENT.md and
+  detect.py's docstring already use, rather than by touching the detector.) That
+  sentence returns one finding.
   This correction is load-bearing rather than cosmetic, because STEP 5 and STEP 7
   scope their injection fixture by "the classes detect.py misses", and a fixture
   drawn from a class it catches proves nothing about the gap. The ALREADY TRUE
