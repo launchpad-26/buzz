@@ -66,7 +66,7 @@ One detail that matters for writing instructions the cohort can follow: the Home
 ## What this means for #289
 
 
-> **Recommendations, not findings.** Everything in this section is my assessment as the author, not behaviour established by the evidence above. Per [ADR-0003]'s claim rule: a claim about how the system *behaves* carries a source reference; a claim about what the cohort *should do* is opinion, attributed. Nothing is both — so nothing below is cited as though it were established.
+> **Recommendations, not findings.** Everything in this section is my assessment as the author, not behaviour established by the evidence above. Per [ADR-0003](../decisions/ADR-0003-handbook-page-provenance-contract.md)'s claim rule: a claim about how the system *behaves* carries a source reference; a claim about what the cohort *should do* is opinion, attributed. Nothing is both — so nothing below is cited as though it were established.
 1. **The platform question is closed and it is not a blocker.** Every architecture the cohort could plausibly be running has a first-party binary and a native install path.
 2. **Intel macOS is explicitly covered**, which retires the specific concern #320 raised — and does so by evidence rather than by assumption, since the cohort has already been bitten by a tool that dropped that architecture.
 3. **The keep-running mechanism is native everywhere**, so "it stops when the laptop reboots" is not a failure mode anyone needs to design around.
