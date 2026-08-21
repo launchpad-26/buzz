@@ -1123,6 +1123,46 @@ class SeverityRerateTests(unittest.TestCase):
                 self.assertEqual(output_doc["adjudication"]["downgrades"], [])
                 self.assertEqual(verdicts.validate(input_doc, output_doc), [])
 
+    def test_out_of_ladder_reported_severity_is_refused_even_when_agreed_with(self):
+        # STEP 6's own done-when: "a guard watching only re-ratings never sees
+        # a finding that ARRIVED at 'Info' and was agreed with, and copies it
+        # into `severity` untouched." Asserted against
+        # `_apply_severity_rerating` directly, because `main()` cannot reach
+        # this shape -- STEP 3's findings.validate refuses an out-of-ladder
+        # input severity before any judge runs -- so a document-level fixture
+        # would test STEP 3's gate instead of this guard.
+        #
+        # Both sub-cases produce the same effective severity, which is the
+        # point: agreement and silence are the same thing to this branch.
+        for proposed in ("Info", None):
+            with self.subTest(proposed=proposed):
+                downgrades: list[dict] = []
+                verdict, severity, reason = run_adjudication._apply_severity_rerating(
+                    "fid", "Info", "CONFIRMED", proposed, None, downgrades
+                )
+                self.assertEqual(verdict, "UNPROVEN")
+                # Blocker, not something smaller: this stage may not decide an
+                # unrateable finding is a minor one.
+                self.assertEqual(severity, "Blocker")
+                self.assertIn("Info", reason)
+                self.assertTrue(reason)
+                # Nothing legally fell -- the value was refused, not compared.
+                self.assertEqual(downgrades, [])
+
+    def test_legal_reported_severity_is_untouched_when_agreed_with(self):
+        # The control for the guard above: a LEGAL reported severity the judge
+        # agrees with (or says nothing about) must still pass through
+        # unchanged, with no reason and no verdict override. Without this, the
+        # guard above could pass by refusing everything.
+        for proposed in ("High", None):
+            with self.subTest(proposed=proposed):
+                downgrades: list[dict] = []
+                verdict, severity, reason = run_adjudication._apply_severity_rerating(
+                    "fid", "High", "CONFIRMED", proposed, None, downgrades
+                )
+                self.assertEqual((verdict, severity, reason), ("CONFIRMED", "High", None))
+                self.assertEqual(downgrades, [])
+
 
 class BareSeverityOrderSubscriptTests(unittest.TestCase):
     """The positive form of the out-of-ladder guard, run over every finding
