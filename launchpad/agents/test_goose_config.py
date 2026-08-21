@@ -179,26 +179,28 @@ class OperatorAuthoredConfigTests(unittest.TestCase):
             )
 
     def test_only_addition_is_the_developer_block(self):
-        """Everything the operator wrote survives verbatim: the output is the
-        input plus the developer entry, with no other line changed."""
+        """BYTE-EXACT: the output is the input with the developer block appended
+        and nothing else changed at all.
+
+        An earlier version of this control compared line *membership*
+        (`[ln for ln in written.splitlines() if ln in original_lines]`), which
+        cross-vendor review correctly called weaker than its own docstring
+        claimed: `splitlines()` discards a missing trailing newline, hides a
+        CRLF/LF conversion, and would tolerate the three new lines being
+        interleaved anywhere among the originals. Comparing the whole string
+        closes all three at once and needs no separate ordering argument."""
         with tempfile.TemporaryDirectory() as d:
             path = self._write_fixture(d)
             m.enable_developer_extension(path=path)
-            written = path.read_text(encoding="utf-8")
 
-            original_lines = OPERATOR_AUTHORED_CONFIG.splitlines()
-            surviving = [ln for ln in written.splitlines() if ln in original_lines]
-            self.assertEqual(
-                surviving,
-                original_lines,
-                "every original line must survive, in its original order",
+            expected = OPERATOR_AUTHORED_CONFIG + (
+                "  developer:\n" "    type: builtin\n" "    enabled: true\n"
             )
-
-            added = [ln for ln in written.splitlines() if ln not in original_lines]
             self.assertEqual(
-                added,
-                ["  developer:", "    type: builtin", "    enabled: true"],
-                "the developer block must be the ONLY addition",
+                path.read_text(encoding="utf-8"),
+                expected,
+                "output must be the operator's file byte-for-byte, plus only "
+                "the appended developer block",
             )
 
 

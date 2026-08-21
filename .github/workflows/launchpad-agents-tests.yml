@@ -48,18 +48,34 @@ jobs:
       - name: Install agent script dependencies
         run: pip install -r launchpad/agents/requirements.txt
 
-      # Fails if the pattern matches nothing, rather than reporting success for a
-      # run that executed zero tests. `unittest discover` exits 0 on an empty
+      # Fails if the suite contains no test CASES, rather than reporting success
+      # for a run that executed nothing. `unittest discover` exits 0 on an empty
       # suite, which is indistinguishable from a pass in the CI summary — the
       # exact shape of the gap this workflow was added to close.
-      - name: Confirm tests were discovered
+      #
+      # COUNTS CASES, NOT FILES, and the first version of this guard counted
+      # files — which left the very hole it existed to close. Found by
+      # cross-vendor review: leave test_goose_config.py in place but rename every
+      # `test_*` method to `check_*`, and a file-counting guard reports one test
+      # file while `unittest discover` collects zero cases and exits 0. A guard
+      # that can be satisfied by a filename is not a guard.
+      #
+      # A module that fails to import counts as one case here (the loader
+      # substitutes a `_FailedTest`), so it passes this step and then fails the
+      # run below — which is the correct split: this step answers "is there
+      # anything to run", the run answers "does it pass".
+      - name: Confirm test cases were discovered
         run: |
-          count=$(ls launchpad/agents/test_*.py 2>/dev/null | wc -l)
-          echo "discovered $count test file(s)"
-          test "$count" -gt 0 || {
-            echo "::error::no launchpad/agents/test_*.py files found — this job would have passed vacuously."
-            exit 1
-          }
+          python3 - <<'PY'
+          import sys, unittest
+          suite = unittest.defaultTestLoader.discover("launchpad/agents", pattern="test_*.py")
+          n = suite.countTestCases()
+          print(f"discovered {n} test case(s)")
+          if n == 0:
+              print("::error::launchpad/agents has no discoverable test cases — "
+                    "this job would have passed vacuously.")
+              sys.exit(1)
+          PY
 
       - name: Run agents unit tests
         run: python3 -m unittest discover -s launchpad/agents -p "test_*.py" -v

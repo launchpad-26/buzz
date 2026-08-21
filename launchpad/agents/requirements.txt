@@ -15,7 +15,19 @@
 # mode preserves them. Anything that edits a human-authored YAML file in place
 # needs the round-trip parser; PyYAML is fine for files only machines write.
 #
-# Floor, not a pin: 0.17.21 is what the python3-ruamel.yaml apt package ships on
-# Ubuntu 24.04, so pinning above it would make the apt route unusable while
-# pinning to it exactly would reject the newer wheel pip installs.
-ruamel.yaml>=0.17.21
+# BOUNDED RANGE, both ends deliberate.
+#
+# Floor 0.17.21: that is what the python3-ruamel.yaml apt package ships on
+# Ubuntu 24.04, and pinning above it would make the apt route unusable for no
+# gain. (An earlier revision of this comment claimed an exact pin "would reject
+# the newer wheel pip installs" — that was simply wrong, pip installs whatever
+# version you name if it is still on the index. Corrected by cross-vendor
+# review; the real reason for a range is the apt/pip split, not pip behaviour.)
+#
+# Ceiling <0.20: an open upper bound let every future release in, including a
+# major-series one. This module's whole purpose is round-tripping an operator's
+# hand-written config, so a serializer change in a future ruamel could silently
+# alter their file with no commit in this repo to point at. 0.19.x is current
+# and is what pip resolves today, so the range covers both routes while keeping
+# the next major series out until someone tests it.
+ruamel.yaml>=0.17.21,<0.20
