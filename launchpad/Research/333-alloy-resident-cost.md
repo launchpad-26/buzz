@@ -142,7 +142,9 @@ $ codesign -dv --verbose=2 ./alloy-darwin-amd64
 ## What this means for #289
 
 1. **Running cost is a non-issue.** ~120 MiB and 0.1% CPU is easy to justify asking of a member.
-2. **Quote 419 MB, not 120 MiB, when asking.** The disk cost is the honest number and it is 3,500× the runtime state.
+2. **Quote 419 MB, not 120 MiB, when asking.** The disk cost is the honest number, and it is roughly **11,600×** the 36 KB of runtime state (419 MB ÷ 36 KB = 11,639×; in binary units 419 MiB ÷ 36 KiB = 11,918×).
+
+   <sub>Corrected per [#414](https://github.com/launchpad-26/buzz/issues/414). This bullet previously said "3,500×", which was wrong twice over: 3.49× is the binary-to-*resident-set* ratio (419 MiB ÷ 120 MiB), and it had a slipped factor of 1000 attached to the wrong denominator. Both underlying measurements were sound; the error was in the sentence built from them — which is the sentence someone would quote when asking a member for the resource.</sub>
 3. **The buffering asymmetry needs a decision before deployment, not after.** A persistent queue for the OTLP pipeline must be configured explicitly, or every laptop-closed window is a hole in exactly the two signals criteria 2 and 3 depend on. This is the single most actionable thing in this measurement.
 4. **It reframes [#334](https://github.com/launchpad-26/buzz/issues/334).** Reachability is not only "can the agent connect" — it is "what happens for the hours it cannot", and today the answer differs per signal.
 5. **Install by Homebrew or curl, never a browser download.** Unsigned binary, quarantine attribute, Gatekeeper.
