@@ -384,6 +384,148 @@ class VerdictEvidenceTests(unittest.TestCase):
         violations = verdicts.validate(input_doc, output_doc)
         self.assertTrue(any("verdict_evidence" in v for v in violations), violations)
 
+    def test_whitespace_only_verdict_evidence_is_rejected(self):
+        """ADJUDICATION.md requires evidence "non-empty" because "an UNPROVEN
+        with no reason is indistinguishable from a stage that skipped the
+        finding". Whitespace IS no reason, so a truthiness test is the wrong
+        check -- ``not "   "`` is False and the value sails through.
+        """
+        # "\xa0" is a non-breaking space: whitespace to str.strip(), but not
+        # something an eye catches in a diff. Kept deliberately, written as
+        # an escape so it is visible in the source rather than invisible.
+        for blank in ("   ", "\n", "\t", "  \n  ", "\xa0"):
+            with self.subTest(evidence=blank):
+                input_doc, output_doc = make_well_formed_pair()
+                output_doc["reports"][0]["findings"][0]["verdict_evidence"] = blank
+                violations = verdicts.validate(input_doc, output_doc)
+                self.assertTrue(any("verdict_evidence" in v for v in violations), violations)
+
+    def test_non_string_verdict_evidence_is_rejected(self):
+        """The sibling half: the guard had no type check at all, so every
+        truthy value passed. ``verdict_evidence: 42`` is not defensible under
+        any reading of the contract, and ``verdict`` one field above already
+        does ``not isinstance(verdict, str)``.
+        """
+        for wrong_type in (42, True, 0.5, ["x"], {"a": 1}):
+            with self.subTest(evidence=wrong_type):
+                input_doc, output_doc = make_well_formed_pair()
+                output_doc["reports"][0]["findings"][0]["verdict_evidence"] = wrong_type
+                violations = verdicts.validate(input_doc, output_doc)
+                self.assertTrue(any("verdict_evidence" in v for v in violations), violations)
+
+
+class SeverityReasonTests(unittest.TestCase):
+    """``severity_reason`` is required when severity differs from
+    reported_severity, and it was guarded by the same truthiness test as
+    ``verdict_evidence`` -- so a re-rating could be justified by whitespace.
+    """
+
+    def _falling_pair(self, reason):
+        raw = make_raw_finding()
+        fell = make_finding(
+            finding_id=raw["finding_id"], severity="Medium", severity_reason=reason
+        )
+        input_doc = make_document(reports=[make_report(findings_list=[raw])])
+        output_doc = make_document(
+            reports=[make_report(findings_list=[fell])],
+            adjudication=make_adjudication(
+                [fell],
+                downgrades=[
+                    {
+                        "finding_id": fell["finding_id"],
+                        "from": "High",
+                        "to": "Medium",
+                        "reason": reason,
+                    }
+                ],
+            ),
+        )
+        return input_doc, output_doc
+
+    def test_whitespace_only_severity_reason_is_rejected(self):
+        for blank in ("   ", "\n", "\t"):
+            with self.subTest(reason=blank):
+                input_doc, output_doc = self._falling_pair(blank)
+                violations = verdicts.validate(input_doc, output_doc)
+                self.assertTrue(any("severity_reason" in v for v in violations), violations)
+
+    def test_non_string_severity_reason_is_rejected(self):
+        for wrong_type in (42, True, ["because"]):
+            with self.subTest(reason=wrong_type):
+                input_doc, output_doc = self._falling_pair(wrong_type)
+                violations = verdicts.validate(input_doc, output_doc)
+                self.assertTrue(any("severity_reason" in v for v in violations), violations)
+
+    def test_a_real_reason_still_validates_clean(self):
+        input_doc, output_doc = self._falling_pair("the judge re-rated it after reading the guard")
+        self.assertEqual(verdicts.validate(input_doc, output_doc), [])
+
+
+class CountFieldTypeTests(unittest.TestCase):
+    """``bool`` subclasses ``int`` in Python, so ``isinstance(True, int)`` is
+    True and every count field accepted a boolean. ``total_refutation`` two
+    checks away uses a strict ``isinstance(..., bool)``, which is the file
+    showing the strictness was intended.
+    """
+
+    def test_boolean_findings_in_and_out_are_rejected(self):
+        input_doc, output_doc = make_well_formed_pair()
+        output_doc["adjudication"]["findings_in"] = True
+        output_doc["adjudication"]["findings_out"] = True
+        violations = verdicts.validate(input_doc, output_doc)
+        self.assertTrue(
+            any("findings_in" in v and "integer" in v for v in violations), violations
+        )
+
+    def test_boolean_report_findings_count_is_rejected(self):
+        """The one the equality check cannot catch on its own: with a single
+        finding, ``True == 1 == len(findings)``, so #117's own count comparison
+        stays silent and only a type check sees it.
+        """
+        input_doc, output_doc = make_well_formed_pair()
+        output_doc["reports"][0]["findings_count"] = True
+        violations = verdicts.validate(input_doc, output_doc)
+        self.assertTrue(any("findings_count" in v for v in violations), violations)
+
+    def test_honest_integer_counts_still_validate_clean(self):
+        input_doc, output_doc = make_well_formed_pair()
+        self.assertEqual(verdicts.validate(input_doc, output_doc), [])
+
+
+class DuplicateGroupSurvivorTests(unittest.TestCase):
+    """A group's ``survivor`` was only ever validated through a member pointing
+    back at it, so a group with an empty ``duplicates`` list never had its
+    survivor checked at all. Validator-only today -- the producer gates on
+    ``len(candidate_ids) < 2`` -- but this is the check STEP 10's malformed-field
+    controls will look for.
+    """
+
+    def _group_pair(self, group):
+        input_doc, output_doc = make_well_formed_pair()
+        output_doc["adjudication"]["duplicate_groups"] = [group]
+        return input_doc, output_doc
+
+    def test_empty_duplicates_with_a_survivor_that_is_no_finding_is_rejected(self):
+        input_doc, output_doc = self._group_pair({"survivor": "no-such-id", "duplicates": []})
+        violations = verdicts.validate(input_doc, output_doc)
+        self.assertTrue(any("survivor" in v for v in violations), violations)
+
+    def test_empty_duplicates_with_a_missing_survivor_key_is_rejected(self):
+        input_doc, output_doc = self._group_pair({"duplicates": []})
+        violations = verdicts.validate(input_doc, output_doc)
+        self.assertTrue(any("survivor" in v for v in violations), violations)
+
+    def test_empty_duplicates_with_a_non_string_survivor_is_rejected(self):
+        input_doc, output_doc = self._group_pair({"survivor": 12345, "duplicates": []})
+        violations = verdicts.validate(input_doc, output_doc)
+        self.assertTrue(any("survivor" in v for v in violations), violations)
+
+    def test_a_real_survivor_with_empty_duplicates_still_validates_clean(self):
+        _, baseline = make_well_formed_pair()
+        real_id = baseline["reports"][0]["findings"][0]["finding_id"]
+        input_doc, output_doc = self._group_pair({"survivor": real_id, "duplicates": []})
+        self.assertEqual(verdicts.validate(input_doc, output_doc), [])
+
 
 class FindingsValidateReRunTests(unittest.TestCase):
     def test_output_breaking_findings_own_contract_is_caught(self):
