@@ -140,12 +140,14 @@ def write_config_atomic(path: Path, config: dict) -> None:
     If `path` already exists, the new file keeps its permission mode
     (`tempfile.mkstemp` otherwise always creates at 0600, which would
     silently narrow an existing 0644 file's permissions on every write)
-    and its line-ending convention (a CRLF file written by a Windows
-    operator was silently rewritten to LF, which is the same class of
-    unasked-for edit as losing their comments -- and this repository does
+    and its LF-or-CRLF line-ending convention (a CRLF file written by a
+    Windows operator was silently rewritten to LF, which is the same class
+    of unasked-for edit as losing their comments -- and this repository does
     support Windows, so it is not hypothetical). A file containing any CRLF
     is treated as a CRLF file; mixed endings are normalised to CRLF rather
-    than preserved per-line."""
+    than preserved per-line. LF and CRLF are the only conventions handled:
+    a lone-CR (pre-OS X Mac) file normalises to LF, which is a limitation
+    of this function rather than a preserved convention."""
     path.parent.mkdir(parents=True, exist_ok=True)
     real_path = path.resolve() if path.is_symlink() else path
     real_path.parent.mkdir(parents=True, exist_ok=True)
