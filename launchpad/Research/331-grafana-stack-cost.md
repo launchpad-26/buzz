@@ -127,7 +127,7 @@ These are extrapolations from one measurement, not measurements. **Which row app
 ## What this means for #289
 
 
-> **Recommendations, not findings.** Everything in this section is my assessment as the author, not behaviour established by the evidence above. Per [ADR-0003]'s claim rule: a claim about how the system *behaves* carries a source reference; a claim about what the cohort *should do* is opinion, attributed. Nothing is both — so nothing below is cited as though it were established.
+> **Recommendations, not findings.** Everything in this section is my assessment as the author, not behaviour established by the evidence above. Per [ADR-0003](../decisions/ADR-0003-handbook-page-provenance-contract.md)'s claim rule: a claim about how the system *behaves* carries a source reference; a claim about what the cohort *should do* is opinion, attributed. Nothing is both — so nothing below is cited as though it were established.
 1. **Memory is a non-issue and can stop being a worry.** ~625 MiB after use, on a 16 GB machine. Criterion 8's "runs on a maintainer's machine" is comfortably satisfied on memory alone.
 2. **The 2.43 GB image is the largest single cost, and it is one-off.** Worth stating because it dwarfs everything else on this page and is easy to forget when sizing a host.
 3. **Turn Pyroscope off.** [#327](https://github.com/launchpad-26/buzz/issues/327) argued it on scope grounds; this measures the price — 64 MB at rest, ~34% of the data directory, for a signal nobody asked for, collected from machines the cohort does not own. Both arguments point the same way.
