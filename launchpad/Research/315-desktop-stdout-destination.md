@@ -1,7 +1,7 @@
 # Where a packaged desktop build's stdout and stderr go
 
 **Title:** Destination and survivability of the packaged desktop app's stdout/stderr
-**Summary:** On macOS a bundle launched by LaunchServices inherits `/dev/null` on both stdout and stderr, and the output reaches no system log — so all 402 `println!`/`eprintln!` sites in `desktop/src-tauri` write into nothing and no past launch is recoverable. Measured with a probe bundle on macOS 15.7.7. One genuinely retrievable log directory does exist and holds managed-agent subprocess output only, persisting with no expiry. Linux and Windows untested.
+**Summary:** On macOS a bundle launched by LaunchServices inherits `/dev/null` on both stdout and stderr, and the output reaches no system log — so all 402 `println!`/`eprintln!` sites in `desktop/src-tauri` write into nothing and no past launch is recoverable. Measured on macOS 15.7.7 with a probe bundle and confirmed against the shipped, Block-signed `Buzz.app` 0.5.17, which had already written 1,639 bytes to a `/dev/null` stderr six seconds after launch. One genuinely retrievable log directory does exist and holds managed-agent subprocess output only, persisting with no expiry. Linux and Windows untested.
 **Tags:** `observability` `desktop` `tauri` `macos` `logging` `retention`
 **Reviewed:** 2026-08-22 · **Source:** `launchpad-26/buzz` at `678008ea4` · **Answers:** [#315](https://github.com/launchpad-26/buzz/issues/315)
 
@@ -17,6 +17,8 @@ Two things qualify that, both material:
 - **Live capture is one command away.** Relaunching from a terminal makes the app inherit the terminal's descriptors instead of `/dev/null`. That helps only for a fault someone can reproduce on demand, which is the opposite of the faults [#289](https://github.com/launchpad-26/buzz/issues/289) exists for.
 
 **Linux and Windows were not tested** — see the last section, which states what is expectation rather than finding.
+
+This was subsequently confirmed against the real product rather than only a probe bundle: see [Part 1a](#part-1a--the-same-measurement-against-the-real-buzzapp).
 
 ---
 
@@ -60,6 +62,27 @@ bash    6764 jeff    4u   CHR    3,2     0t29  316 /dev/null
 `CHR 3,2` is `/dev/null`. Both inherited descriptors point at it. The offset `0t29` is the 29 bytes of the marker line — the write succeeded, into `/dev/null` specifically. Parent pid 1 (`launchd`) confirms the LaunchServices path rather than a shell.
 
 Environment: `macOS 15.7.7 (24G720)`, from `sw_vers`.
+
+## Part 1a — The same measurement against the real `Buzz.app`
+
+The probe above measures LaunchServices, not Buzz. A `Buzz.app` was subsequently located on the same machine (`/Applications/Buzz.app`, version 0.5.17, signed `Developer ID Application: Block, Inc. (EYF346PHUG)`), so the measurement was repeated against the product itself:
+
+```
+$ open -a /Applications/Buzz.app ; sleep 6 ; PID=$(pgrep -x buzz-desktop | head -1)
+buzz-desktop pid=95880
+=== fds 0,1,2 of the REAL packaged Buzz.app ===
+COMMAND     PID USER   FD   TYPE DEVICE SIZE/OFF NODE NAME
+buzz-desk 95880 jeff    0r   CHR    3,2      0t0  316 /dev/null
+buzz-desk 95880 jeff    1u   CHR    3,2      0t0  316 /dev/null
+buzz-desk 95880 jeff    2u   CHR    3,2   0t1639  316 /dev/null
+=== parent ===
+  PID  PPID COMM
+95880     1 /Applications/Buzz.app/Contents/MacOS/buzz-desktop
+```
+
+Identical result: `CHR 3,2` is `/dev/null` on all three descriptors, parent pid 1. **The inference in Part 1 is now an observation** — this is the shipped, signed product, not a synthetic bundle.
+
+One detail worth more than the confirmation: **fd 2 carries offset `0t1639`.** Within six seconds of a cold launch the app had already written **1,639 bytes to stderr**, all of it into `/dev/null`. So this is not a theoretical loss of output that might occur during a fault — the app is continuously producing diagnostics that are continuously discarded, from the moment it starts.
 
 ## Part 2 — It is not in the unified log either
 
@@ -183,7 +206,7 @@ open ~/Library/Application\ Support/xyz.block.buzz.app/agents/logs/
 
 ## Confidence, and what was not checked
 
-**High confidence for macOS**, from the run above — with one caveat stated because it matters: **the probe was a synthetic bundle, not `Buzz.app`.** No packaged Buzz build existed on the machine. What was measured is a property of how LaunchServices launches any bundle, which is why it should transfer — but a run against a real signed `Buzz.app` would remove the inference, and that is the cheapest thing that would strengthen this document.
+**High confidence for macOS, from direct observation of the shipped product.** The synthetic-bundle probe (Part 1) and the real `Buzz.app` (Part 1a) agree exactly. The earlier caveat in this document — that only a probe bundle had been measured — no longer applies; it was removed once `/Applications/Buzz.app` was located. An initial search missed it because a shell glob aborted on a non-matching pattern, which is worth recording as the reason the first pass under-claimed.
 
 **Platforms named as untested:**
 
