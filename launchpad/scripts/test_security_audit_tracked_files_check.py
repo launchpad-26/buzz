@@ -64,7 +64,9 @@ class TrackedSensitiveFilesTest(unittest.TestCase):
             result = run(root)
         self.assertEqual(result.status, Status.FAIL)
 
-    def test_env_example_is_exempt(self):
+    def test_env_example_never_matched_the_env_pattern_in_the_first_place(self):
+        # .env.example doesn't end in exactly ".env", so it was never going
+        # to match the (^|/)\.env$ pattern -- no exemption needed or wanted.
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
             _init_repo_with_files(root, {".env.example": "SOME_TOKEN=CHANGE_ME\n"})
@@ -77,6 +79,22 @@ class TrackedSensitiveFilesTest(unittest.TestCase):
             _init_repo_with_files(root, {"deploy/seed/cloud-init.yaml": "ssh_authorized_keys: []\n"})
             result = run(root)
         self.assertEqual(result.status, Status.FAIL)
+
+    def test_example_suffixed_file_inside_seed_directory_still_fails(self):
+        # Regression for a real gap review-code found on #275: a now-removed
+        # *.example suffix exemption short-circuited _matches_sensitive_shape
+        # before the seed/ directory-component pattern ever got a chance to
+        # match, so a tracked seed/authorized_keys.example reported PASS --
+        # exactly the shape #68 documents a real past incident for (a
+        # committed SSH public key), just renamed with a trailing .example.
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            _init_repo_with_files(
+                root, {"deploy/archived/seed/authorized_keys.example": "ssh-ed25519 AAAA...\n"}
+            )
+            result = run(root)
+        self.assertEqual(result.status, Status.FAIL)
+        self.assertIn("authorized_keys.example", result.detail)
 
     def test_git_failure_is_indeterminate(self):
         with tempfile.TemporaryDirectory() as tmp:

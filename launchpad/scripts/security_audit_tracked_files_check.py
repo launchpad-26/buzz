@@ -48,14 +48,6 @@ _SENSITIVE_PATTERNS = [
     re.compile(r"(^|/)seed\.sample/"),
 ]
 
-#: Explicitly safe by naming convention — a template meant to be copied and
-#: filled in, never a real value. Verified against every current match of the
-#: patterns above before this exemption was added (`.env.example`,
-#: `deploy/compose/.env.example`, `mobile/.env.json.example` — all three are
-#: template files, confirmed by content, not just by name).
-_EXEMPT_SUFFIX = re.compile(r"\.example$")
-
-
 def _tracked_paths(repo_root: Path) -> Optional[List[str]]:
     try:
         result = subprocess.run(
@@ -73,8 +65,17 @@ def _tracked_paths(repo_root: Path) -> Optional[List[str]]:
 
 
 def _matches_sensitive_shape(path: str) -> bool:
-    if _EXEMPT_SUFFIX.search(path):
-        return False
+    # No .example (or any other) suffix exemption here, deliberately: every
+    # pattern above is end-anchored to its own exact filename shape
+    # (.env, .key, .pem, id_rsa, id_ed25519), so a `foo.env.example` never
+    # matches those in the first place -- an exemption bought them nothing.
+    # It did buy something real to exempt, though: seed/ and seed.sample/
+    # match on directory component, not filename, so a tracked
+    # seed/authorized_keys.example previously slipped past a suffix
+    # exemption despite being exactly the shape #68 documents a real past
+    # incident for (a committed SSH public key). Found via review-code
+    # against #275; verified no fixture in this suite or #67's own
+    # .gitleaks.toml relied on a *.example exemption existing here.
     return any(pattern.search(path) for pattern in _SENSITIVE_PATTERNS)
 
 
@@ -90,8 +91,17 @@ def _check_newly_hidden_tracked_files(repo_root: Path, tracked: List[str]) -> Li
         return []
 
     try:
+        # No --depth=1: same bug as security_audit_secrets_check.py's PR-diff
+        # fetch (fixed on #271 after a real CI run reproduced it) -- a shallow
+        # fetch of base_ref grafts a new boundary onto that ref even when the
+        # checkout already has full history, breaking FETCH_HEAD..HEAD's
+        # ancestry once base_ref has advanced past this branch's merge-base.
+        # Here it would silently widen "lines added to the ignore file in
+        # this PR" to "the ignore file's entire history", which degrades to
+        # WARN rather than a hard FAIL, but is still wrong and worth fixing
+        # at the same time.
         subprocess.run(
-            ["git", "fetch", "--depth=1", "origin", base_ref],
+            ["git", "fetch", "origin", base_ref],
             cwd=repo_root,
             check=True,
             capture_output=True,
