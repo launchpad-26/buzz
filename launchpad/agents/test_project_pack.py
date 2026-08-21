@@ -86,24 +86,52 @@ class ProjectEnvVarsTests(unittest.TestCase):
         as_dict = dict(pairs)
         self.assertEqual(as_dict["BUZZ_ACP_MCP_COMMAND"], "/usr/bin/tools-server")
 
+    # Distinctive server names, not "a"/"b" -- a single letter is a substring
+    # of half the words in these messages, so asserting on it would pass
+    # whether or not the name was ever interpolated.
+    TWO_SERVERS = [
+        {"name": "alpha-tools", "command": "alpha.py", "args": [], "env": []},
+        {"name": "beta-tools", "command": "beta.py", "args": [], "env": []},
+    ]
+    SERVER_WITH_ARGS = [
+        {"name": "alpha-tools", "command": "npx", "args": ["-y", "server"], "env": []}
+    ]
+
     def test_two_mcp_servers_fails_loudly_rather_than_dropping_one(self):
-        p = persona(
-            mcp_servers=[
-                {"name": "a", "command": "a.py", "args": [], "env": []},
-                {"name": "b", "command": "b.py", "args": [], "env": []},
-            ]
-        )
-        with self.assertRaises(m.ProjectionError):
-            m.project_env_vars(p, Path("/pack/dir"))
+        with self.assertRaises(m.ProjectionError) as caught:
+            m.project_env_vars(
+                persona(mcp_servers=self.TWO_SERVERS), Path("/pack/dir")
+            )
+        # A refusal an operator cannot act on is barely better than a silent
+        # drop, so the message must name every server it declined to project.
+        message = str(caught.exception)
+        self.assertIn("alpha-tools", message)
+        self.assertIn("beta-tools", message)
 
     def test_mcp_server_with_args_fails_loudly_rather_than_dropping_them(self):
-        p = persona(
-            mcp_servers=[
-                {"name": "a", "command": "npx", "args": ["-y", "server"], "env": []}
-            ]
-        )
-        with self.assertRaises(m.ProjectionError):
-            m.project_env_vars(p, Path("/pack/dir"))
+        with self.assertRaises(m.ProjectionError) as caught:
+            m.project_env_vars(
+                persona(mcp_servers=self.SERVER_WITH_ARGS), Path("/pack/dir")
+            )
+        message = str(caught.exception)
+        self.assertIn("alpha-tools", message)
+        self.assertIn("bot", message)
+        # The args are the whole reason for the refusal -- an operator who
+        # cannot see which ones would be dropped cannot judge the trade-off.
+        self.assertIn("-y", message)
+
+    def test_refusal_messages_do_not_stack_repr_quoting_into_a_possessive(self):
+        """`persona {name!r}'s server ...` renders as "'bot''s" -- repr()'s
+        closing quote butted against the possessive apostrophe. Neither test
+        above can see it, because both assert on names and args rather than on
+        the punctuation between them."""
+        for mcp_servers in (self.TWO_SERVERS, self.SERVER_WITH_ARGS):
+            with self.subTest(servers=len(mcp_servers)):
+                with self.assertRaises(m.ProjectionError) as caught:
+                    m.project_env_vars(
+                        persona(mcp_servers=mcp_servers), Path("/pack/dir")
+                    )
+                self.assertNotIn("''", str(caught.exception))
 
 
 class FindBuzzBinaryTests(unittest.TestCase):
