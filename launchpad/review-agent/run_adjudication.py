@@ -649,6 +649,35 @@ def _apply_severity_rerating(
     reasoning: a sweep is a second place the two could disagree.
     """
     if proposed_severity is None or proposed_severity == reported_severity:
+        # THE GUARD FIRES ON THE EFFECTIVE SEVERITY -- the value that will
+        # actually be emitted -- not only on a re-rating that differs from
+        # `reported_severity`. ADJUDICATION.md is explicit that both must be
+        # checked: "a finding arriving with an out-of-ladder
+        # `reported_severity` that the judge happens to agree with is never
+        # re-rated at all, so a guard watching only re-ratings never fires and
+        # the bad value is copied into `severity` untouched." This branch --
+        # no re-rating, or a re-rating that agrees -- IS that path, so the
+        # check belongs here, ahead of the return that used to copy it.
+        if reported_severity not in review.SEVERITY_ORDER:
+            # There is no legal re-rating to refuse and no safe value to fall
+            # back to: the severity ARRIVED illegal and the judge either
+            # agreed with it or proposed nothing. `Blocker` rather than
+            # anything smaller, because this stage may not silently decide
+            # that an unrateable finding is a minor one.
+            #
+            # Unreachable through `main()` today -- STEP 3's
+            # `findings.validate` refuses an out-of-ladder input severity
+            # before any judge runs -- and kept as a real branch regardless:
+            # `adjudicate()` is importable by anything, and STEP 10's control
+            # suite is planned to feed this function malformed values
+            # directly. Defence in depth that the contract already promises
+            # is not the same as dead code.
+            reason = (
+                f"finding {finding_id!r} carries an out-of-ladder reported severity "
+                f"{reported_severity!r} and the judge proposed no legal re-rating; "
+                "refused, falling back to 'Blocker'"
+            )
+            return "UNPROVEN", "Blocker", reason
         # No re-rating: unchanged from STEP 3/4's behaviour.
         return verdict, reported_severity, None
 
