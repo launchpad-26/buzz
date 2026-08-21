@@ -27,8 +27,10 @@ Rejected alternatives:
 - **Request more RAM, or more RAM and vCPU** — no evidence yet that it is needed, and the
   procurement delay the original filing warned about was the larger risk to M0.
 - **Run the relay from a source build on this host** — was filed as an expected rejection and
-  remains one. `BUZZ_IMAGE` already defaults to a prebuilt image; compiling roughly 30 Rust
-  crates on 1 vCPU with 2 GB would thrash or OOM.
+  remains one. The deployment already requires an explicit prebuilt image: `BUZZ_IMAGE` has no
+  default and Compose fails without it (`deploy/compose/compose.yml` uses
+  `${BUZZ_IMAGE:?...}`; `deploy/compose/README.md` states it plainly). Compiling roughly 30
+  Rust crates on 1 vCPU with 2 GB would thrash or OOM.
 
 ## Context
 
