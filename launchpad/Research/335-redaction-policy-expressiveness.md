@@ -91,7 +91,7 @@ For [#326](https://github.com/launchpad-26/buzz/issues/326)'s consent question t
 ## What this means for #289
 
 
-> **Recommendations, not findings.** Everything in this section is my assessment as the author, not behaviour established by the evidence above. Per [ADR-0003]'s claim rule: a claim about how the system *behaves* carries a source reference; a claim about what the cohort *should do* is opinion, attributed. Nothing is both — so nothing below is cited as though it were established.
+> **Recommendations, not findings.** Everything in this section is my assessment as the author, not behaviour established by the evidence above. Per [ADR-0003](../decisions/ADR-0003-handbook-page-provenance-contract.md)'s claim rule: a claim about how the system *behaves* carries a source reference; a claim about what the cohort *should do* is opinion, attributed. Nothing is both — so nothing below is cited as though it were established.
 1. **Criterion 6's policy can be written as an allowlist and enforced as one.** That is a much better position than the PRD assumes, and it should be written that way — a list of permitted attribute keys — rather than as prose about what is excluded.
 2. **The known-bad case is the weakly-covered one.** Attributes get the strong guarantee; message bodies get regexes. Given #279, the policy should say explicitly what happens to interpolated error strings, and probably that they are not exported at all rather than exported-and-scrubbed.
 3. **Run redaction in Alloy, on the member's machine**, unless there is a reason not to. It is the same processor either way and it makes a stronger, truer promise.
