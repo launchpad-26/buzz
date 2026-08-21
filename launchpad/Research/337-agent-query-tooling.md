@@ -76,7 +76,7 @@ If that is accurate, then for criterion 3 — *"comparing what happened on that 
 ## What this means for #289
 
 
-> **Recommendations, not findings.** Everything in this section is my assessment as the author, not behaviour established by the evidence above. Per [ADR-0003]'s claim rule: a claim about how the system *behaves* carries a source reference; a claim about what the cohort *should do* is opinion, attributed. Nothing is both — so nothing below is cited as though it were established.
+> **Recommendations, not findings.** Everything in this section is my assessment as the author, not behaviour established by the evidence above. Per [ADR-0003](../decisions/ADR-0003-handbook-page-provenance-contract.md)'s claim rule: a claim about how the system *behaves* carries a source reference; a claim about what the cohort *should do* is opinion, attributed. Nothing is both — so nothing below is cited as though it were established.
 1. **Criterion 4 is adopt, not build — for two of three signals.** A first-party, actively distributed MCP server covers logs and metrics query out of the box.
 2. **Read-only is achievable at two layers**: `--disable-write` on the server, Viewer role on the token. Defence in depth for the credential #289 flags as a risk, and neither layer requires trusting the other.
 3. **The trace gap should be checked before criterion 4 is scoped**, because criterion 3 is the acceptance test and it is a trace comparison. This is a ten-minute check against the tool list of a current release.
