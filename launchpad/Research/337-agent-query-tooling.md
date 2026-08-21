@@ -49,7 +49,9 @@ Note the tension worth flagging: the project **recommends Editor** for broad acc
 
 ### Distribution
 
-`uvx` (recommended), Docker Hub (`grafana/mcp-grafana`), compiled binaries from GitHub releases, Go source, or a Helm chart. That is unusually good coverage — it can run wherever the cohort's agent runs.
+`uvx` (recommended), Docker Hub (`grafana/mcp-grafana`), compiled binaries from GitHub releases, Go source, or a Helm chart.
+
+**Version pinning, per [#415](https://github.com/launchpad-26/buzz/issues/415):** if adopted, pin **v1.1.0** (or the then-current release) rather than tracking a floating tag. Fine to leave unpinned at research stage; not fine in a deployment. That is unusually good coverage — it can run wherever the cohort's agent runs.
 
 ### Stated limitations
 
@@ -122,6 +124,12 @@ There is exactly one trace-**querying** tool, and it is narrow:
 ```
 
 A single Sift tool, in the disabled-by-default set, answering "what was slow" rather than criterion 3's "what differed for this member". For criterion 3 the agent would still need the Grafana HTTP API directly, or the opt-in `run-panel-queries` tool against a Tempo-backed panel.
+
+## A lead I did not follow: a Tempo-native MCP server
+
+Surfaced by the review of this note rather than by me. `grafana/otel-lgtm`'s README mentions a **separate, Tempo-native MCP server**, enabled with `--query-frontend.mcp-server.enabled=true`, which queries traces directly. That is a different tool from `mcp-grafana` and it may substantially close the trace-query gap identified above.
+
+**I have not investigated it** — third-party and adjacent tooling was scoped out of this note, and it was surfaced after the research was done. Anyone acting on the trace gap should look there first, because the gap may be narrower than this document concludes.
 
 ## The permissions tension, and a better third option
 
