@@ -94,6 +94,8 @@ Criterion 2 depends on logs; criterion 3 depends on traces. **Both are in the co
 
 ## What this means for #289
 
+
+> **Recommendations, not findings.** Everything in this section is my assessment as the author, not behaviour established by the evidence above. Per [ADR-0003]'s claim rule: a claim about how the system *behaves* carries a source reference; a claim about what the cohort *should do* is opinion, attributed. Nothing is both — so nothing below is cited as though it were established.
 1. **A hybrid is the natural shape, not a compromise.** Tailscale for the desktop agents (nothing exposed, real identity, free at this scale) plus the same-origin relay path for browsers (#321). Neither makes the collector internet-facing.
 2. **The single-option instinct — Cloudflare Tunnel for everything — is the one with the worst fit for the PRD's stated values.** It works, it is free, it is easy, and it puts a third party in the data path of a cohort whose stated value is owning its own infrastructure. That is a legitimate choice, but it should be made rather than defaulted into.
 3. **Availability, not reachability, is the harder half** — and it is per-signal, not global. Any child that picks a tunnel should also pick a buffering policy.
