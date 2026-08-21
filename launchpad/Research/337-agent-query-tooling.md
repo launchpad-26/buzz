@@ -11,7 +11,7 @@
 
 **Yes — and it is first-party. `grafana/mcp-grafana`, maintained by Grafana Labs**, an MCP server giving an AI assistant structured access to a Grafana instance.
 
-**Maintenance is healthy:** last commit **2026-08-21**, release v1.1.0 on 2026-08-10, 3,379 stars, not archived.
+**Maintenance passes a stated bar** — not archived, commit within 7 days, release within 60 days: last commit **2026-08-21**, release v1.1.0 on **2026-08-10**, `archived: false`. (Stars are not a maintenance signal and are not part of the bar.)
 
 **It has a `--disable-write` flag** disabling every mutation across dashboards, incidents, alerting, OnCall, annotations and snapshots. With [#336](https://github.com/launchpad-26/buzz/issues/336)'s Viewer-role service account, criterion 4's agent can be read-only at two independent layers.
 
@@ -84,6 +84,8 @@ If that is accurate, then for criterion 3 — *"comparing what happened on that 
 
 ## Confidence and what is still unknown
 
+<sub>Revised per [#418](https://github.com/launchpad-26/buzz/issues/418): "maintained" and "maintenance is healthy" were asserted with no threshold, so a reader could not re-check them. The bar is now stated explicitly.</sub>
+
 **High confidence** on the project's existence, maintainer, credential model, `--disable-write` flag, distribution methods and stated limitations — all from its own README.
 
 **The trace gap is the weakest claim here and the most consequential.** It rests on Tempo not appearing in a retrieved summary of the tool list. **An absence in a summary is not proof of an absence in the product.** I did not enumerate the tools from source or from a running instance, and the retrieval may simply have omitted it. Anyone acting on this should check the current release's tool list directly — and that check is worth doing before criterion 4 is scoped, precisely because criterion 3 depends on the answer.
@@ -100,7 +102,9 @@ last commit: 2026-08-21T11:03:11Z
 latest release: v1.1.0 @ 2026-08-10T09:45:22Z
 ```
 
-Actively maintained — it passes the same check that found #324's alternative receiver three years stale.
+**Stated bar, so the claim is falsifiable and re-runnable.** "Maintained" here means all three of: **not archived**; **a commit on the default branch within the last 7 days**; **a release within the last 60 days**. As of 2026-08-21 all three hold — commit 2026-08-21, release v1.1.0 on 2026-08-10, `archived: false`.
+
+Applying the same bar to #324's alternative receiver (`m-lab/alertmanager-github-receiver`, last commit 2023-08-25, last release 2023-01-04) fails two of three. That is the contrast, stated as a test rather than an impression.
 
 **On traces:** Tempo does appear in the README (51 code matches), but most mentions are the MCP server **emitting its own traces**, not querying yours:
 
