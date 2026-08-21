@@ -34,6 +34,33 @@ VERDICTS = frozenset({"CONFIRMED", "REFUTED", "UNPROVEN"})
 _FORBIDDEN_KEYS = frozenset({"approved", "mergeable", "merge_recommendation"})
 
 
+def _is_nonempty_str(value: object) -> bool:
+    """A string carrying at least one non-whitespace character.
+
+    ADJUDICATION.md requires several fields "non-empty", and § The verdict
+    gives the reason: "An ``UNPROVEN`` with no reason is indistinguishable
+    from a stage that skipped the finding." Whitespace IS no reason by that
+    standard, so a bare truthiness test is the wrong check -- ``not "   "``
+    is False and the value sails through. The type half matters for the same
+    reason: truthiness also admits ``42``, ``True`` and ``["x"]``, none of
+    which a reader can act on.
+    """
+    return isinstance(value, str) and bool(value.strip())
+
+
+def _is_int(value: object) -> bool:
+    """An integer that is not a boolean.
+
+    ``bool`` subclasses ``int`` in Python, so ``isinstance(True, int)`` is
+    True and a boolean satisfies a naive count check. That matters most where
+    the count is 1: ``True == 1 == len(findings)``, so the equality
+    comparison downstream stays silent and only a type check sees it.
+    ``total_refutation`` is guarded with a strict ``isinstance(..., bool)``
+    below, which is this module already showing the strictness it intends.
+    """
+    return isinstance(value, int) and not isinstance(value, bool)
+
+
 @dataclass
 class Verdict:
     """The six fields ADJUDICATION.md adds on top of FINDINGS.md's ten.
@@ -265,8 +292,11 @@ def validate(input_document: dict, output_document: dict) -> list[str]:
                 f"{finding_label}: verdict must be one of {sorted(VERDICTS)}, got {verdict!r}"
             )
 
-        if not finding.get("verdict_evidence"):
-            violations.append(f"{finding_label}: verdict_evidence must be non-empty")
+        if not _is_nonempty_str(finding.get("verdict_evidence")):
+            violations.append(
+                f"{finding_label}: verdict_evidence must be a non-empty string, got "
+                f"{finding.get('verdict_evidence')!r}"
+            )
 
         reported_severity = finding.get("reported_severity")
         severity = finding.get("severity")
@@ -280,10 +310,11 @@ def validate(input_document: dict, output_document: dict) -> list[str]:
                 f"{finding_label}: severity {severity!r} is not a key of review.SEVERITY_ORDER"
             )
 
-        if severity != reported_severity and not finding.get("severity_reason"):
+        if severity != reported_severity and not _is_nonempty_str(finding.get("severity_reason")):
             violations.append(
-                f"{finding_label}: severity_reason is required when severity ({severity!r}) "
-                f"differs from reported_severity ({reported_severity!r})"
+                f"{finding_label}: severity_reason must be a non-empty string when severity "
+                f"({severity!r}) differs from reported_severity ({reported_severity!r}), got "
+                f"{finding.get('severity_reason')!r}"
             )
 
         dup = finding.get("duplicate_of")
@@ -318,10 +349,21 @@ def validate(input_document: dict, output_document: dict) -> list[str]:
     reports = output_document.get("reports")
     report_findings_count_sum = 0
     if isinstance(reports, list):
-        for report in reports:
-            if isinstance(report, dict) and isinstance(report.get("findings_count"), int):
-                report_findings_count_sum += report["findings_count"]
-    if not (isinstance(findings_in, int) and isinstance(findings_out, int)):
+        for report_index, report in enumerate(reports):
+            if not isinstance(report, dict):
+                continue
+            report_count = report.get("findings_count")
+            if _is_int(report_count):
+                report_findings_count_sum += report_count
+            else:
+                # Named rather than silently skipped: a skipped count makes the
+                # sum wrong, and the equality violation below would then blame
+                # findings_in for a defect that is actually here.
+                violations.append(
+                    f"document.reports[{report_index}]: findings_count must be an integer, "
+                    f"got {report_count!r}"
+                )
+    if not (_is_int(findings_in) and _is_int(findings_out)):
         violations.append(
             "document.adjudication: findings_in and findings_out must both be integers, got "
             f"{findings_in!r} and {findings_out!r}"
@@ -424,6 +466,19 @@ def validate(input_document: dict, output_document: dict) -> list[str]:
             continue
         survivor = group.get("survivor")
         duplicates = group.get("duplicates")
+        # Checked here, not only inside the loop below. The loop validates the
+        # survivor indirectly -- via a member pointing back at it -- so a group
+        # with an empty `duplicates` list never had its survivor checked at all.
+        if not isinstance(survivor, str):
+            violations.append(
+                f"document.adjudication.duplicate_groups[{index}]: survivor must be a string, "
+                f"got {type(survivor).__name__}"
+            )
+        elif survivor not in findings_by_id:
+            violations.append(
+                f"document.adjudication.duplicate_groups[{index}]: survivor {survivor!r} is not "
+                "a finding_id present in the document"
+            )
         if not isinstance(duplicates, list):
             violations.append(
                 f"document.adjudication.duplicate_groups[{index}]: duplicates must be an array, "
