@@ -1,7 +1,7 @@
 # Which platforms Grafana Alloy supports, and by what install method
 
 **Title:** Grafana Alloy platform support matrix for the cohort's machines
-**Summary:** Every plausible cohort platform is supported, including Intel macOS — Alloy v1.18.1 publishes `alloy-darwin-amd64`, the case #320 flagged as most likely to be missed. Each platform has a native package and a native keep-running mechanism: Homebrew to launchd on macOS, native packages to systemd on Linux, an installer to a Windows service. No container runtime is required anywhere. The worry behind the question does not bite.
+**Summary:** Every *plausible* cohort platform is supported, including Intel macOS — Alloy v1.18.1 publishes `alloy-darwin-amd64`, the case #320 flagged as most likely to be missed. Each platform has a native package and a native keep-running mechanism: Homebrew to launchd on macOS, native packages to systemd on Linux, an installer to a Windows service. No container runtime is required anywhere. The worry behind the question does not bite. **The "plausible" qualifier is load-bearing: no cohort platform inventory exists** ([#320](https://github.com/launchpad-26/buzz/issues/320), [#417](https://github.com/launchpad-26/buzz/issues/417)), so this is coverage of an assumed macOS/Linux/Windows superset, not of a verified list.
 **Tags:** `observability` `grafana-alloy` `platform-support` `macos` `install`
 **Reviewed:** 2026-08-22 · **Answers:** [#332](https://github.com/launchpad-26/buzz/issues/332)
 
@@ -9,7 +9,9 @@
 
 ## Finding
 
-**Every plausible cohort platform is supported, including the one most likely to be missed.** Alloy v1.18.1 publishes an **`alloy-darwin-amd64`** binary — Intel Mac — which is exactly the exception [#320](https://github.com/launchpad-26/buzz/issues/320) flagged that a guessed inventory would drop.
+**Every *plausible* cohort platform is supported, including the one most likely to be missed.**
+
+<sub>Read the qualifier as doing real work, per [#417](https://github.com/launchpad-26/buzz/issues/417). **No cohort platform inventory exists anywhere in this repository**, so "every plausible platform" means the assumed macOS/Linux/Windows superset — not a list anyone has checked against. The Alloy half is verified from pinned release assets; the *cohort* half is an inference from [#320](https://github.com/launchpad-26/buzz/issues/320)'s single machine. Until that inventory exists the claim is not falsifiable, which is also why it should not be leaned on hard.</sub> Alloy v1.18.1 publishes an **`alloy-darwin-amd64`** binary — Intel Mac — which is exactly the exception [#320](https://github.com/launchpad-26/buzz/issues/320) flagged that a guessed inventory would drop.
 
 Each platform has a native package and a native keep-running mechanism: **Homebrew → launchd**, **native packages → systemd**, **installer → Windows service**.
 
