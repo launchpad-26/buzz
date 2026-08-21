@@ -16,10 +16,11 @@ no-op, not an append-again.
 Uses ruamel.yaml's round-trip mode (not PyYAML) specifically so an operator's
 comments and quoting style survive a merge -- a plain load+dump strips both
 on every write, confirmed to lose a hand-written "# managed by ansible"
-comment and turn a quoted host string unquoted. Requires the
-`python3-ruamel.yaml` apt package (or `pip install ruamel.yaml`) --
-PERSONA_PACK_SPEC.md's tooling notes should mention this once STEP 5 wires
-this module into the projector CLI.
+comment and turn a quoted host string unquoted. That dependency is recorded
+in `launchpad/agents/requirements.txt` and installed in CI by
+`.github/workflows/launchpad-agents-tests.yml`; locally, either
+`pip install -r launchpad/agents/requirements.txt` or the
+`python3-ruamel.yaml` apt package works.
 
 Known limitation: no file locking across the read-modify-write window, so a
 goose process rewriting its own config.yaml at the same moment this script
@@ -167,7 +168,28 @@ def enable_developer_extension(
 ) -> Path:
     """Read-merge-write entry point: enables goose's `developer` extension
     at `path` (default: `goose_config_path(env)`). Returns the path
-    written."""
+    written.
+
+    WHAT THIS GRANTS, STATED WHERE IT HAPPENS. goose's `developer` extension is
+    its shell-and-filesystem tool: enabling it gives the agent that loads this
+    config the ability to run commands and write files as the invoking user.
+    That is the entire point for #239 (The Professor could draft a page but had
+    no tool that could save it), and it is also a real expansion of blast
+    radius.
+
+    The issue-#239 plan's OPEN item 2 records that this decision is NOT settled
+    for live or unattended operation, and names who must settle it: "Who
+    arbitrates whether goose's `developer` extension is safe enough to enable
+    for a live/unattended run later -- not decided here [...] a live, unattended
+    agent with real shell access is a materially different blast radius than a
+    human-triggered local session under BYOK."
+
+    So this function is scoped to the human-triggered local proof the plan
+    sanctions (STEP 7). It must not be wired into an unattended or
+    cohort-facing runtime until that OPEN item has an answer, and this docstring
+    is deliberately the place a reader finds that out -- the plan is not in
+    scope for someone reading the module.
+    """
     target = path if path is not None else goose_config_path(env)
     current = read_config(target)
     merged = merge_developer_extension(current)
@@ -176,7 +198,11 @@ def enable_developer_extension(
 
 
 def main(argv: list[str] | None = None) -> int:
-    parser = argparse.ArgumentParser(description=__doc__)
+    # First line only, matching project-pack.py's own `__doc__.splitlines()[0]`.
+    # The full docstring is 40+ lines of rationale aimed at a reader of the
+    # source; dumping all of it into `--help` buries the two flags a caller
+    # actually needs to see.
+    parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument(
         "--enable-developer",
         action="store_true",

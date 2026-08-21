@@ -94,6 +94,114 @@ class ReadConfigTests(unittest.TestCase):
             self.assertIn("# production creds", written)
 
 
+# The fixture below is RAW TEXT on purpose, not built by calling this module's
+# own writer. An earlier version of these controls built every fixture with
+# write_config_atomic(), so both the "before" and the "after" had already been
+# through the same serializer -- which is exactly the shape that cannot detect a
+# serializer that mangles human-authored YAML. review-code found this twice
+# independently. It carries a top-of-file comment, an inline comment on a
+# top-level key, a comment nested two levels deep, a deliberately quoted scalar,
+# and an inline comment inside `extensions` -- the block this module writes into.
+OPERATOR_AUTHORED_CONFIG = """\
+# top-of-file: managed by ansible, do not edit by hand
+active_provider: databricks_v2   # inline on a top-level key
+providers:
+  databricks_v2:
+    # a comment nested two levels deep
+    model: goose-claude-4-6-opus
+    host: "https://dbc.example"   # quoted on purpose
+extensions:
+  my-mcp:
+    type: stdio      # inline inside the block this module writes into
+    enabled: false
+"""
+
+
+class OperatorAuthoredConfigTests(unittest.TestCase):
+    """The guarantee this module exists for, exercised through the REAL entry
+    point (`enable_developer_extension`, merge included) against a file a human
+    wrote by hand.
+
+    The distinction matters and was a genuine coverage gap: comment
+    preservation was previously only asserted across read_config ->
+    write_config_atomic, which skips merge_developer_extension entirely. Since
+    the merge copies the mapping (`config.copy()` / `CommentedMap(...)`), a copy
+    that dropped ruamel's comment attachments would have lost every comment on
+    the real path while the old test still passed."""
+
+    def _write_fixture(self, d: str) -> Path:
+        path = Path(d) / "config.yaml"
+        path.write_text(OPERATOR_AUTHORED_CONFIG, encoding="utf-8")
+        return path
+
+    def test_merge_preserves_every_comment_and_quoting_style(self):
+        with tempfile.TemporaryDirectory() as d:
+            path = self._write_fixture(d)
+            m.enable_developer_extension(path=path)
+            written = path.read_text(encoding="utf-8")
+
+            for probe in (
+                "# top-of-file: managed by ansible, do not edit by hand",
+                "# inline on a top-level key",
+                "# a comment nested two levels deep",
+                "# quoted on purpose",
+                "# inline inside the block this module writes into",
+            ):
+                self.assertIn(probe, written, f"comment lost through merge: {probe}")
+
+            # The quoting style itself, not just the value: PyYAML's dumper
+            # re-emits this unquoted, which is how the original Blocker was found.
+            self.assertIn('host: "https://dbc.example"', written)
+
+    def test_merge_adds_developer_without_disturbing_existing_extension(self):
+        with tempfile.TemporaryDirectory() as d:
+            path = self._write_fixture(d)
+            m.enable_developer_extension(path=path)
+            cfg = m.read_config(path)
+            self.assertEqual(
+                cfg["extensions"]["my-mcp"], {"type": "stdio", "enabled": False}
+            )
+            self.assertEqual(
+                cfg["extensions"]["developer"], {"type": "builtin", "enabled": True}
+            )
+            self.assertEqual(cfg["active_provider"], "databricks_v2")
+
+    def test_second_run_on_operator_authored_file_is_byte_for_byte_no_op(self):
+        with tempfile.TemporaryDirectory() as d:
+            path = self._write_fixture(d)
+            m.enable_developer_extension(path=path)
+            after_first = path.read_bytes()
+            m.enable_developer_extension(path=path)
+            self.assertEqual(
+                after_first,
+                path.read_bytes(),
+                "a second run against a human-authored file must be a no-op",
+            )
+
+    def test_only_addition_is_the_developer_block(self):
+        """Everything the operator wrote survives verbatim: the output is the
+        input plus the developer entry, with no other line changed."""
+        with tempfile.TemporaryDirectory() as d:
+            path = self._write_fixture(d)
+            m.enable_developer_extension(path=path)
+            written = path.read_text(encoding="utf-8")
+
+            original_lines = OPERATOR_AUTHORED_CONFIG.splitlines()
+            surviving = [ln for ln in written.splitlines() if ln in original_lines]
+            self.assertEqual(
+                surviving,
+                original_lines,
+                "every original line must survive, in its original order",
+            )
+
+            added = [ln for ln in written.splitlines() if ln not in original_lines]
+            self.assertEqual(
+                added,
+                ["  developer:", "    type: builtin", "    enabled: true"],
+                "the developer block must be the ONLY addition",
+            )
+
+
 class MergeDeveloperExtensionTests(unittest.TestCase):
     def test_adds_developer_extension_when_absent(self):
         merged = m.merge_developer_extension({})
