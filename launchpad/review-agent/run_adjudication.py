@@ -110,6 +110,22 @@ function does not drop or invent one by construction, but a stage that can
 print a lossy document and rely on a downstream ``verdicts.validate`` call
 to catch it has already lost the document once.
 
+``adjudication.notes`` is **deferred to STEP 6/7 too, and left empty here**,
+which until now was the one hardcoded-empty field with no deferral stated
+anywhere. The judge protocol below carries no ``notes`` key, so a judge that
+returns one has it dropped. Recording it explicitly because the silence was
+the defect: ADJUDICATION.md declares the field and ``verdicts.py`` carries
+it, so a reader had every reason to assume the channel worked.
+
+**This deferral is in tension with ``adjudicator.md`` (#265), which
+normatively tells a judge to "record it in ``adjudication.notes``".** While
+that instruction ships against a protocol that discards the key, a judge's
+only remaining outlet is ``verdict_evidence`` -- the field with no
+structural guard. Whoever resolves this should either plumb ``notes``
+through the protocol here (symmetric with how a future ``severity_reason``
+would be) or amend ``adjudicator.md`` to say the channel is deferred. Not
+decided in this step; named so it cannot be merged past unnoticed.
+
 **STEP 4 -- the nonce check and the `stages` manifest.** Two more things
 ``adjudicate()`` does, on top of STEP 3's pass-through/anchor/validation-order
 guarantees above, both implemented in this module because STEP 3 and STEP 4
@@ -240,6 +256,70 @@ class FindingSetIntegrityError(RuntimeError):
     """
 
 
+class StagesShapeError(ValueError):
+    """Raised when ``input_document["stages"]`` is present but malformed --
+    not a list, or carrying an entry that is not an object with a string
+    ``name``.
+
+    Absent is legal and stays legal: #117 emits no top-level ``stages`` key
+    at all, so "no manifest yet" is the normal case. What is refused is a
+    manifest that exists in a shape this stage cannot honour. Treating that
+    as absent -- which both readers previously did -- loses data twice over:
+    the re-run guard has nothing to scan so a duplicate ``adjudication``
+    entry slips through, and every entry already recorded is dropped, so a
+    ``blocked`` pre-flight disappears and the document publishes as
+    ``complete``.
+
+    ADJUDICATION.md's rule is unconditional, and this stage cannot lean on
+    its producer to keep it: the ``stages`` manifest is explicitly an output
+    #117 does NOT emit, so there is no upstream guarantee to inherit. Neither
+    ``findings.validate`` nor ``verdicts.validate`` inspects ``stages``.
+    """
+
+
+def _input_stages(document: dict) -> list:
+    """``document["stages"]`` as a list, or ``[]`` when absent or null.
+
+    The single definition of "a well-shaped input manifest", used by both
+    ``_check_not_already_adjudicated`` and the manifest builder in
+    ``adjudicate()``. One function on purpose: the two readers each had their
+    own inline ``isinstance(..., list)`` test and each treated a malformed
+    container as absent, which is how one shape defect became two independent
+    failures. A second copy of a rule is a second chance to disagree with it.
+
+    Raises ``StagesShapeError`` on a present-but-malformed manifest.
+    """
+    if "stages" not in document:
+        return []
+    stages = document["stages"]
+    if stages is None:
+        # An explicit null is "no manifest", same as omitting the key -- the
+        # reading that keeps absence legal without admitting a wrong type.
+        return []
+    if not isinstance(stages, list):
+        raise StagesShapeError(
+            "input document's `stages` is present but is not an array "
+            f"(got {type(stages).__name__}) -- refusing rather than treating a "
+            "malformed manifest as an absent one, which would discard every "
+            "entry already recorded in it"
+        )
+    for index, entry in enumerate(stages):
+        if not isinstance(entry, dict):
+            raise StagesShapeError(
+                f"input document's `stages`[{index}] is not an object "
+                f"(got {type(entry).__name__}) -- every manifest entry is "
+                "`{name, status, reason}` per ADJUDICATION.md"
+            )
+        name = entry.get("name")
+        if not isinstance(name, str):
+            raise StagesShapeError(
+                f"input document's `stages`[{index}] has a non-string `name` "
+                f"(got {type(name).__name__}) -- an entry that cannot be "
+                "identified by name cannot be checked against this stage's own"
+            )
+    return stages
+
+
 def _report_marker_nonce(report: dict) -> str | None:
     """Extract the nonce embedded in one report's ``completion_marker``, or
     ``None`` when the marker is missing, non-string, or does not parse as
@@ -323,11 +403,8 @@ def _check_not_already_adjudicated(document: dict) -> None:
     itself, independent of whether this particular re-run's nonce happens to
     check out.
     """
-    stages = document.get("stages")
-    if not isinstance(stages, list):
-        return
-    for entry in stages:
-        if isinstance(entry, dict) and entry.get("name") == "adjudication":
+    for entry in _input_stages(document):
+        if entry.get("name") == "adjudication":
             raise AlreadyAdjudicatedError(
                 "input document's `stages` array already carries an `adjudication` entry -- "
                 "refusing to re-run adjudication over an already-adjudicated document"
@@ -409,9 +486,19 @@ def make_replay_judge(replay_dir: Path) -> Judge:
 def _run_judge_safely(judge: Judge, finding: dict, input_document: dict) -> dict:
     """Call ``judge`` and fail closed to ``UNPROVEN`` on anything unusable --
     a raised exception, a non-dict return, an illegal/missing ``verdict``, or
-    empty ``verdict_evidence``. ADJUDICATION.md's own words: "An adjudicator
+    ``verdict_evidence`` that is not a string with at least one
+    non-whitespace character. ADJUDICATION.md's own words: "An adjudicator
     that cannot reach the location, cannot parse the finding, times out, or
     returns unusable output yields UNPROVEN with a reason."
+
+    "Blank", not "empty", and the distinction is the whole point: a
+    truthiness test lets ``"   "`` through, and a whitespace reason is
+    indistinguishable from no reason -- which is the case ADJUDICATION.md
+    says the requirement exists to exclude. The rule is
+    ``verdicts.is_nonempty_str``, imported rather than re-implemented, so
+    this producer guard and the contract check in ``verdicts.validate``
+    cannot drift apart: they did exactly that, each admitting whitespace
+    because the other did.
 
     Returns a dict carrying at least ``verdict``/``verdict_evidence``, and --
     only when the judge's own output was usable -- ``severity``/
@@ -436,13 +523,13 @@ def _run_judge_safely(judge: Judge, finding: dict, input_document: dict) -> dict
 
     verdict = result.get("verdict") if isinstance(result, dict) else None
     evidence = result.get("verdict_evidence") if isinstance(result, dict) else None
-    if verdict not in verdicts.VERDICTS or not evidence:
+    if verdict not in verdicts.VERDICTS or not verdicts.is_nonempty_str(evidence):
         return {
             "verdict": "UNPROVEN",
             "verdict_evidence": (
                 "adjudicator returned unusable output (missing or illegal verdict, "
-                "or empty verdict_evidence); failing closed to UNPROVEN per "
-                "ADJUDICATION.md's default."
+                "or verdict_evidence that was blank, whitespace-only or not a "
+                "string); failing closed to UNPROVEN per ADJUDICATION.md's default."
             ),
         }
 
@@ -561,6 +648,10 @@ def adjudicate(input_document: dict, judge: Judge) -> dict:
     """Adjudicate every finding in ``input_document`` with ``judge`` and
     return the adjudicated output document. Never mutates ``input_document``.
 
+    Raises ``StagesShapeError`` when ``input_document["stages"]`` is present
+    but malformed -- not a list, or an entry that is not an object with a
+    string ``name``. Absent or null stays legal.
+
     Raises ``AlreadyAdjudicatedError`` when ``input_document["stages"]``
     already carries an ``adjudication`` entry (a re-run), and
     ``NonceVerificationError`` when the top-level ``nonce`` cannot be
@@ -662,6 +753,9 @@ def adjudicate(input_document: dict, judge: Judge) -> dict:
         duplicate_groups=[],
         downgrades=downgrades,
         total_refutation=total_refutation,
+        # Deferred to STEP 6/7, not an oversight -- see this module's docstring,
+        # including the unresolved tension with adjudicator.md (#265). The judge
+        # protocol carries no `notes` key, so nothing can populate this yet.
         notes=[],
         completion_marker=f"BUZZ-ADJUDICATION-COMPLETE:{nonce}",
     ).as_dict()
@@ -669,9 +763,10 @@ def adjudicate(input_document: dict, judge: Judge) -> dict:
     # The `stages` manifest (STEP 4). Every entry already on input, in order,
     # plus exactly one new `adjudication` entry -- `_check_not_already_
     # adjudicated` above already guarantees none of the input entries is
-    # itself named `adjudication`.
-    input_stages_raw = input_document.get("stages")
-    input_stages = copy.deepcopy(input_stages_raw) if isinstance(input_stages_raw, list) else []
+    # itself named `adjudication`. That guarantee is real only because both it
+    # and this line read the manifest through `_input_stages`, which refuses a
+    # present-but-malformed shape instead of quietly reading it as absent.
+    input_stages = copy.deepcopy(_input_stages(input_document))
 
     # `status` is "complete" only when every finding received a verdict, the
     # nonce was established, AND `total_refutation` is false. The nonce
@@ -800,6 +895,9 @@ def main(argv: list[str] | None = None) -> int:
             print(f"run_adjudication: {violation}", file=sys.stderr)
         return 1
     except AlreadyAdjudicatedError as exc:
+        print(f"run_adjudication: {exc}", file=sys.stderr)
+        return 1
+    except StagesShapeError as exc:
         print(f"run_adjudication: {exc}", file=sys.stderr)
         return 1
     except NonceVerificationError as exc:
