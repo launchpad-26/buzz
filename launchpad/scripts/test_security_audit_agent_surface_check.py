@@ -22,8 +22,18 @@ from security_audit_agent_surface_check import run
 _REAL_GITLEAKS_TOML = Path(__file__).resolve().parents[2] / ".gitleaks.toml"
 
 
-def _skip_if_no_gitleaks_config() -> bool:
-    return not _REAL_GITLEAKS_TOML.is_file()
+def _skip_if_gitleaks_unavailable() -> bool:
+    # Checks the config file AND the binary. Two of this repo's three CI
+    # workflows (`scripts`, `adr-boundary`) run `unittest discover` over this
+    # whole directory without installing gitleaks -- only the `audit`
+    # workflow does. Before this fix, those two jobs found the config file
+    # (present regardless), ran the real subprocess call, and got
+    # Status.INDETERMINATE back where the assertions expected PASS/FAIL --
+    # a confusing failure with nothing wrong in the check's own logic.
+    # Skipping cleanly when the actual dependency this suite needs isn't
+    # present is the same shape as the existing config-file check, just
+    # covering the other missing piece.
+    return not _REAL_GITLEAKS_TOML.is_file() or shutil.which("gitleaks") is None
 
 
 def _assembled(*parts: str) -> str:
@@ -42,7 +52,7 @@ def _assembled(*parts: str) -> str:
     return "".join(parts)
 
 
-@unittest.skipIf(_skip_if_no_gitleaks_config(), "requires the real .gitleaks.toml from the repo root")
+@unittest.skipIf(_skip_if_gitleaks_unavailable(), "requires the real .gitleaks.toml and the gitleaks binary on PATH")
 class AgentSurfaceSecretScanTest(unittest.TestCase):
     def _prep(self, root: Path) -> None:
         shutil.copy(_REAL_GITLEAKS_TOML, root / ".gitleaks.toml")
