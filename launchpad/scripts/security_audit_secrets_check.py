@@ -122,10 +122,19 @@ def _summarize(findings: List[dict], limit: int = 8) -> str:
 
 
 def _scan_pr_diff(repo_root: Path) -> CheckResult:
+    # This path is the gate (module docstring): security_audit_core.exit_code()
+    # only fails the run on Status.FAIL, treating INDETERMINATE the same as
+    # PASS. So every "couldn't actually run the scan" case here must be FAIL,
+    # never INDETERMINATE — an unscanned PR going green would silently violate
+    # ADR-0008's rule that indeterminate must never render as pass. This is
+    # deliberately asymmetric with _scan_full_history below, whose own
+    # INDETERMINATE is correct: that path already reports pre-existing findings
+    # as WARN rather than FAIL by design, so a same-shaped infra failure there
+    # isn't gating anything a merge depends on.
     base_ref = os.environ.get("GITHUB_BASE_REF", "")
     if not base_ref:
         return CheckResult(
-            NAME, Status.INDETERMINATE, "GITHUB_BASE_REF is unset; cannot scope a diff scan"
+            NAME, Status.FAIL, "GITHUB_BASE_REF is unset; cannot scope a diff scan"
         )
 
     try:
@@ -137,11 +146,11 @@ def _scan_pr_diff(repo_root: Path) -> CheckResult:
             timeout=60,
         )
     except (subprocess.CalledProcessError, subprocess.TimeoutExpired, OSError) as exc:
-        return CheckResult(NAME, Status.INDETERMINATE, f"could not fetch base ref {base_ref!r}: {exc}")
+        return CheckResult(NAME, Status.FAIL, f"could not fetch base ref {base_ref!r}: {exc}")
 
     findings, error = _run_gitleaks(repo_root, log_opts="FETCH_HEAD..HEAD", timeout=_PR_TIMEOUT_SECONDS)
     if error is not None:
-        return CheckResult(NAME, Status.INDETERMINATE, error)
+        return CheckResult(NAME, Status.FAIL, error)
     if findings:
         return CheckResult(
             NAME,
