@@ -53,6 +53,19 @@ export async function meshNodeStatus(): Promise<MeshNodeStatus> {
 }
 
 /**
+ * Whether this build was compiled with the `mesh-llm` feature at all —
+ * distinct from node status, which reports whether a node is *running*.
+ * Some platforms' release builds (Windows, as of writing) don't build
+ * mesh-llm; offering "Buzz shared compute" as a provider choice on one of
+ * those builds is what let every agent that picked it fail deep inside
+ * buzz-agent's own process instead of the option simply not being offered
+ * (#269).
+ */
+export async function meshLlmFeatureEnabled(): Promise<boolean> {
+  return await invokeTauri<boolean>("mesh_llm_feature_enabled");
+}
+
+/**
  * Host-side usage of the compute this machine is sharing. The
  * local/remote/endpoint attempt split distinguishes this machine's own agents
  * (local) from another member consuming this machine's compute (remote/endpoint).

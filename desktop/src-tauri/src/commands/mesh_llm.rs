@@ -805,6 +805,20 @@ pub async fn mesh_stop_node(
     Ok(mesh_llm::stopped_status())
 }
 
+/// Whether this build was compiled with the `mesh-llm` feature at all —
+/// distinct from `mesh_node_status`, which reports whether a node is
+/// *running*. The frontend uses this to decide whether "Buzz shared compute"
+/// belongs in the persona/agent provider picker in the first place: offering
+/// it on a build that lacks the feature (e.g. today's Windows release, which
+/// windows-canary.yml's own comment documents as not building mesh-llm) led
+/// every agent that picked it to fail deep inside buzz-agent's own process
+/// with an opaque `BUZZ_AGENT_PROVIDER=relay-mesh not supported` (#269),
+/// instead of the option simply not being offered.
+#[tauri::command]
+pub fn mesh_llm_feature_enabled() -> bool {
+    true
+}
+
 #[tauri::command]
 pub async fn mesh_node_status(state: State<'_, AppState>) -> CmdResult<mesh_llm::MeshNodeStatus> {
     let runtime = state.mesh_llm_runtime.lock().await;

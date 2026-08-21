@@ -788,6 +788,7 @@ pub fn run() {
             put_agent_session_config,
             get_global_agent_config,
             set_global_agent_config,
+            mesh_llm_feature_enabled,
             mesh_start_node,
             mesh_stop_node,
             mesh_node_status,

@@ -1,6 +1,14 @@
 use super::*;
 use crate::app_state::build_app_state;
 
+#[test]
+fn feature_enabled_reports_true_on_a_mesh_llm_build() {
+    // The frontend uses this to decide whether "Buzz shared compute" belongs
+    // in the provider picker at all (#269) -- must report true whenever this
+    // test itself can even compile, since it's gated the same way.
+    assert!(mesh_llm_feature_enabled());
+}
+
 fn target(model_id: &str, endpoint_addr: &str) -> mesh_llm::MeshServeTarget {
     mesh_llm::MeshServeTarget {
         model_id: model_id.to_string(),

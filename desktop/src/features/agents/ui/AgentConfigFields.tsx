@@ -18,6 +18,7 @@ import type {
   GlobalAgentConfig,
 } from "@/shared/api/types";
 import { cn } from "@/shared/lib/cn";
+import { useMeshLlmFeatureEnabled } from "@/features/mesh-compute/hooks/useMeshLlmFeatureEnabled";
 import { EnvVarsEditor } from "@/features/agents/ui/EnvVarsEditor";
 import type { InheritedEnvRow } from "@/features/agents/ui/EnvVarsEditor";
 import {
@@ -588,6 +589,7 @@ export function AgentConfigFields({
   // On internal Block builds, BUZZ_AGENT_PROVIDER is baked in and a boot
   // migration rewrites v1→v2. Hide the legacy v1 option so it is not offered
   // for new selections; OSS builds show it.
+  const meshLlmFeatureEnabled = useMeshLlmFeatureEnabled();
   const hideProviderIds = React.useMemo(() => {
     const hidden = new Set<string>();
     if (bakedEnvKeys.includes("BUZZ_AGENT_PROVIDER")) {
@@ -598,8 +600,10 @@ export function AgentConfigFields({
     if (selectedRuntimeId !== "buzz-agent") {
       hidden.add("relay-mesh");
     }
+    // Some release builds don't compile mesh-llm at all (#269).
+    if (!meshLlmFeatureEnabled) hidden.add("relay-mesh");
     return hidden;
-  }, [bakedEnvKeys, selectedRuntimeId]);
+  }, [bakedEnvKeys, selectedRuntimeId, meshLlmFeatureEnabled]);
   const providerOptions = getPersonaProviderOptions(
     providerValue,
     credentialRuntimeId,
