@@ -356,6 +356,134 @@ class JudgeFailsClosedTests(unittest.TestCase):
         adjudicated = output_doc["reports"][0]["findings"][0]
         self.assertEqual(adjudicated["verdict"], "UNPROVEN")
 
+    def test_judge_returning_whitespace_evidence_fails_closed_to_unproven(self):
+        """A truthiness test is not the "unusable output" check this function
+        promises: ``not "   "`` is False. ADJUDICATION.md's reason for
+        requiring evidence is that "an UNPROVEN with no reason is
+        indistinguishable from a stage that skipped the finding", and
+        whitespace IS no reason -- so a CONFIRMED Blocker could be published
+        with a blank justification and still validate clean.
+        """
+        for blank in ("   ", "\n", "\t", "   \n  ", "\xa0"):
+            with self.subTest(evidence=blank):
+                def _blank_evidence_judge(finding, document, _b=blank):
+                    return {"verdict": "CONFIRMED", "verdict_evidence": _b}
+
+                input_doc = make_document()
+                output_doc = run_adjudication.adjudicate(input_doc, _blank_evidence_judge)
+                adjudicated = output_doc["reports"][0]["findings"][0]
+                self.assertEqual(adjudicated["verdict"], "UNPROVEN")
+                self.assertTrue(adjudicated["verdict_evidence"].strip())
+
+    def test_judge_returning_non_string_evidence_fails_closed_to_unproven(self):
+        """The sibling half: the guard had no type check, so any truthy value
+        passed. ``verdict_evidence: 42`` is not something a reader can act on.
+        """
+        for wrong_type in (42, True, 0.5, ["x"], {"a": 1}):
+            with self.subTest(evidence=wrong_type):
+                def _wrong_type_judge(finding, document, _w=wrong_type):
+                    return {"verdict": "CONFIRMED", "verdict_evidence": _w}
+
+                input_doc = make_document()
+                output_doc = run_adjudication.adjudicate(input_doc, _wrong_type_judge)
+                adjudicated = output_doc["reports"][0]["findings"][0]
+                self.assertEqual(adjudicated["verdict"], "UNPROVEN")
+                self.assertIsInstance(adjudicated["verdict_evidence"], str)
+
+    def test_blank_evidence_output_still_satisfies_the_verdict_contract(self):
+        """The half that makes this load-bearing: before the fix, the blank
+        evidence reached the published document AND `verdicts.validate`
+        returned zero violations, because the contract check used the same
+        truthiness idiom. Both ends must now agree.
+        """
+        def _blank_evidence_judge(finding, document):
+            return {"verdict": "CONFIRMED", "verdict_evidence": "   \n  "}
+
+        input_doc = make_document()
+        output_doc = run_adjudication.adjudicate(input_doc, _blank_evidence_judge)
+        self.assertEqual(verdicts.validate(input_doc, output_doc), [])
+        self.assertEqual(output_doc["reports"][0]["findings"][0]["verdict"], "UNPROVEN")
+
+
+class ReplayBlankEvidenceTests(unittest.TestCase):
+    """`--replay` forwards a recording's contents unfiltered, so the blank
+    shape was reachable from an ordinary command line -- not only from an
+    injected judge. This drives the guard through the shipped flag.
+    """
+
+    @staticmethod
+    def _replay_run(finding, evidence):
+        """Drive `adjudicate` through a real replay recording.
+
+        The recording format is a mapping ``finding_id -> {verdict, ...}``,
+        NOT a flat record -- get that wrong and the lookup misses, the judge
+        fails closed with "no recorded judge output", and a test asserting
+        UNPROVEN passes for entirely the wrong reason.
+        """
+        with tempfile.TemporaryDirectory() as tmp:
+            recording = {
+                finding["finding_id"]: {"verdict": "CONFIRMED", "verdict_evidence": evidence}
+            }
+            (Path(tmp) / "rec.json").write_text(json.dumps(recording), encoding="utf-8")
+            judge = run_adjudication.make_replay_judge(Path(tmp))
+            input_doc = make_document(reports=[make_report(findings_list=[finding])])
+            output_doc = run_adjudication.adjudicate(input_doc, judge)
+        return input_doc, output_doc
+
+    def test_a_matching_recording_is_actually_used(self):
+        """The control this class needs to be worth anything: prove the lookup
+        HITS, so a later UNPROVEN is the blank-evidence guard firing and not a
+        recording that was never found.
+        """
+        finding = make_raw_finding()
+        input_doc, output_doc = self._replay_run(finding, "the credential is present at that line")
+        adjudicated = output_doc["reports"][0]["findings"][0]
+        self.assertEqual(adjudicated["verdict"], "CONFIRMED")
+        self.assertNotIn("no recorded judge output", adjudicated["verdict_evidence"])
+        self.assertEqual(verdicts.validate(input_doc, output_doc), [])
+
+    def test_replay_recording_with_whitespace_evidence_fails_closed(self):
+        finding = make_raw_finding()
+        input_doc, output_doc = self._replay_run(finding, "   \n  ")
+        adjudicated = output_doc["reports"][0]["findings"][0]
+        self.assertEqual(adjudicated["verdict"], "UNPROVEN")
+        self.assertTrue(adjudicated["verdict_evidence"].strip())
+        # Specifically the guard, not a missed lookup.
+        self.assertIn("unusable output", adjudicated["verdict_evidence"])
+        self.assertNotIn("no recorded judge output", adjudicated["verdict_evidence"])
+        self.assertEqual(verdicts.validate(input_doc, output_doc), [])
+
+
+class NotesDeferralTests(unittest.TestCase):
+    """`adjudication.notes` is hardcoded empty at this step and the judge
+    protocol does not honour a `notes` key. That is deliberate, but it was
+    undocumented -- and `adjudicator.md` (#265) normatively tells a judge to
+    record new observations there. These tests pin the CURRENT behaviour so
+    the deferral is asserted rather than assumed, and so whichever way #118
+    resolves it, a test changes with the decision.
+    """
+
+    def test_a_judge_supplied_notes_key_is_not_carried(self):
+        def _noting_judge(finding, document):
+            return {
+                "verdict": "CONFIRMED",
+                "verdict_evidence": "the credential is present at that line",
+                "notes": ["a genuinely new defect noticed while adjudicating"],
+            }
+
+        input_doc = make_document()
+        output_doc = run_adjudication.adjudicate(input_doc, _noting_judge)
+        # Documented deferral, not an accident: see this module's docstring.
+        self.assertEqual(output_doc["adjudication"]["notes"], [])
+        self.assertEqual(verdicts.validate(input_doc, output_doc), [])
+
+    def test_the_deferral_is_stated_in_the_module_docstring(self):
+        """The finding was that nothing said so. If the sentence goes, this
+        test goes red rather than the gap reopening silently.
+        """
+        self.assertIn("notes", run_adjudication.__doc__)
+        self.assertRegex(run_adjudication.__doc__, r"notes.*(defer|STEP 6/7|left empty)")
+
 
 class NoRerateInThisStepTests(unittest.TestCase):
     """This step performs no re-rating at all (STEP 6's job): every finding's
@@ -677,6 +805,136 @@ class AlreadyAdjudicatedTests(unittest.TestCase):
         self.assertNotEqual(exit_code, 0)
         self.assertEqual(stdout.getvalue(), "")
         self.assertTrue(stderr.getvalue())
+
+
+class MalformedStagesShapeTests(unittest.TestCase):
+    """A `stages` value that is PRESENT but not a list was treated as absent
+    at both sites that read it: the re-run guard returned early, and the
+    manifest builder substituted `[]`. Two consequences, and the second is
+    the one that costs something:
+
+      1. The re-run guard is bypassed -- an `adjudication` entry inside an
+         object container adjudicates at exit 0 instead of being refused.
+      2. Every prior entry is silently discarded. A `blocked` pre-flight
+         (#116's fork-PR-secrets-withheld case) disappears and the document
+         publishes as `complete`, because #119 only banners a non-`complete`
+         status. That is #118's fifth criterion failing through a shape
+         defect no verdict-side check looks at.
+
+    "#117 never emits that shape" is not a defence available to this step:
+    the `stages` manifest is explicitly an output #117 does NOT produce, so
+    this stage cannot inherit a guarantee from it. Absent stays legal.
+    """
+
+    NON_LIST_SHAPES = (
+        ({"0": {"name": "adjudication", "status": "complete", "reason": None}}, "object"),
+        ("adjudication", "string"),
+        (42, "int"),
+        (True, "bool"),
+    )
+
+    def test_adjudicate_raises_on_every_non_list_stages_shape(self):
+        for shape, label in self.NON_LIST_SHAPES:
+            with self.subTest(shape=label):
+                input_doc = make_document()
+                input_doc["stages"] = shape
+                judge = CountingJudge()
+                with self.assertRaises(run_adjudication.StagesShapeError):
+                    run_adjudication.adjudicate(input_doc, judge)
+                # Refused before any finding is adjudicated, like every other
+                # input-shape refusal in this module.
+                self.assertEqual(judge.call_count, 0, judge.calls)
+
+    def test_the_re_run_guard_is_not_bypassed_by_an_object_container(self):
+        """The bypass itself: before the fix this adjudicated at exit 0."""
+        input_doc = make_document()
+        input_doc["stages"] = {"0": {"name": "adjudication", "status": "complete", "reason": None}}
+        with self.assertRaises(run_adjudication.StagesShapeError):
+            run_adjudication.adjudicate(input_doc, run_adjudication.stub_judge)
+
+    def test_a_blocked_preflight_is_never_silently_discarded(self):
+        """The expensive half. A `blocked` pre-flight inside a non-list
+        container used to vanish, and the document published `complete`.
+        """
+        input_doc = make_document()
+        input_doc["stages"] = {
+            "p": {"name": "preflight", "status": "blocked", "reason": "fork PR, secrets withheld"}
+        }
+        with self.assertRaises(run_adjudication.StagesShapeError):
+            run_adjudication.adjudicate(input_doc, run_adjudication.stub_judge)
+
+    def test_a_stages_entry_that_is_not_an_object_is_refused(self):
+        input_doc = make_document()
+        input_doc["stages"] = ["preflight"]
+        with self.assertRaises(run_adjudication.StagesShapeError):
+            run_adjudication.adjudicate(input_doc, run_adjudication.stub_judge)
+
+    def test_a_stages_entry_with_a_non_string_name_is_refused(self):
+        """The Low that rides along: a non-string `name` cannot impersonate an
+        `adjudication` entry, so the re-run guard is not bypassed this way --
+        but an off-shape entry reaching #119 is still not something to pass
+        through in silence.
+        """
+        input_doc = make_document()
+        input_doc["stages"] = [{"name": {"nested": "adjudication"}, "status": "complete"}]
+        with self.assertRaises(run_adjudication.StagesShapeError):
+            run_adjudication.adjudicate(input_doc, run_adjudication.stub_judge)
+
+    def test_absent_stages_is_still_legal(self):
+        """The control. #117 emits no `stages` key at all, so absent must stay
+        the normal case -- a fix that refused absence would break every real
+        document.
+        """
+        input_doc = make_document()
+        self.assertNotIn("stages", input_doc)
+        output_doc = run_adjudication.adjudicate(input_doc, run_adjudication.stub_judge)
+        self.assertEqual([e["name"] for e in output_doc["stages"]], ["adjudication"])
+
+    def test_explicit_null_stages_is_treated_as_absent(self):
+        input_doc = make_document()
+        input_doc["stages"] = None
+        output_doc = run_adjudication.adjudicate(input_doc, run_adjudication.stub_judge)
+        self.assertEqual([e["name"] for e in output_doc["stages"]], ["adjudication"])
+
+    def test_a_well_formed_preflight_entry_still_survives_in_order(self):
+        """The other control: the shape this step is meant to carry forward
+        must still be carried forward, in order, untouched.
+        """
+        input_doc = make_document()
+        input_doc["stages"] = [
+            {"name": "preflight", "status": "blocked", "reason": "fork PR, secrets withheld"}
+        ]
+        output_doc = run_adjudication.adjudicate(input_doc, run_adjudication.stub_judge)
+        self.assertEqual([e["name"] for e in output_doc["stages"]], ["preflight", "adjudication"])
+        self.assertEqual(output_doc["stages"][0]["status"], "blocked")
+
+    def test_main_exits_nonzero_and_prints_no_document(self):
+        for shape, label in self.NON_LIST_SHAPES:
+            with self.subTest(shape=label):
+                input_doc = make_document()
+                input_doc["stages"] = shape
+                stdout, stderr = io.StringIO(), io.StringIO()
+                with mock.patch.object(sys, "stdin", io.StringIO(json.dumps(input_doc))), \
+                     contextlib.redirect_stdout(stdout), contextlib.redirect_stderr(stderr):
+                    exit_code = run_adjudication.main([])
+                self.assertNotEqual(exit_code, 0)
+                self.assertEqual(stdout.getvalue(), "")
+                self.assertTrue(stderr.getvalue())
+
+    def test_real_process_refuses_an_object_container(self):
+        """Through the real process, the way the defect was found."""
+        input_doc = make_document()
+        input_doc["stages"] = {"0": {"name": "adjudication", "status": "complete", "reason": None}}
+        proc = subprocess.run(
+            [sys.executable, str(SCRIPT)],
+            input=json.dumps(input_doc),
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        self.assertNotEqual(proc.returncode, 0)
+        self.assertEqual(proc.stdout, "")
+        self.assertIn("stages", proc.stderr)
 
 
 class PublishIncompleteRuleTests(unittest.TestCase):
