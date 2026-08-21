@@ -32,6 +32,16 @@ docker run -d --name lgtm-measure -v <scratch>/lgtm-data:/data \
 
 **Host:** macOS 15.7.7 (24G720), Intel Core i7-8850H, 12 cores, 16 GB RAM. Docker Desktop reported 11.68 GiB available to containers.
 
+**Artifact pinning — a real limitation of these figures, per [#415](https://github.com/launchpad-26/buzz/issues/415).** The measurement used the floating tag `grafana/otel-lgtm:latest` and **the resolved digest was not captured at measurement time**. Grafana rebuilds and republishes that tag, so re-running the commands below in a month measures a different artifact with no way to tell whether a changed number reflects a changed stack or a changed image.
+
+The digest cannot now be recovered for the run that produced these figures — the image was deleted after measuring. For reference only, the tag resolved to `sha256:20d748ba7439789a0e897d9821a50bca9ba41bba734ec53569d4c01a8dd8f9f2` (multi-arch index) when checked on 2026-08-22, **after** the measurement; it may or may not be the artifact measured, and should not be treated as though it were.
+
+**For any future measurement, capture it at the time:**
+
+```bash
+docker inspect --format '{{index .RepoDigests 0}}' grafana/otel-lgtm:latest
+```
+
 The container's startup log confirms all six components:
 
 ```
