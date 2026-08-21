@@ -193,6 +193,26 @@ class ScanPrDiffTest(unittest.TestCase):
             result = _scan_pr_diff(Path("."))
         self.assertEqual(result.status, Status.PASS)
 
+    def test_fetch_does_not_request_shallow_depth(self):
+        # Regression for a real bug reproduced directly against this repo:
+        # `git fetch --depth=1 origin <base_ref>` grafts a new shallow
+        # boundary onto that ref even in an already-fully-cloned repo (the
+        # workflow's own fetch-depth: 0), which broke FETCH_HEAD..HEAD's
+        # ancestry computation once base_ref had advanced past this branch's
+        # merge-base -- a correct 2-commit range silently became 2,484
+        # commits, and real PR runs reported "findings in this PR" that were
+        # actually years-old content unrelated to the diff.
+        with patch.dict("os.environ", {"GITHUB_BASE_REF": "launchpad"}), patch(
+            "security_audit_secrets_check.subprocess.run", return_value=_completed(0)
+        ) as mock_run, patch(
+            "security_audit_secrets_check._run_gitleaks", return_value=([], None)
+        ):
+            _scan_pr_diff(Path("."))
+        fetch_call = mock_run.call_args_list[0]
+        fetch_cmd = fetch_call.args[0]
+        self.assertEqual(fetch_cmd, ["git", "fetch", "origin", "launchpad"])
+        self.assertFalse(any("depth" in arg for arg in fetch_cmd))
+
     def test_scans_only_the_pr_range_with_pr_timeout(self):
         # review-code High: the FETCH_HEAD..HEAD PR-scoping guarantee (the
         # module's central claim) was never checked against _run_gitleaks's
