@@ -23,6 +23,35 @@ export const BLOCK_BUILD_HIDDEN_PROVIDER_IDS: ReadonlySet<string> = new Set([
   "databricks",
 ]);
 
+/**
+ * Provider ids to suppress from the picker for the current build/runtime
+ * combination: the Block-build legacy v1 set above, `relay-mesh` for any
+ * runtime other than `buzz-agent`, and `relay-mesh` again when this build
+ * was not compiled with the `mesh-llm` feature (#269) — offering it there
+ * let every agent that picked it fail deep inside buzz-agent's own process
+ * instead of the option simply not being offered.
+ */
+export function computeHideProviderIds({
+  bakedEnvKeys,
+  selectedRuntimeId,
+  meshLlmFeatureEnabled,
+}: {
+  bakedEnvKeys: readonly string[];
+  selectedRuntimeId: string;
+  meshLlmFeatureEnabled: boolean;
+}): Set<string> {
+  const hidden = new Set<string>();
+  if (bakedEnvKeys.includes("BUZZ_AGENT_PROVIDER")) {
+    for (const providerId of BLOCK_BUILD_HIDDEN_PROVIDER_IDS) {
+      hidden.add(providerId);
+    }
+  }
+  if (selectedRuntimeId !== "buzz-agent" || !meshLlmFeatureEnabled) {
+    hidden.add("relay-mesh");
+  }
+  return hidden;
+}
+
 export const PERSONA_FIELD_SHELL_CLASS =
   "rounded-xl border border-input bg-muted/40 transition-colors duration-150 ease-out hover:border-muted-foreground/40 focus-within:border-muted-foreground/50";
 export const PERSONA_FIELD_CONTROL_CLASS =
