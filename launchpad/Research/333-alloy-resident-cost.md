@@ -141,6 +141,8 @@ $ codesign -dv --verbose=2 ./alloy-darwin-amd64
 
 ## What this means for #289
 
+
+> **Recommendations, not findings.** Everything in this section is my assessment as the author, not behaviour established by the evidence above. Per [ADR-0003]'s claim rule: a claim about how the system *behaves* carries a source reference; a claim about what the cohort *should do* is opinion, attributed. Nothing is both — so nothing below is cited as though it were established.
 1. **Running cost is a non-issue.** ~120 MiB and 0.1% CPU is easy to justify asking of a member.
 2. **Quote 419 MB, not 120 MiB, when asking.** The disk cost is the honest number, and it is roughly **11,600×** the 36 KB of runtime state (419 MB ÷ 36 KB = 11,639×; in binary units 419 MiB ÷ 36 KiB = 11,918×).
 
