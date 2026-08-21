@@ -64,6 +64,12 @@ doc/
 identity.key
 **/identity.key
 
+# Key/cert material — #68 asserts these stay covered, regardless of shape
+*.pem
+*.key
+id_rsa
+id_ed25519
+
 # Claude Code worktrees
 .claude/worktrees/
 
