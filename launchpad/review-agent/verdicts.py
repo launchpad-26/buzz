@@ -34,7 +34,7 @@ VERDICTS = frozenset({"CONFIRMED", "REFUTED", "UNPROVEN"})
 _FORBIDDEN_KEYS = frozenset({"approved", "mergeable", "merge_recommendation"})
 
 
-def _is_nonempty_str(value: object) -> bool:
+def is_nonempty_str(value: object) -> bool:
     """A string carrying at least one non-whitespace character.
 
     ADJUDICATION.md requires several fields "non-empty", and § The verdict
@@ -48,7 +48,7 @@ def _is_nonempty_str(value: object) -> bool:
     return isinstance(value, str) and bool(value.strip())
 
 
-def _is_int(value: object) -> bool:
+def is_int(value: object) -> bool:
     """An integer that is not a boolean.
 
     ``bool`` subclasses ``int`` in Python, so ``isinstance(True, int)`` is
@@ -292,7 +292,7 @@ def validate(input_document: dict, output_document: dict) -> list[str]:
                 f"{finding_label}: verdict must be one of {sorted(VERDICTS)}, got {verdict!r}"
             )
 
-        if not _is_nonempty_str(finding.get("verdict_evidence")):
+        if not is_nonempty_str(finding.get("verdict_evidence")):
             violations.append(
                 f"{finding_label}: verdict_evidence must be a non-empty string, got "
                 f"{finding.get('verdict_evidence')!r}"
@@ -310,7 +310,7 @@ def validate(input_document: dict, output_document: dict) -> list[str]:
                 f"{finding_label}: severity {severity!r} is not a key of review.SEVERITY_ORDER"
             )
 
-        if severity != reported_severity and not _is_nonempty_str(finding.get("severity_reason")):
+        if severity != reported_severity and not is_nonempty_str(finding.get("severity_reason")):
             violations.append(
                 f"{finding_label}: severity_reason must be a non-empty string when severity "
                 f"({severity!r}) differs from reported_severity ({reported_severity!r}), got "
@@ -353,7 +353,7 @@ def validate(input_document: dict, output_document: dict) -> list[str]:
             if not isinstance(report, dict):
                 continue
             report_count = report.get("findings_count")
-            if _is_int(report_count):
+            if is_int(report_count):
                 report_findings_count_sum += report_count
             else:
                 # Named rather than silently skipped: a skipped count makes the
@@ -363,7 +363,7 @@ def validate(input_document: dict, output_document: dict) -> list[str]:
                     f"document.reports[{report_index}]: findings_count must be an integer, "
                     f"got {report_count!r}"
                 )
-    if not (_is_int(findings_in) and _is_int(findings_out)):
+    if not (is_int(findings_in) and is_int(findings_out)):
         violations.append(
             "document.adjudication: findings_in and findings_out must both be integers, got "
             f"{findings_in!r} and {findings_out!r}"
