@@ -11,7 +11,11 @@
 
 **Four workable options and one that looks obvious and does not work.** They split cleanly on a rule the literature states directly: *"Admin-only access → Tailscale. Public-shareable → Cloudflare Tunnel."*
 
-That maps onto this cohort's two client types. **Desktop agents are admin-only** — an overlay network reaches them and exposes nothing publicly. **Browsers are public-shareable** — they need a public hostname, or the same-origin relay path from [#321](https://github.com/launchpad-26/buzz/issues/321).
+That maps onto this cohort's two client types, and the mapping is grounded in Buzz's own transport rather than in the generic rule alone:
+
+- **Desktop agents are admin-only.** The desktop client is a native process — a Tauri binary (`desktop/src-tauri/tauri.conf.json`, `productName: "Buzz"`) whose relay socket is `tokio_tungstenite` (`desktop/src-tauri/src/native_websocket.rs:7`). A native process can join an overlay network and reach a private address. Nothing need be exposed publicly.
+- **Browsers are public-shareable.** The web client's transport is `new WebSocket(wsUrl)` (`web/src/shared/lib/nostr-client.ts:45`) inside a browser sandbox, which cannot install VPN software and cannot reach a tailnet address unless the machine it runs on is already joined. It needs a publicly resolvable endpoint, or the same-origin relay path from [#321](https://github.com/launchpad-26/buzz/issues/321).
+- **And the relay's own exporter cannot serve a browser regardless.** `crates/buzz-relay/src/telemetry.rs:243-244` builds its OTLP exporter with `.with_tonic()` — gRPC only — and browsers cannot speak OTLP/gRPC. So browser ingest is a separate HTTP-terminating path under every option below.
 
 **The most important finding is a constraint applying to all four.** No tunnel wakes a sleeping laptop, and [#333](https://github.com/launchpad-26/buzz/issues/333) measured what happens during those hours: `prometheus.remote_write` buffers to a disk WAL and replays; `otelcol.exporter.otlp` buffers in memory only and loses everything on restart. Reachability is not "can the agent connect" but "what survives the hours it cannot" — and that answer differs per signal.
 
@@ -100,6 +104,10 @@ Criterion 2 depends on logs; criterion 3 depends on traces. **Both are in the co
 ## Confidence and what is still unknown
 
 **High confidence** on the architectural distinctions — mesh versus reverse proxy, outbound-only, what each exposes — which are consistent across the sources and are properties of how the products work.
+
+**The desktop/browser split is now grounded in this repository**, not only in the vendors' generic rule: the Tauri binary and `tokio_tungstenite` on one side, `new WebSocket` in a browser sandbox and the relay's gRPC-only exporter on the other, all cited by file and line above.
+
+<sub>Revised per [#419](https://github.com/launchpad-26/buzz/issues/419). The first version derived the split from a third-party comparison plus the general observation that a VPN cannot run in a browser, and cited no `crates/`, `desktop/` or `web/` paths — so a reader could have taken generic client-type reasoning for an architecture-specific finding about Buzz. The conclusion is unchanged; its provenance is now checkable.</sub>
 
 **Low confidence on the pricing specifics**, and I would not act on them without checking. The two Tailscale free-tier figures came from different sources and disagree; the Cloudflare limits were described as *"limits on data transfer and log retention that you should check on Cloudflare's current pricing page"*, which is the source telling you not to trust a secondhand figure. **Vendor free tiers are exactly the thing a research document goes stale on.**
 
