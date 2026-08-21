@@ -89,6 +89,8 @@ NOT_OURS = {
     "same reason as security_audit.py",
     "security_audit_selftest_check.py": "the #62 security-audit self-test check; "
     "same reason as security_audit.py",
+    "security_audit_secrets_check.py": "the #67 secret-material detection check; "
+    "same reason as security_audit.py",
 }
 
 

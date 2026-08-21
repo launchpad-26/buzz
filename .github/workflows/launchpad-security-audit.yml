@@ -12,21 +12,19 @@ name: launchpad — security audit
 #                      matching. Off the hour to avoid GitHub's top-of-hour queue.
 #   workflow_dispatch  manual reruns, and the mechanism used to capture the
 #                       self-test evidence this task's PR links to.
-#   pull_request       filtered to the paths the audit can actually be affected
-#                       by — the audit scripts themselves, any workflow, and
-#                       .gitignore, which the (future) ignore-coverage check
-#                       reads. Unfiltered would run on every unrelated PR for no
-#                       benefit; too narrow risks a check landing that no PR
-#                       trigger ever exercises.
+#   pull_request       UNFILTERED by path as of #67. #66 scoped this to
+#                       ".github/**"/"launchpad/**"/".gitignore" because no
+#                       check existed yet that cared about anything else.
+#                       #67's secret scan has to see every file a PR touches —
+#                       a leaked credential is exactly as real in crates/ or
+#                       desktop/ as it is here — so a path filter narrow
+#                       enough to be cheap is also narrow enough to miss the
+#                       one thing this check exists to catch.
 on:
   schedule:
     - cron: "17 3 * * *"
   workflow_dispatch: {}
-  pull_request:
-    paths:
-      - ".github/**"
-      - "launchpad/**"
-      - "**/.gitignore"
+  pull_request: {}
 
 # Read-only, and nothing more. No repository secret is referenced anywhere in
 # this file — a check that needed one would be a check this workflow cannot run
@@ -46,6 +44,27 @@ jobs:
         with:
           persist-credentials: false
           fetch-depth: 0
+
+      # Pinned to a specific release and verified against gitleaks' own
+      # published checksum before extraction — this is the one third-party
+      # binary this workflow trusts, and it never runs with any credential
+      # in scope, so a supply-chain compromise here still cannot reach a
+      # secret. No gitleaks-maintained Action is used, to keep this
+      # workflow's trust surface to "one pinned, checksummed binary" rather
+      # than a third party's Action code at whatever version they push next.
+      - name: Install gitleaks (pinned, checksum-verified)
+        env:
+          GITLEAKS_VERSION: "8.30.1"
+          GITLEAKS_SHA256: "551f6fc83ea457d62a0d98237cbad105af8d557003051f41f3e7ca7b3f2470eb"
+        run: |
+          set -euo pipefail
+          curl -fsSL -o gitleaks.tar.gz \
+            "https://github.com/gitleaks/gitleaks/releases/download/v${GITLEAKS_VERSION}/gitleaks_${GITLEAKS_VERSION}_linux_x64.tar.gz"
+          echo "${GITLEAKS_SHA256}  gitleaks.tar.gz" | sha256sum -c -
+          tar -xzf gitleaks.tar.gz gitleaks
+          sudo install -m 0755 gitleaks /usr/local/bin/gitleaks
+          rm gitleaks.tar.gz gitleaks
+          gitleaks version
 
       # The harness's own controls, scoped to this task's tests only — the
       # unfiltered `unittest discover` other launchpad-*.yml checks use would
