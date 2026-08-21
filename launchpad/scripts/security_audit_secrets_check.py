@@ -122,26 +122,51 @@ def _summarize(findings: List[dict], limit: int = 8) -> str:
 
 
 def _scan_pr_diff(repo_root: Path) -> CheckResult:
+    # This path is the gate (module docstring): security_audit_core.exit_code()
+    # only fails the run on Status.FAIL, treating INDETERMINATE the same as
+    # PASS. So every "couldn't actually run the scan" case here must be FAIL,
+    # never INDETERMINATE — an unscanned PR going green would silently violate
+    # ADR-0008's rule that indeterminate must never render as pass. This is
+    # deliberately asymmetric with _scan_full_history below, whose own
+    # INDETERMINATE is correct: that path already reports pre-existing findings
+    # as WARN rather than FAIL by design, so a same-shaped infra failure there
+    # isn't gating anything a merge depends on.
     base_ref = os.environ.get("GITHUB_BASE_REF", "")
     if not base_ref:
         return CheckResult(
-            NAME, Status.INDETERMINATE, "GITHUB_BASE_REF is unset; cannot scope a diff scan"
+            NAME, Status.FAIL, "GITHUB_BASE_REF is unset; cannot scope a diff scan"
         )
 
     try:
+        # No --depth=1 here, deliberately: this repo's checkout already has full
+        # history (the workflow's actions/checkout uses fetch-depth: 0), and a
+        # --depth=1 fetch of base_ref grafts a NEW shallow boundary onto that one
+        # ref regardless of the rest of the repo being fully cloned. Once
+        # base_ref has advanced past this branch's own merge-base -- true for
+        # almost every real PR, since branches don't get rebased on every push
+        # to the base -- git can no longer see that older shared commit as an
+        # ancestor of the shallow, parent-less FETCH_HEAD, and
+        # `git log FETCH_HEAD..HEAD` silently expands from "this PR's own
+        # commits" to the entire history reachable from HEAD. Reproduced
+        # directly against this repo: a --depth=1 fetch turned a correct
+        # 2-commit range into 2,484 commits, and the PR-diff scan reported 98
+        # "findings in this PR" that were actually years-old content in
+        # AGENTS.md, Justfile and the NIP spec docs. A plain fetch (full
+        # history, matching what the checkout already guarantees) resolves the
+        # same range correctly.
         subprocess.run(
-            ["git", "fetch", "--depth=1", "origin", base_ref],
+            ["git", "fetch", "origin", base_ref],
             cwd=repo_root,
             check=True,
             capture_output=True,
             timeout=60,
         )
     except (subprocess.CalledProcessError, subprocess.TimeoutExpired, OSError) as exc:
-        return CheckResult(NAME, Status.INDETERMINATE, f"could not fetch base ref {base_ref!r}: {exc}")
+        return CheckResult(NAME, Status.FAIL, f"could not fetch base ref {base_ref!r}: {exc}")
 
     findings, error = _run_gitleaks(repo_root, log_opts="FETCH_HEAD..HEAD", timeout=_PR_TIMEOUT_SECONDS)
     if error is not None:
-        return CheckResult(NAME, Status.INDETERMINATE, error)
+        return CheckResult(NAME, Status.FAIL, error)
     if findings:
         return CheckResult(
             NAME,
