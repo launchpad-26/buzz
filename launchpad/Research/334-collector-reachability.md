@@ -4,6 +4,7 @@
 **Summary:** Four workable options and one that looks obvious and fails. They split on a rule the literature states directly — admin-only access to an overlay network, public-shareable to a tunnel — which maps exactly onto the cohort's desktop-versus-browser split. The most important finding is not an option but a constraint applying to all of them: no tunnel wakes a sleeping laptop, and #333 measured that metrics survive that window from a disk WAL while traces and logs, buffered only in memory, do not.
 **Tags:** `observability` `networking` `tailscale` `cloudflare-tunnel` `nat` `availability`
 **Reviewed:** 2026-08-22 · **Answers:** [#334](https://github.com/launchpad-26/buzz/issues/334)
+**Source pin:** every repository citation below is against `678008ea49e790ada52e84d54b47f47dd77c6b38`.
 
 ---
 
@@ -13,9 +14,9 @@
 
 That maps onto this cohort's two client types, and the mapping is grounded in Buzz's own transport rather than in the generic rule alone:
 
-- **Desktop agents are admin-only.** The desktop client is a native process — a Tauri binary (`desktop/src-tauri/tauri.conf.json`, `productName: "Buzz"`) whose relay socket is `tokio_tungstenite` (`desktop/src-tauri/src/native_websocket.rs:7`). A native process can join an overlay network and reach a private address. Nothing need be exposed publicly.
-- **Browsers are public-shareable.** The web client's transport is `new WebSocket(wsUrl)` (`web/src/shared/lib/nostr-client.ts:45`) inside a browser sandbox, which cannot install VPN software and cannot reach a tailnet address unless the machine it runs on is already joined. It needs a publicly resolvable endpoint, or the same-origin relay path from [#321](https://github.com/launchpad-26/buzz/issues/321).
-- **And the relay's own exporter cannot serve a browser regardless.** `crates/buzz-relay/src/telemetry.rs:243-244` builds its OTLP exporter with `.with_tonic()` — gRPC only — and browsers cannot speak OTLP/gRPC. So browser ingest is a separate HTTP-terminating path under every option below.
+- **Desktop agents are admin-only.** The desktop client is a native process — a Tauri binary ([`desktop/src-tauri/tauri.conf.json`](https://github.com/launchpad-26/buzz/blob/678008ea49e790ada52e84d54b47f47dd77c6b38/desktop/src-tauri/tauri.conf.json), `productName: "Buzz"`) whose relay socket is `tokio_tungstenite` ([`desktop/src-tauri/src/native_websocket.rs#L7`](https://github.com/launchpad-26/buzz/blob/678008ea49e790ada52e84d54b47f47dd77c6b38/desktop/src-tauri/src/native_websocket.rs#L7)). A native process can join an overlay network and reach a private address. Nothing need be exposed publicly.
+- **Browsers are public-shareable.** The web client's transport is `new WebSocket(wsUrl)` ([`web/src/shared/lib/nostr-client.ts#L45`](https://github.com/launchpad-26/buzz/blob/678008ea49e790ada52e84d54b47f47dd77c6b38/web/src/shared/lib/nostr-client.ts#L45)) inside a browser sandbox, which cannot install VPN software and cannot reach a tailnet address unless the machine it runs on is already joined. It needs a publicly resolvable endpoint, or the same-origin relay path from [#321](https://github.com/launchpad-26/buzz/issues/321).
+- **And the relay's own exporter cannot serve a browser regardless.** [`crates/buzz-relay/src/telemetry.rs#L243-L244`](https://github.com/launchpad-26/buzz/blob/678008ea49e790ada52e84d54b47f47dd77c6b38/crates/buzz-relay/src/telemetry.rs#L243-L244) builds its OTLP exporter with `.with_tonic()` — gRPC only — and browsers cannot speak OTLP/gRPC. So browser ingest is a separate HTTP-terminating path under every option below.
 
 **The most important finding is a constraint applying to all four.** No tunnel wakes a sleeping laptop, and [#333](https://github.com/launchpad-26/buzz/issues/333) measured what happens during those hours: `prometheus.remote_write` buffers to a disk WAL and replays; `otelcol.exporter.otlp` buffers in memory only and loses everything on restart. Reachability is not "can the agent connect" but "what survives the hours it cannot" — and that answer differs per signal.
 
