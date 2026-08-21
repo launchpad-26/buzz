@@ -196,12 +196,57 @@ class OperatorAuthoredConfigTests(unittest.TestCase):
             expected = OPERATOR_AUTHORED_CONFIG + (
                 "  developer:\n" "    type: builtin\n" "    enabled: true\n"
             )
+            # read_BYTES, not read_text: `read_text` normalises newlines, so a
+            # CRLF/LF rewrite is invisible to it. Cross-vendor review caught the
+            # text-mode version of this assertion passing while the
+            # implementation was in fact rewriting CRLF to LF.
             self.assertEqual(
-                path.read_text(encoding="utf-8"),
-                expected,
+                path.read_bytes(),
+                expected.encode("utf-8"),
                 "output must be the operator's file byte-for-byte, plus only "
                 "the appended developer block",
             )
+
+    def test_preserves_crlf_line_endings(self):
+        """A Windows operator's CRLF file stays CRLF.
+
+        Measured before this was fixed: a 5-CRLF input came back with 0, and
+        the original bytes were not a prefix of the output — the module was
+        silently converting the whole file to LF, which is the same class of
+        unasked-for edit as dropping their comments."""
+        with tempfile.TemporaryDirectory() as d:
+            path = Path(d) / "config.yaml"
+            original = (
+                b"# managed by hand\r\n"
+                b"active_provider: anthropic\r\n"
+                b"extensions:\r\n"
+                b"  my-mcp:\r\n"
+                b"    type: stdio\r\n"
+            )
+            path.write_bytes(original)
+
+            m.enable_developer_extension(path=path)
+            after = path.read_bytes()
+
+            self.assertNotIn(b"\n", after.replace(b"\r\n", b""),
+                             "no bare LF may survive in a CRLF file")
+            self.assertTrue(
+                after.startswith(original),
+                "the operator's original bytes must be an exact prefix of the result",
+            )
+            self.assertEqual(
+                after,
+                original + b"  developer:\r\n    type: builtin\r\n    enabled: true\r\n",
+            )
+
+    def test_lf_file_stays_lf(self):
+        """The mirror of the CRLF case: preserving CRLF must not mean emitting
+        CRLF into a file that never had it."""
+        with tempfile.TemporaryDirectory() as d:
+            path = Path(d) / "config.yaml"
+            path.write_bytes(b"active_provider: anthropic\n")
+            m.enable_developer_extension(path=path)
+            self.assertNotIn(b"\r", path.read_bytes())
 
 
 class MergeDeveloperExtensionTests(unittest.TestCase):

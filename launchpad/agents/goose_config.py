@@ -139,12 +139,25 @@ def write_config_atomic(path: Path, config: dict) -> None:
 
     If `path` already exists, the new file keeps its permission mode
     (`tempfile.mkstemp` otherwise always creates at 0600, which would
-    silently narrow an existing 0644 file's permissions on every write)."""
+    silently narrow an existing 0644 file's permissions on every write)
+    and its line-ending convention (a CRLF file written by a Windows
+    operator was silently rewritten to LF, which is the same class of
+    unasked-for edit as losing their comments -- and this repository does
+    support Windows, so it is not hypothetical). A file containing any CRLF
+    is treated as a CRLF file; mixed endings are normalised to CRLF rather
+    than preserved per-line."""
     path.parent.mkdir(parents=True, exist_ok=True)
     real_path = path.resolve() if path.is_symlink() else path
     real_path.parent.mkdir(parents=True, exist_ok=True)
 
-    existing_mode = real_path.stat().st_mode if real_path.exists() else None
+    existing_mode = None
+    newline = "\n"
+    if real_path.exists():
+        existing_mode = real_path.stat().st_mode
+        # Read in full rather than sampling a prefix: a file can be LF for a
+        # hundred lines and CRLF after. These configs are a few KB at most.
+        if b"\r\n" in real_path.read_bytes():
+            newline = "\r\n"
 
     fd, tmp_name = tempfile.mkstemp(
         dir=str(real_path.parent), prefix=f".{real_path.name}.", suffix=".tmp"
@@ -152,7 +165,9 @@ def write_config_atomic(path: Path, config: dict) -> None:
     try:
         if existing_mode is not None:
             os.chmod(fd, stat.S_IMODE(existing_mode))
-        with os.fdopen(fd, "w", encoding="utf-8") as f:
+        # newline= is what preserves the convention: the YAML dumper always
+        # emits "\n", and Python translates it on the way out.
+        with os.fdopen(fd, "w", encoding="utf-8", newline=newline) as f:
             _yaml().dump(config, f)
         os.replace(tmp_name, real_path)
     except Exception:
