@@ -22,6 +22,8 @@
 
 > *"The redaction processor deletes span attributes that don't match a list of allowed span attributes."*
 
+<sub>Wording note per [#420](https://github.com/launchpad-26/buzz/issues/420). The quoted line above and the `blocked_values` line below say **"span attributes"**; the current upstream README words the same behaviour uniformly as **"span, log, and metric datapoint attributes"**. The substance is unaffected — the processor covers all three signals, as the stability table below states — but a reader diffing this note against upstream could briefly wonder whether behaviour changed. It did not; this quote was captured from secondary documentation using the older phrasing.</sub>
+
 > *"The `allowed_keys` approach is powerful because it is a whitelist. Instead of trying to think of every sensitive key that might appear, you define only the keys you want to keep. Everything else gets dropped."*
 
 This matters more than any other single fact here. A denylist fails silently the first time somebody adds an attribute nobody anticipated — which is how telemetry leaks. An allowlist fails *closed*: a new field is dropped until someone deliberately adds it. For a PRD whose criterion 6 requires knowing what is **not** collected, an allowlist makes the policy and the enforcement the same document.
