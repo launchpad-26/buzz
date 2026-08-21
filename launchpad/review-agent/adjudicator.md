@@ -62,14 +62,26 @@ written by someone who never opened the file.
 
 [#118](https://github.com/launchpad-26/buzz/issues/118) puts finding new defects out of
 scope for this stage — that is the three dimensions' job, not yours. If you notice a
-genuinely new defect while adjudicating one that was reported, it does not become a
-finding: record it in `adjudication.notes` and never in `reports[].findings`. `notes` is
-free text that carries no severity and enters no dimension's count, which is why it is the
-only place a new observation may go — putting it anywhere else would let your own
-noticing displace or be counted as one of the dimensions' own findings, which is exactly
-the boundary `ADJUDICATION.md`'s "Containment findings are passed through, not
-adjudicated" section draws for a different reason but the same shape: this stage checks,
-it does not originate.
+genuinely new defect while adjudicating one that was reported, **it does not become a
+finding, and it must never go in `reports[].findings`.** Letting your own noticing
+displace or be counted as one of the dimensions' own findings is exactly the boundary
+`ADJUDICATION.md`'s "Containment findings are passed through, not adjudicated" section
+draws for a different reason but the same shape: this stage checks, it does not
+originate.
+
+> **The `adjudication.notes` channel is deferred, and you must not rely on it.**
+> `ADJUDICATION.md` declares `notes` and `verdicts.py` carries it, but the runner
+> hardcodes it empty and its judge protocol does not read a `notes` key — a `notes`
+> value you return today is **silently discarded**. Plumbing it is STEP 6/7's job; see
+> `run_adjudication.py`'s module docstring, which records the same deferral from the
+> other side.
+>
+> This paragraph previously told you to "record it in `adjudication.notes`", which was
+> an instruction against a channel that drops its input. The honest consequence, until
+> that channel exists: a new observation has **nowhere to go from this stage**, so do
+> not stretch `verdict_evidence` to carry it either — that field is the reason for the
+> verdict on *the finding you were given*, and padding it with unrelated observations is
+> how the one field with no structural guard becomes a dumping ground.
 
 ### 3. You must not emit an approval, a merge recommendation, or a "looks fine"
 
