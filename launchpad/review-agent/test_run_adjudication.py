@@ -344,6 +344,134 @@ class JudgeFailsClosedTests(unittest.TestCase):
         adjudicated = output_doc["reports"][0]["findings"][0]
         self.assertEqual(adjudicated["verdict"], "UNPROVEN")
 
+    def test_judge_returning_whitespace_evidence_fails_closed_to_unproven(self):
+        """A truthiness test is not the "unusable output" check this function
+        promises: ``not "   "`` is False. ADJUDICATION.md's reason for
+        requiring evidence is that "an UNPROVEN with no reason is
+        indistinguishable from a stage that skipped the finding", and
+        whitespace IS no reason -- so a CONFIRMED Blocker could be published
+        with a blank justification and still validate clean.
+        """
+        for blank in ("   ", "\n", "\t", "   \n  ", "\xa0"):
+            with self.subTest(evidence=blank):
+                def _blank_evidence_judge(finding, document, _b=blank):
+                    return {"verdict": "CONFIRMED", "verdict_evidence": _b}
+
+                input_doc = make_document()
+                output_doc = run_adjudication.adjudicate(input_doc, _blank_evidence_judge)
+                adjudicated = output_doc["reports"][0]["findings"][0]
+                self.assertEqual(adjudicated["verdict"], "UNPROVEN")
+                self.assertTrue(adjudicated["verdict_evidence"].strip())
+
+    def test_judge_returning_non_string_evidence_fails_closed_to_unproven(self):
+        """The sibling half: the guard had no type check, so any truthy value
+        passed. ``verdict_evidence: 42`` is not something a reader can act on.
+        """
+        for wrong_type in (42, True, 0.5, ["x"], {"a": 1}):
+            with self.subTest(evidence=wrong_type):
+                def _wrong_type_judge(finding, document, _w=wrong_type):
+                    return {"verdict": "CONFIRMED", "verdict_evidence": _w}
+
+                input_doc = make_document()
+                output_doc = run_adjudication.adjudicate(input_doc, _wrong_type_judge)
+                adjudicated = output_doc["reports"][0]["findings"][0]
+                self.assertEqual(adjudicated["verdict"], "UNPROVEN")
+                self.assertIsInstance(adjudicated["verdict_evidence"], str)
+
+    def test_blank_evidence_output_still_satisfies_the_verdict_contract(self):
+        """The half that makes this load-bearing: before the fix, the blank
+        evidence reached the published document AND `verdicts.validate`
+        returned zero violations, because the contract check used the same
+        truthiness idiom. Both ends must now agree.
+        """
+        def _blank_evidence_judge(finding, document):
+            return {"verdict": "CONFIRMED", "verdict_evidence": "   \n  "}
+
+        input_doc = make_document()
+        output_doc = run_adjudication.adjudicate(input_doc, _blank_evidence_judge)
+        self.assertEqual(verdicts.validate(input_doc, output_doc), [])
+        self.assertEqual(output_doc["reports"][0]["findings"][0]["verdict"], "UNPROVEN")
+
+
+class ReplayBlankEvidenceTests(unittest.TestCase):
+    """`--replay` forwards a recording's contents unfiltered, so the blank
+    shape was reachable from an ordinary command line -- not only from an
+    injected judge. This drives the guard through the shipped flag.
+    """
+
+    @staticmethod
+    def _replay_run(finding, evidence):
+        """Drive `adjudicate` through a real replay recording.
+
+        The recording format is a mapping ``finding_id -> {verdict, ...}``,
+        NOT a flat record -- get that wrong and the lookup misses, the judge
+        fails closed with "no recorded judge output", and a test asserting
+        UNPROVEN passes for entirely the wrong reason.
+        """
+        with tempfile.TemporaryDirectory() as tmp:
+            recording = {
+                finding["finding_id"]: {"verdict": "CONFIRMED", "verdict_evidence": evidence}
+            }
+            (Path(tmp) / "rec.json").write_text(json.dumps(recording), encoding="utf-8")
+            judge = run_adjudication.make_replay_judge(Path(tmp))
+            input_doc = make_document(reports=[make_report(findings_list=[finding])])
+            output_doc = run_adjudication.adjudicate(input_doc, judge)
+        return input_doc, output_doc
+
+    def test_a_matching_recording_is_actually_used(self):
+        """The control this class needs to be worth anything: prove the lookup
+        HITS, so a later UNPROVEN is the blank-evidence guard firing and not a
+        recording that was never found.
+        """
+        finding = make_raw_finding()
+        input_doc, output_doc = self._replay_run(finding, "the credential is present at that line")
+        adjudicated = output_doc["reports"][0]["findings"][0]
+        self.assertEqual(adjudicated["verdict"], "CONFIRMED")
+        self.assertNotIn("no recorded judge output", adjudicated["verdict_evidence"])
+        self.assertEqual(verdicts.validate(input_doc, output_doc), [])
+
+    def test_replay_recording_with_whitespace_evidence_fails_closed(self):
+        finding = make_raw_finding()
+        input_doc, output_doc = self._replay_run(finding, "   \n  ")
+        adjudicated = output_doc["reports"][0]["findings"][0]
+        self.assertEqual(adjudicated["verdict"], "UNPROVEN")
+        self.assertTrue(adjudicated["verdict_evidence"].strip())
+        # Specifically the guard, not a missed lookup.
+        self.assertIn("unusable output", adjudicated["verdict_evidence"])
+        self.assertNotIn("no recorded judge output", adjudicated["verdict_evidence"])
+        self.assertEqual(verdicts.validate(input_doc, output_doc), [])
+
+
+class NotesDeferralTests(unittest.TestCase):
+    """`adjudication.notes` is hardcoded empty at this step and the judge
+    protocol does not honour a `notes` key. That is deliberate, but it was
+    undocumented -- and `adjudicator.md` (#265) normatively tells a judge to
+    record new observations there. These tests pin the CURRENT behaviour so
+    the deferral is asserted rather than assumed, and so whichever way #118
+    resolves it, a test changes with the decision.
+    """
+
+    def test_a_judge_supplied_notes_key_is_not_carried(self):
+        def _noting_judge(finding, document):
+            return {
+                "verdict": "CONFIRMED",
+                "verdict_evidence": "the credential is present at that line",
+                "notes": ["a genuinely new defect noticed while adjudicating"],
+            }
+
+        input_doc = make_document()
+        output_doc = run_adjudication.adjudicate(input_doc, _noting_judge)
+        # Documented deferral, not an accident: see this module's docstring.
+        self.assertEqual(output_doc["adjudication"]["notes"], [])
+        self.assertEqual(verdicts.validate(input_doc, output_doc), [])
+
+    def test_the_deferral_is_stated_in_the_module_docstring(self):
+        """The finding was that nothing said so. If the sentence goes, this
+        test goes red rather than the gap reopening silently.
+        """
+        self.assertIn("notes", run_adjudication.__doc__)
+        self.assertRegex(run_adjudication.__doc__, r"notes.*(defer|STEP 6/7|left empty)")
+
 
 class NoRerateInThisStepTests(unittest.TestCase):
     """This step performs no re-rating at all (STEP 6's job): every finding's

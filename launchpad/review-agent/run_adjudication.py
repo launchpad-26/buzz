@@ -57,6 +57,22 @@ are STEP 6/7's job, layered on top of this module later. This step leaves
 every finding's ``severity`` exactly equal to its ``reported_severity`` --
 the honest behaviour for a judge (the stub) that never rates anything -- and
 ``duplicate_of`` always null.
+
+``adjudication.notes`` is **deferred to STEP 6/7 too, and left empty here**,
+which until now was the one hardcoded-empty field with no deferral stated
+anywhere. The judge protocol below carries no ``notes`` key, so a judge that
+returns one has it dropped. Recording it explicitly because the silence was
+the defect: ADJUDICATION.md declares the field and ``verdicts.py`` carries
+it, so a reader had every reason to assume the channel worked.
+
+**This deferral is in tension with ``adjudicator.md`` (#265), which
+normatively tells a judge to "record it in ``adjudication.notes``".** While
+that instruction ships against a protocol that discards the key, a judge's
+only remaining outlet is ``verdict_evidence`` -- the field with no
+structural guard. Whoever resolves this should either plumb ``notes``
+through the protocol here (symmetric with how a future ``severity_reason``
+would be) or amend ``adjudicator.md`` to say the channel is deferred. Not
+decided in this step; named so it cannot be merged past unnoticed.
 """
 
 from __future__ import annotations
@@ -166,9 +182,19 @@ def make_replay_judge(replay_dir: Path) -> Judge:
 def _run_judge_safely(judge: Judge, finding: dict, input_document: dict) -> dict:
     """Call ``judge`` and fail closed to ``UNPROVEN`` on anything unusable --
     a raised exception, a non-dict return, an illegal/missing ``verdict``, or
-    empty ``verdict_evidence``. ADJUDICATION.md's own words: "An adjudicator
+    ``verdict_evidence`` that is not a string with at least one
+    non-whitespace character. ADJUDICATION.md's own words: "An adjudicator
     that cannot reach the location, cannot parse the finding, times out, or
     returns unusable output yields UNPROVEN with a reason."
+
+    "Blank", not "empty", and the distinction is the whole point: a
+    truthiness test lets ``"   "`` through, and a whitespace reason is
+    indistinguishable from no reason -- which is the case ADJUDICATION.md
+    says the requirement exists to exclude. The rule is
+    ``verdicts.is_nonempty_str``, imported rather than re-implemented, so
+    this producer guard and the contract check in ``verdicts.validate``
+    cannot drift apart: they did exactly that, each admitting whitespace
+    because the other did.
     """
     try:
         result = judge(finding, input_document)
@@ -185,13 +211,13 @@ def _run_judge_safely(judge: Judge, finding: dict, input_document: dict) -> dict
 
     verdict = result.get("verdict") if isinstance(result, dict) else None
     evidence = result.get("verdict_evidence") if isinstance(result, dict) else None
-    if verdict not in verdicts.VERDICTS or not evidence:
+    if verdict not in verdicts.VERDICTS or not verdicts.is_nonempty_str(evidence):
         return {
             "verdict": "UNPROVEN",
             "verdict_evidence": (
                 "adjudicator returned unusable output (missing or illegal verdict, "
-                "or empty verdict_evidence); failing closed to UNPROVEN per "
-                "ADJUDICATION.md's default."
+                "or verdict_evidence that was blank, whitespace-only or not a "
+                "string); failing closed to UNPROVEN per ADJUDICATION.md's default."
             ),
         }
     return {"verdict": verdict, "verdict_evidence": evidence}
@@ -255,6 +281,9 @@ def adjudicate(input_document: dict, judge: Judge) -> dict:
         duplicate_groups=[],
         downgrades=[],
         total_refutation=total_refutation,
+        # Deferred to STEP 6/7, not an oversight -- see this module's docstring,
+        # including the unresolved tension with adjudicator.md (#265). The judge
+        # protocol carries no `notes` key, so nothing can populate this yet.
         notes=[],
         completion_marker=f"BUZZ-ADJUDICATION-COMPLETE:{nonce}",
     ).as_dict()
