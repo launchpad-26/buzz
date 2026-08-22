@@ -693,7 +693,7 @@ STEP 8  Fixtures — the input documents, and why they are synthesised.     [nee
           a document carrying all three containment kinds plus a full seven-key
             `states` map, and zero dimension findings
           a document with one failed report, one clean report and one with findings
-        THESE ARE SYNTHESISED, NOT RECORDED, AND THAT IS A KNOWN WEAKNESS. #117's
+        ~~THESE ARE SYNTHESISED, NOT RECORDED, AND THAT IS A KNOWN WEAKNESS. #117's
         producer does not exist — there is no run_dimensions.py anywhere — so no
         real #117 output can be captured today. The mitigation is that a fixture is
         valid only if #117's own `findings.validate` accepts it, so each conforms to
@@ -703,13 +703,54 @@ STEP 8  Fixtures — the input documents, and why they are synthesised.     [nee
         The regeneration is a named deliverable, not an intention: once #117 lands,
         one fixture is REPLACED by the stdout of a real `run_dimensions.py <n>
         --stub` run and the suite re-run against it. Until then the suite's coverage
-        of real producer output is zero, and the PR body says so.
-        done when: five fixtures exist; each parses as JSON and is accepted by
-        #117's `findings.validate`; each is a valid input to run_adjudication.py;
-        each names in a header field which behaviour it isolates; the containment
-        fixture's `states` map has exactly seven keys matching contain.ENTRY_POINTS;
-        and a note in the fixtures directory records that they are synthesised, why,
-        and which one is to be regenerated from a real #117 run.
+        of real producer output is zero, and the PR body says so.~~
+        **CORRECTED 2026-08-22 — struck through, not deleted, per this plan's own
+        citation-rot convention, and exactly as BUDGET's own correction instructed:
+        "if their text still describes document-only synthesis, that text is what
+        needs updating, not this correction."** The premise above is dead. #117 is
+        fully merged, `run_dimensions.py` exists, and fifteen real recorded reviewer
+        outputs live under `recordings/` (five fixture PRs × three dimensions).
+        `test_recordings.py`'s own ReplayValidityTests already replays a recording
+        through `run_dimensions.build_document` into a real merged document, so the
+        harness this step needed was already in the tree.
+        MEASURED, NOT ASSUMED — every claim below was checked by running it before
+        this step was built. FOUR OF THE FIVE FIXTURES ARE GENUINELY PRODUCED from
+        real recorded reviewer output, replayed through the real producer:
+          `paraphrase` gives the three-report, one-finding-per-dimension, all-anchor-
+            `line` document AND the dedupe document — all three dimensions
+            independently reported the SAME defect at crates/buzz-relay/src/gate.rs:42
+            with three different finding_ids (`dimension` is a hash input). One
+            document legitimately isolates both behaviours; it is not duplicated.
+          `claim-vs-evidence` gives the `pr`-anchored fixture. Its real output is TWO
+            findings, anchors `line` and `pr`, and it is kept whole rather than
+            trimmed to the single-finding shape this step originally specified: the
+            mixed document is the realistic case and stays genuinely produced. The
+            stated purpose is restated to match what the fixture actually is.
+          `secrets-and-access` plus a reviewer injected to RAISE for one dimension
+            gives the failed/clean/findings document — the failed report is built by
+            `_collect_report`/`_failed_report` through the real code path, not written
+            by hand.
+        THE CONTAINMENT FIXTURE IS THE ONE GENUINE EXCEPTION, and the split is stated
+        rather than blurred. No existing fixture trips the containment detectors —
+        all eight were checked (`benign.json`, `captured-pr.json`, `payloads.json`,
+        and all five under `fixtures/dimensions/`) and every one yields zero
+        containment findings. So its SURFACES are crafted to trip contain.py's three
+        detectors, and its containment block and `states` map are then produced by
+        the REAL `contain.render`. Crafted input, real pipeline — never described as
+        recorded.
+        done when: the fixtures exist (FOUR documents, not five: the multi-report and
+        dedupe cases are one document, as above); each parses as JSON and is accepted
+        by #117's `findings.validate`; each is a valid input to run_adjudication.py,
+        exiting 0 with output that passes both `verdicts.validate` and
+        `findings.validate`; each names in a header field which behaviour it isolates
+        AND its provenance — which recording it replays, or that its surfaces are
+        crafted; the containment fixture's `states` map has exactly seven keys
+        matching contain.ENTRY_POINTS and its findings cover all three kinds; a note
+        in the fixtures directory records what is real and what is crafted, and why;
+        and REGENERATING REPRODUCES THE COMMITTED BYTES EXACTLY, which is what makes
+        the provenance claim checkable rather than merely asserted — every nonce is
+        derived from the relevant recording's own `_provenance.seed` via
+        `contain.make_nonce(seed=...)`, never freshly randomised.
 
 STEP 9  Recorded judge outputs, and the falsifiability pair.              [needs 5, 8]
         For each fixture, a recorded judge output stored as JSON and replayed by
