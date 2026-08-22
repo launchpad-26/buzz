@@ -271,9 +271,14 @@ def build_pr_anchored_finding_document() -> dict:
                 "TWO findings for this fixture (one anchor 'line' Blocker at "
                 "scripts/config_loader.py:23, one anchor 'pr' High citing a "
                 "nonexistent scripts/config_schema.py) -- kept as recorded rather "
-                "than trimmed to isolate the anchor 'pr' case alone, per Serina's "
-                "call recorded in this repo's session notes: a stronger, still "
-                "genuinely-produced test than the isolated single-finding case."
+                "than trimmed to isolate the anchor 'pr' case alone. Trimming would "
+                "make this a real replay with a finding deleted by hand, which is "
+                "the precise thing this directory exists to avoid; the two-finding "
+                "document is also the stronger test, exercising a 'pr' anchor "
+                "alongside a 'line' one rather than in isolation. Argued from what "
+                "the recording contains, deliberately citing no out-of-repo "
+                "decision record -- a citation a reader cannot open is one this "
+                "plan's own conventions treat as no citation at all."
             ),
         },
     )
