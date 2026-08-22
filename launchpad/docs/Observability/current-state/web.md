@@ -249,5 +249,5 @@ No new redaction or retention policy is defined here.
   [issue #323](https://github.com/launchpad-26/buzz/issues/323) and its
   [checked-in trace-context artifact](../../../Research/323-trace-context-propagation.md).
 
-Back to the [overview](overview.md). See also [relay](relay.md) and
-[desktop](desktop.md).
+Back to the [overview](overview.md) or the canonical [coverage inventory](coverage.md).
+See also [relay](relay.md) and [desktop](desktop.md).

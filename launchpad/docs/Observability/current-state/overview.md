@@ -9,8 +9,8 @@ This overview gives operators, contributors, and agents a single, time-constrain
 of what can be observed in Buzz today. It explains which signals the product currently
 emits or exposes, what context survives after a fault, how activity can be correlated
 across component boundaries, and which diagnostic questions the available evidence can
-and cannot answer. The component deep dives remain the source for detailed inventories
-and supporting evidence.
+and cannot answer. The [coverage inventory](coverage.md) is the canonical stage-1
+completeness record; the component deep dives remain the source for current evidence.
 
 The scope is the current product-observability boundary of the Buzz relay, the desktop
 client—including its native Tauri process and frontend—and the browser web client. It
@@ -208,6 +208,7 @@ or retention policy.
 
 ## Component deep dives
 
+- [Canonical coverage inventory](coverage.md)
 - [Relay](relay.md)
 - [Desktop](desktop.md)
 - [Web](web.md)
