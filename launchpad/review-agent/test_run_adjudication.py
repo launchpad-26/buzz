@@ -38,8 +38,18 @@ every output; and a judge that downgrades a Blocker to Low
 (`adjudication.downgrades` names it with from/to/reason). See
 `SeverityRerateTests` and `TotalRefutationStatusTests` below.
 
-Deliberately NOT exercised here (later steps' territory, per the plan):
-dedupe (STEP 7).
+Also exercises STEP 7's own done-when: given two findings from two
+dimensions describing one planted defect (a ``dedupe_judge`` injected to
+report them as duplicates of each other), both are present in the output,
+both carry a verdict, exactly one carries `duplicate_of` naming the other,
+and `duplicate_groups` carries one group naming both; the survivor is the
+same across two runs of the same input, asserted by byte-comparing the two
+outputs; a finding whose `duplicate_of` names an id absent from the document,
+and one naming itself, are each rejected by `verdicts.validate` (that
+validator already exists from STEP 2 -- confirmed here, not reimplemented);
+and a run that dedupes nothing (the default `stub_dedupe_judge`) emits an
+EMPTY `duplicate_groups` array rather than omitting the key. See
+`DedupeTests` below.
 
 This file is scoped to `run_adjudication.py` alone and is deliberately not
 wired into `run_controls.py`'s CONTROLS list -- that is STEP 10's control
@@ -1279,6 +1289,236 @@ class NothingRemovedAssertionTests(unittest.TestCase):
         with mock.patch.object(run_adjudication, "_collect_finding_ids", lying_collect):
             with self.assertRaises(run_adjudication.FindingSetIntegrityError):
                 run_adjudication.adjudicate(input_doc, run_adjudication.stub_judge)
+
+
+def _pairing_dedupe_judge(fid_a: str, fid_b: str):
+    """A ``dedupe_judge`` that always reports exactly one group: ``fid_a``
+    and ``fid_b`` are the same defect. Used throughout ``DedupeTests`` in
+    place of a real cross-finding dedupe mechanism -- STEP 7's own harness
+    is what is under test, not any particular mechanism (see
+    ``run_adjudication``'s module docstring, STEP 7 section, for why the
+    mechanism is a separate, injectable callable at all).
+    """
+
+    def _dedupe(adjudicated_findings: list, document: dict) -> list:
+        return [[fid_a, fid_b]]
+
+    return _dedupe
+
+
+class DedupeTests(unittest.TestCase):
+    """STEP 7's own done-when, in full: two findings from two dimensions
+    describing one planted defect, both emitted with their own verdict and
+    exactly one carrying `duplicate_of`; `duplicate_groups` naming both;
+    survivor determinism proven by byte-comparing two runs; `verdicts.
+    validate` already rejecting a `duplicate_of` naming an absent id or
+    itself (STEP 2's validator, confirmed here rather than reimplemented);
+    and the empty-not-missing `duplicate_groups` key on a run that dedupes
+    nothing.
+    """
+
+    def _two_dimension_document(self, severity="High") -> tuple[dict, str, str]:
+        """Two findings, two different dimensions, describing one planted
+        defect in different words -- different `finding_id`s by
+        construction, since `dimension` is one of `finding_id`'s hash
+        inputs. Returns ``(input_doc, finding_id_a, finding_id_b)``.
+        """
+        finding_a = make_raw_finding(
+            dimension="secrets-and-access",
+            defect="hardcoded credential in connection string",
+            severity=severity,
+        )
+        finding_b = make_raw_finding(
+            dimension="access-control",
+            defect="database password embedded directly in source",
+            severity=severity,
+        )
+        input_doc = make_document(
+            reports=[
+                make_report(dimension="secrets-and-access", findings_list=[finding_a]),
+                make_report(dimension="access-control", findings_list=[finding_b]),
+            ]
+        )
+        return input_doc, finding_a["finding_id"], finding_b["finding_id"]
+
+    def test_both_findings_present_with_their_own_verdict_and_grouped(self):
+        input_doc, fid_a, fid_b = self._two_dimension_document()
+
+        output_doc = run_adjudication.adjudicate(
+            input_doc, _make_judge(verdict="CONFIRMED"), dedupe_judge=_pairing_dedupe_judge(fid_a, fid_b)
+        )
+
+        all_findings = [f for r in output_doc["reports"] for f in r["findings"]]
+        self.assertEqual({f["finding_id"] for f in all_findings}, {fid_a, fid_b})
+        for f in all_findings:
+            self.assertEqual(f["verdict"], "CONFIRMED")
+
+        # Equal severity and verdict on both sides -- the tiebreaker is the
+        # lowest finding_id, per ADJUDICATION.md § Dedupe.
+        survivor, duplicate = sorted([fid_a, fid_b])
+        by_id = {f["finding_id"]: f for f in all_findings}
+        self.assertIsNone(by_id[survivor]["duplicate_of"])
+        self.assertEqual(by_id[duplicate]["duplicate_of"], survivor)
+
+        self.assertEqual(
+            output_doc["adjudication"]["duplicate_groups"],
+            [{"survivor": survivor, "duplicates": [duplicate]}],
+        )
+        self.assertEqual(output_doc["adjudication"]["findings_out"], 2)
+        self.assertEqual(verdicts.validate(input_doc, output_doc), [])
+        self.assertEqual(findings.validate(output_doc), [])
+
+    def test_dedupe_judge_sees_the_adjudicated_findings_not_the_raw_ones(self):
+        # The dedupe judge is called ONCE, after every finding already has
+        # its final verdict/severity -- never once per finding like `Judge`.
+        input_doc, fid_a, fid_b = self._two_dimension_document()
+        seen: list[list[dict]] = []
+
+        def _recording_dedupe(adjudicated_findings, document):
+            seen.append(adjudicated_findings)
+            return []
+
+        run_adjudication.adjudicate(
+            input_doc, _make_judge(verdict="CONFIRMED"), dedupe_judge=_recording_dedupe
+        )
+
+        self.assertEqual(len(seen), 1, "dedupe_judge must be called exactly once")
+        (adjudicated_findings,) = seen
+        self.assertEqual(len(adjudicated_findings), 2)
+        for f in adjudicated_findings:
+            self.assertIn("verdict", f)
+            self.assertIn("severity", f)
+
+    def test_survivor_prefers_highest_severity(self):
+        finding_a = make_raw_finding(dimension="a", defect="one defect", severity="Medium")
+        finding_b = make_raw_finding(dimension="b", defect="same defect worded differently", severity="Blocker")
+        input_doc = make_document(
+            reports=[
+                make_report(dimension="a", findings_list=[finding_a]),
+                make_report(dimension="b", findings_list=[finding_b]),
+            ]
+        )
+        fid_a, fid_b = finding_a["finding_id"], finding_b["finding_id"]
+
+        output_doc = run_adjudication.adjudicate(
+            input_doc, _make_judge(verdict="CONFIRMED"), dedupe_judge=_pairing_dedupe_judge(fid_a, fid_b)
+        )
+
+        [group] = output_doc["adjudication"]["duplicate_groups"]
+        self.assertEqual(group["survivor"], fid_b, "the Blocker finding must survive over the Medium one")
+        self.assertEqual(verdicts.validate(input_doc, output_doc), [])
+
+    def test_survivor_prefers_confirmed_over_unproven_over_refuted(self):
+        finding_a = make_raw_finding(dimension="a", defect="one defect", severity="High")
+        finding_b = make_raw_finding(dimension="b", defect="same defect worded differently", severity="High")
+        input_doc = make_document(
+            reports=[
+                make_report(dimension="a", findings_list=[finding_a]),
+                make_report(dimension="b", findings_list=[finding_b]),
+            ]
+        )
+        fid_a, fid_b = finding_a["finding_id"], finding_b["finding_id"]
+
+        def judge(finding: dict, document: dict) -> dict:
+            verdict = "UNPROVEN" if finding["finding_id"] == fid_a else "CONFIRMED"
+            return {"verdict": verdict, "verdict_evidence": "checked independently"}
+
+        output_doc = run_adjudication.adjudicate(
+            input_doc, judge, dedupe_judge=_pairing_dedupe_judge(fid_a, fid_b)
+        )
+
+        [group] = output_doc["adjudication"]["duplicate_groups"]
+        self.assertEqual(group["survivor"], fid_b, "CONFIRMED must survive over UNPROVEN at equal severity")
+        self.assertEqual(verdicts.validate(input_doc, output_doc), [])
+
+    def test_survivor_is_the_same_across_two_runs_byte_for_byte(self):
+        input_doc, fid_a, fid_b = self._two_dimension_document()
+
+        output_1 = run_adjudication.adjudicate(
+            input_doc, _make_judge(verdict="CONFIRMED"), dedupe_judge=_pairing_dedupe_judge(fid_a, fid_b)
+        )
+        output_2 = run_adjudication.adjudicate(
+            input_doc, _make_judge(verdict="CONFIRMED"), dedupe_judge=_pairing_dedupe_judge(fid_a, fid_b)
+        )
+
+        self.assertEqual(
+            json.dumps(output_1, sort_keys=True),
+            json.dumps(output_2, sort_keys=True),
+            "two runs of the same input must agree on the same survivor, byte for byte",
+        )
+
+    def test_dedupe_judge_raising_fails_closed_to_no_duplicates(self):
+        input_doc, fid_a, fid_b = self._two_dimension_document()
+
+        def _raising_dedupe(adjudicated_findings, document):
+            raise RuntimeError("boom")
+
+        output_doc = run_adjudication.adjudicate(
+            input_doc, _make_judge(verdict="CONFIRMED"), dedupe_judge=_raising_dedupe
+        )
+
+        self.assertEqual(output_doc["adjudication"]["duplicate_groups"], [])
+        for f in [f for r in output_doc["reports"] for f in r["findings"]]:
+            self.assertIsNone(f["duplicate_of"])
+        self.assertEqual(verdicts.validate(input_doc, output_doc), [])
+
+    def test_dedupe_judge_returning_garbage_is_dropped_not_raised(self):
+        input_doc, fid_a, fid_b = self._two_dimension_document()
+
+        def _garbage_dedupe(adjudicated_findings, document):
+            return [
+                "not-a-list",  # a group that is not a list at all
+                [fid_a],  # too few real ids to be a group
+                [fid_a, "unknown-finding-id-not-in-document"],  # references an absent id
+                123,  # not even a list-shaped entry
+            ]
+
+        output_doc = run_adjudication.adjudicate(
+            input_doc, _make_judge(verdict="CONFIRMED"), dedupe_judge=_garbage_dedupe
+        )
+
+        self.assertEqual(output_doc["adjudication"]["duplicate_groups"], [])
+        for f in [f for r in output_doc["reports"] for f in r["findings"]]:
+            self.assertIsNone(f["duplicate_of"])
+        self.assertEqual(verdicts.validate(input_doc, output_doc), [])
+
+    def test_default_dedupe_judge_finds_no_duplicates_and_key_is_present_not_missing(self):
+        input_doc = make_document()
+
+        output_doc = run_adjudication.adjudicate(input_doc, run_adjudication.stub_judge)
+
+        self.assertIn("duplicate_groups", output_doc["adjudication"])
+        self.assertEqual(output_doc["adjudication"]["duplicate_groups"], [])
+        self.assertEqual(verdicts.validate(input_doc, output_doc), [])
+
+    def test_stub_dedupe_judge_directly_returns_no_groups(self):
+        finding = make_raw_finding()
+        self.assertEqual(run_adjudication.stub_dedupe_judge([finding], {}), [])
+
+    def test_duplicate_of_naming_an_absent_id_is_rejected_by_validate(self):
+        # STEP 2's validator, confirmed here rather than reimplemented.
+        finding = make_raw_finding()
+        input_doc = make_document(reports=[make_report(findings_list=[finding])])
+        output_doc = run_adjudication.adjudicate(input_doc, run_adjudication.stub_judge)
+
+        output_doc["reports"][0]["findings"][0]["duplicate_of"] = "not-a-real-finding-id"
+
+        violations = verdicts.validate(input_doc, output_doc)
+        self.assertTrue(
+            any("is not a finding_id present in the document" in v for v in violations), violations
+        )
+
+    def test_duplicate_of_naming_itself_is_rejected_by_validate(self):
+        # STEP 2's validator, confirmed here rather than reimplemented.
+        finding = make_raw_finding()
+        input_doc = make_document(reports=[make_report(findings_list=[finding])])
+        output_doc = run_adjudication.adjudicate(input_doc, run_adjudication.stub_judge)
+
+        fid = output_doc["reports"][0]["findings"][0]["finding_id"]
+        output_doc["reports"][0]["findings"][0]["duplicate_of"] = fid
+
+        violations = verdicts.validate(input_doc, output_doc)
+        self.assertTrue(any("names itself" in v for v in violations), violations)
 
 
 if __name__ == "__main__":

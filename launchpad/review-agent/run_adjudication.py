@@ -55,9 +55,8 @@ STEP 9's future recorded judge outputs). This is also what keeps "choosing the
 model" out of scope here, per #117's own framing and #118's issue: this module
 never names one, and neither flag lets a caller supply one.
 
-Dedupe is STEP 7's job, layered on top of this module later --
-``duplicate_of`` is always null here. Severity re-rating and the
-escalate-only guard are STEP 6, below.
+Severity re-rating and the escalate-only guard are STEP 6, below. Dedupe is
+STEP 7, further below.
 
 **STEP 6 -- severity re-rating and the out-of-ladder guard.** A judge's
 return dict MAY now also carry a ``severity`` key and, when re-rating, a
@@ -179,6 +178,52 @@ re-run against an already-adjudicated document, and is refused outright
 the nonce was established. STEP 6's total-refutation flag does not exist yet
 -- when it lands it becomes a third condition ANDed into ``adjudicate()``'s
 ``stage_complete`` computation below, not a rewrite of it.
+
+**STEP 7 -- dedupe, and the mechanism ADJUDICATION.md deliberately leaves
+open.** ADJUDICATION.md § Dedupe states the *outcome* contract -- a group is
+``{survivor, duplicates: [finding_id]}`` in ``adjudication.duplicate_groups``,
+every duplicate also carries ``duplicate_of``, a duplicate is still emitted
+with its own verdict, and the survivor is chosen deterministically (highest
+severity, then CONFIRMED before UNPROVEN before REFUTED, then lowest
+``finding_id``) -- but it does not, and structurally cannot, say *how* two
+findings are recognised as describing the same defect. ``Judge`` is
+``judge(finding, input_document) -> dict``, called once per finding,
+independently; it has no visibility into any other finding, so it cannot
+detect a cross-finding duplicate by construction, and a cross-dimension
+duplicate has a different ``finding_id`` by construction too (``dimension``
+is one of ``finding_id``'s hash inputs -- see FINDINGS.md).
+
+This module's answer is a **second, separate injectable callable**,
+``dedupe_judge: DedupeJudge`` (default ``stub_dedupe_judge``, below) --
+mirroring how ``judge: Judge`` already defaults to ``stub_judge`` to prove the
+harness end to end before a single prompt is written. It is called **once**,
+after every finding has already been adjudicated (so it sees each finding's
+final ``verdict``/``severity``, not the raw #117 input), and returns which
+sets of ``finding_id`` s -- if any -- describe the same defect; it does
+*not* choose the survivor itself. Survivor selection is ADJUDICATION.md's
+own deterministic rule, applied here in ``_build_duplicate_groups`` /
+``_survivor_sort_key``, and is the same code path regardless of which
+dedupe mechanism decided the grouping -- the two are independent axes on
+purpose, the same reason ``judge``'s per-finding verdict and STEP 6's
+severity re-rating are independent fields on one return dict rather than one
+combined decision.
+
+The alternative considered and set aside: folding dedupe into a single
+richer ``Judge`` call/return shape. That would need ``Judge`` itself to see
+every finding at once (a signature change reaching STEPs 3/4/6's existing
+call sites and tests) to decide something that is, conceptually, a
+completely separate question from "is this one finding true". A second
+callable keeps ``Judge`` exactly as STEPs 3/4/6 already built it, at the
+cost of one more injection point -- the smaller, less disruptive change,
+and the one this module takes.
+
+``stub_dedupe_judge`` finds **no duplicates**, by design, not merely because
+nothing else exists yet: never merging incorrectly is safer than merging
+findings that turn out not to share a defect, the identical fail-safe
+direction ADJUDICATION.md already states for the per-finding default
+(``UNPROVEN``, never ``REFUTED``). A ``dedupe_judge`` that crashes or returns
+something unusable fails closed to the same "no duplicates" answer
+(``_run_dedupe_safely``), never to a partial or guessed grouping.
 """
 
 from __future__ import annotations
@@ -204,6 +249,22 @@ import verdicts
 #: severity re-rating is attempted from output this module could not use in
 #: the first place.
 Judge = Callable[[dict, dict], dict]
+
+#: STEP 7's dedupe protocol: ``dedupe_judge(adjudicated_findings,
+#: input_document) -> list[list[str]]``, called ONCE after every finding has
+#: already been adjudicated (each finding dict in ``adjudicated_findings``
+#: already carries its own ``verdict``/``severity``/etc.), never once per
+#: finding like ``Judge`` above. Returns zero or more groups, each a list of
+#: two-or-more ``finding_id`` strings describing the same defect -- the
+#: dedupe judge decides WHICH findings are duplicates of each other; it does
+#: not choose the survivor, which is ADJUDICATION.md's own deterministic rule
+#: (see ``_build_duplicate_groups``/``_survivor_sort_key`` below), applied
+#: identically regardless of which dedupe judge produced the grouping. A
+#: raised exception, a non-list return, a group naming fewer than two real
+#: finding_ids, or a finding_id already claimed by an earlier group is
+#: handled defensively by ``_run_dedupe_safely``/``_build_duplicate_groups``
+#: -- never a crash, and never a silently wrong merge.
+DedupeJudge = Callable[[list, dict], list]
 
 
 class InputValidationError(ValueError):
@@ -444,6 +505,22 @@ def stub_judge(finding: dict, document: dict) -> dict:
     }
 
 
+def stub_dedupe_judge(adjudicated_findings: list, input_document: dict) -> list:
+    """The default dedupe judge (STEP 7). Finds **no duplicates** -- not
+    merely because no real dedupe mechanism exists yet, but because it is
+    the conservative, fail-safe default: never merging two findings is
+    always safer than merging findings that turn out not to share a defect,
+    the same fail-closed direction ADJUDICATION.md already states for the
+    per-finding verdict default (``UNPROVEN``, never ``REFUTED``).
+
+    Exists to prove STEP 7's harness -- ``adjudicate()``'s dedupe wiring,
+    survivor selection, and ``duplicate_groups``/``duplicate_of`` emission --
+    end to end before a single cross-finding dedupe mechanism is built, the
+    same reason ``stub_judge`` exists for the per-finding verdict.
+    """
+    return []
+
+
 def make_replay_judge(replay_dir: Path) -> Judge:
     """Build a judge that replays recorded judge outputs from ``replay_dir``
     (STEP 9's future recordings) instead of calling a live model.
@@ -643,6 +720,98 @@ def _apply_severity_rerating(
     return verdict, proposed_severity, reason
 
 
+#: Tie-break rank for ADJUDICATION.md § Dedupe's survivor rule: "CONFIRMED
+#: before UNPROVEN before REFUTED". Lower is better, same convention as
+#: ``review.SEVERITY_ORDER`` (Blocker=0 is the most severe).
+_VERDICT_SURVIVOR_RANK = {"CONFIRMED": 0, "UNPROVEN": 1, "REFUTED": 2}
+
+
+def _survivor_sort_key(finding: dict) -> tuple:
+    """ADJUDICATION.md § Dedupe's survivor rule, as a sort key: highest
+    adjudicated severity, then CONFIRMED before UNPROVEN before REFUTED,
+    then lowest ``finding_id`` -- the minimum of this key over a group is
+    the survivor. Deliberately independent of *how* the group was formed:
+    this is the same computation regardless of which ``dedupe_judge``
+    decided two findings are duplicates.
+
+    A finding whose ``severity``/``verdict`` is somehow not a legal ladder
+    value sorts last on that axis (worse than every legal value) rather than
+    raising -- defensive in the same style as this module's other guards,
+    though ``adjudicate()`` only ever calls this after STEP 6's re-rating
+    guard has already guaranteed both fields are legal.
+    """
+    severity_rank = review.SEVERITY_ORDER.get(finding.get("severity"), len(review.SEVERITY_ORDER))
+    verdict_rank = _VERDICT_SURVIVOR_RANK.get(finding.get("verdict"), len(_VERDICT_SURVIVOR_RANK))
+    finding_id = finding.get("finding_id") if isinstance(finding.get("finding_id"), str) else ""
+    return (severity_rank, verdict_rank, finding_id)
+
+
+def _run_dedupe_safely(
+    dedupe_judge: DedupeJudge, adjudicated_findings: list, input_document: dict
+) -> list:
+    """Call ``dedupe_judge`` once and fail closed to "no duplicates" (``[]``)
+    on anything unusable -- a raised exception or a non-list return. Mirrors
+    ``_run_judge_safely``'s "the judge's own crash or garbage output must not
+    abort or corrupt the run" discipline, applied to the second, dedupe-only
+    injection point: a dedupe judge that misbehaves must never silently
+    merge findings it did not actually decide were duplicates.
+    """
+    try:
+        raw_groups = dedupe_judge(adjudicated_findings, input_document)
+    except Exception:  # noqa: BLE001 -- a dedupe judge's own crash must fail
+        # closed to no duplicates, exactly like a per-finding judge's crash
+        # fails closed to UNPROVEN in `_run_judge_safely` above.
+        return []
+    return raw_groups if isinstance(raw_groups, list) else []
+
+
+def _build_duplicate_groups(raw_groups: list, findings_by_id: dict) -> list[dict]:
+    """Turn ``dedupe_judge``'s raw ``list[list[finding_id]]`` into
+    ADJUDICATION.md's ``{survivor, duplicates: [finding_id]}`` shape, with
+    the survivor chosen by ``_survivor_sort_key``.
+
+    Defensive against a dedupe judge returning something it should not,
+    the same discipline this module already applies to a misbehaving
+    per-finding ``Judge``:
+      * a non-list group, or a ``finding_id`` that is not a string, is
+        dropped from that group rather than raising;
+      * a ``finding_id`` naming a finding not present in ``findings_by_id``
+        is dropped -- a dedupe judge can only group findings that were
+        actually adjudicated;
+      * a group left with fewer than two distinct real finding_ids after the
+        above is not a group at all, and is dropped entirely;
+      * a ``finding_id`` already claimed by an earlier group is dropped from
+        every later group, so one duplicate can never point at two
+        survivors -- first group wins, applied in the order
+        ``dedupe_judge`` returned them.
+    Never raises: a dedupe judge cannot break ``adjudicate()`` by returning
+    a malformed grouping, it can only fail to have its grouping honoured.
+    """
+    groups: list[dict] = []
+    claimed: set[str] = set()
+    for raw_group in raw_groups:
+        if not isinstance(raw_group, list):
+            continue
+        candidate_ids: list[str] = []
+        for fid in raw_group:
+            if (
+                isinstance(fid, str)
+                and fid in findings_by_id
+                and fid not in claimed
+                and fid not in candidate_ids
+            ):
+                candidate_ids.append(fid)
+        if len(candidate_ids) < 2:
+            continue
+        survivor = min((findings_by_id[fid] for fid in candidate_ids), key=_survivor_sort_key)[
+            "finding_id"
+        ]
+        duplicates = sorted(fid for fid in candidate_ids if fid != survivor)
+        groups.append({"survivor": survivor, "duplicates": duplicates})
+        claimed.update(candidate_ids)
+    return groups
+
+
 def _collect_finding_ids(document: dict) -> set[str]:
     """The set of every ``finding_id`` present across ``document``'s
     ``reports[].findings``.
@@ -673,9 +842,13 @@ def _collect_finding_ids(document: dict) -> set[str]:
     return ids
 
 
-def adjudicate(input_document: dict, judge: Judge) -> dict:
-    """Adjudicate every finding in ``input_document`` with ``judge`` and
-    return the adjudicated output document. Never mutates ``input_document``.
+def adjudicate(
+    input_document: dict, judge: Judge, dedupe_judge: DedupeJudge = stub_dedupe_judge
+) -> dict:
+    """Adjudicate every finding in ``input_document`` with ``judge``, group
+    duplicates with ``dedupe_judge`` (STEP 7; defaults to ``stub_dedupe_judge``,
+    which finds none), and return the adjudicated output document. Never
+    mutates ``input_document``.
 
     Raises ``StagesShapeError`` when ``input_document["stages"]`` is present
     but malformed -- not a list, or an entry that is not an object with a
@@ -698,12 +871,20 @@ def adjudicate(input_document: dict, judge: Judge) -> dict:
     Pass-through fields (``pr``, ``merge_base_sha``, ``head_sha``,
     ``containment``) are never touched: the output starts as a
     ``copy.deepcopy`` of the input, and only a finding dict's own six new keys
-    are ever written. Dedupe is a later step's job -- ``duplicate_of`` is
-    always null here. Severity re-rating and the out-of-ladder guard are
+    are ever written. Severity re-rating and the out-of-ladder guard are
     STEP 6 (see the module docstring's STEP 6 section and
     ``_apply_severity_rerating``); a judge that never re-rates leaves every
     finding's ``severity`` exactly equal to its ``reported_severity``, same
     as STEP 3/4.
+
+    Dedupe (STEP 7) runs once, after every finding already has its final
+    ``verdict``/``severity`` -- ``dedupe_judge`` is called exactly once with
+    the full list of adjudicated findings, never once per finding, and its
+    grouping is turned into ``adjudication.duplicate_groups`` plus each
+    duplicate's own ``duplicate_of`` by ``_build_duplicate_groups`` (see the
+    module docstring's STEP 7 section). A duplicate is never removed from
+    ``reports[].findings`` -- it keeps its own verdict and is still counted
+    in ``findings_out``.
 
     Before returning, asserts (raising ``FindingSetIntegrityError`` on
     failure) that ``output_document``'s ``finding_id`` set equals
@@ -774,12 +955,30 @@ def adjudicate(input_document: dict, judge: Judge) -> dict:
     findings_out = findings_in
     total_refutation = findings_in > 0 and verdict_counts["REFUTED"] == findings_in
 
+    # STEP 7 -- dedupe. Runs once, after every finding above already carries
+    # its final verdict/severity, and never removes or re-counts anything:
+    # `findings_out` (computed above) is unaffected by grouping.
+    output_findings_by_id: dict[str, dict] = {}
+    adjudicated_findings: list[dict] = []
+    for report in output_document.get("reports", []):
+        for finding in report.get("findings", []):
+            adjudicated_findings.append(finding)
+            fid = finding.get("finding_id")
+            if isinstance(fid, str):
+                output_findings_by_id[fid] = finding
+
+    raw_dedupe_groups = _run_dedupe_safely(dedupe_judge, adjudicated_findings, input_document)
+    duplicate_groups = _build_duplicate_groups(raw_dedupe_groups, output_findings_by_id)
+    for group in duplicate_groups:
+        for dup_id in group["duplicates"]:
+            output_findings_by_id[dup_id]["duplicate_of"] = group["survivor"]
+
     output_document["adjudication"] = verdicts.Adjudication(
         schema_version=1,
         verdict_counts=verdict_counts,
         findings_in=findings_in,
         findings_out=findings_out,
-        duplicate_groups=[],
+        duplicate_groups=duplicate_groups,
         downgrades=downgrades,
         total_refutation=total_refutation,
         # Deferred to STEP 6/7, not an oversight -- see this module's docstring,
