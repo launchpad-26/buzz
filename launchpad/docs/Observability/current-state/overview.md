@@ -16,7 +16,10 @@ The scope is the current product-observability boundary of the Buzz relay, the d
 client—including its native Tauri process and frontend—and the browser web client. It
 covers instrumentation, emitted signals, health and diagnostic surfaces, error context,
 correlation identifiers, persistence, export boundaries, and verified sensitive-data
-risks. Mobile observability is excluded by [PRD #289](https://github.com/launchpad-26/buzz/issues/289).
+risks. The [coverage inventory](coverage.md) is the canonical component assignment and
+assessment-progress record; it does not claim that pending component assessments are
+complete. Mobile observability is excluded by
+[PRD #289](https://github.com/launchpad-26/buzz/issues/289).
 
 This is a vendor-neutral description of current behavior, not a target architecture. It
 distinguishes signals emitted by Buzz from the external collection, storage, and
