@@ -1,5 +1,5 @@
 ---
-description: What the cohort's unrun Python suites print on failure — the suites themselves are safe, but project-pack.py writes the operator's real environment values into its output, which is the tool criterion 3 would wire into CI.
+description: What the cohort's unrun Python suites print on failure — five suites appear safe, investigator remains unverified, and project-pack.py echoes a closed set of operator model/provider configuration values.
 tags: [testing, ci, security, disclosure, public-logs, criterion-3, research, issue-345]
 ---
 
@@ -9,12 +9,13 @@ All source references below are pinned to `5d76799d6e44f2f76aa7bd78c5343d339af98
 
 ## Finding
 
-**The suites are safe to print. One of the tools they test is not.**
+**Five suites appear safe to print. The subprocess-driven investigator suite remains unverified,
+and one tool echoes operator configuration values.**
 
-Failure output from `launchpad/project-intelligence/` discloses nothing that is not already public,
+Failure output from the five inspected `launchpad/project-intelligence/` suites discloses nothing that is not already public,
 and `launchpad/agents/test_project_pack.py` is deliberately hermetic with respect to the
-environment. So criterion 3 can wire these suites into public CI logs without the #279 problem
-recurring *through the tests*.
+environment. The sixth, `test_investigator.py`, runs real subprocesses and captures machine-derived
+output, so this research does not clear it for public CI logs.
 
 But the tool under test in `launchpad/agents/` — `project-pack.py`, the #239 projector — **writes
 the operator's real environment values into its rendered output**, and writes that output to stdout
@@ -32,7 +33,7 @@ mutations were not caught; the `semantic_index` one was, and this is its complet
 FAIL: test_a_zero_vector_has_zero_similarity_not_a_division_error (test_semantic_index.EmbedAndCosineSimilarityTest.test_a_zero_vector_has_zero_similarity_not_a_division_error)
 ----------------------------------------------------------------------
 Traceback (most recent call last):
-  File "/Users/jeff/group-build-project/buzz__worktrees/testing/launchpad/project-intelligence/test_semantic_index.py", line 171, in test_a_zero_vector_has_zero_similarity_not_a_division_error
+  File "<local-worktree>/launchpad/project-intelligence/test_semantic_index.py", line 171, in test_a_zero_vector_has_zero_similarity_not_a_division_error
     self.assertEqual(cosine_similarity(empty, non_empty), 0.0)
     ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 AssertionError: 1.0 != 0.0
@@ -62,19 +63,14 @@ convention, and one Rust function signature used as a test fixture in
 [`test_semantic_index.py:51`](https://github.com/launchpad-26/buzz/blob/5d76799d6e44f2f76aa7bd78c5343d339af98f63/launchpad/project-intelligence/test_semantic_index.py#L51). There
 is no environment access to leak from.
 
-Everything these suites assert over is derived from the repository — graph edges, symbols, memory
+Everything in the five inspected suites is derived from the repository — graph edges, symbols, memory
 entries, similarity scores — and the repository is public. A failure printing repo-derived content
 discloses nothing new.
 
-`launchpad/agents/test_project_pack.py` is safe for a stronger reason: it says so on purpose. Its
-docstring records the choice
-([`test_project_pack.py:4-7`](https://github.com/launchpad-26/buzz/blob/5d76799d6e44f2f76aa7bd78c5343d339af98f63/launchpad/agents/test_project_pack.py#L4-L7)):
-
-> Deliberately does not exercise inspect_pack()/find_buzz_binary() against a [real environment] …
-> drive project_env_vars()/apply_operator_precedence()/render_env_file()
-
-and the call sites pass literal dictionaries — `{"BUZZ_CLI_BIN": str(override)}`, `{}` — never
-`os.environ`.
+`launchpad/agents/test_project_pack.py` is environment-hermetic because its call sites pass literal
+dictionaries — `{"BUZZ_CLI_BIN": str(override)}`, `{}` — never `os.environ`. Its docstring says it
+does not exercise the functions against a real `buzz` binary so the tests run without a cargo
+build; that is a portability statement, not the evidence for environment hermeticity.
 
 ## The one real disclosure surface, and it is not in a test
 
@@ -113,13 +109,15 @@ The rendered result goes to stdout unless `--out` is given
 ```
 
 So for any variable the pack projects *and* the operator has already set, the real operator value is
-written verbatim into the output. The projector's own domain includes credentials — `CLAUDE.md`'s
-Agent CLI section documents `BUZZ_PRIVATE_KEY` and `BUZZ_AUTH_TAG` as the auth environment the ACP
-harness injects.
+written verbatim into the output. The projected runtime key set is closed: model, provider,
+temperature and context-limit settings plus the ACP command/arguments and optional MCP command.
+It does **not** include `BUZZ_PRIVATE_KEY`, `BUZZ_AUTH_TAG`, or provider API credentials. The earlier
+credential characterisation inferred projector scope from unrelated Agent CLI documentation and
+was wrong.
 
-This is the shape #279 records: a value reaching an output stream that is more public than the value
-is. It is structurally the same defect in a different file, and it is in the directory criterion 3
-is about to wire into CI.
+This still has the output-boundary shape #279 records—a live operator value can reach stdout—but
+the values reachable here are configuration, not credentials. Whether publishing model/provider
+choices and limits is acceptable is a narrower policy question than the original threat model.
 
 **No leak is claimed here.** The tests do not reach this path, no CI job runs the projector today,
 and nothing in a tracked file contains a secret. What exists is a code path whose output is unsafe
@@ -150,10 +148,11 @@ lines no test reaches, which is a statement about where I mutated, not about tes
 
 **Opinion, mine (Claude Opus 5, drafting for @tucktuck101). Not established by any source above.**
 
-1. **I would wire the six `project-intelligence` suites into CI without redaction work.** Nothing
-   they assert over is non-public, and the absolute-path noise is harmless on a hosted runner.
-2. **I would treat `project-pack.py`'s operator-value echo as a separate issue from this one**, and
-   as the more important of the two. My reading is that it needs a decision about whether the skip
+1. **I would wire the five repository-derived `project-intelligence` suites into CI without
+   redaction work.** I would assess `test_investigator.py` separately before including it because
+   it captures real subprocess output from `rql`, `grep`, and `cargo`.
+2. **I would treat `project-pack.py`'s operator-value echo as a separate issue from this one.** My
+   reading is that it needs a decision about whether the skip
    comment should carry the value at all — the comment's stated purpose is to explain why a variable
    was skipped, which arguably needs only the variable's name.
 3. **I would not run the projector in CI** until that is settled, which also means keeping it out of
@@ -166,9 +165,9 @@ someone who knows whether that comment's value is load-bearing for operators.
 
 ## Confidence and what was not checked
 
-**High confidence:** the failure output above (captured verbatim), the absence of environment access
-in `project-intelligence`, the hermetic construction of `test_project_pack.py`, and the
-`project-pack.py` code path (read at the pinned lines).
+**High confidence:** the redacted failure output above, the absence of environment access in the
+five repository-derived suites, the hermetic construction of `test_project_pack.py`, the closed
+projector key set, and the `project-pack.py` code path (read at the pinned lines).
 
 **Not checked:**
 
