@@ -1,5 +1,5 @@
 ---
-description: Whether any existing test fails if each of the nine product-code divergences is reverted — none does. Two are guarded by the Windows clippy job, two are genuinely unprotected, and the rest only trip the compiler because a single-file revert is inconsistent.
+description: Whether any existing test fails if each of the nine product-code divergences is reverted — none does. Two are guarded by Windows clippy, three behavioural files are unprotected, and only two of nine reverts were executed.
 tags: [testing, divergence, upstream, criterion-4, rust, research, issue-338]
 ---
 
@@ -15,16 +15,18 @@ arrive with tests — `pack.rs` added four, `resolve.rs` added one — but those
 diverging file, so **reverting the file deletes its own guard**. Nothing fails; the assertion
 simply stops existing.
 
-What protection does exist is the **compiler**, not the test suite, and it splits three ways:
+Only two of the nine reverts were executed; the other seven outcomes below are derived from their
+diffs and references. What protection does exist is the **compiler**, not the test suite, and it
+splits three ways:
 
 | Files | Revert outcome | Actually protected by |
 |---|---|---|
 | `shell.rs`, `lifecycle.rs` | unused imports on Windows | the `windows-rust` clippy job — **real protection** |
-| `pack.rs`, `lib.rs`, `runtime.rs`, `runtime/summary.rs` | compile error | an artefact of reverting *one* file — a consistent merge would not trip it |
-| `restore.rs`, `runtime_commands.rs` | compiles and passes silently | **nothing** |
+| `pack.rs`, `lib.rs`, `runtime/summary.rs` | compile error | an artefact of reverting *one* file — a consistent merge would not trip it |
+| `runtime.rs`, `restore.rs`, `runtime_commands.rs` | behavioural relay fix can revert consistently | **nothing** |
 
-The two in that last row are the real targets for #290's criterion 4, and they are the two that
-change behaviour.
+The three in that last row are the real targets for #290's criterion 4. `runtime.rs` contains the
+actual environment-setting behaviour; the other two are its callers.
 
 ## Method
 
@@ -56,7 +58,7 @@ The divergence adds `Serialize` derives to five types plus one test:
 +    fn resolved_pack_serializes_to_json_with_expected_fields() {
 ```
 
-Reverted, the crate builds and every test passes:
+The captured excerpt from the reverted run ended successfully:
 
 ```
 $ cargo test -p buzz-persona          # with resolve.rs reverted to merge-base
@@ -68,8 +70,11 @@ test result: ok. 13 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; fin
 EXIT=0
 ```
 
-**13 passed, 0 failed.** The test that would have caught this went away with the code it was
-guarding. This is the clearest possible demonstration of the structural problem.
+This is one of three test-result lines emitted by the crate, not the complete output: it is the
+13-test integration binary. The lib unit-test binary containing the divergence's own test was not
+included in the paste. The successful command still supports the structural result—the reverted
+test disappeared and the command exited zero—but this excerpt alone is not evidence that every
+crate test ran.
 
 ### `crates/buzz-cli/src/commands/pack.rs` — compile error, for the wrong reason
 
@@ -160,7 +165,7 @@ agent_snapshot_tests.rs:361:  fn secret_exclusion_relay_url_absent() {
 Both types are the same, so reverting compiles cleanly. A merge that reverts these silently
 restores the bug the comment describes, and every check stays green.
 
-### `managed_agents/runtime.rs` and `runtime/summary.rs` — an extraction, untested either side
+### `managed_agents/runtime.rs` and `runtime/summary.rs` — extraction plus an unprotected behaviour fix
 
 The pair I flagged as refactor-shaped when filing #338 is exactly that: 280 lines leave
 `runtime.rs`, 283 arrive in a new `runtime/summary.rs`, and `runtime.rs` re-exports them:
@@ -180,8 +185,13 @@ test code is a comment:
 desktop/src-tauri/src/managed_agents/types/tests.rs:741:  // Both fields derive from one vector in `build_managed_agent_summary`;
 ```
 
-So there is no behaviour here to protect with a test that is not already unprotected upstream.
-Deleting `summary.rs` breaks the `pub use`, which is again a partial-revert artefact.
+The extraction itself has no new behaviour to protect, and deleting `summary.rs` breaks the
+`pub use`, which is a partial-revert artefact. But `runtime.rs` is not purely the extraction. The
+fork also changed `spawn_agent_child` from taking the relay address from
+`runtime_key.relay_url.clone()` to `relay_url.to_string()`, then writes that effective value to
+`BUZZ_RELAY_URL`. That is the primary implementation of the configured-relay behaviour described
+for `restore.rs` and `runtime_commands.rs`. Reverting it consistently restores the bug; no test
+asserts the value passed to the child.
 
 ## What this changes for #290
 
@@ -192,13 +202,11 @@ A guard for a divergence has to live **outside the file it guards** — a differ
 integration test under `tests/`, or a non-test mechanism entirely.
 
 **The work is much smaller than nine files.** Two divergences (`shell.rs`, `lifecycle.rs`) are
-already protected, better than a test would manage. Four (`pack.rs`, `lib.rs`, `runtime.rs`,
-`summary.rs`) have no distinct behaviour a regression test could assert that the compiler would
-not already catch on a consistent revert — though that claim deserves a second opinion, since
-"the compiler will catch it" is exactly the assumption that fails when a merge is consistent.
-**Two (`restore.rs`, `runtime_commands.rs`) are genuinely exposed**, and they are one line each.
-A single test asserting that a managed agent dials the configured relay rather than
-`key.relay_url` would close the real gap.
+already protected, better than a test would manage. Three (`pack.rs`, `lib.rs`, `summary.rs`) have
+no distinct behaviour a regression test could assert that the compiler would not already catch on
+a partial revert. **Three (`runtime.rs`, `restore.rs`, `runtime_commands.rs`) are genuinely
+exposed.** A single test at the `spawn_agent_child` boundary asserting that a managed agent receives
+the configured relay rather than `runtime_key.relay_url` would close the shared behavioural gap.
 
 **Criterion 4 should also admit non-test guards.** The `windows-rust` clippy job protects two
 divergences at compile time, which is stronger and cheaper than a test. A register that only
@@ -207,9 +215,9 @@ things the compiler already holds.
 
 ## Confidence and what was not checked
 
-**High confidence, executed:** the `resolve.rs` revert (13 passed, 0 failed) and the `pack.rs`
-revert (E0061). Both outputs pasted above; both files restored and the working tree verified clean
-afterwards.
+**High confidence, executed:** the `resolve.rs` revert exited zero (the paste shows only its
+13-test integration binary, not all three result lines) and the `pack.rs` revert produced E0061.
+Both files were restored and the working tree verified clean afterwards.
 
 **Reasoned, not executed — treat as belief:**
 
@@ -218,9 +226,9 @@ afterwards.
   in the job definition. Cheap to confirm: `cargo clippy --target x86_64-pc-windows-msvc` with
   those attributes removed.
 - **`lib.rs`, `restore.rs`, `runtime_commands.rs`, `runtime.rs`, `summary.rs`** were not reverted
-  and tested. The `restore.rs` / `runtime_commands.rs` verdict is the one I would most want
-  executed, because it is the one the recommendation rests on — although it is also the
-  best-supported, since the types are identical and no test mentions the behaviour.
+  and tested. The three-file relay verdict is the one I would most want executed, because the
+  recommendation rests on it—even though the diff shows the same behaviour split between the
+  callers and `spawn_agent_child`, with no test mentioning it.
 - **A *consistent* revert was never tested.** Every compile error here came from reverting one
   file while its counterpart stayed. Reverting `pack.rs` and `lib.rs` *together* — the realistic
   merge scenario — was not attempted, and it is the scenario that matters. I expect it compiles
