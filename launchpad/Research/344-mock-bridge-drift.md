@@ -1,5 +1,5 @@
 ---
-description: Whether the desktop E2E mock bridge has drifted from the real Tauri command surface — it has, six dead handlers, but the drift is currently harmless because unmocked commands throw. Nothing detects it.
+description: Whether the desktop E2E mock bridge has drifted from the real Tauri command surface — five handlers are dead, while one backend-less handler is exercised by a registered spec. Nothing detects the mismatch.
 tags: [testing, desktop, tauri, e2e, mock, drift, research, issue-344]
 ---
 
@@ -9,13 +9,13 @@ All source references below are pinned to `5d76799d6e44f2f76aa7bd78c5343d339af98
 
 ## Finding
 
-**Yes, six handlers have gone stale — and the drift is currently harmless, because the mock throws
-on anything it does not know.**
+**Yes: five handlers appear dead, and one backend-less handler is actively exercised by a spec.**
 
 The failure mode #344 was written to look for — a mock reporting green for behaviour the
-application no longer has — **is not present**. The mechanism that prevents it is a single line:
-an unknown command raises rather than returning a plausible default. Unmocked commands therefore
-fail loudly, and the six stale handlers are unreachable dead code rather than false assurance.
+application no longer has — **is present in one direction**. The registered
+`identity-lost.spec.ts` invokes `complete_identity_recovery_pairing`, for which the mock has a
+handler and the Rust backend has none. In the opposite direction, an unknown backend command raises
+rather than returning a plausible default, so missing mock coverage fails loudly.
 
 What *is* true is that **nothing detects drift**. Six handlers for commands that exist nowhere in
 the repository accumulated without any check noticing, and the same silence would cover a more
@@ -29,9 +29,9 @@ commands are registered in the main handler at
 [`native_websocket.rs:325`](https://github.com/launchpad-26/buzz/blob/5d76799d6e44f2f76aa7bd78c5343d339af98f63/desktop/src-tauri/src/native_websocket.rs#L325).
 
 **Mocked:** 259 commands are handled by
-[`e2eBridge.ts`](https://github.com/launchpad-26/buzz/blob/5d76799d6e44f2f76aa7bd78c5343d339af98f63/desktop/src/testing/e2eBridge.ts) and
-[`e2eBridgeCustomHarnesses.ts`](https://github.com/launchpad-26/buzz/blob/5d76799d6e44f2f76aa7bd78c5343d339af98f63/desktop/src/testing/e2eBridgeCustomHarnesses.ts), counted from
-their `case "…"` labels. `e2eBridge.ts` is 13,450 lines.
+[`e2eBridge.ts`](https://github.com/launchpad-26/buzz/blob/5d76799d6e44f2f76aa7bd78c5343d339af98f63/desktop/src/testing/e2eBridge.ts), counted from its
+`case "…"` labels. `e2eBridgeCustomHarnesses.ts` contributes zero such labels. `e2eBridge.ts` is
+13,450 lines.
 
 ## Direction 1 — mock handles, backend does not: 9
 
@@ -51,9 +51,10 @@ sync_team_directory
 `get_e2e_opened_external_urls` and `get_global_agent_config_set_call_count` exist so a spec can
 inspect what the harness recorded. They have no backend counterpart by design.
 
-**Six are dead handlers.** `complete_identity_recovery_pairing`, `export_team_to_json`,
-`install_team_from_directory`, `parse_team_file`, `pick_team_directory` and
-`sync_team_directory` are defined nowhere in the Rust backend:
+**All six lack Rust implementations, but only five appear dead.**
+`complete_identity_recovery_pairing`, `export_team_to_json`, `install_team_from_directory`,
+`parse_team_file`, `pick_team_directory` and `sync_team_directory` are defined nowhere in the
+Rust backend:
 
 ```
 complete_identity_recovery_pairing: defined_in_rust=0  in_lib.rs=0
@@ -64,16 +65,18 @@ pick_team_directory:               defined_in_rust=0  in_lib.rs=0
 sync_team_directory:               defined_in_rust=0  in_lib.rs=0
 ```
 
-Nor are they invoked from the frontend outside the mock itself — the only file in the repository
-that mentions them is `e2eBridge.ts`:
+Five have no caller found outside the mock. The original research checked one name and incorrectly
+generalised its result to all six:
 
 ```
 $ grep -rln "pick_team_directory" desktop/
 desktop/src/testing/e2eBridge.ts
 ```
 
-So these are handlers for a removed feature (a team import/export flow, judging by the names). They
-cannot mislead a test, because no test path reaches them. They are residue.
+`complete_identity_recovery_pairing` is different: `desktop/tests/e2e/identity-lost.spec.ts`
+invokes it, and that spec is registered by `desktop/playwright.config.ts`. A green mock-driven UI
+transition therefore exercises behaviour with no backend implementation. The other five are
+residue based on the per-name search; deleting the sixth would break a registered test.
 
 ## Direction 2 — backend has, mock does not: 62
 
@@ -109,11 +112,12 @@ what the 146 specs exercise. Whether that partiality is written down anywhere I 
 1. **I would not treat this as a bug to fix, and I would not add mocks for the 62.** The throwing
    fallback already makes the gap safe, and mocking commands no spec exercises would add
    maintenance surface for no assurance.
-2. **I would delete the six dead handlers**, as tidying rather than as a correctness fix. They
-   describe a feature that no longer exists, which is misleading to read even if it is unreachable.
+2. **I would delete only the five handlers with no caller**, as tidying rather than as a correctness
+   fix. `complete_identity_recovery_pairing` needs separate product/test adjudication because a
+   registered spec depends on it.
 3. **A name-level drift check looks cheap and worth having** — compare the `generate_handler!`
    list against the mock's `case` labels and report handlers with no backend counterpart. It would
-   have caught these six. I would scope it to that direction only, since the other direction is
+   have caught these six backend mismatches. I would scope it to that direction only, since the other direction is
    already enforced at runtime by the throw.
 4. **The more valuable check is the one I did not perform** — see below. If I were prioritising, I
    would put return-shape fidelity above name-level drift, because that is where a false green
@@ -124,8 +128,8 @@ None of these is a decision I am entitled to take.
 ## Confidence and what was not checked
 
 **High confidence:** the two command sets and their difference (extracted mechanically from the
-pinned source), that the six are absent from the Rust backend and from frontend callers, and the
-throwing fallback.
+pinned source), that all six are absent from the Rust backend, that five lack callers while
+`complete_identity_recovery_pairing` is invoked by a registered spec, and the throwing fallback.
 
 **Not checked, and the first item is the important one:**
 
