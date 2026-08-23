@@ -151,7 +151,7 @@ With `"identifier": "xyz.block.buzz.app"` from `desktop/src-tauri/tauri.conf.jso
 $ ls -1 "$D" | wc -l
        9
 $ du -sh "$D"
- 96K	/Users/jeff/Library/Application Support/xyz.block.buzz.app/agents/logs
+ 96K	~/Library/Application Support/xyz.block.buzz.app/agents/logs
 $ ls -lt "$D" | head -3 | awk '{print $5, $6, $7, $8}'
 19259 20 Aug 07:15
 19260 20 Aug 07:15
@@ -160,6 +160,8 @@ agents
 identity.migrated
 templates
 ```
+
+*(`du` printed an absolute path here; the home-directory prefix has been elided to `~` per [#385](https://github.com/launchpad-26/buzz/issues/385). Nothing else in the transcript is altered.)*
 
 Nine plain-text files written on 20 August, still present on 22 August. **They survive the app quitting, with no retention policy found.** Their contents are deliberately not quoted here: this repository is public and agent logs are exactly where #289 expects secrets to be. The first line's shape alone is `=== starting Honey (7dca5db32f84ce915ab…`, i.e. plain-text narrative of an agent run.
 
