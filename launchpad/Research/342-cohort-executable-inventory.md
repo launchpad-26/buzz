@@ -1,5 +1,5 @@
 ---
-description: The inventory of cohort-owned executables under launchpad/ and which have tests that run in CI — 31 test artifacts exist, 6 run, and the 13 shell test scripts and review-agent's 5 unittest suites are invisible to automation.
+description: The inventory of cohort-owned executables under launchpad/ and which have tests that run in CI — 32 test artifacts exist, 6 run, and the 14 shell test scripts and review-agent's 5 unittest suites are invisible to automation.
 tags: [testing, ci, inventory, criterion-3, coverage, research, issue-342]
 ---
 
@@ -7,13 +7,13 @@ tags: [testing, ci, inventory, criterion-3, coverage, research, issue-342]
 
 ## Finding
 
-**31 test artifacts exist under `launchpad/`. Six of them run in CI.**
+**32 test artifacts exist under `launchpad/`. Six of them run in CI.**
 
 Criterion 3 of #290 quantifies over "every cohort-owned executable", and this is the denominator
-it was missing: **44 production Python modules, 13 production shell scripts, and 34 YAML files**,
-guarded by **18 Python test files and 13 `test-*.sh` scripts**. CI invokes exactly two things — a
+it was missing: **44 production Python modules, 12 production shell scripts, and 34 `.yml` files**,
+guarded by **18 Python test files and 14 `test-*.sh` scripts**. CI invokes exactly two things — a
 `unittest discover` over `launchpad/scripts` and `review-agent/run_controls.py` — which between
-them cover 6 of the 31.
+them cover 6 of the 32.
 
 The two findings worth acting on are both things nobody has named:
 
@@ -87,7 +87,7 @@ one workflow, and narrower subsets run via the other two.
 | `launchpad/agents/test_*.py` | 1 | **no** | no workflow mentions the directory (#270) |
 | `launchpad/deploy/test-run-guard.sh` | 1 | **no** | only `docker.yml:142` mentions `launchpad/deploy`, in a comment |
 
-**6 of 31.**
+**6 of 32.**
 
 ### Why review-agent's suites do not run, though something of its does
 
@@ -125,7 +125,7 @@ tests**. Both are real; they are not substitutes, and the naming makes them easy
 
 **Criterion 3's scope is roughly four times what the PRD describes.** #290 names
 `launchpad/project-intelligence/` (six suites) and `launchpad/agents/` (#270) as the gap. The real
-set is 25 unrun test artifacts, and the largest single block is the **13 shell test scripts**, which
+set is 26 unrun test artifacts, and the largest single block is the **14 shell test scripts**, which
 the PRD does not mention at all.
 
 **The PRD's evidence needs two corrections.** It says CI "invokes the cohort's *checkers* ... but
@@ -134,7 +134,7 @@ every pull request, plus `mutation_harness.py`. And my own earlier sweep comment
 review agent's controls run, in a context that implied its suites do; that was imprecise, and this
 document is the correction.
 
-**A cheap sequencing observation.** The 13 shell tests and the 6 project-intelligence suites are
+**A cheap sequencing observation.** The 14 shell tests and the 6 project-intelligence suites are
 probably the two cheapest wins, for different reasons: the shell tests need no interpreter beyond
 bash, and #329 established the project-intelligence suites already pass with no dependencies. The
 `agents` suite is the expensive one (#270 documents a missing package and a `PATH`-dependent test).
@@ -160,7 +160,7 @@ five test modules.
 - **Whether the 13 review-agent `check_*.py` controls subsume what the five `test_*.py` suites
   assert.** They might overlap substantially. I established they are different invocations, not
   that the coverage is disjoint.
-- **The 34 YAML files** were counted but not classified. Some are deploy configuration rather than
+- **The 34 `.yml` files** were counted but not classified. Some are deploy configuration rather than
   executables, and "cohort-owned executable" is genuinely arguable at that boundary — as it is for
   `bin/lefthook` (a cohort divergence under ADR-0017, executable, outside `launchpad/`) and for the
   five ADR-0005 deployment files (cohort-owned, not executable). This document counts what is under
