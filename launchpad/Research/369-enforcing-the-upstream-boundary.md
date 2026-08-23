@@ -1,7 +1,7 @@
 # Enforcing "a change to an upstream-owned file requires a ledger row"
 
 **Title:** Five enforcement mechanisms, their cost to contributors, and a tested CODEOWNERS pattern set
-**Summary:** **CODEOWNERS expresses the boundary in six lines** — tested against the real 4,351-file tree, it partitions 4,029 upstream-owned from 322 fork-owned with a **two-file residue that is arguably correct**. GitHub has no `!` negation, but "a pattern with no owners" plus last-match-wins does the job. Measured the CI-check option's real cost: **11 of 60 merged PRs touched an upstream path** — 8 correctly, 2 false positives CODEOWNERS gets right, and **1 catastrophic: the 981-file drop PR**. That is the finding — the CI check's cost is O(files) and CODEOWNERS' is O(1) per PR, and the check is useless exactly when the ledger matters most.
+**Summary:** **CODEOWNERS expresses the boundary in six lines** — tested against the real 4,353-file tree, it partitions 4,029 upstream-owned from 324 fork-owned with a **two-file residue that is arguably correct**. GitHub has no `!` negation, but "a pattern with no owners" plus last-match-wins does the job. Measured the CI-check option's real cost: **11 of 60 merged PRs touched an upstream path** — 8 correctly, 2 false positives CODEOWNERS gets right, and the 981-file drop PR would require explicit handling. The naive CI check's cost is O(files) and CODEOWNERS' is O(1) per PR; without drop-aware design the check would fail exactly when the ledger matters most.
 **Tags:** `upstream-sync` `ledger` `codeowners` `ci` `prd-273` `adr-0022`
 **Established:** 2026-08-22 · **Answers:** [#369](https://github.com/launchpad-26/buzz/issues/369) · **Parent:** [#273](https://github.com/launchpad-26/buzz/issues/273)
 
@@ -19,7 +19,7 @@ deliberately — the file lists are what the commands printed.
 | Mechanism | What it assures | Cost to a contributor | Can it block today? | Failure mode |
 |---|---|---|---|---|
 | **CODEOWNERS** | The boundary was *reviewed* | **O(1)** — one review request per PR | No — needs `require_code_owner_reviews`, currently `false` | Reviewer rubber-stamps |
-| CI check for a ledger row | The boundary is *documented* | **O(files)** — a row per touched file | No — no required checks exist | **Breaks on drop PRs (981 files)** |
+| CI check for a ledger row | The boundary is *documented* | **O(files)** — a row per touched file | No — no required checks exist | **Would break on drop PRs (981 files) without an exemption** |
 | `lefthook` pre-push hook | Same, earlier | O(files), plus local run time | No — bypassable with `--no-verify` | Silently skipped |
 | Post-merge assertion | Divergence is *noticed* | Zero | N/A — reports, does not gate | Report nobody reads |
 | Nothing + scheduled drift report | Drift is *visible* | Zero | N/A | Same, plus latency |
@@ -52,16 +52,16 @@ with last-match-wins precedence. So "own everything, then un-own what the fork o
 Implemented the documented semantics — gitignore-style globs minus negation and character ranges, last matching line wins, a line with no owners removes ownership — and ran it over every tracked file on `launchpad`:
 
 ```
-tracked files:            4351
+tracked files:            4353
 CODEOWNERS-owned:         4029
-CODEOWNERS-unowned:        322
+CODEOWNERS-unowned:        324
 
 fork-added files STILL owned (would trigger a review request): 2
     desktop/src-tauri/src/managed_agents/runtime/summary.rs
     scripts/test-ci-changed-paths-filter.sh
 ```
 
-**Six lines, and a residue of two files out of 321 fork additions.**
+**Six lines, and a residue of two files out of 323 fork additions.**
 
 **And the residue is arguably correct rather than a defect.** Both files are fork-only additions that live *inside upstream's directory structure* — [`summary.rs`](https://github.com/launchpad-26/buzz/blob/5d76799d6e44f2f76aa7bd78c5343d339af98f63/desktop/src-tauri/src/managed_agents/runtime/summary.rs) in upstream's `managed_agents/` tree, `test-ci-changed-paths-filter.sh` in upstream's `scripts/`. A change to either genuinely touches the upstream boundary. `summary.rs` is the strongest case: [#360](https://github.com/launchpad-26/buzz/issues/360) found that the drop's one semantic conflict landed exactly there, because it holds code extracted from an upstream-owned file. If any two fork files deserve boundary review, these are they.
 
@@ -94,7 +94,7 @@ PRs touching an upstream-owned path: 11
 
 **The false positives are fork-only additions living outside `launchpad/`.** `.claude/skills/*` are fork files at an upstream-owned path prefix. A path-based check flags them; **CODEOWNERS does not**, because the pattern set un-owns `/.claude/`. That is a concrete accuracy win for CODEOWNERS, not a tie.
 
-**The catastrophic case is the one that matters.** A drop PR touches 981 upstream-owned files and creates no new divergence. A check demanding a ledger row per touched file would demand 981 rows on every drop — so it must exempt drop PRs, and **the drop is precisely when divergence is most likely to be silently lost.** A gate that switches itself off during the event it exists to guard is not a gate.
+**The large case is the one that matters.** A drop PR touches 981 upstream-owned files and creates no new divergence. A naive check demanding a ledger row per touched file would demand 981 rows on every drop — so it needs drop-aware logic or an exemption, and **the drop is precisely when divergence is most likely to be silently lost.** This is a deduction from the input size and proposed rule; no required check exists today, so no live check was observed breaking.
 
 CODEOWNERS has no equivalent failure: a 981-file drop PR produces **one review request**. Its cost is O(1) in the size of the change; the CI check's is O(files). For a fork whose largest PRs are drops, that difference is the whole comparison.
 
@@ -115,7 +115,7 @@ One asymmetry worth noting: with `require_code_owner_reviews` on, CODEOWNERS blo
 
 ## The other three, briefly
 
-**[`lefthook`](https://github.com/launchpad-26/buzz/blob/5d76799d6e44f2f76aa7bd78c5343d339af98f63/lefthook.yml) pre-push hook.** Same assurance as the CI check, earlier and cheaper to iterate on, and bypassable — `git commit --no-verify` and `git push --no-verify`, and [`lefthook.yml:14-15`](https://github.com/launchpad-26/buzz/blob/5d76799d6e44f2f76aa7bd78c5343d339af98f63/lefthook.yml#L14-L15) documents that `git rebase` and `git cherry-pick` do not run `commit-msg` at all. PR #216 was itself pushed with `--no-verify`, which is the empirical answer to whether the bypass gets used. Also `lefthook.yml` is one of the 27 contested files, so the enforcement mechanism would live in a file the boundary it enforces is about.
+**[`lefthook`](https://github.com/launchpad-26/buzz/blob/5d76799d6e44f2f76aa7bd78c5343d339af98f63/lefthook.yml) pre-push hook.** Same assurance as the CI check, earlier and cheaper to iterate on, and bypassable — `git commit --no-verify` and `git push --no-verify`, and [`lefthook.yml:14-15`](https://github.com/launchpad-26/buzz/blob/5d76799d6e44f2f76aa7bd78c5343d339af98f63/lefthook.yml#L14-L15) documents that `git rebase` and `git cherry-pick` do not run `commit-msg` at all. PR #216 was itself pushed with `--no-verify`, which is the empirical answer to whether the bypass gets used. Also `lefthook.yml` is one of the 8 contested files, so the enforcement mechanism would live in a file the boundary it enforces is about.
 
 **Post-merge assertion.** Reports rather than gates, so it cannot block a PR — but it is the only option that catches divergence arriving by a path no gate covers, including inside a drop. Zero contributor cost. Same shape as the mechanism [#362](https://github.com/launchpad-26/buzz/issues/362) and [#366](https://github.com/launchpad-26/buzz/issues/366) recommend for position durability, which means one mechanism could serve both.
 
@@ -145,7 +145,7 @@ Added after @tucktuck101 decided on 2026-08-22 that the fork ends with the cohor
 2026-09-17. An enforcement mechanism is a control that pays off over time, so the horizon changes
 what is worth building.
 
-**The measurements are unchanged.** The CODEOWNERS partition (4,029 / 322, two-file residue) and the
+**The corrected measurements preserve the conclusion.** The CODEOWNERS partition (4,029 / 324, two-file residue) and the
 11-of-60 firing rate with its 8 correct / 2 false / 1 catastrophic split both stand.
 
 *The rest of this section is my recommendation as the author, not a finding.*
