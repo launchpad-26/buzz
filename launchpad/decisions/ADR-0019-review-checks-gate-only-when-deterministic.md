@@ -31,23 +31,26 @@ supersedes: none
    and [#146](https://github.com/launchpad-26/buzz/issues/146) therefore remain open by
    decision, not by obstruction.
 
-**`enforce_admins` stays off.** Recorded explicitly rather than left silent: the five repository
-admins can bypass required checks once they exist. This is a deliberate acceptance, not an
+**`enforce_admins` stays off.** Recorded explicitly rather than left silent: the four repository
+admins (measured 2026-08-24: `joshuavial`, `baradev`, `tucktuck101`, `jatin-puri-coder`) can
+bypass required checks once they exist. This is a deliberate acceptance, not an
 oversight — see Consequences.
 
 ## Context
 
 Review in this fork is advisory, and the cost of that is documented rather than hypothetical.
-`pr-gate.sh` states it in its own header: *"Hook is the bouncer; the required check is the
+The cohort's local pre-push gate states it in its own header: *"Hook is the bouncer; the required check is the
 locked door. Both, or say plainly which one you have."* On 2026-08-03 a pull request was merged
 from GitHub's UI while its final review was still running; the hook worked correctly and could
 do nothing, because it runs on one machine and the merge happened on the platform. On
 2026-08-13 a `review-final` pass completed after 6m 4s and its verdict was lost when the
 session died. Nothing noticed.
 
-The case against letting model verdicts gate is a measurement, not a preference. #118 records
-AUROC 0.48–0.64 for agent judges against 6,642 human-verified labels on adversarial security
-claims — near chance at the bottom of that range. At that accuracy the false-block rate is not
+The case against letting model verdicts gate is a measurement, not a preference. #109 (as
+amended, primary source [arXiv:2603.06594](https://arxiv.org/abs/2603.06594)) records
+AUROC 0.48–0.64 against 6,642 human-verified labels on adversarial security claims — measured
+for one judge (JailJudge), one victim model and two attacks, not a range across judges (#122's
+correction) — near chance at the bottom of that range. At that accuracy the false-block rate is not
 a tuning problem. The variant with a human override was rejected for a different reason: the
 override becomes the path of least resistance on the first busy afternoon, and afterwards a
 dismissed false positive is indistinguishable from a dismissed true one. That converts a gate
@@ -90,16 +93,20 @@ checking by hand.
   required, so it blocks nothing. The 2026-08-03 failure mode — a merge landing past a review
   that is still running — remains live for as long as enforcement is deferred. Deferring is a
   choice with that cost attached.
-- **Admins bypass.** With `enforce_admins` off, five of the eleven people who can merge are
-  exempt from whatever checks become required. Recent merges into `launchpad` were performed by
-  two people, both admins. The gate will therefore bind the people least likely to be merging
-  and exempt those most likely to. Accepted deliberately, in exchange for keeping an
-  emergency-merge path that does not depend on a second person being awake.
+- **Admins bypass.** With `enforce_admins` off, four of the eleven people who can merge are
+  exempt from whatever checks become required. Measured 2026-08-24, ten of the last twelve
+  merges into `launchpad` were performed by a non-admin (`maintain` role), who would be fully
+  bound by a required check; the other two by an admin, who is exempt. The bypass therefore
+  exempts an account doing a real share of recent merging while binding the account doing most
+  of it — which makes the exemption a live cost today, not a dormant one. Accepted deliberately,
+  in exchange for keeping an emergency-merge path that does not depend on a second person being
+  awake.
 - **One human plus a script is less review than two humans.** Two people reading a diff catch
   different things; a person and a deterministic check do not. The drop from two approvals to
   one happened outside this decision, but this record is where the cost should be named rather
   than left implicit.
-- **Deferral has no stated end date**, only a dependency. If `buzz-infrastructure` #105 slips,
+- **Deferral now carries a review date**: revisit this record if `buzz-infrastructure` #105 has
+  not landed by **2026-09-05** (two weeks before the cohort's 2026-09-17 hard end). If #105 slips,
   this ruling quietly becomes "review is advisory" again with a decision record that reads as
   though something was fixed.
 
@@ -111,7 +118,7 @@ people can push to, so it is the enforcement half of the fork's change-control s
 Two exposures are accepted by it. First, until enforcement lands, the only mechanical barrier
 between an unreviewed change and `launchpad` is one human approval and the push restriction —
 the review chain's findings carry no weight the platform recognises. Second, `enforce_admins`
-off means the eventual barrier is bypassable by five accounts; a compromise of any one of them
+off means the eventual barrier is bypassable by four accounts; a compromise of any one of them
 defeats the check set entirely, which is a reason to keep admin count low rather than a reason
 to reverse this ruling.
 
@@ -119,7 +126,7 @@ The prohibition on model verdicts gating is itself a security control. A check t
 on a model's opinion is an agent approving work, which `launchpad/AGENTS.md` rule 1 forbids, and
 at AUROC 0.48–0.64 it would also be an unreliable one. Preferring CI to local hooks carries a
 further safety property learned expensively: on 2026-08-13 a work-in-progress edit to
-`git-safety.sh` refused *every* tool call and locked two working sessions out with no recovery
+a local safety hook, mid-edit, refused *every* tool call and locked two working sessions out with no recovery
 from inside a session. A broken CI check fails a pull request; it cannot take a machine away
 from the person using it.
 
@@ -137,6 +144,6 @@ in #154 corrected above. Enforcement timing — deferral to `buzz-infrastructure
 Drafted by an AI agent (Claude Opus 5). Verified on 2026-08-21 with repository admin: the absence
 of repository rulesets, that enforcement is classic branch protection, that zero required status
 checks are configured, that required approvals was already 1 before any change that day, and that
-`adr-boundary` runs and passes without being required. Not verified: the AUROC figures in #118,
-which are quoted from that issue and carry #122's caveat that they represent one judge, one
-victim model and two attacks rather than a range across judges.
+`adr-boundary` runs and passes without being required. Not verified: the AUROC figures themselves,
+which are quoted from #109 as amended after #122's verification pass (#118's copy of them
+predates that pass and still carries a phrase #122 established is not in the paper).
