@@ -30,6 +30,7 @@ CONTROLS = [
     ("check_flag_guard.py", False),
     ("check_fetch_states.py", False),
     ("check_unit_suites.py", False),
+    ("check_adjudication.py", False),
 ]
 
 
