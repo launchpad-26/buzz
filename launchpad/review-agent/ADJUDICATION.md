@@ -88,7 +88,9 @@ a field that arrived already broken.
 ## Escalate, never approve
 
 Stated as three concrete prohibitions rather than a slogan, because a slogan is not
-checkable:
+checkable — followed by the structural condition all three turned out to depend on
+(§ 4 below, added after a judge was found able to defeat two of them without violating
+either as written):
 
 1. **No field in this contract can carry an approval, a merge recommendation, or a
    pass.** There is no `approved`, no `mergeable`, no `verdict: OK`. A judge cannot emit
@@ -117,6 +119,45 @@ safety claims perform "on average only slightly better than a random coin-flip" 
 6,642 human-verified labels, and the AUROC 0.48–0.64 range is one judge on one victim
 model under two attacks — not quoted here as anything broader. The phrase "despite high
 performance on standard validation sets" is not used, because it is not in the paper.
+
+### 4. An injected callable is given immutable input, or a copy — never the record itself
+
+**Added 2026-08-24.** The three prohibitions above are all enforced by inspecting what a
+judge **returns**. That makes them conditional on something this contract had left
+unsaid: the judge must not be able to reach the record directly.
+
+It could. `adjudicate()` passed the judge the live output finding and read
+`reported_severity` back out of it *after* the call, so a judge doing
+`finding["severity"] = "Low"` and returning nothing but a `REFUTED` verdict produced
+three `Blocker`s published as `Low`, an empty `adjudication.downgrades`, a
+`reported_severity` of `"Low"` — and **no `verdicts.validate` violation**, because every
+check ran against a record the judge had already rewritten. Prohibitions 1 and 3 were
+both defeated without either being violated as written. Fixed in `5bb984b96`.
+
+**#117 had this right and this stage diverged from it.** `run_dimensions._run_reviewer_into`
+takes `document: str` — an immutable object, so a reviewer there can influence the run
+only through its return value, which is then validated. This stage took a `dict`, and a
+`dict` handed to injected code is a shared mutable reference, not an argument.
+
+So, as a rule binding every stage and not just this one:
+
+> A callable injected into any stage of this pipeline receives immutable input, or a deep
+> copy. Never the object the stage will go on to publish, and never the object its own
+> guards will be evaluated against.
+
+Two consequences worth stating, because both were tempting and both are wrong:
+
+- **Copying is not defence in depth here, it is the enforcement.** A guard that reads the
+  value it is guarding *after* invoking the component it is guarding against is not a
+  guard, however carefully the comparison is written.
+- **It is not only about severity.** `finding_id` is what the input/output set-equality
+  check is keyed on, so an in-place edit there defeats that check too. Copy at the
+  boundary, once, rather than guarding fields individually as each is noticed — the
+  fields are open-ended and the boundary is not.
+
+This applies to the judge, the dedupe judge, and any future injected reviewer, renderer or
+publisher — #119's included. It was found by cross-model review after four same-model
+passes over the same code did not raise it.
 
 ## The `adjudication` block
 
