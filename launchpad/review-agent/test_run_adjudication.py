@@ -1929,6 +1929,15 @@ class RealRecordingsReplayTests(unittest.TestCase):
                 path.stem,
                 f"{path.name}'s _provenance.fixture names a different fixture than its own filename",
             )
+            # A recording carrying _dedupe_groups is making an extra, distinct
+            # claim (these specific ids are one defect) beyond the per-finding
+            # verdicts -- that claim gets its own disclosure, checked non-empty
+            # the same way model/date/sampling are, rather than living as
+            # unread prose with no reader anywhere in the tree.
+            if data.get("_dedupe_groups"):
+                self.assertTrue(
+                    provenance.get("dedupe"), f"{path.name} carries _dedupe_groups but no _provenance.dedupe disclosure"
+                )
 
     def test_dedupe_fixtures_three_identical_findings_are_grouped_not_dropped(self):
         # line-anchored-findings.json's own three findings ARE the dedupe

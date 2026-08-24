@@ -206,14 +206,19 @@ def all_findings(document: dict) -> list[dict]:
     return [f for r in document["reports"] for f in r["findings"]]
 
 
-# --- this whole suite makes no network call ---------------------------------
-# Asserted once, up front, over the exact path every real-recordings check
-# below actually exercises -- an injected runner that raises on any subprocess
-# or HTTP call, not merely an absence of observed failures.
+# --- in-process replay makes no network call --------------------------------
+# Scoped to the IN-PROCESS adjudicate() path only -- an injected runner that
+# raises on any subprocess or HTTP call, not merely an absence of observed
+# failures. Deliberately narrower than "every real-recordings check below":
+# the real-CLI dedupe check further down spawns run_adjudication.py as an
+# actual subprocess on purpose (that IS the point of that check), which a
+# patched subprocess.run here would not see anyway -- mock.patch inside this
+# process does not reach into a child process's own, unpatched import of the
+# same name.
 
 
 def _boom(*args, **kwargs):
-    raise AssertionError("check_adjudication.py must not touch the network or a subprocess in-process")
+    raise AssertionError("in-process replay must not touch the network or a subprocess")
 
 
 try:
@@ -881,6 +886,45 @@ for _name in REAL_FIXTURE_NAMES:
     _judge = run_adjudication.make_replay_judge(RECORDINGS_DIR)
     _real_output = run_adjudication.adjudicate(_real_input, _judge)
     check(findings.validate(_real_output) == [], f"{_name}: #117's own findings.validate still accepts the output")
+
+# --- FALSIFIABILITY.md's "before" quotes are genuinely verbatim -----------
+# review-final found this true by hand once (a comma and a closing sentence
+# had drifted from the actual recording) and flagged that the fix had no
+# committed guard, so the exact same drift could recur silently the next
+# time a recording's verdict_evidence changes. This makes it a mechanical
+# check instead of a fact re-verified by the next human reviewer.
+import re as _re  # noqa: E402 -- single-use, local to this one check
+
+_falsifiability_path = HERE / "fixtures" / "adjudication" / "recordings" / "FALSIFIABILITY.md"
+_falsifiability_text = _falsifiability_path.read_text(encoding="utf-8")
+
+_all_recorded_evidence: list[str] = []
+for _recording_path in sorted(RECORDINGS_DIR.glob("*.json")):
+    with _recording_path.open(encoding="utf-8") as _handle:
+        _recording_data = json.load(_handle)
+    for _key, _value in _recording_data.items():
+        if _key.startswith("_") or not isinstance(_value, dict):
+            continue
+        _evidence = _value.get("verdict_evidence", "")
+        _all_recorded_evidence.append(" ".join(_re.sub(r"\s+", " ", _evidence).split()))
+_all_real_evidence = " ".join(_all_recorded_evidence)
+
+_before_heading = r"\*\*Before \(full adjudicator\.md\), the actual recorded verdict:\*\*\n\n((?:> .*\n?)+)"
+_before_blocks = _re.findall(_before_heading, _falsifiability_text)
+check(len(_before_blocks) == 4, f"FALSIFIABILITY.md names exactly four 'Before' blocks (found {len(_before_blocks)})")
+
+for _index, _block in enumerate(_before_blocks, start=1):
+    _joined = " ".join(line[2:] if line.startswith("> ") else line for line in _block.splitlines())
+    _joined = _re.sub(r"\s+", " ", _joined).strip()
+    _quote_match = _re.search(r'"(.*)"', _joined)
+    check(_quote_match is not None, f"pair {_index}: the 'Before' block contains a quoted verdict_evidence")
+    if _quote_match is None:
+        continue
+    _quoted_text = _quote_match.group(1)
+    check(
+        _quoted_text in _all_real_evidence,
+        f"pair {_index}: the 'Before' quote is byte-verbatim against some real recording's verdict_evidence",
+    )
 
 print(f"\n{len(failures)} failure(s)")
 sys.exit(1 if failures else 0)
