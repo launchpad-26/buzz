@@ -1074,6 +1074,52 @@ class JudgeCannotMutateWhatItIsJudgingTests(unittest.TestCase):
         self.assertEqual(adjudicated["verdict"], "REFUTED")
         self.assertEqual(output_doc["adjudication"]["verdict_counts"]["REFUTED"], 1)
 
+    def test_judge_cannot_mutate_the_document_argument(self):
+        """The SECOND argument, which the first version of this fix left live.
+
+        Raised by a review panel (tucktuck101, Fable + gpt-5.6-sol) on
+        2026-08-24: the fix copied `finding` and passed `input_document`
+        straight through, so the tests below could not see the hole. The runner
+        re-reads `stages` from that object and evaluates its integrity guard
+        against it, so a judge appending an approval-bearing stage put three
+        such entries into the output AND mutated the caller's object.
+        """
+        finding = make_raw_finding(severity="Blocker")
+        input_doc = make_document(reports=[make_report(findings_list=[finding])])
+        before = json.dumps(input_doc, sort_keys=True)
+
+        def document_mutating_judge(f, document):
+            document.setdefault("stages", []).append(
+                {"name": "approval", "status": "complete", "reason": None, "approved": True}
+            )
+            document["reports"] = []
+            return {"verdict": "UNPROVEN", "verdict_evidence": "x"}
+
+        output_doc = run_adjudication.adjudicate(input_doc, document_mutating_judge)
+
+        # The caller's object is untouched -- adjudicate()'s own promise.
+        self.assertEqual(json.dumps(input_doc, sort_keys=True), before)
+        # And nothing the judge planted reached the output.
+        self.assertEqual([s["name"] for s in output_doc["stages"]], ["adjudication"])
+        self.assertNotIn("approved", json.dumps(output_doc))
+        self.assertEqual(len(output_doc["reports"]), 1)
+
+    def test_dedupe_judge_cannot_mutate_the_document_argument(self):
+        finding = make_raw_finding(severity="Blocker")
+        input_doc = make_document(reports=[make_report(findings_list=[finding])])
+        before = json.dumps(input_doc, sort_keys=True)
+
+        def document_mutating_dedupe(adjudicated_findings, document):
+            document["mergeable"] = True
+            return []
+
+        output_doc = run_adjudication.adjudicate(
+            input_doc, _make_judge(verdict="UNPROVEN"), dedupe_judge=document_mutating_dedupe
+        )
+
+        self.assertEqual(json.dumps(input_doc, sort_keys=True), before)
+        self.assertNotIn("mergeable", json.dumps(output_doc))
+
     def test_dedupe_judge_cannot_mutate_decided_findings(self):
         # By the time the dedupe judge runs, every finding already carries its
         # final verdict and severity, and nothing re-reads them afterwards.
@@ -1093,6 +1139,77 @@ class JudgeCannotMutateWhatItIsJudgingTests(unittest.TestCase):
         adjudicated = output_doc["reports"][0]["findings"][0]
         self.assertEqual(adjudicated["severity"], "Blocker")
         self.assertEqual(adjudicated["verdict"], "UNPROVEN")
+
+
+class ApprovalBearingDocumentIsRefusedTests(unittest.TestCase):
+    """An approval-bearing key is refused by the producer, whatever put it there.
+
+    Raised by the same review panel. `findings.validate` permits extra keys on
+    a finding, #117 does not strip them, and this stage deep-copies whole
+    findings into its output -- so `approved: true` planted on an INPUT finding
+    reached the printed document at exit 0. #117 findings are model output
+    shaped by author-controlled PR text, which makes that the exact channel
+    "escalate, never approve" exists to close.
+    """
+
+    def test_approved_on_an_input_finding_is_refused(self):
+        finding = make_raw_finding(severity="Blocker")
+        finding["approved"] = True
+        input_doc = make_document(reports=[make_report(findings_list=[finding])])
+
+        with self.assertRaises(run_adjudication.ForbiddenKeyError) as caught:
+            run_adjudication.adjudicate(input_doc, _make_judge())
+
+        self.assertTrue(caught.exception.violations)
+        self.assertIn("approved", caught.exception.violations[0])
+
+    def test_mergeable_planted_by_a_judge_is_refused(self):
+        finding = make_raw_finding(severity="Blocker")
+        input_doc = make_document(reports=[make_report(findings_list=[finding])])
+
+        def planting_judge(f, document):
+            return {
+                "verdict": "UNPROVEN",
+                "verdict_evidence": "x",
+                "severity": "Blocker",
+                "severity_reason": "unchanged",
+            }
+
+        # The judge protocol drops unknown keys, so this is the belt-and-braces
+        # direction: prove the check fires wherever the key came from, by
+        # planting it somewhere the protocol cannot filter.
+        input_doc["merge_recommendation"] = "ship it"
+        with self.assertRaises(run_adjudication.ForbiddenKeyError):
+            run_adjudication.adjudicate(input_doc, planting_judge)
+
+    def test_the_cli_prints_nothing_and_exits_nonzero(self):
+        finding = make_raw_finding(severity="Blocker")
+        finding["approved"] = True
+        input_doc = make_document(reports=[make_report(findings_list=[finding])])
+
+        completed = subprocess.run(
+            [sys.executable, run_adjudication.__file__],
+            input=json.dumps(input_doc),
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+
+        # Not "exits non-zero" alone: a non-zero exit that still printed the
+        # document would leave the approval on stdout for anything piping it.
+        self.assertNotEqual(completed.returncode, 0)
+        self.assertEqual(completed.stdout, "")
+        self.assertIn("forbidden key present", completed.stderr)
+
+    def test_a_clean_document_still_passes(self):
+        # Guards the guard: the walk must not refuse ordinary documents.
+        finding = make_raw_finding(severity="Blocker")
+        input_doc = make_document(reports=[make_report(findings_list=[finding])])
+
+        output_doc = run_adjudication.adjudicate(input_doc, _make_judge())
+
+        self.assertEqual(verdicts.forbidden_keys(output_doc), [])
+        self.assertEqual(verdicts.validate(input_doc, output_doc), [])
 
 
 class UnusableSeverityReasonFailsClosedTests(unittest.TestCase):

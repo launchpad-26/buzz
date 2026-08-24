@@ -327,6 +327,35 @@ class FindingSetIntegrityError(RuntimeError):
     """
 
 
+class ForbiddenKeyError(ValueError):
+    """Raised when the document this stage is about to emit carries an
+    approval-bearing key (``approved``, ``mergeable``, ``merge_recommendation``)
+    anywhere in it.
+
+    **The key does not have to come from the judge.** ``findings.validate``
+    permits extra keys on a finding, #117 does not strip them, and this stage
+    deep-copies whole findings into its output -- so an ``approved: true``
+    planted on an incoming finding reached the printed document at exit 0. #117
+    findings are model output shaped by author-controlled PR text, which makes
+    that the precise channel prohibition 1 exists to close.
+
+    Refused rather than stripped. Stripping would emit a document that looks
+    clean and silently discards evidence that something upstream tried to put
+    an approval in it; the nonce failures already establish the house
+    behaviour for "cannot honour this input" -- non-zero exit, no document.
+
+    ``verdicts.validate`` catches this too, but only for whoever calls it, and
+    ``main()`` did not: the CLI printed and returned 0. This module's own rule
+    applies -- "a stage that can print a lossy document and rely on a
+    downstream ``verdicts.validate`` call to catch it has already lost the
+    document once."
+    """
+
+    def __init__(self, violations: list[str]) -> None:
+        super().__init__("; ".join(violations))
+        self.violations = violations
+
+
 class StagesShapeError(ValueError):
     """Raised when ``input_document["stages"]`` is present but malformed --
     not a list, or carrying an entry that is not an object with a string
@@ -608,7 +637,21 @@ def _run_judge_safely(judge: Judge, finding: dict, input_document: dict) -> dict
         # the input/output set-equality check is keyed on, so an in-place edit
         # there defeats that check too. Copy once, at the boundary, rather than
         # guarding fields one at a time as each is noticed.
-        result = judge(copy.deepcopy(finding), input_document)
+        # BOTH arguments. The first version of this fix copied only the
+        # finding, which was the wrong half of the job and looked like the
+        # whole of it: the runner re-reads `stages` from `input_document` and
+        # evaluates its own integrity guard against it, so a judge appending
+        # `{"name": "approval", ..., "approved": True}` to `document["stages"]`
+        # put three approval-bearing entries into the output AND mutated the
+        # caller's object, against this function's own "never mutates
+        # input_document" promise. Copying one argument satisfied the letter of
+        # ADJUDICATION.md § "Escalate, never approve" § 4 while leaving the
+        # hole it describes wide open.
+        #
+        # Per call, not once per run: a single shared copy would still let one
+        # finding's judge alter what the next one sees. If this ever shows up
+        # in a profile the answer is a read-only view, never a shared object.
+        result = judge(copy.deepcopy(finding), copy.deepcopy(input_document))
     except Exception as exc:  # noqa: BLE001 -- a judge's own crash is exactly
         # the "cannot parse / times out" case above, and must fail closed
         # rather than propagate and abort the whole run over one finding.
@@ -807,7 +850,9 @@ def _run_dedupe_safely(
         # a dedupe judge handed the live list could quietly rewrite decisions
         # that are no longer re-checked -- the grouping it returns is validated,
         # but the findings themselves are not re-read afterwards.
-        raw_groups = dedupe_judge(copy.deepcopy(adjudicated_findings), input_document)
+        raw_groups = dedupe_judge(
+            copy.deepcopy(adjudicated_findings), copy.deepcopy(input_document)
+        )
     except Exception:  # noqa: BLE001 -- a dedupe judge's own crash must fail
         # closed to no duplicates, exactly like a per-finding judge's crash
         # fails closed to UNPROVEN in `_run_judge_safely` above.
@@ -1111,6 +1156,20 @@ def adjudicate(
             f"invented={sorted(output_ids - input_ids)}"
         )
 
+    # Prohibition 1, enforced by the producer rather than hoped for from a
+    # consumer -- same argument as the finding-set check immediately above, and
+    # the same position: after everything that could introduce a key, before
+    # the document is handed to anyone.
+    #
+    # `verdicts.forbidden_keys`, not a local walk: the rule lives in one place.
+    # This catches all three sources at once -- a key the judge returned, a key
+    # a dedupe judge planted, and a key that arrived on an input finding and
+    # was deep-copied through (which `findings.validate` permits and #117 does
+    # not strip, so it is the likeliest of the three).
+    approval_violations = verdicts.forbidden_keys(output_document)
+    if approval_violations:
+        raise ForbiddenKeyError(approval_violations)
+
     return output_document
 
 
@@ -1186,6 +1245,15 @@ def main(argv: list[str] | None = None) -> int:
         return 1
     except NonceVerificationError as exc:
         print(f"run_adjudication: {exc.reason}: {exc.detail}", file=sys.stderr)
+        return 1
+    except ForbiddenKeyError as exc:
+        for violation in exc.violations:
+            print(f"run_adjudication: {violation}", file=sys.stderr)
+        print(
+            "run_adjudication: refusing to emit an approval-bearing document; "
+            "no document printed",
+            file=sys.stderr,
+        )
         return 1
 
     print(json.dumps(output_document))

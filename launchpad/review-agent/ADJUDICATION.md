@@ -142,8 +142,19 @@ only through its return value, which is then validated. This stage took a `dict`
 So, as a rule binding every stage and not just this one:
 
 > A callable injected into any stage of this pipeline receives immutable input, or a deep
-> copy. Never the object the stage will go on to publish, and never the object its own
-> guards will be evaluated against.
+> copy, **in every argument**. Never the object the stage will go on to publish, and never
+> the object its own guards will be evaluated against.
+
+**"In every argument" is not padding — the first attempt at this rule failed on exactly
+that.** It copied the finding and passed `input_document` through live, which satisfied
+the sentence as originally written while leaving the hole it describes open: the runner
+re-reads `stages` from that document and evaluates its integrity guard against it, so a
+judge appending `{"name": "approval", …, "approved": true}` to `document["stages"]` put
+three approval-bearing entries into the output *and* mutated the caller's object, against
+`adjudicate()`'s own "never mutates `input_document`" promise. The regression tests
+mutated only the copied argument, so they could not see it. Found by a review panel after
+the partial fix had already shipped to a pull request. A rule about arguments has to name
+all of them, and its tests have to exercise all of them.
 
 Two consequences worth stating, because both were tempting and both are wrong:
 
