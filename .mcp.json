@@ -1,0 +1,7 @@
+{
+  "mcpServers": {
+    "professor-tools": {
+      "command": "launchpad/agents/the-professor/tools/server.py"
+    }
+  }
+}
