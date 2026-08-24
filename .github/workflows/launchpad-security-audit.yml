@@ -71,7 +71,17 @@ jobs:
       # also run every unrelated script's test suite in this directory, which
       # is duplicate work this workflow doesn't own and would blow the 3-minute
       # budget #66 sets for no benefit.
+      # REQUIRE_GITLEAKS_RULESET turns test_security_audit_gitleaks_ruleset.py's
+      # "gitleaks not on PATH" skip into a failure. That suite is the only thing
+      # that proves .gitleaks.toml's rules still match anything, and it is the
+      # one suite here that needs the binary — so if the install step above ever
+      # breaks or is reordered, this job must go red rather than report success
+      # for a scan-ruleset check that silently did not run. Same reasoning as
+      # launchpad-agents-tests.yml's empty-discovery guard: a check that can be
+      # satisfied by absence is not a check.
       - name: Run the harness's controls
+        env:
+          REQUIRE_GITLEAKS_RULESET: "1"
         run: python3 -m unittest discover -s launchpad/scripts -p "test_security_audit*.py"
 
       - name: Run the security audit
