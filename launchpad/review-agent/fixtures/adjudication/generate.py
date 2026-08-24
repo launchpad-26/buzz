@@ -221,9 +221,13 @@ def build_line_anchored_findings_document() -> dict:
             "note": (
                 "All three dimensions report a Blocker at "
                 "crates/buzz-relay/src/gate.rs:42, same defect, same location, "
-                "different finding_id (dimension is a hash input) -- exercising "
-                "both the 'all line-anchored' shape and the adjudicator's dedupe "
-                "path in the same real document."
+                "different finding_id (dimension is a hash input) -- carrying "
+                "both the 'all line-anchored' shape and a genuine dedupe "
+                "CANDIDATE in the same real document. Candidate, not "
+                "demonstration: run_adjudication.py's default stub_dedupe_judge "
+                "groups nothing by design, so this document currently produces "
+                "an empty duplicate_groups. Asserting on that output is STEP "
+                "10's job, not this fixture's."
             ),
         },
     )

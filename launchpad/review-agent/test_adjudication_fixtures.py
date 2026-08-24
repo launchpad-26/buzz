@@ -127,6 +127,131 @@ class HeaderNamesBehaviourAndProvenanceTests(unittest.TestCase):
         self.assertEqual(not_real, ["containment-all-kinds.json"])
 
 
+class RealDocumentsReplayTheirNamedRecordingsTests(unittest.TestCase):
+    """The `real` claim, made falsifiable instead of merely asserted.
+
+    RegenerationReproducesCommittedBytesTests proves generate.py ON DISK is
+    deterministic. That is a weaker property than it reads as: rewrite the
+    generator to hand-type finding content, regenerate, commit, and the bytes
+    agree with the new generator perfectly -- every other test in this file
+    still passes while `real: true` and `source_recordings` have quietly
+    become false. PROVENANCE.md claims byte reproducibility is "what makes
+    'real' ... checkable rather than merely asserted"; on its own it is not,
+    because it compares the generator against itself.
+
+    So this class supplies the missing half, by reading the recordings and
+    requiring the content to match them. It is the #118 counterpart of
+    test_recordings.py's own sampling-disclosure guard, added for the same
+    reason: a claim that no test can falsify decays without anyone noticing.
+    """
+
+    def _real_documents(self):
+        return [f for f in DOCUMENT_FILES if _load(f)["_fixture"]["real"] is True]
+
+    def test_at_least_one_document_is_real(self):
+        # Guards the guard. If every document were crafted, every assertion
+        # below would pass vacuously over an empty list.
+        self.assertTrue(self._real_documents())
+
+    def test_every_real_document_names_recordings_that_exist(self):
+        for filename in self._real_documents():
+            with self.subTest(filename=filename):
+                named = _load(filename)["_fixture"].get("source_recordings")
+                self.assertIsInstance(named, list)
+                self.assertTrue(named)
+                for relative in named:
+                    self.assertTrue(relative.startswith("recordings/"), relative)
+                    self.assertTrue(os.path.isfile(os.path.join(HERE, relative)), relative)
+
+    def test_every_replayed_report_matches_its_named_recording(self):
+        compared = 0
+        for filename in self._real_documents():
+            doc = _load(filename)
+            named = doc["_fixture"]["source_recordings"]
+            for report in doc["reports"]:
+                dimension = report["dimension"]
+                matches = [r for r in named if r.endswith("/" + dimension + ".json")]
+                if not matches:
+                    # mixed-report-statuses.json deliberately carries one
+                    # genuinely-raised failure where a replayed clean dimension
+                    # would otherwise sit -- PROVENANCE.md says so, and a failed
+                    # report has no recording behind it to compare against.
+                    self.assertEqual(report["status"], "failed", dimension)
+                    continue
+                with self.subTest(filename=filename, dimension=dimension):
+                    with open(os.path.join(HERE, matches[0]), encoding="utf-8") as handle:
+                        recording = json.load(handle)
+                    # Not "equivalent" -- equal. Any hand-edit to a defect
+                    # description, severity, evidence string or anchor shows up
+                    # here, which is the whole point of the document being real.
+                    self.assertEqual(report["findings"], recording["findings"])
+                    self.assertEqual(report["outcome"], recording["outcome"])
+                    compared += 1
+        # A refactor that silently stopped comparing anything would otherwise
+        # leave this test green while checking nothing at all.
+        self.assertGreaterEqual(compared, len(self._real_documents()))
+
+    def test_every_named_recording_is_actually_replayed(self):
+        # Provenance inflation in the other direction: naming a recording the
+        # document never replayed would read as more real than it is.
+        for filename in self._real_documents():
+            doc = _load(filename)
+            dimensions = {report["dimension"] for report in doc["reports"]}
+            for relative in doc["_fixture"]["source_recordings"]:
+                with self.subTest(filename=filename, recording=relative):
+                    slug = os.path.basename(relative)[: -len(".json")]
+                    self.assertIn(slug, dimensions)
+
+    def test_every_real_documents_nonce_derives_from_its_recordings_seed(self):
+        # The nonce is the one field a fabricated generator cannot get right by
+        # copying shapes: it is make_nonce(seed=...) over the recording's OWN
+        # recorded seed, so inventing a seed changes it. PROVENANCE.md's
+        # determinism section states exactly this; here it is, enforced.
+        for filename in self._real_documents():
+            with self.subTest(filename=filename):
+                doc = _load(filename)
+                seeds = set()
+                for relative in doc["_fixture"]["source_recordings"]:
+                    with open(os.path.join(HERE, relative), encoding="utf-8") as handle:
+                        seeds.add(json.load(handle)["_provenance"]["seed"])
+                self.assertTrue(seeds)
+                self.assertIn(
+                    doc["nonce"],
+                    {contain.make_nonce(seed=seed) for seed in seeds},
+                )
+
+
+class ProvenanceNoteRecordsTheHonestySplitTests(unittest.TestCase):
+    """PROVENANCE.md's accounting is load-bearing, so pin it.
+
+    test_provenance_note_exists checks only that the file is present. Truncate
+    it to a single header line and that test still passes, taking the entire
+    real-versus-crafted accounting with it -- the same silent-loss failure
+    test_recordings.py's sampling-disclosure guard exists to prevent.
+    """
+
+    REQUIRED_FRAGMENTS = (
+        "five named behaviours",
+        "crafted surfaces, real pipeline",
+        "honesty split",
+        "replay, not re-synthesis",
+    )
+
+    def test_note_still_carries_its_accounting(self):
+        with open(PROVENANCE_NOTE, encoding="utf-8") as handle:
+            text = handle.read().lower()
+        for fragment in self.REQUIRED_FRAGMENTS:
+            with self.subTest(fragment=fragment):
+                self.assertIn(fragment.lower(), text)
+
+    def test_note_accounts_for_every_document(self):
+        with open(PROVENANCE_NOTE, encoding="utf-8") as handle:
+            text = handle.read()
+        for filename in DOCUMENT_FILES:
+            with self.subTest(filename=filename):
+                self.assertIn(filename, text)
+
+
 class FindingsValidateTests(unittest.TestCase):
     def test_every_document_passes_findings_validate_with_zero_violations(self):
         for filename in DOCUMENT_FILES:
@@ -181,9 +306,16 @@ class LineAnchoredFindingsFixtureTests(unittest.TestCase):
         self.assertEqual(len(locations), 1, f"expected one shared location, got {locations}")
         self.assertEqual(len(defects), 1, f"expected one shared defect text, got {defects}")
         # finding_id differs across the three -- `dimension` is a hash input,
-        # per ADJUDICATION.md's own Dedupe section -- so this genuinely
-        # exercises adjudicate()'s dedupe path (three distinct ids describing
-        # one defect) rather than three identical ids.
+        # per ADJUDICATION.md's own Dedupe section -- so this document is a
+        # genuine dedupe CANDIDATE (three distinct ids describing one defect)
+        # rather than three identical ids.
+        #
+        # It is a candidate, not a demonstration: run_adjudication.py's default
+        # stub_dedupe_judge finds no duplicates by design, so running this
+        # document through the real CLI today emits `duplicate_groups: []` with
+        # every `duplicate_of` null. Asserting on that output is STEP 10's
+        # ("dedupe visible from both ends"); what this file checks is the input
+        # shape a real dedupe judge will have to group.
         ids = {f["finding_id"] for f in findings_list}
         self.assertEqual(len(ids), 3)
 

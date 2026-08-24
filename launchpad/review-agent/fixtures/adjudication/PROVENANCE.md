@@ -83,6 +83,21 @@ and is different every run by design).
 
 `python3 generate.py` from this directory reproduces the four committed files
 **byte-for-byte** — this is checked, not asserted, by
-`../../test_adjudication_fixtures.py`. That is what makes "real" and "crafted surfaces,
-real pipeline" checkable claims rather than assertions: anyone can re-run the generator
-against the same recordings and fixture payloads and get the same bytes back.
+`../../test_adjudication_fixtures.py`.
+
+**Byte reproducibility alone does not make "real" checkable, and this file used to claim
+that it did.** It compares the generator against itself: rewrite `generate.py` to type
+finding content by hand, regenerate, commit, and the new bytes agree with the new
+generator perfectly while `real: true` and `source_recordings` have quietly become false.
+That was demonstrated against this directory, not imagined — a generator reading nothing
+under `recordings/` passed every test here.
+
+So the claim is carried by a second, separate check:
+`RealDocumentsReplayTheirNamedRecordingsTests` reads the recordings this directory names
+and requires every replayed report's `findings` and `outcome` to be **equal** to the
+recording's own, and every real document's `nonce` to be `contain.make_nonce(seed=...)`
+over a seed that recording actually records. The nonce is the field a fabricated
+generator cannot get right by copying shapes, because inventing a seed changes it.
+Between them, byte reproducibility answers "is the generator deterministic?" and that
+class answers "did the content come from a recording?" — two different questions, and
+the second is the one this file's honesty depends on.
