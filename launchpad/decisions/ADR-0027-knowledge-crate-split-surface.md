@@ -22,8 +22,14 @@ corpus, and neither one runs the Python pipeline live:
 **`knowledge.find(query)`'s free-text search is out of scope for the v1 crate.** It is
 the one method among #211's seven with an unbounded input domain — the other six are
 already keyed on a symbol, an area, or a task name — and there is no finite set of
-answers an offline pipeline could pre-render against arbitrary text. It is tracked as a
-separate, later issue rather than solved here.
+answers an offline pipeline could pre-render against arbitrary text. It is tracked
+separately as #1400 rather than solved here.
+
+`knowledge.ask(text)` shares the same fate for the same reason: it is an eighth public
+function, not one of the seven named by `all_methods()`, and it takes arbitrary
+natural-language text that it routes to `find` for the FIND intent
+(`knowledge.py:370-420`). #1400 covers it alongside `find`, not as a separate gap to
+rediscover later.
 
 This rejects Option A (re-implement resolution in Rust) and Option C (a live sidecar),
 and it is deliberately the same shape as Option B, made explicit: the pipeline's output
@@ -110,7 +116,7 @@ issue:
 
 ## Provenance
 
-Decided by Serina Mcfall in conversation on 2026-08-25, after an agent-drafted
+Decided by Serina McFall in conversation on 2026-08-25, after an agent-drafted
 recommendation.
 
 **Her call:** Option D over B, A and C.
