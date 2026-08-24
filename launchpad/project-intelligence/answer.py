@@ -98,3 +98,63 @@ class Answer:
 
     def claims_of_class(self, entry_class: EntryClass) -> tuple[Claim, ...]:
         return tuple(c for c in self.claims if c.entry_class == entry_class)
+
+
+# The structural field is TEAM_KNOWLEDGE; the design doc writes it "TEAM
+# KNOWLEDGE" in prose and #211's own done-when uses that spelling. Mapped here
+# once, explicitly, so the reader-facing label and the stored enum can never
+# drift into two different vocabularies by accident.
+_DISPLAY_LABEL = {
+    "FACT": "FACT",
+    "INFERENCE": "INFERENCE",
+    "TEAM_KNOWLEDGE": "TEAM KNOWLEDGE",
+}
+
+
+def render_claim(claim: Claim) -> str:
+    """One `## Sources` line: label first, then the statement, then evidence.
+
+    The label leads because that is the thing a reader must not miss. An
+    INFERENCE carries its confidence and a TEAM KNOWLEDGE carries who said it,
+    both inline -- the doc requires an inference to "always give the evidence
+    and, if relevant, your confidence", and requires team knowledge stored
+    "with who said it".
+    """
+    label = _DISPLAY_LABEL[claim.entry_class]
+    if claim.entry_class == "INFERENCE":
+        label = f"{label} (confidence {claim.confidence})"
+    elif claim.entry_class == "TEAM_KNOWLEDGE":
+        label = f"{label} (from {claim.provided_by})"
+
+    line = f"- {label}: {claim.statement}"
+    if claim.evidence:
+        line += f" -- {', '.join(claim.evidence)}"
+    return line
+
+
+def render(answer: Answer) -> str:
+    """Render the six-section format, omitting every section with no content.
+
+    Omission is uniform, including `## Sources`: an answer citing nothing emits
+    no Sources heading rather than an empty one. That is deliberate but worth
+    knowing -- an empty heading reads as "checked, found nothing", while an
+    absent one reads as "not established", and the second is the honest signal.
+    A claimless answer is a defect for the assembly stage to prevent, not for
+    the renderer to paper over.
+    """
+    bodies = {
+        "Short answer": answer.short_answer.strip(),
+        "How it works": answer.how_it_works.strip(),
+        "Relevant flow": answer.relevant_flow.strip(),
+        "Important files": ", ".join(answer.important_files),
+        "Things to be aware of": answer.things_to_be_aware_of.strip(),
+        "Sources": "\n".join(render_claim(c) for c in answer.claims),
+    }
+
+    # Iterating SECTION_ORDER is what fixes the order -- a section added to
+    # `bodies` and not to SECTION_ORDER simply never renders, rather than
+    # rendering in dict order and silently disagreeing with the design doc.
+    # KeyError here is the right failure: a missing body is a coding error,
+    # not a runtime condition to swallow.
+    blocks = [f"## {name}\n{bodies[name]}" for name in SECTION_ORDER if bodies[name]]
+    return "\n\n".join(blocks)

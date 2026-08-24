@@ -11,7 +11,7 @@ from __future__ import annotations
 
 import unittest
 
-from answer import SECTION_ORDER, Answer, Claim
+from answer import SECTION_ORDER, Answer, Claim, render
 
 
 class ClaimProvenanceValidationTest(unittest.TestCase):
@@ -116,6 +116,100 @@ class AnswerShapeTest(unittest.TestCase):
     def test_important_files_as_a_bare_string_is_rejected(self) -> None:
         with self.assertRaises(ValueError):
             Answer(question="q?", important_files="kind.rs")
+
+
+class RenderTest(unittest.TestCase):
+    """STEP 2's done-when, asserted on the rendered string rather than the object."""
+
+    def _fact_and_inference_answer(self, **overrides: object) -> Answer:
+        defaults: dict[str, object] = {
+            "question": "how does kind gating work?",
+            "short_answer": "A kind integer is checked against a shared-gate allowlist.",
+            "claims": (
+                Claim(
+                    statement="is_shared_gated_kind is the gate",
+                    entry_class="FACT",
+                    evidence=("crates/buzz-core/src/kind.rs:120",),
+                ),
+                Claim(
+                    statement="the allowlist was widened for performance",
+                    entry_class="INFERENCE",
+                    evidence=("commit message only, no benchmark",),
+                    confidence=0.4,
+                ),
+            ),
+        }
+        defaults.update(overrides)
+        return Answer(**defaults)  # type: ignore[arg-type]
+
+    def test_both_provenance_labels_appear_under_sources(self) -> None:
+        rendered = render(self._fact_and_inference_answer())
+        sources = rendered.split("## Sources\n", 1)[1]
+        self.assertIn("FACT:", sources)
+        self.assertIn("INFERENCE (confidence 0.4):", sources)
+
+    def test_no_flow_content_emits_no_flow_heading(self) -> None:
+        rendered = render(self._fact_and_inference_answer(relevant_flow=""))
+        self.assertNotIn("## Relevant flow", rendered)
+
+    def test_flow_content_does_emit_the_heading(self) -> None:
+        """The mirror of the test above -- without it, a render() that never
+        emitted the heading at all would pass."""
+        rendered = render(self._fact_and_inference_answer(relevant_flow="A -> B -> C"))
+        self.assertIn("## Relevant flow\nA -> B -> C", rendered)
+
+    def test_whitespace_only_section_counts_as_empty(self) -> None:
+        rendered = render(self._fact_and_inference_answer(how_it_works="   \n  "))
+        self.assertNotIn("## How it works", rendered)
+
+    def test_sections_render_in_the_design_doc_order(self) -> None:
+        rendered = render(
+            self._fact_and_inference_answer(
+                how_it_works="mechanism",
+                relevant_flow="A -> B",
+                important_files=("kind.rs",),
+                things_to_be_aware_of="a caveat",
+            )
+        )
+        headings = [line[3:] for line in rendered.splitlines() if line.startswith("## ")]
+        self.assertEqual(headings, list(SECTION_ORDER))
+
+    def test_team_knowledge_renders_with_a_space_and_names_the_source(self) -> None:
+        """The stored enum is TEAM_KNOWLEDGE; the reader-facing label is
+        "TEAM KNOWLEDGE", which is the spelling the design doc and #211's own
+        done-when use. Both spellings are asserted so the mapping is pinned."""
+        answer = Answer(
+            question="q?",
+            claims=(
+                Claim(
+                    statement="we plan to drop this next quarter",
+                    entry_class="TEAM_KNOWLEDGE",
+                    provided_by="serina",
+                ),
+            ),
+        )
+        rendered = render(answer)
+        self.assertIn("TEAM KNOWLEDGE (from serina):", rendered)
+        self.assertNotIn("TEAM_KNOWLEDGE", rendered)
+
+    def test_an_answer_citing_nothing_emits_no_sources_heading(self) -> None:
+        """Documented choice, not an oversight: an empty heading reads as
+        "checked, found nothing", an absent one as "not established"."""
+        rendered = render(Answer(question="q?", short_answer="something"))
+        self.assertNotIn("## Sources", rendered)
+
+    def test_evidence_is_joined_onto_the_claim_line(self) -> None:
+        answer = Answer(
+            question="q?",
+            claims=(
+                Claim(
+                    statement="the gate exists",
+                    entry_class="FACT",
+                    evidence=("kind.rs:120", "kind.rs:145"),
+                ),
+            ),
+        )
+        self.assertIn("- FACT: the gate exists -- kind.rs:120, kind.rs:145", render(answer))
 
 
 if __name__ == "__main__":
