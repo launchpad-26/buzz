@@ -160,7 +160,18 @@ class ImpactTest(unittest.TestCase):
         result = knowledge.impact(_agent(), "symbol_with_no_edges")
         for claim in result.claims:
             self.assertEqual(claim.entry_class, "FACT")
-            self.assertIn("the graph holds no", claim.statement)
+            # "the INDEXED graph holds no ..." -- the wording is what earns the
+            # FACT label here, since nothing was re-read from the tree. Codex
+            # pushed on exactly this: a cached traversal asserted as fact.
+            self.assertIn("the indexed graph holds no", claim.statement)
+
+    def test_a_graph_only_answer_states_that_it_is_a_snapshot(self) -> None:
+        """No live read happens in dependencies()/impact(), so the answer must
+        say so rather than let a reader assume the tree was consulted."""
+        for call in (knowledge.dependencies, knowledge.impact):
+            with self.subTest(method=call.__name__):
+                result = call(_agent(), TARGET)
+                self.assertIn("indexed at agent build time", result.things_to_be_aware_of)
 
 
 class ConventionsTest(unittest.TestCase):
@@ -185,8 +196,24 @@ class ConventionsTest(unittest.TestCase):
 
 
 class SetupTest(unittest.TestCase):
+    """setup() reads through agent.tools now, not the process-global
+    investigator -- the seam was split and Codex found it. These tests therefore
+    use REAL tools, because reading real manifests is the behaviour under test.
+    """
+
+    @staticmethod
+    def _real_tools_agent() -> KnowledgeAgent:
+        symbols = [_symbol(TARGET, tests=("tests::membership",))]
+        return KnowledgeAgent(
+            crate="buzz-core",
+            symbols=symbols,
+            graph=ProjectGraph.from_symbols(symbols),
+            index=SemanticIndex.from_symbols(symbols),
+            memory=ProjectMemory(),
+        )
+
     def test_a_real_justfile_recipe_is_cited_by_file_and_line(self) -> None:
-        result = knowledge.setup(_agent(), "test")
+        result = knowledge.setup(self._real_tools_agent(), "test")
         cited = [c for c in result.claims if "Justfile" in " ".join(c.evidence)]
         self.assertTrue(cited, "no claim cited the real Justfile")
         self.assertRegex(cited[0].evidence[0], r"^Justfile:\d+$")
@@ -194,14 +221,35 @@ class SetupTest(unittest.TestCase):
     def test_an_unknown_task_reports_not_found_rather_than_guessing(self) -> None:
         """A generic recipe is wrong the moment the project's tooling differs
         from the guess, so nothing is invented."""
-        result = knowledge.setup(_agent(), "frobnicate")
+        result = knowledge.setup(self._real_tools_agent(), "frobnicate")
         self.assertIn("no 'frobnicate' entry point", result.claims[0].statement)
 
 
 class FindTest(unittest.TestCase):
-    def test_an_unresolvable_concept_says_so_about_the_index(self) -> None:
+    def test_a_rejected_candidate_is_never_reported_as_an_empty_index(self) -> None:
+        """The cross-model review's finding 1: this path emitted
+        `FACT: the SemanticIndex returned no candidate` while find_concept had
+        returned is_shared_gated_kind at score 0.0. A FACT that is untrue is the
+        worst output this layer can produce, and it was introduced BY the fix
+        for the 0.0-score defect. The two no-answer states are now distinct."""
         result = knowledge.find(_agent(), "zzzz nothing like this exists zzzz")
-        self.assertIn("statement about this index", result.things_to_be_aware_of)
+        for claim in result.claims:
+            self.assertNotIn("returned no candidate", claim.statement)
+        self.assertIn("at or below the floor", result.claims[0].statement)
+        self.assertIn("did return a top-ranked symbol", result.things_to_be_aware_of)
+
+    def test_a_genuinely_empty_index_does_report_an_empty_index(self) -> None:
+        """The mirror. Without it, a version that never reported an empty index
+        would pass the test above."""
+        empty = KnowledgeAgent(
+            crate="empty",
+            symbols=[],
+            graph=ProjectGraph.from_symbols([]),
+            index=SemanticIndex.from_symbols([]),
+            memory=ProjectMemory(),
+        )
+        result = knowledge.find(empty, "anything")
+        self.assertIn("returned no candidate", result.claims[0].statement)
 
     def test_a_zero_score_concept_resolves_to_nothing_not_to_whatever_ranked_first(self) -> None:
         """Verified against #210, not assumed: the concept below scores 0.0 --

@@ -49,8 +49,22 @@ import investigator
 from question import Question
 from trace import Trace
 
-# The canonical order. The trace must be a subsequence of this.
-PROGRESSION = ("search_symbols", "read_file", "find_references", "search_text", "inspect_git_history")
+# The canonical TOOL-CALL order. The trace must be a subsequence of this.
+#
+# Note the second `read_file`: the tests stage makes two calls, one to locate the
+# `mod tests` boundary and one to search below it. That read used to be absent
+# from both this constant and the trace, which made the trace under-report. It is
+# listed here rather than hidden because this constant's whole job is to be the
+# truth the trace is checked against -- a canonical order that omits a call the
+# code makes is the same class of lie as the trace that omitted it.
+PROGRESSION = (
+    "search_symbols",
+    "read_file",
+    "find_references",
+    "read_file",
+    "search_text",
+    "inspect_git_history",
+)
 
 TEST_MODULE_MARKER = "mod tests"
 
@@ -172,9 +186,24 @@ def _tests(target: str, findings: Findings, trace: Trace, tools: Tools) -> None:
     """
     match = findings.match
     file = match.file  # type: ignore[union-attr]
+    # This read is RECORDED. It was not until 2026-08-24: the trace claimed to
+    # hold every Investigator call and quietly omitted this one, so injected
+    # tools counted two reads while the trace showed one. A trace that
+    # under-reports is worse than no trace -- it is an audit log that lies by
+    # omission, in the one artefact built to make the reasoning inspectable.
     text = tools.read_file(file)  # type: ignore[union-attr]
     marker_line = next(
         (i for i, line in enumerate(text.splitlines(), start=1) if TEST_MODULE_MARKER in line), None
+    )
+    trace.record(
+        "read_file",
+        f"{file} (locating the {TEST_MODULE_MARKER!r} boundary)",
+        found=marker_line is not None,
+        detail=(
+            f"test module starts at line {marker_line}"
+            if marker_line is not None
+            else f"no {TEST_MODULE_MARKER!r} in the file"
+        ),
     )
     matches = [m for m in tools.search_text(target, glob=file.rsplit("/", 1)[-1]) if m.file == file]
     if marker_line is not None:

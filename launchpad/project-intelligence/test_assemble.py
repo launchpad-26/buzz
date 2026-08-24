@@ -151,6 +151,37 @@ class TeamKnowledgeTest(unittest.TestCase):
         answer = assemble(decompose(f"how does `{TARGET}` work?"), _findings(), Trace(), memory)
         self.assertEqual(len(answer.claims_of_class("TEAM_KNOWLEDGE")), 1)
 
+    def test_a_superseded_entry_is_not_surfaced_as_current(self) -> None:
+        """Cross-model review reproduced Alice's "do not use" and Bob's
+        superseding "approved for use" BOTH appearing as current TEAM_KNOWLEDGE,
+        contradicting each other with no sign of which won. #209 built
+        `superseded_by` for exactly this and nothing consumed it. A retracted
+        statement presented as current is worse than one omitted -- the reader
+        acts on guidance the team already withdrew."""
+        memory = ProjectMemory()
+        memory.add(
+            MemoryEntry(
+                id="old",
+                entry_class="TEAM_KNOWLEDGE",
+                statement=f"{TARGET}: do not use",
+                provided_by="alice",
+                superseded_by="new",
+            )
+        )
+        memory.add(
+            MemoryEntry(
+                id="new",
+                entry_class="TEAM_KNOWLEDGE",
+                statement=f"{TARGET}: approved for use",
+                provided_by="bob",
+            )
+        )
+        answer = assemble(decompose(f"how does `{TARGET}` work?"), _findings(), Trace(), memory)
+        team = answer.claims_of_class("TEAM_KNOWLEDGE")
+        self.assertEqual(len(team), 1)
+        self.assertEqual(team[0].provided_by, "bob")
+        self.assertNotIn("do not use", team[0].statement)
+
     def test_unrelated_team_knowledge_is_not_attached(self) -> None:
         memory = ProjectMemory()
         memory.add(
@@ -274,6 +305,56 @@ class CaveatsTest(unittest.TestCase):
         )
         self.assertIn("f4e1c9", answer.things_to_be_aware_of)
         self.assertIn("INFERENCE", answer.things_to_be_aware_of)
+
+
+class TemporalStateTest(unittest.TestCase):
+    def test_a_base_question_says_it_was_answered_from_working(self) -> None:
+        """BASE was classified by question.py and then ignored by everything
+        downstream -- the third dead-classified-value defect in this branch. BASE
+        reads are still not implemented (filed separately); what is fixed is the
+        silence. The design doc: "don't silently answer from one state while the
+        question implied the other"."""
+        question = decompose(f"how did `{TARGET}` behave before my changes?")
+        self.assertEqual(question.temporal_state, "BASE")
+        answer = assemble(question, _findings(), Trace(), ProjectMemory())
+        self.assertIn("asked about the repository BEFORE", answer.things_to_be_aware_of)
+        self.assertIn("read from the WORKING tree", answer.things_to_be_aware_of)
+
+    def test_a_working_question_carries_no_base_caveat(self) -> None:
+        answer = assemble(
+            decompose(f"how does `{TARGET}` work?"), _findings(), Trace(), ProjectMemory()
+        )
+        self.assertNotIn("asked about the repository BEFORE", answer.things_to_be_aware_of)
+
+
+class InjectedReaderTest(unittest.TestCase):
+    def test_verification_reads_through_the_injected_reader(self) -> None:
+        """The seam was split: investigation used agent.tools while verification
+        called the process-global investigator, so a test driving an injected
+        repository had its claim confirmed against the real worktree instead --
+        silently downgrading a claim the injected data supported."""
+        seen: list[str] = []
+
+        def reader(path, start=None, end=None):
+            seen.append(path)
+            return REAL_SIGNATURE
+
+        answer = assemble(
+            decompose(f"how does `{TARGET}` work?"),
+            _findings(),
+            Trace(),
+            ProjectMemory(),
+            read_file=reader,
+        )
+        self.assertEqual(seen, [REAL_FILE])
+        self.assertEqual(answer.claims[0].entry_class, "FACT")
+
+    def test_omitting_the_reader_still_uses_the_real_investigator(self) -> None:
+        """Production callers must keep working without passing one."""
+        answer = assemble(
+            decompose(f"how does `{TARGET}` work?"), _findings(), Trace(), ProjectMemory()
+        )
+        self.assertEqual(answer.claims[0].entry_class, "FACT")
 
 
 class NotLocatedTest(unittest.TestCase):

@@ -157,7 +157,7 @@ class KnowledgeAgent:
         # asserting the intent.
         findings = investigate(question, self.crate, trace, self.tools, assessment.confident)
 
-        answer = assemble(question, findings, trace, self.memory)
+        answer = assemble(question, findings, trace, self.memory, self.tools.read_file)
         return Outcome(answer=answer, assessment=assessment, findings=findings, trace=trace)
 
     def answer(self, text: str, depth: Depth | None = None) -> Answer:

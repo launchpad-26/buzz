@@ -49,19 +49,55 @@ MINIMUM_CANDIDATE_SCORE = 1e-9
 def find(agent: KnowledgeAgent, query: str) -> Answer:
     """The no-name case: the caller cannot name the symbol yet."""
     result = agent.find_concept(query)
-    # `candidate_score is None` is a real reachable state, not defensive
-    # padding: find_it_for_me returns a PipelineResult with EVERY field None --
-    # not None itself -- whenever index.search() comes back empty, which happens
-    # for an index built from zero symbols. The first version of this guard
-    # checked only `result is not None`, so an empty crate raised
-    # "TypeError: '<=' not supported between instances of 'NoneType' and
-    # 'float'" instead of returning the no-candidate Answer three lines below.
-    # Found by review, reproduced before fixing.
-    if result is not None and (
-        result.candidate_score is None or result.candidate_score <= MINIMUM_CANDIDATE_SCORE
-    ):
-        result = None
+
+    # Two DIFFERENT no-answer states, which an earlier version conflated into
+    # one claim that was simply false.
+    #
+    # `candidate_score is None` means index.search() came back empty -- nothing
+    # was returned at all. It is reachable: find_it_for_me returns a
+    # PipelineResult with EVERY field None (not None itself) for an index built
+    # from zero symbols, and the first version of this guard tested only
+    # `result is not None`, so that raised TypeError instead of answering.
+    #
+    # A score at or below the floor is the opposite: the index DID return a
+    # candidate, and this code rejected it. Saying "the SemanticIndex returned
+    # no candidate" there is a FACT that is untrue -- caught by the cross-model
+    # review, which reproduced `find()` reporting exactly that while
+    # find_concept() had returned is_shared_gated_kind at score 0.0. A false
+    # FACT is the worst output this layer can produce, and it was produced by
+    # the fix for another defect of the same class.
+    rejected_candidate = None
+    if result is not None:
+        if result.candidate_score is None:
+            result = None
+        elif result.candidate_score <= MINIMUM_CANDIDATE_SCORE:
+            rejected_candidate = result
+            result = None
+
     if result is None:
+        if rejected_candidate is not None:
+            return Answer(
+                question=query,
+                short_answer="No candidate resolved for that concept.",
+                things_to_be_aware_of=(
+                    "The index did return a top-ranked symbol, and it was rejected here for "
+                    "sharing no token at all with the concept -- not withheld because the index "
+                    "was silent."
+                ),
+                claims=(
+                    Claim(
+                        statement=(
+                            f"the top-ranked candidate {rejected_candidate.qualified_name} scored "
+                            f"{rejected_candidate.candidate_score}, at or below the floor of "
+                            f"{MINIMUM_CANDIDATE_SCORE}"
+                        ),
+                        entry_class="FACT",
+                        evidence=(
+                            f"SemanticIndex.search({query!r}) over {agent.symbol_count} symbols",
+                        ),
+                    ),
+                ),
+            )
         return Answer(
             question=query,
             short_answer="No candidate resolved for that concept.",
@@ -149,6 +185,7 @@ def dependencies(agent: KnowledgeAgent, symbol: str) -> Answer:
         question=f"what does {symbol} depend on?",
         short_answer=f"{len(direct)} direct, {len(transitive)} transitive.",
         relevant_flow=" ; ".join(" -> ".join(h.path) for h in hits) or "",
+        things_to_be_aware_of=SNAPSHOT_CAVEAT,
         claims=(
             _slice_claim(symbol, "direct dependency", "direct dependencies", direct),
             _slice_claim(symbol, "transitive dependency", "transitive dependencies", transitive),
@@ -171,7 +208,7 @@ def impact(agent: KnowledgeAgent, symbol: str) -> Answer:
         short_answer=f"{len(direct)} direct dependent(s), {len(secondary)} secondary.",
         things_to_be_aware_of=(
             "Secondary dependents are reached through another symbol, so a change here affects "
-            "them only if the direct dependent's own behaviour changes."
+            "them only if the direct dependent's own behaviour changes.\n" + SNAPSHOT_CAVEAT
         ),
         claims=(
             _slice_claim(symbol, "direct dependent", "direct dependents", direct),
@@ -181,11 +218,21 @@ def impact(agent: KnowledgeAgent, symbol: str) -> Answer:
 
 
 def _slice_claim(symbol: str, singular: str, plural: str, hits: list) -> Claim:
-    """A graph slice is a FACT when it found something and a FACT when it did
-    not: both are observations of the same materialized edge set. The wording
-    scopes it to the graph rather than to the world -- "the graph holds no
-    dependent" is an observation, while "nothing depends on this" is a claim
-    about the world that was never established.
+    """A graph slice, scoped in its wording to THE INDEX rather than the world.
+
+    Both branches are FACT, and the wording is what earns that: every statement
+    says what the indexed graph holds, never what the codebase contains. "The
+    indexed graph holds no dependent" is an observation of a snapshot; "nothing
+    depends on this" is a claim about the world that was never established.
+
+    Cross-model review pushed on this: dependencies() and impact() return FACT
+    claims while every live Investigator tool is disabled, so nothing was
+    re-verified against the tree. That is true, and the answer is scoping rather
+    than verifying -- re-confirming every edge in a traversal would mean a live
+    read per node, which turns a graph query into an investigation. The claim is
+    honest as long as it never says more than "the index says so", which is why
+    "indexed" appears in every statement here and the caller adds the snapshot
+    caveat.
 
     Takes both word forms rather than appending "(s)": the live CLI printed
     "1 direct(s)", which reads as unfinished output in an answer whose whole
@@ -194,17 +241,27 @@ def _slice_claim(symbol: str, singular: str, plural: str, hits: list) -> Claim:
     if hits:
         return Claim(
             statement=(
-                f"{len(hits)} {singular if len(hits) == 1 else plural} of {symbol}: "
+                f"the indexed graph holds {len(hits)} "
+                f"{singular if len(hits) == 1 else plural} of {symbol}: "
                 + ", ".join(sorted(h.node for h in hits))
             ),
             entry_class="FACT",
             evidence=tuple(f"{' -> '.join(h.path)} ({h.hop} hop)" for h in hits),
         )
     return Claim(
-        statement=f"the graph holds no {singular} of {symbol}",
+        statement=f"the indexed graph holds no {singular} of {symbol}",
         entry_class="FACT",
         evidence=(f"ProjectGraph traversal from {symbol!r} returned no node at that depth",),
     )
+
+
+# Appended to any answer built purely from the in-memory graph, with no live
+# read. The graph is built once by KnowledgeAgent.build(); an edit to the tree
+# after that point is invisible to it.
+SNAPSHOT_CAVEAT = (
+    "Derived from the graph indexed at agent build time, with no live re-read -- an edit to the "
+    "working tree since then is not reflected here."
+)
 
 
 def setup(agent: KnowledgeAgent, task: str) -> Answer:
@@ -213,9 +270,14 @@ def setup(agent: KnowledgeAgent, task: str) -> Answer:
     from the guess."""
     claims: list[Claim] = []
     files: list[str] = []
+    # Reads through the agent's injected seam, not the process-global
+    # investigator. Cross-model review found the seam was split: investigation
+    # used agent.tools while verification and this function bypassed it, so a
+    # test driving an injected repository still had these two functions reading
+    # the real worktree.
     for source in SETUP_SOURCES:
         try:
-            text = investigator.read_file(source)
+            text = agent.tools.read_file(source)
         except (OSError, ValueError):
             continue
         for lineno, line in enumerate(text.splitlines(), start=1):
@@ -256,7 +318,10 @@ def conventions(agent: KnowledgeAgent, area: str | None = None) -> Answer:
         entry
         for entry_class in ("TEAM_KNOWLEDGE", "INFERENCE")
         for entry in agent.memory.query_by_class(entry_class)
-        if area is None or area in entry.statement
+        # Superseded entries are excluded here for the same reason as in
+        # assemble._team_knowledge: a retracted convention presented as current
+        # is worse than one omitted. This consumer had the same gap.
+        if entry.superseded_by is None and (area is None or area in entry.statement)
     ]
     claims = tuple(
         Claim(

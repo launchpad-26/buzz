@@ -22,7 +22,7 @@ from __future__ import annotations
 
 from dataclasses import replace
 
-from answer import Answer, render
+from answer import Answer, Claim, render
 from graph import Reachable, reachable
 from knowledge_agent import KnowledgeAgent
 
@@ -62,7 +62,27 @@ def build(agent: KnowledgeAgent) -> Answer:
     hit = deepest_path(agent, WORKED_SYMBOL)
     if hit is None:
         return answer
-    return replace(answer, relevant_flow=render_flow(hit))
+
+    # The flow gets its OWN claim, so the rendered path appears under Sources
+    # like everything else. Cross-model review caught this: the earlier version
+    # substituted `relevant_flow` and added no claim, so the answer asserted
+    # "is_unshared_gated_event -> is_shared_gated_kind -> extern:contains
+    # (2 hops)" while nothing in its claim ledger mentioned that path.
+    #
+    # An unclaimed assertion in the artefact built to DEMONSTRATE that every
+    # assertion is claimed is the worst possible place for this defect. It is
+    # also exactly why Answer has no authored `sources` field -- and this
+    # bypassed that protection by writing a different section instead.
+    flow_claim = Claim(
+        statement=f"the indexed graph holds this call path: {' -> '.join(hit.path)}",
+        entry_class="FACT",
+        evidence=(f"ProjectGraph.reachable from {WORKED_SYMBOL!r}, {hit.hop} hop(s)",),
+    )
+    return replace(
+        answer,
+        relevant_flow=render_flow(hit),
+        claims=answer.claims + (flow_claim,),
+    )
 
 
 def section_names(rendered: str) -> list[str]:

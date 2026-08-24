@@ -129,6 +129,29 @@ class BuildTest(unittest.TestCase):
             self.assertTrue(claim.evidence)
             self.assertIn(claim.statement, answer.things_to_be_aware_of)
 
+    def test_the_rendered_flow_has_a_claim_backing_it(self) -> None:
+        """Every assertion in an answer must appear in its claim ledger. The
+        earlier version substituted relevant_flow and added no claim, so this
+        artefact -- the one built to DEMONSTRATE that property -- asserted a
+        2-hop path nothing in Sources mentioned."""
+        answer = build(_agent())
+        self.assertTrue(answer.relevant_flow)
+        path_claims = [c for c in answer.claims if "call path" in c.statement]
+        self.assertEqual(len(path_claims), 1)
+        for node in (GATE, INNER):
+            self.assertIn(node, path_claims[0].statement)
+        self.assertEqual(path_claims[0].entry_class, "FACT")
+        self.assertTrue(path_claims[0].evidence)
+
+    def test_every_node_in_the_rendered_flow_appears_in_a_claim(self) -> None:
+        """Stronger than checking a claim exists: the claim must cover the path
+        that was actually rendered, not some other path."""
+        answer = build(_agent())
+        rendered_nodes = [n.strip() for n in answer.relevant_flow.split("(")[0].split("->")]
+        ledger = " | ".join(c.statement for c in answer.claims)
+        for node in rendered_nodes:
+            self.assertIn(node, ledger, f"{node!r} is rendered but claimed nowhere")
+
     def test_a_symbol_with_no_flow_keeps_the_assembled_answer_unchanged(self) -> None:
         """No traversal is not a reason to discard a real answer."""
         agent = _agent()

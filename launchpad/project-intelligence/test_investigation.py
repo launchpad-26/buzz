@@ -106,7 +106,11 @@ class CallOrderTest(unittest.TestCase):
             trace,
             _tools(text_hits=[_TextMatch(FILE, 12, "is_shared_gated_kind(1)")]),
         )
-        self.assertEqual(trace.tools, PROGRESSION)
+        self.assertEqual(
+            trace.tools,
+            ("search_symbols", "read_file", "find_references", "read_file", "search_text",
+             "inspect_git_history"),
+        )
 
     def test_a_side_effecting_tool_is_never_reached(self) -> None:
         trace = Trace()

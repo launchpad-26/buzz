@@ -37,6 +37,22 @@ APPEARS_UNUSED_CONFIDENCE = 0.4
 
 PREDICATE_CONFIDENCE = 0.7
 
+# Emitted when the question implied BASE (the repository at HEAD) but every
+# claim was gathered from WORKING (the live tree).
+#
+# The design doc is explicit: "If WORKING diverges from BASE in a way that
+# changes the answer, say so -- don't silently answer from one state while the
+# question implied the other." Reading BASE properly needs `git show HEAD:<path>`
+# and is NOT implemented; that is filed rather than faked. What is fixed here is
+# the silence. Cross-model review found BASE being classified by question.py and
+# then ignored by everything downstream -- the third dead-classified-value defect
+# in this branch, after the confidence predicate and Findings.sufficient.
+BASE_NOT_HONOURED = (
+    "This question asked about the repository BEFORE the current changes (BASE), but every claim "
+    "below was read from the WORKING tree. BASE reads are not implemented, so if the two differ, "
+    "this answer describes the wrong one."
+)
+
 
 def _team_knowledge(memory: ProjectMemory, target: str) -> list[Claim]:
     """TEAM_KNOWLEDGE passes through verbatim, with its author.
@@ -54,7 +70,13 @@ def _team_knowledge(memory: ProjectMemory, target: str) -> list[Claim]:
             temporal_state=entry.temporal_state,
         )
         for entry in memory.query_by_class("TEAM_KNOWLEDGE")
-        if target in entry.statement
+        # `superseded_by` is why #209 built the reconciliation rule, and this
+        # never consumed it. Cross-model review reproduced Alice's "do not use"
+        # and Bob's superseding "approved for use" BOTH surfacing as current
+        # TEAM_KNOWLEDGE, contradicting each other with no sign of which won.
+        # Presenting a retracted statement as current is worse than omitting it:
+        # the reader acts on guidance the team has already withdrawn.
+        if entry.superseded_by is None and target in entry.statement
     ]
 
 
@@ -63,6 +85,7 @@ def assemble(
     findings: Findings,
     trace: Trace,
     memory: ProjectMemory,
+    read_file=None,
 ) -> Answer:
     target = findings.target
 
@@ -96,6 +119,7 @@ def assemble(
             citation_line,  # type: ignore[arg-type]
             citation_line,  # type: ignore[arg-type]
             trace,
+            **({} if read_file is None else {"read_file": read_file}),
         )
     ]
 
@@ -191,12 +215,12 @@ def assemble(
         how_it_works=f"{match.signature}".strip(),  # type: ignore[union-attr]
         relevant_flow=flow,
         important_files=tuple(dict.fromkeys(files)),
-        things_to_be_aware_of=_caveats(findings, claims, trace),
+        things_to_be_aware_of=_caveats(findings, claims, trace, question),
         claims=tuple(claims),
     )
 
 
-def _caveats(findings: Findings, claims: list[Claim], trace: Trace) -> str:
+def _caveats(findings: Findings, claims: list[Claim], trace: Trace, question: Question | None = None) -> str:
     """The caveats section IS the inferences, restated where a reader meets them.
 
     Not a separate authored paragraph: an authored caveat can say something the
@@ -209,7 +233,11 @@ def _caveats(findings: Findings, claims: list[Claim], trace: Trace) -> str:
     corroborated, so the common case rendered five of six sections with the
     inferences visible only under Sources.
     """
-    lines = [
+    lines: list[str] = []
+    # First, because it changes how everything under it should be read.
+    if question is not None and question.temporal_state == "BASE":
+        lines.append(BASE_NOT_HONOURED)
+    lines += [
         f"{c.statement} (INFERENCE, confidence {format_confidence(c.confidence)}; "
         f"{'; '.join(c.evidence)})"
         for c in claims

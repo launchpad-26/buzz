@@ -32,7 +32,14 @@ from trace import Trace
 UNCONFIRMED_CONFIDENCE = 0.3
 
 
-def confirm_text_at(path: str, start_line: int, end_line: int, expected: str, trace: Trace) -> bool:
+def confirm_text_at(
+    path: str,
+    start_line: int,
+    end_line: int,
+    expected: str,
+    trace: Trace,
+    read_file=investigator.read_file,
+) -> bool:
     """Read the exact cited range and check it contains what the claim says.
 
     This is the check that catches a citation which resolves but does not
@@ -41,8 +48,14 @@ def confirm_text_at(path: str, start_line: int, end_line: int, expected: str, tr
     only "does the path exist" passes that; asking "does this range contain
     this text" does not.
     """
+    # Reads through the caller's reader, defaulting to the real Investigator.
+    # Cross-model review found the injection seam was SPLIT: investigation used
+    # agent.tools while this function called the process-global investigator, so
+    # a test driving an injected repository had its definition confirmed against
+    # the real worktree instead -- silently downgrading a claim that the
+    # injected data supported.
     try:
-        text = investigator.read_file(path, start_line, end_line)
+        text = read_file(path, start_line, end_line)
     except (OSError, ValueError) as exc:
         # A failed read is a failed confirmation, not a crash -- but it is also
         # not a silent pass. Recorded as not-found with the reason.
@@ -71,6 +84,7 @@ def verified_fact(
     start_line: int,
     end_line: int,
     trace: Trace,
+    read_file=investigator.read_file,
 ) -> Claim:
     """Emit a FACT only if the cited range confirms it; otherwise an INFERENCE.
 
@@ -79,7 +93,7 @@ def verified_fact(
     confirm what I was going to say" -- the downgrade keeps the failure visible.
     """
     citation = f"{path}:{start_line}-{end_line}"
-    if confirm_text_at(path, start_line, end_line, expected, trace):
+    if confirm_text_at(path, start_line, end_line, expected, trace, read_file):
         return Claim(statement=statement, entry_class="FACT", evidence=(citation,))
     return Claim(
         statement=statement,
