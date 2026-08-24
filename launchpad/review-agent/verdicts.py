@@ -227,6 +227,19 @@ def _find_forbidden_keys(value: object, path: str) -> list[str]:
     return violations
 
 
+def forbidden_keys(document: object) -> list[str]:
+    """Prohibition 1's machine-checkable half, callable on its own.
+
+    Public because a PRODUCER needs it before it prints. ``validate`` below is
+    the contract check a consumer runs: it takes an input and an output
+    document together and reports everything. A producer holding only its own
+    output still has to refuse to emit an approval-bearing document, and the
+    alternative was a second copy of this walk over there -- and a second copy
+    of a rule is a second chance to disagree with it.
+    """
+    return _find_forbidden_keys(document, "document")
+
+
 def validate(input_document: dict, output_document: dict) -> list[str]:
     """Every violation of ADJUDICATION.md that STEP 2's own done-when requires
     this function to catch -- never raises, never stops early.

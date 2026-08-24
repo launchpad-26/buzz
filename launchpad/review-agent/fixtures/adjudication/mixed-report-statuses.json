@@ -1,0 +1,88 @@
+{
+  "_comment": "#118 STEP 8 fixture 5. Real: replays launchpad-26/buzz#117's own recorded reviewer output for the 'secrets-and-access' fixture (recordings/secrets-and-access/*.json) for two of its three dimensions, through the real run_dimensions.build_document. The third dimension (claim-vs-evidence, recorded clean for this fixture) is replaced with a reviewer that RAISES, so run_dimensions._collect_report's real exception-handling path produces the failed report below -- it is not hand-written.",
+  "_fixture": {
+    "isolates": [
+      "one failed report, one clean report, one report with findings"
+    ],
+    "provenance": "real (two replayed reports) + a genuinely-raised failure (one report) through the real _collect_report path",
+    "real": true,
+    "source_recordings": [
+      "recordings/secrets-and-access/secrets-and-access.json",
+      "recordings/secrets-and-access/correctness-and-failure-modes.json"
+    ],
+    "source_fixture_payload": "fixtures/dimensions/secrets-and-access.json",
+    "note": "claim-vs-evidence's real recording for this fixture is clean, not failed -- the failure here is deliberately injected (a reviewer that raises) so run_adjudication.py's stub judge sees a genuine status:'failed' report produced by the real pipeline, rather than a synthesised one."
+  },
+  "pr": 0,
+  "merge_base_sha": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+  "head_sha": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+  "reports": [
+    {
+      "schema_version": 1,
+      "dimension": "secrets-and-access",
+      "pr": 0,
+      "merge_base_sha": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "head_sha": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+      "status": "complete",
+      "outcome": "findings",
+      "error": null,
+      "findings": [
+        {
+          "dimension": "secrets-and-access",
+          "severity": "Blocker",
+          "anchor": "line",
+          "file": "scripts/deploy.sh",
+          "line": 10,
+          "defect": "Database password hardcoded in a tracked deploy script",
+          "failure": "Anyone with read access to this repository can extract the release database's live credential and authenticate against it directly",
+          "finding_id": "1c947d53116f5737",
+          "entry_point": null,
+          "evidence": null
+        }
+      ],
+      "findings_count": 1,
+      "completion_marker": "BUZZ-DIMENSION-COMPLETE:secrets-and-access:affa7ae33e169f62c2226e06be3b7889"
+    },
+    {
+      "schema_version": 1,
+      "dimension": "claim-vs-evidence",
+      "pr": 0,
+      "merge_base_sha": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "head_sha": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+      "status": "failed",
+      "outcome": null,
+      "error": {
+        "reason": "reviewer raised RuntimeError: #118 STEP 8 fixture 5: this reviewer is deliberately made to raise, to exercise run_dimensions._collect_report's real status:'failed' path rather than hand-writing a failed report's shape"
+      },
+      "findings": [],
+      "findings_count": 0,
+      "completion_marker": "BUZZ-DIMENSION-COMPLETE:claim-vs-evidence:affa7ae33e169f62c2226e06be3b7889"
+    },
+    {
+      "schema_version": 1,
+      "dimension": "correctness-and-failure-modes",
+      "pr": 0,
+      "merge_base_sha": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "head_sha": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+      "status": "complete",
+      "outcome": "clean",
+      "error": null,
+      "findings": [],
+      "findings_count": 0,
+      "completion_marker": "BUZZ-DIMENSION-COMPLETE:correctness-and-failure-modes:affa7ae33e169f62c2226e06be3b7889"
+    }
+  ],
+  "containment": {
+    "findings": [],
+    "states": {
+      "pr_title": "ok",
+      "pr_body": "ok",
+      "pr_diff": "ok",
+      "pr_issue_comments": "ok",
+      "pr_review_comments": "ok",
+      "pr_review_bodies": "ok",
+      "linked_issue": "ok"
+    }
+  },
+  "nonce": "affa7ae33e169f62c2226e06be3b7889"
+}

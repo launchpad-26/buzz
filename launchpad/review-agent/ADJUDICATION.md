@@ -88,7 +88,9 @@ a field that arrived already broken.
 ## Escalate, never approve
 
 Stated as three concrete prohibitions rather than a slogan, because a slogan is not
-checkable:
+checkable — followed by the structural condition all three turned out to depend on
+(§ 4 below, added after a judge was found able to defeat two of them without violating
+either as written):
 
 1. **No field in this contract can carry an approval, a merge recommendation, or a
    pass.** There is no `approved`, no `mergeable`, no `verdict: OK`. A judge cannot emit
@@ -117,6 +119,56 @@ safety claims perform "on average only slightly better than a random coin-flip" 
 6,642 human-verified labels, and the AUROC 0.48–0.64 range is one judge on one victim
 model under two attacks — not quoted here as anything broader. The phrase "despite high
 performance on standard validation sets" is not used, because it is not in the paper.
+
+### 4. An injected callable is given immutable input, or a copy — never the record itself
+
+**Added 2026-08-24.** The three prohibitions above are all enforced by inspecting what a
+judge **returns**. That makes them conditional on something this contract had left
+unsaid: the judge must not be able to reach the record directly.
+
+It could. `adjudicate()` passed the judge the live output finding and read
+`reported_severity` back out of it *after* the call, so a judge doing
+`finding["severity"] = "Low"` and returning nothing but a `REFUTED` verdict produced
+three `Blocker`s published as `Low`, an empty `adjudication.downgrades`, a
+`reported_severity` of `"Low"` — and **no `verdicts.validate` violation**, because every
+check ran against a record the judge had already rewritten. Prohibitions 1 and 3 were
+both defeated without either being violated as written. Fixed in `5bb984b96`.
+
+**#117 had this right and this stage diverged from it.** `run_dimensions._run_reviewer_into`
+takes `document: str` — an immutable object, so a reviewer there can influence the run
+only through its return value, which is then validated. This stage took a `dict`, and a
+`dict` handed to injected code is a shared mutable reference, not an argument.
+
+So, as a rule binding every stage and not just this one:
+
+> A callable injected into any stage of this pipeline receives immutable input, or a deep
+> copy, **in every argument**. Never the object the stage will go on to publish, and never
+> the object its own guards will be evaluated against.
+
+**"In every argument" is not padding — the first attempt at this rule failed on exactly
+that.** It copied the finding and passed `input_document` through live, which satisfied
+the sentence as originally written while leaving the hole it describes open: the runner
+re-reads `stages` from that document and evaluates its integrity guard against it, so a
+judge appending `{"name": "approval", …, "approved": true}` to `document["stages"]` put
+three approval-bearing entries into the output *and* mutated the caller's object, against
+`adjudicate()`'s own "never mutates `input_document`" promise. The regression tests
+mutated only the copied argument, so they could not see it. Found by a review panel after
+the partial fix had already shipped to a pull request. A rule about arguments has to name
+all of them, and its tests have to exercise all of them.
+
+Two consequences worth stating, because both were tempting and both are wrong:
+
+- **Copying is not defence in depth here, it is the enforcement.** A guard that reads the
+  value it is guarding *after* invoking the component it is guarding against is not a
+  guard, however carefully the comparison is written.
+- **It is not only about severity.** `finding_id` is what the input/output set-equality
+  check is keyed on, so an in-place edit there defeats that check too. Copy at the
+  boundary, once, rather than guarding fields individually as each is noticed — the
+  fields are open-ended and the boundary is not.
+
+This applies to the judge, the dedupe judge, and any future injected reviewer, renderer or
+publisher — #119's included. It was found by cross-model review after four same-model
+passes over the same code did not raise it.
 
 ## The `adjudication` block
 
@@ -155,11 +207,45 @@ drop-and-invent swap violates even though the count survives it.
 
 ## The `stages` entry
 
-#117 does not emit a top-level `stages` array — it is the manifest #119's plan reads
-for stages that produce no envelope of their own (#116's pre-flight, and this one). This
-stage adds exactly one entry, `{name: "adjudication", status, reason}`, to whatever
-`stages` array arrived (empty, or already carrying #116's entry), and passes every
+This stage adds exactly one entry, `{name: "adjudication", status, reason}`, to whatever
+`stages` array arrived (empty, or already carrying earlier entries), and passes every
 existing entry through unchanged.
+
+> **Amended 2026-08-24.** This section previously opened with a sentence that is struck
+> through here rather than deleted, because it was the asserted contract for ten days:
+>
+> > ~~#117 does not emit a top-level `stages` array — it is the manifest #119's plan reads
+> > for stages that produce no envelope of their own (#116's pre-flight, and this one).~~
+>
+> That is the wording #119's own plan superseded on 2026-08-14 (`8d47f8764`) and named as
+> a defect:
+>
+> > *"names EVERY stage the review depended on — #116's pre-flight, #117's three
+> > dimensions by slug, and #118's adjudication. Not only the stages that emit no
+> > envelope of their own, which is what an earlier revision said and which contradicted
+> > this step's own condition (7) […] Built to the old definition, the manifest held two
+> > entries, neither a dimension, so (7) could never fire: a three-dimension run that
+> > produced two reports rendered as COMPLETE."*
+> > — `launchpad/plans/2026-08-12-issue-119-publish-one-review.md` STEP 5
+>
+> **The corrected definition:** `stages` names every stage the review depended on,
+> *including each of #117's dimensions by slug*. #119's condition (7) — a dimension named
+> by the manifest produced no report at all — is the only check that catches a dimension
+> failing so completely that no envelope exists for it, and it has nothing to compare
+> `reports` against unless the dimension is named here.
+>
+> **This stage cannot produce those entries, and must not pretend to.** Deriving them
+> from `reports[].dimension` would name only the dimensions that *did* report, so
+> condition (7) could still never fire — a report cannot testify to its own absence. The
+> expected set is known only to `run_dimensions.list_dimensions()`, which enumerates
+> `dimensions/*.py` before dispatch. **Producing the per-dimension entries is #117's, in
+> `run_dimensions.py`.** Filed separately; this stage's contribution is the one
+> `adjudication` entry described above, and pass-through of whatever else arrived.
+>
+> Consequence, stated plainly rather than left for a reader to discover: until #117 emits
+> them, a `stages` array reaching #119 names no dimension, so condition (7) cannot fire
+> and a run that loses a whole dimension can still render as complete. That is a live gap
+> in the pipeline, not a property of this stage.
 
 **It never overwrites an existing `adjudication` entry.** A second one on input means a
 re-run against a document this stage has already adjudicated, and this stage exits
