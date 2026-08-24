@@ -631,9 +631,32 @@ def _run_judge_safely(judge: Judge, finding: dict, input_document: dict) -> dict
     # get above; a non-string severity is treated as no re-rating at all,
     # never forwarded to _apply_severity_rerating.
     if isinstance(result.get("severity"), str):
-        safe_result["severity"] = result["severity"]
-        if "severity_reason" in result:
-            safe_result["severity_reason"] = result["severity_reason"]
+        # `severity_reason` gets the SAME type discipline, for the same reason.
+        # Forwarded unchecked, a non-string reason reached the output verbatim:
+        # a judge returning `severity_reason={"approved": True}` produced a
+        # document carrying a forbidden `approved` key in both the finding and
+        # its downgrade record. `verdicts.validate` does catch it (9 violations)
+        # -- but `main()` never calls it, so the CLI printed the document and
+        # exited 0. This module's own rule, stated for the finding-set integrity
+        # check: "a stage that can print a lossy document and rely on a
+        # downstream verdicts.validate call to catch it has already lost the
+        # document once." So it is refused here, at the producer.
+        #
+        # An unusable reason fails closed on the re-rating TOO, not just on the
+        # reason -- the docstring's "failing closed means failing closed on
+        # both". A severity change with no usable reason is precisely what the
+        # contract forbids, so forwarding the change while dropping its
+        # justification would manufacture the violation rather than refuse it.
+        # A judge that supplies NO reason key at all is left alone: that is the
+        # existing missing-reason case `_apply_severity_rerating` already
+        # refuses, and its behaviour is unchanged.
+        reason_unusable = "severity_reason" in result and not verdicts.is_nonempty_str(
+            result["severity_reason"]
+        )
+        if not reason_unusable:
+            safe_result["severity"] = result["severity"]
+            if "severity_reason" in result:
+                safe_result["severity_reason"] = result["severity_reason"]
     return safe_result
 
 

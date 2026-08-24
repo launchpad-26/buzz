@@ -1083,6 +1083,87 @@ class JudgeCannotMutateWhatItIsJudgingTests(unittest.TestCase):
         self.assertEqual(adjudicated["verdict"], "UNPROVEN")
 
 
+class UnusableSeverityReasonFailsClosedTests(unittest.TestCase):
+    """A judge-supplied `severity_reason` gets the same type discipline as
+    `verdict`, `verdict_evidence` and `severity`.
+
+    Also from the cross-model (Codex) pass on 2026-08-24. Forwarded unchecked,
+    a non-string reason reached the output verbatim: a judge returning
+    `severity_reason={"approved": True}` produced a document carrying a
+    forbidden `approved` key in both the finding and its downgrade record.
+    `verdicts.validate` does catch that -- 9 violations -- but `main()` never
+    calls it, so the CLI printed the document and exited 0.
+
+    This module's own rule for the finding-set integrity check applies: "a
+    stage that can print a lossy document and rely on a downstream
+    verdicts.validate call to catch it has already lost the document once."
+    """
+
+    def _adjudicate_with(self, ret):
+        finding = make_raw_finding(severity="Blocker")
+        input_doc = make_document(reports=[make_report(findings_list=[finding])])
+        output_doc = run_adjudication.adjudicate(input_doc, lambda f, d: dict(ret))
+        return input_doc, output_doc, output_doc["reports"][0]["findings"][0]
+
+    def test_non_string_reason_fails_closed_on_the_rerating_too(self):
+        _, output_doc, adjudicated = self._adjudicate_with(
+            {
+                "verdict": "REFUTED",
+                "verdict_evidence": "x",
+                "severity": "Low",
+                "severity_reason": {"approved": True},
+            }
+        )
+        # The re-rating is refused, not applied-with-a-dropped-reason: a
+        # severity change with no usable reason is what the contract forbids.
+        self.assertEqual(adjudicated["severity"], "Blocker")
+        self.assertEqual(adjudicated["reported_severity"], "Blocker")
+        self.assertIsNone(adjudicated["severity_reason"])
+        self.assertEqual(output_doc["adjudication"]["downgrades"], [])
+
+    def test_no_forbidden_key_survives_into_the_document(self):
+        input_doc, output_doc, _ = self._adjudicate_with(
+            {
+                "verdict": "REFUTED",
+                "verdict_evidence": "x",
+                "severity": "Low",
+                "severity_reason": {"approved": True},
+            }
+        )
+        # The property that actually matters, asserted against the contract
+        # checker rather than by inspecting fields one at a time.
+        self.assertEqual(verdicts.validate(input_doc, output_doc), [])
+        self.assertNotIn("approved", json.dumps(output_doc))
+
+    def test_blank_reason_fails_closed(self):
+        # Whitespace-only, the same "blank not empty" distinction
+        # _run_judge_safely already makes for verdict_evidence.
+        _, _, adjudicated = self._adjudicate_with(
+            {
+                "verdict": "REFUTED",
+                "verdict_evidence": "x",
+                "severity": "Low",
+                "severity_reason": "   ",
+            }
+        )
+        self.assertEqual(adjudicated["severity"], "Blocker")
+        self.assertIsNone(adjudicated["severity_reason"])
+
+    def test_a_legal_rerating_with_a_usable_reason_still_applies(self):
+        # Guards the guard: failing closed must not swallow the legitimate case.
+        _, _, adjudicated = self._adjudicate_with(
+            {
+                "verdict": "CONFIRMED",
+                "verdict_evidence": "x",
+                "severity": "High",
+                "severity_reason": "narrower than reported",
+            }
+        )
+        self.assertEqual(adjudicated["severity"], "High")
+        self.assertEqual(adjudicated["reported_severity"], "Blocker")
+        self.assertEqual(adjudicated["severity_reason"], "narrower than reported")
+
+
 class SeverityRerateTests(unittest.TestCase):
     """STEP 6's severity re-rating guard: legal re-ratings (both directions),
     illegal ones (refused), and the no-op case, all against `adjudicate()`
