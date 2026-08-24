@@ -251,4 +251,5 @@ here.
   [`connection.rs`](https://github.com/launchpad-26/buzz/blob/678008ea49e790ada52e84d54b47f47dd77c6b38/crates/buzz-relay/src/connection.rs), and
   [`audio/handler.rs`](https://github.com/launchpad-26/buzz/blob/678008ea49e790ada52e84d54b47f47dd77c6b38/crates/buzz-relay/src/audio/handler.rs).
 
-Back to the [overview](overview.md). See also [desktop](desktop.md) and [web](web.md).
+Back to the [overview](overview.md) or the canonical [coverage inventory](coverage.md).
+See also [desktop](desktop.md) and [web](web.md).
