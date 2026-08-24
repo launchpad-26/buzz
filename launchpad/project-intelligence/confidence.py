@@ -14,10 +14,12 @@ reason: everything downstream decides whether to investigate based on it.
 from __future__ import annotations
 
 from dataclasses import dataclass
+from typing import Sequence
 
 from graph import ProjectGraph
 from memory import ProjectMemory
 from semantic_index import SemanticIndex
+from symbol import Symbol
 
 MEMORY_CLASSES = ("FACT", "INFERENCE", "TEAM_KNOWLEDGE")
 
@@ -63,15 +65,30 @@ def _graph_hit(graph: ProjectGraph, target: str) -> ComponentHit:
     )
 
 
-def _semantic_hit(index: SemanticIndex, target: str) -> ComponentHit:
-    entry = index.get(target)
+def _semantic_hit(index: SemanticIndex, target: str, symbols: Sequence[Symbol]) -> ComponentHit:
+    """Looks up by symbol_id, resolved from the qualified_name via the Symbol
+    list -- NOT by qualified_name directly.
+
+    #210 keys symbol-level ConceptEntry scopes on symbol_id on purpose: one
+    qualified_name can cover several symbols in a real crate, so it is not a
+    unique key. An earlier version here called index.get(qualified_name) and so
+    reported "SemanticIndex: empty" for symbols the index definitely held --
+    a false negative that made stage 1 under-report its own confidence. Found
+    by running the live agent, not by reading.
+    """
+    ids = [s.symbol_id for s in symbols if s.qualified_name == target]
+    hits = [i for i in ids if index.get(i) is not None]
     return ComponentHit(
         component="SemanticIndex",
-        found=entry is not None,
+        found=bool(hits),
         detail=(
-            f"concept entry for scope {target!r}"
-            if entry is not None
-            else f"no concept entry scoped to {target!r}"
+            f"{len(hits)} concept entry/entries for symbol_id(s) of {target!r}"
+            if hits
+            else (
+                f"no concept entry for any symbol_id of {target!r}"
+                if ids
+                else f"no symbol in the index has qualified_name {target!r}"
+            )
         ),
     )
 
@@ -107,6 +124,7 @@ def assess(
     graph: ProjectGraph,
     index: SemanticIndex,
     memory: ProjectMemory,
+    symbols: Sequence[Symbol] = (),
 ) -> Assessment:
     """All three components are always consulted, in a fixed order, so the
     report is the same shape whether anything was found or not."""
@@ -116,7 +134,7 @@ def assess(
         target=target,
         hits=(
             _graph_hit(graph, target),
-            _semantic_hit(index, target),
+            _semantic_hit(index, target, symbols),
             _memory_hit(memory, target),
         ),
     )

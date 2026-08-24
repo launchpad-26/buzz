@@ -100,10 +100,17 @@ def assemble(
     ]
 
     if findings.callers:
+        # Call SITES and CALLERS are different counts, and the live run made the
+        # difference matter: five sites in kind.rs belong to two callers, four of
+        # them inside one test. Reporting "5 caller(s)" and then naming two read
+        # as three names having gone missing.
+        caller_names = sorted({c.caller_qualified_name for c in findings.callers})
         claims.append(
             Claim(
-                statement=f"{len(findings.callers)} caller(s) in this crate: "
-                + ", ".join(sorted({c.caller_qualified_name for c in findings.callers})),
+                statement=(
+                    f"{len(caller_names)} caller(s) across {len(findings.callers)} call site(s): "
+                    + ", ".join(caller_names)
+                ),
                 entry_class="FACT",
                 evidence=tuple(f"{c.file}:{c.line}" for c in findings.callers),
             )
@@ -170,27 +177,45 @@ def assemble(
     files = [citation_file]
     files += sorted({c.file for c in findings.callers} | {m.file for m in findings.test_sites})
 
+    # Deduped by caller name. The live run produced the same caller-to-target
+    # arrow four times over, which reads as four distinct callers rather than
+    # four call sites in one test.
+    flow = " | ".join(
+        f"{name} -> {target}"
+        for name in sorted({c.caller_qualified_name for c in findings.callers})
+    )
+
     return Answer(
         question=question.raw,
         short_answer=f"A {match.kind} at {citation_file}:{citation_line}.",  # type: ignore[union-attr]
         how_it_works=f"{match.signature}".strip(),  # type: ignore[union-attr]
-        relevant_flow=(
-            " | ".join(
-                f"{c.caller_qualified_name} -> {target}"
-                for c in sorted(findings.callers, key=lambda c: c.caller_qualified_name)
-            )
-            if findings.callers
-            else ""
-        ),
+        relevant_flow=flow,
         important_files=tuple(dict.fromkeys(files)),
-        things_to_be_aware_of=(
-            f"{len(findings.history)} commit(s) touch its definition line."
-            if findings.history
-            else (
-                "No caller and no test-side mention were found in this crate."
-                if not findings.corroborated
-                else ""
-            )
-        ),
+        things_to_be_aware_of=_caveats(findings, claims),
         claims=tuple(claims),
     )
+
+
+def _caveats(findings: Findings, claims: list[Claim]) -> str:
+    """The caveats section IS the inferences, restated where a reader meets them.
+
+    Not a separate authored paragraph: an authored caveat can say something the
+    claims do not support, and then `## Sources` and `## Things to be aware of`
+    disagree about the same answer. Building it from the INFERENCE claims makes
+    that impossible by construction -- the same reason Answer has no authored
+    `sources` field.
+
+    An earlier version emitted this section only when history existed or nothing
+    corroborated, so the common case rendered five of six sections with the
+    inferences visible only under Sources.
+    """
+    lines = [
+        f"{c.statement} (INFERENCE, confidence {c.confidence}; {'; '.join(c.evidence)})"
+        for c in claims
+        if c.entry_class == "INFERENCE"
+    ]
+    if findings.history:
+        lines.append(f"{len(findings.history)} commit(s) touch its definition line.")
+    if not findings.corroborated:
+        lines.append("No caller and no test-side mention were found in this crate.")
+    return "\n".join(lines)

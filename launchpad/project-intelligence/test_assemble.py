@@ -200,6 +200,82 @@ class UncorroboratedTest(unittest.TestCase):
         )
 
 
+class CallerCountingTest(unittest.TestCase):
+    """Four call sites in one test plus one real caller -- the exact shape the
+    live run against kind.rs produced."""
+
+    def _four_sites_two_callers(self) -> list:
+        return [
+            _Ref("tests::membership", REAL_FILE, 1077),
+            _Ref("tests::membership", REAL_FILE, 1078),
+            _Ref("tests::membership", REAL_FILE, 1082),
+            _Ref("is_unshared_gated_event", REAL_FILE, 234),
+        ]
+
+    def test_callers_and_call_sites_are_counted_separately(self) -> None:
+        """Reporting "4 caller(s)" and then naming two reads as two names having
+        gone missing."""
+        answer = assemble(
+            decompose(f"how does `{TARGET}` work?"),
+            _findings(callers=self._four_sites_two_callers()),
+            Trace(),
+            ProjectMemory(),
+        )
+        caller_claim = next(c for c in answer.claims if "call site" in c.statement)
+        self.assertIn("2 caller(s) across 4 call site(s)", caller_claim.statement)
+        self.assertEqual(len(caller_claim.evidence), 4)
+
+    def test_the_flow_is_deduped_by_caller(self) -> None:
+        """The live run emitted the same arrow four times, which reads as four
+        distinct callers."""
+        answer = assemble(
+            decompose(f"how does `{TARGET}` work?"),
+            _findings(callers=self._four_sites_two_callers()),
+            Trace(),
+            ProjectMemory(),
+        )
+        self.assertEqual(answer.relevant_flow.count(f"tests::membership -> {TARGET}"), 1)
+        self.assertEqual(answer.relevant_flow.count(" | "), 1)
+
+
+class CaveatsTest(unittest.TestCase):
+    def test_the_caveats_section_restates_the_inferences(self) -> None:
+        """Not an authored paragraph: an authored caveat can say something the
+        claims do not support, and then Sources and Things-to-be-aware-of
+        disagree about the same answer."""
+        answer = assemble(
+            decompose(f"how does `{TARGET}` work?"),
+            _findings(callers=[_Ref("is_unshared_gated_event", REAL_FILE, 234)]),
+            Trace(),
+            ProjectMemory(),
+        )
+        inferences = answer.claims_of_class("INFERENCE")
+        self.assertTrue(inferences)
+        for claim in inferences:
+            self.assertIn(claim.statement, answer.things_to_be_aware_of)
+
+    def test_the_caveats_section_is_populated_in_the_ordinary_case(self) -> None:
+        """An earlier version emitted it only when history existed or nothing
+        corroborated, so the common case rendered five of six sections."""
+        answer = assemble(
+            decompose(f"how does `{TARGET}` work?"),
+            _findings(callers=[_Ref("is_unshared_gated_event", REAL_FILE, 234)]),
+            Trace(),
+            ProjectMemory(),
+        )
+        self.assertTrue(answer.things_to_be_aware_of.strip())
+
+    def test_every_caveat_line_carries_its_evidence(self) -> None:
+        answer = assemble(
+            decompose(f"how did `{TARGET}` evolve?"),
+            _findings(history=[_Commit("f4e1c9", "2026-01-01", "alice", "widen the allowlist")]),
+            Trace(),
+            ProjectMemory(),
+        )
+        self.assertIn("f4e1c9", answer.things_to_be_aware_of)
+        self.assertIn("INFERENCE", answer.things_to_be_aware_of)
+
+
 class NotLocatedTest(unittest.TestCase):
     def test_an_unlocatable_symbol_says_so_about_the_index_not_the_codebase(self) -> None:
         """"Not in the index" and "not in the codebase" are different claims,

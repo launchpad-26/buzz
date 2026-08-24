@@ -112,6 +112,24 @@ class AssessTest(unittest.TestCase):
         self.assertTrue(result.confident)
         self.assertEqual(result.sources, ("ProjectMemory",))
 
+    def test_semantic_index_is_found_via_symbol_id_not_qualified_name(self) -> None:
+        """#210 keys symbol-level scopes on symbol_id on purpose -- one
+        qualified_name can cover several symbols. An earlier version looked up
+        the qualified_name directly and reported "SemanticIndex: empty" for
+        symbols the index definitely held, making stage 1 under-report its own
+        confidence. Found by running the live agent."""
+        result = assess(TARGET, self.graph, self.index, self.memory, self.symbols)
+        self.assertIn("SemanticIndex", result.sources)
+
+    def test_omitting_the_symbol_list_reports_semantic_index_honestly(self) -> None:
+        """Without the Symbol list there is no way to resolve qualified_name to
+        symbol_id, and the detail must say that rather than imply the index was
+        consulted and came back empty."""
+        result = assess(TARGET, self.graph, self.index, self.memory)
+        hit = next(h for h in result.hits if h.component == "SemanticIndex")
+        self.assertFalse(hit.found)
+        self.assertIn("no symbol in the index has qualified_name", hit.detail)
+
     def test_an_empty_target_is_rejected(self) -> None:
         with self.assertRaises(ValueError):
             assess("  ", self.graph, self.index, self.memory)

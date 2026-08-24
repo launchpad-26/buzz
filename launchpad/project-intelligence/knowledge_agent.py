@@ -141,7 +141,7 @@ class KnowledgeAgent:
                 trace=trace,
             )
 
-        assessment = assess(question.target, self.graph, self.index, self.memory)
+        assessment = assess(question.target, self.graph, self.index, self.memory, self.symbols)
 
         # Stage 3 runs when stage 1 was not confident. When it WAS confident,
         # stage 2 still verifies -- being confident never skips verification,
