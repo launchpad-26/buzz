@@ -1,0 +1,93 @@
+name: Feature
+description: One demonstrable capability under a PRD, decomposed into agent-executable tasks
+title: "feature: "
+labels: ["type:feature"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        <!--
+        AGENT INSTRUCTIONS — read before filling this form.
+
+        1. A Feature is ONE demonstrable capability: when it is done, someone can watch
+           it work. If you are stating a problem and evidence, that is a PRD - use
+           01-prd.yml. If it is bounded work with no children, that is a Task - use
+           02-task.yml. The hierarchy is Milestone > PRD > Feature > Task.
+        2. Fill EVERY field. Do not add headings that are not in this form.
+        3. If a field does not apply, write exactly: N/A - <one-line reason>
+        4. Outcome must be ONE sentence naming the capability, not the implementation.
+           Bad:  Add a Redis cache
+           Good: A relay owner selects a telemetry profile in Settings and what the
+                 instance emits changes accordingly
+        5. Acceptance criteria MUST be markdown checkboxes. Each line names an
+           observable check (a command, an endpoint, a UI state) that someone who did
+           not build it can verify. "Works well" and "is fast" are not criteria.
+           If you need more than ~7 lines, split the feature.
+        6. Child issues is a markdown task-list of the task/bug/ADR issues that
+           implement this feature ("- [ ] #123" per line). At filing it may be
+           "N/A - not yet decomposed"; it must be filled in before work starts, and
+           kept current - it is the feature's progress bar.
+        7. Milestone: the exact title of an open milestone in this repo. ALSO attach
+           the real milestone to the issue - this field makes the intent checkable,
+           it does not set metadata.
+        8. A Feature always has a parent PRD. Link it by number.
+        -->
+
+        One demonstrable capability inside a milestone. Decomposes into Tasks; rolls up
+        into a PRD. When it closes, the capability exists and the acceptance criteria
+        are all ticked with evidence.
+
+  - type: input
+    id: parent
+    attributes:
+      label: Parent PRD
+      description: 'Issue number of the PRD this feature delivers part of, e.g. #290. A feature always has a parent.'
+      placeholder: "#290"
+    validations:
+      required: true
+
+  - type: input
+    id: milestone
+    attributes:
+      label: Milestone
+      description: 'Exact title of the open milestone this feature ships in, e.g. "Knowledge crate shipped". Attach the actual milestone to the issue as well.'
+    validations:
+      required: true
+
+  - type: input
+    id: outcome
+    attributes:
+      label: Outcome
+      description: One sentence. The capability that exists when this closes, phrased as what someone can do or observe - not the implementation.
+    validations:
+      required: true
+
+  - type: textarea
+    id: acceptance
+    attributes:
+      label: Acceptance criteria
+      description: Markdown checkboxes. Each line an observable check verifiable by someone who did not build it.
+      value: |
+        - [ ]
+        - [ ]
+        - [ ]
+    validations:
+      required: true
+
+  - type: textarea
+    id: children
+    attributes:
+      label: Child issues
+      description: 'Task-list of the issues that implement this, one per line: "- [ ] #123". Write "N/A - not yet decomposed" if filing ahead of breakdown; fill in before work starts.'
+      value: |
+        - [ ] #
+    validations:
+      required: true
+
+  - type: textarea
+    id: outofscope
+    attributes:
+      label: Out of scope
+      description: Adjacent capabilities a reviewer should NOT expect this feature to deliver, and where they live instead.
+    validations:
+      required: true

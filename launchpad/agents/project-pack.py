@@ -149,11 +149,12 @@ def project_env_vars(persona: dict, pack_dir: Path) -> list[tuple[str, str]]:
         server = mcp_servers[0]
         if server.get("args"):
             raise ProjectionError(
-                f"persona {persona.get('name')!r}'s MCP server {server.get('name')!r} "
-                f"declares args {server['args']!r}, but BUZZ_ACP_MCP_COMMAND is a "
-                "bare command string -- buzz-acp's build_mcp_servers() always "
-                "spawns it with an empty args list. Projecting only the command "
-                "would silently drop the required arguments."
+                f"MCP server {server.get('name')!r} for persona "
+                f"{persona.get('name')!r} declares args {server['args']!r}, but "
+                "BUZZ_ACP_MCP_COMMAND is a bare command string -- buzz-acp's "
+                "build_mcp_servers() always spawns it with an empty args list. "
+                "Projecting only the command would silently drop the required "
+                "arguments."
             )
         command = Path(server["command"])
         if not command.is_absolute():
