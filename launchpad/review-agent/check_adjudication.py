@@ -13,6 +13,12 @@ against STEP 9's actual recordings -- not a stand-in.
 Registered in `run_controls.py`'s CONTROLS list as ("check_adjudication.py",
 False), so #120's single CI entry point picks it up and no second workflow
 is added.
+
+81 PASS lines as of this writing (`python3 check_adjudication.py | grep -c
+'^PASS'`) -- the introducing commit stated 44, an uncounted claim; corrected
+in a follow-up commit rather than by rewriting history, since counting it
+here means it is checked against the running script instead of the other
+way around.
 """
 
 from __future__ import annotations
