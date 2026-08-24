@@ -6,7 +6,8 @@ tags: [documentation, upstream, citations, staleness, handbook, research, issue-
 # How is a testing document's citation to upstream kept current?
 
 All repository references below were checked at
-`5d76799d6e44f2f76aa7bd78c5343d339af98f63`.
+`5d76799d6e44f2f76aa7bd78c5343d339af98f63`. Answers
+[#343](https://github.com/launchpad-26/buzz/issues/343).
 
 ## Finding
 
@@ -14,7 +15,9 @@ The accepted handbook design specifies a mechanical, git-based staleness detecto
 files in upstream repositories. It applies to pages in the separate `launchpad-26/handbook`
 repository because those pages carry the provenance frontmatter and appear in the published page
 index. A methodology document committed only under `launchpad/` in this repository does not satisfy
-that input contract and is therefore **not covered** by either specified detection path.
+that input contract and is therefore **not covered** by either specified detection path. Of the
+two paths, only ADR-0004's detector is an accepted decision; ADR-0010 is `status: Proposed`, so
+the second signal is a specified seam, not a commitment.
 
 This establishes the design boundary, not the operating state. I did not inspect the private
 handbook repository and did not verify that its scheduled job or published index exists and runs.
@@ -25,7 +28,7 @@ handbook repository and did not verify that its scheduled job or published index
 |---|---|---|
 | ADR-0003 | Every handbook page records each source's `repo`, `ref`, full commit SHA, and paths; references link to the pinned SHA. | **Yes, as the input contract.** A `block/buzz` source is representable. It detects nothing by itself. |
 | ADR-0004 | A scheduled job fetches each source ref, fails if the pin is not its ancestor, then runs `git log <pin>..<head> -- <paths>`. Non-empty output flags the page. | **Yes, mechanically.** A change to a cited upstream path produces a flag; movement is detected, not semantic invalidity. |
-| ADR-0010 | Upstream-intelligence may read the handbook's published page index and flag affected handbook pages without reproducing private source details. | **Yes, as an additional handbook-only signal.** It depends on the page being in the published index and does not replace ADR-0004. |
+| ADR-0010 *(Proposed)* | Upstream-intelligence may read the handbook's published page index and flag affected handbook pages without reproducing private source details. | **Yes, as an additional handbook-only signal.** It depends on the page being in the published index and does not replace ADR-0004. |
 | ADR-0015 | Every handbook page is agent-drafted, provenance-gated, and human-reviewed; v1 has a 100% human-review floor. | **Only at authoring/reverification time.** Review can judge whether a moved source invalidates a claim, but it is not the movement detector. |
 
 ADR-0001 fixes the scope: the handbook lives in a dedicated private repository and is published to
@@ -63,7 +66,8 @@ Both specified paths are keyed on handbook inventory:
 
 1. ADR-0004 iterates `sources[]` attached to handbook pages and emits a handbook page report plus
    a page-to-sources index.
-2. ADR-0010 consumes that published page index and names the affected handbook page.
+2. ADR-0010 (Proposed) specifies that upstream-intelligence would consume that published page
+   index and name the affected handbook page.
 
 No decision record says either mechanism scans arbitrary markdown in `launchpad-26/buzz`, and this
 repository does not publish those documents into the handbook index. A methodology document placed
@@ -92,8 +96,10 @@ Choosing among them determines placement, visibility, review policy, and ongoing
 
 ADR-0010 permits a flag to name the handbook page but forbids reproducing its private source repo,
 path, or pinned commit into a channel with different membership. Any extension of the mechanism must
-preserve that rule. It matters because the handbook index includes private repositories even though
-the example `block/buzz` source is public.
+preserve that rule. It matters because the handbook's *allowed source scope* includes private
+repositories — ADR-0002 names two of the five allowed source repos as private — even though the
+example `block/buzz` source is public. (Whether the index *currently* carries a private-source row
+is an operating-state fact this note does not claim; see "Not verified".)
 
 ## Confidence and what was not checked
 
@@ -114,6 +120,7 @@ and ADR-0001 locates the corpus in a separate repository.
 ## Sources
 
 - `launchpad/decisions/ADR-0001-handbook-repository-location-and-publication-target.md`
+- `launchpad/decisions/ADR-0002-handbook-source-repository-scope.md`
 - `launchpad/decisions/ADR-0003-handbook-page-provenance-contract.md`
 - `launchpad/decisions/ADR-0004-handbook-staleness-detection-mechanism.md`
 - `launchpad/decisions/ADR-0010-upstream-intel-handbook-staleness-link.md`
