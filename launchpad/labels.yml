@@ -6,7 +6,10 @@
 # --- Type: exactly one per issue. A type never modifies another type. ----------
 - name: "type:prd"
   color: "5319e7"
-  description: "Work with acceptance criteria that needs child tasks"
+  description: "Problem, evidence and success criteria — delivered through child features and tasks"
+- name: "type:feature"
+  color: "8a63d2"
+  description: "One demonstrable capability under a PRD — decomposes into tasks"
 - name: "type:task"
   color: "1d76db"
   description: "Bounded work — one branch, one PR. The default type."

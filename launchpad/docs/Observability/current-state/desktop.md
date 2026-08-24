@@ -267,4 +267,5 @@ defined here.
   [`huddle/state.rs`](https://github.com/launchpad-26/buzz/blob/678008ea49e790ada52e84d54b47f47dd77c6b38/desktop/src-tauri/src/huddle/state.rs#L34-L144),
   and [`egress_guard.rs`](https://github.com/launchpad-26/buzz/blob/678008ea49e790ada52e84d54b47f47dd77c6b38/desktop/src-tauri/src/egress_guard.rs#L1-L54).
 
-Back to the [overview](overview.md). See also [relay](relay.md) and [web](web.md).
+Back to the [overview](overview.md) or the canonical [coverage inventory](coverage.md).
+See also [relay](relay.md) and [web](web.md).
