@@ -27,10 +27,22 @@ class FixtureDriftTest(unittest.TestCase):
     """Several suites here hardcode this real symbol's current line numbers.
 
     review-tests flagged that as an undeclared coupling to a file outside this
-    change's control. It fails loudly rather than silently, which is the right
-    direction, but it fails in several places at once with messages about
-    provenance rather than about drift. This one test names the cause, so a
-    refactor of kind.rs produces one intelligible failure first.
+    change's control. It fails loudly rather than silently, and this test names
+    the cause.
+
+    It does NOT run first, and an earlier version of this docstring claimed it
+    did. Adjudication measured the real discovery order: `unittest discover`
+    sorts modules alphabetically, so test_assemble's dependent test runs at
+    position 62 of 269 while this guard runs at 308. Fixing that properly means
+    hoisting the shared fixture constants into one module with a setUpModule
+    hook -- worth doing, not done here, and recorded rather than implied.
+
+    The affected modules, measured by simulating a 5-line drift rather than
+    assumed: test_verify.py, test_assemble.py and test_worked_trace.py fail.
+    test_knowledge_agent.py does NOT -- it hardcodes the range only in a
+    synthetic DefinedAt that no test reads from disk. The earlier message named
+    that file and omitted test_worked_trace.py, pointing a maintainer at the one
+    module that was fine and away from one that was broken.
     """
 
     def test_the_hardcoded_range_still_holds_the_symbol_the_fixtures_assume(self) -> None:
@@ -39,8 +51,10 @@ class FixtureDriftTest(unittest.TestCase):
             REAL_SIGNATURE,
             text,
             f"{REAL_PATH}:{REAL_START}-{REAL_END} no longer contains {REAL_SIGNATURE!r}. "
-            "The fixtures in test_verify.py, test_assemble.py and test_knowledge_agent.py "
-            "hardcode this range; update them together rather than one at a time.",
+            "The fixtures in test_verify.py, test_assemble.py and test_worked_trace.py "
+            "read this range from disk; update them together rather than one at a time. "
+            "(test_knowledge_agent.py hardcodes the same numbers but never reads the file, "
+            "so it will not fail here.)",
         )
 
 

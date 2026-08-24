@@ -114,18 +114,32 @@ def _agent(tools: Tools, memory: ProjectMemory | None = None) -> KnowledgeAgent:
 
 
 def _unconfident_agent(tools: Tools) -> KnowledgeAgent:
-    """An agent whose three components know nothing about the target: no graph
-    node, no concept entry, no memory. Built from a DIFFERENT symbol so the
-    target is genuinely absent from all three."""
-    symbols = [_symbol("something_else")]
-    return KnowledgeAgent(
-        crate="buzz-core",
-        symbols=symbols,
-        graph=ProjectGraph.from_symbols(symbols),
-        index=SemanticIndex.from_symbols(symbols),
-        memory=ProjectMemory(),
-        tools=tools,
+    """The ORDINARY case: the target is fully indexed, and ProjectMemory holds
+    no prior answer about it.
+
+    Until 2026-08-24 this helper manufactured un-confidence by indexing a
+    DIFFERENT symbol name, because `confident` then meant "any component found
+    something" and a real indexed symbol could never be un-confident. That
+    workaround was itself the evidence of the bug -- the state the tests had to
+    fake is the state production is almost always in. `confident` now means
+    "ProjectMemory holds a prior answer", so an empty memory is enough.
+    """
+    return _agent(tools)
+
+
+def _confident_agent(tools: Tools) -> KnowledgeAgent:
+    """A target ProjectMemory already holds an answer about -- the only thing
+    that makes stage 1 confident."""
+    memory = ProjectMemory()
+    memory.add(
+        MemoryEntry(
+            id="prior",
+            entry_class="FACT",
+            statement=f"{TARGET} gates shared kinds",
+            evidence=(f"{FILE}:219-221",),
+        )
     )
+    return _agent(tools, memory)
 
 
 class ConfidenceGateTest(unittest.TestCase):
@@ -140,7 +154,7 @@ class ConfidenceGateTest(unittest.TestCase):
 
     def test_confident_skips_the_corroboration_stages(self) -> None:
         counting = _CountingTools()
-        agent = _agent(counting.as_tools())
+        agent = _confident_agent(counting.as_tools())
         outcome = agent.run(f"how does `{TARGET}` work?")
         self.assertTrue(outcome.assessment.confident)
         self.assertEqual(counting.counts.get("find_references", 0), 0)
@@ -157,7 +171,7 @@ class ConfidenceGateTest(unittest.TestCase):
         """Never skipped: nothing in the graph, index or memory supplies a
         citable file:line, so skipping them yields an answer with no citation."""
         counting = _CountingTools()
-        agent = _agent(counting.as_tools())
+        agent = _confident_agent(counting.as_tools())
         agent.run(f"how does `{TARGET}` work?")
         self.assertEqual(counting.counts.get("search_symbols", 0), 1)
         self.assertGreaterEqual(counting.counts.get("read_file", 0), 1)
@@ -167,7 +181,7 @@ class ConfidenceGateTest(unittest.TestCase):
         a present-tense one. Gating it would make knowledge.history() return no
         commits for any target stage 1 felt confident about."""
         counting = _CountingTools()
-        agent = _agent(counting.as_tools())
+        agent = _confident_agent(counting.as_tools())
         outcome = agent.run(f"how did `{TARGET}` evolve?")
         self.assertTrue(outcome.assessment.confident)
         self.assertEqual(counting.counts.get("inspect_git_history", 0), 1)
@@ -177,7 +191,7 @@ class ConfidenceGateTest(unittest.TestCase):
         can mean "never searched". Neither the caveats nor an "appears unused"
         claim may assert an absence nobody looked for."""
         counting = _CountingTools()
-        agent = _agent(counting.as_tools())
+        agent = _confident_agent(counting.as_tools())
         answer = agent.run(f"how does `{TARGET}` work?").answer
         self.assertNotIn("No caller and no test-side mention", answer.things_to_be_aware_of)
         self.assertEqual(
@@ -203,8 +217,7 @@ class ConfidenceGateTest(unittest.TestCase):
                 evidence=(f"{FILE}:219-221",),
             )
         )
-        agent = _unconfident_agent(counting.as_tools())
-        agent.memory = memory
+        agent = _agent(counting.as_tools(), memory)
         outcome = agent.run(f"how does `{TARGET}` work?")
         self.assertTrue(outcome.assessment.confident)
         self.assertEqual(counting.counts.get("find_references", 0), 0)
@@ -213,7 +226,7 @@ class ConfidenceGateTest(unittest.TestCase):
 class RunShapeTest(unittest.TestCase):
     def test_a_nameless_question_returns_an_answer_without_investigating(self) -> None:
         counting = _CountingTools()
-        agent = _agent(counting.as_tools())
+        agent = _agent(counting.as_tools())  # noqa: E501
         outcome = agent.run("where is the code that checks kind gating?")
         self.assertEqual(counting.counts, {})
         self.assertIsNone(outcome.assessment)

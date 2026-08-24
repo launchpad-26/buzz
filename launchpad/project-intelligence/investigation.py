@@ -10,8 +10,13 @@ run in order, stopping as soon as the evidence is sufficient.
 the design doc does not specify it mechanically:**
 
   * Locate and read ALWAYS run. Without them there is nothing to answer from,
-    so "sufficient" cannot be true before them.
-  * Callers runs whenever there is a symbol target.
+    so no amount of cached confidence can skip them.
+  * Callers runs whenever there is a symbol target AND stage 1 found no prior
+    stored answer -- see `confident` in investigate()'s own docstring below.
+    (This line said "whenever there is a symbol target" until 2026-08-24, which
+    contradicted investigate() two hundred lines below it once the confidence
+    gate landed. Adjudication caught it: a module header denying a gate that
+    exists is the same defect as the docstring that claimed a gate that didn't.)
   * Tests runs only if callers found no corroboration. It is the second attempt
     at the same thing, so corroborated evidence makes it redundant -- and a
     redundant call is not free, it is a slower answer and a longer trace for a
@@ -83,12 +88,23 @@ class Findings:
 
     @property
     def corroborated(self) -> bool:
-        """Something other than the definition itself points at this symbol."""
+        """Something other than the definition itself points at this symbol.
+
+        Read directly by the stop rule below and by assemble(). Note what it
+        does NOT mean since the confidence gate landed: False can mean "looked
+        and found nothing" OR "never looked, because a prior answer existed".
+        Any caller inferring an absence from it must first check the trace for a
+        find_references/search_text call -- assemble() does exactly that.
+        """
         return bool(self.callers) or bool(self.test_sites)
 
-    @property
-    def sufficient(self) -> bool:
-        return self.located and self.corroborated
+    # `sufficient` (located and corroborated) was removed on 2026-08-24.
+    # Adjudication found it had no production reader at all -- the stop rule
+    # reads `corroborated` directly -- and that it had become actively
+    # misleading: it reported False for is_unshared_gated_event, a symbol with
+    # eight real callers, because the confidence gate had SKIPPED corroboration
+    # rather than failed to find it. Dead code that misreports is worse than no
+    # code, so it is gone rather than documented.
 
     def citation(self) -> str | None:
         if not self.located:
@@ -219,8 +235,10 @@ def investigate(
     tools: Tools = REAL_TOOLS,
     confident: bool = False,
 ) -> Findings:
-    """`confident` is stage 1's verdict, and it gates the CORROBORATION stages
-    only -- find_references and search_text.
+    """`confident` is stage 1's verdict -- specifically, whether ProjectMemory
+    holds a PRIOR ANSWER about the target (see confidence.Assessment.confident,
+    which is not "some component has heard of it"). It gates the CORROBORATION
+    stages only -- find_references and search_text.
 
     Decided 2026-08-24 after two independent reviewers found that stage 1's
     assessment was computed and then ignored, while this module's caller claimed

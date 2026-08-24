@@ -151,7 +151,8 @@ class StopRuleTest(unittest.TestCase):
             trace,
             _tools(refs=[_Ref("is_unshared_gated_event", FILE, 240)]),
         )
-        self.assertTrue(findings.sufficient)
+        self.assertTrue(findings.located)
+        self.assertTrue(findings.corroborated)
         self.assertIn("inspect_git_history", trace.tools)
 
     def test_history_is_queried_over_a_window_never_a_single_line(self) -> None:
@@ -191,7 +192,7 @@ class StopRuleTest(unittest.TestCase):
         )
         self.assertEqual(trace.tools, ("search_symbols",))
         self.assertFalse(findings.located)
-        self.assertFalse(findings.sufficient)
+        self.assertFalse(findings.corroborated)
 
 
 class FindingsTest(unittest.TestCase):

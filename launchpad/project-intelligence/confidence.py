@@ -37,11 +37,44 @@ class Assessment:
     hits: tuple[ComponentHit, ...]
 
     @property
-    def confident(self) -> bool:
-        """True only if some component actually found something. Derived, never
-        stored -- a stored flag can disagree with the hits it summarises, and
-        this is the one value the investigation decision turns on."""
+    def knows_of_target(self) -> bool:
+        """Some component has heard of the target. Reporting only -- NOT the
+        gate. Existence is not an answer."""
         return any(h.found for h in self.hits)
+
+    @property
+    def confident(self) -> bool:
+        """True only when a PRIOR ANSWER is stored -- i.e. ProjectMemory has an
+        entry about the target. Derived, never stored.
+
+        This was `any(h.found for h in self.hits)` until 2026-08-24, and that
+        was wrong in a way only measurement exposed. SemanticIndex.from_symbols
+        adds one ConceptEntry per symbol_id BY CONSTRUCTION, so a semantic hit
+        is guaranteed for every symbol in the crate. Once the caller started
+        using this value as control flow, the consequence was measured:
+
+            distinct qualified_names in buzz-core: 439
+            not confident:                           0
+
+        Zero of 439. The corroboration stages became unreachable in production,
+        and knowledge.explain() silently dropped a FACT claim carrying eight
+        real file:line citations plus its whole `Relevant flow` section.
+
+        The design doc settles what the predicate should be. Step 1 is "Query
+        ProjectGraph / SemanticIndex / ProjectMemory for an existing ANSWER",
+        and its own worked example is explicit: `search_symbols("UserRepository")`
+        FINDS the symbol and the doc still records "no existing ProjectMemory
+        entry -- confidence: none yet." Existence in an index is not an answer;
+        a stored claim is.
+
+        Consequence worth stating plainly: ProjectMemory does not persist
+        between runs (#209), so on a fresh process this is False for every
+        target and the full investigation always runs. That is the safe
+        direction, and the gate is real and tested rather than decorative -- it
+        fires the moment a stored answer exists, which is what #209 will make
+        durable.
+        """
+        return any(h.found for h in self.hits if h.component == "ProjectMemory")
 
     @property
     def sources(self) -> tuple[str, ...]:

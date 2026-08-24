@@ -112,6 +112,42 @@ class AssessTest(unittest.TestCase):
         self.assertTrue(result.confident)
         self.assertEqual(result.sources, ("ProjectMemory",))
 
+    def test_a_real_indexed_symbol_with_empty_memory_is_not_confident(self) -> None:
+        """The assertion whose absence let a High-severity regression ship.
+
+        SemanticIndex.from_symbols adds an entry per symbol_id BY CONSTRUCTION,
+        so a semantic hit is guaranteed for every symbol in the crate. When
+        `confident` meant "any component found something", it was measured True
+        for 439 of 439 buzz-core symbols -- making the corroboration stages
+        unreachable in production once it became control flow.
+
+        The design doc's own worked example is the authority: search_symbols
+        FINDS UserRepository and the doc still records "confidence: none yet",
+        because no ProjectMemory entry exists. Existence is not an answer.
+        """
+        result = assess(TARGET, self.graph, self.index, self.memory, self.symbols)
+        self.assertTrue(result.knows_of_target, "the symbol should be known to the index")
+        self.assertIn("ProjectGraph", result.sources)
+        self.assertIn("SemanticIndex", result.sources)
+        self.assertFalse(result.confident, "index presence is not a stored answer")
+
+    def test_only_a_project_memory_hit_makes_it_confident(self) -> None:
+        self.memory.add(
+            MemoryEntry(
+                id="m9",
+                entry_class="FACT",
+                statement=f"{TARGET} gates shared kinds",
+                evidence=("crates/buzz-core/src/kind.rs:219-221",),
+            )
+        )
+        self.assertTrue(assess(TARGET, self.graph, self.index, self.memory, self.symbols).confident)
+
+    def test_knows_of_target_and_confident_are_different_questions(self) -> None:
+        """Kept as separate properties on purpose: collapsing them is what
+        caused the regression, so the distinction is asserted, not just named."""
+        result = assess(TARGET, self.graph, self.index, self.memory, self.symbols)
+        self.assertNotEqual(result.knows_of_target, result.confident)
+
     def test_semantic_index_is_found_via_symbol_id_not_qualified_name(self) -> None:
         """#210 keys symbol-level scopes on symbol_id on purpose -- one
         qualified_name can cover several symbols. An earlier version looked up
