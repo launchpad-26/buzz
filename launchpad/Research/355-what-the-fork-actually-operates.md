@@ -15,20 +15,25 @@ misrepresent what the command printed.
 
 ## Finding
 
-**19 of the 796 files in the current drop can reach the deployed relay. 737 cannot reach anything this fork runs.**
+**19 of the 796 files in the current drop can reach the deployed relay. 739 cannot reach anything this fork runs.**
 
 The operational surface is narrow and it is knowable exactly, because it is defined by a build rather than by opinion: the relay image builds three binaries and two static bundles, and the crate dependency closure of those binaries is 16 of the repository's 30 workspace crates.
 
-| Tier | What it is | Files in the 796 |
+| Tier | What it is | Files in the 796 (each file counted once) |
 |---|---|---|
 | **Deployed** | Crate closure of `buzz-relay`, `buzz-admin`, `buzz-pair-relay`; `web/`; `admin-web/`; `migrations/`; build inputs | **19** |
 | **Cohort tooling** | `buzz-cli`, `buzz-acp`, `buzz-agent`, `buzz-dev-mcp` — the agent-execution tree the cohort plans to run on contributors' machines | **17** |
-| **Build and gate** | `Justfile`, `lefthook.yml`, `bin/.lefthookrc`, `scripts/*`, `.github/workflows/*`, `schema/`, `renovate.json` | **24** |
-| **Inert for this fork** | `desktop/` 575, `mobile/` 110, `benchmarks/` 52, non-deployed crates 19 | **736** |
+| **Build and gate** | `Justfile`, `lefthook.yml`, `bin/.lefthookrc`, `scripts/*`, `.github/workflows/*`, `schema/`, `renovate.json`, less the three files already counted as Deployed | **21** |
+| **Inert for this fork** | `desktop/` 575, `mobile/` 110, `benchmarks/` 52, remaining non-deployed crate files 2 | **739** |
+
+The build/gate/ops role is played by 24 paths in full (listed below); three of them —
+`Cargo.lock`, `migrations/0032_channel_roster_snapshot_fence.sql`, and `web/package.json` —
+are also deploy-reaching and are tallied under Deployed rather than counted twice:
+19 + 17 + 21 + 739 = 796.
 
 The two numbers that matter to #273 pull in opposite directions, and both should be said out loud:
 
-- **ADR-0022's affordability argument is far stronger than the record claims.** It rests on 8 contested files out of 796. The better number is that 736 of the 796 cannot affect anything the cohort operates *at all*, contested or not. Adopting them unreviewed is close to free.
+- **ADR-0022's affordability argument is far stronger than the record claims.** It rests on 8 contested files out of 796. The better number is that 739 of the 796 cannot affect anything the cohort operates *at all*, contested or not. Adopting them unreviewed is close to free.
 - **But the risk concentrates rather than disappearing.** One of the 19 live files is [`migrations/0032_channel_roster_snapshot_fence.sql`](https://github.com/block/buzz/blob/025425591ed67518a63870316f1473ffd02dd520/migrations/0032_channel_roster_snapshot_fence.sql) — a new schema migration that the relay **applies automatically on startup**. That is the highest-consequence single file in the entire drop, it is not in any ledger, it does not conflict, and under ADR-0022 it is adopted without anyone reading it.
 
 ---
@@ -108,7 +113,7 @@ web/package.json
 
 Note what is in there: the relay's **ingest handler**, its **side-effect handler**, the **workflow executor**, `buzz-db`'s **migration** module, and a **new SQL migration**. This is not a random 2.4% — it is the relay's hot path.
 
-### The 24 build/gate/ops files, in full
+### The 24 build/gate/ops files, in full (three of them tallied under Deployed above)
 
 ```
 .github/workflows/benchmark-harbor.yml
@@ -145,7 +150,8 @@ web/package.json
 
 > Buzz can initiate an agent and run it as the `buzz-acp` → `buzz-agent` → `buzz-dev-mcp` process tree, carrying the production MCP toolset — shell, file tools, todo — with the `buzz` CLI on the shell's `PATH` — `IMPLEMENTED` upstream
 
-and the cohort's own use of it as `OPEN` at [#43](https://github.com/launchpad-26/buzz/issues/43). Upstream touched those four crates 17 times in this drop:
+and the cohort's own adoption of it recorded at [#43](https://github.com/launchpad-26/buzz/issues/43)
+(closed 2026-08-21, before this document's commit). Upstream touched those four crates 17 times in this drop:
 
 ```
 $ grep '^crates/' /tmp/up796.txt | cut -d/ -f2 | sort | uniq -c | sort -rn
