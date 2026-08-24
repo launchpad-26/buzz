@@ -41,7 +41,9 @@ and the operational version:
 **The measured effectiveness is the important part.** Evaluating SAM — a tool that generates unit tests with four generators (EvoSuite, Differential EvoSuite, Randoop, Randoop Clean) and runs them against Base, Left, Right and Merge — across 85 change pairs from 51 merge scenarios:
 
 - detected **9 of 28 conflicts** — recall **0.32**
-- precision **0.84** (3 false positives in 57 non-conflict cases)
+- **3 false positives** in 57 non-conflict cases. The paper reports no overall precision for
+  SAM — only per-tool, per-configuration values in its Table 2 (0.66 to 1.0) — so none is
+  quoted here.
 - 19 false negatives, of which manual analysis suggested 13 were theoretically reachable with better test generation
 
 The authors' own conclusion:
@@ -182,7 +184,7 @@ deliverable now.
 
 ## Sources
 
-- [Detecting Semantic Conflicts with Unit Tests](https://arxiv.org/html/2310.02395) — the definition, the SAM tool, recall 0.32 / precision 0.84, and the authors' conclusion
+- [Detecting Semantic Conflicts with Unit Tests](https://arxiv.org/html/2310.02395) — the definition, the SAM tool, recall 0.32 (9 of 28 detected), 3 false positives in 57 non-conflict cases, and the authors' conclusion
 - [Detecting semantic conflicts with unit tests — ScienceDirect](https://www.sciencedirect.com/science/article/pii/S0164121224001158) — journal version of the same work
 - [Patches in Electron](https://www.electronjs.org/docs/latest/development/patches) — *"patches can break—sometimes without even a patch conflict or a compilation error"*
 - [Using Pre-trained Language Models to Resolve Textual and Semantic Merge Conflicts](https://www.microsoft.com/en-us/research/wp-content/uploads/2022/07/issta22-merge-conflicts-llm.pdf) — the Chromium/Edge downstream-fork framing
