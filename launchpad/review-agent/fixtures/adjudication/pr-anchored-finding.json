@@ -1,0 +1,99 @@
+{
+  "_comment": "#118 STEP 8 fixture 2. Real: replays launchpad-26/buzz#117's own recorded reviewer output for the 'claim-vs-evidence' fixture (recordings/claim-vs-evidence/*.json) through the real run_dimensions.build_document, one call per dimension, merged into one document. No hand-written finding content.",
+  "_fixture": {
+    "isolates": [
+      "a pr-anchored finding (file and line null) alongside a line-anchored one, from the same dimension"
+    ],
+    "provenance": "real",
+    "real": true,
+    "source_recordings": [
+      "recordings/claim-vs-evidence/secrets-and-access.json",
+      "recordings/claim-vs-evidence/claim-vs-evidence.json",
+      "recordings/claim-vs-evidence/correctness-and-failure-modes.json"
+    ],
+    "source_fixture_payload": "fixtures/dimensions/claim-vs-evidence.json",
+    "note": "The claim-vs-evidence dimension's own recording genuinely reports TWO findings for this fixture (one anchor 'line' Blocker at scripts/config_loader.py:23, one anchor 'pr' High citing a nonexistent scripts/config_schema.py) -- kept as recorded rather than trimmed to isolate the anchor 'pr' case alone. Trimming would make this a real replay with a finding deleted by hand, which is the precise thing this directory exists to avoid; the two-finding document is also the stronger test, exercising a 'pr' anchor alongside a 'line' one rather than in isolation. Argued from what the recording contains, deliberately citing no out-of-repo decision record -- a citation a reader cannot open is one this plan's own conventions treat as no citation at all."
+  },
+  "pr": 0,
+  "merge_base_sha": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+  "head_sha": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+  "reports": [
+    {
+      "schema_version": 1,
+      "dimension": "secrets-and-access",
+      "pr": 0,
+      "merge_base_sha": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "head_sha": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+      "status": "complete",
+      "outcome": "clean",
+      "error": null,
+      "findings": [],
+      "findings_count": 0,
+      "completion_marker": "BUZZ-DIMENSION-COMPLETE:secrets-and-access:fd67113ca5ee05b31650c71b4365032f"
+    },
+    {
+      "schema_version": 1,
+      "dimension": "claim-vs-evidence",
+      "pr": 0,
+      "merge_base_sha": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "head_sha": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+      "status": "complete",
+      "outcome": "findings",
+      "error": null,
+      "findings": [
+        {
+          "dimension": "claim-vs-evidence",
+          "severity": "Blocker",
+          "anchor": "line",
+          "file": "scripts/config_loader.py",
+          "line": 23,
+          "defect": "PR body claims --verbose's value is restricted to debug/info/warn via argparse choices=, but the diff adds a plain boolean flag with no validation",
+          "failure": "A reader trusting the PR description believes input validation exists where none does; any --verbose value (or none) passes through unchecked",
+          "finding_id": "0d4a625fa2227bcc",
+          "entry_point": null,
+          "evidence": null
+        },
+        {
+          "dimension": "claim-vs-evidence",
+          "severity": "High",
+          "anchor": "pr",
+          "file": null,
+          "line": null,
+          "defect": "PR body cites scripts/config_schema.py as the validation contract source; no such file exists anywhere in this repository",
+          "failure": "A reviewer or future maintainer following the citation to verify the validation contract finds nothing, and cannot confirm the claim by any means",
+          "finding_id": "f699b70a97ebb6e5",
+          "entry_point": null,
+          "evidence": null
+        }
+      ],
+      "findings_count": 2,
+      "completion_marker": "BUZZ-DIMENSION-COMPLETE:claim-vs-evidence:fd67113ca5ee05b31650c71b4365032f"
+    },
+    {
+      "schema_version": 1,
+      "dimension": "correctness-and-failure-modes",
+      "pr": 0,
+      "merge_base_sha": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "head_sha": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+      "status": "complete",
+      "outcome": "clean",
+      "error": null,
+      "findings": [],
+      "findings_count": 0,
+      "completion_marker": "BUZZ-DIMENSION-COMPLETE:correctness-and-failure-modes:fd67113ca5ee05b31650c71b4365032f"
+    }
+  ],
+  "containment": {
+    "findings": [],
+    "states": {
+      "pr_title": "ok",
+      "pr_body": "ok",
+      "pr_diff": "ok",
+      "pr_issue_comments": "ok",
+      "pr_review_comments": "ok",
+      "pr_review_bodies": "ok",
+      "linked_issue": "ok"
+    }
+  },
+  "nonce": "fd67113ca5ee05b31650c71b4365032f"
+}
