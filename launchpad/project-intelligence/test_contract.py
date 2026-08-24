@@ -13,8 +13,16 @@ the no-`sources`-field guarantee. Drift fails the suite instead of misleading a
 reader.
 
 What this CANNOT check is whether the prose is *right* -- whether § 7's
-reconciliation is honest, or whether § 6 describes error modes a caller actually
-hits. Those need a reviewer. This only holds the mechanical claims.
+reconciliation is honest. That needs a reviewer.
+
+§ 6's error modes WERE in that category and are not any more. A Codex review of
+#577 found the table promising `ValueError` for an empty target while all five
+methods returned an `Answer`, and § 5 promising a caveat per `INFERENCE` claim
+while `find()` returned one with the field empty. Both were reachable from the
+hermetic fixture agent in `test_knowledge`, so both are now asserted below
+rather than left to the next reviewer's diligence. `ContractBehaviourTest` is
+the lesson: a promise about what a call *does* is checkable by making the call,
+and a substring search for the sentence that makes the promise is not.
 
 Hermetic: reads CONTRACT.md and introspects the modules. No `rql`, no network.
 
@@ -25,15 +33,22 @@ Run:  python3 -m unittest test_contract
 from __future__ import annotations
 
 import pathlib
+import re
 import typing
 import unittest
 from dataclasses import fields
 
 import answer
+import confidence
 import investigation
 import knowledge
 import memory
 import question
+import trace
+from answer import Answer
+
+# The hermetic fixture agent -- fixture Symbols, never build(), so no `rql`.
+from test_knowledge import TARGET, _agent
 
 CONTRACT = pathlib.Path(__file__).with_name("CONTRACT.md")
 
@@ -187,6 +202,164 @@ class ContractOpenQuestionsTest(unittest.TestCase):
 
     def test_the_unratified_status_is_stated(self) -> None:
         self.assertIn("not ratified", self.doc)
+
+
+class ContractBehaviourTest(unittest.TestCase):
+    """Promises about what a CALL does, asserted by making the call.
+
+    Every test here corresponds to a sentence a Codex review of #577 found to be
+    false. A substring check for that sentence passed while the sentence was
+    wrong, which is the whole reason this class exists.
+    """
+
+    @classmethod
+    def setUpClass(cls) -> None:
+        cls.doc = CONTRACT.read_text()
+
+    # -- § 6: the error table --------------------------------------------------
+
+    def test_six_of_the_seven_do_not_raise_on_an_empty_target(self) -> None:
+        """§ 6 promised `ValueError` for an empty target from all seven. Six of
+        them wrap the argument before a validator sees it -- `explain("")`
+        interpolates it into a non-empty question, `dependencies("")` never calls
+        `confidence.assess` at all -- but `find` does not, and raises (below). A
+        consumer's `except ValueError` around one of these six is dead code.
+        """
+        agent = _agent()
+        for name in ("explain", "dependencies", "impact", "setup", "conventions", "history"):
+            with self.subTest(method=name):
+                result = getattr(knowledge, name)(agent, "")
+                self.assertIsInstance(
+                    result, Answer, f"knowledge.{name}('') should return an Answer, not raise"
+                )
+
+    def test_find_and_ask_raise_on_an_empty_target(self) -> None:
+        """`find` is the one method of the seven with no bounded input to wrap an
+        empty argument into, so the empty query reaches `Answer.__post_init__`
+        unguarded. `ask` -- an eighth function, not one of the seven -- calls
+        `question.decompose` on the raw argument before it routes anywhere, so it
+        raises the same way `find` does, through a different mechanism.
+        """
+        agent = _agent()
+        with self.assertRaises(ValueError):
+            knowledge.find(agent, "")
+        with self.assertRaises(ValueError):
+            knowledge.ask(agent, "")
+
+    def test_the_contract_no_longer_promises_that_exception(self) -> None:
+        """The other half: the document must not re-acquire the false promise."""
+        self.assertIn(
+            "Six of the seven methods do not raise on an empty target", self.doc
+        )
+        self.assertNotIn("None of the seven methods raise on an empty target", self.doc)
+
+    def test_the_functions_that_do_raise_still_raise(self) -> None:
+        """§ 6's rows are true of these three called directly, which is why the
+        table was narrowed rather than deleted."""
+        agent = _agent()
+        with self.assertRaises(ValueError):
+            question.decompose("")
+        with self.assertRaises(ValueError):
+            confidence.assess("", agent.graph, agent.index, agent.memory)
+        with self.assertRaises(ValueError):
+            answer.Answer(question="")
+
+        # investigate() raises on a question carrying no target -- which is what
+        # a nameless question decomposes to, and is find()'s case instead.
+        nameless = question.decompose("how does sharing work around here?")
+        self.assertIsNone(nameless.target, "fixture question unexpectedly resolved a target")
+        with self.assertRaises(ValueError):
+            investigation.investigate(nameless, agent.crate, trace.Trace())
+
+    # -- § 5: the caveat promise ----------------------------------------------
+
+    def test_an_inference_claim_does_not_guarantee_a_caveat(self) -> None:
+        """§ 5 said `things_to_be_aware_of` "is generated from the `INFERENCE`
+        claims", so a consumer could read an empty field as "no inference here".
+        `find()` disproves it. Asserted so that a future change which DOES
+        populate it consistently fails here and forces § 5 to be corrected --
+        the drift is caught in either direction.
+        """
+        result = knowledge.find(_agent(), "whether a kind is gated for sharing")
+        self.assertTrue(
+            result.claims_of_class("INFERENCE"), "expected find() to return an INFERENCE claim"
+        )
+        self.assertEqual(
+            result.things_to_be_aware_of,
+            "",
+            "find() now emits a caveat -- § 5's narrowed wording must be revisited",
+        )
+
+    def test_ask_loses_the_base_state_when_it_routes(self) -> None:
+        """§ 5's BASE row is honest for the explain pipeline and not for `ask()`,
+        which classifies BASE then dispatches to `impact()` and drops it. Tracked
+        as #588; asserted so the row cannot silently become true-but-undocumented.
+
+        Asserts the premise first: if the cue words ever stop classifying this
+        text as BASE, `assertNotIn` below would pass vacuously (nothing to lose
+        if nothing was ever classified). Fail here, not silently there.
+        """
+        text = f"what happens at head if I change `{TARGET}`?"
+        self.assertEqual(
+            question.decompose(text).temporal_state,
+            "BASE",
+            "fixture question no longer classifies BASE -- this test would pass vacuously below",
+        )
+        result = knowledge.ask(_agent(), text)
+        self.assertNotIn("BASE", result.things_to_be_aware_of)
+        self.assertIn("#588", self.doc)
+
+    # -- § 3: the shape count -------------------------------------------------
+
+    def test_the_citation_shape_count_matches_the_table(self) -> None:
+        """§ 3 said "all four shapes" above a five-row table, and "three of five"
+        two lines below that. Nothing caught it, because no test counted. This
+        counts, so the number and the table cannot drift apart again.
+        """
+        words = {"three": 3, "four": 4, "five": 5, "six": 6, "seven": 7, "eight": 8}
+        section = self.doc.split("## 3. Citation forms", 1)[1].split("\n---", 1)[0]
+
+        rows = [
+            line
+            for line in section.splitlines()
+            if line.startswith("|") and not line.startswith("| Shape") and "---" not in line
+        ]
+
+        match = re.search(r"must handle all\s+(\w+)\s+shapes", section)
+        self.assertIsNotNone(match, "§ 3 no longer states how many shapes there are")
+        stated = words.get(match.group(1))
+        self.assertIsNotNone(stated, f"unrecognised number word {match.group(1)!r} in § 3")
+        self.assertEqual(
+            stated, len(rows), f"§ 3 says {match.group(1)} shapes; the table lists {len(rows)}"
+        )
+
+    def test_the_openability_prose_matches_the_table(self) -> None:
+        """The same section's "mis-handle three of six" is a second, independent
+        count of the same table -- it drifted too, so it is asserted too.
+
+        Checks both numbers the sentence states: the numerator (unopenable rows)
+        AND the denominator (total rows) -- asserting only the numerator lets
+        "three of one hundred" pass, which does not pin the sentence to the
+        table it claims to describe.
+        """
+        words = {"one": 1, "two": 2, "three": 3, "four": 4, "five": 5, "six": 6}
+        section = self.doc.split("## 3. Citation forms", 1)[1].split("\n---", 1)[0]
+
+        rows = [
+            line
+            for line in section.splitlines()
+            if line.startswith("|") and not line.startswith("| Shape") and "---" not in line
+        ]
+        not_openable = [line for line in rows if line.rstrip().endswith("| no |")]
+
+        match = re.search(r"mis-handle\s+(\w+)\s+of\s+(\w+)", section)
+        self.assertIsNotNone(match, "§ 3 no longer states how many citations are unopenable")
+        self.assertEqual(
+            words.get(match.group(1)), len(not_openable), "numerator does not match unopenable rows"
+        )
+        self.assertEqual(
+            words.get(match.group(2)), len(rows), "denominator does not match the table's total rows"
+        )
 
 
 if __name__ == "__main__":
