@@ -69,8 +69,10 @@ def section_names(rendered: str) -> list[str]:
     return [line[3:] for line in rendered.splitlines() if line.startswith("## ")]
 
 
-def main() -> None:
-    agent = KnowledgeAgent.build(WORKED_CRATE)
+def main(agent: KnowledgeAgent | None = None) -> None:
+    """Same reason as worked_trace.main(): the index build is the expensive
+    part, and the CLI runs both examples."""
+    agent = agent if agent is not None else KnowledgeAgent.build(WORKED_CRATE)
     answer = build(agent)
     rendered = render(answer)
     print(f"Question: {WORKED_QUESTION}\n")

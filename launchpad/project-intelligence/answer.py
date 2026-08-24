@@ -111,6 +111,18 @@ _DISPLAY_LABEL = {
 }
 
 
+def format_confidence(confidence: float) -> str:
+    """Two decimal places, trailing zeros trimmed.
+
+    knowledge.find sets an inference's confidence to the measured cosine score,
+    which printed as "confidence 0.3908672882686386" -- sixteen digits implying
+    a precision the ranking does not have. Rounded for display only; the stored
+    value is untouched, because the number a caller reads programmatically
+    should be the one that was computed.
+    """
+    return f"{round(confidence, 2):g}"
+
+
 def render_claim(claim: Claim) -> str:
     """One `## Sources` line: label first, then the statement, then evidence.
 
@@ -122,7 +134,7 @@ def render_claim(claim: Claim) -> str:
     """
     label = _DISPLAY_LABEL[claim.entry_class]
     if claim.entry_class == "INFERENCE":
-        label = f"{label} (confidence {claim.confidence})"
+        label = f"{label} (confidence {format_confidence(claim.confidence)})"
     elif claim.entry_class == "TEAM_KNOWLEDGE":
         label = f"{label} (from {claim.provided_by})"
 

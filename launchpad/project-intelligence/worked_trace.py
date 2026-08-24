@@ -102,8 +102,10 @@ def _split_by_class(answer: Answer) -> tuple[tuple[Claim, ...], tuple[Claim, ...
     )
 
 
-def main() -> None:
-    agent = KnowledgeAgent.build(WORKED_CRATE)
+def main(agent: KnowledgeAgent | None = None) -> None:
+    """Takes an already-built agent when one exists: indexing the crate is the
+    expensive part, and knowledge.py's CLI runs both worked examples."""
+    agent = agent if agent is not None else KnowledgeAgent.build(WORKED_CRATE)
     outcome = agent.run(WORKED_QUESTION)
 
     print(f"Question: {WORKED_QUESTION}\n")

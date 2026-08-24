@@ -11,7 +11,7 @@ from __future__ import annotations
 
 import unittest
 
-from answer import SECTION_ORDER, Answer, Claim, render
+from answer import SECTION_ORDER, Answer, Claim, format_confidence, render, render_claim
 
 
 class ClaimProvenanceValidationTest(unittest.TestCase):
@@ -116,6 +116,34 @@ class AnswerShapeTest(unittest.TestCase):
     def test_important_files_as_a_bare_string_is_rejected(self) -> None:
         with self.assertRaises(ValueError):
             Answer(question="q?", important_files="kind.rs")
+
+
+class FormatConfidenceTest(unittest.TestCase):
+    def test_a_measured_score_is_rounded_for_display(self) -> None:
+        """knowledge.find sets confidence to the measured cosine score, which
+        printed as "confidence 0.3908672882686386" in the live CLI -- sixteen
+        digits implying a precision the ranking does not have."""
+        self.assertEqual(format_confidence(0.3908672882686386), "0.39")
+
+    def test_trailing_zeros_are_trimmed(self) -> None:
+        self.assertEqual(format_confidence(0.4), "0.4")
+        self.assertEqual(format_confidence(0.7), "0.7")
+
+    def test_the_bounds_render_without_decimals(self) -> None:
+        self.assertEqual(format_confidence(0.0), "0")
+        self.assertEqual(format_confidence(1.0), "1")
+
+    def test_rounding_is_display_only_and_does_not_touch_the_claim(self) -> None:
+        """A caller reading confidence programmatically should get the number
+        that was computed, not the one that was printed."""
+        claim = Claim(
+            statement="a ranked guess",
+            entry_class="INFERENCE",
+            evidence=("score",),
+            confidence=0.3908672882686386,
+        )
+        self.assertEqual(claim.confidence, 0.3908672882686386)
+        self.assertIn("confidence 0.39", render_claim(claim))
 
 
 class RenderTest(unittest.TestCase):

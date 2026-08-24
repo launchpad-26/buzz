@@ -141,6 +141,19 @@ class ImpactTest(unittest.TestCase):
         direct = next(c for c in result.claims if "direct dependent" in c.statement)
         self.assertIn(CALLER, direct.statement)
 
+    def test_counts_are_pluralised_properly_and_never_print_a_paren_s(self) -> None:
+        """The live CLI printed "1 direct(s)", which reads as unfinished output
+        in an answer whose whole point is being trustworthy."""
+        result = knowledge.dependencies(_agent(), CALLER)
+        statements = " | ".join(c.statement for c in result.claims)
+        self.assertNotIn("(s)", statements)
+        self.assertIn("1 direct dependency", statements)
+
+    def test_a_plural_count_uses_the_plural_word(self) -> None:
+        result = knowledge.impact(_agent(), TARGET)
+        direct = next(c for c in result.claims if "direct dependent" in c.statement)
+        self.assertNotIn("(s)", direct.statement)
+
     def test_an_empty_slice_is_still_a_fact_scoped_to_the_graph(self) -> None:
         """"The graph holds no dependent" is an observation. "Nothing depends on
         this" is a claim about the world that was never established."""

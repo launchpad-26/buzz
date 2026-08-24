@@ -139,7 +139,10 @@ def dependencies(agent: KnowledgeAgent, symbol: str) -> Answer:
         question=f"what does {symbol} depend on?",
         short_answer=f"{len(direct)} direct, {len(transitive)} transitive.",
         relevant_flow=" ; ".join(" -> ".join(h.path) for h in hits) or "",
-        claims=(_slice_claim(symbol, "direct", direct), _slice_claim(symbol, "transitive", transitive)),
+        claims=(
+            _slice_claim(symbol, "direct dependency", "direct dependencies", direct),
+            _slice_claim(symbol, "transitive dependency", "transitive dependencies", transitive),
+        ),
     )
 
 
@@ -161,24 +164,34 @@ def impact(agent: KnowledgeAgent, symbol: str) -> Answer:
             "them only if the direct dependent's own behaviour changes."
         ),
         claims=(
-            _slice_claim(symbol, "direct dependent", direct),
-            _slice_claim(symbol, "secondary dependent", secondary),
+            _slice_claim(symbol, "direct dependent", "direct dependents", direct),
+            _slice_claim(symbol, "secondary dependent", "secondary dependents", secondary),
         ),
     )
 
 
-def _slice_claim(symbol: str, label: str, hits: list) -> Claim:
+def _slice_claim(symbol: str, singular: str, plural: str, hits: list) -> Claim:
     """A graph slice is a FACT when it found something and a FACT when it did
     not: both are observations of the same materialized edge set. The wording
-    scopes it to the graph rather than to the world."""
+    scopes it to the graph rather than to the world -- "the graph holds no
+    dependent" is an observation, while "nothing depends on this" is a claim
+    about the world that was never established.
+
+    Takes both word forms rather than appending "(s)": the live CLI printed
+    "1 direct(s)", which reads as unfinished output in an answer whose whole
+    point is being trustworthy.
+    """
     if hits:
         return Claim(
-            statement=f"{len(hits)} {label}(s) of {symbol}: " + ", ".join(sorted(h.node for h in hits)),
+            statement=(
+                f"{len(hits)} {singular if len(hits) == 1 else plural} of {symbol}: "
+                + ", ".join(sorted(h.node for h in hits))
+            ),
             entry_class="FACT",
             evidence=tuple(f"{' -> '.join(h.path)} ({h.hop} hop)" for h in hits),
         )
     return Claim(
-        statement=f"the graph holds no {label} of {symbol}",
+        statement=f"the graph holds no {singular} of {symbol}",
         entry_class="FACT",
         evidence=(f"ProjectGraph traversal from {symbol!r} returned no node at that depth",),
     )
@@ -276,9 +289,27 @@ def all_methods() -> tuple[str, ...]:
 
 
 if __name__ == "__main__":
+    import worked_answer
+    import worked_trace
     from answer import render
 
+    # One index build, shared by both worked examples and the seven-method
+    # surface below -- indexing the crate is the expensive part of this CLI.
     agent = KnowledgeAgent.build("buzz-core")
+
+    print("#" * 70)
+    print("# Worked example 1 -- the investigation trace (STEP 10)")
+    print("#" * 70 + "\n")
+    worked_trace.main(agent)
+
+    print("\n" + "#" * 70)
+    print("# Worked example 2 -- the six-section answer format (STEP 11)")
+    print("#" * 70 + "\n")
+    worked_answer.main(agent)
+
+    print("\n" + "#" * 70)
+    print("# The seven knowledge.* methods, live (STEP 9)")
+    print("#" * 70)
     for name, call in (
         ("find", lambda: find(agent, "the check that decides whether a kind is gated for sharing")),
         ("explain", lambda: explain(agent, "is_shared_gated_kind")),

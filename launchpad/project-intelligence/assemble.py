@@ -18,7 +18,7 @@ which resolves without supporting its claim.
 
 from __future__ import annotations
 
-from answer import Answer, Claim
+from answer import Answer, Claim, format_confidence
 from investigation import Findings
 from memory import ProjectMemory
 from question import Question
@@ -210,7 +210,8 @@ def _caveats(findings: Findings, claims: list[Claim]) -> str:
     inferences visible only under Sources.
     """
     lines = [
-        f"{c.statement} (INFERENCE, confidence {c.confidence}; {'; '.join(c.evidence)})"
+        f"{c.statement} (INFERENCE, confidence {format_confidence(c.confidence)}; "
+        f"{'; '.join(c.evidence)})"
         for c in claims
         if c.entry_class == "INFERENCE"
     ]
