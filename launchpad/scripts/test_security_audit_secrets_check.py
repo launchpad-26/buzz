@@ -2,10 +2,13 @@
 """Controls for the #67 secret-material check.
 
 Mocks subprocess.run throughout — no real gitleaks invocation, no network.
-.gitleaks.toml's rules themselves are proven against real fixtures with the
-real gitleaks binary separately (see the PR body / commit history for that
-evidence); this suite is about the check script's own branching and error
-handling, which is what a future edit is most likely to quietly break.
+This suite is about the check script's own branching and error handling, which
+is what a future edit is most likely to quietly break.
+
+.gitleaks.toml's rules themselves are proven by
+`test_security_audit_gitleaks_ruleset.py`, which runs the real binary against
+the planted fixtures and fails if any rule stops matching. Keep that split: a
+rule regression must not be able to hide behind these mocks.
 """
 
 import json
