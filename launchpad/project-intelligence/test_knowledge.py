@@ -190,6 +190,56 @@ class ConventionsTest(unittest.TestCase):
         result = knowledge.conventions(_agent(memory), TARGET)
         self.assertEqual(result.claims_of_class("FACT")[0].statement.count("returns bool"), 0)
 
+    def test_a_superseded_convention_is_not_surfaced_as_current(self) -> None:
+        """conventions() had the same superseded_by gap as assemble, and only
+        assemble got a regression test in the first fix round -- Codex flagged
+        the asymmetry. Both consumers now have one."""
+        memory = ProjectMemory()
+        memory.add(
+            MemoryEntry(
+                id="old",
+                entry_class="TEAM_KNOWLEDGE",
+                statement=f"{TARGET}: do not use",
+                provided_by="alice",
+                superseded_by="new",
+            )
+        )
+        memory.add(
+            MemoryEntry(
+                id="new",
+                entry_class="TEAM_KNOWLEDGE",
+                statement=f"{TARGET}: approved for use",
+                provided_by="bob",
+            )
+        )
+        result = knowledge.conventions(_agent(memory), TARGET)
+        team = result.claims_of_class("TEAM_KNOWLEDGE")
+        self.assertEqual(len(team), 1)
+        self.assertEqual(team[0].provided_by, "bob")
+
+    def test_setup_reads_through_the_injected_seam(self) -> None:
+        """The existing setup tests deliberately use REAL tools, so reverting
+        setup() to the process-global investigator would go undetected. Codex
+        mutation-tested exactly that. This one injects a reader and asserts it
+        was the one used."""
+        seen: list[str] = []
+
+        def reader(path, *a, **k):
+            seen.append(path)
+            return "test:\n    echo hi"
+
+        agent = _agent()
+        agent.tools = Tools(
+            search_symbols=agent.tools.search_symbols,
+            read_file=reader,
+            find_references=agent.tools.find_references,
+            search_text=agent.tools.search_text,
+            inspect_git_history=agent.tools.inspect_git_history,
+        )
+        knowledge.setup(agent, "test")
+        self.assertTrue(seen, "setup() did not read through the injected seam")
+        self.assertIn("Justfile", seen)
+
     def test_the_non_persistence_caveat_is_stated_not_implied(self) -> None:
         result = knowledge.conventions(_agent(), None)
         self.assertIn("does not persist", result.things_to_be_aware_of)

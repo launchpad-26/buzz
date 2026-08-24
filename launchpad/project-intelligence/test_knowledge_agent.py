@@ -223,6 +223,68 @@ class ConfidenceGateTest(unittest.TestCase):
         self.assertEqual(counting.counts.get("find_references", 0), 0)
 
 
+class InjectedReaderReachesVerificationTest(unittest.TestCase):
+    """The INTEGRATION boundary, not the unit.
+
+    test_assemble's seam control calls assemble() directly with a reader, so it
+    passes whether or not KnowledgeAgent.run actually forwards one. Codex
+    mutation-tested exactly that -- discarded the forwarded reader -- and 19
+    tests across three modules still passed.
+
+    This closes it by exploiting the fixtures' own divergence from the real
+    repo: the injected file text puts the signature at line 6, while the real
+    kind.rs line 6 is a comment. So if verification reads through the injected
+    seam the claim is a FACT, and if it reaches the real worktree instead the
+    claim downgrades to INFERENCE. One assertion, and it can only pass when the
+    forwarding is intact.
+    """
+
+    def test_the_definition_claim_is_confirmed_against_the_injected_file(self) -> None:
+        counting = _CountingTools()
+        agent = _unconfident_agent(counting.as_tools())
+        answer = agent.run(f"how does `{TARGET}` work?").answer
+        definition = answer.claims[0]
+        self.assertEqual(
+            definition.entry_class,
+            "FACT",
+            "verification did not read through the injected seam -- it fell back to the real "
+            "worktree, where this line range does not hold the signature",
+        )
+
+    def test_a_reader_whose_ranged_read_disagrees_downgrades_the_claim(self) -> None:
+        """The mirror, and it needed a second attempt to be honest.
+
+        The first version returned junk for every read, which made the symbol
+        UNLOCATABLE rather than unconfirmed -- so claims[0] was still a FACT,
+        just a different one ("the index has no locatable definition"). It
+        passed for the wrong reason and proved nothing about verification.
+
+        This reader answers the full-file read (so locate succeeds and
+        definition_line is found) and disagrees on the RANGED read that
+        verification makes. That isolates the verification step, which is the
+        only thing this class is about.
+        """
+        counting = _CountingTools()
+        agent = _unconfident_agent(counting.as_tools())
+
+        def split_reader(path, start=None, end=None):
+            if start is None and end is None:
+                return FILE_TEXT
+            return "// a line that does not hold the signature"
+
+        agent.tools = Tools(
+            search_symbols=agent.tools.search_symbols,
+            read_file=split_reader,
+            find_references=agent.tools.find_references,
+            search_text=agent.tools.search_text,
+            inspect_git_history=agent.tools.inspect_git_history,
+        )
+        answer = agent.run(f"how does `{TARGET}` work?").answer
+        definition = answer.claims[0]
+        self.assertEqual(definition.entry_class, "INFERENCE")
+        self.assertIn("unconfirmed", definition.evidence[0])
+
+
 class RunShapeTest(unittest.TestCase):
     def test_a_nameless_question_returns_an_answer_without_investigating(self) -> None:
         counting = _CountingTools()

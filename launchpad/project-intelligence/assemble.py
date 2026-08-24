@@ -47,10 +47,20 @@ PREDICATE_CONFIDENCE = 0.7
 # the silence. Cross-model review found BASE being classified by question.py and
 # then ignored by everything downstream -- the third dead-classified-value defect
 # in this branch, after the confidence predicate and Findings.sufficient.
+# Wording matters here and the first version got it wrong. It said "every claim
+# below was read from the WORKING tree", which is false: an answer can carry a
+# HISTORY claim (drawn from git history) or TEAM_KNOWLEDGE with its own temporal
+# state, and both sit beneath this sentence. A caveat that overstates what it
+# covers is the same defect class the caveat exists to fix -- caught by the
+# second cross-model pass, in prose written by the first fix round.
+#
+# It now says only what is true of every case: BASE was never read, and each
+# claim carries its own temporal_state for a reader who needs the detail.
 BASE_NOT_HONOURED = (
-    "This question asked about the repository BEFORE the current changes (BASE), but every claim "
-    "below was read from the WORKING tree. BASE reads are not implemented, so if the two differ, "
-    "this answer describes the wrong one."
+    "This question asked about the repository BEFORE the current changes (BASE). BASE reads are "
+    "not implemented, so nothing here was read from BASE -- code claims come from the WORKING "
+    "tree, and each claim carries its own temporal_state. If WORKING and BASE differ, this "
+    "answer describes WORKING."
 )
 
 
@@ -93,13 +103,23 @@ def assemble(
         # An answer that could not find its subject says so, with the trace as
         # its evidence. Returning an empty Answer would read as "nothing to
         # report about a symbol that exists".
+        #
+        # The BASE caveat belongs here too, and its absence was the sharpest
+        # form of the defect: a symbol DELETED in WORKING but present at BASE
+        # would report "not in the index" to a question asked specifically about
+        # BASE -- an answer that is not merely incomplete but points the reader
+        # away from the state they asked about. Found by the second cross-model
+        # pass; the first fix round wired the caveat into the located path only.
+        not_located_caveats = [
+            "This is a statement about the index, not about the codebase -- the symbol may "
+            "exist under a different qualified name, or in a crate that was not searched."
+        ]
+        if question.temporal_state == "BASE":
+            not_located_caveats.insert(0, BASE_NOT_HONOURED)
         return Answer(
             question=question.raw,
             short_answer=f"{target} could not be located in the index.",
-            things_to_be_aware_of=(
-                "This is a statement about the index, not about the codebase -- the symbol may "
-                "exist under a different qualified name, or in a crate that was not searched."
-            ),
+            things_to_be_aware_of="\n".join(not_located_caveats),
             claims=(
                 Claim(
                     statement=f"the index has no locatable definition for {target}",

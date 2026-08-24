@@ -318,7 +318,38 @@ class TemporalStateTest(unittest.TestCase):
         self.assertEqual(question.temporal_state, "BASE")
         answer = assemble(question, _findings(), Trace(), ProjectMemory())
         self.assertIn("asked about the repository BEFORE", answer.things_to_be_aware_of)
-        self.assertIn("read from the WORKING tree", answer.things_to_be_aware_of)
+        self.assertIn("nothing here was read from BASE", answer.things_to_be_aware_of)
+
+    def test_an_unlocatable_symbol_still_discloses_that_base_was_not_read(self) -> None:
+        """The sharpest form of the defect, and the one the first fix missed: a
+        symbol DELETED in WORKING but present at BASE reports "not in the index"
+        to a question asked specifically about BASE -- pointing the reader away
+        from the state they asked about, not merely answering incompletely."""
+        trace = Trace()
+        trace.record("search_symbols", "'gone', crate='buzz-core'", found=False, detail="no symbol")
+        answer = assemble(
+            decompose("how did `gone_symbol` behave before my changes?"),
+            Findings(target="gone_symbol"),
+            trace,
+            ProjectMemory(),
+        )
+        self.assertIn("nothing here was read from BASE", answer.things_to_be_aware_of)
+        self.assertIn("statement about the index", answer.things_to_be_aware_of)
+
+    def test_the_base_caveat_does_not_overstate_what_it_covers(self) -> None:
+        """The first wording said "every claim below was read from the WORKING
+        tree". False: an answer can carry a HISTORY claim from git history, and
+        it sits beneath that sentence. A caveat that overstates its own coverage
+        is the defect class the caveat exists to fix."""
+        findings = _findings(history=[_Commit("abc", "2026-01-01", "alice", "widen allowlist")])
+        answer = assemble(
+            decompose(f"how did `{TARGET}` behave before my changes?"),
+            findings,
+            Trace(),
+            ProjectMemory(),
+        )
+        self.assertIn("HISTORY", {c.temporal_state for c in answer.claims})
+        self.assertNotIn("every claim below", answer.things_to_be_aware_of)
 
     def test_a_working_question_carries_no_base_caveat(self) -> None:
         answer = assemble(
