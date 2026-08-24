@@ -15,7 +15,9 @@ All repository-inspection evidence has cutoff **2026-08-22** and is pinned to
 [`26920e5c30d8a07a3d59c306d4e2b9056750e762`](https://github.com/launchpad-26/buzz/tree/26920e5c30d8a07a3d59c306d4e2b9056750e762)
 (`26920e5c`). The completed web assessment is pinned separately to
 [`678008ea49e790ada52e84d54b47f47dd77c6b38`](https://github.com/launchpad-26/buzz/tree/678008ea49e790ada52e84d54b47f47dd77c6b38)
-(`678008ea`). Inspection covered Cargo metadata and manifests, release and container
+(`678008ea`) — the repository revision that assessment inspected, as declared in
+[web.md](web.md)'s verification metadata; the completed document itself landed later, in
+`26920e5c`. Inspection covered Cargo metadata and manifests, release and container
 packaging, process entry points, router and protocol registrations, Tauri invoke/event/
 channel registrations, frontend route trees, ACP/MCP dispatch, CLI parsers, worker
 spawns, adapters, subprocess calls, and signal/export registrations. Source inspection
