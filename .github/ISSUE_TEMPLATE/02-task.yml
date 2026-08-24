@@ -11,7 +11,8 @@ body:
 
         1. This is the DEFAULT type. If you are unsure which template to use, use this
            one and add the label needs-triage, then say so in Objective.
-        2. A Task has NO children. If this needs sub-issues, it is a PRD - use 01-prd.yml.
+        2. A Task has NO children. If this needs sub-issues, it is a Feature - use
+           07-feature.yml. If it is a problem statement needing evidence, it is a PRD.
         3. Fill EVERY required field. Do not add headings that are not in this form.
         4. If a field does not apply, write exactly: N/A - <one-line reason>
         5. Objective must be ONE sentence naming an artifact that will exist when done.
@@ -23,7 +24,7 @@ body:
         -->
 
         Bounded, concrete work. One branch, one PR. If it needs child issues, file a
-        **PRD** instead.
+        **Feature** instead.
 
   - type: input
     id: parent
