@@ -215,7 +215,11 @@ def _caveats(findings: Findings, claims: list[Claim]) -> str:
         if c.entry_class == "INFERENCE"
     ]
     if findings.history:
-        lines.append(f"{len(findings.history)} commit(s) touch its definition line.")
+        # "the range queried", not "its definition line" -- the history stage
+        # asks over a window (see investigation.HISTORY_LINE_WINDOW), and saying
+        # "line" would describe a narrower query than the one that produced
+        # these commits.
+        lines.append(f"{len(findings.history)} commit(s) touch the range queried around it.")
     if not findings.corroborated:
         lines.append("No caller and no test-side mention were found in this crate.")
     return "\n".join(lines)

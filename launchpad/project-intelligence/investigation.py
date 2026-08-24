@@ -180,16 +180,35 @@ def _tests(target: str, findings: Findings, trace: Trace, tools: Tools) -> None:
     )
 
 
+# The history stage queries a window, not the single definition line.
+#
+# Measured, not assumed: investigator.inspect_git_history on
+# crates/buzz-core/src/kind.rs returns 0 commits for the range (850, 850) and 4
+# commits for (840, 860), while `git log -L 850,850:...` names a real commit for
+# that exact line. A degenerate start == end range comes back empty from #208's
+# tool. That is #208's defect and is filed rather than patched here -- the plan's
+# LEFT OUT reserves #206-#210's own logic to their own issues.
+#
+# What IS this task's to fix is the call site: asking with start == end meant the
+# history stage was silently returning nothing every time. The citation reports
+# the window actually queried, never the single line, because a claim must cite
+# what was really asked.
+HISTORY_LINE_WINDOW = 10
+
+
 def _history(findings: Findings, trace: Trace, tools: Tools) -> None:
     match = findings.match
     line = findings.definition_line or 1
-    commits = tools.inspect_git_history(match.file, line, line)  # type: ignore[union-attr]
+    start, end = line, line + HISTORY_LINE_WINDOW
+    commits = tools.inspect_git_history(match.file, start, end)  # type: ignore[union-attr]
     findings.history = list(commits)
     trace.record(
         "inspect_git_history",
-        f"{match.file}:{line}",  # type: ignore[union-attr]
+        f"{match.file}:{start}-{end}",  # type: ignore[union-attr]
         found=bool(commits),
-        detail=f"{len(commits)} commit(s)" if commits else "no commits touching that line",
+        detail=(
+            f"{len(commits)} commit(s)" if commits else "no commits touching that range"
+        ),
     )
 
 

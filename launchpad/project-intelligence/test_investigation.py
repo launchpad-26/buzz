@@ -14,7 +14,7 @@ from __future__ import annotations
 import unittest
 from dataclasses import dataclass
 
-from investigation import PROGRESSION, Tools, investigate
+from investigation import HISTORY_LINE_WINDOW, PROGRESSION, Tools, investigate
 from question import decompose
 from trace import Trace
 
@@ -147,6 +147,34 @@ class StopRuleTest(unittest.TestCase):
         )
         self.assertTrue(findings.sufficient)
         self.assertIn("inspect_git_history", trace.tools)
+
+    def test_history_is_queried_over_a_window_never_a_single_line(self) -> None:
+        """Measured against the real tool: inspect_git_history returns 0 commits
+        for (850, 850) and 4 for (840, 860) on kind.rs, while `git log -L
+        850,850` names a real commit. A degenerate range comes back empty, so a
+        single-line query made this stage silently useless."""
+        seen: list[tuple[int, int]] = []
+        tools = _tools()
+        tools = Tools(
+            search_symbols=tools.search_symbols,
+            read_file=tools.read_file,
+            find_references=tools.find_references,
+            search_text=tools.search_text,
+            inspect_git_history=lambda f, s, e: seen.append((s, e)) or [],
+        )
+        trace = Trace()
+        investigate(decompose("how did `is_shared_gated_kind` evolve?"), "buzz-core", trace, tools)
+        self.assertEqual(len(seen), 1)
+        start, end = seen[0]
+        self.assertGreater(end, start, "a degenerate start == end range returns nothing")
+        self.assertEqual(end - start, HISTORY_LINE_WINDOW)
+
+    def test_the_history_citation_reports_the_range_actually_queried(self) -> None:
+        """A claim must cite what was really asked, not the line it was about."""
+        trace = Trace()
+        investigate(decompose("how did `is_shared_gated_kind` evolve?"), "buzz-core", trace, _tools())
+        call = next(c for c in trace.calls if c.tool == "inspect_git_history")
+        self.assertIn(f"{6}-{6 + HISTORY_LINE_WINDOW}", call.args)
 
     def test_a_symbol_that_does_not_exist_stops_after_locating(self) -> None:
         """Nothing downstream has a subject, so continuing would query for a
