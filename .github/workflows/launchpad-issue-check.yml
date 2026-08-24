@@ -31,6 +31,8 @@ jobs:
           REQUIRED = {
               "type:prd": ["Problem", "Evidence", "Success criteria", "Non-goals",
                            "Impacted components", "Security implications"],
+              "type:feature": ["Parent PRD", "Milestone", "Outcome",
+                               "Acceptance criteria", "Child issues", "Out of scope"],
               "type:task": ["Parent PRD", "Objective", "Definition of done",
                             "Impacted components", "Out of scope"],
               "type:enhancement": ["Current behaviour", "Desired behaviour", "Why now",
