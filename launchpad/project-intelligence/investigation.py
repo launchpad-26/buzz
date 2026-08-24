@@ -217,7 +217,32 @@ def investigate(
     crate: str,
     trace: Trace,
     tools: Tools = REAL_TOOLS,
+    confident: bool = False,
 ) -> Findings:
+    """`confident` is stage 1's verdict, and it gates the CORROBORATION stages
+    only -- find_references and search_text.
+
+    Decided 2026-08-24 after two independent reviewers found that stage 1's
+    assessment was computed and then ignored, while this module's caller claimed
+    in its own docstring that stage 3 was "skipped when already confident". The
+    gate now exists, and its shape follows the design doc rather than that
+    sentence:
+
+      * locate and read are NEVER skipped. Nothing in ProjectGraph,
+        SemanticIndex or ProjectMemory supplies a citable file:line, so skipping
+        them would produce an answer with no citation -- which is the one thing
+        this layer must never do. This is also § Reasoning Rules point 2: "at
+        least one live Investigator call before answering, even if cached
+        knowledge already agrees."
+      * find_references and search_text ARE skipped when confident. They exist
+        to corroborate, and a stored FACT or a graph edge is the cached
+        corroboration that made stage 1 confident in the first place.
+      * history is NOT gated by confidence, despite the first draft of this
+        decision saying it would be. History is the CONTENT of a historical
+        question, not corroboration of a present-tense one -- gating it would
+        make knowledge.history() return no commits for any target stage 1
+        happened to feel confident about. It stays governed by the question.
+    """
     if question.target is None:
         raise ValueError("investigate() needs a named target; a nameless question is FIND's case")
 
@@ -227,10 +252,11 @@ def investigate(
         return findings
 
     _read(findings, trace, tools)
-    _callers(question.target, crate, findings, trace, tools)
 
-    if not findings.corroborated:
-        _tests(question.target, findings, trace, tools)
+    if not confident:
+        _callers(question.target, crate, findings, trace, tools)
+        if not findings.corroborated:
+            _tests(question.target, findings, trace, tools)
 
     wants_history = question.temporal_state == "HISTORY" or question.depth == "RATIONALE"
     if wants_history and findings.located:

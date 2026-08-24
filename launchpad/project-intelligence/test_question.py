@@ -9,8 +9,9 @@ Run:  python3 -m unittest test_question
 from __future__ import annotations
 
 import unittest
+from typing import get_args
 
-from question import SETUP_TASKS, classify_intent, decompose, extract_target
+from question import SETUP_TASKS, Depth, classify_intent, decompose, extract_target
 
 # STEP 4's done-when: seven questions, one per intent, no two colliding.
 # Kept as data so the "no two collide" property is checked over the whole set
@@ -100,6 +101,43 @@ class TargetTest(unittest.TestCase):
         """FIND exists for callers who cannot name the thing. Someone who wrote
         the name already has it, so the concept pipeline is the wrong tool."""
         self.assertEqual(classify_intent("where is `AuthMiddleware`?")[0], "EXPLAIN")
+
+
+class DepthTest(unittest.TestCase):
+    """classify_depth had ZERO coverage anywhere in the suite until review-tests
+    found it: a version returning a constant would have passed all 138 tests.
+
+    The only downstream effect of depth is investigation.py's
+    `temporal_state == "HISTORY" or depth == "RATIONALE"`, and every historical
+    test phrases its question so temporal_state ALSO says HISTORY -- so the
+    depth half of that `or` was never isolated either. That branch is now pinned
+    in test_knowledge_agent.py, and the six literals are pinned here.
+    """
+
+    def test_each_depth_level_is_reachable(self) -> None:
+        cases = {
+            "SUMMARY": "briefly, how does `foo_bar` work?",
+            "IMPLEMENTATION": "exactly how does `foo_bar` work?",
+            "TRACE": "trace `foo_bar` end to end",
+            "RATIONALE": "what was the design decision behind `foo_bar`?",
+            "IMPACT": "what happens if I change `foo_bar`?",
+            "ONBOARDING": "how does `foo_bar` work?",
+        }
+        classified = {depth: decompose(q).depth for depth, q in cases.items()}
+        self.assertEqual(classified, {depth: depth for depth in cases})
+
+    def test_all_six_levels_are_covered_by_the_cases_above(self) -> None:
+        """Guards against a seventh level being added with no question proving
+        it is reachable -- an unreachable branch reads as working code."""
+        self.assertEqual(len(set(get_args(Depth))), 6)
+
+    def test_an_impact_question_always_takes_impact_depth(self) -> None:
+        """Intent wins over phrasing here: a blast-radius question rendered at
+        onboarding depth would answer a different question than was asked."""
+        self.assertEqual(decompose("briefly, what happens if I change `foo_bar`?").depth, "IMPACT")
+
+    def test_a_historical_question_takes_rationale_depth(self) -> None:
+        self.assertEqual(decompose("how did `foo_bar` evolve?").depth, "RATIONALE")
 
 
 class ValidationTest(unittest.TestCase):

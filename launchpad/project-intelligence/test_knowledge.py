@@ -213,6 +213,56 @@ class FindTest(unittest.TestCase):
         for claim in result.claims:
             self.assertNotIn("is the implementation", claim.statement)
 
+    def test_an_empty_index_returns_no_candidate_instead_of_crashing(self) -> None:
+        """Found by review-code, reproduced before fixing. find_it_for_me returns
+        a PipelineResult with EVERY field None -- not None itself -- when
+        index.search() is empty, which happens for an index built from zero
+        symbols. The first version of the score-floor guard checked only
+        `result is not None`, so this raised
+        "TypeError: '<=' not supported between instances of 'NoneType' and
+        'float'". The guard added to close one fail-open defect had opened a
+        crash on the empty case."""
+        empty = KnowledgeAgent(
+            crate="empty",
+            symbols=[],
+            graph=ProjectGraph.from_symbols([]),
+            index=SemanticIndex.from_symbols([]),
+            memory=ProjectMemory(),
+        )
+        result = knowledge.find(empty, "anything at all")
+        self.assertIn("No candidate resolved", result.short_answer)
+        self.assertEqual(result.claims[0].entry_class, "FACT")
+
+    def test_a_score_exactly_at_the_floor_resolves_to_nothing(self) -> None:
+        """Pins the `<=` boundary itself, which no test covered -- only the 0.0
+        case was exercised, and 0.0 would also pass under a `<` comparison."""
+
+        class _AtFloor:
+            qualified_name = "whatever"
+            candidate_score = knowledge.MINIMUM_CANDIDATE_SCORE
+            subsystem_score = 0.5
+            subsystem = type("S", (), {"scope": "f.rs"})()
+            confirmation = None
+
+        agent = _agent()
+        agent.find_concept = lambda concept: _AtFloor()  # type: ignore[method-assign]
+        self.assertIn("No candidate resolved", knowledge.find(agent, "x").short_answer)
+
+    def test_a_score_just_above_the_floor_does_resolve(self) -> None:
+        """The mirror, without which a guard that rejected everything would
+        pass the test above."""
+
+        class _AboveFloor:
+            qualified_name = "whatever"
+            candidate_score = knowledge.MINIMUM_CANDIDATE_SCORE * 10
+            subsystem_score = 0.5
+            subsystem = type("S", (), {"scope": "f.rs"})()
+            confirmation = None
+
+        agent = _agent()
+        agent.find_concept = lambda concept: _AboveFloor()  # type: ignore[method-assign]
+        self.assertIn("Most likely whatever", knowledge.find(agent, "x").short_answer)
+
     def test_the_identification_itself_is_never_a_fact(self) -> None:
         """A similarity rank and being right are different properties. The
         scores are measured (FACT); that the top hit answers the question is

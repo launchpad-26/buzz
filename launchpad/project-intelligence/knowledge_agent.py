@@ -8,8 +8,10 @@ prove the layers connected. STEPs 4-8 built the real stages, and this is now the
 thing that runs them in order:
 
   1. decompose        (question.py)
-  2. check confidence (confidence.py)   -- stage 1
-  3. investigate      (investigation.py) -- stage 3, skipped when already confident
+  2. check confidence (confidence.py)    -- stage 1
+  3. investigate      (investigation.py) -- stage 3; stage 1's verdict skips the
+                                            CORROBORATION stages only, never
+                                            locate/read and never history
   4. verify + assemble (verify.py, assemble.py) -- stages 2 and 4
 
 STEP 3's standalone build_answer() is gone rather than left beside this: it was
@@ -143,12 +145,17 @@ class KnowledgeAgent:
 
         assessment = assess(question.target, self.graph, self.index, self.memory, self.symbols)
 
-        # Stage 3 runs when stage 1 was not confident. When it WAS confident,
-        # stage 2 still verifies -- being confident never skips verification,
-        # only investigation. That is the distinction § Reasoning Rules draws
-        # between its points 2 and 3, and collapsing the two would mean a
-        # cached answer was never checked against the tree.
-        findings = investigate(question, self.crate, trace, self.tools)
+        # Stage 1's verdict is passed to stage 3, which uses it to skip the
+        # CORROBORATION stages only -- see investigate()'s own docstring for
+        # exactly what is and is not gated.
+        #
+        # This wiring did not exist until 2026-08-24. The assessment was
+        # computed and then used only for display, while the docstring above
+        # claimed stage 3 was skipped when confident. Two independent reviewers
+        # found it and no test covered it, which is why there is now a test
+        # asserting the tool count in both directions rather than a comment
+        # asserting the intent.
+        findings = investigate(question, self.crate, trace, self.tools, assessment.confident)
 
         answer = assemble(question, findings, trace, self.memory)
         return Outcome(answer=answer, assessment=assessment, findings=findings, trace=trace)

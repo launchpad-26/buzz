@@ -49,7 +49,17 @@ MINIMUM_CANDIDATE_SCORE = 1e-9
 def find(agent: KnowledgeAgent, query: str) -> Answer:
     """The no-name case: the caller cannot name the symbol yet."""
     result = agent.find_concept(query)
-    if result is not None and result.candidate_score <= MINIMUM_CANDIDATE_SCORE:
+    # `candidate_score is None` is a real reachable state, not defensive
+    # padding: find_it_for_me returns a PipelineResult with EVERY field None --
+    # not None itself -- whenever index.search() comes back empty, which happens
+    # for an index built from zero symbols. The first version of this guard
+    # checked only `result is not None`, so an empty crate raised
+    # "TypeError: '<=' not supported between instances of 'NoneType' and
+    # 'float'" instead of returning the no-candidate Answer three lines below.
+    # Found by review, reproduced before fixing.
+    if result is not None and (
+        result.candidate_score is None or result.candidate_score <= MINIMUM_CANDIDATE_SCORE
+    ):
         result = None
     if result is None:
         return Answer(

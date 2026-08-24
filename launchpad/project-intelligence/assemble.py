@@ -191,12 +191,12 @@ def assemble(
         how_it_works=f"{match.signature}".strip(),  # type: ignore[union-attr]
         relevant_flow=flow,
         important_files=tuple(dict.fromkeys(files)),
-        things_to_be_aware_of=_caveats(findings, claims),
+        things_to_be_aware_of=_caveats(findings, claims, trace),
         claims=tuple(claims),
     )
 
 
-def _caveats(findings: Findings, claims: list[Claim]) -> str:
+def _caveats(findings: Findings, claims: list[Claim], trace: Trace) -> str:
     """The caveats section IS the inferences, restated where a reader meets them.
 
     Not a separate authored paragraph: an authored caveat can say something the
@@ -221,6 +221,17 @@ def _caveats(findings: Findings, claims: list[Claim]) -> str:
         # "line" would describe a narrower query than the one that produced
         # these commits.
         lines.append(f"{len(findings.history)} commit(s) touch the range queried around it.")
-    if not findings.corroborated:
+    if not findings.corroborated and _looked_for_corroboration(trace):
+        # Gated on having actually looked. Since stage 1's confidence can now
+        # skip the corroboration stages entirely, `not corroborated` alone no
+        # longer means "searched and found nothing" -- it can equally mean
+        # "never searched, because cached knowledge already agreed". Saying
+        # "no caller was found" in the second case reports an absence nobody
+        # established, which is the same defect as the "appears unused" claim
+        # guarded in assemble() above.
         lines.append("No caller and no test-side mention were found in this crate.")
     return "\n".join(lines)
+
+
+def _looked_for_corroboration(trace: Trace) -> bool:
+    return any(c.tool in ("find_references", "search_text") for c in trace.calls)

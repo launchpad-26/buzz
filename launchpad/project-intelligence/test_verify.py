@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import unittest
 
+import investigator
 from memory import MemoryEntry, ProjectMemory
 from trace import Trace
 from verify import UNCONFIRMED_CONFIDENCE, confirm_text_at, verified_fact
@@ -20,6 +21,27 @@ from verify import UNCONFIRMED_CONFIDENCE, confirm_text_at, verified_fact
 REAL_PATH = "crates/buzz-core/src/kind.rs"
 REAL_START, REAL_END = 219, 221
 REAL_SIGNATURE = "pub fn is_shared_gated_kind(kind: u32) -> bool"
+
+
+class FixtureDriftTest(unittest.TestCase):
+    """Several suites here hardcode this real symbol's current line numbers.
+
+    review-tests flagged that as an undeclared coupling to a file outside this
+    change's control. It fails loudly rather than silently, which is the right
+    direction, but it fails in several places at once with messages about
+    provenance rather than about drift. This one test names the cause, so a
+    refactor of kind.rs produces one intelligible failure first.
+    """
+
+    def test_the_hardcoded_range_still_holds_the_symbol_the_fixtures_assume(self) -> None:
+        text = investigator.read_file(REAL_PATH, REAL_START, REAL_END)
+        self.assertIn(
+            REAL_SIGNATURE,
+            text,
+            f"{REAL_PATH}:{REAL_START}-{REAL_END} no longer contains {REAL_SIGNATURE!r}. "
+            "The fixtures in test_verify.py, test_assemble.py and test_knowledge_agent.py "
+            "hardcode this range; update them together rather than one at a time.",
+        )
 
 
 class TraceTest(unittest.TestCase):

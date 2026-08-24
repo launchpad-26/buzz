@@ -85,6 +85,12 @@ class CallOrderTest(unittest.TestCase):
     def test_recorded_calls_are_an_ordered_subsequence_of_the_progression(self) -> None:
         trace = Trace()
         investigate(decompose("how does `is_shared_gated_kind` work?"), "buzz-core", trace, _tools())
+        # The non-emptiness check is not padding. review-tests demonstrated that
+        # the subsequence assertion ALONE passes on a total no-op: () is a
+        # subsequence of anything, so an investigate() that returned immediately
+        # with zero tool calls satisfied it. Its siblings in this class caught
+        # that mutation, but this test read in isolation was a tautology.
+        self.assertTrue(trace.tools, "investigate() recorded no tool calls at all")
         self.assertTrue(
             _is_subsequence(trace.tools, PROGRESSION),
             f"{trace.tools} is not an ordered subsequence of {PROGRESSION}",
