@@ -1,0 +1,16 @@
+{
+  "_provenance": {
+    "model": "claude-sonnet-5",
+    "date": "2026-08-25",
+    "fixture": "pr-anchored-finding",
+    "sampling": "Two independent judge calls, one per finding_id, both against fixtures/dimensions/claim-vs-evidence.json's real pr_body/pr_diff/comments."
+  },
+  "0d4a625fa2227bcc": {
+    "verdict": "CONFIRMED",
+    "verdict_evidence": "Read fixtures/dimensions/claim-vs-evidence.json's pr_body and pr_diff directly. pr_body states: '--verbose... restricted to debug, info, or warn via argparse's choices=, matching the validation contract described in scripts/config_schema.py.' The actual diff at scripts/config_loader.py:23 adds only parser.add_argument(\"--verbose\", action=\"store_true\") -- a plain boolean flag with no choices= argument and no value restriction of any kind. The description claims a validated three-way enum flag; the code adds an unchecked boolean. Confirmed by reading the diff line myself, not by accepting the dimension's paraphrase of it."
+  },
+  "f699b70a97ebb6e5": {
+    "verdict": "UNPROVEN",
+    "verdict_evidence": "Anchor is 'pr' -- no file or line to read, which is a legitimate shape per FINDINGS.md's anchor contract, not treated as a defect in the finding itself. Checked everything this fixture actually supplies: the diff (touches only scripts/config_loader.py, creates or references no other file), the PR body (cites scripts/config_schema.py as an existing validation contract), the review/issue comments, and the linked issue -- none of them create, quote, or otherwise attest to scripts/config_schema.py. That is consistent with the finding's claim, but a live adjudicator would resolve 'does this file exist anywhere in the repository' by searching the actual checkout at head_sha, which this fixture does not provide -- only the PR's own surfaces. Nothing available supports the file's existence, but I cannot independently establish a repository-wide absence from diff/body/comments alone. UNPROVEN rather than CONFIRMED because the check available to me is narrower than the claim; UNPROVEN rather than REFUTED because nothing contradicts the finding either."
+  }
+}

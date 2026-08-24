@@ -1817,5 +1817,130 @@ class DedupeTests(unittest.TestCase):
         self.assertTrue(any("names itself" in v for v in violations), violations)
 
 
+ADJUDICATION_FIXTURES_DIR = HERE / "fixtures" / "adjudication"
+# Deliberately NOT under recordings/ -- that directory is #117 STEP 8's own,
+# and test_recordings.py's RecordingFilesExistTests asserts it holds exactly
+# 15 files (5 fixtures x 3 dimensions). A sixth subdirectory there breaks
+# that count. This step's recordings live beside the fixtures they replay
+# instead.
+ADJUDICATION_RECORDINGS_DIR = HERE / "fixtures" / "adjudication" / "recordings"
+
+REAL_FIXTURE_NAMES = [
+    "line-anchored-findings",
+    "pr-anchored-finding",
+    "mixed-report-statuses",
+    "containment-all-kinds",
+]
+
+
+def _load_real_fixture(name: str) -> dict:
+    with (ADJUDICATION_FIXTURES_DIR / f"{name}.json").open(encoding="utf-8") as handle:
+        return json.load(handle)
+
+
+class RealRecordingsReplayTests(unittest.TestCase):
+    """STEP 9's own done-when, exercised against the real artefact rather than
+    a hand-built stand-in (``ReplayJudgeTests`` above proves the replay
+    *mechanism*; this proves the four *recordings* it will actually load in
+    production).
+
+    Every one of #118's four real adjudication fixtures
+    (``fixtures/adjudication/*.json``, STEP 8), replayed through
+    ``recordings/adjudication/`` (STEP 9), must validate, must leave
+    everything STEP 3 promises byte-identical, must touch neither the
+    network nor a subprocess, and every recording file must carry its own
+    provenance rather than reading as anonymous JSON.
+    """
+
+    def test_every_real_fixture_replays_to_a_valid_document(self):
+        for name in REAL_FIXTURE_NAMES:
+            with self.subTest(fixture=name):
+                input_doc = _load_real_fixture(name)
+                judge = run_adjudication.make_replay_judge(ADJUDICATION_RECORDINGS_DIR)
+                output_doc = run_adjudication.adjudicate(input_doc, judge)
+
+                self.assertEqual(verdicts.validate(input_doc, output_doc), [])
+                self.assertEqual(findings.validate(output_doc), [])
+
+                for key in ("pr", "head_sha", "merge_base_sha"):
+                    self.assertEqual(input_doc[key], output_doc[key])
+                self.assertEqual(
+                    json.dumps(input_doc["containment"], sort_keys=True),
+                    json.dumps(output_doc["containment"], sort_keys=True),
+                )
+
+                input_ids = {f["finding_id"] for r in input_doc["reports"] for f in r["findings"]}
+                output_ids = {f["finding_id"] for r in output_doc["reports"] for f in r["findings"]}
+                self.assertEqual(input_ids, output_ids, "no real finding may be dropped or invented on replay")
+
+                # No real finding replays as a stub-judge/replay-miss UNPROVEN --
+                # every finding_id present in a real fixture has a matching
+                # recording, so a miss here means a recording went stale.
+                for report in output_doc["reports"]:
+                    for f in report["findings"]:
+                        self.assertNotIn(
+                            "no recorded judge output for finding_id",
+                            f["verdict_evidence"],
+                            f"finding {f['finding_id']!r} in {name!r} has no matching recording",
+                        )
+
+    def test_replay_over_all_real_fixtures_makes_no_network_or_subprocess_call(self):
+        def _boom(*args, **kwargs):
+            raise AssertionError("replaying a recorded judge output must not touch the network or a subprocess")
+
+        with mock.patch("subprocess.run", side_effect=_boom), \
+             mock.patch("subprocess.Popen", side_effect=_boom), \
+             mock.patch("urllib.request.urlopen", side_effect=_boom), \
+             mock.patch("http.client.HTTPConnection.request", side_effect=_boom), \
+             mock.patch("http.client.HTTPSConnection.request", side_effect=_boom):
+            judge = run_adjudication.make_replay_judge(ADJUDICATION_RECORDINGS_DIR)
+            for name in REAL_FIXTURE_NAMES:
+                run_adjudication.adjudicate(_load_real_fixture(name), judge)
+
+    def test_every_recording_file_carries_model_and_date_provenance(self):
+        recording_files = sorted(ADJUDICATION_RECORDINGS_DIR.glob("*.json"))
+        self.assertEqual(
+            len(recording_files),
+            len(REAL_FIXTURE_NAMES),
+            "one recording file per real fixture (STEP 8's four, after its own five-to-four consolidation)",
+        )
+        for path in recording_files:
+            with path.open(encoding="utf-8") as handle:
+                data = json.load(handle)
+            provenance = data.get("_provenance")
+            self.assertIsInstance(provenance, dict, f"{path.name} has no _provenance block")
+            self.assertTrue(provenance.get("model"), f"{path.name}'s _provenance is missing a model id")
+            self.assertTrue(provenance.get("date"), f"{path.name}'s _provenance is missing a date")
+
+    def test_dedupe_fixtures_three_identical_findings_are_grouped_not_dropped(self):
+        # line-anchored-findings.json's own three findings ARE the dedupe
+        # case (see fixtures/adjudication/PROVENANCE.md): three dimensions
+        # independently reported the identical planted defect at the
+        # identical file/line. STEP 7 already built the grouping mechanism
+        # as an injectable dedupe_judge; this proves it does not drop any of
+        # the three real, recorded verdicts once something actually groups
+        # them, which is the one thing STEP 9 adds that STEP 7's own tests
+        # (synthetic two-finding documents) could not exercise.
+        input_doc = _load_real_fixture("line-anchored-findings")
+        finding_ids = [f["finding_id"] for r in input_doc["reports"] for f in r["findings"]]
+        self.assertEqual(len(finding_ids), 3)
+
+        def _group_all_three(adjudicated_findings, document):
+            return [finding_ids]
+
+        judge = run_adjudication.make_replay_judge(ADJUDICATION_RECORDINGS_DIR)
+        output_doc = run_adjudication.adjudicate(input_doc, judge, dedupe_judge=_group_all_three)
+
+        self.assertEqual(verdicts.validate(input_doc, output_doc), [])
+        output_ids = {f["finding_id"] for r in output_doc["reports"] for f in r["findings"]}
+        self.assertEqual(output_ids, set(finding_ids), "dedupe must not drop a finding")
+        self.assertEqual(output_doc["adjudication"]["findings_out"], output_doc["adjudication"]["findings_in"])
+
+        [group] = output_doc["adjudication"]["duplicate_groups"]
+        self.assertEqual(set(group["duplicates"]) | {group["survivor"]}, set(finding_ids))
+        for f in [f for r in output_doc["reports"] for f in r["findings"]]:
+            self.assertEqual(f["verdict"], "CONFIRMED")
+
+
 if __name__ == "__main__":
     unittest.main()
