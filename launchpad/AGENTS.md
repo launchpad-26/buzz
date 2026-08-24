@@ -101,7 +101,7 @@ New workflows go in `.github/workflows/` (GitHub requires it) and **must** be na
 
 ## 4. Choosing an issue type
 
-Five types. **Exactly one `type:` label per issue** — a type never modifies another
+Six types. **Exactly one `type:` label per issue** — a type never modifies another
 type.
 
 Work down this list. **The first "yes" wins.** Do not reorder it.
@@ -111,8 +111,9 @@ Work down this list. **The first "yes" wins.** Do not reorder it.
 | 1 | Is the output a **decision plus rationale**, with nothing in the repo changing when it closes? | **ADR** | A document records a choice; no code or config moves |
 | 2 | Does something **exist and behave incorrectly**? | **Bug** | You ran it and observed the failure |
 | 3 | Does something **exist and work, but insufficiently**? | **Enhancement** | Behaviour is correct, just not good enough |
-| 4 | Does it need **child issues** to finish? | **PRD** | It has acceptance criteria and decomposes |
-| 5 | Otherwise | **Task** | One agent, one branch, one PR |
+| 4 | Is it a **problem statement with evidence**, whose delivery spans more than one capability? | **PRD** | It states why; features deliver it |
+| 5 | Does it need **child issues** to finish? | **Feature** | One demonstrable capability; holds acceptance criteria and decomposes into tasks |
+| 6 | Otherwise | **Task** | One agent, one branch, one PR |
 
 ADR is first on purpose: **decisions masquerade as work.** "Pick a config management
 tool" looks like a Task until you notice nothing ships when it closes.
@@ -120,15 +121,21 @@ tool" looks like a Task until you notice nothing ships when it closes.
 ### How the types relate
 
 ```
-Milestone  (M0, M1)
-└── PRD                    the approvable unit; holds acceptance criteria
-    ├── Task               executable child: one branch, one PR
-    ├── Bug                found while building
-    ├── Enhancement        deferred improvement
-    └── ADR                an open question the PRD cannot proceed without
+Milestone  (a dated, demonstrable outcome)
+└── PRD                    problem, evidence, success criteria — the why
+    ├── Feature            one demonstrable capability; holds acceptance criteria
+    │   ├── Task           executable child: one branch, one PR
+    │   ├── Bug            found while building this feature
+    │   └── ADR            a decision only this feature depends on
+    ├── ADR                an open question the PRD cannot proceed without,
+    │                      or a decision more than one feature depends on
+    └── Enhancement        deferred improvement against shipped work
 
 ADR ───────────────────────  standalone only when no PRD raised it
 ```
+
+Tasks filed before the Feature level existed parent directly to their PRD; that
+remains valid history — do not re-parent closed or in-flight work.
 
 1. **An ADR is never a work item and never has children.** Work a decision creates is
    filed separately afterwards and linked back.
@@ -142,7 +149,7 @@ ADR ───────────────────────  stand
    that closes its issue.** A decision that exists only in a closed issue is lost to the
    noise. Closing the issue without writing the document is not done. This does not make
    an ADR a work item — no code or config moves; the decision record is the only artifact.
-4. **A Task never has children.** If a Task grows children, it was a PRD — relabel it.
+4. **A Task never has children.** If a Task grows children, it was a Feature — relabel it.
 5. **Bug and Enhancement** are children of a PRD if found while building it, standalone
    if found later against shipped work.
 6. **An Enhancement against unshipped work is a scope change to its PRD, not an
@@ -179,7 +186,7 @@ These are hard constraints, not style preferences.
 
 ### Filing an issue
 
-There is one specialised form beyond the five types: **Agent workflow proposal**
+There is one specialised form beyond the six types: **Agent workflow proposal**
 (`06-agent-workflow.yml`). It is an Enhancement with different prompts — it requires the
 specific access an agent needs and its blast radius. Use it for any proposal that an agent
 should do something a person does today. Guidance is in #40.
