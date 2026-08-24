@@ -119,6 +119,26 @@ MUTATIONS = [
         "refusal depends on as a second, independent line of defence",
     ),
     (
+        "findings-severity-ladder-check-dropped",
+        "findings.py",
+        '    if not isinstance(severity, str):\n'
+        '        # ``severity not in SEVERITY_ORDER`` requires a hashable value, same as the\n'
+        '        # entry_point guard above — an unhashable severity (a dict, a list) would\n'
+        '        # raise TypeError before this function could report it.\n'
+        '        violations.append(f"{label}: severity must be a string, got {type(severity).__name__}")\n'
+        '    elif severity not in SEVERITY_ORDER:\n'
+        '        violations.append(f"{label}: severity {severity!r} is not a key of SEVERITY_ORDER")\n',
+        '    pass  # mutated: findings.py\'s own severity checks removed\n',
+        "an input finding ARRIVING with an out-of-ladder severity is refused before adjudication",
+        ["severity=None is named by verdicts.validate, by its OWN message anchor"],
+        "#117's OWN severity check is the one STEP 3's upstream findings.validate(input_document) "
+        "call actually relies on to refuse an illegal INPUT severity before any judge runs -- with "
+        "it gone, adjudicate() no longer refuses that input at all. Also proves the severity anchor "
+        "fixed after review-final's finding does not depend on findings.py's collateral message: "
+        "it should stay green here, using verdicts.py's own review.SEVERITY_ORDER-qualified message "
+        "instead, which this mutation does not touch",
+    ),
+    (
         "out-of-ladder-reported-severity-guard-dropped",
         "run_adjudication.py",
         '        if reported_severity not in review.SEVERITY_ORDER:\n'
@@ -146,7 +166,7 @@ MUTATIONS = [
         '        # mutated: the reported_severity-in-SEVERITY_ORDER half of the guard is gone\n'
         '        return verdict, reported_severity, None\n',
         "_apply_severity_rerating refuses an illegal reported_severity the judge merely agreed with",
-        ["real dedupe: no duplicate is dropped, all three still present"],
+        ["dedupe plumbing: no duplicate is dropped, all three still present"],
         "keeping only the `severity` half of the guard passes an illegal "
         "reported_severity straight through whenever the judge does not re-rate -- "
         "exactly the gap STEP 3's own upstream refusal exists to close for the real "
@@ -228,7 +248,7 @@ MUTATIONS = [
         "run_adjudication.py",
         '            output_findings_by_id[dup_id]["duplicate_of"] = group["survivor"]',
         '            output_findings_by_id[group["survivor"]]["duplicate_of"] = group["survivor"]',
-        "real dedupe: exactly one survivor, two findings pointing at it via duplicate_of",
+        "dedupe plumbing: exactly one survivor, two findings pointing at it via duplicate_of",
         [],
         "the survivor ends up pointing at itself and the real duplicates keep "
         "duplicate_of=null, so a consumer reading any one duplicate finding sees no "

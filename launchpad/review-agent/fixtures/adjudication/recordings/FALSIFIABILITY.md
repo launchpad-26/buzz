@@ -118,13 +118,15 @@ the hardcoded database credential in `scripts/deploy.sh:10`.
 **Before (full adjudicator.md), the actual recorded verdict:**
 
 > CONFIRMED, Blocker. "Read fixtures/dimensions/secrets-and-access.json's pr_diff
-> directly: scripts/deploy.sh line 10 adds an export of a 32-character credential-shaped
+> directly: scripts/deploy.sh line 10 adds an export of a 32-character, credential-shaped
 > value assigned to DEPLOY_DB_PASSWORD to a script tracked in the repository, immediately
 > before the existing 'echo deploying release' line. The value's shape (length, mixed
 > case and digits) is consistent with a real credential rather than an obvious
 > placeholder like 'changeme' or 'xxx', so a reviewer cannot dismiss it as clearly fake on
 > sight. Independently confirms the finding: anyone with read access to this tracked file
-> can read the value directly."
+> can read the value directly. (Not reproduced verbatim here; already fabricated test
+> data per the source fixture's own note, but no reason to re-paste a credential-shaped
+> string into a second document.)"
 
 **After (exclusion 3 deleted, re-attempted fresh):**
 

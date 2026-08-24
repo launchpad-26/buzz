@@ -599,6 +599,46 @@ def make_replay_judge(replay_dir: Path) -> Judge:
     return _replay
 
 
+def make_replay_dedupe_judge(replay_dir: Path) -> DedupeJudge:
+    """Build a ``dedupe_judge`` that replays a recorded grouping decision from
+    ``replay_dir`` (STEP 9) instead of calling a live model, the dedupe
+    counterpart to ``make_replay_judge``.
+
+    STEP 9's recording format may carry an optional top-level
+    ``_dedupe_groups`` key alongside a file's ``finding_id`` -> judge-output
+    entries: ``list[list[finding_id]]``, a real judge's own determination
+    that those finding_ids describe one defect. Every group from every file
+    under ``replay_dir`` is loaded. At call time a recorded group is offered
+    only when at least two of its finding_ids are actually present in
+    ``adjudicated_findings`` -- a recording directory accumulates groups from
+    every fixture it has ever recorded, and a group naming ids from a
+    document that is not the one being replayed here must not silently
+    apply just because the ids happen to be in the lookup.
+
+    Without this, ``--replay`` alone could never produce a duplicate group:
+    ``stub_dedupe_judge`` (the only other dedupe_judge this CLI has ever
+    passed) finds none by design, so a fixture whose real recorded verdicts
+    are all identical duplicates of one another would replay with every
+    finding a stray singleton -- which is what happened here before this
+    function existed, found on `review-final` rather than assumed absent.
+    """
+    recorded_groups: list[list[str]] = []
+    if replay_dir.is_dir():
+        for path in sorted(replay_dir.glob("*.json")):
+            with path.open("r", encoding="utf-8") as fh:
+                data = json.load(fh)
+            if isinstance(data, dict):
+                groups = data.get("_dedupe_groups")
+                if isinstance(groups, list):
+                    recorded_groups.extend(group for group in groups if isinstance(group, list))
+
+    def _replay_dedupe(adjudicated_findings: list, document: dict) -> list:
+        present_ids = {f.get("finding_id") for f in adjudicated_findings}
+        return [group for group in recorded_groups if sum(1 for gid in group if gid in present_ids) >= 2]
+
+    return _replay_dedupe
+
+
 def _run_judge_safely(judge: Judge, finding: dict, input_document: dict) -> dict:
     """Call ``judge`` and fail closed to ``UNPROVEN`` on anything unusable --
     a raised exception, a non-dict return, an illegal/missing ``verdict``, or
@@ -1230,9 +1270,12 @@ def main(argv: list[str] | None = None) -> int:
         return 1
 
     judge: Judge = make_replay_judge(args.replay) if args.replay is not None else stub_judge
+    dedupe_judge: DedupeJudge = (
+        make_replay_dedupe_judge(args.replay) if args.replay is not None else stub_dedupe_judge
+    )
 
     try:
-        output_document = adjudicate(input_document, judge)
+        output_document = adjudicate(input_document, judge, dedupe_judge=dedupe_judge)
     except InputValidationError as exc:
         for violation in exc.violations:
             print(f"run_adjudication: {violation}", file=sys.stderr)

@@ -1846,7 +1846,7 @@ class RealRecordingsReplayTests(unittest.TestCase):
 
     Every one of #118's four real adjudication fixtures
     (``fixtures/adjudication/*.json``, STEP 8), replayed through
-    ``recordings/adjudication/`` (STEP 9), must validate, must leave
+    ``fixtures/adjudication/recordings/`` (STEP 9), must validate, must leave
     everything STEP 3 promises byte-identical, must touch neither the
     network nor a subprocess, and every recording file must carry its own
     provenance rather than reading as anonymous JSON.
@@ -1911,6 +1911,24 @@ class RealRecordingsReplayTests(unittest.TestCase):
             self.assertIsInstance(provenance, dict, f"{path.name} has no _provenance block")
             self.assertTrue(provenance.get("model"), f"{path.name}'s _provenance is missing a model id")
             self.assertTrue(provenance.get("date"), f"{path.name}'s _provenance is missing a date")
+            # Mirrors #117's sibling guard (test_recordings.py's
+            # test_every_recording_discloses_its_sampling_limitation) in
+            # spirit, not in the exact wording it checks for: THAT guard
+            # requires "not" + "independent" because #117's own recordings
+            # are one reasoning pass standing in for three, a limitation
+            # that disclosure names. These recordings make the opposite,
+            # equally load-bearing claim -- each finding was judged fresh,
+            # not reused -- so only that a non-empty disclosure exists is
+            # asserted here; what it says is checked against the file's own
+            # name instead, below.
+            self.assertTrue(
+                provenance.get("sampling"), f"{path.name}'s _provenance has no sampling disclosure"
+            )
+            self.assertEqual(
+                provenance.get("fixture"),
+                path.stem,
+                f"{path.name}'s _provenance.fixture names a different fixture than its own filename",
+            )
 
     def test_dedupe_fixtures_three_identical_findings_are_grouped_not_dropped(self):
         # line-anchored-findings.json's own three findings ARE the dedupe

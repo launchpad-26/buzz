@@ -3,52 +3,81 @@
 Deliberately separate from `test_run_adjudication.py`'s unittest suite (see
 `check_unit_suites.py`'s own history -- #270's Out of scope names this
 directly: "duplicating it here would create a second CI entry point that
-#118 explicitly rules out"). That suite proves the internal API,
-`adjudicate()`, behaves correctly when called directly. This control proves
-the same properties end to end through the real CLI process
-(`run_adjudication.py` via subprocess, exactly as CI invokes it) and, where a
-property is about REAL recorded output rather than a hand-built document,
-against STEP 9's actual recordings -- not a stand-in.
+#118 explicitly rules out"). The two suites differ mainly by FIXTURE
+PROVENANCE, not by process boundary: `test_run_adjudication.py` largely
+exercises `adjudicate()` against hand-built documents built for one test at a
+time; this file runs the bulk of its checks against STEP 9's actual
+recordings -- not a stand-in -- replayed through `adjudicate()` the same
+in-process way. A minority of checks here do cross the real CLI process
+(`run_adjudication.py` via `subprocess`, exactly as CI invokes it) -- a
+well-formed run, the no-marker exit path, and the dedupe check that proves
+`--replay` alone, with no manual override, produces a real grouping -- and
+each of those is labelled "via the CLI" or "through the real CLI" so the two
+kinds are not conflated by a reader scanning PASS lines.
 
 Registered in `run_controls.py`'s CONTROLS list as ("check_adjudication.py",
 False), so #120's single CI entry point picks it up and no second workflow
 is added.
 
-93 PASS lines as of this writing (`python3 check_adjudication.py | grep -c
-'^PASS'`) -- up from 81 (itself a correction of an uncounted "44" the
-introducing commit stated), then 90 once STEP 11's mutation harness
-(`check_adjudication_mutations.py`) found three cases this file did not yet
-exercise directly: a "swapped" finding_id (a real finding replaced by a
-different, self-consistent one -- the plain "invented" case above uses a
-non-hash-matching id that #117's own findings.validate already catches on
-its own terms); `_apply_severity_rerating`'s illegal-`reported_severity`
-branch, unreachable through `adjudicate()` because STEP 3's upstream
-refusal never lets a malformed severity reach it; and
+**The PASS count is deliberately not stated as a number here.** `python3
+check_adjudication.py | grep -c '^PASS'` gives the true count for the tree
+you actually have; a number typed into this docstring is a second, unchecked
+copy of that fact, and it has already been wrong once: an early commit
+claimed "44" without counting, corrected to 81, then 90 once STEP 11's
+mutation harness (`check_adjudication_mutations.py`) found three cases this
+file did not yet exercise directly -- a "swapped" finding_id (a real finding
+replaced by a different, self-consistent one -- the plain "invented" case
+elsewhere uses a non-hash-matching id that #117's own findings.validate
+already catches on its own terms); `_apply_severity_rerating`'s illegal-
+`reported_severity` branch, unreachable through `adjudicate()` because
+STEP 3's upstream refusal never lets a malformed severity reach it; and
 `verdicts.forbidden_keys` as a hand-built-document check, since
 `adjudicate()`'s own producer-side re-check of the same function means every
 check that goes through `adjudicate()` crashes before reaching its own
 assertion once that mechanism is the thing under test.
 
-**Then 93, fixing three Blockers `review-code`/`review-tests`/`review-adjudicate`
-found in the 90-check version, none caught by this file's own author:** the
-`severity`/`reported_severity` checks in the six-added-fields loop were
-vacuous -- `verdicts.py`'s severity_reason-required message contains both
-field names as substrings, so a bare `field_name in violation` test passed
-even with either field's own SEVERITY_ORDER-membership check deleted
-entirely from `verdicts.py` (proven by the reviewers, reproduced here, fixed
-by anchoring each field to its own exact message shape below); `severity_reason`
-was absent from the loop's driving dict altogether, covered by one bespoke
-blank-string case where the plan's own criterion asks for empty, missing and
-malformed in turn; and the dropped/invented `finding_id` checks reduced to
-`bool(violations)`, passing even with `verdicts.py`'s finding_id set-equality
-logic fully deleted, riding on unrelated collateral messages instead. Two new
-mutations in `check_adjudication_mutations.py`
-(`severity-ladder-check-dropped`, `reported-severity-ladder-check-dropped`)
-now prove the two fields are independent of each other's checks.
+**Then a round of fixes for three further Blockers**, found by
+`review-code`/`review-tests`/`review-adjudicate` in that 90-check version and
+missed by this file's own author: the `severity`/`reported_severity` checks
+in the six-added-fields loop were vacuous -- `verdicts.py`'s
+severity_reason-required message contains both field names as substrings, so
+a bare `field_name in violation` test passed even with either field's own
+SEVERITY_ORDER-membership check deleted entirely from `verdicts.py` (proven
+by the reviewers, reproduced here, fixed by anchoring each field to its own
+exact message shape below); `severity_reason` was absent from the loop's
+driving dict altogether, covered by one bespoke blank-string case where the
+plan's own criterion asks for empty, missing and malformed in turn; and the
+dropped/invented `finding_id` checks reduced to `bool(violations)`, passing
+even with `verdicts.py`'s finding_id set-equality logic fully deleted, riding
+on unrelated collateral messages instead.
+
+**Then a second review-final pass found the `severity` anchor above was
+still only three-quarters fixed**: `verdicts.validate` re-runs #117's own
+`findings.validate`, which independently emits a near-identical
+"is not a key of SEVERITY_ORDER" message for the same field (bare, no
+`review.` prefix) -- so `severity`'s three string-valued bad cases stayed
+green with `verdicts.py`'s own check fully deleted, riding on `findings.py`'s
+message instead. Re-anchored on the qualified `review.SEVERITY_ORDER` name,
+which only `verdicts.py` ever emits. Four mutations in
+`check_adjudication_mutations.py` now stand behind this loop's independence
+claims: `severity-ladder-check-dropped`, `reported-severity-ladder-check-
+dropped`, `findings-severity-ladder-check-dropped`, each pairing a
+must-fail target with an unrelated must-still-pass control.
+
+**Same pass also found STEP 9's own done-when unmet**: its recordings
+carried no dedupe grouping, so `--replay` alone could never produce one --
+`stub_dedupe_judge`, the only `dedupe_judge` `main()` had ever passed, finds
+none by design. Fixed in `run_adjudication.py`
+(`make_replay_dedupe_judge`, wired into `main()`) and in
+`line-anchored-findings.json`'s recording (a genuine `_dedupe_groups` entry).
+The checks below now prove the real CLI groups those three findings with no
+manual `dedupe_judge` override, ahead of the pre-existing plumbing check that
+proves the mechanism is general.
 """
 
 from __future__ import annotations
 
+import dataclasses
 import json
 import subprocess
 import sys
@@ -275,17 +304,16 @@ check(
 )
 
 # --- six added fields, each fed empty/missing/malformed in turn ------------
-# (STEP 1's six-field list, checked by name against ADJUDICATION.md rather
-# than by counting -- "six" is a number someone can miscount silently)
+# (STEP 1's six-field list. Derived from verdicts.Verdict's own dataclass
+# fields -- the actual in-code authority ADJUDICATION.md's contract is
+# implemented as -- rather than retyped as a second literal: review-final
+# found the original version compared one hand-typed tuple's length against
+# itself, and a hand-typed tuple cannot disagree with its own count. A
+# seventh field added to Verdict now changes this set automatically, so the
+# comparison below against _FIELD_ANCHORS' keys catches a real drift instead
+# of asserting two literals agree.)
 
-_SIX_ADDED_FIELDS = (
-    "verdict",
-    "verdict_evidence",
-    "reported_severity",
-    "severity",
-    "severity_reason",
-    "duplicate_of",
-)
+_SIX_ADDED_FIELDS = tuple(f.name for f in dataclasses.fields(verdicts.Verdict))
 
 # One message-ANCHOR predicate per field, built from verdicts.py's own exact
 # f-string shapes (read from the source, not guessed) rather than a bare
@@ -303,7 +331,17 @@ _FIELD_ANCHORS = {
     "verdict": lambda bad, v: "verdict must be one of" in v,
     "verdict_evidence": lambda bad, v: "verdict_evidence must be a non-empty string" in v,
     "reported_severity": lambda bad, v: f"reported_severity {bad!r} is not a key of" in v,
-    "severity": lambda bad, v: (f"severity {bad!r} is not a key of" in v and "reported_severity" not in v),
+    # Anchored on the QUALIFIED name "review.SEVERITY_ORDER", not the bare
+    # "is not a key of" -- #117's own findings.py:215 emits a nearly
+    # identical message for the SAME field name but ends in the bare
+    # "SEVERITY_ORDER" (no "review." prefix), and verdicts.validate re-runs
+    # findings.validate internally, so that collateral message survived the
+    # first fix (found by review-final: 3 of 4 bad `severity` values stayed
+    # green with verdicts.py's own check fully deleted, riding on
+    # findings.py's message instead).
+    "severity": lambda bad, v: (
+        f"severity {bad!r} is not a key of review.SEVERITY_ORDER" in v and "reported_severity" not in v
+    ),
     "severity_reason": lambda bad, v: "severity_reason must be a non-empty string" in v,
     "duplicate_of": lambda bad, v: "duplicate_of must be" in v,
 }
@@ -648,10 +686,45 @@ check(
 
 # --- dedupe visible from both ends, no duplicate dropped -------------------
 # Real: the line-anchored-findings fixture IS three dimensions describing
-# one planted defect (see fixtures/adjudication/PROVENANCE.md).
+# one planted defect (see fixtures/adjudication/PROVENANCE.md), and its
+# recording now carries a genuine _dedupe_groups entry (added after
+# review-final found the original recording carried none, so --replay alone
+# could never produce a grouping -- stub_dedupe_judge, the only dedupe_judge
+# main() ever passed, finds none by design).
 
 _dedupe_real_input = load_real_fixture("line-anchored-findings")
 _dedupe_fids = [f["finding_id"] for f in all_findings(_dedupe_real_input)]
+
+# THE ACTUAL DELIVERABLE: the real CLI, with --replay and no manual
+# dedupe_judge override, reading only what the recording itself carries.
+# This is what STEP 9's own done-when asks for -- not a test-only stand-in
+# grouping function speaking on the CLI's behalf.
+_dedupe_code, _dedupe_cli_out_raw, _dedupe_cli_err = run_cli(_dedupe_real_input, replay_dir=RECORDINGS_DIR)
+check(_dedupe_code == 0, f"real dedupe via the CLI: --replay alone exits 0 ({_dedupe_cli_err[-300:]})")
+_dedupe_cli_out = json.loads(_dedupe_cli_out_raw) if _dedupe_code == 0 else {}
+_dedupe_cli_fids = {f["finding_id"] for f in all_findings(_dedupe_cli_out)} if _dedupe_cli_out else set()
+check(
+    _dedupe_cli_fids == set(_dedupe_fids),
+    "real dedupe via the CLI: no duplicate is dropped, all three still present",
+)
+_cli_survivors = [f for f in all_findings(_dedupe_cli_out) if f["duplicate_of"] is None] if _dedupe_cli_out else []
+_cli_dupes = [f for f in all_findings(_dedupe_cli_out) if f["duplicate_of"] is not None] if _dedupe_cli_out else []
+check(
+    len(_cli_survivors) == 1 and len(_cli_dupes) == 2,
+    "real dedupe via the CLI: exactly one survivor, two findings pointing at it via duplicate_of, "
+    "with NO manual dedupe_judge override -- --replay alone produced this",
+)
+_cli_groups = _dedupe_cli_out.get("adjudication", {}).get("duplicate_groups", []) if _dedupe_cli_out else []
+check(
+    len(_cli_groups) == 1
+    and set(_cli_groups[0].get("duplicates", [])) | {_cli_groups[0].get("survivor")} == set(_dedupe_fids),
+    f"real dedupe via the CLI: duplicate_groups names the same three ids, from the block's own side ({_cli_groups})",
+)
+
+# The underlying STEP 7 plumbing, separately: an arbitrary injected grouping
+# still drops nothing and groups correctly, regardless of WHERE the grouping
+# decision came from. Kept distinct from the block above -- that one proves
+# the recording is real; this one proves the mechanism is general.
 
 
 def _group_all(adjudicated_findings, document):
@@ -661,17 +734,17 @@ def _group_all(adjudicated_findings, document):
 _dedupe_judge = run_adjudication.make_replay_judge(RECORDINGS_DIR)
 _dedupe_real_out = run_adjudication.adjudicate(_dedupe_real_input, _dedupe_judge, dedupe_judge=_group_all)
 _dedupe_out_fids = {f["finding_id"] for f in all_findings(_dedupe_real_out)}
-check(_dedupe_out_fids == set(_dedupe_fids), "real dedupe: no duplicate is dropped, all three still present")
+check(_dedupe_out_fids == set(_dedupe_fids), "dedupe plumbing: no duplicate is dropped, all three still present")
 _survivors = [f for f in all_findings(_dedupe_real_out) if f["duplicate_of"] is None]
 _dupes = [f for f in all_findings(_dedupe_real_out) if f["duplicate_of"] is not None]
 check(
     len(_survivors) == 1 and len(_dupes) == 2,
-    "real dedupe: exactly one survivor, two findings pointing at it via duplicate_of",
+    "dedupe plumbing: exactly one survivor, two findings pointing at it via duplicate_of",
 )
 [_group] = _dedupe_real_out["adjudication"]["duplicate_groups"]
 check(
     set(_group["duplicates"]) | {_group["survivor"]} == set(_dedupe_fids),
-    "real dedupe: duplicate_groups names the same three ids, from the block's own side",
+    "dedupe plumbing: duplicate_groups names the same three ids, from the block's own side",
 )
 
 # Hand-built, fed straight to verdicts.validate: a group naming a finding
