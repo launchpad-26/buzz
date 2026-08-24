@@ -97,7 +97,8 @@ Choosing among them determines placement, visibility, review policy, and ongoing
 ADR-0010 permits a flag to name the handbook page but forbids reproducing its private source repo,
 path, or pinned commit into a channel with different membership. Any extension of the mechanism must
 preserve that rule. It matters because the handbook's *allowed source scope* includes private
-repositories — ADR-0002 names two of the five allowed source repos as private — even though the
+repositories — ADR-0002 counts two of the five allowed source repos as private (ADR-0010 is
+where the two are named) — even though the
 example `block/buzz` source is public. (Whether the index *currently* carries a private-source row
 is an operating-state fact this note does not claim; see "Not verified".)
 
