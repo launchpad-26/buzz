@@ -83,7 +83,7 @@ Three findings shaped the decision to adopt rather than design:
 
 **Good.** The methodology becomes legible: adopting it forces it to be written down in one place,
 which is the gap #84 was actually reporting. No parallel methodology to maintain. The cohort's testing effort points at the gaps
-that are actually its own rather than duplicating a 4,342-test suite. #84's real contribution —
+that are actually its own rather than duplicating a 4,615-test suite. #84's real contribution —
 that coverage gaps must be visible rather than inferred — is preserved by #290 carrying an
 explicit non-coverage list.
 
@@ -93,7 +93,7 @@ explicit non-coverage list.
   audited them. Two of the five most recent `ci.yml` runs failed; whether the inherited suite is
   reliably green is unverified.
 - **Quarantine becomes necessary the moment checks are required.** Upstream needs no quarantine
-  because upstream gates nothing. With 137 Playwright specs and 19 relay E2E suites behind a
+  because upstream gates nothing. With 146 Playwright specs and 19 relay E2E suites behind a
   required check, a flaky test blocks merges — and ADR-0019 already names the consequence: people
   route around a gate they cannot trust, and a gate that is routed around is worth less than none.
 - **This decision closes the methodology question while the enforcement question stays open**
