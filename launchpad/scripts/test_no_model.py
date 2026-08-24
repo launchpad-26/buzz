@@ -109,6 +109,14 @@ NOT_OURS = {
     "same reason as security_audit.py",
     "security_audit_secrets_check.py": "the #67 secret-material detection check; "
     "same reason as security_audit.py",
+    "security_audit_agent_surface.py": "the #68 agent-surface directory/glob list; "
+    "same reason as security_audit.py",
+    "security_audit_ignore_coverage_check.py": "the #68 ignore-coverage check; "
+    "same reason as security_audit.py",
+    "security_audit_tracked_files_check.py": "the #68 tracked-sensitive-files check; "
+    "same reason as security_audit.py",
+    "security_audit_agent_surface_check.py": "the #68 agent-surface secret-scan check; "
+    "same reason as security_audit.py",
 }
 
 

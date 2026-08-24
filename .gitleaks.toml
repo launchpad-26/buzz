@@ -28,7 +28,13 @@ description = "BUZZ_PRIVATE_KEY or a similarly-named 64-hex-character private ke
 # leaks the moment useDefault is active; (?:a|b) is unaffected). No known
 # gitleaks issue was found describing this, so treat every future rule here
 # the same way: no capturing groups, ever, unless secretGroup is set to use one.
-regex = '''(?i)[A-Z0-9_]*(?:PRIVATE_KEY|NSEC|SECKEY)[A-Z0-9_]*\s*=\s*['"]?[0-9a-fA-F]{64}['"]?'''
+#
+# The key/separator segment accepts an optional closing quote before `:` or
+# `=` — found missing by #68's own agent-surface fixtures, which are JSON
+# (`"BUZZ_PRIVATE_KEY": "..."`), not `.env`-shaped (`BUZZ_PRIVATE_KEY=...`).
+# A `.env` file has no key-side quote to close, so the `['"]?` before the
+# separator is optional, not required, and both forms still match.
+regex = '''(?i)[A-Z0-9_]*(?:PRIVATE_KEY|NSEC|SECKEY)[A-Z0-9_]*['"]?\s*[:=]\s*['"]?[0-9a-fA-F]{64}['"]?'''
 tags = ["key", "nostr"]
 
 [[rules]]
@@ -50,7 +56,10 @@ description = "BUZZ_S3_ACCESS_KEY or BUZZ_S3_SECRET_KEY assignment"
 # punctuation character as if it were a credential. Requiring a real value
 # shape excludes it without an allowlist entry, and still matches every
 # fixture and every real assignment this rule exists for.
-regex = '''BUZZ_S3_(?:ACCESS|SECRET)_KEY\s*=\s*['"]?[A-Za-z0-9_\-]{6,}['"]?'''
+# `['"]?` before the separator and `[:=]` instead of a bare `=`: same JSON-vs-
+# .env gap #68's fixtures found on buzz-private-key, above — applied here too
+# for the same reason, even though no fixture has yet forced this one.
+regex = '''BUZZ_S3_(?:ACCESS|SECRET)_KEY['"]?\s*[:=]\s*['"]?[A-Za-z0-9_\-]{6,}['"]?'''
 tags = ["key", "s3", "minio"]
 # .env.example is, by repository-wide convention, entirely placeholder
 # values meant to be copied and replaced — verified against .env.example
