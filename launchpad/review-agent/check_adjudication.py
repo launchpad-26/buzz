@@ -14,9 +14,9 @@ Registered in `run_controls.py`'s CONTROLS list as ("check_adjudication.py",
 False), so #120's single CI entry point picks it up and no second workflow
 is added.
 
-90 PASS lines as of this writing (`python3 check_adjudication.py | grep -c
+93 PASS lines as of this writing (`python3 check_adjudication.py | grep -c
 '^PASS'`) -- up from 81 (itself a correction of an uncounted "44" the
-introducing commit stated) once STEP 11's mutation harness
+introducing commit stated), then 90 once STEP 11's mutation harness
 (`check_adjudication_mutations.py`) found three cases this file did not yet
 exercise directly: a "swapped" finding_id (a real finding replaced by a
 different, self-consistent one -- the plain "invented" case above uses a
@@ -28,6 +28,23 @@ refusal never lets a malformed severity reach it; and
 `adjudicate()`'s own producer-side re-check of the same function means every
 check that goes through `adjudicate()` crashes before reaching its own
 assertion once that mechanism is the thing under test.
+
+**Then 93, fixing three Blockers `review-code`/`review-tests`/`review-adjudicate`
+found in the 90-check version, none caught by this file's own author:** the
+`severity`/`reported_severity` checks in the six-added-fields loop were
+vacuous -- `verdicts.py`'s severity_reason-required message contains both
+field names as substrings, so a bare `field_name in violation` test passed
+even with either field's own SEVERITY_ORDER-membership check deleted
+entirely from `verdicts.py` (proven by the reviewers, reproduced here, fixed
+by anchoring each field to its own exact message shape below); `severity_reason`
+was absent from the loop's driving dict altogether, covered by one bespoke
+blank-string case where the plan's own criterion asks for empty, missing and
+malformed in turn; and the dropped/invented `finding_id` checks reduced to
+`bool(violations)`, passing even with `verdicts.py`'s finding_id set-equality
+logic fully deleted, riding on unrelated collateral messages instead. Two new
+mutations in `check_adjudication_mutations.py`
+(`severity-ladder-check-dropped`, `reported-severity-ladder-check-dropped`)
+now prove the two fields are independent of each other's checks.
 """
 
 from __future__ import annotations
@@ -195,13 +212,24 @@ check(
     "every input finding_id survives to output, none invented",
 )
 
+# Both checks below assert the EXACT message verdicts.py's finding_id
+# set-equality logic emits -- "present on input, missing from output" for a
+# drop, "present on output, absent from input (invented)" for an invention --
+# rather than "some violation exists". The bare-existence form was proven
+# vacuous: deleting either branch of that set-equality block individually
+# (in a scratch copy, reverted after) left this file fully green in both
+# directions, because #117's own "non-empty findings array" rule and the
+# adjudication findings_in/out sum-consistency check each independently
+# raise on a drop, and findings_count changing alone raised on an
+# invention -- neither collateral message says anything about finding_id
+# SETS specifically, which is the one property STEP 10's first bullet names.
 _dropped = json.loads(json.dumps(_output_doc))
 _dropped["reports"][0]["findings"] = []
 _dropped["reports"][0]["findings_count"] = 0
 _drop_violations = verdicts.validate(_input_doc, _dropped)
 check(
-    any("in input but not output" in v or "missing" in v.lower() for v in _drop_violations) or bool(_drop_violations),
-    f"a dropped finding_id is rejected by verdicts.validate ({_drop_violations})",
+    any("finding_id set: present on input, missing from output" in v for v in _drop_violations),
+    f"a dropped finding_id is named by the finding_id SET check specifically ({_drop_violations})",
 )
 
 _invented = json.loads(json.dumps(_output_doc))
@@ -210,7 +238,10 @@ _extra["finding_id"] = "invented0000000"
 _invented["reports"][0]["findings"].append(_extra)
 _invented["reports"][0]["findings_count"] = len(_invented["reports"][0]["findings"])
 _invent_violations = verdicts.validate(_input_doc, _invented)
-check(bool(_invent_violations), f"an invented finding_id is rejected by verdicts.validate ({_invent_violations})")
+check(
+    any("finding_id set: present on output, absent from input (invented)" in v for v in _invent_violations),
+    f"an invented finding_id is named by the finding_id SET check specifically ({_invent_violations})",
+)
 check(
     _drop_violations != _invent_violations,
     "a drop and an invention are reported as DIFFERENT violations, not one shared 'mismatch' message",
@@ -255,9 +286,30 @@ _SIX_ADDED_FIELDS = (
     "severity_reason",
     "duplicate_of",
 )
+
+# One message-ANCHOR predicate per field, built from verdicts.py's own exact
+# f-string shapes (read from the source, not guessed) rather than a bare
+# `field_name in violation`. That bare form is a real confound here: the
+# severity_reason-required message contains both "severity" and
+# "reported_severity" as substrings (it names both by value), so mutating
+# EITHER of those two fields alone was passing purely on that OTHER
+# violation's text -- proven by deleting each of verdicts.py's own two
+# SEVERITY_ORDER-membership checks in a scratch copy and finding this
+# suite still fully green. And "severity" is *itself* a substring of
+# "reported_severity", so the fix is not simply "check a more specific
+# phrase" -- it is checking the one field's phrase AND the absence of the
+# other field's name in the same message.
+_FIELD_ANCHORS = {
+    "verdict": lambda bad, v: "verdict must be one of" in v,
+    "verdict_evidence": lambda bad, v: "verdict_evidence must be a non-empty string" in v,
+    "reported_severity": lambda bad, v: f"reported_severity {bad!r} is not a key of" in v,
+    "severity": lambda bad, v: (f"severity {bad!r} is not a key of" in v and "reported_severity" not in v),
+    "severity_reason": lambda bad, v: "severity_reason must be a non-empty string" in v,
+    "duplicate_of": lambda bad, v: "duplicate_of must be" in v,
+}
 check(
-    len(_SIX_ADDED_FIELDS) == 6,
-    "the field-by-field control below actually covers all six of ADJUDICATION.md's added fields",
+    set(_FIELD_ANCHORS) == set(_SIX_ADDED_FIELDS),
+    f"every one of the six added fields has its own message anchor, not a bare substring test ({sorted(_FIELD_ANCHORS)})",
 )
 
 
@@ -267,9 +319,11 @@ def _mutate_field(doc: dict, field: str, value: object) -> dict:
     return mutated
 
 
-def _finding_needing_reason() -> dict:
+def _finding_needing_reason(**overrides) -> dict:
     # severity_reason is only REQUIRED when severity != reported_severity, so
-    # its own malformed-value case needs a finding that already differs.
+    # every one of ITS OWN malformed-value cases needs a finding that already
+    # differs -- unlike the other five fields, it cannot be tested against
+    # _base_adjudicated (where severity == reported_severity by construction).
     finding = make_raw_finding(finding_id="needsreason0001")
     finding_adjudicated = {
         **finding,
@@ -280,10 +334,33 @@ def _finding_needing_reason() -> dict:
         "severity_reason": "cosmetic on inspection",
         "duplicate_of": None,
     }
+    finding_adjudicated.update(overrides)
     return finding_adjudicated
 
 
+def _needs_reason_document(severity_reason_value) -> tuple[dict, dict]:
+    finding = _finding_needing_reason(severity_reason=severity_reason_value)
+    input_doc = make_document(reports=[make_report(findings_list=[make_raw_finding(finding_id="needsreason0001")])])
+    output_doc = json.loads(json.dumps(input_doc))
+    output_doc["reports"][0]["findings"][0] = finding
+    output_doc["adjudication"] = {
+        "schema_version": 1,
+        "verdict_counts": {"CONFIRMED": 1, "REFUTED": 0, "UNPROVEN": 0},
+        "findings_in": 1,
+        "findings_out": 1,
+        "duplicate_groups": [],
+        "downgrades": [
+            {"finding_id": "needsreason0001", "from": "High", "to": "Low", "reason": "cosmetic on inspection"}
+        ],
+        "total_refutation": False,
+        "notes": [],
+        "completion_marker": f"BUZZ-ADJUDICATION-COMPLETE:{NONCE}",
+    }
+    return input_doc, output_doc
+
+
 _base_adjudicated = json.loads(json.dumps(_output_doc))
+_fields_actually_tested: set[str] = set()
 
 for _field, _bad_values in {
     "verdict": [None, "", "MAYBE", 42],
@@ -292,34 +369,42 @@ for _field, _bad_values in {
     "severity": [None, "", "Info", "blocker"],
     "duplicate_of": [42, []],
 }.items():
+    _fields_actually_tested.add(_field)
     for _bad in _bad_values:
         _m = _mutate_field(_base_adjudicated, _field, _bad)
         _violations = verdicts.validate(_input_doc, _m)
+        _anchor = _FIELD_ANCHORS[_field]
         check(
-            any(_field in v for v in _violations),
-            f"{_field}={_bad!r} is named by verdicts.validate",
+            any(_anchor(_bad, v) for v in _violations),
+            f"{_field}={_bad!r} is named by verdicts.validate, by its OWN message anchor ({_violations})",
         )
 
-# severity_reason: required only when severity != reported_severity.
-_needs_reason_doc = make_document(reports=[make_report(findings_list=[_finding_needing_reason()])])
-_needs_reason_out = json.loads(json.dumps(_needs_reason_doc))
-_needs_reason_out["reports"][0]["findings"][0]["severity_reason"] = ""
-_needs_reason_out["adjudication"] = {
-    "schema_version": 1,
-    "verdict_counts": {"CONFIRMED": 1, "REFUTED": 0, "UNPROVEN": 0},
-    "findings_in": 1,
-    "findings_out": 1,
-    "duplicate_groups": [],
-    "downgrades": [],
-    "total_refutation": False,
-    "notes": [],
-    "completion_marker": f"BUZZ-ADJUDICATION-COMPLETE:{NONCE}",
-}
-_violations = verdicts.validate(_needs_reason_doc, _needs_reason_out)
+# severity_reason: required only when severity != reported_severity, so it
+# gets its own document per STEP 10's "empty, missing and malformed" trio --
+# the same three shapes as every other field, not blank-string alone.
+_fields_actually_tested.add("severity_reason")
+for _bad in ["", None, 42]:
+    _needs_reason_doc, _needs_reason_out = _needs_reason_document(_bad)
+    _violations = verdicts.validate(_needs_reason_doc, _needs_reason_out)
+    _anchor = _FIELD_ANCHORS["severity_reason"]
+    check(
+        any(_anchor(_bad, v) for v in _violations),
+        f"severity_reason={_bad!r} is named when severity != reported_severity, by its OWN message anchor ({_violations})",
+    )
+
 check(
-    any("severity_reason" in v for v in _violations),
-    f"blank severity_reason is named when severity != reported_severity ({_violations})",
+    _fields_actually_tested == set(_SIX_ADDED_FIELDS),
+    f"the loops above actually exercised all six fields, not a tuple literal asserting its own length ({sorted(_fields_actually_tested)})",
 )
+
+# Whether these per-field anchors are actually independent of each other --
+# i.e. whether deleting verdicts.py's OWN severity/reported_severity
+# SEVERITY_ORDER checks now makes ONLY that field's control fail -- is
+# check_adjudication_mutations.py's job (the "severity-ladder-check-dropped"
+# and "reported-severity-ladder-check-dropped" mutations), not this file's:
+# that harness already exists specifically to prove a control against a
+# targeted production-code mutation on a scratch copy, and duplicating it
+# here in-process would be a second, weaker copy of the same proof.
 
 # --- out-of-ladder EFFECTIVE severity refused, fed both ways ---------------
 # (STEP 6's guard: a judge's re-rating, AND a reported_severity the judge

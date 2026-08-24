@@ -76,17 +76,47 @@ MUTATIONS = [
         '                f"{finding.get(\'severity_reason\')!r}"\n'
         '            )\n',
         '        pass  # mutated: severity_reason presence check removed\n',
-        "blank severity_reason is named when severity != reported_severity",
+        "severity_reason='' is named when severity != reported_severity, by its OWN message anchor",
         [
-            "verdict=None is named by verdicts.validate",
-            "verdict_evidence=None is named by verdicts.validate",
-            "reported_severity=None is named by verdicts.validate",
-            "severity=None is named by verdicts.validate",
-            "duplicate_of=42 is named by verdicts.validate",
+            "verdict=None is named by verdicts.validate, by its OWN message anchor",
+            "verdict_evidence=None is named by verdicts.validate, by its OWN message anchor",
+            "reported_severity=None is named by verdicts.validate, by its OWN message anchor",
+            "severity=None is named by verdicts.validate, by its OWN message anchor",
+            "duplicate_of=42 is named by verdicts.validate, by its OWN message anchor",
         ],
         "deleting one field's presence check must fail only that field's control -- if "
         "a different field's control also fails, the fixture entangles fields that "
         "must be independent",
+    ),
+    (
+        "severity-ladder-check-dropped",
+        "verdicts.py",
+        '        if not isinstance(severity, str) or severity not in SEVERITY_ORDER:\n'
+        '            violations.append(\n'
+        '                f"{finding_label}: severity {severity!r} is not a key of review.SEVERITY_ORDER"\n'
+        '            )\n',
+        '        pass  # mutated: severity SEVERITY_ORDER-membership check removed\n',
+        "severity=None is named by verdicts.validate, by its OWN message anchor",
+        ["reported_severity=None is named by verdicts.validate, by its OWN message anchor"],
+        "the severity field arrives illegal (e.g. an out-of-ladder value the ladder guard "
+        "in run_adjudication.py never sees, or one it deliberately falls back to) and "
+        "nothing in verdicts.validate names it -- the field is confirmed independent of "
+        "reported_severity's own check, which must still catch its own illegal values",
+    ),
+    (
+        "reported-severity-ladder-check-dropped",
+        "verdicts.py",
+        '        if not isinstance(reported_severity, str) or reported_severity not in SEVERITY_ORDER:\n'
+        '            violations.append(\n'
+        '                f"{finding_label}: reported_severity {reported_severity!r} is not a key of "\n'
+        '                "review.SEVERITY_ORDER"\n'
+        '            )\n',
+        '        pass  # mutated: reported_severity SEVERITY_ORDER-membership check removed\n',
+        "reported_severity=None is named by verdicts.validate, by its OWN message anchor",
+        ["severity=None is named by verdicts.validate, by its OWN message anchor"],
+        "an input finding whose reported_severity already arrived illegal is no longer "
+        "named by verdicts.validate at all -- the exact property STEP 3's own upstream "
+        "refusal depends on as a second, independent line of defence",
     ),
     (
         "out-of-ladder-reported-severity-guard-dropped",
