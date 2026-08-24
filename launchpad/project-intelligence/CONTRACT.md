@@ -80,20 +80,25 @@ absent one as "not established", and the second is the honest signal.
 ## 3. Citation forms
 
 `evidence` entries are not all file references, and a consumer parsing them must handle all
-four shapes:
+six shapes:
 
 | Shape | Example | Openable? |
 |---|---|---|
 | File range | `crates/buzz-core/src/kind.rs:219-221` | yes |
 | File line | `crates/buzz-core/src/kind.rs:1077` | yes |
+| Bare path | `Justfile` | yes, but carries no position |
 | Graph edge | `is_shared_gated_kind -> is_unshared_gated_event (1 hop)` | no |
 | Tool result | `find_references('x', crate='buzz-core') -> no callers in this crate` | no |
 | Commit | `commit 067c085f… (2026-08-05…) by Wes` | no |
 
-A consumer that treats every citation as a path will mis-handle three of five. `worked_trace
-.audit_citations()` shows the intended discipline: parse what is parseable, and **report the
-rest as unverified rather than skipping it** — a checker that silently ignores what it cannot
-read produces a clean audit over nothing.
+A consumer that treats every citation as a path will mis-handle three of six, and one of the
+three it *can* open — the bare path — resolves to a whole file rather than to the lines the
+claim is about. Bare paths come from `setup()`'s not-found branch, which cites the manifests
+it searched (`evidence=tuple(SETUP_SOURCES)`) rather than a location inside one.
+
+`worked_trace.audit_citations()` shows the intended discipline: parse what is parseable, and
+**report the rest as unverified rather than skipping it** — a checker that silently ignores
+what it cannot read produces a clean audit over nothing.
 
 ---
 
@@ -119,7 +124,9 @@ reporting that as a find is true evidence about the wrong subject.
 
 ### `explain(agent, symbol: str, depth: Depth | None = None) -> Answer`
 
-The full four-stage pipeline. **`depth` is accepted and currently ignored** — see §7 and #571.
+The full four-stage pipeline. **`depth` is accepted, and only `RATIONALE` changes the answer**
+— it triggers the history stage, which can add history claims and their caveat. `SUMMARY` and
+`TRACE` return identical answers. See §7 and #571.
 
 ### `dependencies(agent, symbol: str) -> Answer`
 
@@ -187,19 +194,31 @@ Two properties a consumer can rely on:
 
 ## 5. Caveats a consumer must surface
 
-`things_to_be_aware_of` is not decoration. It is generated from the `INFERENCE` claims plus
-these conditions, so it cannot disagree with the ledger:
+`things_to_be_aware_of` is not decoration. Where it is populated, it is derived from the same
+evidence as the claims, so it cannot disagree with the ledger. It is **not** emitted for every
+`INFERENCE` claim: `find()` and `conventions()` can return an `INFERENCE` and leave the field
+empty. A consumer must therefore treat a caveat as authoritative when present, and must not
+read its absence as "no caveat applies".
+
+The conditions below do populate it:
 
 | Condition | The answer says |
 |---|---|
 | Graph-only answer (`dependencies`, `impact`) | derived from the build-time index, no live re-read |
-| Question implied `BASE` | BASE was never read; code claims come from `WORKING` |
+| `explain`/`ask` routed through the explain pipeline with `BASE` implied | BASE was never read; code claims come from `WORKING` |
 | `ProjectMemory` consulted | it does not persist between runs |
 | Symbol not located | a statement about **the index**, not about the codebase |
 | Candidate rejected at the score floor | the index *did* return one; it was rejected here |
 
 A consumer that renders `claims` and drops `things_to_be_aware_of` **breaks the guarantee in
 §1**, because several claims are only honest in the presence of their caveat.
+
+**The `BASE` caveat does not survive routing — #588.** `ask()` classifies the temporal state
+and then dispatches to a method that does not carry it, so a question such as *"what happens
+at head if I change `X`?"* is routed to `impact()` and comes back with only the graph-snapshot
+caveat. The BASE row above is honest for the `explain` pipeline and not for `ask()`; until
+#588 lands, a consumer must not infer from the absence of a BASE caveat that the question was
+not about `BASE`.
 
 ---
 
@@ -211,13 +230,23 @@ property after §1: a degraded answer is data, not an exception.
 
 ### Raises
 
-| Condition | Exception |
-|---|---|
-| Empty or non-string question | `ValueError` (`question.decompose`) |
-| Empty or non-string target | `ValueError` (`confidence.assess`) |
-| `investigate()` with no named target | `ValueError` — a nameless question is `find`'s case |
-| Claim/Answer violating §1 | `ValueError` at construction |
-| `find_symbol` miss | `LookupError`, naming the symbol |
+**None of the seven methods raise on an empty target.** They wrap the caller's argument before
+it reaches a validator — `explain("")` interpolates it into a non-empty question, so
+`question.decompose` never sees an empty string, and `dependencies("")` goes straight to a
+graph lookup without calling `confidence.assess` at all. Measured 2026-08-24: `explain`,
+`dependencies`, `impact`, `setup` and `history` each called with `""` all returned an `Answer`
+and none raised. A consumer writing `except ValueError` around a `knowledge.*` call is writing
+dead code; handle the labelled no-answer in the next table instead.
+
+The functions below raise, and are reachable only by calling them **directly**:
+
+| Condition | Exception | Raised by |
+|---|---|---|
+| Empty or non-string question | `ValueError` | `question.decompose` (`question.py:198`) |
+| Empty or non-string target | `ValueError` | `confidence.assess` (`confidence.py:175`) |
+| No named target | `ValueError` — a nameless question is `find`'s case | `investigate()` (`investigation.py:338`) |
+| Claim/Answer violating §1 | `ValueError` at construction | `answer.Claim`, `answer.Answer` |
+| Symbol miss | `LookupError`, naming the symbol | `investigator.find_symbol` — a tool helper, called by none of the seven |
 
 ### Returns a labelled answer, never raises
 
@@ -245,7 +274,7 @@ DoD item 2. Every place this contract, the design doc, and the merged code diver
 |---|---|---|
 | 1 | Design doc says `knowledge.explain(symbol, depth?)` is "depth-tunable". Implementation accepts `depth` and returns identical answers for `SUMMARY` and `TRACE`; the only effect is that `RATIONALE` triggers the history stage. | **Open — #571.** Contract documents the real behaviour. |
 | 2 | Design doc says `setup(task)` returns "cited operational steps". Implementation returns the recipe *header* (`Justfile defines 'test': test:`), with no runnable command. | **Open — #572.** |
-| 3 | Design doc treats `BASE` as first-class and separately queryable. Implementation classifies `BASE` and reads `WORKING`, disclosing it in a caveat. | **Partial by design.** BASE reads need `git show HEAD:<path>`; unfiled. Filing recommended. |
+| 3 | Design doc treats `BASE` as first-class and separately queryable. Implementation classifies `BASE` and reads `WORKING`, disclosing it in a caveat. | **Open — #588.** BASE reads need `git show HEAD:<path>`. `ask()` also discards the classified state when it routes, so the §5 caveat does not appear for routed questions. |
 | 4 | Design doc's step 1 queries three components "for an existing answer". Implementation's `confident` is a `ProjectMemory` hit **only** — a graph or semantic hit proves the symbol exists, which is not an answer. | **Intentional.** The doc's own worked example agrees: `search_symbols` finds `UserRepository` and it still records "confidence: none yet". |
 | 5 | `history` queries a 10-line window, not the definition line. | **Workaround for #569.** Revert when fixed. |
 | 6 | Design doc's investigation progression lists five tool calls. The real trace has six — the tests stage reads the file to locate `mod tests` *and* searches below it. | **Contract and `PROGRESSION` both list six.** A canonical order omitting a call the code makes is the same lie as a trace omitting it. |
@@ -309,7 +338,12 @@ Four contract properties visible in one response:
 
 ## 9. Open questions
 
-Three, all needing a decision before #551 scaffolds against this.
+Three, all needing a decision before #551 scaffolds against this. Each is now filed as an ADR
+issue parented to PRD #4, per `launchpad/AGENTS.md` §4 rule 2 — an open question left only in
+a document body "gets decided by accident inside whichever task hits it first".
+
+- **9.1** and **9.2** → **#578** (they are one decision; see below)
+- **9.3** → **#589**
 
 **9.1 — What shape is the committed corpus?** PRD #4's Ruling 12 says the corpus is a
 committed artefact; it does not say whether that is JSON, Markdown with frontmatter, or
@@ -321,6 +355,15 @@ document because it constrains the crate's read path and that is #551's to weigh
 two. If one, the crate must implement the seven methods over the corpus. If two, the human
 surface can be pre-rendered and only the agent surface needs the methods. This is the largest
 unresolved question in M3 and it changes #551's scope materially.
+
+**Why 9.1 and 9.2 are one decision (#578).** 9.1 cannot be answered before 9.2, because the
+format is the serialisation of whatever turns out to be pre-computed. And 9.2 is not a free
+choice between two workable designs: Ruling 11 forbids the crate implementing the methods
+itself ("no traversal logic duplicated in Rust"), while `find(query)` takes arbitrary free
+text resolved at call time (§4), so it has no finite key set to pre-render against either.
+Whichever way it goes, Ruling 11, Ruling 12 or #533's seven-method success criterion has to be
+amended — which is why it is an ADR and not a task. Ruling 12's own auditability argument
+already rules out a binary corpus.
 
 **9.3 — Who owns this contract once the crate exists?** It currently lives beside the Python
 implementation because that is the only party that exists. When #551 scaffolds the crate, the
