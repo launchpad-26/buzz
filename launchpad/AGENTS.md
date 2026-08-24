@@ -178,12 +178,13 @@ These are hard constraints, not style preferences.
    output. If you do not know, write that you do not know.
 7. **Put a caveat where the claim is, not where the discussion of it is.** If a
    limitation changes how a Finding or Summary should be read, it goes *in* that Finding
-   or Summary. "Confidence and what is still unknown" is for what you did not check --
-   it is not a place to qualify what you did claim. The test is whether the conclusion
-   survives the caveat: "I did not measure logs" bounds scope and belongs at the bottom;
-   "the artifact I measured cannot be identified" changes what the figures mean and
-   belongs at the top. A caveat present but sitting below the conclusion it qualifies
-   reads as agreement to everyone who stops at the headline.
+   or Summary. A closing confidence section may assess how far to trust what you did
+   check and record what you did not — what it must not do is qualify a claim made above
+   it. The test is whether the conclusion survives the caveat: "I did not measure logs"
+   bounds scope and belongs at the bottom; "the artifact I measured cannot be identified"
+   changes what the figures mean and belongs at the top. A caveat present but sitting
+   below the conclusion it qualifies reads as agreement to everyone who stops at the
+   headline.
 
 ### Filing an issue
 
