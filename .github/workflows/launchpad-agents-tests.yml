@@ -1,0 +1,81 @@
+name: launchpad — agents tests
+
+# Runs the unit tests for launchpad/agents/*.py.
+#
+# WHY THIS WORKFLOW EXISTS. Until it did, NO CI job ran anything under
+# launchpad/agents/ — review-code found the same High finding independently on
+# two separate pull requests (#260's 20 tests and #262's 25 tests, both green
+# locally and both never executed by CI). A test suite nothing runs is a claim,
+# not a check: it cannot fail, so it cannot protect anything.
+#
+# It also catches the failure mode that made the gap visible. goose_config.py
+# imports ruamel.yaml, a third-party package the repo recorded nowhere. On a
+# machine without it the module raises ImportError before a single test runs, and
+# nothing would have reported that. Installing from the requirements file here
+# means an unrecorded dependency now breaks CI rather than breaking a reader.
+#
+# `pull_request`, deliberately NOT `pull_request_target` — the suite under test
+# lives in the repository, so a pull request can modify the very code this job
+# runs. On `pull_request` that code executes with the fork's own permissions and
+# no access to repository secrets. Same reasoning as
+# launchpad-review-agent-controls.yml, which this mirrors.
+
+on:
+  pull_request:
+    paths:
+      - "launchpad/agents/**"
+      - ".github/workflows/launchpad-agents-tests.yml"
+  push:
+    branches: [launchpad]
+    paths:
+      - "launchpad/agents/**"
+
+# Read-only. These are pure unit tests against temp-directory fixtures: they
+# reach no network, no relay, and no GitHub API, so they need no token scope.
+permissions:
+  contents: read
+
+jobs:
+  tests:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install agent script dependencies
+        run: pip install -r launchpad/agents/requirements.txt
+
+      # Fails if the suite contains no test CASES, rather than reporting success
+      # for a run that executed nothing. `unittest discover` exits 0 on an empty
+      # suite, which is indistinguishable from a pass in the CI summary — the
+      # exact shape of the gap this workflow was added to close.
+      #
+      # COUNTS CASES, NOT FILES, and the first version of this guard counted
+      # files — which left the very hole it existed to close. Found by
+      # cross-vendor review: leave test_goose_config.py in place but rename every
+      # `test_*` method to `check_*`, and a file-counting guard reports one test
+      # file while `unittest discover` collects zero cases and exits 0. A guard
+      # that can be satisfied by a filename is not a guard.
+      #
+      # A module that fails to import counts as one case here (the loader
+      # substitutes a `_FailedTest`), so it passes this step and then fails the
+      # run below — which is the correct split: this step answers "is there
+      # anything to run", the run answers "does it pass".
+      - name: Confirm test cases were discovered
+        run: |
+          python3 - <<'PY'
+          import sys, unittest
+          suite = unittest.defaultTestLoader.discover("launchpad/agents", pattern="test_*.py")
+          n = suite.countTestCases()
+          print(f"discovered {n} test case(s)")
+          if n == 0:
+              print("::error::launchpad/agents has no discoverable test cases — "
+                    "this job would have passed vacuously.")
+              sys.exit(1)
+          PY
+
+      - name: Run agents unit tests
+        run: python3 -m unittest discover -s launchpad/agents -p "test_*.py" -v

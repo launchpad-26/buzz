@@ -70,6 +70,8 @@ docker run -v /your/path:/data grafana/otel-lgtm      # persist across restarts
 
 Grafana at `http://127.0.0.1:3000`, default credentials `admin/admin`. All backend data lives under `/data`.
 
+**Version pinning, per [#415](https://github.com/launchpad-26/buzz/issues/415).** Everything above describes the floating tag `grafana/otel-lgtm:latest`, whose bundled component versions change without notice. This document records the component *set*, which is stable; it should not be read as recording the *versions*, which are not. Anything the cohort deploys should pin a digest, and [#331](https://github.com/launchpad-26/buzz/issues/331) records that its own measurements were taken against an unpinned tag.
+
 **The caveat, quoted:** *"If you are looking for a production-ready, out-of-the box solution to monitor applications and minimize MTTR (mean time to resolution) with OpenTelemetry and Prometheus, you should try Grafana Cloud Application Observability."* The image is *"intended for development, demo, and testing environments."*
 
 That is not a reason to avoid it — it is the fastest way to have the whole stack running, and it is the right way to answer [#331](https://github.com/launchpad-26/buzz/issues/331)'s cost question. It **is** a reason not to treat "we ran the reference image" as equivalent to "we deployed the stack". Criterion 8 asks for something portable to a second host; a bundle-everything-in-one-container image explicitly scoped to demos is a starting point, not a destination.
