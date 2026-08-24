@@ -29,6 +29,7 @@ CONTROLS = [
     ("check_mutations.py", False),
     ("check_flag_guard.py", False),
     ("check_fetch_states.py", False),
+    ("check_unit_suites.py", False),
 ]
 
 
