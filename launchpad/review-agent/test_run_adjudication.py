@@ -502,9 +502,21 @@ class NotesDeferralTests(unittest.TestCase):
     def test_the_deferral_is_stated_in_the_module_docstring(self):
         """The finding was that nothing said so. If the sentence goes, this
         test goes red rather than the gap reopening silently.
+
+        Asserts the FACT, not the wording. The previous regex accepted the
+        literal "STEP 6/7", which had become wrong -- both steps are in this
+        branch and neither plumbed `notes` -- so correcting the docstring
+        would have meant editing a green test, making the fix look like a
+        regression. A test that pins prose it cannot verify is a test that
+        defends a stale claim.
         """
-        self.assertIn("notes", run_adjudication.__doc__)
-        self.assertRegex(run_adjudication.__doc__, r"notes.*(defer|STEP 6/7|left empty)")
+        doc = run_adjudication.__doc__
+        self.assertIn("notes", doc)
+        # The field is empty, and the docstring says so in some words.
+        self.assertRegex(doc, r"notes.{0,200}(left empty|no step .{0,40}plumbs)")
+        # And it must not silently regain a scheduled-sounding owner: naming a
+        # STEP as the target is exactly the claim that went stale before.
+        self.assertNotRegex(doc, r"notes`` is \*\*deferred to STEP")
 
 
 class NoRerateInThisStepTests(unittest.TestCase):

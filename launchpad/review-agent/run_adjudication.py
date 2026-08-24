@@ -109,21 +109,31 @@ function does not drop or invent one by construction, but a stage that can
 print a lossy document and rely on a downstream ``verdicts.validate`` call
 to catch it has already lost the document once.
 
-``adjudication.notes`` is **deferred to STEP 6/7 too, and left empty here**,
-which until now was the one hardcoded-empty field with no deferral stated
-anywhere. The judge protocol below carries no ``notes`` key, so a judge that
-returns one has it dropped. Recording it explicitly because the silence was
-the defect: ADJUDICATION.md declares the field and ``verdicts.py`` carries
-it, so a reader had every reason to assume the channel worked.
+``adjudication.notes`` is **left empty here, and no step in this plan plumbs
+it**, which until now was the one hardcoded-empty field with no deferral
+stated anywhere. The judge protocol below carries no ``notes`` key, so a
+judge that returns one has it dropped. Recording it explicitly because the
+silence was the defect: ADJUDICATION.md declares the field and ``verdicts.py``
+carries it, so a reader had every reason to assume the channel worked.
 
-**This deferral is in tension with ``adjudicator.md`` (#265), which
-normatively tells a judge to "record it in ``adjudication.notes``".** While
-that instruction ships against a protocol that discards the key, a judge's
-only remaining outlet is ``verdict_evidence`` -- the field with no
-structural guard. Whoever resolves this should either plumb ``notes``
-through the protocol here (symmetric with how a future ``severity_reason``
-would be) or amend ``adjudicator.md`` to say the channel is deferred. Not
-decided in this step; named so it cannot be merged past unnoticed.
+**The tension this once named is resolved, and in the other direction.** The
+original text said the deferral conflicted with ``adjudicator.md`` (#265),
+which "normatively tells a judge to record it in ``adjudication.notes``", and
+asked whoever resolved it to either plumb ``notes`` through this protocol or
+amend that document. ``adjudicator.md`` was amended (``05a960478``): it now
+states that the channel is deferred and that a judge "must not rely on it",
+and records that its own earlier paragraph said otherwise. So the instruction
+no longer ships against a protocol that discards the key, and nothing here
+needs to change to make the two agree.
+
+Two things that were true then and remain true, kept because they are the
+reason this paragraph exists rather than being deleted with the tension: a
+judge's only free-text outlet is still ``verdict_evidence``, the field
+ADJUDICATION.md identifies as having no structural guard; and the earlier
+wording named "STEP 6/7" as the deferral target, which was already wrong --
+both steps are in this branch and neither plumbed it. Plumbing ``notes``
+remains unowned. It is a live gap, not a scheduled one, and calling it
+"deferred to STEP 6/7" made it look scheduled.
 
 **STEP 4 -- the nonce check and the `stages` manifest.** Two more things
 ``adjudicate()`` does, on top of STEP 3's pass-through/anchor/validation-order
