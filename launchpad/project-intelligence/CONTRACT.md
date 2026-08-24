@@ -230,23 +230,30 @@ property after §1: a degraded answer is data, not an exception.
 
 ### Raises
 
-**None of the seven methods raise on an empty target.** They wrap the caller's argument before
-it reaches a validator — `explain("")` interpolates it into a non-empty question, so
-`question.decompose` never sees an empty string, and `dependencies("")` goes straight to a
-graph lookup without calling `confidence.assess` at all. Measured 2026-08-24: `explain`,
-`dependencies`, `impact`, `setup` and `history` each called with `""` all returned an `Answer`
-and none raised. A consumer writing `except ValueError` around a `knowledge.*` call is writing
-dead code; handle the labelled no-answer in the next table instead.
+**Six of the seven methods do not raise on an empty target — `find` is the exception.**
+`explain`, `dependencies`, `impact`, `setup`, `conventions` and `history` wrap the caller's
+argument before it reaches a validator — `explain("")` interpolates it into a non-empty
+question, so `question.decompose` never sees an empty string, and `dependencies("")` goes
+straight to a graph lookup without calling `confidence.assess` at all. Measured 2026-08-25 by
+calling all seven directly: `explain`, `dependencies`, `impact`, `setup`, `conventions` and
+`history` each called with `""` returned an `Answer`; `find("")` raised `ValueError` (below).
+`ask("")` — an eighth public function, not one of the seven, sharing `find`'s routing for the
+`FIND` intent (`knowledge.py:391`) — raises the same way, through the same mechanism as the
+first table row. A consumer writing `except ValueError` around `explain`, `dependencies`,
+`impact`, `setup`, `conventions` or `history` is writing dead code; a caller of `find` or
+`ask` still needs it.
 
-The functions below raise, and are reachable only by calling them **directly**:
+The functions below raise; the first four are reachable only by calling them **directly**,
+`find` and `ask` raise through ordinary use:
 
 | Condition | Exception | Raised by |
 |---|---|---|
-| Empty or non-string question | `ValueError` | `question.decompose` (`question.py:198`) |
+| Empty or non-string question | `ValueError` | `question.decompose` (`question.py:198`) — also `ask`'s path, which calls `decompose` on the raw argument before any routing |
 | Empty or non-string target | `ValueError` | `confidence.assess` (`confidence.py:175`) |
 | No named target | `ValueError` — a nameless question is `find`'s case | `investigate()` (`investigation.py:338`) |
 | Claim/Answer violating §1 | `ValueError` at construction | `answer.Claim`, `answer.Answer` |
-| Symbol miss | `LookupError`, naming the symbol | `investigator.find_symbol` — a tool helper, called by none of the seven |
+| Empty or non-string `find` query | `ValueError` — `find`'s no-candidate branch constructs an `Answer` from the raw query before anything else validates it | `answer.Answer.__post_init__` (`answer.py:91`), from `knowledge.py:79` |
+| Symbol miss | `LookupError`, naming the symbol | `knowledge_agent.find_symbol` (`knowledge_agent.py:46`, raise at `:57`) — a tool helper, called by none of the seven |
 
 ### Returns a labelled answer, never raises
 
