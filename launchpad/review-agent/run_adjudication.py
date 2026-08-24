@@ -586,7 +586,19 @@ def _run_judge_safely(judge: Judge, finding: dict, input_document: dict) -> dict
     failing closed on both.
     """
     try:
-        result = judge(finding, input_document)
+        # A COPY, never the live output finding. The escalate-only guarantee is
+        # enforced by inspecting what the judge RETURNS; handing it the mutable
+        # object those checks are about would let it edit the finding in place
+        # and route around every one of them -- a judge doing
+        # `finding["severity"] = "Low"` and returning only a REFUTED verdict
+        # produced `reported_severity: "Low"`, an empty `downgrades`, and NO
+        # `verdicts.validate` violation, because the "as reported" value was
+        # read back out of the object the judge had already altered.
+        # The same argument applies to every other field: `finding_id` is what
+        # the input/output set-equality check is keyed on, so an in-place edit
+        # there defeats that check too. Copy once, at the boundary, rather than
+        # guarding fields one at a time as each is noticed.
+        result = judge(copy.deepcopy(finding), input_document)
     except Exception as exc:  # noqa: BLE001 -- a judge's own crash is exactly
         # the "cannot parse / times out" case above, and must fail closed
         # rather than propagate and abort the whole run over one finding.
@@ -757,7 +769,12 @@ def _run_dedupe_safely(
     merge findings it did not actually decide were duplicates.
     """
     try:
-        raw_groups = dedupe_judge(adjudicated_findings, input_document)
+        # Copies again, same reason as ``_run_judge_safely``. By the time this
+        # runs every finding already carries its final verdict and severity, so
+        # a dedupe judge handed the live list could quietly rewrite decisions
+        # that are no longer re-checked -- the grouping it returns is validated,
+        # but the findings themselves are not re-read afterwards.
+        raw_groups = dedupe_judge(copy.deepcopy(adjudicated_findings), input_document)
     except Exception:  # noqa: BLE001 -- a dedupe judge's own crash must fail
         # closed to no duplicates, exactly like a per-finding judge's crash
         # fails closed to UNPROVEN in `_run_judge_safely` above.
@@ -930,8 +947,14 @@ def adjudicate(
     for report in output_document.get("reports", []):
         for finding in report.get("findings", []):
             findings_in += 1
-            result = _run_judge_safely(judge, finding, input_document)
+            # BEFORE the judge runs, not after. `_run_judge_safely` now hands
+            # the judge a copy, so this ordering is belt as well as braces --
+            # but the ordering is what makes the guarantee readable at the call
+            # site: "as reported" must be captured from the document as it
+            # arrived, and anything read after an injected callable has been
+            # invoked is not that.
             reported_severity = finding["severity"]
+            result = _run_judge_safely(judge, finding, input_document)
             verdict, severity, severity_reason = _apply_severity_rerating(
                 finding_id=finding.get("finding_id"),
                 reported_severity=reported_severity,

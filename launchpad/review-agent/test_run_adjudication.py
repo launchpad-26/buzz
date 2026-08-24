@@ -997,6 +997,92 @@ def _make_judge(verdict="CONFIRMED", **overrides):
     return _judge
 
 
+class JudgeCannotMutateWhatItIsJudgingTests(unittest.TestCase):
+    """The escalate-only guard is enforced on what the judge RETURNS, so the
+    judge must not be handed the object those checks are about.
+
+    Found by a cross-model (Codex) review on 2026-08-24, after four same-model
+    passes over the same code did not raise it. Before the fix, `adjudicate()`
+    called the judge with the live output finding and read `reported_severity`
+    back out of it AFTERWARDS, so a judge could rewrite the finding in place
+    and route around every guard at once: three input `Blocker`s came out
+    `Low`, `reported_severity` recorded `Low` (falsifying the record of what
+    was reported), `downgrades` stayed empty, and `verdicts.validate` reported
+    no violations.
+
+    A judge is injected Python, not model output, so this needs a hostile or
+    buggy judge implementation rather than a prompt injection -- but STEP 6's
+    premise is that the prohibitions hold in code regardless of what the judge
+    does, and a guard the guarded component can step around is not one.
+    """
+
+    @staticmethod
+    def _mutating_judge(finding: dict, document: dict) -> dict:
+        finding["severity"] = "Low"
+        finding["finding_id"] = "0" * 16
+        finding["defect"] = "rewritten by the judge"
+        return {"verdict": "REFUTED", "verdict_evidence": "claimed refutation"}
+
+    def test_in_place_severity_edit_does_not_reach_the_output(self):
+        finding = make_raw_finding(severity="Blocker")
+        input_doc = make_document(reports=[make_report(findings_list=[finding])])
+
+        output_doc = run_adjudication.adjudicate(input_doc, self._mutating_judge)
+
+        adjudicated = output_doc["reports"][0]["findings"][0]
+        self.assertEqual(adjudicated["severity"], "Blocker")
+        self.assertEqual(adjudicated["reported_severity"], "Blocker")
+        self.assertIsNone(adjudicated["severity_reason"])
+        self.assertEqual(output_doc["adjudication"]["downgrades"], [])
+
+    def test_in_place_identity_edits_do_not_reach_the_output(self):
+        # finding_id is what the input/output set-equality check is keyed on,
+        # so an in-place edit here would defeat that check too.
+        finding = make_raw_finding(severity="Blocker")
+        original_id = finding["finding_id"]
+        original_defect = finding["defect"]
+        input_doc = make_document(reports=[make_report(findings_list=[finding])])
+
+        output_doc = run_adjudication.adjudicate(input_doc, self._mutating_judge)
+
+        adjudicated = output_doc["reports"][0]["findings"][0]
+        self.assertEqual(adjudicated["finding_id"], original_id)
+        self.assertEqual(adjudicated["defect"], original_defect)
+
+    def test_the_verdict_itself_is_still_honoured(self):
+        # Guards the guard: copying the finding must not stop a judge doing its
+        # actual job. REFUTED is a verdict, not an approval -- refusing to let a
+        # judge edit the finding is not refusing its conclusion.
+        finding = make_raw_finding(severity="Blocker")
+        input_doc = make_document(reports=[make_report(findings_list=[finding])])
+
+        output_doc = run_adjudication.adjudicate(input_doc, self._mutating_judge)
+
+        adjudicated = output_doc["reports"][0]["findings"][0]
+        self.assertEqual(adjudicated["verdict"], "REFUTED")
+        self.assertEqual(output_doc["adjudication"]["verdict_counts"]["REFUTED"], 1)
+
+    def test_dedupe_judge_cannot_mutate_decided_findings(self):
+        # By the time the dedupe judge runs, every finding already carries its
+        # final verdict and severity, and nothing re-reads them afterwards.
+        finding = make_raw_finding(severity="Blocker")
+        input_doc = make_document(reports=[make_report(findings_list=[finding])])
+
+        def mutating_dedupe(adjudicated_findings, document):
+            for item in adjudicated_findings:
+                item["severity"] = "Info"
+                item["verdict"] = "CONFIRMED"
+            return []
+
+        output_doc = run_adjudication.adjudicate(
+            input_doc, _make_judge(verdict="UNPROVEN"), dedupe_judge=mutating_dedupe
+        )
+
+        adjudicated = output_doc["reports"][0]["findings"][0]
+        self.assertEqual(adjudicated["severity"], "Blocker")
+        self.assertEqual(adjudicated["verdict"], "UNPROVEN")
+
+
 class SeverityRerateTests(unittest.TestCase):
     """STEP 6's severity re-rating guard: legal re-ratings (both directions),
     illegal ones (refused), and the no-op case, all against `adjudicate()`
