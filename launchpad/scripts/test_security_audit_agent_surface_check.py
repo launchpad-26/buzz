@@ -112,13 +112,24 @@ class AgentSurfaceSecretScanTest(unittest.TestCase):
             result = run(root)
         self.assertEqual(result.status, Status.INDETERMINATE)
 
-    def test_no_surface_files_at_all_passes(self):
+    def test_no_surface_files_at_all_is_indeterminate_not_pass(self):
+        """Nothing to scan is not a clean scan.
+
+        This test previously asserted PASS with "0 agent-surface file" in the
+        detail, which codified the fail-open behaviour rather than catching it:
+        a sparse checkout or a refactor that moved the agent-config directories
+        produced a green control that had scanned zero bytes, indistinguishable
+        in the summary from a real clean scan. `exit_code()` only fails on FAIL,
+        so the audit passed. Inverted deliberately — if this ever asserts PASS
+        again, the control has stopped asserting anything.
+        """
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
             self._prep(root)
             result = run(root)
-        self.assertEqual(result.status, Status.PASS)
-        self.assertIn("0 agent-surface file", result.detail)
+        self.assertEqual(result.status, Status.INDETERMINATE)
+        self.assertIn("asserts", result.detail)
+        self.assertNotIn("no credential-shaped strings found", result.detail)
 
 
 if __name__ == "__main__":

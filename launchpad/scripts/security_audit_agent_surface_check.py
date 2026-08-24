@@ -120,6 +120,24 @@ def _run_gitleaks_no_git(
 
 def run(repo_root: Path) -> CheckResult:
     surface_paths = _collect_surface_paths(repo_root)
+    if not surface_paths:
+        # Nothing to scan is not a clean scan. Without this, a sparse checkout,
+        # a refactor that moves the agent-config directories, or any environment
+        # where AGENT_SURFACE_DIRS and AGENT_CONFIG_FILE_GLOBS resolve to nothing
+        # produces "no credential-shaped strings found across 0 agent-surface
+        # file(s)" — indistinguishable in the summary from a real clean scan of
+        # the full surface, and green because exit_code() only fails on FAIL. A
+        # security check that reports clean when it did not run is worse than no
+        # check. Same fail-closed shape as security_audit_ignore_coverage_check's
+        # unreadable-file case.
+        return CheckResult(
+            NAME,
+            Status.INDETERMINATE,
+            "no agent-surface files were found to scan, so this control asserts "
+            "nothing — this is not the same as scanning the surface and finding it "
+            f"clean. Looked for {list(AGENT_CONFIG_FILE_GLOBS)} under "
+            f"{list(AGENT_SURFACE_DIRS)} in {repo_root}",
+        )
     findings, error = _run_gitleaks_no_git(repo_root, surface_paths)
     if error is not None:
         return CheckResult(NAME, Status.INDETERMINATE, error)
