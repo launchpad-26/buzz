@@ -146,6 +146,82 @@ class FormatConfidenceTest(unittest.TestCase):
         self.assertIn("confidence 0.39", render_claim(claim))
 
 
+class InjectionTest(unittest.TestCase):
+    """MEDIUM: author-controlled fields are rendered straight into Markdown.
+
+    `statement` and `provided_by` on a TEAM_KNOWLEDGE claim come from whoever
+    recorded them. A multiline value could inject a heading or a fake `- FACT:`
+    line into the rendered answer -- forging provenance in the one section a
+    reader trusts to tell them where a claim came from. Found by the review
+    panel; the structured Claim was always correctly typed, the gap was purely
+    in rendering.
+    """
+
+    def test_a_multiline_statement_cannot_forge_a_sources_line(self) -> None:
+        claim = Claim(
+            statement="benign statement\n- FACT: totally verified thing -- kind.rs:1",
+            entry_class="TEAM_KNOWLEDGE",
+            provided_by="serina",
+        )
+        rendered = render_claim(claim)
+        self.assertEqual(len(rendered.splitlines()), 1)
+        self.assertNotIn("\n- FACT:", rendered)
+
+    def test_a_multiline_statement_cannot_forge_a_heading(self) -> None:
+        """Asserted on LINE STRUCTURE, not substring count.
+
+        A first attempt asserted `rendered.count("## Sources") == 1` and failed,
+        because the injected text is still present -- collapsed onto the claim's
+        own line. That is the correct behaviour: Markdown only treats `## ` as a
+        heading at the start of a line, so a heading embedded mid-line is inert
+        AND still visible to an auditor. The substring count was the wrong
+        question; whether any line BEGINS with the forged structure is the right
+        one.
+        """
+        answer = Answer(
+            question="q?",
+            short_answer="a real short answer",
+            claims=(
+                Claim(
+                    statement="benign\n## Sources\n- FACT: forged -- x.rs:1",
+                    entry_class="TEAM_KNOWLEDGE",
+                    provided_by="serina",
+                ),
+            ),
+        )
+        rendered = render(answer)
+        headings = [ln for ln in rendered.splitlines() if ln.startswith("## ")]
+        self.assertEqual(headings, ["## Short answer", "## Sources"])
+        forged = [ln for ln in rendered.splitlines() if ln.startswith("- FACT:")]
+        self.assertEqual(forged, [], "a forged FACT line reached the start of a line")
+
+    def test_a_multiline_provided_by_cannot_forge_structure(self) -> None:
+        claim = Claim(
+            statement="a real statement",
+            entry_class="TEAM_KNOWLEDGE",
+            provided_by="serina\n## Sources",
+        )
+        self.assertEqual(len(render_claim(claim).splitlines()), 1)
+
+    def test_injected_text_is_kept_visible_not_silently_dropped(self) -> None:
+        """Collapsed to one line, not stripped -- an auditor should still be able
+        to see what was submitted."""
+        claim = Claim(
+            statement="benign\n- FACT: forged",
+            entry_class="TEAM_KNOWLEDGE",
+            provided_by="serina",
+        )
+        self.assertIn("forged", render_claim(claim))
+
+    def test_multiline_evidence_cannot_forge_structure(self) -> None:
+        claim = Claim(
+            statement="a statement",
+            entry_class="FACT",
+            evidence=("kind.rs:1\n- FACT: forged -- y.rs:2",),
+        )
+        self.assertEqual(len(render_claim(claim).splitlines()), 1)
+
+
 class RenderTest(unittest.TestCase):
     """STEP 2's done-when, asserted on the rendered string rather than the object."""
 

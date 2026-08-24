@@ -12,7 +12,14 @@ phrasing a sentence and hoping.
 
 Intents are the seven the design doc's § Data Model item 8 names -- the
 programmatic interface and the intents are deliberately the same list, so a
-question and a direct call route to identical logic.
+question and a direct call route to identical logic. That routing is
+`knowledge.ask()`, and every intent has a test asserting it reaches its own
+method.
+
+Until 2026-08-24 this paragraph was false: nothing dispatched on intent, so five
+of the seven were dead values and a SETUP question was answered by the explain
+pipeline. Named here because a docstring that describes behaviour the code does
+not have is the defect class this branch hit four times.
 """
 
 from __future__ import annotations
@@ -94,9 +101,19 @@ def classify_temporal_state(text: str) -> TemporalState:
     """WORKING unless the question is explicitly historical or comparative --
     the default the design doc's § Data Model item 5 states."""
     lowered = text.lower()
+    # "why does" is deliberately NOT here, though it IS a HISTORY *intent*.
+    # A "why" question asks for rationale, which is not the same as asking about
+    # a past STATE of the tree -- and temporal_state governs which state gets
+    # read. Treating them as one gave present-tense mechanism questions ("why
+    # does this return bool?") git-history framing. Found by the review panel.
+    #
+    # History still runs for these: classify_depth maps a HISTORY intent to
+    # RATIONALE depth, and investigate() triggers the history stage on either
+    # temporal_state == HISTORY or depth == RATIONALE. So the evidence is
+    # unchanged; only the claimed temporal state is now accurate.
     if any(
         w in lowered
-        for w in ("evolve", "evolved", "over time", "used to", "history", "originally", "when was", "why does")
+        for w in ("evolve", "evolved", "over time", "used to", "history", "originally", "when was")
     ):
         return "HISTORY"
     if any(w in lowered for w in ("at head", "before my changes", "before this change", "as committed", "on the branch")):

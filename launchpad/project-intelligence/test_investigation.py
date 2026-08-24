@@ -199,6 +199,106 @@ class StopRuleTest(unittest.TestCase):
         self.assertFalse(findings.corroborated)
 
 
+class AmbiguityTest(unittest.TestCase):
+    """LOW 6: a name resolving to several symbols took matches[0] silently.
+
+    That produces the worst citation shape this layer can emit -- a real
+    file:line for the WRONG subject. The code guards against exactly that shape
+    elsewhere (exact qualified_name matching, the "not a prefix match" test) and
+    this path quietly did the opposite. Found by the review panel.
+    """
+
+    def test_a_collision_is_recorded_in_the_trace(self) -> None:
+        trace = Trace()
+        second = _Match("is_shared_gated_kind", "function", "crates/buzz-core/src/other.rs", SIGNATURE)
+        findings = investigate(
+            decompose("how does `is_shared_gated_kind` work?"),
+            "buzz-core",
+            trace,
+            _tools(matches=[MATCH, second]),
+        )
+        ambiguous = [c for c in trace.calls if "AMBIGUOUS" in c.detail]
+        self.assertEqual(len(ambiguous), 1)
+        self.assertEqual(findings.ambiguous, (FILE, "crates/buzz-core/src/other.rs"))
+
+    def test_a_single_match_records_no_ambiguity(self) -> None:
+        trace = Trace()
+        findings = investigate(
+            decompose("how does `is_shared_gated_kind` work?"), "buzz-core", trace, _tools()
+        )
+        self.assertEqual(findings.ambiguous, ())
+        self.assertEqual([c for c in trace.calls if "AMBIGUOUS" in c.detail], [])
+
+    def test_a_collision_still_produces_an_answer(self) -> None:
+        """Disclosed, not refused -- refusing would answer nothing for a
+        legitimately overloaded name."""
+        trace = Trace()
+        second = _Match("is_shared_gated_kind", "function", "crates/buzz-core/src/other.rs", SIGNATURE)
+        findings = investigate(
+            decompose("how does `is_shared_gated_kind` work?"),
+            "buzz-core",
+            trace,
+            _tools(matches=[MATCH, second]),
+        )
+        self.assertTrue(findings.located)
+
+
+class SignatureLocationTest(unittest.TestCase):
+    """LOW 7: _read pinned the FIRST line containing the signature substring.
+
+    A signature quoted in a doc comment gets pinned as the definition, and then
+    verification confirms the claim against the comment -- the wrong-subject
+    failure the verify stage exists to catch, defeated by locate handing it the
+    wrong line. Found by the review panel.
+    """
+
+    def test_a_doc_comment_quoting_the_signature_is_not_pinned_as_the_definition(self) -> None:
+        text = "\n".join(
+            [
+                "// header",
+                f"/// see also {SIGNATURE} for the gate",
+                "// filler",
+                SIGNATURE,
+                "    SHARED_GATED_KINDS.contains(&kind)",
+                "}",
+            ]
+        )
+        trace = Trace()
+        findings = investigate(
+            decompose("how does `is_shared_gated_kind` work?"),
+            "buzz-core",
+            trace,
+            _tools(file_text=text),
+        )
+        self.assertEqual(findings.definition_line, 4, "pinned the doc comment, not the definition")
+
+    def test_an_indented_definition_is_still_found(self) -> None:
+        """The rule matches after stripping indentation, so a method inside an
+        impl block still locates."""
+        text = "\n".join(["// header", f"    {SIGNATURE}", "}"])
+        trace = Trace()
+        findings = investigate(
+            decompose("how does `is_shared_gated_kind` work?"),
+            "buzz-core",
+            trace,
+            _tools(file_text=text),
+        )
+        self.assertEqual(findings.definition_line, 2)
+
+    def test_a_containment_only_match_still_locates_rather_than_reporting_missing(self) -> None:
+        """Fallback: an unanticipated formatting should locate something rather
+        than claim the symbol is absent."""
+        text = "\n".join(["// header", f"pub(crate) {SIGNATURE} {{", "}"])
+        trace = Trace()
+        findings = investigate(
+            decompose("how does `is_shared_gated_kind` work?"),
+            "buzz-core",
+            trace,
+            _tools(file_text=text),
+        )
+        self.assertEqual(findings.definition_line, 2)
+
+
 class FindingsTest(unittest.TestCase):
     def test_the_definition_line_is_found_by_reading_not_assumed(self) -> None:
         trace = Trace()

@@ -124,7 +124,14 @@ def assemble(
                 Claim(
                     statement=f"the index has no locatable definition for {target}",
                     entry_class="FACT",
-                    evidence=tuple(f"{c.tool}({c.args}) -> {c.detail}" for c in trace.calls),
+                    # A FACT needs evidence, and an empty trace supplies none --
+                    # which raised ValueError out of a public function. Not
+                    # reachable through run() (locate always records a call), but
+                    # assemble() is public and the review panel reached it. The
+                    # fallback names the real absence rather than inventing a
+                    # citation.
+                    evidence=tuple(f"{c.tool}({c.args}) -> {c.detail}" for c in trace.calls)
+                    or ("no investigation was recorded for this target",),
                 ),
             ),
         )

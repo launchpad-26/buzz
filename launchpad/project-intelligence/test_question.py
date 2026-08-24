@@ -72,6 +72,27 @@ class TemporalStateTest(unittest.TestCase):
     def test_present_tense_phrasing_selects_working(self) -> None:
         self.assertEqual(decompose("how does `foo_bar` work?").temporal_state, "WORKING")
 
+    def test_a_why_question_is_rationale_intent_but_not_a_past_state(self) -> None:
+        """LOW 8: "why does" forced temporal_state=HISTORY, giving present-tense
+        mechanism questions git-history framing. A "why" question asks for
+        rationale; temporal_state governs which STATE of the tree gets read, and
+        those are different things. Found by the review panel.
+
+        History still fires -- classify_depth maps a HISTORY intent to RATIONALE,
+        and investigate() triggers history on either. Only the claimed temporal
+        state changed, and it is now accurate."""
+        question = decompose("why does `foo_bar` return a bool?")
+        self.assertEqual(question.intent, "HISTORY")
+        self.assertEqual(question.depth, "RATIONALE")
+        self.assertEqual(question.temporal_state, "WORKING")
+
+    def test_explicitly_historical_phrasing_still_selects_history(self) -> None:
+        """The mirror -- removing "why does" must not have removed the real
+        historical cues."""
+        for phrasing in ("how did `foo_bar` evolve?", "when was `foo_bar` added?"):
+            with self.subTest(phrasing=phrasing):
+                self.assertEqual(decompose(phrasing).temporal_state, "HISTORY")
+
     def test_comparative_phrasing_selects_base(self) -> None:
         self.assertEqual(decompose("how did `foo_bar` behave before my changes?").temporal_state, "BASE")
 

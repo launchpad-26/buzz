@@ -23,7 +23,7 @@ import investigator
 from answer import Answer, Claim
 from graph import reachable
 from knowledge_agent import KnowledgeAgent
-from question import Depth
+from question import Depth, decompose
 
 # Where an operational answer for each task is looked for, in order. Cited by
 # path, never generically: "run npm install" is wrong the moment the project
@@ -183,7 +183,14 @@ def dependencies(agent: KnowledgeAgent, symbol: str) -> Answer:
     transitive = [h for h in hits if h.hop > 1]
     return Answer(
         question=f"what does {symbol} depend on?",
-        short_answer=f"{len(direct)} direct, {len(transitive)} transitive.",
+        # Phrased without "(s)" for the same reason the claims were: the
+        # pluralisation fix landed on claims only, and its regression test
+        # iterated result.claims -- so the defect its own narrative described
+        # survived one field over, invisibly. Caught by the review panel.
+        short_answer=(
+            f"{len(direct)} direct and {len(transitive)} transitive "
+            f"{'dependency' if len(direct) + len(transitive) == 1 else 'dependencies'}."
+        ),
         relevant_flow=" ; ".join(" -> ".join(h.path) for h in hits) or "",
         things_to_be_aware_of=SNAPSHOT_CAVEAT,
         claims=(
@@ -205,7 +212,10 @@ def impact(agent: KnowledgeAgent, symbol: str) -> Answer:
     secondary = [h for h in hits if h.hop > IMPACT_DIRECT_HOPS]
     return Answer(
         question=f"what happens if I change {symbol}?",
-        short_answer=f"{len(direct)} direct dependent(s), {len(secondary)} secondary.",
+        short_answer=(
+            f"{len(direct)} direct and {len(secondary)} secondary "
+            f"{'dependent' if len(direct) + len(secondary) == 1 else 'dependents'}."
+        ),
         things_to_be_aware_of=(
             "Secondary dependents are reached through another symbol, so a change here affects "
             "them only if the direct dependent's own behaviour changes.\n" + SNAPSHOT_CAVEAT
@@ -355,6 +365,59 @@ def conventions(agent: KnowledgeAgent, area: str | None = None) -> Answer:
 
 def history(agent: KnowledgeAgent, symbol: str) -> Answer:
     return agent.answer(f"how did `{symbol}` evolve?")
+
+
+def ask(agent: KnowledgeAgent, text: str) -> Answer:
+    """Route a natural-language question to the method that answers it.
+
+    This is the piece `question.py` always claimed existed. Its docstring said
+    "a question and a direct call route to identical logic" while nothing
+    dispatched on intent at all: `KnowledgeAgent.run()` ran the EXPLAIN pipeline
+    for every question, so "how do I run the tests?" classified SETUP with
+    setup_task="test", discarded both, and answered "no symbol named in the
+    question" -- while setup() sat right here and would have answered it.
+
+    Five of seven intents were dead values. The review panel named it as the
+    FOURTH instance of the dead-classified-value defect on a branch that had
+    already fixed that class three times (the confidence predicate,
+    Findings.sufficient, and BASE). Fixing each instance as it surfaced and never
+    sweeping for the rest is the actual mistake; this time every intent is
+    dispatched and a test asserts each one reaches its own method.
+
+    It lives here rather than in KnowledgeAgent.run() because knowledge.py
+    imports knowledge_agent -- routing from inside run() would be a cycle. So
+    run() stays what it honestly is: the explain pipeline.
+    """
+    question = decompose(text)
+
+    if question.intent == "SETUP":
+        # setup_task is guaranteed non-None for SETUP by classify_intent, which
+        # returns the intent and the task together.
+        return setup(agent, question.setup_task or "")
+    if question.intent == "FIND":
+        return find(agent, text)
+    if question.intent == "CONVENTIONS":
+        return conventions(agent, question.target)
+
+    if question.target is None:
+        # Every remaining intent needs a subject. Saying so beats answering a
+        # different question, and beats crashing on a None target.
+        return Answer(
+            question=text,
+            short_answer="No symbol named in the question.",
+            things_to_be_aware_of=(
+                f"This reads as a {question.intent} question, which needs a named symbol. "
+                "Use knowledge.find() for a concept whose name you do not know yet."
+            ),
+        )
+
+    if question.intent == "DEPENDENCIES":
+        return dependencies(agent, question.target)
+    if question.intent == "IMPACT":
+        return impact(agent, question.target)
+    if question.intent == "HISTORY":
+        return history(agent, question.target)
+    return explain(agent, question.target, question.depth)
 
 
 def all_methods() -> tuple[str, ...]:

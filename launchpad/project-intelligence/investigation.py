@@ -95,6 +95,10 @@ class Findings:
     callers: list = field(default_factory=list)
     test_sites: list = field(default_factory=list)
     history: list = field(default_factory=list)
+    # Files of every candidate when a name resolved to more than one symbol.
+    # Empty is the normal case; non-empty means an answer describes ONE of
+    # several same-named symbols and must say so.
+    ambiguous: tuple = ()
 
     @property
     def located(self) -> bool:
@@ -136,6 +140,27 @@ def _locate(target: str, crate: str, findings: Findings, trace: Trace, tools: To
     )
     if matches:
         findings.match = matches[0]
+        # A collision is DISCLOSED, not silently resolved. Taking matches[0]
+        # when several symbols share a name produces the worst citation shape
+        # this layer can emit: a real file:line for the wrong subject. The code
+        # guards against that shape elsewhere (exact qualified_name matching in
+        # find_symbol, the "not a prefix match" test), and this path quietly
+        # did the opposite. Found by the review panel.
+        #
+        # Still resolved to the first match rather than refusing -- refusing
+        # would answer nothing for a legitimately overloaded name. But the trace
+        # now records that a choice was made, so an auditor sees it.
+        if len(matches) > 1:
+            findings.ambiguous = tuple(
+                getattr(m, "file", "?") for m in matches
+            )
+            trace.record(
+                "search_symbols",
+                f"{target!r} resolved to {getattr(matches[0], 'file', '?')} of "
+                f"{len(matches)} candidates",
+                found=True,
+                detail="AMBIGUOUS: several symbols share this name; the first was used",
+            )
 
 
 def _read(findings: Findings, trace: Trace, tools: Tools) -> None:
@@ -150,10 +175,29 @@ def _read(findings: Findings, trace: Trace, tools: Tools) -> None:
     text = tools.read_file(match.file)  # type: ignore[union-attr]
     lines = text.splitlines()
     signature = match.signature.strip()  # type: ignore[union-attr]
+    # Prefer a line that STARTS with the signature (after indentation) over one
+    # that merely contains it. A signature quoted inside a doc comment --
+    # `/// calls pub fn foo(...)` -- would otherwise be pinned as the
+    # definition, and then verification would confirm the claim against the
+    # comment. That is the wrong-subject failure the verify stage exists to
+    # catch, defeated by the locate stage handing it the wrong line. Found by
+    # the review panel.
+    #
+    # Falls back to a containment match so a formatting the strict rule does not
+    # anticipate still locates something, rather than reporting the symbol
+    # missing.
+    contained_at = None
     for i, line in enumerate(lines, start=1):
-        if signature and signature in line:
+        if not signature:
+            break
+        stripped = line.strip()
+        if stripped.startswith(signature):
             findings.definition_line = i
             break
+        if contained_at is None and signature in line:
+            contained_at = i
+    if findings.definition_line is None and contained_at is not None:
+        findings.definition_line = contained_at
     trace.record(
         "read_file",
         match.file,  # type: ignore[union-attr]

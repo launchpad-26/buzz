@@ -111,6 +111,24 @@ _DISPLAY_LABEL = {
 }
 
 
+def one_line(text: str) -> str:
+    """Collapse newlines so an author-controlled field cannot forge structure.
+
+    `statement` and `provided_by` on a TEAM_KNOWLEDGE claim come from whoever
+    recorded it, and they are rendered straight into Markdown. A multiline value
+    can therefore inject a `## Sources` heading or a fake `- FACT: ...` line into
+    the rendered answer -- forging provenance in the one section a reader trusts
+    to tell them where a claim came from.
+
+    The structured Claim stays correctly typed either way; the gap was purely in
+    rendering, which is where this fix belongs. Found by the review panel.
+
+    Newlines become " / " rather than being stripped, so the injected text is
+    still visible to a reader (and to an auditor) rather than silently vanishing.
+    """
+    return " / ".join(part.strip() for part in str(text).splitlines() if part.strip()) or str(text).strip()
+
+
 def format_confidence(confidence: float) -> str:
     """Two decimal places, trailing zeros trimmed.
 
@@ -136,11 +154,11 @@ def render_claim(claim: Claim) -> str:
     if claim.entry_class == "INFERENCE":
         label = f"{label} (confidence {format_confidence(claim.confidence)})"
     elif claim.entry_class == "TEAM_KNOWLEDGE":
-        label = f"{label} (from {claim.provided_by})"
+        label = f"{label} (from {one_line(claim.provided_by or '')})"
 
-    line = f"- {label}: {claim.statement}"
+    line = f"- {label}: {one_line(claim.statement)}"
     if claim.evidence:
-        line += f" -- {', '.join(claim.evidence)}"
+        line += f" -- {', '.join(one_line(e) for e in claim.evidence)}"
     return line
 
 

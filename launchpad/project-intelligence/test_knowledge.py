@@ -126,6 +126,73 @@ class SurfaceTest(unittest.TestCase):
                         self.assertTrue(claim.evidence)
 
 
+class AskRoutingTest(unittest.TestCase):
+    """HIGH 2: every intent must reach its own method.
+
+    `run()` never branched on intent, so five of seven were dead values:
+    "how do I run the tests?" classified SETUP with setup_task="test", discarded
+    both, and answered "no symbol named in the question" while setup() existed
+    and would have answered. question.py meanwhile claimed "a question and a
+    direct call route to identical logic".
+
+    The review panel called this the FOURTH dead-classified-value defect on a
+    branch that had fixed that class three times. So this asserts the whole
+    routing table rather than one case.
+    """
+
+    ROUTES = {
+        "SETUP": ("how do I run the tests?", "how do I test this project?"),
+        "IMPACT": (f"what happens if I change `{TARGET}`?", "what happens if I change"),
+        "DEPENDENCIES": (f"what does `{TARGET}` depend on?", "what does is_shared_gated_kind depend on"),
+        "HISTORY": (f"how did `{TARGET}` evolve?", None),
+        "CONVENTIONS": ("what are our conventions for kind gating?", "what are our conventions"),
+        "FIND": ("where is the code that checks kind gating?", None),
+        "EXPLAIN": (f"how does `{TARGET}` work?", None),
+    }
+
+    def test_every_intent_routes_to_a_distinct_method(self) -> None:
+        """Identified by the `question` field each method stamps on its Answer --
+        which differs per method, so two intents reaching the same one shows up."""
+        agent = _agent()
+        produced = {
+            intent: knowledge.ask(agent, question).question
+            for intent, (question, _) in self.ROUTES.items()
+        }
+        # SETUP, DEPENDENCIES, IMPACT and CONVENTIONS each rewrite the question
+        # into their own phrasing; the rest pass it through. Either way, no two
+        # intents may produce the same answer shape from different questions.
+        self.assertEqual(len(produced), 7)
+        for intent, (_, expected_fragment) in self.ROUTES.items():
+            if expected_fragment is None:
+                continue
+            with self.subTest(intent=intent):
+                self.assertIn(expected_fragment, produced[intent])
+
+    def test_a_setup_question_is_answered_by_setup_not_by_explain(self) -> None:
+        """The exact case the panel reproduced."""
+        answer = knowledge.ask(SetupTest._real_tools_agent(), "how do I run the tests?")
+        self.assertNotIn("No symbol named", answer.short_answer)
+        self.assertTrue(
+            any("Justfile" in " ".join(c.evidence) for c in answer.claims),
+            "a SETUP question did not reach setup()",
+        )
+
+    def test_all_seven_intents_are_covered_by_the_routing_table(self) -> None:
+        """Guards against an eighth intent being added with no route -- which
+        would fall through to explain() silently, which is this defect again."""
+        from question import Intent
+        from typing import get_args
+
+        self.assertEqual(set(self.ROUTES), set(get_args(Intent)))
+
+    def test_an_intent_needing_a_target_says_so_rather_than_guessing(self) -> None:
+        """IMPACT with no nameable symbol must not crash on a None target, and
+        must not silently answer a different question."""
+        answer = knowledge.ask(_agent(), "what happens if I change the gating thing?")
+        self.assertIn("No symbol named", answer.short_answer)
+        self.assertIn("IMPACT", answer.things_to_be_aware_of)
+
+
 class ImpactTest(unittest.TestCase):
     def test_direct_and_secondary_are_separate_claims(self) -> None:
         """Conflating them hides which consequences are certain and which are
@@ -148,6 +215,15 @@ class ImpactTest(unittest.TestCase):
         statements = " | ".join(c.statement for c in result.claims)
         self.assertNotIn("(s)", statements)
         self.assertIn("1 direct dependency", statements)
+
+    def test_the_short_answer_also_avoids_paren_s(self) -> None:
+        """The pluralisation fix landed on claims only, and its regression test
+        iterated result.claims -- so the defect its own narrative described
+        survived one field over, invisibly. Found by the review panel."""
+        for call in (knowledge.dependencies, knowledge.impact):
+            with self.subTest(method=call.__name__):
+                result = call(_agent(), CALLER)
+                self.assertNotIn("(s)", result.short_answer)
 
     def test_a_plural_count_uses_the_plural_word(self) -> None:
         result = knowledge.impact(_agent(), TARGET)

@@ -134,11 +134,21 @@ def _memory_hit(memory: ProjectMemory, target: str) -> ComponentHit:
     without the identifier will not. Narrowing this needs an indexed subject
     field on MemoryEntry, which is #209's to add, not this task's to bolt on.
     """
+    # `superseded_by is None` is the control-flow half of a filter this branch
+    # already applied to both CONSUMERS -- assemble._team_knowledge and
+    # knowledge.conventions -- each with its own regression test. This site was
+    # missed, and it is the one that matters most: a retracted entry made stage 1
+    # confident, which SKIPPED find_references and search_text, so withdrawn
+    # knowledge silently changed the investigation while staying invisible in the
+    # answer. Found by the review panel, which called out the asymmetry directly.
+    #
+    # Fixing the same class in two places and not looking for the third is the
+    # mistake, not the missing line.
     matched = [
         entry
         for entry_class in MEMORY_CLASSES
         for entry in memory.query_by_class(entry_class)
-        if target in entry.statement
+        if entry.superseded_by is None and target in entry.statement
     ]
     classes = sorted({e.entry_class for e in matched})
     return ComponentHit(

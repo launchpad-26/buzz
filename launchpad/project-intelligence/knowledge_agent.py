@@ -115,7 +115,17 @@ class KnowledgeAgent:
             return None
 
     def run(self, text: str, depth: Depth | None = None) -> Outcome:
-        """The four stages, in order, with every decision recorded."""
+        """The four stages, in order, with every decision recorded.
+
+        This is the EXPLAIN pipeline specifically, not a router. It does not
+        dispatch on `question.intent` and is not meant to -- `knowledge.ask()`
+        does that, and lives there because knowledge.py imports this module, so
+        routing from here would be a cycle.
+
+        Worth stating explicitly because the absence of routing here was read as
+        a defect by two independent reviewers, and they were right to: nothing
+        anywhere dispatched on intent, and question.py claimed something did.
+        """
         question = decompose(text)
         if depth is not None:
             question = type(question)(

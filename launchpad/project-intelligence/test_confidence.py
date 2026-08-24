@@ -166,6 +166,43 @@ class AssessTest(unittest.TestCase):
         self.assertFalse(hit.found)
         self.assertIn("no symbol in the index has qualified_name", hit.detail)
 
+    def test_a_superseded_entry_does_not_make_the_agent_confident(self) -> None:
+        """The control-flow half of a filter this branch applied to both
+        CONSUMERS and missed here. A retracted entry made stage 1 confident,
+        which SKIPPED corroboration -- so withdrawn knowledge silently changed
+        the investigation while staying invisible in the answer. Found by the
+        review panel, which named the asymmetry directly."""
+        self.memory.add(
+            MemoryEntry(
+                id="retracted",
+                entry_class="FACT",
+                statement=f"{TARGET} gates shared kinds",
+                evidence=("crates/buzz-core/src/kind.rs:219-221",),
+                superseded_by="newer",
+            )
+        )
+        result = assess(TARGET, self.graph, self.index, self.memory, self.symbols)
+        self.assertFalse(result.confident, "a superseded entry must not confer confidence")
+        self.assertIn("ProjectMemory", result.empty)
+
+    def test_every_memory_consumer_filters_superseded_entries(self) -> None:
+        """The lesson was not the missing line -- it was fixing the same class
+        twice and never sweeping for the third site. This asserts the sweep:
+        every production module that reads memory entries filters them.
+        """
+        import pathlib as _pathlib
+
+        readers = []
+        for path in sorted(_pathlib.Path(".").glob("*.py")):
+            if path.name.startswith("test_") or path.name == "memory.py":
+                continue
+            text = path.read_text()
+            if "query_by_class" in text:
+                readers.append((path.name, "superseded_by" in text))
+        self.assertTrue(readers, "found no memory consumers to check")
+        unfiltered = [name for name, filtered in readers if not filtered]
+        self.assertEqual(unfiltered, [], f"these read memory without filtering: {unfiltered}")
+
     def test_an_empty_target_is_rejected(self) -> None:
         with self.assertRaises(ValueError):
             assess("  ", self.graph, self.index, self.memory)
