@@ -12,7 +12,9 @@ tasks.
 """
 
 from security_audit_selftest_check import run as harness_self_test
+from security_audit_secrets_check import run as secret_material_scan
 
 CHECKS = [
     harness_self_test,
+    secret_material_scan,
 ]
