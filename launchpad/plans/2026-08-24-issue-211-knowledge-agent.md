@@ -55,11 +55,14 @@ ALREADY TRUE  (verified against git and the live repo, not notes)
 
 APPROACH NOTE (read before step 1)
   Orchestration here is **deterministic** -- rule-based question decomposition and templated
-  prose, no model call. Three reasons, all checkable: every sibling module in this series has no
-  LLM/API dependency; ADR-0012's inference-provider boundary was amended on 2026-08-20 for #74
-  specifically, and names no other consumer, so a model call from #211 sits outside the recorded
-  credential boundary; and all six of #211's DoD items are structurally checkable without one.
-  See OPEN -- this is a default with reasoning, not a settled decision.
+  prose, no model call. **Confirmed with Serina 2026-08-24, before step 1.** Three reasons, all
+  checkable: every sibling module in this series has no LLM/API dependency; ADR-0012's
+  inference-provider boundary was amended on 2026-08-20 for #74 specifically, and names no other
+  consumer, so a model call from #211 sits outside the recorded credential boundary; and all six
+  of #211's DoD items are structurally checkable without one.
+
+  A builder must therefore not introduce an API client, a model client, or a network call. If one
+  looks necessary to satisfy a step, that is a signal the step was misread -- stop and say so.
 
   Tests are written **per step**, as each step's own done-when, not gathered at the end.
   Step 12 proves the suite is hermetic and wires the CLI; it does not author the suite.
@@ -187,13 +190,12 @@ BUDGET    Step 7 (the investigation loop) is most likely to overrun. "Stopping a
           finding a real flow in buzz-core with enough depth to fill all six sections honestly
           may take several candidate symbols before one holds up.
 
-OPEN      **Does the KnowledgeAgent call a model?** The design doc calls it "the only component
-          allowed to produce prose", which reads as an LLM, but ADR-0012's amendment names #74
-          and no other consumer, and every sibling module here is deterministic. This plan
-          defaults to deterministic templated prose (see APPROACH NOTE) so the whole task stays
-          hermetically testable and inside the recorded credential boundary. A human should
-          confirm that reading rather than discover it in review -- if a model call is intended,
-          the boundary needs an ADR amendment first, and this plan changes shape.
+OPEN      ~~**Does the KnowledgeAgent call a model?**~~ **Decided 2026-08-24 by Serina: no.**
+          Deterministic templated prose -- see APPROACH NOTE. Kept here rather than deleted
+          because the design doc's "the only component allowed to produce prose" still reads as
+          an LLM to anyone arriving at that sentence cold, and the reason it isn't one is the
+          ADR-0012 boundary, not the doc. If a later consumer wants real synthesis, that is an
+          ADR-0012 amendment naming it, before code.
           **What "significant enough to re-verify" means** in decision-logic stage 2. The doc
           says "it will drive a code change, or will be stated to the user as settled fact",
           which is not mechanically decidable. Default: every FACT claim is verified, since the
