@@ -155,11 +155,45 @@ drop-and-invent swap violates even though the count survives it.
 
 ## The `stages` entry
 
-#117 does not emit a top-level `stages` array — it is the manifest #119's plan reads
-for stages that produce no envelope of their own (#116's pre-flight, and this one). This
-stage adds exactly one entry, `{name: "adjudication", status, reason}`, to whatever
-`stages` array arrived (empty, or already carrying #116's entry), and passes every
+This stage adds exactly one entry, `{name: "adjudication", status, reason}`, to whatever
+`stages` array arrived (empty, or already carrying earlier entries), and passes every
 existing entry through unchanged.
+
+> **Amended 2026-08-24.** This section previously opened with a sentence that is struck
+> through here rather than deleted, because it was the asserted contract for ten days:
+>
+> > ~~#117 does not emit a top-level `stages` array — it is the manifest #119's plan reads
+> > for stages that produce no envelope of their own (#116's pre-flight, and this one).~~
+>
+> That is the wording #119's own plan superseded on 2026-08-14 (`8d47f8764`) and named as
+> a defect:
+>
+> > *"names EVERY stage the review depended on — #116's pre-flight, #117's three
+> > dimensions by slug, and #118's adjudication. Not only the stages that emit no
+> > envelope of their own, which is what an earlier revision said and which contradicted
+> > this step's own condition (7) […] Built to the old definition, the manifest held two
+> > entries, neither a dimension, so (7) could never fire: a three-dimension run that
+> > produced two reports rendered as COMPLETE."*
+> > — `launchpad/plans/2026-08-12-issue-119-publish-one-review.md` STEP 5
+>
+> **The corrected definition:** `stages` names every stage the review depended on,
+> *including each of #117's dimensions by slug*. #119's condition (7) — a dimension named
+> by the manifest produced no report at all — is the only check that catches a dimension
+> failing so completely that no envelope exists for it, and it has nothing to compare
+> `reports` against unless the dimension is named here.
+>
+> **This stage cannot produce those entries, and must not pretend to.** Deriving them
+> from `reports[].dimension` would name only the dimensions that *did* report, so
+> condition (7) could still never fire — a report cannot testify to its own absence. The
+> expected set is known only to `run_dimensions.list_dimensions()`, which enumerates
+> `dimensions/*.py` before dispatch. **Producing the per-dimension entries is #117's, in
+> `run_dimensions.py`.** Filed separately; this stage's contribution is the one
+> `adjudication` entry described above, and pass-through of whatever else arrived.
+>
+> Consequence, stated plainly rather than left for a reader to discover: until #117 emits
+> them, a `stages` array reaching #119 names no dimension, so condition (7) cannot fire
+> and a run that loses a whole dimension can still render as complete. That is a live gap
+> in the pipeline, not a property of this stage.
 
 **It never overwrites an existing `adjudication` entry.** A second one on input means a
 re-run against a document this stage has already adjudicated, and this stage exits
