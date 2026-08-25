@@ -28,11 +28,13 @@ the wrong token is not a weak control; it is a false one.
 
 from __future__ import annotations
 
+import contextlib
 import copy
 import os
 import subprocess
 import sys
 from pathlib import Path
+from unittest import mock
 
 WORKFLOW = Path(__file__).resolve().parents[2] / ".github" / "workflows" / "launchpad-review-agent-publish.yml"
 
@@ -211,8 +213,91 @@ def run_identity_check(configured_login: str, observed_login: str | None) -> Non
     )
 
 
+@contextlib.contextmanager
+def _isolated_failures():
+    """Redirects check()/skip() into a scratch list for the duration of the
+    block, so a self-test's deliberately-triggered FAIL (e.g. feeding a 404 to
+    prove it FAILs) is inspected here rather than polluting the real run's
+    exit code.
+    """
+    global failures
+    saved = failures
+    failures = []
+    try:
+        yield failures
+    finally:
+        failures = saved
+
+
+def run_offline_self_tests() -> None:
+    """Proves the live/identity halves' SKIP-vs-FAIL-vs-PASS logic without a
+    real Actions run -- per STEP 9's own done-when: a recorded 404 must FAIL,
+    a recorded 403 must PASS, an unexpected success must FAIL and delete the
+    ref it made, GITHUB_WORKFLOW naming the wrong workflow must SKIP (never
+    PASS or FAIL), and an identity mismatch must FAIL naming both values.
+
+    A control observed only against the real environment is proven only by
+    luck the first time it runs for real -- these assertions are what would
+    have caught `_in_publish_workflow()`'s comparison silently inverted, or
+    `status == 403` degraded to `status != 200`, before either ever reached a
+    live token.
+    """
+    saved_env = {
+        k: os.environ.get(k)
+        for k in ("GITHUB_WORKFLOW", "GITHUB_TOKEN", "GH_TOKEN", "GITHUB_RUN_ID", "GITHUB_REPOSITORY")
+    }
+    try:
+        os.environ["GITHUB_WORKFLOW"] = PUBLISH_WORKFLOW_NAME
+        os.environ["GITHUB_TOKEN"] = "self-test-token"
+        os.environ["GITHUB_RUN_ID"] = "999999"
+        os.environ["GITHUB_REPOSITORY"] = "launchpad-26/buzz"
+
+        with _isolated_failures() as inner:
+            run_live_half(probe=lambda repo, run_id: (404, {"message": "self-test"}))
+        check(bool(inner), "self-test: a recorded 404 fed to the live half yields FAIL, not PASS")
+
+        with _isolated_failures() as inner:
+            run_live_half(probe=lambda repo, run_id: (403, {"message": "self-test"}))
+        check(not inner, "self-test: a recorded 403 fed to the live half yields PASS")
+
+        deleted = []
+        with _isolated_failures() as inner, mock.patch(
+            "subprocess.run", side_effect=lambda *a, **k: deleted.append(a) or mock.Mock()
+        ):
+            run_live_half(probe=lambda repo, run_id: (201, {"ref_name": "refs/heads/scope-probe-999999"}))
+        check(bool(inner), "self-test: an unexpected 201 success yields FAIL")
+        check(bool(deleted), "self-test: an unexpected success attempts to delete the ref it created")
+
+        with _isolated_failures() as inner:
+            run_identity_check(configured_login="github-actions[bot]", observed_login="someone-else")
+        check(
+            bool(inner) and "github-actions[bot]" in inner[0] and "someone-else" in inner[0],
+            "self-test: identity mismatch yields FAIL naming both values",
+        )
+
+        with _isolated_failures() as inner:
+            run_identity_check(configured_login="github-actions[bot]", observed_login="github-actions[bot]")
+        check(not inner, "self-test: identity match yields PASS")
+
+        # The wrong-workflow guard: GITHUB_WORKFLOW names the CONTROLS
+        # workflow -- the exact wrong-token case the plan names by name --
+        # and neither half may PASS or FAIL, only SKIP.
+        os.environ["GITHUB_WORKFLOW"] = "launchpad — review agent containment controls"
+        with _isolated_failures() as inner:
+            run_live_half()
+            run_identity_check(configured_login="github-actions[bot]", observed_login="github-actions[bot]")
+        check(not inner, "self-test: GITHUB_WORKFLOW naming the controls workflow -> SKIP, never PASS or FAIL")
+    finally:
+        for k, v in saved_env.items():
+            if v is None:
+                os.environ.pop(k, None)
+            else:
+                os.environ[k] = v
+
+
 if __name__ == "__main__":
     run_static_half()
+    run_offline_self_tests()
     run_live_half()
     run_identity_check(
         configured_login=os.environ.get("PUBLISH_CONFIGURED_LOGIN", "github-actions[bot]"),

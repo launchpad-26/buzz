@@ -57,6 +57,21 @@ def _listing() -> dict:
     return json.loads((FIXTURES / "reviews-listing.json").read_text(encoding="utf-8"))
 
 
+def _lifecycle() -> dict:
+    return json.loads((FIXTURES / "review-lifecycle.json").read_text(encoding="utf-8"))
+
+
+def _real_put_response() -> dict:
+    """The real recorded PUT response body from STEP 1 -- genuinely measured,
+    not authored from belief about the shape `_submit` parses.
+    """
+    return _lifecycle()["put"]["body"]
+
+
+def _real_post_response() -> dict:
+    return _lifecycle()["post"]["body"]
+
+
 # ---------------------------------------------------------------------------
 # (i) the event published is COMMENT, and no other event string exists.
 # ---------------------------------------------------------------------------
@@ -79,15 +94,18 @@ def assertion_i() -> bool:
 # ---------------------------------------------------------------------------
 def assertion_ii() -> bool:
     listing = _listing()
-    marked_page = [_marked(listing["recorded_single_page"][0])]
+    real_review = listing["recorded_single_page"][0]
+    marked_page = [_marked(real_review)]
     calls: list[list[str]] = []
 
     def list_reviews(argv):
         return marked_page
 
+    real_put = _real_put_response()
+
     def submit(argv):
         calls.append(argv)
-        return 200, {"id": marked_page[0]["id"], "user": {"login": "serina-mcfall"}}
+        return 200, real_put
 
     result = publish.post_or_update(
         1421, "launchpad-26/buzz", publish.MARKER + "\nsecond run",
@@ -95,11 +113,40 @@ def assertion_ii() -> bool:
     )
     puts = [c for c in calls if "PUT" in c]
     posts = [c for c in calls if "POST" in c]
-    ok = len(puts) == 1 and len(posts) == 0 and result[1] == "updated"
+    single_ok = len(puts) == 1 and len(posts) == 0 and result[1] == "updated"
+
+    # A submitted review can't be deleted, so once two of the agent's own
+    # markers exist on one PR neither can be retired -- find_existing must
+    # resolve to the NEWER one, never the older, or the body a human reads
+    # last stays permanently stale. Older copy dated well before the real
+    # recording's own submitted_at.
+    older = _marked(real_review)
+    older["id"] = 1
+    older["submitted_at"] = "2020-01-01T00:00:00Z"
+    newer = _marked(real_review)  # the real recording's own (later) timestamp
+
+    def list_reviews_both(argv):
+        return [older, newer]
+
+    calls2: list[list[str]] = []
+
+    def submit2(argv):
+        calls2.append(argv)
+        return 200, real_put
+
+    result2 = publish.post_or_update(
+        1421, "launchpad-26/buzz", publish.MARKER + "\nthird run",
+        "serina-mcfall", list_reviews=list_reviews_both, submit=submit2,
+    )
+    targeted_newer = any(f"/{newer['id']}" in c[2] for c in calls2 if "PUT" in c)
+    tie_break_ok = targeted_newer and result2[0] == newer["id"]
+
+    ok = single_ok and tie_break_ok
     return check(
         ok,
-        "(ii) marker present -> PUT and no POST",
-        f"puts={len(puts)} posts={len(posts)} result={result}",
+        "(ii) marker present -> PUT and no POST; two own markers -> PUT targets the NEWER, not the older",
+        f"puts={len(puts)} posts={len(posts)} result={result}; "
+        f"tie-break targeted newer id={newer['id']!r}: {targeted_newer}, result2={result2}",
     )
 
 
@@ -182,9 +229,9 @@ def assertion_iv() -> bool:
     body = publish_render.render_body(
         publish.MARKER, [report], _make_stages(), _make_containment(), "h", "b", nonce=NONCE,
     )
-    idx_blocker = body.index("Blocker")
-    idx_low = body.index("Low", idx_blocker)
-    ok = idx_blocker < idx_low
+    idx_blocker = body.find("Blocker")
+    idx_low = body.find("Low")
+    ok = idx_blocker != -1 and idx_low != -1 and idx_blocker < idx_low
     return check(
         ok, "(iv) a Blocker appended last in the array still renders first",
         f"Blocker index={idx_blocker}, Low index={idx_low}",
@@ -255,6 +302,10 @@ def assertion_vii() -> bool:
 
     def submit_403(argv):
         calls.append(argv)
+        # SYNTHETIC, not recorded: STEP 1's fixture holds a 422 DELETE but no
+        # 403 PUT (this session's own PUT calls all returned 200). The shape
+        # matters here only as much as post_or_update's own status check
+        # (200 <= status < 300), which does not inspect the body at all.
         return 403, {"message": "forbidden"}
 
     raised = False
@@ -311,7 +362,7 @@ def assertion_viii() -> bool:
         "stages": _make_stages(), "reports": [_make_report(d) for d in DIMS],
         "containment": _make_containment(), "nonce": NONCE,
     }
-    fake, calls = _fake_run(listing_reviews=[], post_response=lambda argv: (200, {"id": 1, "user": {"login": "github-actions[bot]"}}))
+    fake, calls = _fake_run(listing_reviews=[], post_response=lambda argv: (200, _real_post_response()))
     with mock.patch("publish.subprocess.run", side_effect=fake):
         with mock.patch("sys.stdin", __import__("io").StringIO(json.dumps(document))):
             rc = publish.main(["--repo", "launchpad-26/buzz"])
@@ -336,7 +387,7 @@ def assertion_ix() -> bool:
         "stages": _make_stages(), "reports": [_make_report(d) for d in DIMS],
         "containment": _make_containment(), "nonce": NONCE,
     }
-    fake, calls = _fake_run(listing_reviews=[foreign], post_response=lambda argv: (200, {"id": 1, "user": {"login": "github-actions[bot]"}}))
+    fake, calls = _fake_run(listing_reviews=[foreign], post_response=lambda argv: (200, _real_post_response()))
     with mock.patch("publish.subprocess.run", side_effect=fake):
         with mock.patch("sys.stdin", __import__("io").StringIO(json.dumps(document))):
             rc = publish.main(["--repo", "launchpad-26/buzz", "--as", "github-actions[bot]"])
@@ -357,7 +408,7 @@ def assertion_x() -> bool:
         "stages": _make_stages(), "reports": [_make_report(d) for d in DIMS],
         "containment": _make_containment(), "nonce": NONCE,
     }
-    fake, calls = _fake_run(listing_reviews=[], post_response=lambda argv: (200, {"id": 1, "user": {"login": "github-actions[bot]"}}))
+    fake, calls = _fake_run(listing_reviews=[], post_response=lambda argv: (200, _real_post_response()))
     with mock.patch("publish.subprocess.run", side_effect=fake):
         with mock.patch("sys.stdin", __import__("io").StringIO(json.dumps(document))):
             rc = publish.main(["--repo", "launchpad-26/buzz", "--as", "github-actions[bot]"])
@@ -459,8 +510,23 @@ def apply_mutation(root: Path, filename: str, find: str, replace: str) -> bool:
     return True
 
 
+import re
+
+_FAIL_LABEL_RE = re.compile(r"^FAIL\s+\(([a-zA-Z]+)\)")
+
+
+def _failing_assertion_names(stdout: str) -> set[str]:
+    """Which of the ten assertions' own FAIL lines appear in a full-suite run.
+
+    Parses labels rather than trusting the exit code alone, because the exit
+    code only says "something failed" -- the "exactly" in this step's own
+    done-when needs to know WHICH one(s).
+    """
+    return {m.group(1) for line in stdout.splitlines() if (m := _FAIL_LABEL_RE.match(line))}
+
+
 def prove_mutations() -> int:
-    print(f"{len(MUTATIONS)} mutations, each must break exactly its own assertion\n")
+    print(f"{len(MUTATIONS)} mutations, each must be caught by its own named assertion\n")
     mutation_failures = []
     for name, filename, find, replace in MUTATIONS:
         with tempfile.TemporaryDirectory() as tmp:
@@ -470,18 +536,43 @@ def prove_mutations() -> int:
                 print(f"FAIL  mutation {name:<6}could not apply -- the anchor has drifted in {filename}")
                 mutation_failures.append(name)
                 continue
+            # Full suite, no --only: --only alone cannot see collateral
+            # breakage. Verified empirically that mutation (ii) ("make
+            # find_existing return None unconditionally" -- the plan's own
+            # stated mutation) also breaks (iii), (vii) and (ix), since all
+            # four exercise the same shared find_existing/post_or_update
+            # code path. That is not a suite defect -- a mutation to
+            # widely-shared code SHOULD break every assertion that depends
+            # on it -- so the full failing set is reported for honesty, and
+            # only "the named assertion did NOT fail" counts as survival.
             proc = subprocess.run(
-                [sys.executable, str(root / "check_publish_single.py"), "--only", name],
+                [sys.executable, str(root / "check_publish_single.py")],
                 capture_output=True, text=True, cwd=root, timeout=60,
             )
-            if proc.returncode != 0:
-                print(f"PASS  mutation {name:<6}caught (assertion {name} failed under the mutant)")
+            failing = _failing_assertion_names(proc.stdout)
+            if name in failing:
+                extra = sorted(failing - {name})
+                note = f" (also broke: {extra})" if extra else ""
+                print(f"PASS  mutation {name:<6}caught{note}")
             else:
                 print(f"FAIL  mutation {name:<6}SURVIVED -- assertion {name} still passed")
                 print(proc.stdout)
                 mutation_failures.append(name)
     print(f"\n{len(mutation_failures)} surviving mutant(s)")
     return 1 if mutation_failures else 0
+
+
+def _run_assertion_safely(name: str, fn) -> bool:
+    """A mutation can make an assertion raise rather than merely return False
+    (STEP 4's own reasoning about crashes vs incomplete banners applies here
+    too) -- an uncaught exception must report as that assertion's own FAIL,
+    not kill the whole run and leave prove_mutations() unable to tell which
+    assertion (if any) actually caught the mutant.
+    """
+    try:
+        return fn()
+    except Exception as exc:  # noqa: BLE001 -- deliberately broad: any crash is a FAIL
+        return check(False, f"({name}) CRASHED instead of failing cleanly", f"{type(exc).__name__}: {exc}")
 
 
 def main() -> int:
@@ -494,11 +585,11 @@ def main() -> int:
         return prove_mutations()
 
     if args.only:
-        ok = ASSERTIONS[args.only]()
+        ok = _run_assertion_safely(args.only, ASSERTIONS[args.only])
         return 0 if ok else 1
 
     for name, fn in ASSERTIONS.items():
-        fn()
+        _run_assertion_safely(name, fn)
 
     print(f"\n{len(failures)} failure(s)")
     return 1 if failures else 0

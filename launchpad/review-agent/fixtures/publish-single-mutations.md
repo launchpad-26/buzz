@@ -9,8 +9,8 @@ invocations against this branch's real code, captured verbatim.
 ```
 PASS  (i) event is COMMENT and no other event string exists in the source
       event=COMMENT present=True; APPROVE absent=True; REQUEST_CHANGES absent=True
-PASS  (ii) marker present -> PUT and no POST
-      puts=1 posts=0 result=(5014996076, 'updated', 'serina-mcfall')
+PASS  (ii) marker present -> PUT and no POST; two own markers -> PUT targets the NEWER, not the older
+      puts=1 posts=0 result=(5014996076, 'updated', 'serina-mcfall'); tie-break targeted newer id=5014996076: True, result2=(5014996076, 'updated', 'serina-mcfall')
 PASS  (iii) find_existing paginates -- page two reachable only with --paginate
       with --paginate found id=5014996076 (expected 5014996076); without --paginate, marked reviews visible=0 (expected 0)
 PASS  (iv) a Blocker appended last in the array still renders first
@@ -34,23 +34,32 @@ PASS  (x) a clean (empty) listing still posts
 ## Each of the ten stated mutations, applied to a scratch copy and reverted
 
 ```
-10 mutations, each must break exactly its own assertion
+10 mutations, each must be caught by its own named assertion
 
-PASS  mutation i     caught (assertion i failed under the mutant)
-PASS  mutation ii    caught (assertion ii failed under the mutant)
-PASS  mutation iii   caught (assertion iii failed under the mutant)
-PASS  mutation iv    caught (assertion iv failed under the mutant)
-PASS  mutation v     caught (assertion v failed under the mutant)
-PASS  mutation vi    caught (assertion vi failed under the mutant)
-PASS  mutation vii   caught (assertion vii failed under the mutant)
-PASS  mutation viii  caught (assertion viii failed under the mutant)
-PASS  mutation ix    caught (assertion ix failed under the mutant)
-PASS  mutation x     caught (assertion x failed under the mutant)
+PASS  mutation i     caught
+PASS  mutation ii    caught (also broke: ['iii', 'ix', 'vii'])
+PASS  mutation iii   caught (also broke: ['ix', 'viii', 'x'])
+PASS  mutation iv    caught
+PASS  mutation v     caught
+PASS  mutation vi    caught
+PASS  mutation vii   caught
+PASS  mutation viii  caught (also broke: ['ix', 'x'])
+PASS  mutation ix    caught
+PASS  mutation x     caught (also broke: ['viii'])
 
 0 surviving mutant(s)
 ```
 
-A note on two genuine gaps this recording exposed and fixed, not papered over:
+Mutations ii, iii, viii and x show collateral breakage against other named
+assertions -- that is disclosed, not hidden: `prove_mutations()` runs the
+FULL ten-assertion suite under each mutant (not `--only <name>`) and reports
+every assertion that failed, not merely whether the target one did. A
+mutation to widely-shared code (`find_existing`, `post_or_update`, `main`'s
+transport wiring) breaking several assertions at once is not a suite defect;
+what would be a defect is not being able to see it, which an earlier draft
+of this harness could not.
+
+Real gaps this recording exposed and fixed, not papered over:
 
 - Assertion (iv)'s first draft chose finding_ids (`f-medium`, `f-low`,
   `f-blocker-appended-last`) whose alphabetical order happened to coincide
@@ -68,3 +77,16 @@ A note on two genuine gaps this recording exposed and fixed, not papered over:
   `RuntimeError` from `post_or_update`, so the foreign-marker refusal (the
   exact case assertion (ix) exercises) crashed with a raw traceback instead
   of exiting cleanly. Fixed in `main()`, not just in this control.
+- A review-tests pass on this file found three further real gaps, fixed
+  here: `check_publish_scope.py`'s (STEP 9) live/identity SKIP-vs-FAIL logic
+  had zero automated proof -- fixed by adding `run_offline_self_tests()`
+  there, verified to catch an injected inversion of the workflow-name guard.
+  This file's own write-response bodies were hand-authored despite the real
+  recorded shape (`fixtures/review-lifecycle.json`) being available and
+  cited in the module docstring -- fixed by loading it for assertions (ii),
+  (viii), (ix) and (x); only the unmeasured 403 case in (vii) stays
+  synthetic, now labelled as such. And assertion (ii) itself had no coverage
+  of "newest, not oldest" wins when two of the agent's own markers exist on
+  one PR -- extended in place (still one named assertion) with a second
+  scenario proving the tie-break targets the newer id, verified live to fail
+  when the real `max()` is inverted to `min()`.
