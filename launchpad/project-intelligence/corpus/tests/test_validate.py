@@ -37,9 +37,25 @@ class ValidFixtureTest(unittest.TestCase):
 
 class SchemaViolationTest(unittest.TestCase):
     def test_bad_schema_fixture_named_and_rejected(self) -> None:
-        errors = validate.validate_corpus(INVALID_DIR)
+        errors = validate.validate_corpus(INVALID_DIR / "bad-schema")
         self.assertEqual(len(errors), 1)
         self.assertIn("validator-fixture-bad-schema", errors[0])
+
+
+class DuplicateIdTest(unittest.TestCase):
+    def test_duplicate_id_rejected_and_named(self) -> None:
+        errors = validate.validate_corpus(INVALID_DIR / "duplicate-id")
+        self.assertEqual(len(errors), 1)
+        self.assertIn("validator-fixture-duplicate", errors[0])
+        self.assertIn("duplicate id", errors[0])
+
+
+class UnresolvedRelationshipTargetTest(unittest.TestCase):
+    def test_unresolved_target_rejected_and_named(self) -> None:
+        errors = validate.validate_corpus(INVALID_DIR / "unresolved-target")
+        self.assertEqual(len(errors), 1)
+        self.assertIn("validator-fixture-unresolved-target", errors[0])
+        self.assertIn("no-such-node-anywhere", errors[0])
 
 
 class RealCorpusRootExclusionTest(unittest.TestCase):

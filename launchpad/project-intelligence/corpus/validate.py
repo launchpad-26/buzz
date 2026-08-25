@@ -122,10 +122,45 @@ def load_nodes(corpus_root: Path) -> list[LoadedNode]:
     return nodes
 
 
+def find_duplicate_ids(nodes: list[LoadedNode]) -> list[str]:
+    """Every node's `id` must be unique across the corpus."""
+    paths_by_id: dict[object, list[Path]] = {}
+    for node in nodes:
+        if node.id is None:
+            continue
+        paths_by_id.setdefault(node.id, []).append(node.path)
+
+    errors = []
+    for node_id, paths in paths_by_id.items():
+        if len(paths) > 1:
+            joined = ", ".join(str(p) for p in paths)
+            errors.append(f"{node_id}: duplicate id used by {len(paths)} nodes: {joined}")
+    return errors
+
+
+def find_unresolved_relationship_targets(nodes: list[LoadedNode]) -> list[str]:
+    """Every `relationships[].target` must match some loaded node's `id`."""
+    known_ids = {node.id for node in nodes if node.id is not None}
+
+    errors = []
+    for node in nodes:
+        for relationship in node.data.get("relationships") or []:
+            target = relationship.get("target")
+            if target is not None and target not in known_ids:
+                errors.append(
+                    f"{node.id or node.path}: relationship target {target!r} "
+                    "does not match any known node id"
+                )
+    return errors
+
+
 def validate_corpus(corpus_root: Path) -> list[str]:
     """Return every validation error found. Empty list means the corpus is clean."""
     nodes = load_nodes(corpus_root)
-    return [n.error for n in nodes if n.error]
+    errors = [n.error for n in nodes if n.error]
+    errors.extend(find_duplicate_ids(nodes))
+    errors.extend(find_unresolved_relationship_targets(nodes))
+    return errors
 
 
 def main(argv: list[str] | None = None) -> int:
