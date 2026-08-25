@@ -139,12 +139,24 @@ def find_duplicate_ids(nodes: list[LoadedNode]) -> list[str]:
 
 
 def find_unresolved_relationship_targets(nodes: list[LoadedNode]) -> list[str]:
-    """Every `relationships[].target` must match some loaded node's `id`."""
+    """Every `relationships[].target` must match some loaded node's `id`.
+
+    Nodes with `node.error` already set (a schema violation, e.g. a malformed
+    `relationships` entry) are skipped here -- they're already reported, and their
+    unvalidated `data` isn't safe to assume well-shaped. The `isinstance` guard is
+    defense-in-depth on top of that, not the primary protection: node.schema.json
+    already requires each relationship to be an object, so a schema-invalid node
+    is the only way a non-dict entry reaches here at all.
+    """
     known_ids = {node.id for node in nodes if node.id is not None}
 
     errors = []
     for node in nodes:
+        if node.error:
+            continue
         for relationship in node.data.get("relationships") or []:
+            if not isinstance(relationship, dict):
+                continue
             target = relationship.get("target")
             if target is not None and target not in known_ids:
                 errors.append(
@@ -163,11 +175,19 @@ def find_unresolved_relationship_targets(nodes: list[LoadedNode]) -> list[str]:
 # wildcard" mistake this project's own credential-handling rule warns about.
 _CREDENTIAL_LIKE_BASENAME_PREFIXES = ("id_rsa", "id_ed25519")
 _CREDENTIAL_LIKE_EXTENSIONS = {".pem", ".key"}
+# Conventional non-secret .env suffixes -- exempted so a real, tracked, public
+# template like .env.example (this repo's own AGENTS.md says `cp .env.example
+# .env`) is never rejected as a prohibited credential. The same over-broad-match
+# mistake already caught once for crates/buzz-auth, recurring here for .env
+# specifically until an independent review-code pass found it.
+_ENV_SAFE_SUFFIXES = (".example", ".sample", ".template")
 
 
 def _is_prohibited_citation(citation: str) -> bool:
     name = PurePosixPath(citation).name
-    if name == ".env" or name.startswith(".env."):
+    if name == ".env":
+        return True
+    if name.startswith(".env.") and not name.endswith(_ENV_SAFE_SUFFIXES):
         return True
     if any(name.startswith(prefix) for prefix in _CREDENTIAL_LIKE_BASENAME_PREFIXES):
         return True
@@ -183,22 +203,49 @@ def find_citation_problems(nodes: list[LoadedNode], repo_root_path: Path) -> lis
     (rejected without echoing it -- the DoD's "without leaking private source
     content"), or a repo-relative path that must resolve to a real file.
 
+    URLs are checked FIRST, before the credential blocklist -- a public URL whose
+    path happens to contain a blocklisted substring (e.g. a blog post titled
+    "id_rsa-security-best-practices") must still be accepted as-is, per this
+    validator's plan. Checking the blocklist first (an earlier revision did)
+    silently rejected such URLs, contradicting that stated rule.
+
     ADR-0003's citation convention is a commit-pinned markdown link -- a URL --
-    never a bare commit hash, so a bare SHA is correctly treated as the third case
-    and rejected as a non-existent path: it isn't an ADR-0003-compliant citation
-    either way.
+    never a bare commit hash, so a bare SHA is correctly treated as a
+    repo-relative path and rejected as non-existent: it isn't an
+    ADR-0003-compliant citation either way.
+
+    An absolute path (e.g. /etc/passwd) is rejected explicitly rather than
+    existence-checked: pathlib's `/` operator silently discards the left operand
+    when the right is absolute, so `repo_root_path / "/etc/passwd"` would
+    otherwise evaluate to `/etc/passwd` itself and "validate" against the host
+    filesystem instead of the repo.
+
+    Nodes with `node.error` already set are skipped -- see
+    find_unresolved_relationship_targets's docstring for why.
     """
     errors = []
     for node in nodes:
+        if node.error:
+            continue
         for entry in node.data.get("evidence") or []:
+            if not isinstance(entry, dict):
+                continue
             for citation in entry.get("evidence") or []:
+                if not isinstance(citation, str):
+                    continue
+                if citation.startswith("http://") or citation.startswith("https://"):
+                    continue
                 if _is_prohibited_citation(citation):
                     errors.append(
                         f"{node.id or node.path}: an evidence citation matches a "
                         "prohibited credential-like pattern"
                     )
                     continue
-                if citation.startswith("http://") or citation.startswith("https://"):
+                if PurePosixPath(citation).is_absolute():
+                    errors.append(
+                        f"{node.id or node.path}: an evidence citation must be a "
+                        "repo-relative path, not absolute"
+                    )
                     continue
                 if not (repo_root_path / citation).exists():
                     errors.append(

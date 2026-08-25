@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import importlib.util
 import sys
+import tempfile
 import unittest
 from pathlib import Path
 
@@ -33,6 +34,14 @@ class ValidFixtureTest(unittest.TestCase):
     def test_valid_fixture_passes(self) -> None:
         errors = validate.validate_corpus(VALID_DIR)
         self.assertEqual(errors, [])
+
+    def test_valid_fixture_actually_discovers_its_nodes(self) -> None:
+        # errors == [] alone can't distinguish "genuinely clean" from "discovery
+        # silently found nothing" -- assert the positive too. Four nodes as of
+        # this test: node-a, node-b (auth citation), node-c (url citation), node-d
+        # (.env.example citation). generated/index.json is not .md and doesn't count.
+        nodes = validate.load_nodes(VALID_DIR)
+        self.assertEqual(len(nodes), 4)
 
 
 class SchemaViolationTest(unittest.TestCase):
@@ -86,12 +95,109 @@ class ProhibitedCitationTest(unittest.TestCase):
         # whole valid directory happens to pass for unrelated reasons.
         self.assertFalse(validate._is_prohibited_citation("crates/buzz-auth/src/lib.rs"))
 
+    def test_env_example_is_not_prohibited(self) -> None:
+        # .env.example is this repo's own real, tracked, non-secret config
+        # template (AGENTS.md: `cp .env.example .env`). An independent
+        # review-code pass found the .env.* blocklist rejected it -- the same
+        # class of over-broad match already caught once for buzz-auth, recurring
+        # here until that pass found it. node-d-env-example-citation.md in the
+        # valid fixtures cites exactly this path.
+        self.assertFalse(validate._is_prohibited_citation(".env.example"))
+
+    def test_env_local_is_still_prohibited(self) -> None:
+        # The exemption is for conventional non-secret suffixes only -- a real
+        # .env.local (or bare .env) must still be rejected.
+        self.assertTrue(validate._is_prohibited_citation(".env.local"))
+        self.assertTrue(validate._is_prohibited_citation(".env"))
+
+
+class MalformedEntryDoesNotCrashTest(unittest.TestCase):
+    """A non-dict item in `evidence` or `relationships` must never crash the
+    validator -- it must be reported (via node.error from schema validation,
+    since node.schema.json already requires object-typed entries) rather than
+    raising an unhandled AttributeError, per the DoD's "names the failing node,"
+    which a stack trace does not. An independent review-code pass found this by
+    constructing exactly this input against the shipped code."""
+
+    def test_non_dict_evidence_item_does_not_crash(self) -> None:
+        node = validate.LoadedNode(
+            path=Path("synthetic"),
+            data={"evidence": ["just a bare string, not an object"]},
+            error="already reported by schema validation",
+        )
+        errors = validate.find_citation_problems([node], validate.repo_root())
+        self.assertEqual(errors, [])
+
+    def test_non_dict_relationship_item_does_not_crash(self) -> None:
+        node = validate.LoadedNode(
+            path=Path("synthetic"),
+            data={"relationships": ["just a bare string, not an object"]},
+            error="already reported by schema validation",
+        )
+        errors = validate.find_unresolved_relationship_targets([node])
+        self.assertEqual(errors, [])
+
+
+class AbsolutePathCitationTest(unittest.TestCase):
+    """An absolute-path citation must be rejected explicitly, not silently
+    "validated" against the host filesystem -- pathlib's `/` operator discards
+    the left operand when the right is absolute, so `repo_root / "/etc/passwd"`
+    would otherwise evaluate to `/etc/passwd` itself. An independent review-code
+    pass found this by citing a path that genuinely exists on the host."""
+
+    def test_absolute_path_citation_rejected(self) -> None:
+        node = validate.LoadedNode(
+            path=Path("synthetic"),
+            id="abs-path-check",
+            data={
+                "evidence": [
+                    {"statement": "x", "entry_class": "FACT", "evidence": ["/etc/passwd"]}
+                ]
+            },
+        )
+        errors = validate.find_citation_problems([node], validate.repo_root())
+        self.assertEqual(len(errors), 1)
+        self.assertIn("abs-path-check", errors[0])
+        self.assertIn("repo-relative", errors[0])
+
+
+class UrlCitationTest(unittest.TestCase):
+    """URL citations are accepted as-is, checked BEFORE the credential blocklist
+    -- an independent review-code pass found the blocklist ran first, silently
+    rejecting public URLs whose path merely resembled a credential filename."""
+
+    def test_url_accepted_even_when_path_looks_credential_like(self) -> None:
+        node = validate.LoadedNode(
+            path=Path("synthetic"),
+            id="url-check",
+            data={
+                "evidence": [
+                    {
+                        "statement": "x",
+                        "entry_class": "FACT",
+                        "evidence": [
+                            "https://example.com/posts/id_rsa-security-best-practices"
+                        ],
+                    }
+                ]
+            },
+        )
+        errors = validate.find_citation_problems([node], validate.repo_root())
+        self.assertEqual(errors, [])
+
 
 class OwnershipViolationTest(unittest.TestCase):
     def test_stray_non_md_file_rejected_and_named(self) -> None:
         errors = validate.validate_corpus(INVALID_DIR / "misplaced-generated")
         self.assertEqual(len(errors), 1)
         self.assertIn("index.json", errors[0])
+
+    def test_non_md_file_under_generated_is_exempt(self) -> None:
+        # Only the reject-outside-generated/ direction was tested before -- this
+        # proves the exemption itself has a passing-case fixture, not just that
+        # the whole valid/ directory happens to pass for unrelated reasons.
+        errors = validate.find_ownership_violations(VALID_DIR)
+        self.assertEqual(errors, [])
 
 
 class MissingInputTest(unittest.TestCase):
@@ -116,20 +222,46 @@ class MissingInputTest(unittest.TestCase):
         empty_dir.mkdir(exist_ok=True)
         try:
             self.assertEqual(validate.validate_corpus(empty_dir), [])
+            # errors == [] alone can't distinguish "genuinely empty" from
+            # "discovery broke" -- assert zero nodes were found, not merely zero
+            # errors, since both would look identical from errors alone.
+            self.assertEqual(validate.load_nodes(empty_dir), [])
         finally:
             empty_dir.rmdir()
 
 
-class RealCorpusRootExclusionTest(unittest.TestCase):
-    """schema/ is #622's own infrastructure, never scanned as corpus content."""
+class SchemaDirExclusionTest(unittest.TestCase):
+    """schema/ is #622's own infrastructure, never scanned as corpus content.
 
-    def test_real_corpus_root_excludes_schema_dir(self) -> None:
+    Proven against a purpose-built fixture tree containing BOTH a schema/ file
+    and a real sibling, not merely against today's real launchpad/docs/corpus/
+    root -- that root currently has zero non-schema content, so a test asserting
+    only "no file under schema/ leaked" against it would pass vacuously even if
+    exclusion were broadened to reject everything. An independent review-tests
+    pass found this.
+    """
+
+    def test_sibling_discovered_schema_dir_excluded(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            (root / "schema").mkdir()
+            real_sibling = root / "real-sibling.md"
+            inside_schema = root / "schema" / "inside-schema.md"
+            real_sibling.write_text("not real frontmatter, only proving discovery\n")
+            inside_schema.write_text("not real frontmatter, only proving exclusion\n")
+
+            files = validate.discover_markdown_files(root)
+
+            self.assertIn(real_sibling, files)
+            self.assertNotIn(inside_schema, files)
+
+    def test_real_corpus_root_currently_has_no_content_outside_schema(self) -> None:
+        # A documentation-style sanity check on today's real state, not the
+        # primary proof of exclusion (see test_sibling_discovered_schema_dir_
+        # excluded above, which is the one that can actually fail on regression).
         root = validate.repo_root() / validate.DEFAULT_ROOT
         files = validate.discover_markdown_files(root)
-        self.assertTrue(
-            all("schema" not in f.relative_to(root).parts[:1] for f in files),
-            f"a file under schema/ leaked into discovery: {files}",
-        )
+        self.assertEqual(files, [])
 
 
 if __name__ == "__main__":
