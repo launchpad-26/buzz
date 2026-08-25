@@ -20,19 +20,28 @@ For claims about **intended or authorized behavior**, accepted normative decisio
 ratified specs) are authoritative over everything else, including code that has since
 drifted from them without a corresponding decision update. GitHub history, team knowledge,
 and inference may supply context but are never treated as fact on their own; they stay
-attributed to their source and distinguishable from FACT claims (Ruling 4).
+attributed to their source and distinguishable from FACT claims (PRD #4's Ruling 4).
 
-When two authoritative sources disagree in a way this ordering doesn't resolve — an accepted
-spec and current code both claiming authority but contradicting each other, say — the corpus
-author stops and records the contradiction rather than picking a side. The affected node
-stays unestablished/flagged until a human resolves it.
+This ordering resolves the ordinary case — a spec's stated intent versus code's current
+behavior are two different claim types, so each has its own tiebreaker and neither needs
+escalation. What it does not resolve is two sources with authority over the *same* claim
+type that contradict each other — for example, two accepted normative records (two ADRs, or
+an ADR and a ratified spec) both governing the same intent/authorization claim, but saying
+different things. There, the corpus author stops and records the contradiction rather than
+picking a side. The affected node stays unestablished/flagged until a human resolves it.
 
 This rejects a single fixed hierarchy applied uniformly to every claim (option 2) and
 latest-timestamp-wins (option 3).
 
 ## Context
 
-#602's corpus is synthesized from sources that routinely disagree with each other: an
+**Numbering note:** this is ADR-0029, the next number after ADR-0028 (the corpus
+representation decision, #603). ADR-0028 is not yet on `launchpad` as of this writing — open
+in #1403 — so per `decisions/README.md`'s "numbered in the order they were accepted," this PR
+should not merge before #1403 does, to avoid a numbering gap.
+
+#602 ("prd: canonical Buzz documentation corpus") is synthesized from sources that routinely
+disagree with each other: an
 accepted ADR can go stale relative to code that changed without updating it; a maintained
 doc can lag a schema migration; GitHub discussion can preserve a plan later reversed without
 a formal record. #604 asked how the corpus author reconciles that when producing one node's
@@ -55,15 +64,16 @@ spec purely for having been touched more recently.
 
 **Good.** Conflicts stay visible with attributable sources, rather than being silently
 resolved by whichever agent happens to author the node — matching the corpus's broader
-review-before-trust posture (Ruling 2, Ruling 4).
+review-before-trust posture (PRD #4's Ruling 2, "synthesis complements sources; it does not
+replace them," and Ruling 4).
 
 **Good.** Behavior claims and intent/authorization claims each get the tiebreaker suited to
 them, instead of one rule that is right for one claim type and wrong for the other.
 
 **Bad.** More expensive to implement and validate than a single fixed ranking — evidence
 collectors and reviewers need to retain enough source identity to classify a claim's type and
-replay how it was ranked, and #605's validator has to check that classification rather than a
-flat list.
+replay how it was ranked, and #605's ("feature: documentation corpus contract is executable")
+validator has to check that classification rather than a flat list.
 
 **Bad.** Escalating on material conflict means some nodes stay unestablished/flagged pending
 a human decision, rather than the corpus always producing a confident answer. That is
@@ -90,4 +100,5 @@ hierarchy (option 2) and latest-timestamp-wins (option 3, already expected to be
 reasoning that a fixed hierarchy can't serve both behavior claims and intent/authorization
 claims correctly at once, and that escalating on real contradictions is the safer default
 given the security stakes named in the issue itself. The agent drafted the recommendation;
-Serina reached the same option independently before it was given, and confirmed it.
+per issue #604's own record, the Decision outcome is Serina's, filled directly rather than
+left to an agent to approve.
