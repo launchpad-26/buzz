@@ -309,6 +309,41 @@ MUTATIONS = [
         "finding (file and line both null) falls through to the file:line formatter "
         "and renders the literal string 'None:None'",
     ),
+    (
+        "schema-version-bumped",
+        "run_adjudication.py",
+        "        schema_version=1,\n",
+        "        schema_version=2,\n",
+        "schema_version is the contract's literal value, 1",
+        [],
+        "found by a real cohort review panel on PR #1406, mutation-proven before this "
+        "control existed: schema_version silently changing was caught by NEITHER the "
+        "106 STEP 10 checks NOR the 275 unit tests at the time -- zero coverage anywhere",
+    ),
+    (
+        "verdict-counts-fabricated",
+        "run_adjudication.py",
+        "        verdict_counts=verdict_counts,\n",
+        '        verdict_counts={"CONFIRMED": 999, "REFUTED": 999, "UNPROVEN": 999},\n',
+        "verdict_counts tallies all three verdict values from the real findings, not just one",
+        [],
+        "found by the same review panel: a fabricated verdict_counts passed all of "
+        "STEP 10's checks, and the one incidental check elsewhere in the repo "
+        "(test_run_adjudication.py's JudgeCannotMutateWhatItIsJudgingTests) only pins "
+        "the REFUTED key, so a CONFIRMED- or UNPROVEN-only fabrication would still slip "
+        "past the whole suite",
+    ),
+    (
+        "notes-not-emptied",
+        "run_adjudication.py",
+        "        notes=[],\n",
+        '        notes=["mutated-sentinel"],\n',
+        "a judge-returned 'notes' value never survives into adjudication.notes",
+        [],
+        "found by the same review panel: notes already had a real, mutation-provable "
+        "control (test_run_adjudication.py's NotesDeferralTests), but it lived outside "
+        "STEP 10, which ADJUDICATION.md's STEP 1 text assigns this key to specifically",
+    ),
 ]
 
 failures: list[str] = []

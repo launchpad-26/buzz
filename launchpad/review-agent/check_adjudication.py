@@ -73,6 +73,18 @@ none by design. Fixed in `run_adjudication.py`
 The checks below now prove the real CLI groups those three findings with no
 manual `dedupe_judge` override, ahead of the pre-existing plumbing check that
 proves the mechanism is general.
+
+**Then a live cohort review panel on PR #1406 (Fable + Codex, cross-checked
+independently by two human members) found the plan's "one control per key"
+clause was unmet for three of the `adjudication` block's nine keys**:
+`schema_version`, `verdict_counts`, `notes`. Mutation-proven by the panel and
+reproduced by a human reviewer before this fix existed: bumping
+`schema_version` from 1 to 2, and fabricating `verdict_counts`, both passed
+every check in this file and the whole 275-test unit suite -- zero coverage
+anywhere. `notes` already had a real, mutation-provable control, but it
+lived in `test_run_adjudication.py`, not here, where the plan assigns the
+key. All three now have dedicated controls below, each with its own named
+mutation in `check_adjudication_mutations.py`.
 """
 
 from __future__ import annotations
@@ -867,6 +879,63 @@ check(_good_out["nonce"] == _good_nonce_doc["nonce"], "a matching nonce is byte-
 check(
     _good_out["adjudication"]["completion_marker"] == f"BUZZ-ADJUDICATION-COMPLETE:{_good_nonce_doc['nonce']}",
     "the completion marker embeds the same, unchanged nonce",
+)
+
+# --- the adjudication block's nine keys, one control each -------------------
+# ADJUDICATION.md's own STEP 1 text assigns "one control per key" to STEP 10
+# by name -- findings_in/findings_out, duplicate_groups, downgrades,
+# total_refutation and completion_marker each already have a dedicated check
+# above. schema_version, verdict_counts and notes did not: a real cohort
+# review panel (PR #1406) mutation-proved this -- schema_version 1->2 and a
+# fabricated verdict_counts both passed all 106 checks that existed at the
+# time, and notes had a real control but it lived only in
+# test_run_adjudication.py, not in this file, which is what the plan assigns
+# the key to.
+
+check(
+    _good_out["adjudication"]["schema_version"] == 1,
+    f"schema_version is the contract's literal value, 1 (got {_good_out['adjudication']['schema_version']!r})",
+)
+
+_verdict_count_doc = make_document(
+    reports=[
+        make_report(
+            findings_list=[
+                make_raw_finding(defect="counted as confirmed"),
+                make_raw_finding(dimension="claim-vs-evidence", file="other-a.rs", defect="counted as refuted"),
+                make_raw_finding(dimension="correctness-and-failure-modes", file="other-b.rs", defect="counted as unproven"),
+            ]
+        )
+    ]
+)
+
+
+def _three_way_judge(finding, document):
+    if "confirmed" in finding["defect"]:
+        return {"verdict": "CONFIRMED", "verdict_evidence": "checked directly"}
+    if "refuted" in finding["defect"]:
+        return {"verdict": "REFUTED", "verdict_evidence": "checked directly"}
+    return {"verdict": "UNPROVEN", "verdict_evidence": "checked directly"}
+
+
+_verdict_count_out = run_adjudication.adjudicate(_verdict_count_doc, _three_way_judge)
+check(
+    _verdict_count_out["adjudication"]["verdict_counts"] == {"CONFIRMED": 1, "REFUTED": 1, "UNPROVEN": 1},
+    "verdict_counts tallies all three verdict values from the real findings, not just one "
+    f"(got {_verdict_count_out['adjudication']['verdict_counts']})",
+)
+
+_notes_input = make_document()
+
+
+def _notes_leaking_judge(finding, document):
+    return {"verdict": "CONFIRMED", "verdict_evidence": "checked directly", "notes": ["a judge tried to leak this"]}
+
+
+_notes_out = run_adjudication.adjudicate(_notes_input, _notes_leaking_judge)
+check(
+    _notes_out["adjudication"]["notes"] == [],
+    f"a judge-returned 'notes' value never survives into adjudication.notes (got {_notes_out['adjudication']['notes']!r})",
 )
 
 # --- anchor "pr": adjudicated without reading file or line ------------------
