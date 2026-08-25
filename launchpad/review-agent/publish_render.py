@@ -116,8 +116,12 @@ def _dimension_stage_names(stages) -> set:
 def _containment_unparseable(containment) -> bool:
     if not isinstance(containment, dict):
         return True
-    if not isinstance(containment.get("findings"), list):
+    findings = containment.get("findings")
+    if not isinstance(findings, list):
         return True
+    for f in findings:
+        if not isinstance(f, dict) or not all(k in f for k in ("kind", "entry_point", "evidence")):
+            return True
     return not isinstance(containment.get("states"), dict)
 
 
@@ -187,7 +191,7 @@ def _incomplete_reasons(
         reasons.append("reports' completion-marker nonces disagree with each other")
 
     missing_dimensions = dimension_stage_names - reported_dimensions
-    for name in missing_dimensions:  # (7)
+    for name in sorted(missing_dimensions, key=lambda n: (n is None, n)):  # (7)
         reasons.append(f"dimension {name!r} is named by the manifest but produced no report")
 
     if containment is None or _containment_unparseable(containment):  # (9), STEP 4 inherited
@@ -286,7 +290,7 @@ def render_body(
     rule below.
     """
     all_findings: list[dict] = []
-    for report in reports:
+    for report in reports if isinstance(reports, list) else []:
         for finding in (report.get("findings", []) or []) if isinstance(report, dict) else []:
             all_findings.append(dict(finding))
     by_id = {f.get("finding_id"): f for f in all_findings if f.get("finding_id") is not None}

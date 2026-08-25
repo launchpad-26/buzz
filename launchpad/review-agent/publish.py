@@ -217,7 +217,15 @@ def main(argv: list[str] | None = None) -> int:
         print(body)
         return 0
 
-    review_id, action, author_login = post_or_update(document.get("pr"), repo, body, args.login)
+    pr = document.get("pr")
+    if not isinstance(pr, int):
+        print(
+            f"error: stdin document has no valid integer 'pr' field, got {pr!r}",
+            file=sys.stderr,
+        )
+        return 1
+
+    review_id, action, author_login = post_or_update(pr, repo, body, args.login)
     print(f"{action} review {review_id} as {author_login}")
     return 0
 
