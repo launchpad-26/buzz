@@ -104,6 +104,15 @@ def _sort_key(finding: dict) -> tuple:
     )
 
 
+def _dimension_stage_names(stages) -> set:
+    stage_list = stages if isinstance(stages, list) else []
+    return {
+        s.get("name")
+        for s in stage_list
+        if isinstance(s, dict) and s.get("name") not in _NON_DIMENSION_STAGE_NAMES
+    }
+
+
 def _containment_unparseable(containment) -> bool:
     if not isinstance(containment, dict):
         return True
@@ -123,15 +132,13 @@ def _incomplete_reasons(
     reasons: list[str] = []
 
     stage_list = stages if isinstance(stages, list) else []
-    dimension_stage_names = set()
+    dimension_stage_names = _dimension_stage_names(stages)
     for stage in stage_list:
         if not isinstance(stage, dict):
             reasons.append("a stage manifest entry could not be parsed")
             continue
         name = stage.get("name")
         status = stage.get("status")
-        if name not in _NON_DIMENSION_STAGE_NAMES:
-            dimension_stage_names.add(name)
         if status != "complete":  # (1)
             reason = stage.get("reason")
             detail = f", reason: {reason!r}" if reason else ""
@@ -291,6 +298,7 @@ def render_body(
         "",
     ]
 
+    dimension_stage_names = _dimension_stage_names(stages)
     reasons = _incomplete_reasons(stages, reports, containment, nonce, all_findings)
     if reasons:
         lines.append(_render_incomplete_banner(reasons))
@@ -335,5 +343,18 @@ def render_body(
             lines.append(
                 _render_finding(finding, dimension_count_by_id.get(finding.get("finding_id")))
             )
+
+    if not reasons and not ordered:
+        # Silence is indistinguishable from a crashed agent -- this path posts
+        # explicitly, on the same code path as the findings path, rather than
+        # rendering nothing. Not the same input as "incomplete with zero
+        # findings": the banner above already covers that case and this
+        # sentence is skipped when it fired.
+        names = ", ".join(sorted(dimension_stage_names)) if dimension_stage_names else "none"
+        lines.append(
+            f"No confirmed findings were produced across "
+            f"{len(dimension_stage_names)} dimension(s): {names}."
+        )
+        lines.append("")
 
     return "\n".join(lines)
