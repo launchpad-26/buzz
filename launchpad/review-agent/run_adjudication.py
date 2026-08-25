@@ -51,9 +51,21 @@ would otherwise be a real question with no good answer.
 
 Two ways to obtain a verdict, and no others: ``--judge stub`` (the default --
 ``stub_judge`` below) and ``--replay <dir>`` (``make_replay_judge``, reading
-STEP 9's future recorded judge outputs). This is also what keeps "choosing the
+STEP 9's recorded judge outputs). This is also what keeps "choosing the
 model" out of scope here, per #117's own framing and #118's issue: this module
 never names one, and neither flag lets a caller supply one.
+
+``--replay <dir>`` ALSO swaps the dedupe judge, not only the per-finding one.
+``main()`` passes ``make_replay_dedupe_judge(args.replay)`` in place of
+``stub_dedupe_judge`` whenever ``--replay`` is given, reading the same
+directory's recording files for a ``_dedupe_groups`` key (STEP 7's section,
+below, documents the format). Without this, ``--replay`` could recite real
+recorded verdicts while still reporting every duplicate as a singleton,
+because ``stub_dedupe_judge`` is the only dedupe_judge this CLI passed before
+STEP 9 built real recordings to replay grouping from. There is no ``--dedupe``
+flag and no way to request the stub dedupe behaviour while replaying verdicts
+-- the two are not independently selectable from the CLI, only from
+``adjudicate()`` directly.
 
 Severity re-rating and the escalate-only guard are STEP 6, below. Dedupe is
 STEP 7, further below.
@@ -562,18 +574,21 @@ def stub_dedupe_judge(adjudicated_findings: list, input_document: dict) -> list:
 
 def make_replay_judge(replay_dir: Path) -> Judge:
     """Build a judge that replays recorded judge outputs from ``replay_dir``
-    (STEP 9's future recordings) instead of calling a live model.
+    (STEP 9's recordings, e.g. ``fixtures/adjudication/recordings/``) instead
+    of calling a live model.
 
-    STEP 9 has not been built yet and ``replay_dir`` will not exist when this
-    runs in practice today -- this is a real, reachable code path per STEP 3's
-    own scope, not one exercised end to end here. The format it reads: every
-    ``*.json`` file directly under ``replay_dir`` is a JSON object mapping
-    ``finding_id`` -> ``{"verdict": ..., "verdict_evidence": ...}``. Every
-    file found is loaded and merged into one lookup; a ``finding_id`` with no
-    matching entry anywhere fails closed to ``UNPROVEN`` with a reason naming
-    the missing recording -- "no recording for this finding" is "cannot reach
-    the finding", the same failure family ``_run_judge_safely`` already covers,
-    not a crash.
+    The format it reads: every ``*.json`` file directly under ``replay_dir``
+    is a JSON object mapping ``finding_id`` -> ``{"verdict": ...,
+    "verdict_evidence": ..., ...}``. Two top-level keys are RESERVED and
+    never treated as a finding_id: ``_provenance`` (model, date and other
+    disclosure fields; see any file under
+    ``fixtures/adjudication/recordings/`` for the shape) and
+    ``_dedupe_groups`` (read by ``make_replay_dedupe_judge``, below, not by
+    this function). Every other ``*.json`` file found is loaded and merged
+    into one lookup; a ``finding_id`` with no matching entry anywhere fails
+    closed to ``UNPROVEN`` with a reason naming the missing recording -- "no
+    recording for this finding" is "cannot reach the finding", the same
+    failure family ``_run_judge_safely`` already covers, not a crash.
     """
     recordings: dict[str, dict] = {}
     if replay_dir.is_dir():
@@ -581,7 +596,7 @@ def make_replay_judge(replay_dir: Path) -> Judge:
             with path.open("r", encoding="utf-8") as fh:
                 data = json.load(fh)
             if isinstance(data, dict):
-                recordings.update(data)
+                recordings.update({k: v for k, v in data.items() if not k.startswith("_")})
 
     def _replay(finding: dict, document: dict) -> dict:
         finding_id = finding.get("finding_id")
@@ -597,6 +612,46 @@ def make_replay_judge(replay_dir: Path) -> Judge:
         return recorded
 
     return _replay
+
+
+def make_replay_dedupe_judge(replay_dir: Path) -> DedupeJudge:
+    """Build a ``dedupe_judge`` that replays a recorded grouping decision from
+    ``replay_dir`` (STEP 9) instead of calling a live model, the dedupe
+    counterpart to ``make_replay_judge``.
+
+    STEP 9's recording format may carry an optional top-level
+    ``_dedupe_groups`` key alongside a file's ``finding_id`` -> judge-output
+    entries: ``list[list[finding_id]]``, a real judge's own determination
+    that those finding_ids describe one defect. Every group from every file
+    under ``replay_dir`` is loaded. At call time a recorded group is offered
+    only when at least two of its finding_ids are actually present in
+    ``adjudicated_findings`` -- a recording directory accumulates groups from
+    every fixture it has ever recorded, and a group naming ids from a
+    document that is not the one being replayed here must not silently
+    apply just because the ids happen to be in the lookup.
+
+    Without this, ``--replay`` alone could never produce a duplicate group:
+    ``stub_dedupe_judge`` (the only other dedupe_judge this CLI has ever
+    passed) finds none by design, so a fixture whose real recorded verdicts
+    are all identical duplicates of one another would replay with every
+    finding a stray singleton -- which is what happened here before this
+    function existed, found on `review-final` rather than assumed absent.
+    """
+    recorded_groups: list[list[str]] = []
+    if replay_dir.is_dir():
+        for path in sorted(replay_dir.glob("*.json")):
+            with path.open("r", encoding="utf-8") as fh:
+                data = json.load(fh)
+            if isinstance(data, dict):
+                groups = data.get("_dedupe_groups")
+                if isinstance(groups, list):
+                    recorded_groups.extend(group for group in groups if isinstance(group, list))
+
+    def _replay_dedupe(adjudicated_findings: list, document: dict) -> list:
+        present_ids = {f.get("finding_id") for f in adjudicated_findings}
+        return [group for group in recorded_groups if sum(1 for gid in group if gid in present_ids) >= 2]
+
+    return _replay_dedupe
 
 
 def _run_judge_safely(judge: Judge, finding: dict, input_document: dict) -> dict:
@@ -1199,7 +1254,9 @@ def build_arg_parser() -> argparse.ArgumentParser:
         metavar="DIR",
         help=(
             "replay recorded judge outputs from DIR (STEP 9) instead of calling "
-            "--judge. Takes precedence over --judge when both are given."
+            "--judge, AND replay any recorded dedupe grouping from the same DIR "
+            "instead of stub_dedupe_judge (which finds none). Takes precedence "
+            "over --judge when both are given."
         ),
     )
     return parser
@@ -1230,9 +1287,12 @@ def main(argv: list[str] | None = None) -> int:
         return 1
 
     judge: Judge = make_replay_judge(args.replay) if args.replay is not None else stub_judge
+    dedupe_judge: DedupeJudge = (
+        make_replay_dedupe_judge(args.replay) if args.replay is not None else stub_dedupe_judge
+    )
 
     try:
-        output_document = adjudicate(input_document, judge)
+        output_document = adjudicate(input_document, judge, dedupe_judge=dedupe_judge)
     except InputValidationError as exc:
         for violation in exc.violations:
             print(f"run_adjudication: {violation}", file=sys.stderr)
