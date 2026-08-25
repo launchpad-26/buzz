@@ -96,8 +96,20 @@ The deliberate exceptions, all accepted knowingly:
   a different root config file or mechanism needs its own record. Reasoning and the
   rejected alternatives are in
   [`decisions/ADR-0046-root-mcp-registration-exception.md`](decisions/ADR-0046-root-mcp-registration-exception.md).
+- **Cohort Rust crates in the root workspace** — the root `Cargo.toml` `members` list
+  gains one append-only entry per cohort crate under `launchpad/crates/`, and
+  `Cargo.lock` changes with it. Reasoning and the rejected alternatives are in
+  [`decisions/ADR-0045-cohort-crates-in-launchpad-workspace.md`](decisions/ADR-0045-cohort-crates-in-launchpad-workspace.md).
 
 The list itself is closed; any further exception needs its own ADR.
+
+**When a divergence is permitted, prefer a fork-owned override to an in-place edit.**
+A fork-owned file that overrides, wraps, or delegates to upstream's keeps receiving
+upstream's changes; a copy diverges silently and is prohibited. Where no override
+mechanism exists, an in-place edit is allowed with its reason recorded against the file.
+This governs the form a permitted divergence takes, not whether one is permitted — the
+list above stays closed. Reasoning is in
+[`decisions/ADR-0043-prefer-fork-owned-overrides.md`](decisions/ADR-0043-prefer-fork-owned-overrides.md).
 
 New workflows go in `.github/workflows/` (GitHub requires it) and **must** be named
 `launchpad-*.yml` so they never collide with upstream's.
