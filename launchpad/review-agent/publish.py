@@ -17,8 +17,15 @@ reads at the bottom of the timeline is always current.
 
 from __future__ import annotations
 
+import argparse
 import json
+import os
 import subprocess
+import sys
+
+import publish_render
+
+DEFAULT_LOGIN = "github-actions[bot]"
 
 #: First line of every body this agent posts. Passed into ``publish_render.render_body``
 #: rather than imported there, so that module never imports this one -- see STEP 7's
@@ -151,3 +158,69 @@ def post_or_update(
     if not (200 <= status < 300):
         raise RuntimeError(f"POST failed with status {status}")
     return response["id"], "created", response["user"]["login"]
+
+
+def _build_argparser() -> argparse.ArgumentParser:
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--repo", default=None, help="owner/repo, defaults to GITHUB_REPOSITORY")
+    parser.add_argument("--as", dest="login", default=DEFAULT_LOGIN, help="the identity posting reviews")
+    parser.add_argument("--dry-run", action="store_true", help="print the body, post nothing")
+    return parser
+
+
+def main(argv: list[str] | None = None) -> int:
+    """Read the seven-or-eight-key stdin document, render it, post or update.
+
+    The document WRAPS #117's and #118's envelopes verbatim -- ``reports`` and
+    ``containment`` mean here exactly what they mean there, per #117's own
+    contract, so this never restates or renames a field inside them.
+    ``adjudication`` is optional, exactly as ``containment`` was before #117
+    settled it: a caller with no adjudication stage omits the key, and
+    ``duplicate_groups`` defaults to empty rather than the key being required.
+    """
+    args = _build_argparser().parse_args(argv)
+
+    if args.login == "":
+        print("error: --as requires a non-empty login", file=sys.stderr)
+        return 1
+
+    repo = args.repo or os.environ.get("GITHUB_REPOSITORY")
+    if not repo:
+        print(
+            "error: no repository specified -- pass --repo owner/name or set "
+            "GITHUB_REPOSITORY",
+            file=sys.stderr,
+        )
+        return 1
+
+    try:
+        document = json.loads(sys.stdin.read())
+    except json.JSONDecodeError as exc:
+        print(f"error: malformed JSON on stdin: {exc}", file=sys.stderr)
+        return 1
+
+    adjudication = document.get("adjudication") or {}
+    duplicate_groups = adjudication.get("duplicate_groups", ())
+
+    body = publish_render.render_body(
+        MARKER,
+        document.get("reports"),
+        document.get("stages"),
+        document.get("containment"),
+        document.get("head_sha"),
+        document.get("merge_base_sha"),
+        duplicate_groups=duplicate_groups,
+        nonce=document.get("nonce"),
+    )
+
+    if args.dry_run:
+        print(body)
+        return 0
+
+    review_id, action, author_login = post_or_update(document.get("pr"), repo, body, args.login)
+    print(f"{action} review {review_id} as {author_login}")
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
