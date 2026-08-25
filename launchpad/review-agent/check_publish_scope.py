@@ -230,11 +230,13 @@ def run_live_half(probe=attempt_ref_create) -> None:
 
     status, body = probe(repo, run_id)
     check(status == 403, f"contents-write probe returns 403 (got {status})")
-    if status == 403:
-        # Pasted into the PR as evidence of which credential was actually
-        # measured, per this control's own reasoning -- not taken on trust.
-        print(f"    GITHUB_WORKFLOW: {os.environ.get('GITHUB_WORKFLOW')!r}")
-        print(f"    response body: {body}")
+    # Printed on 403 as evidence of which credential was actually measured,
+    # per this control's own reasoning -- not taken on trust. Printed on any
+    # OTHER status too: an unrecognisable response carries its own
+    # parse_error key (see attempt_ref_create), and that is precisely the
+    # detail a debugger needs and "FAIL (got 0)" alone does not give them.
+    print(f"    GITHUB_WORKFLOW: {os.environ.get('GITHUB_WORKFLOW')!r}")
+    print(f"    response body: {body}")
     if status == 200 or status == 201:
         ref_name = body.get("ref_name")
         if ref_name:

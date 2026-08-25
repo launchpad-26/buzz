@@ -466,7 +466,8 @@ MUTATIONS = [
     ("vii", "publish.py",
      "    status, response = submit(argv)\n"
      "    if not (200 <= status < 300):\n"
-     "        raise RuntimeError(f\"PUT on review {review_id} failed with status {status}\")\n"
+     "        detail = f\" ({response['parse_error']})\" if \"parse_error\" in response else \"\"\n"
+     "        raise RuntimeError(f\"PUT on review {review_id} failed with status {status}{detail}\")\n"
      "    return review_id, \"updated\", response[\"user\"][\"login\"]",
      "    status, response = submit(argv)\n"
      "    if not (200 <= status < 300):\n"

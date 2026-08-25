@@ -63,6 +63,14 @@ jobs:
     needs: guard
     if: needs.guard.outputs.is-fork != 'true'
     runs-on: ubuntu-latest
+    # ONE literal, shared by both steps below via ${{ env.PUBLISH_LOGIN }} --
+    # the publish step's --as and the verify step's PUBLISH_CONFIGURED_LOGIN
+    # were previously two independent copies of "github-actions[bot]" with
+    # nothing asserting they agreed. Moving #110's credential now means
+    # changing this one line, not remembering to change it in two places
+    # while the IDENTITY control silently verifies whichever copy it reads.
+    env:
+      PUBLISH_LOGIN: github-actions[bot]
     steps:
       - uses: actions/checkout@v4
 
@@ -82,9 +90,14 @@ jobs:
       # from stdin, so there is no pre-flight stage to pipe from until #116
       # exists, and --list (a boolean flag that prints discovered slugs and
       # exits) is not a way to select which dimensions run; there isn't one
-      # today -- every discovered dimension always runs. No --repo flag:
-      # Actions sets GITHUB_REPOSITORY for every run, and publish.py falls
-      # back to it.
+      # today -- every discovered dimension always runs. publish.py needs no
+      # --repo flag -- Actions sets GITHUB_REPOSITORY for every run and it
+      # falls back to that -- but run_dimensions.py has no such fallback: its
+      # own default is a hardcoded "launchpad-26/buzz" (fetch.DEFAULT_REPO),
+      # correct only by coincidence of matching this repo's own name. Passed
+      # explicitly so a fork or a rename fetches and posts about the SAME
+      # repository rather than silently reviewing this one while posting to
+      # another.
       #
       # KNOWN GAP, disclosed rather than silently wrong: run_dimensions.py
       # emits no top-level `stages` key at all, and run_adjudication.py only
@@ -108,9 +121,9 @@ jobs:
         # A bare `run_dimensions.py` here is "command not found", exit 127,
         # and the pipeline never runs on any real invocation.
         run: |
-          python3 run_dimensions.py "${{ github.event.pull_request.number }}" |
+          python3 run_dimensions.py "${{ github.event.pull_request.number }}" --repo "${{ github.repository }}" |
           python3 run_adjudication.py |
-          python3 publish.py --as 'github-actions[bot]'
+          python3 publish.py --as "$PUBLISH_LOGIN"
 
       # The live half of the credential control: it must run under the token it
       # claims to measure, and this is the only workflow whose token is that one.
@@ -118,9 +131,10 @@ jobs:
       # own $GITHUB_OUTPUT -- the live identity only exists inside that
       # process, off the POST/PUT response.
       - name: Verify the publish credential's live scope
+        if: always()
         working-directory: launchpad/review-agent
         env:
           GH_TOKEN: ${{ github.token }}
-          PUBLISH_CONFIGURED_LOGIN: github-actions[bot]
+          PUBLISH_CONFIGURED_LOGIN: ${{ env.PUBLISH_LOGIN }}
           PUBLISH_OBSERVED_LOGIN: ${{ steps.publish.outputs.author_login }}
         run: python3 check_publish_scope.py

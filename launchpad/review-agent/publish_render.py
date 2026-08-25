@@ -104,6 +104,24 @@ def _sort_key(finding: dict) -> tuple:
     )
 
 
+def _reported_dimension_names(reports) -> set:
+    """Dimensions that actually produced a report -- the manifest in `stages`
+    is the EXPECTED set (used for condition (7): did a named dimension fail
+    to report at all), but the clean-case sentence must name what actually
+    ran. The real pipeline's `stages` never carries a dimension entry at all
+    (only `adjudication`, from `run_adjudication.py`), so deriving the clean
+    sentence from `stages` renders "0 dimension(s): none" after real
+    dimensions ran clean -- the same "silence reads as a crashed agent"
+    failure this sentence exists to prevent, arriving through the wrong
+    source.
+    """
+    return {
+        r.get("dimension")
+        for r in (reports if isinstance(reports, list) else [])
+        if isinstance(r, dict) and r.get("dimension") is not None
+    }
+
+
 def _dimension_stage_names(stages) -> set:
     stage_list = stages if isinstance(stages, list) else []
     return {
@@ -310,7 +328,6 @@ def render_body(
         "",
     ]
 
-    dimension_stage_names = _dimension_stage_names(stages)
     reasons = _incomplete_reasons(stages, reports, containment, nonce, all_findings)
     if reasons:
         lines.append(_render_incomplete_banner(reasons))
@@ -362,10 +379,11 @@ def render_body(
         # rendering nothing. Not the same input as "incomplete with zero
         # findings": the banner above already covers that case and this
         # sentence is skipped when it fired.
-        names = ", ".join(sorted(dimension_stage_names)) if dimension_stage_names else "none"
+        reported_names = _reported_dimension_names(reports)
+        names = ", ".join(sorted(reported_names)) if reported_names else "none"
         lines.append(
             f"No confirmed findings were produced across "
-            f"{len(dimension_stage_names)} dimension(s): {names}."
+            f"{len(reported_names)} dimension(s): {names}."
         )
         lines.append("")
 

@@ -106,7 +106,8 @@ def _put(repo: str, pr: int, review_id: int, body: str, submit) -> tuple[int, st
     ]
     status, response = submit(argv)
     if not (200 <= status < 300):
-        raise RuntimeError(f"PUT on review {review_id} failed with status {status}")
+        detail = f" ({response['parse_error']})" if "parse_error" in response else ""
+        raise RuntimeError(f"PUT on review {review_id} failed with status {status}{detail}")
     return review_id, "updated", response["user"]["login"]
 
 
@@ -163,7 +164,8 @@ def post_or_update(
     ]
     status, response = submit(argv)
     if not (200 <= status < 300):
-        raise RuntimeError(f"POST failed with status {status}")
+        detail = f" ({response['parse_error']})" if "parse_error" in response else ""
+        raise RuntimeError(f"POST failed with status {status}{detail}")
     return response["id"], "created", response["user"]["login"]
 
 
