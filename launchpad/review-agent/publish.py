@@ -51,8 +51,15 @@ def _submit(argv: list[str]) -> tuple[int, dict]:
     """
     result = subprocess.run(argv + ["-i"], capture_output=True, text=True)
     lines = result.stdout.splitlines()
-    blank = next(i for i, line in enumerate(lines) if line.strip() == "")
-    status = int(lines[0].split()[1])
+    try:
+        status = int(lines[0].split()[1])
+        blank = next(i for i, line in enumerate(lines) if line.strip() == "")
+    except (IndexError, ValueError, StopIteration):
+        # Fail closed, not crash: an unrecognisable response shape is not a
+        # 2xx, and post_or_update's own status check already turns that into
+        # a raised RuntimeError naming the status -- letting the parse itself
+        # raise here would surface a confusing traceback instead.
+        return 0, {"parse_error": f"unrecognisable response: {lines[:1]!r}"}
     body_text = "\n".join(lines[blank + 1 :])
     body = json.loads(body_text) if body_text.strip() else {}
     return status, body
