@@ -52,10 +52,15 @@ record rules on that third region as follows:
   shape of `lefthook.yml`"* — is **not** replay and escalates. Nothing in this record
   authorises the agent to reconstruct a one-line re-application from a ledger entry.
 - **This record does not settle whether sub-file positions can be made mechanical at all.**
-  #294 owns the ledger's format and enforcement. If #294 defines a machine-applicable form
-  for a sub-file position, that form must be a human-written driver meeting the constraints
-  above, and this boundary should be revisited in a new record rather than read as already
-  permitting it.
+  #294 owns the ledger's format and enforcement, and it has since been settled: its
+  accepted outcome permits transforming merge drivers, per-path merge assignments,
+  post-merge assertions, recorded `rerere` replay, and explicit escalation. That set is
+  broader than a driver alone, so this record does **not** impose driver-only enforcement
+  over it. What this record constrains is narrower and unchanged: whichever of #294's
+  mechanisms is used, the agent may not author or widen it, and any residual conflict still
+  escalates. Whether a sub-file position can be made mechanical at all is a question for
+  #294's implementation, and this boundary should be revisited in a new record rather than
+  read as already settling it.
 
 ## Context
 
