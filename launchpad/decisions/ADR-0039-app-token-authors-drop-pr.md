@@ -101,10 +101,16 @@ the audit log, unlike a PAT.
 
 A credential is introduced where ADR-0038 introduces none, and that asymmetry is
 deliberate rather than an oversight: authorship needs an identity, a fast-forward of
-`main` does not. Following ADR-0008, the app must be installed on this repository
-specifically rather than org-wide, its private key held as an Actions secret or
-Environment and never as a tracked file, and its scope, owner and expiry written down
-where the next person will find them.
+`main` does not. ADR-0008 is cited here as reasoning by analogy only, not as governing authority.
+It says so itself: it "covers only the read-only credential the audit workflow itself
+uses to inspect this repository's own settings; neither decision constrains the other."
+So this record states its own requirements de novo, taking the shape of ADR-0008's
+argument rather than borrowing its authority: the app is installed on this repository
+specifically rather than org-wide, its private key is held as an Actions secret or
+Environment and never as a tracked file, and its scope, owner and expiry are written
+down where the next person will find them. An earlier revision of this record replaced a
+fabricated ADR-0015 citation with an overreach on ADR-0008, which is the same defect one
+document over; that is withdrawn.
 
 ## Supersedes
 
