@@ -111,6 +111,21 @@ class ProhibitedCitationTest(unittest.TestCase):
         self.assertTrue(validate._is_prohibited_citation(".env"))
 
 
+class NonMappingFrontmatterTest(unittest.TestCase):
+    """Frontmatter that is valid YAML but not a mapping (a bare list, string,
+    number, or bool) must be reported as a parse error naming the file, never
+    crash with an unhandled AttributeError -- the sibling case, at the top
+    level, of MalformedEntryDoesNotCrashTest below. An independent review-final
+    pass found this by trying the one adversarial shape the earlier review-code/
+    review-tests round hadn't: a malformed top-level document rather than a
+    malformed entry nested inside an already-parsed dict."""
+
+    def test_non_mapping_frontmatter_reported_not_crashed(self) -> None:
+        errors = validate.validate_corpus(INVALID_DIR / "non-mapping-frontmatter")
+        self.assertEqual(len(errors), 1)
+        self.assertIn("not a mapping", errors[0])
+
+
 class MalformedEntryDoesNotCrashTest(unittest.TestCase):
     """A non-dict item in `evidence` or `relationships` must never crash the
     validator -- it must be reported (via node.error from schema validation,

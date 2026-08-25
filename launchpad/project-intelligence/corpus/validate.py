@@ -102,6 +102,23 @@ def load_nodes(corpus_root: Path) -> list[LoadedNode]:
             nodes.append(LoadedNode(path=path, error=f"{path}: {exc}"))
             continue
 
+        # Frontmatter is valid YAML but not a mapping (a bare list, string, number,
+        # or bool -- all valid YAML, none of them a schema violation jsonschema
+        # would ever see, since that check happens below and needs a dict to run
+        # against). An independent review-final pass found this crashes here with
+        # an unhandled AttributeError, one line before the safety net the earlier
+        # fix round relied on for malformed *entries inside* an already-parsed
+        # dict -- this is the sibling case at the top level, caught before ever
+        # reaching jsonschema.
+        if not isinstance(data, dict):
+            nodes.append(
+                LoadedNode(
+                    path=path,
+                    error=f"{path}: frontmatter is not a mapping (got {type(data).__name__})",
+                )
+            )
+            continue
+
         node_id = data.get("id")
         errors = sorted(validator.iter_errors(data), key=str)
         if errors:
