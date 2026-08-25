@@ -87,6 +87,13 @@ class ProhibitedCitationTest(unittest.TestCase):
         self.assertFalse(validate._is_prohibited_citation("crates/buzz-auth/src/lib.rs"))
 
 
+class OwnershipViolationTest(unittest.TestCase):
+    def test_stray_non_md_file_rejected_and_named(self) -> None:
+        errors = validate.validate_corpus(INVALID_DIR / "misplaced-generated")
+        self.assertEqual(len(errors), 1)
+        self.assertIn("index.json", errors[0])
+
+
 class RealCorpusRootExclusionTest(unittest.TestCase):
     """schema/ is #622's own infrastructure, never scanned as corpus content."""
 

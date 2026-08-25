@@ -208,6 +208,25 @@ def find_citation_problems(nodes: list[LoadedNode], repo_root_path: Path) -> lis
     return errors
 
 
+def find_ownership_violations(corpus_root: Path) -> list[str]:
+    """Every non-`.md` file (schema/ excluded) must live under a `generated/`
+    subdirectory -- ADR-0028's canonical-vs-generated boundary: hand-authored
+    content is Markdown+frontmatter, anything else must be clearly segregated as a
+    generated projection, never interleaved with authored nodes."""
+    errors = []
+    for path in sorted(corpus_root.rglob("*")):
+        if path.is_dir() or path.suffix == ".md" or _is_excluded(path, corpus_root):
+            continue
+        rel = path.relative_to(corpus_root)
+        if "generated" in rel.parts[:-1]:
+            continue
+        errors.append(
+            f"{rel}: non-.md file outside generated/ -- misplaced generated "
+            "artifact, or hand-authored content in the wrong format"
+        )
+    return errors
+
+
 def validate_corpus(corpus_root: Path) -> list[str]:
     """Return every validation error found. Empty list means the corpus is clean."""
     root = repo_root()
@@ -216,6 +235,7 @@ def validate_corpus(corpus_root: Path) -> list[str]:
     errors.extend(find_duplicate_ids(nodes))
     errors.extend(find_unresolved_relationship_targets(nodes))
     errors.extend(find_citation_problems(nodes, root))
+    errors.extend(find_ownership_violations(corpus_root))
     return errors
 
 
