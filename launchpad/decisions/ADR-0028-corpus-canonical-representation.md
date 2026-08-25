@@ -78,10 +78,11 @@ classification (FACT/INFERENCE/TEAM KNOWLEDGE) must stay structurally encoded �
 checkable, not asserted only in free-form body prose that could be misread or forged as a
 stronger claim than it is. This decision does not itself say classification is a page-level
 front-matter field: the existing contract (`launchpad/project-intelligence/CONTRACT.md`)
-classifies at claim granularity, since one node can hold several differently-classified
-claims, and #605 owns exactly where that structure lives within the canonical Markdown
-representation this ADR fixes. Generated views must not silently drop whatever
-security-relevant provenance their source node carries.
+classifies at the granularity of an individual claim within a response, not a whole page or
+node. Whether a single corpus node holds one claim or several is exactly the corpus-shape
+question CONTRACT.md §9.1 leaves open — it is #605's to decide, not something this ADR or
+that contract settles. Generated views must not silently drop whatever security-relevant
+provenance their source node carries.
 
 ## Provenance
 
