@@ -1,0 +1,78 @@
+name: launchpad — corpus validate
+
+# Runs the unit tests for launchpad/project-intelligence/corpus/*.py, then the
+# deterministic corpus validator itself against the real corpus root.
+#
+# WHY THIS WORKFLOW EXISTS. Mirrors launchpad-corpus-schema-tests.yml's pattern
+# exactly, for the identical reason it was built: without a workflow like this one,
+# no CI job runs these tests at all, and a passing suite nobody executes is a claim,
+# not a check. It also declares this suite's new dependency (jsonschema + PyYAML,
+# see launchpad/project-intelligence/requirements.txt) so an unrecorded import
+# breaks CI rather than breaking the next person to clone the repo.
+#
+# The final step runs `just corpus-validate` against the REAL launchpad/docs/corpus/
+# tree, not just the unit tests' private fixtures -- a regression only visible
+# against the real tree (e.g. a real corpus node someone hand-authored with a typo)
+# would not be caught by the fixture-only unit tests alone.
+#
+# `pull_request`, deliberately NOT `pull_request_target` — the suite under test
+# lives in the repository, so a pull request can modify the very validator/corpus
+# this job checks. On `pull_request` that code executes with the fork's own
+# permissions and no access to repository secrets. Same reasoning
+# launchpad-corpus-schema-tests.yml documents.
+
+on:
+  pull_request:
+    paths:
+      - "launchpad/project-intelligence/corpus/**"
+      - "launchpad/project-intelligence/requirements.txt"
+      - "launchpad/docs/corpus/**"
+      - ".github/workflows/launchpad-corpus-validate.yml"
+  push:
+    branches: [launchpad]
+    paths:
+      - "launchpad/project-intelligence/corpus/**"
+      - "launchpad/docs/corpus/**"
+
+# Read-only. These are pure unit tests plus a read-only validation scan: no
+# network, no relay, no GitHub API, so no token scope is needed.
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install corpus validator dependencies
+        run: pip install -r launchpad/project-intelligence/requirements.txt
+
+      # Fails if the suite contains no test CASES, rather than reporting success
+      # for a run that executed nothing -- launchpad-corpus-schema-tests.yml and
+      # launchpad-agents-tests.yml found this the hard way; this counts cases, not
+      # files, for the same reason.
+      - name: Confirm test cases were discovered
+        run: |
+          python3 - <<'PY'
+          import sys, unittest
+          suite = unittest.defaultTestLoader.discover(
+              "launchpad/project-intelligence/corpus/tests", pattern="test_*.py"
+          )
+          n = suite.countTestCases()
+          print(f"discovered {n} test case(s)")
+          if n == 0:
+              print("::error::launchpad/project-intelligence/corpus/tests has no "
+                    "discoverable test cases — this job would have passed vacuously.")
+              sys.exit(1)
+          PY
+
+      - name: Run corpus validator unit tests
+        run: python3 -m unittest discover -s launchpad/project-intelligence/corpus/tests -p "test_*.py" -v
+
+      - name: Validate the real corpus
+        run: python3 launchpad/project-intelligence/corpus/validate.py

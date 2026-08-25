@@ -1,0 +1,17 @@
+# Third-party dependencies for launchpad/project-intelligence/corpus/*.py.
+#
+# WHY THIS FILE EXISTS. Until #623, launchpad/project-intelligence/ imported neither
+# jsonschema nor PyYAML anywhere, and had no requirements file of its own -- the
+# identical unrecorded-dependency gap launchpad/agents/requirements.txt and
+# launchpad/docs/corpus/schema/requirements.txt were each created to close for their
+# own directories. A machine without these raises ImportError before a single
+# corpus-validator test runs, and .github/workflows/launchpad-corpus-validate.yml
+# installs from this file specifically so that failure mode is caught in CI.
+#
+# jsonschema: validates corpus nodes against launchpad/docs/corpus/schema/node.schema.json
+# (the schema #622 defined). Floor 4.0: Draft202012Validator was introduced in
+# jsonschema 4.0.
+jsonschema>=4.0,<5
+
+# PyYAML: parses each node's YAML frontmatter (ADR-0028's canonical representation).
+PyYAML>=6.0,<7
