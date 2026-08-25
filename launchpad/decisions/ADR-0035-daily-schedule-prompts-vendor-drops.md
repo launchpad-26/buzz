@@ -1,5 +1,5 @@
 ---
-status: Accepted
+status: Proposed
 date: 2026-08-25
 issue: launchpad-26/buzz#295
 decided_in: launchpad-26/buzz#295
@@ -10,15 +10,31 @@ supersedes: none
 
 ## Decision
 
-The scheduled daily run is the primary prompt for a vendor drop. A fresh human
-instruction, an upstream tag, or a size threshold is not required before the workflow
-attempts the next drop.
+**Not yet settled by a human, and the option below is not one #295 offered.** This record
+is `Proposed`, not `Accepted`. `launchpad/AGENTS.md` §5.1 reserves the choice for a human
+and #295's *Decision outcome* is still blank. The option below is also none of #295's
+considered options A–D: #295's decision drivers explicitly pre-reject this shape —
+*"A scheduled drop is the mirror behaviour the corrected premise rejects, and would take
+the deliberateness out of the one thing that is supposed to be deliberate."* The Context
+below explains why the premise changed after #295 was written, but a human must decide
+whether that justifies departing from every option on the table. When a human states the
+outcome in #295, this record's `status` becomes `Accepted`.
+
+The proposed option: the scheduled daily run is the primary prompt for a vendor drop. A
+fresh human instruction, an upstream tag, or a size threshold is not required before the
+workflow attempts the next drop.
 
 Each run pins the exact upstream commit it observed. If upstream has not moved since the
 last adopted point, the run is a recorded no-op. If upstream has moved, the same run
 computes the drop report from that pinned input and attempts the merge path governed by
 ADR-0021 and ADR-0022. The report is not produced by a separate earlier schedule, because
 that would let upstream move between the report and the drop it purports to describe.
+
+**Unless a drop is already in flight.** ADR-0036 (#302) serialises drops: an invocation
+that finds an existing open drop records a blocked attempt instead of attempting a merge.
+This record sets the cadence of *attempts*; ADR-0036 governs what an attempt does when one
+is already outstanding. The two are intended to land together and neither is complete
+alone.
 
 A manual dispatch may retry a failed run or expedite a time-sensitive upstream change, but
 it invokes the same policy and does not create a separate adoption path. Human review still
@@ -29,11 +45,6 @@ The project-level choice of daily cadence is the deliberate act. Individual exec
 not require another person to remember to start them. This is consistent with ADR-0021's
 chosen-point model because every attempt records a specific upstream commit and the
 protected pull-request path decides whether it lands.
-
-This outcome was selected automatically under @tucktuck101's explicit approval for the
-2026-08-25 ADR-clearing session. Jeff delegated low-complexity, non-design ADR outcomes to
-the agent even where the original risk rubric classifies them above Low; he did not
-personally select this individual outcome.
 
 ## Context
 
@@ -50,22 +61,10 @@ an important maintenance activity with no self-starting trigger depends on someo
 that it has not happened.
 
 Research #365 adds a narrower reason not to schedule the report separately. The measured
-drop grew from 67 to 80 upstream commits during one working session, so a report computed
-before the merge attempt can be stale when used. Computing it from the same pinned input as
-the attempt preserves the evidence-to-action relationship.
-
-## Risk classification
-
-**Clear Medium (4/12), high confidence.** Blast radius 1; reversibility 0;
-security/trust 0; data/state 1; contracts/dependencies 1; operations/uncertainty 1.
-
-No hard High-risk trigger applies. The decision changes when one existing repository
-workflow acts and advances shared Git state non-destructively; it does not change the
-workflow's identity, token permissions, branch protection, production credentials, public
-interfaces, or a cross-repository contract. The cadence is trivially changed, while the
-human merge gate contains each attempt. Complexity is Low because later Project 20 work has
-already selected daily scheduling; that complexity assessment routes decision authority and
-does not lower this risk score.
+drop grew from 67 to 80 upstream commits during one working session — #365 records
+*"Thirteen commits, 19% growth, within one working session"* — so a report computed before
+the merge attempt can be stale when used. Computing it from the same pinned input as the
+attempt preserves the evidence-to-action relationship.
 
 ## Consequences
 
@@ -77,8 +76,13 @@ does not lower this risk score.
 - The workflow consumes CI capacity every day, including no-op days.
 - A bad upstream change can reach a candidate pull request sooner; ADR-0022's curation,
   required validation, and human merge review remain the controls before adoption.
-- Task #541 already owns the scheduled daily merge job, so this decision creates no new
-  implementation task.
+- **Task #541 owns the scheduled daily merge job but does not yet cover this record's
+  mechanism.** Its only acceptance criterion is *"a scheduled job exists that runs the
+  daily upstream merge"*. Three requirements here are outside it and must be added to #541
+  before it is built, or filed separately under Feature #525: pinning the exact upstream
+  commit observed by each run; computing the drop report from that same pinned input; and
+  recording a visible no-op when upstream has not moved. This record does **not** claim it
+  creates no implementation work.
 
 ## Security implications
 
@@ -94,6 +98,6 @@ none
 
 ## Provenance
 
-Selected and recorded by an agent under Jeff's explicit, session-only authorization for
-low-complexity ADRs. The original alternatives remain in #295; the later daily-cadence
-authority is recorded in #520, #525, and #541.
+Drafted by an agent from #295's options and the later delivery authority; the decision
+itself is pending a human, as stated at the top of *Decision*. The original alternatives
+remain in #295; the later daily-cadence authority is recorded in #520, #525, and #541.
