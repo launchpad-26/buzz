@@ -993,3 +993,11 @@ benchmark *ARGS:
 # Stop the benchmark Docker stack (state and channels are kept)
 benchmark-down:
     docker compose --project-name buzz-benchmark down
+
+# ─── Launchpad corpus ──────────────────────────────────────────────────────────
+
+# Validate the documentation corpus (launchpad/docs/corpus) against its schema
+# and cross-node rules (#623): duplicate ids, unresolved relationship targets,
+# citation existence/prohibited-content, and generated/manual ownership.
+corpus-validate:
+    python3 launchpad/project-intelligence/corpus/validate.py
