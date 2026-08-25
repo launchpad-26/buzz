@@ -49,9 +49,9 @@ to misread as "only FACT needs evidence."
 |---|---|---|
 | `statement` | yes | The claim, one sentence. |
 | `entry_class` | yes | One of `FACT`, `INFERENCE`, `TEAM_KNOWLEDGE`. |
-| `evidence` | for FACT and INFERENCE | Citations (paths, commit-pinned links). **Required for both FACT and INFERENCE** — a common misreading of CONTRACT.md's table is that only FACT needs it; the enforced rule in `memory.py` requires it for INFERENCE too. |
-| `confidence` | for INFERENCE only | Float in `[0.0, 1.0]`, in addition to `evidence`. |
-| `provided_by` | for TEAM_KNOWLEDGE only | Who told the corpus this. TEAM_KNOWLEDGE needs no evidence — it is the class that exists for uncorroborated statements. |
+| `evidence` | for FACT and INFERENCE | Citations (paths, commit-pinned links). **Required for both FACT and INFERENCE** — a common misreading of CONTRACT.md's table is that only FACT needs it; the enforced rule in `memory.py` requires it for INFERENCE too. Optional (never required, never forbidden) on TEAM_KNOWLEDGE. |
+| `confidence` | for INFERENCE only | Float in `[0.0, 1.0]`, in addition to `evidence`. **Forbidden** on FACT and TEAM_KNOWLEDGE entries, mirroring `memory.py`'s bidirectional `__post_init__` check — not just required in the "this class needs it" direction. |
+| `provided_by` | for TEAM_KNOWLEDGE only | Who told the corpus this. **Forbidden** on FACT and INFERENCE entries, same bidirectional rule. TEAM_KNOWLEDGE needs no evidence — it is the class that exists for uncorroborated statements. |
 
 This issue's plan left open (see its `OPEN` section) whether classification applies
 per-node or per-claim-within-a-node — ADR-0028 says explicitly that granularity is
@@ -64,7 +64,16 @@ A `relationships` array item has two fields: a closed-enum `type` and a `target`
 related node's `id`). Five relationship types are defined, each with a `relationshipMeta`
 entry describing its directionality and whether its inverse edge is `authored` (a human
 writes both directions) or `generated` (tooling derives the reverse edge; never write it
-by hand):
+by hand).
+
+`node.schema.json` inlines its own copy of the `type`/`target` shape (`$defs.relationship`)
+rather than `$ref`-ing this file across a schema boundary — an earlier revision did, keyed
+to a fake `https://...` `$id`, which meant any standards-conformant validator that didn't
+build the same manual resolver this directory's tests once did would attempt a live DNS
+lookup and fail on any node using `relationships`. `relationships.schema.json` stays the
+canonical source for the enum and its `relationshipMeta`; a test
+(`test_relationship_enum_matches_node_schemas_inlined_copy`) asserts the two enum lists
+never drift apart.
 
 | Type | Directionality | Inverse |
 |---|---|---|

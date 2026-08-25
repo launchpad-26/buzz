@@ -30,12 +30,21 @@ def _load_frontmatter(path: Path) -> dict:
 
 
 def _node_validator() -> jsonschema.Draft202012Validator:
-    """A validator for node.schema.json that can resolve its relationships.schema.json $ref."""
+    """A validator for node.schema.json.
+
+    Plain construction, no custom resolver -- node.schema.json's `relationships` field
+    inlines its own $defs.relationship rather than $ref-ing relationships.schema.json
+    across files. An earlier revision used a cross-file $ref keyed to node.schema.json's
+    $id, which is a fake `https://buzz.launchpad-26.internal/...` domain: any standards-
+    conformant validator that doesn't hand-build the same resolver/store this file used
+    to (jsonschema.validate(), ajv, an IDE's JSON Schema support) would attempt a live
+    DNS lookup and fail with RefResolutionError on any node using `relationships` --
+    found by review-code, reproduced directly. See
+    test_relationship_enum_matches_node_schemas_inlined_copy below for what keeps the
+    inlined copy from silently drifting.
+    """
     node_schema = json.loads(NODE_SCHEMA_PATH.read_text())
-    relationships_schema = json.loads(RELATIONSHIPS_SCHEMA_PATH.read_text())
-    store = {relationships_schema["$id"]: relationships_schema}
-    resolver = jsonschema.RefResolver.from_schema(node_schema, store=store)
-    return jsonschema.Draft202012Validator(node_schema, resolver=resolver)
+    return jsonschema.Draft202012Validator(node_schema)
 
 
 class SchemaMetaValidityTest(unittest.TestCase):
@@ -70,12 +79,31 @@ class RelationshipEnumMetadataTest(unittest.TestCase):
             self.assertIn("inverse", entry)
             self.assertIn(entry["inverse"], ("authored", "generated"))
 
+    def test_relationship_enum_matches_node_schemas_inlined_copy(self) -> None:
+        # node.schema.json inlines its own $defs.relationship (see _node_validator's
+        # docstring) rather than $ref-ing this file across a schema boundary, so the two
+        # enum lists are two literal copies. This is what stops them from silently
+        # drifting apart -- a relationship type added to one and not the other fails here.
+        node_schema = json.loads(NODE_SCHEMA_PATH.read_text())
+        node_enum = node_schema["$defs"]["relationship"]["properties"]["type"]["enum"]
+        self.assertEqual(node_enum, self.enum_members)
+
 
 class ValidFixtureTest(unittest.TestCase):
-    """A minimal, fully-conforming node passes validation."""
+    """Fully-conforming nodes pass validation."""
 
-    def test_valid_fixture_passes(self) -> None:
+    def test_minimal_fixture_passes(self) -> None:
         frontmatter = _load_frontmatter(VALID_FIXTURES_DIR / "node-minimal.md")
+        _node_validator().validate(frontmatter)
+
+    def test_full_fixture_passes(self) -> None:
+        # Exercises every optional path node-minimal.md doesn't: multiple audiences,
+        # INFERENCE and TEAM_KNOWLEDGE on their own happy path (not just FACT), and a
+        # relationship. Closes a real gap: without this, nothing in the suite confirmed
+        # a *correct* INFERENCE/TEAM_KNOWLEDGE entry actually validates -- only that an
+        # incomplete one is rejected. A schema that rejected every INFERENCE entry
+        # outright would have passed every other test in this file.
+        frontmatter = _load_frontmatter(VALID_FIXTURES_DIR / "node-full.md")
         _node_validator().validate(frontmatter)
 
 
@@ -146,6 +174,76 @@ class InvalidFixtureTest(unittest.TestCase):
         self.assertEqual(list(error.absolute_path), ["relationships", 0, "type"])
         self.assertEqual(error.validator, "enum")
         self.assertIn("depended-on-by", error.message)
+
+    # The tests below close gaps an independent review-tests pass found by mutation:
+    # every field the schema declares `required` at :8 previously had a fixture only for
+    # a *wrong value*, never plain absence -- so removing a field from `required`
+    # entirely left the whole suite green. Each test here fails if the corresponding
+    # field is ever silently dropped from `required` again.
+
+    def test_missing_type_rejected(self) -> None:
+        error = self._one_error("missing-type.md")
+        self.assertEqual(error.validator, "required")
+        self.assertIn("type", error.message)
+
+    def test_missing_status_rejected(self) -> None:
+        error = self._one_error("missing-status.md")
+        self.assertEqual(error.validator, "required")
+        self.assertIn("status", error.message)
+
+    def test_missing_origin_rejected(self) -> None:
+        error = self._one_error("missing-origin.md")
+        self.assertEqual(error.validator, "required")
+        self.assertIn("origin", error.message)
+
+    def test_missing_evidence_field_rejected(self) -> None:
+        # Distinct from test_missing_evidence_for_{fact,inference}_rejected, which cover
+        # an evidence *entry* missing its own citations -- this covers the top-level
+        # `evidence` array being absent entirely.
+        error = self._one_error("missing-evidence-field.md")
+        self.assertEqual(error.validator, "required")
+        self.assertIn("evidence", error.message)
+
+    def test_inference_missing_confidence_rejected(self) -> None:
+        error = self._one_error("inference-missing-confidence.md")
+        self.assertEqual(list(error.absolute_path), ["evidence", 0])
+        self.assertEqual(error.validator, "required")
+        self.assertIn("confidence", error.message)
+
+    def test_team_knowledge_missing_provided_by_rejected(self) -> None:
+        error = self._one_error("team-knowledge-missing-provided-by.md")
+        self.assertEqual(list(error.absolute_path), ["evidence", 0])
+        self.assertEqual(error.validator, "required")
+        self.assertIn("provided_by", error.message)
+
+    def test_fact_with_forbidden_fields_rejected(self) -> None:
+        # Confirms the fix for review-code's finding: a FACT entry carrying confidence
+        # or provided_by (fields that belong to INFERENCE/TEAM_KNOWLEDGE) must be
+        # rejected, mirroring memory.py's bidirectional __post_init__ check -- not just
+        # required-field checks in the "this class needs these fields" direction.
+        error = self._one_error("fact-with-forbidden-fields.md")
+        self.assertEqual(list(error.absolute_path), ["evidence", 0])
+        self.assertEqual(error.validator, "not")
+
+    def test_malformed_id_rejected(self) -> None:
+        error = self._one_error("malformed-id.md")
+        self.assertEqual(list(error.absolute_path), ["id"])
+        self.assertEqual(error.validator, "pattern")
+
+    def test_unrecognized_field_rejected(self) -> None:
+        error = self._one_error("unrecognized-field.md")
+        self.assertEqual(error.validator, "additionalProperties")
+        self.assertIn("internal_note", error.message)
+
+    def test_unknown_audience_value_rejected(self) -> None:
+        error = self._one_error("unknown-audience-value.md")
+        self.assertEqual(list(error.absolute_path), ["audiences", 0])
+        self.assertEqual(error.validator, "enum")
+
+    def test_duplicate_audiences_rejected(self) -> None:
+        error = self._one_error("duplicate-audiences.md")
+        self.assertEqual(list(error.absolute_path), ["audiences"])
+        self.assertEqual(error.validator, "uniqueItems")
 
 
 if __name__ == "__main__":
