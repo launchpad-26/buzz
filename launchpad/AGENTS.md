@@ -94,6 +94,14 @@ Four deliberate exceptions, all accepted knowingly:
 
 The list itself is closed; any further exception needs its own ADR.
 
+**When a divergence is permitted, prefer a fork-owned override to an in-place edit.**
+A fork-owned file that overrides, wraps, or delegates to upstream's keeps receiving
+upstream's changes; a copy diverges silently and is prohibited. Where no override
+mechanism exists, an in-place edit is allowed with its reason recorded against the file.
+This governs the form a permitted divergence takes, not whether one is permitted — the
+list above stays closed. Reasoning is in
+[`decisions/ADR-0043-prefer-fork-owned-overrides.md`](decisions/ADR-0043-prefer-fork-owned-overrides.md).
+
 New workflows go in `.github/workflows/` (GitHub requires it) and **must** be named
 `launchpad-*.yml` so they never collide with upstream's.
 

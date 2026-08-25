@@ -1,5 +1,5 @@
 ---
-status: Accepted
+status: Proposed
 date: 2026-08-25
 issue: launchpad-26/buzz#307
 decided_in: launchpad-26/buzz#307
@@ -10,41 +10,57 @@ supersedes: none
 
 ## Decision
 
-Choose Option A. The default for a standing disagreement with upstream is a fork-owned file
-that overrides, wraps, or delegates to upstream's — never a copy. An in-place edit to an
-upstream file is allowed only with a recorded justification in the PR body explaining why
-an override was not possible, and that justification lands in the divergence register as
-the file's recorded reason. The distinction between *override* (delegates to upstream,
-keeps receiving upstream's changes) and *copy* (diverges silently) is explicit: copies are
-prohibited.
+**Not yet settled by a human.** This record is `Proposed`, not `Accepted`.
+`launchpad/AGENTS.md` §5.1 reserves the choice for a human and #307's *Decision outcome*
+is still blank. When a human states the outcome in #307, this record's `status` becomes
+`Accepted`.
 
-This outcome was selected automatically under @tucktuck101's explicit approval for the
-2026-08-25 ADR-clearing session. Jeff authorized automated selection of Low and
-clear-Medium ADR outcomes; he did not personally select this individual outcome.
+The proposed option is A. The default for a standing disagreement with upstream is a
+fork-owned file that overrides, wraps, or delegates to upstream's — never a copy. The
+distinction between *override* (delegates to upstream, keeps receiving upstream's changes)
+and *copy* (diverges silently) is explicit: copies are prohibited.
+
+**This rule governs the form a divergence takes, not whether one is permitted.** §3's
+exception list stays closed and this record does not add to it; whether a given file may
+diverge at all is still decided by §3 and by an ADR per exception. §3 is amended by this
+record only to state the override-first preference, so the two documents do not disagree.
+
+**Where the justification lives.** An in-place edit to an upstream file is allowed only
+with a recorded justification, and the durable home for that justification is the
+divergence ledger row for the file — not the pull-request body, which is not a record
+anyone can query later. The PR body is where the reason is *written*; the ledger is where
+it *lives*.
+
+**Dependency, stated plainly: the ledger does not exist yet.** There is no divergence
+ledger on `launchpad` today, and its schema and location are proposed in ADR-0047 (#294,
+pull request #1443) rather than settled. Until that record is accepted and the ledger
+exists, this rule cannot be complied with as written. In the interim the justification
+goes in the pull-request body alone, and every such edit is a row owed to the ledger once
+it exists. Whoever accepts ADR-0047 should expect that backlog.
 
 ## Context
 
-Of 48 diverged upstream files, 27 are edits to upstream's files — the entire conflict
-surface — and 20 of those have no recorded reason. ADR-0005 already chose a wrapper for
-`deploy/compose/run.sh` and rejected forking `docker.yml` into a copy, recording that "a
-conflict that Git shows you is better than a divergence that nothing does." This
-generalises that precedent with the justification gate. It applies to work not yet done;
-the 27 existing edits are not worth retrofitting.
+Measured on 2026-08-21 (#307; the tip moves, so re-measure before relying on these):
+of 48 diverged upstream files, 27 are edits to upstream's files — the entire conflict
+surface — and 20 of those have no recorded reason.
 
-## Risk classification
-
-**Clear Medium (6/12), high confidence.** Blast radius 2; reversibility 1;
-security/trust 1; data/state 0; contracts/dependencies 1; operations 1. No hard High-risk
-trigger. This reduces future conflict volume; the security property is that upstream's
-fixes keep arriving on files the fork does not own.
+ADR-0005 already chose a wrapper for `deploy/compose/run.sh` and rejected forking
+`docker.yml` into a copy. Its reasoning is that a copy trades *"a conflict that Git shows
+you for a divergence that nothing does"*, and it states the principle as *"A conflict you
+must resolve is better than a copy you forget to."* This record generalises that
+precedent and adds the justification gate. It applies to work not yet done; the 27
+existing edits are not worth retrofitting.
 
 ## Consequences
 
 - The form of divergence has a governing rule; the 20 silent edits stop being the pattern.
-- The justification requirement lands in the register at the moment of divergence — the
-  exact gap the register exists to fill.
+- The justification is owed to the ledger at the moment of divergence — the exact gap the
+  ledger exists to fill.
 - Rust/TSX often have no override mechanism, so the rule will frequently resolve to "edit
-  in place, justification: no alternative" — honest, and it leaves the register complete.
+  in place, justification: no alternative" — honest, and it leaves the ledger complete.
+- Until ADR-0047 lands there is nowhere durable to put the justification, so compliance is
+  partial by construction and a backlog of owed rows accumulates.
+- §3 gains a paragraph stating the preference. The exception list is unchanged in length.
 
 ## Security implications
 
@@ -60,5 +76,5 @@ none
 
 ## Provenance
 
-Selected and recorded by an agent under Jeff's explicit, session-only authorization
-for lower-risk ADRs. Full alternatives remain in #307.
+Drafted by an agent from #307's options; the decision itself is pending a human, as stated
+at the top of *Decision*. Full alternatives remain in #307.
