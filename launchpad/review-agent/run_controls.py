@@ -32,6 +32,8 @@ CONTROLS = [
     ("check_unit_suites.py", False),
     ("check_adjudication.py", False),
     ("check_adjudication_mutations.py", False),
+    ("check_publish_scope.py", True),
+    ("check_publish_single.py", False),
 ]
 
 
