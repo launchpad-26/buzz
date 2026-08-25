@@ -24,9 +24,12 @@ automated report prompts the drop decision; a human takes the drop deliberately.
 least `launchpad`'s merge-base with upstream so it is a truthful baseline, and that
 merge-base is not a tag: `git merge-base origin/launchpad upstream/main` resolves to
 `f8692fa9b52ddcfeb4b95fb4862109983509f131`, and `git describe --tags --exact-match` on it
-answers `fatal: no tag exactly matches`. Nor does a qualifying tag reach it — measured on
-2026-08-26, no `desktop-v*` or `relay-v*` tag is an ancestor of that commit, so no tag in
-the filter delivers that baseline. The one-off is therefore stated as an exception rather
+answers `fatal: no tag exactly matches`. Nor can a qualifying tag stand in for it — measured on
+2026-08-26, no tag in the filter resolves to that commit. Six qualifying tags
+(`desktop-v0.5.3`, `.4`, `.5`, `relay-v0.1.1`, `v0.2.0`, `v0.2.1`) *are* ancestors of it,
+so they are reachable history rather than substitutes; taking any of them would move `main`
+backwards from the baseline, not to it. An earlier revision of this record claimed no
+qualifying tag was an ancestor at all, which is false. The one-off is therefore stated as an exception rather
 than dressed up as compliance; every move after it goes to a qualifying tag.
 
 ## Context
@@ -48,16 +51,16 @@ it.** #305 rejected Option B ("pin to a tag, any tag") on cost — *"seven drops
 days on the current tag rate, most of them for a mobile RC the fork does not ship"* — and
 described upstream's stream as dominated by mobile RCs. Both halves are wrong on the tag
 record. Measured on 2026-08-26 with `git for-each-ref --sort=creatordate` over
-`refs/tags/desktop-v*` and `refs/tags/relay-v*`, **thirteen tags matching Option A's own
-filter** were created after the current pin: twelve `desktop-v*`, from `desktop-v0.5.7`
+`refs/tags/desktop-v*` and `refs/tags/relay-v*`, **fourteen tags matching Option A's own
+filter** were created after the current pin: thirteen `desktop-v*`, from `desktop-v0.5.6`
 (2026-08-07) through `desktop-v0.5.18` (2026-08-21), plus `relay-v0.2.1` (2026-08-08). Over
-the same span upstream created 21 tags in total, of which 8 are `mobile-v*` — so the RC
+the same span upstream created 22 tags in total, of which 8 are `mobile-v*` — so the RC
 stream is the *minority*, not the dominant one, and the chosen filter fires at least as
 often as the rule it was preferred over. Option A is not the lower-cadence option. What it
 actually buys is *coherence of the pin* — every candidate is a relay or desktop release the
 fork ships — not fewer prompts. A prompt is not a drop: the standing report notices a
-qualifying tag, a human decides whether to take it, and declining thirteen prompts is cheap
-in a way taking thirteen drops is not.
+qualifying tag, a human decides whether to take it, and declining fourteen prompts is cheap
+in a way taking fourteen drops is not.
 
 Rejected: per arbitrary commit (C, no coherence guarantee), time-boxed HEAD (D, the mirror
 behaviour curation rejects), and demand-driven-only (E, what produced the unnoticed
@@ -70,7 +73,7 @@ gap — valid as an additional trigger, not as the sole rule).
 - The gap becomes a stated policy choice with an owner rather than an unnoticed default.
 - A tag filter can be wrong the first time upstream tags something important under a name
   it does not match; recording the SHA bounds the risk.
-- The standing report will fire often — thirteen qualifying tags in the nineteen days
+- The standing report will fire often — fourteen qualifying tags in the nineteen days
   between the current pin and 2026-08-26 — so the cost of the rule lands on triaging
   prompts, not on the filter being too narrow to notice anything.
 
