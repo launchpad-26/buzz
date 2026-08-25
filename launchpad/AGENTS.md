@@ -73,7 +73,7 @@ Note: `launchpad/AGENTS.md` (contributor guide) and `launchpad/agents/` (persona
 **Never move or rename upstream files.** Upstream is ~3,800 files and we merge from it
 regularly; a rename turns every future merge into manual work.
 
-Four deliberate exceptions, all accepted knowingly:
+The deliberate exceptions, all accepted knowingly:
 
 - `.github/ISSUE_TEMPLATE/` — our templates replace upstream's, which pointed
   contributors at `block/buzz`.
@@ -91,6 +91,11 @@ Four deliberate exceptions, all accepted knowingly:
   [`decisions/ADR-0005-launchpad-deployment-boundary.md`](decisions/ADR-0005-launchpad-deployment-boundary.md).
   **This is settled — do not raise it as a §3 violation in review.** Adding a sixth file
   to this exception is a change to that record, not a call to make in a pull request.
+- **Root MCP server registration** — `.mcp.json` at the repository root registers
+  cohort MCP servers whose commands live under `launchpad/`. Scoped to that one file;
+  a different root config file or mechanism needs its own record. Reasoning and the
+  rejected alternatives are in
+  [`decisions/ADR-0046-root-mcp-registration-exception.md`](decisions/ADR-0046-root-mcp-registration-exception.md).
 
 The list itself is closed; any further exception needs its own ADR.
 
