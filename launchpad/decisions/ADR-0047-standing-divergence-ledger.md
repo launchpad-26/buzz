@@ -40,18 +40,22 @@ Exceptions override these defaults:
 - The five deployment-provenance files accepted in ADR-0005 retain their fork
   position.
 - The pinned binaries accepted in ADR-0017 use newest wins.
-- The product-code paths surveyed in #339 are **unrecorded** pending a decision.
-  #339 is a `type:task`, not a decision venue — §4.1 of `launchpad/AGENTS.md`
-  states that "An ADR is never a work item" — and its output records evidence
-  rather than a position. `launchpad/Research/339-divergence-permanence.md`
-  found that "The commit history does not identify any of the nine as a
-  disagreement with upstream, but author intent was not confirmed", and warned
-  that "`runtime.rs` demonstrates why provenance must be recorded by change, not
-  only by file: one path can contain both", and that "Recording all nine paths
-  as "standing positions" would imply a deliberate product view the cohort has
-  never taken". Rows for these paths carry `unrecorded` as their rationale, and a
-  later decision on them MAY record provenance at sub-file rather than per-path
-  granularity.
+- The nine product-code rows decided in #339 retain their recorded permanent,
+  converging, or permanent-by-construction positions, exactly as #294's accepted
+  outcome states.
+
+  **A concern is raised here rather than acted on.**
+  `launchpad/Research/339-divergence-permanence.md` found that "The commit history
+  does not identify any of the nine as a disagreement with upstream, but author
+  intent was not confirmed", and warned that "`runtime.rs` demonstrates why
+  provenance must be recorded by change, not only by file: one path can contain
+  both", and that "Recording all nine paths as "standing positions" would imply a
+  deliberate product view the cohort has never taken". That tension is real and a
+  later decision may want to record provenance at sub-file rather than per-path
+  granularity. It is not this record's to resolve: reclassifying these nine rows
+  would reverse a settled human decision, which `launchpad/AGENTS.md` §5.1 forbids
+  — "Raise concerns; never clear them." If the concern is accepted, #294's
+  *Decision outcome* is where it gets amended.
 
 Permitted enforcement mechanisms are transforming merge driver, per-path merge
 assignment, post-merge assertion, recorded `rerere` replay, and explicit
@@ -130,3 +134,9 @@ enforcement behind it.
 
 none — this operationalizes ADR-0021 and ADR-0022 without changing either
 accepted decision.
+
+## Provenance
+
+N/A - the decision was settled in #294 on 2026-08-26 and does not predate its ADR
+issue, which is the only case `launchpad/decisions/README.md` scopes this section
+to.
