@@ -1,0 +1,98 @@
+name: launchpad — review agent publish
+
+# Posts (or updates) the single review comment #119's publish.py owns.
+#
+# This job HOLDS pull-requests: write, unlike launchpad-review-agent-controls.yml,
+# which must not have it -- that is why this lives in a separate file rather than
+# an added job there. The trigger below is deliberately not the plain event name
+# that file uses: this job's write-capable token would otherwise be handed to a
+# SAME-REPOSITORY pull request whose own diff can modify publish.py or
+# check_publish_scope.py, the exact code this job then executes -- a PR could
+# rewrite either to submit an APPROVE under the bot's identity, a hard violation
+# of launchpad/AGENTS.md rule 1 ("Draft everything. Approve nothing."). The
+# trigger below grants the base repository's token to every PR, fork or not, but
+# actions/checkout defaults to the BASE ref when no `ref:` is given -- so the code
+# that runs here is always what is committed on launchpad, never what the PR
+# changed. No checkout step below may set `ref:` to anything derived from the
+# pull request's head; doing so would recreate the exact vulnerability this
+# trigger choice exists to close, now with the base repository's token instead of
+# a fork's. The only untrusted PR content this job ever reads is the seven-key
+# document piped into publish.py on stdin below -- DATA, fetched over the API by
+# the pipeline's earlier stages exactly as CONTAINMENT.md requires, never code
+# checked out and executed.
+
+on:
+  pull_request_target:
+    types: [opened, synchronize, reopened]
+
+# Nothing else, and no job below overrides this.
+permissions:
+  contents: read
+  pull-requests: write
+
+# Interpolates the pull request number so two pushes seconds apart cancel the
+# stale run rather than racing it -- STEP 2's second find_existing call in
+# publish.py is a backstop for the remaining race, not a substitute for this.
+# A workflow-wide fixed group would be worse than none: every pull request would
+# then cancel every other one's publish run.
+concurrency:
+  group: launchpad-review-agent-publish-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  guard:
+    runs-on: ubuntu-latest
+    outputs:
+      is-fork: ${{ steps.check.outputs.is-fork }}
+    steps:
+      - name: Check whether this pull request is cross-repository
+        id: check
+        run: |
+          if [ "${{ github.event.pull_request.head.repo.full_name }}" != "${{ github.repository }}" ]; then
+            echo "is-fork=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "is-fork=false" >> "$GITHUB_OUTPUT"
+          fi
+
+  # No cross-repository publication path is designed or built (see the plan's
+  # LEFT OUT) -- this issue's own scope is launchpad-26/buzz pull requests, so a
+  # fork PR is still skipped here, for a different reason than before: not
+  # because the token would be unsafe (it no longer would be), but because
+  # nothing downstream is built to handle one.
+  publish:
+    needs: guard
+    if: needs.guard.outputs.is-fork != 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: pip install pyyaml
+
+      # #116, #117 and #118 are unmerged plans, not code, as of this revision --
+      # this step is written against the CLI shape each names for itself, so a
+      # re-check happens at the point each upstream stage actually merges rather
+      # than this file being silently correct on its own four corners while
+      # wiring nothing. No --repo flag: Actions sets GITHUB_REPOSITORY for every
+      # run, and publish.py falls back to it.
+      - name: Build the review document and publish
+        working-directory: launchpad/review-agent
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          preflight.py --pr ${{ github.event.pull_request.number }} |
+          run_dimensions.py --list secrets-and-access,claim-vs-evidence,correctness-and-failure-modes |
+          run_adjudication.py |
+          publish.py --as github-actions[bot]
+
+      # The live half of the credential control: it must run under the token it
+      # claims to measure, and this is the only workflow whose token is that one.
+      - name: Verify the publish credential's live scope
+        working-directory: launchpad/review-agent
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: python3 check_publish_scope.py
