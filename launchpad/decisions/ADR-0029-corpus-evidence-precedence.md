@@ -20,7 +20,10 @@ For claims about **intended or authorized behavior**, accepted normative decisio
 ratified specs) are authoritative over everything else, including code that has since
 drifted from them without a corresponding decision update. GitHub history, team knowledge,
 and inference may supply context but are never treated as fact on their own; they stay
-attributed to their source and distinguishable from FACT claims (PRD #4's Ruling 4).
+attributed to their source and distinguishable from FACT claims — the classification
+ADR-0003 and `launchpad/project-intelligence/CONTRACT.md` already establish, not PRD #4's
+Ruling 4, which governs upstream/Launchpad origin distinguishability rather than
+FACT/INFERENCE/TEAM_KNOWLEDGE handling.
 
 This ordering resolves the ordinary case — a spec's stated intent versus code's current
 behavior are two different claim types, so each has its own tiebreaker and neither needs
