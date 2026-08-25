@@ -94,6 +94,32 @@ class OwnershipViolationTest(unittest.TestCase):
         self.assertIn("index.json", errors[0])
 
 
+class MissingInputTest(unittest.TestCase):
+    """A nonexistent root is a missing input (fail closed). An existing root with
+    zero nodes is a true, honest state -- launchpad/docs/corpus/ today, before
+    #636/#639 land content -- and must pass, not fail. These are deliberately
+    different outcomes; see this plan's own OPEN section for why."""
+
+    def test_nonexistent_root_raises_corpus_root_missing(self) -> None:
+        missing_path = FIXTURES_DIR / "does-not-exist-anywhere"
+        self.assertFalse(missing_path.exists())
+        with self.assertRaises(validate.CorpusRootMissing):
+            validate.validate_corpus(missing_path)
+
+    def test_main_reports_failure_for_nonexistent_root(self) -> None:
+        missing_path = FIXTURES_DIR / "does-not-exist-anywhere"
+        exit_code = validate.main(["--root", str(missing_path)])
+        self.assertEqual(exit_code, 1)
+
+    def test_existing_but_empty_root_passes_cleanly(self) -> None:
+        empty_dir = FIXTURES_DIR / "empty-on-purpose"
+        empty_dir.mkdir(exist_ok=True)
+        try:
+            self.assertEqual(validate.validate_corpus(empty_dir), [])
+        finally:
+            empty_dir.rmdir()
+
+
 class RealCorpusRootExclusionTest(unittest.TestCase):
     """schema/ is #622's own infrastructure, never scanned as corpus content."""
 
