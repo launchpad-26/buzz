@@ -179,8 +179,11 @@ machinery, not by anything here.
 as "A live, replayable localhost dashboard for a git-worktree agent swarm — watches
 worktrees, branches, tmux panes, and workmux state, read-only."
 
-[ADR-0002](decisions/ADR-0002-handbook-source-repository-scope.md) records its role for
+[ADR-0002](decisions/ADR-0002-handbook-source-repository-scope.md) recorded its role for
 the handbook as "Agent observability tooling", carrying the `[supporting]` origin prefix.
+ADR-0002 is superseded by
+[ADR-0050](decisions/ADR-0050-canonical-corpus-supersedes-handbook.md), which retires the
+handbook as an authority, so that role is cited here as history rather than as a live rule.
 
 [#43](https://github.com/launchpad-26/buzz/issues/43) records the asymmetry that matters
 most between the two projects: "Sibling project `launchpad-26/rhizomorph` is deliberately
