@@ -227,6 +227,16 @@ def main(argv: list[str] | None = None) -> int:
 
     review_id, action, author_login = post_or_update(pr, repo, body, args.login)
     print(f"{action} review {review_id} as {author_login}")
+
+    # STEP 9's identity control reads this in a LATER step of the same job --
+    # the live credential's actual login only exists inside this process, off
+    # the POST/PUT response, and $GITHUB_OUTPUT is how a value crosses that
+    # step boundary. Absent outside Actions, so this is a no-op locally.
+    github_output = os.environ.get("GITHUB_OUTPUT")
+    if github_output:
+        with open(github_output, "a", encoding="utf-8") as handle:
+            handle.write(f"author_login={author_login}\n")
+
     return 0
 
 

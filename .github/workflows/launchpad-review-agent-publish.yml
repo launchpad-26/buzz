@@ -80,6 +80,7 @@ jobs:
       # wiring nothing. No --repo flag: Actions sets GITHUB_REPOSITORY for every
       # run, and publish.py falls back to it.
       - name: Build the review document and publish
+        id: publish
         working-directory: launchpad/review-agent
         env:
           GH_TOKEN: ${{ github.token }}
@@ -91,8 +92,13 @@ jobs:
 
       # The live half of the credential control: it must run under the token it
       # claims to measure, and this is the only workflow whose token is that one.
+      # PUBLISH_OBSERVED_LOGIN crosses the step boundary via the prior step's
+      # own $GITHUB_OUTPUT -- the live identity only exists inside that
+      # process, off the POST/PUT response.
       - name: Verify the publish credential's live scope
         working-directory: launchpad/review-agent
         env:
           GH_TOKEN: ${{ github.token }}
+          PUBLISH_CONFIGURED_LOGIN: github-actions[bot]
+          PUBLISH_OBSERVED_LOGIN: ${{ steps.publish.outputs.author_login }}
         run: python3 check_publish_scope.py
