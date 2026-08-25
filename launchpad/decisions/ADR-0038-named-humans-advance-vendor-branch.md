@@ -25,10 +25,12 @@ false.
 change the restriction list (#298: *"Only a repository admin can change the restriction
 list"*), so the list is set by an admin acting on #298, and this record deliberately
 names no accounts: it has no standing to grant anyone push access. What it proposes is
-the shape of the list, not its contents — **at most four accounts, each named
-individually rather than by team**, so that widening it is a visible act rather than a
-side effect of team membership changing. An admin who wants a different cap should say
-so in #298; the cap is the reviewable part.
+the shape of the list, not its size or contents — **each holder named individually
+rather than by team**, so that widening it is a visible act rather than a side effect of
+team membership changing. **The number is the human's to set in #298, not this record's.**
+An earlier revision proposed a cap of four; inventing a bound is the same class of act as
+inventing the membership, so it is withdrawn. #298 should state both how many accounts
+and which, since only an admin can execute either.
 
 **No automation receives a credential for pushing to `main`.** That sentence is scoped
 to `main` push and to this decision only. It is **not** a fork-wide rule that automation
@@ -77,7 +79,8 @@ must never be performed by a shared or automated identity.
 - The vendor branch can be corrected to at least `launchpad`'s merge-base, making it a
   truthful baseline.
 - Availability improves: one person's absence no longer stalls the curation loop.
-- The list must stay short and named; the proposed cap of four is what makes "short"
+- The list must stay short and named; a bound stated by the human in #298 is what makes
+  "short"
   checkable, and exceeding it should require a new record rather than an admin's
   judgement in the moment.
 - Nothing here is executable until an admin acts on #298, and nothing here records a
