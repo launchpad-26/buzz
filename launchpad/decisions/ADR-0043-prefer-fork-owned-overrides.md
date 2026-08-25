@@ -31,10 +31,12 @@ divergence ledger row for the file — not the pull-request body, which is not a
 anyone can query later. The PR body is where the reason is *written*; the ledger is where
 it *lives*.
 
-**Dependency, stated plainly: the ledger does not exist yet.** There is no divergence
-ledger on `launchpad` today, and its schema and location are proposed in ADR-0047 (#294,
-pull request #1443) rather than settled. Until that record is accepted and the ledger
-exists, this rule cannot be complied with as written. In the interim the justification
+**Dependency, stated plainly: the decision is settled but the ledger does not exist yet.**
+#294 was settled by a human on 2026-08-26 and defines the ledger's contract, so the
+*decision* this rule depends on is not in doubt. What is outstanding is its record
+(ADR-0047, pull request #1443, still open) and the ledger file itself, which does not exist
+on `launchpad`. Until the file exists, this rule cannot be complied with as written. An
+earlier revision described #294 as "proposed rather than settled", which was wrong. In the interim the justification
 goes in the pull-request body alone, and every such edit is a row owed to the ledger once
 it exists. Whoever accepts ADR-0047 should expect that backlog.
 
