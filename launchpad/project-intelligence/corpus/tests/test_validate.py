@@ -58,6 +58,35 @@ class UnresolvedRelationshipTargetTest(unittest.TestCase):
         self.assertIn("no-such-node-anywhere", errors[0])
 
 
+class MissingCitationTest(unittest.TestCase):
+    def test_missing_citation_rejected_and_named(self) -> None:
+        errors = validate.validate_corpus(INVALID_DIR / "missing-citation")
+        self.assertEqual(len(errors), 1)
+        self.assertIn("validator-fixture-missing-citation", errors[0])
+        # The offending path itself is not required to be absent from this
+        # particular error class's message -- unlike prohibited-citation below,
+        # a missing-file path is not private content. Only assert the node is named.
+
+
+class ProhibitedCitationTest(unittest.TestCase):
+    def test_prohibited_citation_rejected_without_leaking_the_value(self) -> None:
+        errors = validate.validate_corpus(INVALID_DIR / "prohibited-citation")
+        self.assertEqual(len(errors), 1)
+        self.assertIn("validator-fixture-prohibited-citation", errors[0])
+        # The DoD's "without leaking private source content", taken literally: the
+        # rejected value itself must never appear in the error output.
+        self.assertNotIn("id_rsa", errors[0])
+
+    def test_ordinary_auth_path_is_not_prohibited(self) -> None:
+        # crates/buzz-auth is a real, ordinary, non-secret crate this repo ships.
+        # An earlier draft of this plan's credential blocklist (*auth* as a bare
+        # substring) would have rejected it; serina:review-plan caught this before
+        # any code was written. node-b-auth-citation.md in the valid fixtures cites
+        # exactly this path -- this test asserts it passes, not merely that the
+        # whole valid directory happens to pass for unrelated reasons.
+        self.assertFalse(validate._is_prohibited_citation("crates/buzz-auth/src/lib.rs"))
+
+
 class RealCorpusRootExclusionTest(unittest.TestCase):
     """schema/ is #622's own infrastructure, never scanned as corpus content."""
 

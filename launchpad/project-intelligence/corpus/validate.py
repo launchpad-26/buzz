@@ -17,7 +17,7 @@ import json
 import subprocess
 import sys
 from dataclasses import dataclass, field
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 
 import jsonschema
 import yaml
@@ -154,12 +154,68 @@ def find_unresolved_relationship_targets(nodes: list[LoadedNode]) -> list[str]:
     return errors
 
 
+# A SHORT, EXACT list of credential-shaped filenames/extensions -- deliberately NOT
+# broad substring words like *auth*/*token*/*secret*/*credential*. An earlier draft
+# of this validator's plan proposed exactly those substrings; serina:review-plan
+# caught that *auth* alone would reject `crates/buzz-auth/...`, a real, ordinary,
+# non-secret crate this repo publicly ships. Short substring wildcards over
+# legitimate source paths are exactly the "match on exact names, never sweep with a
+# wildcard" mistake this project's own credential-handling rule warns about.
+_CREDENTIAL_LIKE_BASENAME_PREFIXES = ("id_rsa", "id_ed25519")
+_CREDENTIAL_LIKE_EXTENSIONS = {".pem", ".key"}
+
+
+def _is_prohibited_citation(citation: str) -> bool:
+    name = PurePosixPath(citation).name
+    if name == ".env" or name.startswith(".env."):
+        return True
+    if any(name.startswith(prefix) for prefix in _CREDENTIAL_LIKE_BASENAME_PREFIXES):
+        return True
+    if PurePosixPath(citation).suffix in _CREDENTIAL_LIKE_EXTENSIONS:
+        return True
+    if ".ssh" in PurePosixPath(citation).parts:
+        return True
+    return False
+
+
+def find_citation_problems(nodes: list[LoadedNode], repo_root_path: Path) -> list[str]:
+    """Every evidence citation is either a URL, a prohibited credential-like path
+    (rejected without echoing it -- the DoD's "without leaking private source
+    content"), or a repo-relative path that must resolve to a real file.
+
+    ADR-0003's citation convention is a commit-pinned markdown link -- a URL --
+    never a bare commit hash, so a bare SHA is correctly treated as the third case
+    and rejected as a non-existent path: it isn't an ADR-0003-compliant citation
+    either way.
+    """
+    errors = []
+    for node in nodes:
+        for entry in node.data.get("evidence") or []:
+            for citation in entry.get("evidence") or []:
+                if _is_prohibited_citation(citation):
+                    errors.append(
+                        f"{node.id or node.path}: an evidence citation matches a "
+                        "prohibited credential-like pattern"
+                    )
+                    continue
+                if citation.startswith("http://") or citation.startswith("https://"):
+                    continue
+                if not (repo_root_path / citation).exists():
+                    errors.append(
+                        f"{node.id or node.path}: an evidence citation does not "
+                        "resolve to a real file"
+                    )
+    return errors
+
+
 def validate_corpus(corpus_root: Path) -> list[str]:
     """Return every validation error found. Empty list means the corpus is clean."""
+    root = repo_root()
     nodes = load_nodes(corpus_root)
     errors = [n.error for n in nodes if n.error]
     errors.extend(find_duplicate_ids(nodes))
     errors.extend(find_unresolved_relationship_targets(nodes))
+    errors.extend(find_citation_problems(nodes, root))
     return errors
 
 
