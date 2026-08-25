@@ -91,6 +91,11 @@ The deliberate exceptions, all accepted knowingly:
   [`decisions/ADR-0005-launchpad-deployment-boundary.md`](decisions/ADR-0005-launchpad-deployment-boundary.md).
   **This is settled — do not raise it as a §3 violation in review.** Adding a sixth file
   to this exception is a change to that record, not a call to make in a pull request.
+- **Root MCP server registration** — `.mcp.json` at the repository root may register
+  cohort MCP servers whose commands live under `launchpad/`. Scoped to that one file;
+  a different root config file or mechanism needs its own record. Reasoning and the
+  rejected alternatives are in
+  [`decisions/ADR-0046-root-mcp-registration-exception.md`](decisions/ADR-0046-root-mcp-registration-exception.md).
 - **Cohort Rust crates in the root workspace** — the root `Cargo.toml` `members` list
   gains one append-only entry per cohort crate under `launchpad/crates/`, and
   `Cargo.lock` changes with it. Reasoning and the rejected alternatives are in
