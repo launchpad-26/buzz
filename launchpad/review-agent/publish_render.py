@@ -135,6 +135,14 @@ def _incomplete_reasons(
     """
     reasons: list[str] = []
 
+    if not isinstance(stages, list):
+        # A missing or malformed manifest is not "no dimensions expected" --
+        # that silent default is exactly how an absent stages key would
+        # otherwise render as COMPLETE with nothing to say about it. The
+        # real pipeline (run_adjudication.py) always emits a list, so this
+        # guards a hand-built or malformed document, not the normal path.
+        reasons.append(f"stages manifest is missing or not a list (got {type(stages).__name__})")
+
     stage_list = stages if isinstance(stages, list) else []
     dimension_stage_names = _dimension_stage_names(stages)
     for stage in stage_list:
@@ -273,7 +281,7 @@ def _render_finding(finding: dict, dimension_count: int | None) -> str:
 def render_body(
     marker: str,
     reports: list[dict],
-    stages: dict,
+    stages: list[dict],
     containment: dict | None,
     head_sha: str,
     merge_base_sha: str,

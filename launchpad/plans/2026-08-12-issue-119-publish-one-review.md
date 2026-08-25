@@ -1687,23 +1687,32 @@ OPEN  Not for a builder to decide.
   bounded and real, and no prose in this plan or in PUBLISHING.md may describe the
   published review as unforgeable.
 
-  Whether `defect` and `failure` should be escaped at all is #119's call and this
-  plan has made it: yes, through `contain.escape`. They are model-authored prose
-  rather than author-supplied text, so no upstream contract requires it, and a
-  reader may reasonably think it is belt-and-braces. The argument for it is that a
-  model quoting an attacker's delimiter into its own defect line is the one path by
-  which the payload re-enters the document at full authority after containment has
-  done its job, and the transform touches only two characters. If a reviewer
-  disagrees, the place to change it is STEP 4's rule and STEP 12's prose together.
+  **CORRECTED 2026-08-25 — this paragraph named the wrong outcome.** As first
+  written it said: "Whether `defect` and `failure` should be escaped at all is
+  #119's call and this plan has made it: yes, through `contain.escape`... the
+  transform touches only two characters." That is the claim STEP 4 measured and
+  falsified while building this plan out — `contain.escape` doubles every
+  literal `~`, and `~~text~~` is markdown strikethrough, so the full escape
+  visibly corrupts ordinary tilde-bearing prose (this fork's own dotfile paths
+  among them). The decision actually shipped, in STEP 4's own rule, in the
+  code (`publish_render.py`'s `_escape_prose`), and in PUBLISHING.md, is
+  narrower: only `contain.TOKEN` is replaced with `contain.ESC_TOKEN` in
+  `defect`/`failure`; the tilde is left alone. Kept struck through in spirit
+  rather than deleted, per this plan's own citation-rot discipline — a
+  reviewer who disagrees with the shipped decision should still change STEP
+  4's rule, the code and STEP 12's prose together, not this paragraph alone.
   The first draft of this plan assumed `review.render_review` would simply
   compose with #117's records. It does not — the function reads `.severity`,
   `.kind`, `.entry_point` and `.evidence` by attribute off `contain.Finding`.
   That was found by serina:review-plan, rated Blocker, and is recorded here so
   the next reader knows the composition is deliberate rather than inherited.
-  Whether the throwaway pull request from STEPs 1 and 3 stays open, and whether
-  its recorded responses are committed as fixtures. They contain review ids and
-  bodies from this public fork — no credential — but they are permanent once
-  committed.
+  DISCHARGED. This item read as still-open when written, but STEP 1
+  (`:366-373`) and STEP 10 (`:1285-1288`) already name the recorded responses
+  as deliverables committed as fixtures — not a builder's decision made in
+  passing, the plan's own later steps pre-empted it. Both throwaway pull
+  requests (#1421, #1424) are closed without merging once their evidence was
+  captured; the committed fixtures contain review ids and bodies from this
+  public fork, no credential, and are permanent as recorded.
   What happens when the workflow token is present but the review is on a pull
   request the agent has already reviewed at the SAME head SHA — a re-run with no
   new commit. This plan re-renders and PUTs unconditionally, which is idempotent

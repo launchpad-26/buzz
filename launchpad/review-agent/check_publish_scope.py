@@ -30,6 +30,7 @@ from __future__ import annotations
 
 import contextlib
 import copy
+import io
 import os
 import subprocess
 import sys
@@ -63,6 +64,17 @@ def _on_key(doc: dict):
 def static_violations(doc: dict) -> list[str]:
     """Every reason ``doc`` fails the static half. Empty means it passes."""
     violations: list[str] = []
+
+    # A rename of the workflow's own name: key breaks _in_publish_workflow()'s
+    # GITHUB_WORKFLOW comparison silently -- the live/identity halves would
+    # SKIP forever afterward, with nothing red anywhere, which is the same
+    # class of false result this control's own docstring warns against for
+    # the wrong-token case.
+    if doc.get("name") != PUBLISH_WORKFLOW_NAME:
+        violations.append(
+            f"workflow name {doc.get('name')!r} does not match the name this control "
+            f"is keyed on ({PUBLISH_WORKFLOW_NAME!r})"
+        )
 
     triggers = doc.get(_on_key(doc), {}) or {}
     if not (isinstance(triggers, dict) and "pull_request_target" in triggers):
@@ -132,6 +144,20 @@ def run_static_half() -> dict | None:
             if str(step.get("uses", "")).startswith("actions/checkout"):
                 step["with"] = {"ref": "${{ github.event.pull_request.head.sha }}"}
     check(bool(static_violations(bad_ref)), "mutation (ref: pull_request.head.sha) is caught")
+
+    head_ref = copy.deepcopy(doc)
+    for job in head_ref.get("jobs", {}).values():
+        for step in job.get("steps", []) or []:
+            if str(step.get("uses", "")).startswith("actions/checkout"):
+                step["with"] = {"ref": "${{ github.head_ref }}"}
+    check(
+        bool(static_violations(head_ref)),
+        "mutation (ref: github.head_ref -- not just pull_request.head/head.sha) is caught",
+    )
+
+    renamed = copy.deepcopy(doc)
+    renamed["name"] = "some other workflow"
+    check(bool(static_violations(renamed)), "mutation (workflow renamed) is caught")
 
     return doc
 
@@ -240,10 +266,22 @@ def _isolated_failures():
     global failures
     saved = failures
     failures = []
+    buf = io.StringIO()
     try:
-        yield failures
+        with contextlib.redirect_stdout(buf):
+            yield failures
     finally:
         failures = saved
+        # The suppressed output is printed back, but fenced and prefixed so it
+        # can never be mistaken for a live result -- run_live_half's own
+        # PASS/FAIL/GITHUB_WORKFLOW/response-body lines are shaped identically
+        # to genuine live evidence, and STEP 9's own done-when asks for that
+        # exact evidence to be pasted into a PR. Unlabelled, a self-test run
+        # counterfeits it.
+        captured = buf.getvalue()
+        if captured.strip():
+            for line in captured.splitlines():
+                print(f"    [SELFTEST, not live] {line}")
 
 
 def run_offline_self_tests() -> None:

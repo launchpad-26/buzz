@@ -8,6 +8,10 @@ Normative, and a sibling to `CONTAINMENT.md` in the same voice. This is the cont
 planning first, so it is settled here in enough detail that #118 and #119 implement
 against it without renegotiating.
 
+**Consumed by `PUBLISHING.md`** (#119): the finding record, the report envelope, and
+the merged document's `nonce` key are read verbatim by the renderer that document
+specifies — see its own cross-references section.
+
 **Follow-up owed to `CONTAINMENT.md`, not yet paid.** `CONTAINMENT.md`'s own "Contract
 for later stages" table lives on `feat/review-agent-untrusted-input`
 ([#120](https://github.com/launchpad-26/buzz/issues/120)), which is committed but

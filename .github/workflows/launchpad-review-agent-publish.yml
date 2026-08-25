@@ -16,10 +16,10 @@ name: launchpad — review agent publish
 # changed. No checkout step below may set `ref:` to anything derived from the
 # pull request's head; doing so would recreate the exact vulnerability this
 # trigger choice exists to close, now with the base repository's token instead of
-# a fork's. The only untrusted PR content this job ever reads is the seven-key
-# document piped into publish.py on stdin below -- DATA, fetched over the API by
-# the pipeline's earlier stages exactly as CONTAINMENT.md requires, never code
-# checked out and executed.
+# a fork's. The only untrusted PR content this job ever reads is the
+# seven-or-eight-key document piped into publish.py on stdin below -- DATA,
+# fetched over the API by the pipeline's earlier stages exactly as
+# CONTAINMENT.md requires, never code checked out and executed.
 
 on:
   pull_request_target:
@@ -73,12 +73,29 @@ jobs:
       - name: Install dependencies
         run: pip install pyyaml
 
-      # #116, #117 and #118 are unmerged plans, not code, as of this revision --
-      # this step is written against the CLI shape each names for itself, so a
-      # re-check happens at the point each upstream stage actually merges rather
-      # than this file being silently correct on its own four corners while
-      # wiring nothing. No --repo flag: Actions sets GITHUB_REPOSITORY for every
-      # run, and publish.py falls back to it.
+      # #116 (pre-flight) is still an unmerged plan, not code -- #117 and #118
+      # are ALREADY MERGED as code (run_dimensions.py, run_adjudication.py),
+      # verified against their own --help rather than assumed from an earlier
+      # revision's "unmerged plans" note, which was stale the moment #117
+      # landed and went unchecked. run_dimensions.py takes the PR number as a
+      # positional argument and fetches surfaces itself -- it reads nothing
+      # from stdin, so there is no pre-flight stage to pipe from until #116
+      # exists, and --list (a boolean flag that prints discovered slugs and
+      # exits) is not a way to select which dimensions run; there isn't one
+      # today -- every discovered dimension always runs. No --repo flag:
+      # Actions sets GITHUB_REPOSITORY for every run, and publish.py falls
+      # back to it.
+      #
+      # KNOWN GAP, disclosed rather than silently wrong: run_dimensions.py
+      # emits no top-level `stages` key at all, and run_adjudication.py only
+      # ever adds its OWN "adjudication" entry to whatever `stages` array
+      # arrived -- so the merged document publish.py reads today never names
+      # a dimension in `stages`, and STEP 5 condition (7) ("a dimension named
+      # by the manifest produced no report") can never fire until #116 (or a
+      # future revision of #117) actually populates dimension entries. This
+      # is the same category of gap the plan itself names for the missing
+      # pre-flight stage -- STEP 5's own text: "the stage manifest... is what
+      # stands in for it" -- not yet dischargeable without #116.
       - name: Build the review document and publish
         id: publish
         working-directory: launchpad/review-agent
@@ -91,10 +108,9 @@ jobs:
         # A bare `run_dimensions.py` here is "command not found", exit 127,
         # and the pipeline never runs on any real invocation.
         run: |
-          python3 preflight.py --pr ${{ github.event.pull_request.number }} |
-          python3 run_dimensions.py --list secrets-and-access,claim-vs-evidence,correctness-and-failure-modes |
+          python3 run_dimensions.py "${{ github.event.pull_request.number }}" |
           python3 run_adjudication.py |
-          python3 publish.py --as github-actions[bot]
+          python3 publish.py --as 'github-actions[bot]'
 
       # The live half of the credential control: it must run under the token it
       # claims to measure, and this is the only workflow whose token is that one.
