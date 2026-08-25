@@ -33,8 +33,31 @@ import contain
 import review
 
 MALFORMED_HEADING = "### Malformed finding"
+INCOMPLETE_HEADING = "## Incomplete"
 
 _VALID_ANCHORS = ("pr", "file", "line")
+
+#: The two stage names #116 and #118 contribute that are NOT dimension slugs --
+#: matches the literal names already used elsewhere in this codebase (see
+#: test_run_adjudication.py's ``["preflight", "adjudication"]``). Every other
+#: manifest entry is presumed to be a dimension slug, checked against
+#: ``reports[].dimension`` for condition (7) below -- #117 discovers dimension
+#: slugs from disk at runtime, so no fixed dimension list exists to import here.
+_NON_DIMENSION_STAGE_NAMES = ("preflight", "adjudication")
+
+#: #117's dimension completion marker, per STEP 5's condition (5): the primary
+#: check is the parsed nonce against the document's own ``nonce`` argument, not
+#: sibling-to-sibling agreement, because one report is enough to check that way.
+_DIMENSION_MARKER_PREFIX = "BUZZ-DIMENSION-COMPLETE"
+
+
+def _parse_dimension_marker(marker) -> tuple[str, str] | None:
+    if not isinstance(marker, str):
+        return None
+    parts = marker.split(":")
+    if len(parts) != 3 or parts[0] != _DIMENSION_MARKER_PREFIX:
+        return None
+    return parts[1], parts[2]
 
 
 def _escape_prose(text: str) -> str:
@@ -81,6 +104,125 @@ def _sort_key(finding: dict) -> tuple:
     )
 
 
+def _containment_unparseable(containment) -> bool:
+    if not isinstance(containment, dict):
+        return True
+    if not isinstance(containment.get("findings"), list):
+        return True
+    return not isinstance(containment.get("states"), dict)
+
+
+def _incomplete_reasons(
+    stages, reports, containment, nonce, all_findings: list[dict]
+) -> list[str]:
+    """Ten named conditions plus two inherited from STEP 4. The default is
+    incomplete: anything this function cannot classify is added as a reason
+    rather than silently passed over, per STEP 5's own rule that absence of a
+    failure signal is not evidence of success.
+    """
+    reasons: list[str] = []
+
+    stage_list = stages if isinstance(stages, list) else []
+    dimension_stage_names = set()
+    for stage in stage_list:
+        if not isinstance(stage, dict):
+            reasons.append("a stage manifest entry could not be parsed")
+            continue
+        name = stage.get("name")
+        status = stage.get("status")
+        if name not in _NON_DIMENSION_STAGE_NAMES:
+            dimension_stage_names.add(name)
+        if status != "complete":  # (1)
+            reason = stage.get("reason")
+            detail = f", reason: {reason!r}" if reason else ""
+            reasons.append(f"stage {name!r} has not completed (status: {status!r}{detail})")
+
+    report_list = reports if isinstance(reports, list) else []
+    parsed_nonces: list[tuple[str, str]] = []
+    reported_dimensions = set()
+    for report in report_list:
+        if not isinstance(report, dict):
+            reasons.append("a report could not be parsed")  # default-incomplete
+            continue
+        dimension = report.get("dimension")
+        reported_dimensions.add(dimension)
+        status = report.get("status")
+        if status == "failed":  # (2)
+            reasons.append(f"dimension {dimension!r} reported status: failed")
+        if status == "complete" and report.get("outcome") is None:  # (8)
+            reasons.append(f"dimension {dimension!r} has status: complete but no outcome")
+
+        keys = list(report.keys())
+        if "completion_marker" not in report or not keys or keys[-1] != "completion_marker":
+            reasons.append(  # (3)
+                f"dimension {dimension!r}'s completion_marker is absent or not the last key"
+            )
+        else:
+            parsed = _parse_dimension_marker(report["completion_marker"])
+            if parsed is None or parsed[0] != dimension:  # (4)
+                reasons.append(
+                    f"dimension {dimension!r}'s completion marker names a different dimension"
+                )
+            else:
+                parsed_nonces.append((dimension, parsed[1]))
+                if parsed[1] != nonce:  # (5), primary: against the document's nonce
+                    reasons.append(
+                        f"dimension {dimension!r}'s completion marker nonce does not match "
+                        "the run nonce"
+                    )
+
+        findings = report.get("findings")
+        findings_count = report.get("findings_count")
+        if not isinstance(findings, list) or findings_count != len(findings):  # (6)
+            reasons.append(f"dimension {dimension!r}'s findings_count does not match its findings")
+
+    if len({n for _, n in parsed_nonces}) > 1:  # (5), secondary: siblings disagree
+        reasons.append("reports' completion-marker nonces disagree with each other")
+
+    missing_dimensions = dimension_stage_names - reported_dimensions
+    for name in missing_dimensions:  # (7)
+        reasons.append(f"dimension {name!r} is named by the manifest but produced no report")
+
+    if containment is None or _containment_unparseable(containment):  # (9), STEP 4 inherited
+        reasons.append("the containment block is absent or unparseable")
+    else:
+        states = containment.get("states", {})
+        actual = set(states)
+        expected = set(contain.ENTRY_POINTS)
+        if actual != expected:  # (10)
+            missing = expected - actual
+            extra = actual - expected
+            detail = []
+            if missing:
+                detail.append(f"missing {sorted(missing)}")
+            if extra:
+                detail.append(f"unexpected {sorted(extra)}")
+            reasons.append(
+                "containment.states does not name exactly the seven entry points ("
+                + "; ".join(detail) + ")"
+            )
+
+    for finding in all_findings:  # STEP 4 inherited: out-of-ladder severity
+        if finding.get("severity") not in review.SEVERITY_ORDER:
+            reasons.append(
+                f"finding {finding.get('finding_id')!r} has a severity outside the ladder"
+            )
+
+    return reasons
+
+
+def _render_incomplete_banner(reasons: list[str]) -> str:
+    lines = [
+        INCOMPLETE_HEADING,
+        "",
+        "This review is INCOMPLETE and must not be read as a full pass:",
+        "",
+    ]
+    lines.extend(f"- {reason}" for reason in reasons)
+    lines.append("")
+    return "\n".join(lines)
+
+
 def _render_malformed(finding: dict) -> str:
     raw = json.dumps(finding, indent=2, default=str)
     fence = review.fence_for(raw)
@@ -125,11 +267,23 @@ def render_body(
     head_sha: str,
     merge_base_sha: str,
     duplicate_groups=(),
+    nonce=None,
 ) -> str:
-    """The full review body. ``stages`` is accepted, unused here -- STEP 5's
-    incomplete banner reads it; the parameter exists now so that step does not
-    change this signature.
+    """The full review body.
+
+    ``nonce`` is the merged document's run nonce (#117), added here rather than
+    at STEP 4 because STEP 5's condition (5) is the first thing that needs it --
+    defaulted to ``None`` so STEP 4's own tests, which never supplied one, are
+    unaffected; a missing document nonce still fails condition (5) honestly for
+    any report that carries a completion marker, per the default-is-incomplete
+    rule below.
     """
+    all_findings: list[dict] = []
+    for report in reports:
+        for finding in (report.get("findings", []) or []) if isinstance(report, dict) else []:
+            all_findings.append(dict(finding))
+    by_id = {f.get("finding_id"): f for f in all_findings if f.get("finding_id") is not None}
+
     lines = [
         marker,
         "",
@@ -137,7 +291,11 @@ def render_body(
         "",
     ]
 
-    if containment is not None:
+    reasons = _incomplete_reasons(stages, reports, containment, nonce, all_findings)
+    if reasons:
+        lines.append(_render_incomplete_banner(reasons))
+
+    if containment is not None and not _containment_unparseable(containment):
         contain_findings = [
             contain.Finding(
                 kind=f["kind"],
@@ -149,12 +307,6 @@ def render_body(
         ]
         lines.append(review.render_review(contain_findings, containment.get("states", {})))
         lines.append("")
-
-    all_findings: list[dict] = []
-    for report in reports:
-        for finding in report.get("findings", []) or []:
-            all_findings.append(dict(finding))
-    by_id = {f.get("finding_id"): f for f in all_findings if f.get("finding_id") is not None}
 
     remove_ids: set = set()
     force_malformed_ids: set = set()
