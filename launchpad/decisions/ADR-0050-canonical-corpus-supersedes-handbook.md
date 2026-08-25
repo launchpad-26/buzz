@@ -15,10 +15,10 @@ cohort system knowledge. New canonical documentation MUST be authored in the
 corpus belonging to the system it documents: the Buzz corpus for Buzz-owned
 knowledge and the Buzz Infrastructure corpus for infrastructure-owned knowledge.
 
-Existing handbook information MAY be reused only after it remains accurate and
-passes the destination corpus's provenance, disclosure, and validation
-requirements. Accuracy and passage are both preconditions, not alternatives to
-each other. Handbook material is source material, not an authority. The handbook
+Existing handbook information MAY be reused only after it passes the destination
+corpus's provenance, disclosure, and validation requirements. That is #1408's
+accepted wording and this record does not add to it; an earlier revision inserted
+an independent accuracy gate that no human settled, and it is withdrawn. Handbook material is source material, not an authority. The handbook
 is retired and MUST NOT receive new canonical documentation.
 
 ADR-0001, ADR-0002, ADR-0003, ADR-0004, and ADR-0015 are superseded. Their
@@ -75,13 +75,22 @@ corpus under `launchpad/docs/corpus/` is an established destination.
   ADR. Four live artefacts cite that vocabulary today rather than owning it:
   `launchpad/docs/corpus/schema/README.md` and
   `launchpad/docs/corpus/schema/node.schema.json` both describe `origin` as
-  reusing ADR-0003's per-claim origin prefixes; ADR-0029 rests on "the
-  classification ADR-0003 and `launchpad/project-intelligence/CONTRACT.md`
-  already establish"; and ADR-0028 justifies the corpus's document shape partly
-  by precedent, noting that handbook pages "used the same shape (ADR-0003's
-  provenance-contract front matter)". The two schema files are the load-bearing
-  cases — they define a live enum by reference to a superseded record; ADR-0028's
-  is a precedent citation rather than a borrowed rule.
+  reusing ADR-0003's per-claim origin prefixes; and ADR-0028 justifies the corpus's
+  document shape partly by precedent, noting that handbook pages "used the same
+  shape (ADR-0003's provenance-contract front matter)". Those two schema files are
+  the load-bearing cases — they define a live enum by reference to a superseded
+  record; ADR-0028's is a precedent citation rather than a borrowed rule.
+
+  **ADR-0029 is deliberately not in that group, and its own citation is wrong.**
+  ADR-0029 rests on "the classification ADR-0003 and
+  `launchpad/project-intelligence/CONTRACT.md` already establish", but ADR-0003
+  contains no mention of `FACT`, `INFERENCE` or `TEAM_KNOWLEDGE` at all — it
+  defines a behaviour-versus-opinion claim rule and the `[upstream]`,
+  `[launchpad]`, `[cohort]`, `[supporting]` origin prefixes. That enum is defined
+  by `launchpad/project-intelligence/CONTRACT.md`. So ADR-0029 does not depend on
+  ADR-0003 for the classification it names, and superseding ADR-0003 does not
+  strand it. ADR-0029's attribution is a separate pre-existing error, recorded
+  here so it is not lost, and not corrected by this record.
   The corpus schema MUST restate the `origin` enum and the per-claim
   origin prefixes as its own normative vocabulary, and those citations MUST be
   updated to point at it. Until that lands, ADR-0003's superseded text remains
