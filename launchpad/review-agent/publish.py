@@ -225,7 +225,11 @@ def main(argv: list[str] | None = None) -> int:
         )
         return 1
 
-    review_id, action, author_login = post_or_update(pr, repo, body, args.login)
+    try:
+        review_id, action, author_login = post_or_update(pr, repo, body, args.login)
+    except RuntimeError as exc:
+        print(f"error: {exc}", file=sys.stderr)
+        return 1
     print(f"{action} review {review_id} as {author_login}")
 
     # STEP 9's identity control reads this in a LATER step of the same job --
