@@ -47,9 +47,9 @@ privilege, changes no production system, and is cheap to replace later.
 - Local execution is not centrally attested and can vary by contributor machine.
 - Resolution reuse remains governed separately; this record does not choose a shared
   `rr-cache` or grant an agent authority to resolve a novel conflict.
-- Existing Task #537 owns updating PRD #273 and its vendor-drop workflow. The concrete
-  resume command belongs in that implementation decomposition; no new task is raised
-  by this decision record.
+- Task #1426 owns the reproducible escalation bundle and local `just` resume entry
+  point under Feature #525. It was raised because #541 owns the scheduled merge but
+  does not cover this conflict-resolution UX.
 
 ## Security implications
 
