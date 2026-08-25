@@ -80,8 +80,18 @@ def static_violations(doc: dict) -> list[str]:
             violations.append(f"job {jname!r} overrides permissions")
         for step in (jbody or {}).get("steps", []) or []:
             if str(step.get("uses", "")).startswith("actions/checkout"):
-                ref = (step.get("with") or {}).get("ref")
-                if ref and ("pull_request.head" in str(ref) or "head.sha" in str(ref)):
+                # ANY ref: override is refused, not only the ones that name
+                # pull_request.head/head.sha by substring. github.head_ref
+                # (the PR's source branch name) is equally derived from the
+                # PR head and equally capable of checking out
+                # attacker-controlled code under this job's write-capable
+                # token -- a substring denylist misses it, and a new
+                # PR-head-derived expression this deny-list has never heard
+                # of would too. The safety property this job rests on is "the
+                # base ref is always what runs", which a bare-presence check
+                # proves and a denylist can only approximate.
+                if "ref" in (step.get("with") or {}):
+                    ref = step["with"]["ref"]
                     violations.append(f"job {jname!r} checkout sets ref: {ref!r}")
 
     return violations
@@ -151,8 +161,15 @@ def attempt_ref_create(repo: str, run_id: str) -> tuple[int, dict]:
     )
     lines = result.stdout.splitlines()
     if not lines:
-        return 0, {}
-    status = int(lines[0].split()[1])
+        return 0, {"parse_error": "empty response"}
+    try:
+        status = int(lines[0].split()[1])
+    except (IndexError, ValueError) as exc:
+        # Fail closed, not crash: an unrecognisable response shape is not a
+        # 403, and letting this raise would abort the whole script before
+        # the identity check ever ran -- on the one run where something
+        # about the response was already unusual.
+        return 0, {"parse_error": f"unrecognisable status line {lines[0]!r}: {exc}"}
     blank = next((i for i, line in enumerate(lines) if line.strip() == ""), len(lines))
     body_text = "\n".join(lines[blank + 1 :])
     import json as _json

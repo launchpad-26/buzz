@@ -84,11 +84,17 @@ jobs:
         working-directory: launchpad/review-agent
         env:
           GH_TOKEN: ${{ github.token }}
+        # python3 on every stage: none of these scripts is executable or carries
+        # a shebang (they open with a docstring, per this repo's own
+        # convention -- every other invocation anywhere in the repo spells
+        # this out too), and working-directory does not add itself to $PATH.
+        # A bare `run_dimensions.py` here is "command not found", exit 127,
+        # and the pipeline never runs on any real invocation.
         run: |
-          preflight.py --pr ${{ github.event.pull_request.number }} |
-          run_dimensions.py --list secrets-and-access,claim-vs-evidence,correctness-and-failure-modes |
-          run_adjudication.py |
-          publish.py --as github-actions[bot]
+          python3 preflight.py --pr ${{ github.event.pull_request.number }} |
+          python3 run_dimensions.py --list secrets-and-access,claim-vs-evidence,correctness-and-failure-modes |
+          python3 run_adjudication.py |
+          python3 publish.py --as github-actions[bot]
 
       # The live half of the credential control: it must run under the token it
       # claims to measure, and this is the only workflow whose token is that one.
