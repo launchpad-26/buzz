@@ -100,3 +100,9 @@ second implementation from weakening or drifting from that boundary.
 
 none — extends the existing review-agent containment contract without replacing
 its pull-request-author coverage.
+
+## Provenance
+
+N/A - the decision was settled in #303 on 2026-08-26 and does not predate its ADR
+issue, which is the only case `launchpad/decisions/README.md` scopes this section
+to.
