@@ -32,49 +32,40 @@ What follows is therefore a **draft shape for the eventual decision**, recorded 
 reasoning is not lost, and not a rule anyone should implement. It becomes `Accepted` only
 after #474–#476 close and a human states the outcome in #492.
 
-### Draft shape
+### What this record deliberately does NOT contain
 
-Instrumentation depth is expressed as **preset profiles**, which is the mechanism ADR-0026
-already fixed: *"When enabled, configuration uses preset profiles rather than individual or
-granular signal-level toggles."* Earlier drafts of this record spoke only of "tiers" and
-never mentioned profiles, which left an implementer with two governing nouns and no
-mapping. There is one noun: a profile. A "tier" in the sketch below is a profile, and the
-profile set itself is what #474–#476 must inform.
+An earlier revision of this record kept a "draft shape" that named two profiles, defined
+their signal contents, and set numeric graduation thresholds. That was the prohibited act,
+not a way around it: #492 says *"do not invent profiles"*, and a record cannot both invent
+a profile set and claim it is not choosing one. Those inventions are withdrawn rather than
+relocated, and nothing replaces them here.
 
-- **Baseline profile.** Every first-party CLI emits structured command outcomes, correlated
-  using **W3C Trace Context** (`traceparent`), which `ADR-0024-w3c-trace-context-correlation.md`
-  makes *"Buzz's primary correlation mechanism"* and which forbids substituting another
-  universal identity join. Earlier drafts said "propagated correlation IDs", which did not
-  name the mandated mechanism.
-- **Traced profile.** Spans and metrics are added where lifecycle or latency evidence needs
-  them.
+What survives is only the shape of the question, which #474-#476 must answer before anyone
+can answer it:
 
-Graduation from baseline to traced requires at least one of the following, each stated so
-it can be decided rather than argued:
+- Depth is configured by **preset profiles**, not per-signal toggles. That is not this
+  record's choice — `ADR-0026-fail-open-telemetry-export.md` already decided it: *"When
+  enabled, configuration uses preset profiles rather than individual or granular
+  signal-level toggles."* Whatever #492 eventually decides is expressed in that vocabulary.
+- Correlation uses **W3C Trace Context**, per `ADR-0024-w3c-trace-context-correlation.md`,
+  which makes it *"Buzz's primary correlation mechanism"* and forbids substituting another
+  universal identity join. Not open for this record to revisit either.
+- Content handling follows `ADR-0025-controlled-free-text-telemetry.md`, which permits free
+  text as a *"required diagnostic capability"* under its named controls (field
+  classification, secret and credential filtering before the export boundary, size limits
+  with a visible truncation marker, restricted and audited access, defined retention,
+  contributor consent) and absolutely prohibits *"[p]rivate keys, authentication tokens,
+  raw environment variables, and binary attachments"*. An earlier revision of this record
+  said "no raw user content is exported", which reads as forbidding the evidence ADR-0025
+  requires; that is withdrawn.
+- The existing machine-readable CLI output contract is preserved and never weakened. It is
+  itself an agent contract.
 
-- the command supervises a subprocess whose expected wall-clock exceeds **30 seconds**
-  (earlier drafts said "long-lived", which set no threshold);
-- the command holds or presents a credential, or performs a relay administrative
-  operation; or
-- an operator has filed a diagnosis request naming the command and the missing signal, and
-  no existing baseline outcome answers it. This replaces "end-to-end diagnosis with no
-  other signal", which was unfalsifiable — another signal can always be claimed to exist.
-
-**Content rules, aligned with ADR-0025 rather than against it.** The existing
-machine-readable CLI output contract is preserved and never weakened. Telemetry content
-follows `ADR-0025-controlled-free-text-telemetry.md`, which permits free text as a
-*"required diagnostic capability"* subject to its named controls: explicit field
-classification, secret and credential filtering before the export boundary, size limits
-with a visible truncation marker, restricted and audited access, defined retention, and
-contributor consent. What is prohibited under every profile is what ADR-0025 prohibits —
-*"[p]rivate keys, authentication tokens, raw environment variables, and binary
-attachments"* — plus any unclassified or unfiltered field. An earlier draft of this record
-said "no raw user content is exported", which reads as forbidding the evidence ADR-0025
-requires; that wording is withdrawn.
-
-**Scrubbing is a profile requirement, not a deferred obligation.** Span data on the
-administrative surface is exported only after credential filtering, per ADR-0025. An
-earlier draft deferred this onto graduation criteria that did not contain it.
+**The open questions, left open:** which profiles exist, which is the default, what each
+one's signal contents are, and what promotes a tool from one to another. #462 and #474-#476
+must establish current runtime capabilities, cost, safety boundaries and distribution
+constraints first. Anyone tempted to fill these in before that evidence lands should read
+the comment on #492 again.
 
 ## Context
 
@@ -96,10 +87,9 @@ naming a default.
 ## Consequences
 
 - Nothing is implementable from this record while it is `Proposed`. That is intended.
-- Once unblocked: complete outcomes and correlation joins for every command; spans only
-  where they earn their cost.
-- Decidable graduation criteria stop teams under-instrumenting high-risk administrative or
-  subprocess operations, and stop the criteria being arguable in review.
+- Once unblocked: the decision will express depth as profiles, correlate with W3C Trace
+  Context, and handle content under ADR-0025's controls. Everything past that is
+  undetermined by design.
 - The machine-readable CLI contract, which is itself an agent contract, stays stable.
 - Expressing depth as profiles keeps one vocabulary with ADR-0026 instead of two.
 
