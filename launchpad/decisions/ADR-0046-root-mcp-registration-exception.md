@@ -15,7 +15,8 @@ supersedes: none
 is still blank. When a human states the outcome in #1415, this record's `status` becomes
 `Accepted`.
 
-The proposed option is B. `professor-tools` is registered repo-wide via a root `.mcp.json`:
+The proposed option is B. Registering `professor-tools` repo-wide via a root `.mcp.json`
+is permitted — the file does not exist yet and this record does not add it (see below):
 
 ```json
 { "mcpServers": { "professor-tools": { "command": "launchpad/agents/the-professor/tools/server.py" } } }
@@ -69,6 +70,9 @@ Earlier drafts referred to ADR-0030's exception in the present tense as though i
 
 - Once #1398 merges, `draft-page` becomes discoverable and runnable from any root session,
   closing the gap its own review named.
+- Every session opened in this repository gains reach to a tool that holds a GitHub
+  credential and writes local files. That is a real widening of the default surface, not a
+  read-only convenience.
 - The decision Serina made in conversation gets a durable, citable record.
 - §3 gains a fifth named exception, scoped to `.mcp.json` alone.
 - A future root MCP registration in the same file is covered; anything broader will cite
@@ -80,10 +84,19 @@ Earlier drafts referred to ADR-0030's exception in the present tense as though i
 ## Security implications
 
 This changes what every session opened in this repository can reach by default, once the
-file exists. The exposure is bounded: all tools read-only against public or
-cohort-controlled sources, no writes, no arbitrary command execution, no credential
-handling; the script only runs if a session exercises the skill, and then passes through
-Claude Code's own MCP approval prompt. `draft-page`'s execution gap — its five required
+file exists, and the surface is **not** read-only. An earlier revision of this record
+claimed every tool was read-only with no writes and no credential handling. That is false:
+`launchpad/agents/the-professor/tools/server.py` obtains a GitHub authentication credential
+and passes it into a subprocess environment (around lines 378-399), and writes draft
+content to a local file (around line 438).
+
+What the exposure actually is, stated accurately: the server reads public or
+cohort-controlled sources; it holds a GitHub credential for the duration of a call, which
+it does not print; it writes only to paths it creates for draft output; it executes no
+caller-supplied command. The script runs only if a session exercises the skill, and then
+passes through Claude Code's own MCP approval prompt. That is a narrower surface than an
+arbitrary-execution server, and a wider one than "read-only" — anyone weighing this
+exception should weigh the credential, not the sanitised version. `draft-page`'s execution gap — its five required
 tool calls, none of which can run without a registered server — was the reason for this
 registration and is resolved by it.
 
