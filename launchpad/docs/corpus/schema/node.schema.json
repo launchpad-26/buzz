@@ -1,0 +1,140 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://buzz.launchpad-26.internal/corpus/node.schema.json",
+  "title": "Buzz documentation corpus node",
+  "description": "Frontmatter contract for a canonical corpus node (ADR-0028: Markdown with YAML frontmatter). Validates the machine-checkable fields; the Markdown body carries the human-readable prose ADR-0029 governs.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["id", "type", "status", "origin", "audiences", "evidence"],
+  "properties": {
+    "id": {
+      "type": "string",
+      "pattern": "^[a-z0-9]+(-[a-z0-9]+)*$",
+      "description": "Stable identifier for this node. Kebab-case. Never renamed once assigned, per ADR-0028's canonical-representation requirement that generated projections derive reproducibly from one source."
+    },
+    "type": {
+      "type": "string",
+      "enum": [
+        "architecture",
+        "layers",
+        "capabilities",
+        "platforms",
+        "implementation",
+        "interfaces-events",
+        "verification",
+        "operations",
+        "development",
+        "release",
+        "governance",
+        "agent",
+        "ingestion"
+      ],
+      "description": "The corpus surface this node documents. Values are PRD #602's own enumerated list of in-scope surfaces, reused here rather than a second, independently invented taxonomy."
+    },
+    "status": {
+      "type": "string",
+      "enum": ["draft", "active", "deprecated", "retired", "flagged"],
+      "description": "flagged is ADR-0029's 'unestablished/flagged' state: two same-claim-type authoritative sources contradict each other and a human has not yet resolved it. A flagged node is not simply low-confidence -- it names an unresolved conflict."
+    },
+    "origin": {
+      "type": "string",
+      "enum": ["upstream", "launchpad", "cohort", "supporting"],
+      "description": "Reuses ADR-0003's per-claim origin prefixes so origin stays a consistent vocabulary across the handbook and the corpus, rather than each corpus inventing its own."
+    },
+    "audiences": {
+      "type": "array",
+      "minItems": 1,
+      "uniqueItems": true,
+      "items": {
+        "type": "string",
+        "enum": ["agent", "developer", "operator", "reviewer"]
+      },
+      "description": "Who this node is written for. Closed enum, not free text -- see COMPATIBILITY.md before adding a value."
+    },
+    "evidence": {
+      "type": "array",
+      "minItems": 1,
+      "items": { "$ref": "#/$defs/evidenceEntry" },
+      "description": "The node's provenance ledger. One entry per claim, classified per launchpad/project-intelligence/CONTRACT.md's FACT/INFERENCE/TEAM_KNOWLEDGE contract (reused here, not reinvented)."
+    },
+    "relationships": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/relationship" },
+      "description": "Typed edges to other corpus nodes. Optional -- a node may have none. relationships.schema.json is the canonical source for this enum plus each type's directionality/inverse metadata; the $defs.relationship below is inlined rather than cross-file-$ref'd so this schema validates with a plain jsonschema.validate() call and no custom resolver. tests/test_schema.py asserts the two enum lists never drift apart."
+    }
+  },
+  "$defs": {
+    "relationship": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["type", "target"],
+      "properties": {
+        "type": {
+          "type": "string",
+          "enum": ["depends-on", "supersedes", "implements", "references", "part-of"]
+        },
+        "target": {
+          "type": "string",
+          "pattern": "^[a-z0-9]+(-[a-z0-9]+)*$",
+          "description": "The stable id (this schema's own `id` field) of the related node."
+        }
+      }
+    },
+    "evidenceEntry": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["statement", "entry_class"],
+      "properties": {
+        "statement": {
+          "type": "string",
+          "minLength": 1,
+          "description": "The claim being made, one sentence."
+        },
+        "entry_class": {
+          "type": "string",
+          "enum": ["FACT", "INFERENCE", "TEAM_KNOWLEDGE"]
+        },
+        "evidence": {
+          "type": "array",
+          "minItems": 1,
+          "items": { "type": "string", "minLength": 1 },
+          "description": "Citations (paths, commit-pinned links, or similar). Required for FACT and INFERENCE -- see launchpad/project-intelligence/memory.py's enforced rule, not just CONTRACT.md's summary table."
+        },
+        "confidence": {
+          "type": "number",
+          "minimum": 0.0,
+          "maximum": 1.0,
+          "description": "Required (in addition to evidence) for INFERENCE only; forbidden on FACT and TEAM_KNOWLEDGE -- memory.py's __post_init__ raises if confidence is set on any other class."
+        },
+        "provided_by": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Who told the corpus this. Required for TEAM_KNOWLEDGE only; forbidden on FACT and INFERENCE -- memory.py's __post_init__ raises if provided_by is set on any other class. TEAM_KNOWLEDGE needs no evidence (it may optionally carry some) -- it is the class that exists for uncorroborated statements."
+        }
+      },
+      "allOf": [
+        {
+          "if": { "properties": { "entry_class": { "const": "FACT" } } },
+          "then": {
+            "required": ["evidence"],
+            "not": { "anyOf": [{ "required": ["confidence"] }, { "required": ["provided_by"] }] }
+          }
+        },
+        {
+          "if": { "properties": { "entry_class": { "const": "INFERENCE" } } },
+          "then": {
+            "required": ["evidence", "confidence"],
+            "not": { "required": ["provided_by"] }
+          }
+        },
+        {
+          "if": { "properties": { "entry_class": { "const": "TEAM_KNOWLEDGE" } } },
+          "then": {
+            "required": ["provided_by"],
+            "not": { "required": ["confidence"] }
+          }
+        }
+      ]
+    }
+  }
+}

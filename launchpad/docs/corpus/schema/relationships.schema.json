@@ -1,0 +1,51 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://buzz.launchpad-26.internal/corpus/relationships.schema.json",
+  "title": "Buzz documentation corpus relationship types",
+  "description": "The finite relationship-type enum a corpus node's `relationships` array may use. `relationshipMeta` (below the JSON Schema keywords) is not itself a validation rule -- it is the directionality/inverse metadata issue #622's done-when requires per relationship type, read by tooling and by launchpad/docs/corpus/schema/tests/test_schema.py, which asserts every enum member here has a matching entry.",
+  "$defs": {
+    "relationship": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["type", "target"],
+      "properties": {
+        "type": {
+          "type": "string",
+          "enum": ["depends-on", "supersedes", "implements", "references", "part-of"]
+        },
+        "target": {
+          "type": "string",
+          "pattern": "^[a-z0-9]+(-[a-z0-9]+)*$",
+          "description": "The stable id (node.schema.json's `id`) of the related node."
+        }
+      }
+    }
+  },
+  "relationshipMeta": {
+    "depends-on": {
+      "directionality": "source requires target to be true/current for source's own claims to hold",
+      "inverse": "generated",
+      "inverseType": "depended-on-by"
+    },
+    "supersedes": {
+      "directionality": "source replaces target; target becomes historical",
+      "inverse": "generated",
+      "inverseType": "superseded-by"
+    },
+    "implements": {
+      "directionality": "source is the concrete realization of target (e.g. a template instance of a standard)",
+      "inverse": "generated",
+      "inverseType": "implemented-by"
+    },
+    "references": {
+      "directionality": "source cites target as supporting context; no ownership or currency dependency implied",
+      "inverse": "authored",
+      "inverseType": "referenced-by"
+    },
+    "part-of": {
+      "directionality": "source is a constituent section/child of target",
+      "inverse": "generated",
+      "inverseType": "has-part"
+    }
+  }
+}
