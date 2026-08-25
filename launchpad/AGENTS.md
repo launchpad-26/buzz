@@ -73,7 +73,7 @@ Note: `launchpad/AGENTS.md` (contributor guide) and `launchpad/agents/` (persona
 **Never move or rename upstream files.** Upstream is ~3,800 files and we merge from it
 regularly; a rename turns every future merge into manual work.
 
-Five deliberate exceptions, all accepted knowingly:
+Four deliberate exceptions, all accepted knowingly:
 
 - `.github/ISSUE_TEMPLATE/` — our templates replace upstream's, which pointed
   contributors at `block/buzz`.
@@ -91,15 +91,6 @@ Five deliberate exceptions, all accepted knowingly:
   [`decisions/ADR-0005-launchpad-deployment-boundary.md`](decisions/ADR-0005-launchpad-deployment-boundary.md).
   **This is settled — do not raise it as a §3 violation in review.** Adding a sixth file
   to this exception is a change to that record, not a call to make in a pull request.
-- **Root skill-registration dirs may symlink into `launchpad/`** — `.agents/skills/`,
-  `.claude/skills/`, `.codex/skills/` and `.goose/skills/` may each hold a relative symlink
-  whose target resolves into `launchpad/`, so a cohort-authored skill (e.g. one living under
-  `launchpad/agents/<pack>/skills/`) can be discovered by a generic root session. The symlink
-  itself, not the cohort content, is what sits at root — a copy is not covered by this
-  exception. Reasoning and the rejected alternatives are in
-  [`decisions/ADR-0030-root-skill-registration-may-symlink-into-launchpad.md`](decisions/ADR-0030-root-skill-registration-may-symlink-into-launchpad.md).
-  **This is settled — do not raise it as a §3 violation in review.** A future cohort skill
-  using this exact shape does not need its own ADR.
 
 The list itself is closed; any further exception needs its own ADR.
 
