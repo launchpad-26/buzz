@@ -79,5 +79,74 @@ class ValidFixtureTest(unittest.TestCase):
         _node_validator().validate(frontmatter)
 
 
+class InvalidFixtureTest(unittest.TestCase):
+    """Each fixture violates exactly one failure class, and fails only for that reason.
+
+    Every assertion pins the single reported error's JSON path and validator keyword, not
+    merely "raises" -- a fixture that fails for a different, accidental reason must fail
+    this test, not pass it.
+    """
+
+    def _one_error(self, filename: str):
+        frontmatter = _load_frontmatter(INVALID_FIXTURES_DIR / filename)
+        errors = list(_node_validator().iter_errors(frontmatter))
+        self.assertEqual(
+            len(errors), 1, f"{filename}: expected exactly one error, got {errors}"
+        )
+        return errors[0]
+
+    def test_missing_identity_rejected(self) -> None:
+        error = self._one_error("missing-identity.md")
+        self.assertEqual(error.validator, "required")
+        self.assertIn("id", error.message)
+
+    def test_unknown_type_rejected(self) -> None:
+        error = self._one_error("unknown-type.md")
+        self.assertEqual(list(error.absolute_path), ["type"])
+        self.assertEqual(error.validator, "enum")
+
+    def test_unknown_status_rejected(self) -> None:
+        error = self._one_error("unknown-status.md")
+        self.assertEqual(list(error.absolute_path), ["status"])
+        self.assertEqual(error.validator, "enum")
+
+    def test_unknown_origin_rejected(self) -> None:
+        error = self._one_error("unknown-origin.md")
+        self.assertEqual(list(error.absolute_path), ["origin"])
+        self.assertEqual(error.validator, "enum")
+
+    def test_missing_audiences_rejected(self) -> None:
+        error = self._one_error("missing-audiences.md")
+        self.assertEqual(error.validator, "required")
+        self.assertIn("audiences", error.message)
+
+    def test_missing_evidence_for_fact_rejected(self) -> None:
+        error = self._one_error("missing-evidence-fact.md")
+        self.assertEqual(list(error.absolute_path), ["evidence", 0])
+        self.assertEqual(error.validator, "required")
+        self.assertIn("evidence", error.message)
+
+    def test_missing_evidence_for_inference_rejected(self) -> None:
+        error = self._one_error("missing-evidence-inference.md")
+        self.assertEqual(list(error.absolute_path), ["evidence", 0])
+        self.assertEqual(error.validator, "required")
+        self.assertIn("evidence", error.message)
+
+    def test_unknown_relationship_type_rejected(self) -> None:
+        error = self._one_error("unknown-relationship-type.md")
+        self.assertEqual(list(error.absolute_path), ["relationships", 0, "type"])
+        self.assertEqual(error.validator, "enum")
+
+    def test_wrong_direction_relationship_rejected(self) -> None:
+        # depended-on-by is depends-on's *generated* inverse (relationshipMeta) -- never
+        # an authored `type` value. Same enum mechanism as unknown-relationship-type, but
+        # a distinct, meaningful authoring mistake: hand-writing the inverse edge rather
+        # than an arbitrary typo.
+        error = self._one_error("wrong-direction-relationship.md")
+        self.assertEqual(list(error.absolute_path), ["relationships", 0, "type"])
+        self.assertEqual(error.validator, "enum")
+        self.assertIn("depended-on-by", error.message)
+
+
 if __name__ == "__main__":
     unittest.main()
