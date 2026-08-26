@@ -218,13 +218,17 @@ net.**
 
 ## MUST
 
-1. **Retire by changing `status`. Never delete the node's file.** Deletion breaks every
-   inbound edge; a status change breaks none.
+1. **Retire by setting `status` to `retired`. Never delete the node's file.** Changing
+   it to `deprecated` is a different obligation under this same page, not retirement —
+   a status change satisfies this rule only when the value is the retired one.
+   Deletion breaks every inbound edge; a status change breaks none.
 2. **Never reuse or rename a spent id.** ADR-0028 requires generated projections to
    derive reproducibly from one canonical source, so a renamed id breaks whatever
    resolves through it and a reused one silently redirects old references to new content.
-3. **Say why, in the node's body, and at which revision that was decided.** A reader
-   arriving from an old link is owed the reason, not just the label.
+3. **Say why, in the node's body and in the `evidence` ledger, and at which revision
+   that was decided.** A reader arriving from an old link is owed the reason, not just
+   the label — and a reason recorded only in prose is exactly the kind of claim the
+   ledger exists to make auditable rather than asserted.
 4. **Where another node takes over the subject, that node declares
    `supersedes` targeting the retired id.** The direction is fixed: the source replaces
    the target. The retired node cannot declare the reverse — `supersedes` has a
