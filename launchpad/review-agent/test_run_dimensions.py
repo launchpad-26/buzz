@@ -328,6 +328,26 @@ class StagesManifestSourceTests(unittest.TestCase):
         for stage in (forward, reverse):
             self.assertNotEqual(stage["status"], "complete")
 
+    def test_non_string_dimension_is_named_in_a_shape_118_accepts(self):
+        # run_adjudication._input_stages raises StagesShapeError on a non-string
+        # `name`, so emitting the raw value would have #117 produce a document
+        # #118 refuses wholesale -- one stage tolerating what the next rejects.
+        # The dimension is still named, which is the property that matters.
+        doc = self._build([42], [])
+        self.assertEqual(doc["stages"], [
+            {
+                "name": "42",
+                "status": "no_report",
+                "reason": "dimension was dispatched but produced no report",
+            }
+        ])
+        # And #118 accepts it rather than raising.
+        import run_adjudication
+
+        self.assertEqual(
+            [s["name"] for s in run_adjudication._input_stages(doc)], ["42"]
+        )
+
     def test_no_dimensions_dispatched_yields_an_empty_manifest(self):
         # The literal boundary of the property this class pins: nothing
         # dispatched, so nothing named. Distinct from the total-outage case

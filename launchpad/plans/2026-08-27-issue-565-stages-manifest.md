@@ -68,6 +68,19 @@ ALREADY TRUE  (verified against git and the running code, not against the issue 
     merged-document table. All three resolve by keeping both additions. Intended final key
     order once both land: `pr, merge_base_sha, head_sha, reviewer, stages, reports,
     containment, nonce`. This branch must not rebase onto or cherry-pick from #1460.
+    A FOURTH SITE, added 2026-08-27 after review-final, and the dangerous one because it
+    is NOT a textual conflict — git merges it silently, in both directions.
+    `publish_render.py:107-117` on that branch documents `_reported_dimension_names` with
+    "The real pipeline's `stages` never carries a dimension entry at all (only
+    `adjudication`, from `run_adjudication.py`)". This branch falsifies that sentence:
+    `run_dimensions.build_stages` now emits one entry per dispatched dimension. The
+    FUNCTION stays correct either way — the clean-case sentence must still name what
+    actually ran, so deriving it from `reports` remains right — but its stated RATIONALE
+    inverts. Left standing, the next reader concludes either that condition (7) is dead
+    code and removes it, or that the clean sentence should now be derived from `stages`
+    on grounds that are wrong in the opposite direction. Whichever branch merges second
+    must correct that docstring; it will not be flagged by a conflict marker, so it has
+    to be carried in the PR body of both.
 
 DECIDED HERE (the issue's "Not verified" section hands this decision to this plan)
   The status vocabulary reuses the report's own, plus exactly one new value for absence:
@@ -252,7 +265,9 @@ STEP 5  The two documents, agreeing with the two that already exist.      [indep
             stage the review depended on, INCLUDING each of #117's dimensions by slug; it is
             produced from `list_dimensions()` (what was dispatched) and never from
             `reports[].dimension`, because A REPORT CANNOT TESTIFY TO ITS OWN ABSENCE; the
-            three status values and what `reason` carries for each; and that #118 appends
+            four status values and what `reason` carries for each (three when this step
+            was written; see the dated amendment to DECIDED HERE above, which added
+            `malformed_report`); and that #118 appends
             exactly one `adjudication` entry and passes everything else through. Reuse
             ADJUDICATION.md:207-247's sentences — this is a fourth location for one rule, so
             it must quote, not paraphrase.
@@ -273,10 +288,17 @@ STEP 5  The two documents, agreeing with the two that already exist.      [indep
               is marked as superseded;
           (b) `grep -c '^| `stages` |' FINDINGS.md` returns 1 and
               `grep -c '^### The stages manifest' FINDINGS.md` returns 1;
-          (c) `grep -in 'cannot testify to its own absence' FINDINGS.md ADJUDICATION.md
+          (c) `grep -in 'testify to its own' FINDINGS.md ADJUDICATION.md
               ../plans/2026-08-12-issue-119-publish-one-review.md` returns at least one hit
               in EACH of the three files — the mechanical form of "agrees rather than adding
-              a fourth wording";
+              a fourth wording".
+              CORRECTED 2026-08-27, after review-final. This check previously matched the
+              full phrase 'cannot testify to its own absence', which CANNOT pass: in the
+              #119 plan the sentence is line-wrapped between 'ITS OWN' and 'ABSENCE.', so
+              grep returns two files, not three, while the agreement it tests is genuinely
+              satisfied. A done-when that fails on a met condition is worse than none — it
+              gets overridden by hand once and then means nothing. Shortened to the part
+              that cannot wrap;
           (d) the count word before "changes:" in FINDINGS.md equals the number of numbered
               items beneath it.
 

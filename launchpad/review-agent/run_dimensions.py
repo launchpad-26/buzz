@@ -423,8 +423,9 @@ def build_stages(dimensions: list[str], reports: list[dict]) -> list[dict]:
     catch and the reason #565 was filed. #117's own definition of done already
     reserves a third case ("a report without a completion marker is treated as
     truncated rather than clean"), so the unknown status is a matter of time, not
-    a hypothetical. ``_summarise`` at :809 already reads the same way -- ``all(...
-    == "complete")`` -- and this keeps the two consistent.
+    a hypothetical. ``main()``'s own completion check reads the same way --
+    ``all(report["status"] == "complete" for report in document["reports"])`` --
+    and this keeps the two consistent.
     """
     by_name: dict[str, dict] = {}
     for report in reports:
@@ -446,8 +447,8 @@ def build_stages(dimensions: list[str], reports: list[dict]) -> list[dict]:
         # dimension publish as clean while `reports` still carried the failure --
         # a stages/reports split-brain, and the same fail-open shape this
         # function's status handling exists to refuse. A dimension is complete
-        # only if every report for it is, which is how `_summarise` at :809
-        # already reads.
+        # only if every report for it is, which is how main()'s own completion
+        # check reads.
         if kept is None or (
             kept.get("status") == "complete" and report.get("status") != "complete"
         ):
@@ -455,11 +456,21 @@ def build_stages(dimensions: list[str], reports: list[dict]) -> list[dict]:
 
     stages = []
     for dimension in dimensions:
-        report = by_name.get(dimension) if isinstance(dimension, str) else None
+        # Coerced to str once, and everything below uses the coerced value.
+        # `list_dimensions()` yields `Path.stem`, so this is identity for every
+        # real caller. It matters for any other one: `_input_stages` in
+        # run_adjudication.py raises StagesShapeError on a non-string ``name``,
+        # so writing the raw value through would have #117 emit a document #118
+        # refuses wholesale -- one stage tolerating what the next rejects, with
+        # the error surfacing in the wrong stage. Naming it in a shape #118
+        # accepts keeps the dispatched dimension visible, which is the property
+        # this function exists for; dropping it would not.
+        name = dimension if isinstance(dimension, str) else str(dimension)
+        report = by_name.get(name)
         if report is None:
             stages.append(
                 {
-                    "name": dimension,
+                    "name": name,
                     "status": "no_report",
                     "reason": "dimension was dispatched but produced no report",
                 }
@@ -467,12 +478,12 @@ def build_stages(dimensions: list[str], reports: list[dict]) -> list[dict]:
             continue
         status = report.get("status")
         if status == "complete":
-            stages.append({"name": dimension, "status": "complete", "reason": None})
+            stages.append({"name": name, "status": "complete", "reason": None})
             continue
         error = report.get("error")
         stages.append(
             {
-                "name": dimension,
+                "name": name,
                 # A report whose status is not even a string is not a report this
                 # function can vouch for. It is named, and it is not complete.
                 "status": status if isinstance(status, str) else "malformed_report",
