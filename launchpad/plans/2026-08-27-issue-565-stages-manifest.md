@@ -77,6 +77,26 @@ DECIDED HERE (the issue's "Not verified" section hands this decision to this pla
       that report's own `error["reason"]` verbatim, never re-worded
     - a dimension that was dispatched and whose report is absent → `"no_report"`, with a
       fixed reason naming the absence
+  AMENDED 2026-08-27, after review. Two corrections to the block above, both made because
+  review found the original wording under-specified rather than wrong:
+    - "plus exactly one new value" became TWO. A report whose `status` is not a string at
+      all can be neither mirrored nor called absent — it arrived. It becomes
+      `"malformed_report"`. Calling it `"no_report"` would have the published banner state
+      "produced no report" about a dimension whose report is sitting in the same document,
+      because #119's `publish_render._reported_dimension_names` derives the reported set
+      from `reports[].dimension` — a `stages`/`reports` split-brain, and a false statement
+      in a published review. Adjudication confirmed nothing downstream enumerates legal
+      stage statuses: `publish_render.py:192` tests `status != "complete"` (an open set),
+      `_input_stages` validates only `name`, and `verdicts.py`/`findings.py` never read
+      `stages`. The field was already open — #118 emits `total_refutation` and
+      `incomplete`, neither of them in this list.
+    - the `failed` row generalises: ANY status that is not `"complete"` passes through
+      verbatim, not `"failed"` alone. The original shape (an `elif` for `failed`, an `else`
+      producing `complete`) renders an unknown status as a clean stage, which is the
+      failure this issue exists to remove; #117's own done-when already reserves
+      `truncated`.
+  Duplicate reports for one dimension resolve fail-closed — a `complete` never displaces a
+  non-complete — which the original block did not consider at all.
   Why reuse rather than invent: a second vocabulary needs a translation table, and a
   translation table is a second source for one fact — the defect ADJUDICATION.md's own
   `_input_stages` docstring describes ("a second copy of a rule is a second chance to

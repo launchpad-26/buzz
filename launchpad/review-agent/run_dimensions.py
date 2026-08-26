@@ -407,7 +407,13 @@ def build_stages(dimensions: list[str], reports: list[dict]) -> list[dict]:
     recording), which is why the tests hand it reports deliberately out of order.
 
     Duplicate reports for one dimension resolve fail-closed: a ``"complete"``
-    report never displaces a non-complete one.
+    report never displaces a non-complete one. Precisely, it is
+    first-non-complete-wins, so where SEVERAL non-complete reports name one
+    dimension, which of them surfaces depends on arrival order. That order
+    dependence is deliberate and harmless: every one of those outcomes is
+    non-complete, so each downstream ``status != "complete"`` test fires either
+    way and only the reason string differs. The direction that would matter --
+    a complete masking a failure -- cannot happen.
 
     Only ``"complete"`` is treated as complete, and every other status is carried
     through rather than matched against a list. Written the other way round -- an

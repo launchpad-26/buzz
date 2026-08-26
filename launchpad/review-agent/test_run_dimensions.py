@@ -254,10 +254,16 @@ class StagesManifestSourceTests(unittest.TestCase):
         self.assertEqual(by_name["dim-alpha"]["reason"], "alpha's own reason")
         self.assertEqual(by_name["dim-gamma"]["status"], "complete")
         self.assertIsNone(by_name["dim-gamma"]["reason"])
-        # dim-beta was dispatched and nothing came back for it at all.
-        self.assertNotIn("dim-beta", [r["dimension"] for r in doc["reports"]])
+        # dim-beta was dispatched and nothing came back for it at all. Asserted as
+        # the DIFFERENCE between the two sets, not as "dim-beta is absent from
+        # reports" -- the latter only restates the fixture this test just built and
+        # cannot fail on any build_stages change. The difference can: it goes empty
+        # the moment the manifest stops naming what did not report, which is the
+        # whole property.
+        named = {s["name"] for s in doc["stages"]}
+        reported = {r["dimension"] for r in doc["reports"]}
+        self.assertEqual(named - reported, {"dim-beta"})
         self.assertEqual(by_name["dim-beta"]["status"], "no_report")
-        self.assertNotEqual(by_name["dim-beta"]["status"], "complete")
 
     def test_report_for_undispatched_dimension_is_not_named(self):
         dimensions = ["dim-alpha", "dim-beta"]
@@ -303,6 +309,25 @@ class StagesManifestSourceTests(unittest.TestCase):
                 self.assertEqual(len(doc["stages"]), 1)
                 self.assertEqual(doc["stages"][0]["status"], "failed")
 
+    def test_first_non_complete_wins_among_several_duplicates(self):
+        # Three reports, two of them non-complete. The rule is first-non-complete-
+        # wins, so WHICH non-complete surfaces depends on arrival order -- pinned
+        # here because it is real, order-dependent behaviour that the docstring
+        # would otherwise leave to be rediscovered. It is not a masking direction:
+        # both orders yield a non-complete status, so every downstream condition
+        # that tests `status != "complete"` fires either way, and only the reason
+        # string differs.
+        first = make_report("dim-alpha", status="failed", reason="A")
+        second = make_report("dim-alpha", status="truncated")
+        complete = make_report("dim-alpha")
+        forward = self._build(["dim-alpha"], [first, second, complete])["stages"][0]
+        self.assertEqual((forward["status"], forward["reason"]), ("failed", "A"))
+        reverse = self._build(["dim-alpha"], [second, first, complete])["stages"][0]
+        self.assertEqual(reverse["status"], "truncated")
+        # The invariant that does NOT depend on order: a complete never wins.
+        for stage in (forward, reverse):
+            self.assertNotEqual(stage["status"], "complete")
+
     def test_no_dimensions_dispatched_yields_an_empty_manifest(self):
         # The literal boundary of the property this class pins: nothing
         # dispatched, so nothing named. Distinct from the total-outage case
@@ -338,7 +363,6 @@ class StagesManifestSourceTests(unittest.TestCase):
         doc = self._build(["dim-alpha"], [make_report("dim-alpha", status="truncated")])
         stage = doc["stages"][0]
         self.assertEqual(stage["status"], "truncated")
-        self.assertNotEqual(stage["status"], "complete")
 
     def test_total_outage_every_dispatched_dimension_still_named(self):
         # Guards against `if not reports: return []` short-circuits: they source
