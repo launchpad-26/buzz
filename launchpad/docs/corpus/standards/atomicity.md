@@ -109,7 +109,7 @@ evidence:
     entry_class: FACT
     evidence:
       - ".github/workflows/launchpad-corpus-validate.yml"
-  - statement: "The corpus is authored as Markdown specifically so it stays reviewable as a human-read pull-request diff, which ADR-0028 names as the enforcement mechanism the rest of the corpus depends on."
+  - statement: "The corpus is authored as Markdown specifically so it stays reviewable as a human-read pull-request diff, which ADR-0028 names as the enforcement mechanism the rest of Ruling 12 depends on."
     entry_class: FACT
     evidence:
       - "launchpad/decisions/ADR-0028-corpus-canonical-representation.md"
@@ -117,6 +117,14 @@ evidence:
     entry_class: FACT
     evidence:
       - "launchpad/docs/corpus/AGENTS.md"
+  - statement: "At the revision recorded in this ledger the corpus holds exactly one node besides this one, whose id is corpus-agents, so that id is available as a relationship target."
+    entry_class: FACT
+    evidence:
+      - "launchpad/docs/corpus/AGENTS.md"
+      - "launchpad/project-intelligence/corpus/validate.py"
+  - statement: "The standards set is receiving its typed edges in a single follow-up pass once the sibling nodes have landed, rather than each node declaring edges as it is written."
+    entry_class: TEAM_KNOWLEDGE
+    provided_by: "the feature #605 task brief for the corpus standard documents: 'Edges get added in a follow-up once the set has landed.'"
   - statement: "Correcting an over-merged node later fails silently while correcting an over-split one fails visibly, so a call the tests leave balanced should resolve toward two nodes."
     entry_class: INFERENCE
     evidence:
@@ -343,11 +351,12 @@ with what outcome — is a procedure, and case A applies to it.
 ### C. A stable concept and a volatile detail — **two nodes, or neither**
 
 Here test 3 fires alone: the concept is steady and the detail moves whenever the code
-moves. Tests 1 and 5 both say "one".
+moves. Test 1 says one, because the subject states cleanly in a single sentence.
 
-Test 3 beats test 1, so the answer is not one node. Whether it is two turns on test 5.
-If the detail can stand as its own node, it is one. **If it cannot, the answer is not to
-merge it back — it is that the detail probably does not belong in the corpus.** For
+Test 1 never overrides anything, so it does not settle this. Test 5 does, and it
+decides between the two outcomes still live. **If the detail can stand as its own node,
+the answer is two nodes. If it cannot, the answer is not to merge it back — it is that
+the detail probably does not belong in the corpus.** For
 claims about current behaviour the executable source is authoritative anyway, so a node
 restating it adds a copy that can only fall behind, and nothing in the corpus will
 report that it has.
@@ -424,8 +433,8 @@ node split into six fragments.
 **Enforcement is therefore the pull-request review**, and that is not a gap left by
 accident. ADR-0028 chose Markdown over a machine-readable record format precisely
 because the corpus is reviewed as a human-read diff at the pull request that changes
-it, and named that review as the mechanism the rest of the corpus rests on. Atomicity
-is one of the things it is relied on for.
+it, and named that review as the enforcement mechanism the rest of Ruling 12 depends
+on. Atomicity is one of the things it is relied on for.
 
 This is not the first such convention. The instruction node already names another — a
 ledger carrying more than one commit-only `FACT` — and says outright that a reviewer
@@ -494,11 +503,22 @@ when a second concept appears mid-draft, and who enforces any of it.
 
 **No `relationships` in this node's front matter.**
 This node declares no `relationships`, and the absence is deliberate rather than an
-oversight. At the revision recorded in its ledger the corpus contained exactly one
-other node, the instruction node, and every sibling standard this document points at
-— #1313, #1314, #1316, #1317, #1318, #1319, #1320, #1322, #1324 — is an open task with
-no node and therefore no `id` to target. A `relationships[].target` naming an id no
-node carries is a hard validation error, so the edges wait until the nodes exist.
+oversight. Two different reasons apply, and they should not be confused:
+
+- **The sibling standards cannot be targeted yet.** Every one this document points at —
+  #1313, #1314, #1316, #1317, #1318, #1319, #1320, #1322, #1324 — is an open task with
+  no node, so it carries no `id`. A `relationships[].target` naming an id no node
+  carries is a hard validation error, so those edges wait until the nodes exist.
+- **The instruction node could be targeted, and deliberately is not.** `corpus-agents`
+  exists at the revision recorded in this ledger and would resolve cleanly. This node
+  derives its authority from it, which is the obvious candidate for an edge. Which type
+  expresses that, and in which direction, is #1318's to decide, and the whole set of
+  standards is getting its edges in one pass once it has landed. Declaring one edge
+  ahead of that rule would be this node guessing at a sibling's subject — the move its
+  own scope table refuses.
+
+The distinction matters because a reader who saw only the first reason would conclude
+no target was available, which is not true.
 
 **Expected but not verified when this node was written:**
 
