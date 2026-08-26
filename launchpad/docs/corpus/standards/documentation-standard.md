@@ -74,6 +74,14 @@ evidence:
       - "launchpad/project-intelligence/corpus/validate.py"
       - "launchpad/decisions/ADR-0028-corpus-canonical-representation.md"
     confidence: 0.9
+  - statement: "corpus-agents (AGENTS.md's node id) is loadable from origin/launchpad, carried in by #1468, #1469 and #1477, so a depends-on edge to it resolves on the merge target."
+    entry_class: FACT
+    evidence:
+      - "launchpad/project-intelligence/corpus/validate.py"
+      - "git.ls_tree('origin/launchpad', 'launchpad/docs/corpus') -> AGENTS.md, README.md, standards/confidence.md, standards/decision-references.md, plus the excluded schema/ subtree"
+relationships:
+  - type: depends-on
+    target: corpus-agents
 ---
 
 # Standard: documentation standard
@@ -154,7 +162,7 @@ would be evidence the rule is wrong.
 
 | # | Requirement |
 |---|---|
-| **D1** | A standard MUST carry these six sections, in this order and no other: *Scope and authority*, *MUST*, *SHOULD*, *Enforcement*, *Exceptions and escalation*, *Scope and omissions*. Additional sections MAY sit between them; none of the six may be absent, and a section that is genuinely empty says so rather than being dropped. |
+| **D1** | A standard MUST carry these six sections, in this relative order and none reordered among themselves: *Scope and authority*, *MUST*, *SHOULD*, *Enforcement*, *Exceptions and escalation*, *Scope and omissions*. Additional sections MAY sit between them; none of the six may be absent, and a section that is genuinely empty says so rather than being dropped. |
 | **D2** | The scope-and-authority section MUST state three things: what the standard governs, what grants it authority, and which source wins when it and that source disagree. |
 | **D3** | MUST requirements and SHOULD guidance MUST occupy two separate sections. One list with mixed modal verbs does not satisfy this, however clearly the verbs are written. |
 | **D4** | Every requirement MUST carry a short identifier, unique within the standard and stable once published. A requirement that cannot be named cannot be cited in a review, granted an exception, or referred to by another node. |
@@ -176,15 +184,20 @@ would be evidence the rule is wrong.
 
 ## Enforcement
 
-**Nothing automated enforces any requirement on this page, and nothing can.**
+**Nothing automated enforces any requirement on this page.**
 
 The deterministic checker splits a node's front matter off and discards the body before
 any check runs. Not "does not currently inspect it" — the body is not passed to
-anything. Every check the corpus has is therefore a check on front matter, ids,
+anything. Every check the corpus has today is therefore a check on front matter, ids,
 relationship targets, citation forms and file placement, and none of those is a property
 of how a document's sections are arranged. `AGENTS.md` and
 `launchpad/project-intelligence/corpus/validate.py` are where what *is* checked lives;
 D9 says not to copy it here.
+
+That is a fact about the checker that exists, not a claim that no checker ever could.
+Nothing here establishes that a document's section structure is inherently unenforceable
+— only that the current one discards the body before it would have the chance. Building
+a checker that parses the body is future scope this document has no opinion on.
 
 A standard with none of D1's six sections passes exactly as cleanly as this one. So does
 a standard whose H1 is anything at all, whose requirements have no identifiers, and
@@ -290,12 +303,13 @@ is this document's evidence and its cost in the same breath: the rule is retroac
 four documents whose pull requests are open, and reconciling them is their owners' work
 under the exceptions process above, not something this node does to them.
 
-**No `relationships` in this node's front matter.** Not because there is nothing to
-point at — `corpus-agents` exists on this branch and this node depends on it. It is
-absent because a relationship target must resolve on the branch being **merged into**,
-and on `launchpad` no corpus node exists yet at all. An edge declared here would validate
-cleanly in this worktree and be a hard error in CI. The reason is merge order; the edges
-are worth adding in one pass once the batch has landed.
+**This node declares `depends-on: corpus-agents`.** That reading of its authority is
+stated above under *Where the authority comes from*, and the edge is real rather than
+deferred: `corpus-agents` — `AGENTS.md`'s node id — is loadable from `origin/launchpad`
+today, carried in ahead of this node by #1468, #1469 and #1477. A relationship target
+must resolve on the branch being **merged into**, and it now does; declaring the edge
+would have been a hard error in CI when this node was first authored, before those three
+PRs landed, but is not one now.
 
 **The same merge-order trap applies to citations, and it caught this node.** A
 repo-relative citation is resolved against the tree being validated, so a path that
