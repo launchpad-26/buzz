@@ -107,10 +107,14 @@ OPEN      Whether `developer` belongs in `audiences`. #636 carries `agent` and
           `schema/` is out of this issue's scope and its DoD forbids a second authored
           node. It becomes a filed issue, not a silent edit.
 
-LEFT OUT  Any `relationships` edge. Every sibling standard (#1307–#1351) is unmerged,
-          and a `relationships[].target` naming an id no loaded node carries is a hard
-          validation error. The absence is stated in the body with its reason, as
-          `AGENTS.md` does for itself.
+LEFT OUT  Any `relationships` edge. Every sibling standard (#1307–#1351) is unmerged, and
+          a `relationships[].target` naming an id no loaded node carries is a hard
+          validation error, so no edge to a sibling would resolve. CORRECTION, from
+          review-final: that does not mean nothing is linkable — `AGENTS.md` carries
+          `id: corpus-agents`, is a loaded node, and a `references` edge to it would
+          validate today. Declaring none is a deliberate choice to add the whole edge set
+          in one pass once the siblings land, and the body must say that rather than
+          claiming nothing is legal to point at.
           Editing `launchpad/docs/corpus/AGENTS.md`, even where this work suggests it
           could be clearer — the brief forbids it and the DoD scopes this task to one
           authored document.

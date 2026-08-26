@@ -47,10 +47,12 @@ evidence:
     evidence:
       - "launchpad/docs/corpus/AGENTS.md"
       - "launchpad/project-intelligence/corpus/validate.py"
-  - statement: "The only INFERENCE in the corpus at the recorded revision is AGENTS.md's claim that retirement is a status change rather than a deletion, carried at confidence 0.8."
+  - statement: "AGENTS.md carries an INFERENCE at confidence 0.8 claiming that retirement is a status change rather than a deletion, and it is the only INFERENCE in the validated corpus at the recorded revision because validate.py excludes the schema/ subtree, whose valid fixture carries one too."
     entry_class: FACT
     evidence:
       - "launchpad/docs/corpus/AGENTS.md"
+      - "launchpad/project-intelligence/corpus/validate.py"
+      - "launchpad/docs/corpus/schema/fixtures/valid/node-full.md"
   - statement: "No corpus mechanism records whether a past inference turned out to be correct, so a confidence value can only express the author's assessed strength of reasoning and never an observed frequency."
     entry_class: INFERENCE
     evidence:
@@ -86,15 +88,22 @@ This is a policy node. Look up the section you need.
 Those files are authoritative. Where this document and any of them disagree, **they
 win** — this one has drifted and should be fixed.
 
-**One part of the schema's field-combination matrix is restated here and the rest is
-not.** Requirement 1 below states the `confidence` row, because a standard about this
-field cannot omit the field's own rule. Everything else is left to the schema
-deliberately: the other entries' rules, the numeric bounds, and every enum's member list.
-The check never reads body prose, so a copy that goes stale stays green forever — which
-makes the one copy that does exist here a named drift surface rather than an accident.
-**If the schema's confidence rule changes, Requirement 1 and the enforcement table in
-*Enforcement, and where it stops* are the two places in this document that must change
-with it.**
+**This document restates the schema only where its own subject forces it to.** A standard
+about `confidence` cannot omit the rule for `confidence`, so Requirement 1 states that one
+row of the field-combination matrix and Requirements 2 and 3 describe how the value itself
+is bounded. What is *not* restated: the literal bound values, the rules for the other
+entry fields, and every enum's member list. The check never reads body prose, so a copy
+that goes stale stays green forever — which makes the copies that do exist here named
+drift surfaces rather than accidents.
+
+**If the schema's rules change, these are the places in this document that must change
+with them**, and there is nowhere else:
+
+| Restated here | Tracks |
+|---|---|
+| Requirement 1 | The `confidence` row of the field-combination matrix |
+| Requirements 2 and 3, and the enforcement table in *Enforcement, and where it stops* | What the schema does and does not catch on the value itself — the NaN gap in particular, which #1463 is filed to close |
+| The description of `flagged`, in *What the number is for* and in *Exceptions and escalation* | The schema's `status` description, which #1410 is filed to encode further |
 
 ## Scope and authority
 
@@ -130,15 +139,16 @@ That is the whole of it. In particular:
   saying different things is `status: flagged`, not a low number. See *Exceptions and
   escalation*.
 
-**The failure this field exists to prevent.** A number between 0 and 1 with no stated
-meaning is decoration. The specific way that goes wrong: an author writes `0.8` because
+**The failure this field exists to prevent.** A number with no stated meaning is
+decoration. The specific way that goes wrong: an author writes `0.8` because
 it feels about right, and a reader — or a generated view, or a later agent — treats it
 as calibrated and reasons onward from it. The number then carries more weight than
 anything that produced it. Everything below is aimed at that.
 
 ## Requirements
 
-These are MUSTs. The first three are enforced mechanically; the rest are enforced by
+These are MUSTs. The first two are enforced mechanically. Requirement 3 is a MUST that
+no check reaches — see *Enforcement, and where it stops*. The rest are enforced by
 review, and a reviewer who lets one through has approved a defect.
 
 1. **Every INFERENCE entry MUST carry a `confidence`, and no FACT or TEAM_KNOWLEDGE
@@ -146,8 +156,11 @@ review, and a reviewer who lets one through has approved a defect.
    schema rejects the node either way.
 2. **The value MUST be a number within the closed interval the schema defines.** Both
    bounds are inclusive. A quoted string is not a number and is rejected on type.
-3. **The value MUST be finite.** The schema does not currently enforce this — see
-   *Enforcement, and where it stops* — so this one is on the author and the reviewer.
+3. **The value MUST be a real number, not NaN.** The infinities are already caught on
+   range — `.inf` exceeds the maximum and `-.inf` falls below the minimum — so NaN is
+   the single value that escapes, because every comparison against it is false and the
+   range assertions therefore never apply. See *Enforcement, and where it stops*. This
+   one is on the author and the reviewer alone.
 4. **The reasoning the number rates MUST be visible.** The reader has to be able to see
    what was reasoned from what: in the `statement`, in the body section the entry
    supports, or in both. A number attached to reasoning nobody can inspect cannot be
@@ -157,10 +170,13 @@ review, and a reviewer who lets one through has approved a defect.
    it to TEAM_KNOWLEDGE and name who decided. See *Reasoning versus deciding*.
 6. **A number MUST NOT be moved because someone pushed back on it.** Re-verify the claim
    or reclassify the entry. Adjusting the number to settle an argument records agreement
-   where there was none. Re-encoding an unchanged assessment onto the band values in
-   *Guidance* is not a move under this rule — the judgement is identical and only its
-   expression changed — but say so where the change is recorded, because from the diff
-   alone the two are indistinguishable.
+   where there was none. Re-encoding an existing value onto the band values in *Guidance*
+   is not a move under this rule, but do not tell yourself nothing changed: snapping to a
+   peg preserves the assessment while it can and does alter the entry's **rank** against
+   its neighbours, which is the one thing the number legitimately does. So the record must
+   name the band's "Means" row the assessment matches and why — not merely report that a
+   re-encoding happened. A value equidistant from two pegs has no tie-break rule here; it
+   is decided by the "Means" column and by nothing else.
 7. **When a claim is re-verified at a new revision, its confidence MUST be re-considered
    in the same edit.** A number that outlived the reasoning it rated is worse than no
    number, because it still looks current.
@@ -185,7 +201,7 @@ step open. Count what the sources *settle*, never how many there are.
 **Two decimal places are not warranted.** The scale has no calibration behind it, so
 `0.83` claims a precision that nothing supports. Use the band's value and nothing else.
 The three values are evenly spaced, carry one decimal, and start at `0.8` because that is
-what the corpus's only pre-existing INFERENCE already used — the convention continues
+what the only INFERENCE in the validated corpus already used — the convention continues
 practice rather than inventing a fresh scale beside it.
 
 **This node's own ledger follows the convention**, and is the nearest worked example:
@@ -305,7 +321,7 @@ travels between them, and where they differ the stricter one is the safe assumpt
 | Whether the number is justified, or was reasoned at all | An arbitrary value passes cleanly. This standard's judgement rules are review-enforced only. |
 | Whether the citation supports the claim | Checking is structural. A FACT or an INFERENCE citing a real file that says nothing on the subject passes. |
 | Whether an INFERENCE is really a decision | The move described in *Reasoning versus deciding* is invisible to every check that exists. |
-| **A non-finite value** | `confidence: .nan` satisfies the schema and passes corpus validation, while `memory.py` rejects the identical value as out of range. The schema's own description points at `memory.py` as the enforced rule, so this is a real divergence between the two paths and not a deliberate relaxation. Requirement 3 exists to cover it. |
+| **A NaN value — and only NaN** | `confidence: .nan` satisfies the schema and passes corpus validation, while `memory.py` rejects the identical value as out of range. The infinities do not escape: `.inf` and `-.inf` are both caught on the bounds. NaN slips through because every comparison against it is false, so the range assertions never fire rather than failing. The schema's own description points at `memory.py` as the enforced rule, so this is a real divergence between the two paths and not a deliberate relaxation. Requirement 3 covers it until #1463 closes it. |
 
 The pattern across that table: everything a schema can hold is held, and everything that
 requires reading is not. Reviewing a confidence value means reading the sources. There
@@ -356,23 +372,32 @@ conclude, and what enforcement does and does not reach.
 | Whether a node's classification is per-node or per-claim | Settled as per-entry by the schema; the wider question sits with #605 |
 | Any numeric scale with real calibration behind it | Nothing. No such thing exists here, and this document does not invent one. |
 
-**No `relationships` in this node's front matter.** Every sibling standard is unmerged
-at the recorded revision, and a `relationships[].target` naming an id no loaded node
-carries is a hard validation error — so there is nothing this node could legally point
-at. `AGENTS.md` is the only other authored node and is the natural first edge. The
-absence is deliberate, and the moment the sibling standards land is the moment to
-revisit it.
+**No `relationships` in this node's front matter, and the reason is narrower than it
+looks.** Every sibling standard is unmerged at the recorded revision, so no edge to one
+would resolve — a `relationships[].target` naming an id no loaded node carries is a hard
+validation error. But that is not the same as *nothing* being linkable: `AGENTS.md`
+carries `id: corpus-agents`, is a loaded node, and a `references` edge to it would
+validate today. The absence is a deliberate choice to add the whole edge set in one pass
+once the siblings land, not a claim that the corpus offers nothing to point at. The
+first sibling standard to merge is the moment to revisit it, and `corpus-agents` is the
+edge to make first.
 
 **Expected but not verified when this node was written:**
 
 - **The bands in *Guidance*, and the values `0.8` / `0.6` / `0.4`, are not derived from
-  anything.** They are a proposed convention for keeping values coarse and comparable
-  within a node, offered because unbounded precision is the observed failure. No study,
-  no sample, and only one INFERENCE existed in the corpus to look at. `0.8` was chosen to
-  match that one entry and the other two spaced evenly from it — which is a reason, but
-  not evidence. A convention is all this is: three agreed pegs, so that two authors at
-  least mean the same thing by the same numeral. Treat them as a starting point that
-  practice should correct, and do not read the spacing as measuring anything.
+  anything.** They are a proposed convention for keeping values coarse, offered because
+  unbounded precision is the observed failure. No study, no sample, and one authored
+  INFERENCE in the corpus to look at. `0.8` was chosen to match that entry and the other
+  two spaced evenly from it — which is a reason, but not evidence. Treat them as a
+  starting point that practice should correct, and do not read the spacing as measuring
+  anything.
+- **Adopting the pegs does not make values comparable, and this document does not claim
+  it does.** The prohibition in *What a reader may conclude* is unconditional and stands:
+  the schema guarantees nothing about how any value was chosen, so no reader may compare
+  across authors or nodes. What a shared convention can do is give *future* authors who
+  followed it a common vocabulary — which is a hope about practice, not a property a
+  reader may rely on, and certainly not licence to sort. Until something records that an
+  author followed the pegs, a reader cannot tell whether they did.
 - **No generated view was tested consuming a `confidence` value.** No generator exists
   yet, so how a projection renders or ranks these numbers is unknown, and the
   "not comparable" rule above has not been tested against a consumer that might assume
