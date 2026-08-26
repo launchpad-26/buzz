@@ -31,7 +31,7 @@ evidence:
     evidence:
       - "launchpad/project-intelligence/memory.py"
       - "launchpad/project-intelligence/corpus/validate.py"
-  - statement: "In memory.py's store, live repository evidence contradicting a FACT or an INFERENCE supersedes it with a new FACT entry, while the same code-only observation never supersedes a TEAM_KNOWLEDGE entry -- only a later explicit statement from a person can retire one."
+  - statement: "In memory.py's store, live repository evidence contradicting a FACT or an INFERENCE supersedes it with a new FACT entry and marks the superseded entry stale rather than deleting or rewriting it, while the same code-only observation never supersedes a TEAM_KNOWLEDGE entry -- only a later explicit statement from a person can retire one, and that route supersedes any class."
     entry_class: FACT
     evidence:
       - "launchpad/project-intelligence/memory.py"
@@ -93,7 +93,7 @@ evidence:
     entry_class: FACT
     evidence:
       - "launchpad/docs/corpus/AGENTS.md"
-  - statement: "ADR-0029 ranks evidence contextually by claim type, rejecting both a single fixed hierarchy applied to every claim and a latest-timestamp-wins rule, and holds that GitHub history, team knowledge and inference are never treated as fact on their own but stay attributed to their source."
+  - statement: "ADR-0029 ranks evidence contextually by claim type -- executable evidence such as code, configuration, schema and passing tests is authoritative for claims about how the system currently behaves, while accepted normative decisions such as ADRs and ratified specifications are authoritative for claims about intended or authorized behaviour -- rejecting both a single fixed hierarchy applied to every claim and a latest-timestamp-wins rule, and holds that GitHub history, team knowledge and inference are never treated as fact on their own but stay attributed to their source."
     entry_class: FACT
     evidence:
       - "launchpad/decisions/ADR-0029-corpus-evidence-precedence.md"
@@ -130,6 +130,32 @@ evidence:
     entry_class: FACT
     evidence:
       - "launchpad/project-intelligence/corpus/validate.py"
+  - statement: "A bare-path citation is resolved against the tree the validator runs in, so a citation naming a file that exists on the authoring branch but not on the merge target passes locally and is a hard error after merge, exactly as an unresolved relationship target is."
+    entry_class: FACT
+    evidence:
+      - "launchpad/project-intelligence/corpus/validate.py"
+  - statement: "AGENTS.md's step 9 forbids declaring a relationship whose target is absent from the merge target and supplies a git ls-tree command to check it, and says nothing about the same hazard applying to bare-path citations."
+    entry_class: FACT
+    evidence:
+      - "launchpad/docs/corpus/AGENTS.md"
+  - statement: "AGENTS.md is the corpus's procedure document for creating, updating and retiring a node, and it describes provided_by as naming who or what said it -- a person, an issue, a decision record -- without mentioning a commit message."
+    entry_class: FACT
+    evidence:
+      - "launchpad/docs/corpus/AGENTS.md"
+  - statement: "memory.py's field contract requires each citation to be a non-empty string and checks nothing further, so it neither parses citation forms nor resolves repository paths and accepts citations validate.py rejects."
+    entry_class: FACT
+    evidence:
+      - "launchpad/project-intelligence/memory.py"
+  - statement: "COMPATIBILITY.md treats adding a new optional field, a new enum value or a new relationship type as non-breaking, requiring no history entry though noting them is welcome."
+    entry_class: FACT
+    evidence:
+      - "launchpad/docs/corpus/schema/COMPATIBILITY.md"
+  - statement: "The parent PRD's outcome states that a developer or agent can create one atomic corpus node and deterministic validation accepts or rejects it against one documented contract; it says nothing about who any standard is written for."
+    entry_class: TEAM_KNOWLEDGE
+    provided_by: "launchpad-26/buzz#605, Outcome section"
+  - statement: "The procedure gap in which AGENTS.md's merge-order guard covers relationship targets but not bare-path citations is filed as a separate issue, and this node's own pull request is gated on the branch that introduces AGENTS.md."
+    entry_class: TEAM_KNOWLEDGE
+    provided_by: "launchpad-26/buzz#1488 (the procedure gap) and #1462 (the AGENTS.md pull request this node is based on)"
   - statement: "The validator never reads a node's body, so a body claim carrying no ledger entry, and a ledger entry supporting no body claim, are both invisible to every check that exists."
     entry_class: FACT
     evidence:
@@ -197,6 +223,12 @@ document neither creates those rules nor can relax them, and it does not restate
 the checker never reads body prose, so a copy here would stay green forever after going
 stale. What this document adds is the half no schema can hold — the judgement about which
 class is honest — and that half is enforced by review alone.
+
+**Where the rules below come from.** The MUSTs and SHOULDs in this document are issued
+under its own authority, and that authority is delegated by its task: #1314's definition of
+done asks this node to state scope and authority, to separate MUST requirements from SHOULD
+guidance, and to define enforcement and an exception process. They are this document's
+normative statements, not findings derived from a source.
 
 **On ranking conflicting evidence, `ADR-0029` outranks this document.** It is the
 accepted decision; this is a standard written under it. Where the two appear to differ,
@@ -743,7 +775,7 @@ working around it in a node.
 |---|---|
 | The front-matter contract — fields, enums, and which class requires or forbids what | `launchpad/docs/corpus/schema/node.schema.json` |
 | Prose explanation of those fields | `launchpad/docs/corpus/schema/README.md` |
-| Adding a value to a closed enum | `launchpad/docs/corpus/schema/COMPATIBILITY.md` |
+| Adding a value to a closed enum, or removing one | `launchpad/docs/corpus/schema/COMPATIBILITY.md` |
 | How to rank conflicting evidence, and when to stop | `launchpad/decisions/ADR-0029-corpus-evidence-precedence.md` |
 | Why classification must be structural rather than prose | `launchpad/decisions/ADR-0028-corpus-canonical-representation.md` |
 | The citation shapes as vocabulary | `launchpad/project-intelligence/CONTRACT.md` §3 |
@@ -764,20 +796,21 @@ unsupportable claim takes, how conflicting evidence is ranked and when to escala
 citation forms that name no openable file, and what a passing validation run does and does
 not establish.
 
-**It does not cover, and these are gaps rather than silence:**
+**It does not cover, and these are gaps rather than silence.** The mappings below are the
+ones `AGENTS.md` records, not ones this node inferred:
 
 | Not covered here | Owned by |
 |---|---|
 | The citation forms that name **code** — repository paths, positions, pinned links, and how each resolves | #1308 |
-| What an `INFERENCE`'s `confidence` value means and how to pick one, and the NaN question raised against it | #1309 and #1463 |
-| Provenance for generated artifacts and the exception process for them | #1316 |
-| Whether a recorded revision may stay put across edits, and what to do when only some claims are re-verified | #1321 |
-| Encoding `ADR-0029`'s claim-type classification and the flagged state in the schema and checker | #1410 |
+| What an `INFERENCE`'s `confidence` value means and how to pick one | #1309 |
+| Provenance for generated artifacts | #1316 |
+| Whether a recorded revision may stay put across edits | #1321 |
+| Encoding `ADR-0029`'s claim-type classification in the schema and checker | #1410 |
 | Line numbers in citations not being checked against file length | #1459 |
 | Reconciling `CONTRACT.md`, `AGENTS.md` and `validate.py` on the citation forms | #1478 |
 | Whether `ADR-0003`'s markdown-link wrapper is required on corpus evidence | #605 |
 | The human-facing entry point to the corpus | #639 |
-| Whether one node holds one claim or several | left open by `ADR-0028`; #605's to decide |
+| Whether one node holds one claim or several | left open by `ADR-0028` |
 
 **One position taken without a source, and named as such.** MUST 8 lists a commit among the
 things `provided_by` may name, and this node uses that form. `AGENTS.md` says the field
@@ -819,9 +852,48 @@ code-naming forms and assigns only the tool-output forms here. So the table has 
 destinations and `AGENTS.md` names one. This node takes what nothing else claims and leaves
 the rest; it may not edit `AGENTS.md`, so the discrepancy is reported.
 
+### Merge order: this node must not reach `launchpad` ahead of #1462
+
+**This node is authored against `AGENTS.md`, which has not merged.** Nine of its ledger
+entries cite `launchpad/docs/corpus/AGENTS.md` directly, because nine of its claims are
+about what that document says. Those citations resolve here and **do not resolve on
+`origin/launchpad`**, where the corpus contains nothing outside `schema/`.
+
+That is not a stylistic risk. It was measured, and the measurement is reproducible:
+
+```bash
+# materialise the merge target, drop this node into it, validate
+git archive origin/launchpad | tar -x -C /tmp/mt && cd /tmp/mt && git init -q .
+mkdir -p launchpad/docs/corpus/standards
+cp <this-node> launchpad/docs/corpus/standards/evidence.md
+python3 launchpad/project-intelligence/corpus/validate.py   # -> FAIL, 9 errors, exit 1
+```
+
+Removing only the `AGENTS.md` citations and changing nothing else turns the same run into
+`PASS`, exit 0 — which is what proves those citations are the cause rather than something
+else in the node.
+
+**The general rule this node states, because `AGENTS.md`'s own step 9 does not:** step 9
+forbids a `relationships` target absent from the merge target and supplies a `git ls-tree`
+check for it. **The identical hazard applies to bare-path citations, and step 9 is silent
+on them.** A citation is resolved against whatever tree the validator runs in, so a path
+that exists only on the authoring branch passes locally and fails hard after merge — the
+same defect, discovered later, when it is a broken build on `launchpad` rather than a red
+check on a pull request. The procedure gap is filed as **#1488**; this section is the
+interim guard for anyone authoring against an unmerged instruction node.
+
+**What that experiment is, in this document's own terms.** Its result — nine errors, and
+zero once the citations change — is a measured run, and no citation form expresses one, so
+it is not in the ledger. Neither is the branch state it depends on. The command above is
+given instead: re-run it rather than trusting this paragraph, exactly as with the citation
+verdicts.
+
+**What follows for this node:** it is based on `task/636-corpus-agents-md` and must merge
+into it, or land after it. It must never be retargeted at `launchpad` while #1462 is open.
+
 ### No `relationships` in this node's front matter
 
-The reason is **merge order**, not an empty corpus. `corpus-agents` is loadable from this
+The reason is the same **merge order**, not an empty corpus. `corpus-agents` is loadable from this
 branch, so an edge to it would validate here — and would become a hard error the moment
 this node reached `launchpad` ahead of the branch that introduces it, because a
 `relationships[].target` matching no loaded node's id fails. Do not take that on this
@@ -840,8 +912,8 @@ than an oversight.
 - **No generated view was tested consuming a ledger.** `validate.py` records that no
   corpus generator exists yet, so how a projection would render or rank the three classes —
   and in particular whether it would preserve the distinction at all — is unknown.
-  `ADR-0028` requires that generated views must not silently drop provenance their source
-  node carries; nothing existed to test that against.
+  `ADR-0028` requires that generated views must not silently drop security-relevant
+  provenance their source node carries; nothing existed to test that against.
 - **The citation verdicts were produced by calling `validate.py`'s classifier directly on
   constructed citations, and that run is not in the ledger.** No citation form expresses an
   execution, so the entries behind those verdicts cite the program's source and the tables
