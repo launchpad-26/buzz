@@ -52,7 +52,7 @@ evidence:
     entry_class: FACT
     evidence:
       - "launchpad/project-intelligence/corpus/validate.py"
-  - statement: "Five relationship types are defined, each with its own directionality and an inverse marked generated or authored."
+  - statement: "A finite relationship-type vocabulary, with directionality metadata for each type, is defined for the front matter's relationships array."
     entry_class: FACT
     evidence:
       - "launchpad/docs/corpus/schema/relationships.schema.json"
@@ -100,6 +100,9 @@ evidence:
       - "launchpad/project-intelligence/corpus/validate.py"
       - "git_ls_tree(ref=origin/launchpad, path=launchpad/docs/corpus) -> schema only"
     confidence: 0.95
+  - statement: "Backfilling the authored relationships across the corpus standards nodes, once the batch has merged, is tracked as #1489."
+    entry_class: TEAM_KNOWLEDGE
+    provided_by: "launchpad-26/buzz#1489"
   - statement: "Issue #1312's definition of done requires this node to state scope and authority, separate MUST requirements from SHOULD guidance, define enforcement and an exception or escalation process, and link decisions instead of duplicating them."
     entry_class: TEAM_KNOWLEDGE
     provided_by: "launchpad-26/buzz#1312 definition of done"
@@ -115,6 +118,21 @@ evidence:
   - statement: "Node classification and taxonomy is #1324's subject, and the evidence standard is #1314's."
     entry_class: TEAM_KNOWLEDGE
     provided_by: "launchpad-26/buzz#1324 and launchpad-26/buzz#1314"
+  - statement: "What a recorded revision means, and when it moves, is #1321's subject."
+    entry_class: TEAM_KNOWLEDGE
+    provided_by: "launchpad-26/buzz#1321"
+  - statement: "Linking between corpus nodes as a general subject is #1318's."
+    entry_class: TEAM_KNOWLEDGE
+    provided_by: "launchpad-26/buzz#1318"
+  - statement: "Node atomicity -- whether a node describes one independently maintainable idea -- is #1307's subject."
+    entry_class: TEAM_KNOWLEDGE
+    provided_by: "launchpad-26/buzz#1307"
+  - statement: "A sibling node's bare-path citations to the unmerged instruction node become hard validator errors on the merge target; that failure is tracked as #1473."
+    entry_class: TEAM_KNOWLEDGE
+    provided_by: "launchpad-26/buzz#1473"
+  - statement: "CONTRACT.md, the instruction node and validate.py disagree about the citation forms and their count, which is tracked as #1478."
+    entry_class: TEAM_KNOWLEDGE
+    provided_by: "launchpad-26/buzz#1478"
 ---
 
 # Diagrams in corpus nodes
@@ -143,7 +161,7 @@ they win and this document has drifted.**
 | Prose explanation of those fields | `launchpad/docs/corpus/schema/README.md` |
 | Relationship types and their directionality | `launchpad/docs/corpus/schema/relationships.schema.json` |
 | How to rank conflicting evidence, and when to stop | `launchpad/decisions/ADR-0029-corpus-evidence-precedence.md` |
-| The citation shapes | `launchpad/project-intelligence/CONTRACT.md` §3 |
+| The citation shapes — but see **#1478**, which records that this file, the instruction node and the validator disagree on the forms and their count; where they differ, the validator is what runs | `launchpad/project-intelligence/CONTRACT.md` §3 |
 | What the checker actually enforces | `launchpad/project-intelligence/corpus/validate.py` |
 
 Where this document states a rule that none of those establish, it says so in place and
@@ -250,8 +268,11 @@ this standard picks, no tool will hold it.
 **The rule.**
 
 - **MUST** — every relationship a diagram asserts is **already asserted in the node's
-  prose by a claim that carries its own ledger entry**. A diagram projects the ledger; it
-  never extends it.
+  prose**, by a claim carrying its own ledger entry or by a rule this standard states with
+  named authority (section 2). A diagram projects what the node already establishes; it
+  never extends it. The second case is narrow and follows from section 2: a self-authored
+  rule legitimately has no ledger entry, so an edge depicting one is backed by the rule
+  rather than exempt from backing.
 - **MUST NOT** — a diagram is never the only place a claim appears.
 - A diagram **does not get a ledger entry for being a diagram.** It gets none of its own,
   because it contributes no claim of its own.
@@ -296,12 +317,24 @@ flowchart LR
   BODY -- "every substantive claim has an entry in" --> FM
 ```
 
-Reading the edges against the ledger: `validate.py` reading front matter and discarding
-the body is the entry on parsing; the ledger carrying one entry per claim is the entry
-citing `node.schema.json` and `CONTRACT.md`; the diagram projecting rather than extending
-the ledger is the INFERENCE entry on body invisibility, at confidence 0.9. The diagram
-adds nothing that is not already written above it — which is the rule demonstrating
-itself.
+Reading all five edges against their backing, in the order drawn:
+
+1. `CHK -> FM` "reads, validates" — the FACT entry citing `validate.py` on front-matter
+   parsing.
+2. `CHK -> BODY` "splits off and discards" — the same entry; it is one parse.
+3. `DIA -> BODY` "lives inside" — **section 3's MUST**, a rule this standard states with
+   named authority. It has no ledger entry, correctly, and this is exactly the second case
+   the MUST above admits.
+4. `DIA -> FM` "projects claims recorded in" — the INFERENCE entry on body invisibility,
+   at confidence 0.9.
+5. `BODY -> FM` "every substantive claim has an entry in" — the FACT entry citing
+   `node.schema.json` and `CONTRACT.md`.
+
+The diagram adds nothing that is not already written above it — which is the rule
+demonstrating itself. Edge 3 is the one worth pausing on: it is why the MUST reads "or by
+a rule this standard states with named authority" rather than "a ledger entry" alone. A
+standard whose own worked example failed its own rule would be evidence the rule was
+wrong.
 
 ## 6. Keeping a diagram honest
 
@@ -352,7 +385,8 @@ leave it.
 
 **Reviewer checklist**, since the reviewer is the check:
 
-1. Every edge traces to a ledger entry (section 5).
+1. Every edge traces to a ledger entry, or to a rule this standard states with named
+   authority (section 5).
 2. No claim appears only in the diagram.
 3. No `path:line` citation anchors it (section 6).
 4. Edges between corpus nodes are declared in `relationships`, not merely drawn.
@@ -389,7 +423,9 @@ empty corpus. `corpus-agents` is loadable from the branch this node was authored
 is **absent from `origin/launchpad`**, the branch it merges into; the checker loads
 whatever is present where it runs, so an edge to it would validate here and be a hard
 error in CI. The edges this node wants — to the evidence standard, to generated content,
-to atomicity — are all to nodes that do not exist yet. Adding them is a later pass.
+to atomicity — are all to nodes that do not exist yet. Adding them is a later pass, and
+because that reason expires the moment the sibling standards merge, the backfill is
+tracked as **#1489** rather than left to be noticed.
 
 **`audiences` omits `developer`, deliberately.** This node addresses whoever authors a
 corpus node and the reviewer who is its only enforcement. Whether a human developer

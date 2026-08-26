@@ -154,7 +154,16 @@ GATES     `review-code` after STEP 5 (the diff is a document plus a plan; `revie
           holds: **the PR is created with `--draft`** (`pr-gate.sh` requires no verdict from
           a draft), the undischarged #1467 gate is named in the PR body's "Not verified"
           section as its single most important line, and marking it ready is Serina's call.
-          This matches what #1307 did. `qa` explore mode does NOT apply: this change
+          This matches what #1307 did.
+          **What actually happened, recorded 2026-08-27. The paragraph above stays: it was
+          true when written and the constraint is worth keeping.** Codex recovered before
+          the gate ran, so a real cross-model pass was attempted rather than stood in for.
+          It reproduced the merge-target probe independently (exit 0, 4 unverified) and
+          independently confirmed one finding — issue-derived ownership claims in the body
+          with no ledger entry — but then **ran out of credits mid-review and never reached
+          a verdict**. #1467 therefore still bites and the gate is still NOT discharged.
+          The PR stays a draft and its "Not verified" section says so.
+          `qa` explore mode does NOT apply: this change
           adds one Markdown document and has no runtime interface to exercise. The
           validator and the corpus unit suite are the only executable checks, and they run
           inside STEPs 3, 4 and 5 rather than as a gate afterwards.
