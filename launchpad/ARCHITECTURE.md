@@ -177,10 +177,11 @@ The last row is here and not in
 it decides what the cohort runs to watch itself — host logs, infrastructure metrics and
 agent traces are three signals with three possible destinations — which is a shape
 question for this architecture. It has a security consequence, stated in
-[#83](https://github.com/launchpad-26/buzz/issues/83), but the posture's own dependency on
-security-event visibility is already carried by
-[#34](https://github.com/launchpad-26/buzz/issues/34) in
-[SECURITY-POSTURE.md § What is true today](SECURITY-POSTURE.md#what-is-true-today), and
+[#83](https://github.com/launchpad-26/buzz/issues/83), but security-event visibility as a
+requirement is [#34](https://github.com/launchpad-26/buzz/issues/34)'s — current status of
+any control is tracked privately, not in
+[SECURITY-POSTURE.md § What is true today](SECURITY-POSTURE.md#what-is-true-today), which
+carries policy rather than a status reading — and
 [#83](https://github.com/launchpad-26/buzz/issues/83) defines no control that the posture
 asserts.
 

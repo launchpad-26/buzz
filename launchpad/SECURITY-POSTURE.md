@@ -26,13 +26,15 @@ This section previously listed host-hardening and repository-hygiene controls on
 each marked `Open`, `Implemented` or similar, as of 2026-08-11. That table is retired, not
 updated.
 
-Two things made retiring it the right call rather than correcting it. First, it had
-already drifted from reality — it stated the cohort ran Buzz on `localhost` only, which
-stopped being true before anyone caught it, and a stale gap table reads as a current one
-to anyone who doesn't check the date. Second, and more fundamentally: a control-by-control
-readiness table in a public, world-readable file is a gap map for anyone who reads it,
-whether or not it is accurate. Making it accurate would not have closed that problem — an
-accurate gap map is worth more to an attacker than a stale one, not less.
+Two things made retiring it the right call rather than correcting it. First, it made a
+dated, present-tense operational claim — that the cohort ran Buzz on `localhost` only — of
+exactly the kind a public document should not carry: a reader has no way to tell, from the
+document alone, whether a present-tense claim like that is still current, and a public
+repository is not the place to answer that question either way. Second, and more
+fundamentally: a control-by-control readiness table in a public, world-readable file is a
+gap map for anyone who reads it, independent of whether any single row in it is correct.
+Correcting individual rows would not have closed that problem — a table's *shape* is what
+makes it a gap map, not the accuracy of what it currently says.
 
 Detailed, current security posture is tracked in the cohort's private companion
 repository, `buzz-infrastructure`, under the disclosure boundary
@@ -40,12 +42,8 @@ repository, `buzz-infrastructure`, under the disclosure boundary
 document still states what's safe to say publicly and nothing more: accepted risks with
 their reasoning ([below](#accepted-risks)), the gap this document exists to surface
 ([below](#the-gap-this-document-exists-to-surface)), and which decisions remain open
-([below](#open-security-decisions)).
-
-The one control-level fact that stays, because it names nothing about the live host and
-is independently checkable by any reader: `cargo-deny check` runs in this repository's own
-CI and covers its Rust dependency surface, nothing beyond that —
-[`.github/workflows/ci.yml`](../.github/workflows/ci.yml).
+([below](#open-security-decisions)) — policy and process, not a status reading on any
+control.
 
 ---
 
