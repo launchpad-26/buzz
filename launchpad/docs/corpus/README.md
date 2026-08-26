@@ -50,11 +50,11 @@ evidence:
     entry_class: FACT
     evidence:
       - "launchpad/project-intelligence/corpus/validate.py"
-  - statement: "The corpus schema was authored under issue #622, whose parent feature is #605 and whose parent PRD is #602."
+  - statement: "The corpus schema was authored under issue #622, whose parent PRD is #605 and whose parent-parent PRD is #602."
     entry_class: FACT
     evidence:
       - "launchpad/docs/corpus/schema/README.md"
-  - statement: "AGENTS.md records the per-type standards and templates as owned by issues #1307-#1351 with none of them merged yet, and names #1316, #1410 and #1459 as the owners of three further named gaps."
+  - statement: "AGENTS.md records the per-type standards and templates as owned by issues #1307-#1351 with none of them merged yet, and names four further gaps owned by #1316, #1410, #1459 and #639, the last of which is the human-facing entry point this node supplies."
     entry_class: FACT
     evidence:
       - "launchpad/docs/corpus/AGENTS.md"
@@ -97,6 +97,10 @@ evidence:
     evidence:
       - "launchpad/docs/corpus/schema/node.schema.json"
     confidence: 0.6
+  - statement: "At the recorded revision the corpus's only other node, AGENTS.md, carries the audiences agent and reviewer, so this node is the first in the corpus to carry developer and the first to exclude a role deliberately."
+    entry_class: FACT
+    evidence:
+      - "launchpad/docs/corpus/AGENTS.md"
 ---
 
 # The Buzz documentation corpus
@@ -119,6 +123,10 @@ as the nearest `AGENTS.md` for any change under this directory.
 
 ## What a node is
 
+*Summary only. The first two rules are owned by
+[`launchpad/decisions/ADR-0028-corpus-canonical-representation.md`](../../decisions/ADR-0028-corpus-canonical-representation.md);
+the third is owned by [`launchpad/docs/corpus/AGENTS.md`](AGENTS.md).*
+
 One file is one node: a Markdown file with YAML front matter. That is the single
 canonical authored representation of everything in the corpus — JSON, indexes and
 graph serializations are generated derived views, never hand-authored. The front
@@ -130,7 +138,8 @@ procedure discovered while writing becomes its own node, not another section.
 ## What is in the corpus today
 
 Ask the checker rather than trusting a count written on this page — it is the same
-discovery the validator itself runs, and it cannot go stale:
+discovery the validator itself runs, and it cannot go stale. Run it from the
+repository root:
 
 ```bash
 python3 -c "import sys; sys.path.insert(0, 'launchpad/project-intelligence/corpus'); \
@@ -147,10 +156,15 @@ Two kinds of thing live under the corpus root, and the difference matters:
 | [`launchpad/docs/corpus/schema/`](schema/README.md) | The front-matter contract, its fixtures and its tests | **No** — deliberately excluded from the scan |
 
 **This is a corpus under construction, and the sparseness is the current state
-rather than an omission.** The per-type standards and templates are owned by issues
-#1307–#1351, none of which had merged when this page was written, and #1316, #1410
-and #1459 own three further named gaps. Expect the list above to grow, and expect
-the shape of a node to be tightened by standards that do not exist yet.
+rather than an omission.** The schema was built under issue #622, whose parent PRD
+is #605 and whose parent-parent PRD is #602; #605 is the work item under which the
+rest of the corpus is being written. The per-type standards and templates are owned
+by issues #1307–#1351, none of which had merged when this page was written, and
+#1316, #1410 and #1459 own three of the four further gaps AGENTS.md names. The
+fourth is this page: AGENTS.md lists "the human-facing entry point to the corpus"
+as a gap owned by #639, so the two nodes are a declared pair rather than
+overlapping documents. Expect the list above to grow, and expect the shape of a
+node to be tightened by standards that do not exist yet.
 
 ## Where each rule lives
 
@@ -242,9 +256,12 @@ the corpus — a developer looking for the rules and a reviewer judging a corpus
 request. What it does for an agent is hand it to
 [`AGENTS.md`](AGENTS.md), which is the node authored for agents. Listing `agent`
 here would make an audience-filtered view return two nodes to a cold-start agent, one
-of which only redirects to the other. This is the corpus's first `developer` audience
-and its first deliberate audience *exclusion*; a reader who thinks `audiences` should
-name everyone who might read a node rather than everyone it addresses would add it.
+of which only redirects to the other. **At the recorded revision** — when the only
+other node, AGENTS.md, carried `agent` and `reviewer` — this was the corpus's first
+`developer` and its first deliberate audience *exclusion*; a sibling landing later
+may of course get there first, and nothing checks that claim. A reader who thinks
+`audiences` should name everyone who might read a node rather than everyone it
+addresses would add `agent` back.
 
 **`type: governance` is the closest true fit, not an exact one.** The enum carries no
 `reference` or `index` member, and this node's subject is the corpus's own rules and
