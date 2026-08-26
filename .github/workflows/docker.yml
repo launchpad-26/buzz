@@ -77,8 +77,92 @@ env:
   IMAGE_NAME: ghcr.io/launchpad-26/buzz
 
 jobs:
+  # PR-only build validation. Deliberately a separate job from `build` below,
+  # not a conditional inside it: this job's `permissions` block never grants
+  # packages/id-token/attestations, so a pull_request run — same-repo or
+  # fork — never holds GHCR-write or OIDC-attestation credentials in the
+  # first place, regardless of what any `if:` condition inside the job says.
+  # See launchpad-26/buzz#1454: the previous single-job design granted those
+  # scopes unconditionally and already completed GHCR login for same-repo
+  # PRs, leaving only a step-level `push:` flag between a same-repo PR and a
+  # real publish — a flag that lives in the same file a same-repo PR's own
+  # diff controls. Splitting the job doesn't remove every risk a write-access
+  # account editing this file can create (see the PR that introduced this
+  # comment for what's still open), but it does mean an ordinary PR run,
+  # untouched, never holds live publish credentials at all.
+  build-pr:
+    # Same `name:` as `build` below, deliberately — the two are mutually
+    # exclusive per run (never both trigger the same event) and this keeps
+    # whichever job actually runs reporting under the exact status-check
+    # name branch protection may already require, rather than introducing a
+    # new check name a PR could never satisfy.
+    name: Build (${{ matrix.platform }})
+    if: github.event_name == 'pull_request'
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 60
+    permissions:
+      contents: read
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - platform: linux/amd64
+            runner: ubuntu-24.04
+            arch: amd64
+          - platform: linux/arm64
+            runner: ubuntu-24.04-arm
+            arch: arm64
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10  # v6.0.3
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@d7f5e7f509e45cec5c76c4d5afdd7de93d0b3df5  # v4.1.0
+        with:
+          buildkitd-config-inline: |
+            [worker.oci]
+              max-parallelism = 2
+
+      # No GHCR login: this job never authenticates to the registry, on any
+      # trigger, so cache-from below is an anonymous pull. If the buildcache
+      # package isn't public, that's a cache miss (cold build), not a
+      # failure — buildx treats an unreachable cache-from source as "no
+      # cache available." Traded deliberately: same-repo PRs lose the
+      # registry-cache warm-start `build` still gets, in exchange for never
+      # holding a push-capable token during a PR run.
+      - name: Build release image (validation only, never pushed)
+        uses: docker/build-push-action@f9f3042f7e2789586610d6e8b85c8f03e5195baf  # v7.2.0
+        with:
+          context: .
+          file: ./Dockerfile
+          target: runtime
+          platforms: ${{ matrix.platform }}
+          outputs: type=cacheonly
+          cache-from: |
+            type=registry,ref=${{ env.IMAGE_NAME }}-buildcache:${{ matrix.arch }}
+
+      - name: Build debug image (validation only, never pushed)
+        uses: docker/build-push-action@f9f3042f7e2789586610d6e8b85c8f03e5195baf  # v7.2.0
+        with:
+          context: .
+          file: ./Dockerfile
+          target: runtime-debug
+          platforms: ${{ matrix.platform }}
+          outputs: type=cacheonly
+          cache-from: |
+            type=registry,ref=${{ env.IMAGE_NAME }}-buildcache:${{ matrix.arch }}
+
   build:
     name: Build (${{ matrix.platform }})
+    # Never runs on pull_request — see build-pr above. This keeps
+    # packages:write/id-token:write/attestations:write out of the job a
+    # pull_request event executes entirely, not just conditionally unused
+    # within it.
+    if: github.event_name != 'pull_request'
     runs-on: ${{ matrix.runner }}
     timeout-minutes: 60
     permissions:
