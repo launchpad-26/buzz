@@ -46,7 +46,7 @@ evidence:
     entry_class: FACT
     evidence:
       - "launchpad/project-intelligence/corpus/validate.py"
-  - statement: "A commit citation is never checked against the repository's object store, so a commit id that exists and one that does not are both reported UNVERIFIED and are indistinguishable in the output."
+  - statement: "A commit citation is never checked against the repository's object store and never compared against HEAD, so a commit id that exists and one that does not are both reported UNVERIFIED and are indistinguishable in the output."
     entry_class: FACT
     evidence:
       - "launchpad/project-intelligence/corpus/validate.py"
@@ -79,29 +79,39 @@ evidence:
     entry_class: FACT
     evidence:
       - "launchpad/docs/corpus/AGENTS.md"
-  - statement: "ADR-0029 ranks evidence contextually by claim type rather than by one fixed hierarchy, and holds that GitHub history, team knowledge and inference are never treated as fact on their own but stay attributed to their source."
+  - statement: "ADR-0029 ranks evidence contextually by claim type, rejecting both a single fixed hierarchy applied to every claim and a latest-timestamp-wins rule, and holds that GitHub history, team knowledge and inference are never treated as fact on their own but stay attributed to their source."
     entry_class: FACT
     evidence:
       - "launchpad/decisions/ADR-0029-corpus-evidence-precedence.md"
-  - statement: "ADR-0029 requires a node whose two same-claim-type authoritative sources contradict each other to be left unestablished and flagged for a human rather than resolved by its author, and node.schema.json provides flagged as a status value for exactly that state."
+  - statement: "ADR-0029 requires a node whose two same-claim-type authoritative sources contradict each other to be left unestablished and flagged for a human rather than resolved by its author, and node.schema.json provides flagged as a status value for exactly that state, describing it as naming an unresolved conflict rather than simple low confidence."
     entry_class: FACT
     evidence:
       - "launchpad/decisions/ADR-0029-corpus-evidence-precedence.md"
       - "launchpad/docs/corpus/schema/node.schema.json"
-  - statement: "ADR-0028 requires claim classification to stay structurally encoded and validator-checkable rather than asserted only in free-form body prose, and leaves the question of how many claims one node holds open."
+  - statement: "ADR-0028 requires claim classification to stay structurally encoded and validator-checkable rather than asserted only in free-form body prose, requires that generated views must not silently drop security-relevant provenance their source node carries, and leaves the question of how many claims one node holds open."
     entry_class: FACT
     evidence:
       - "launchpad/decisions/ADR-0028-corpus-canonical-representation.md"
+  - statement: "ADR-0029 requires that private evidence must not be copied into the public corpus to resolve a conflict, and that where evidence cannot be published the claim stays unestablished rather than being asserted from a source that cannot be shown."
+    entry_class: FACT
+    evidence:
+      - "launchpad/decisions/ADR-0029-corpus-evidence-precedence.md"
+  - statement: "COMPATIBILITY.md governs changes to the node and relationship schemas, treating any change that removes a field, removes an enum value or narrows a type as breaking and requiring a dated entry plus a re-validation pass of every existing node in the same pull request."
+    entry_class: FACT
+    evidence:
+      - "launchpad/docs/corpus/schema/COMPATIBILITY.md"
   - statement: "The validator never reads a node's body, so a body claim carrying no ledger entry, and a ledger entry supporting no body claim, are both invisible to every check that exists."
     entry_class: FACT
     evidence:
       - "launchpad/project-intelligence/corpus/validate.py"
-  - statement: "The same validator command that runs locally runs in CI on every pull request and every push to the launchpad branch that touches the corpus root, so a local failure is a CI failure."
+  - statement: "The same validator command that runs locally runs in CI on every pull request and every push to the launchpad branch that touches the corpus root, so a local failure is a CI failure, and the just recipe wrapping it invokes exactly that command while needing the Hermit environment activated first."
     entry_class: FACT
     evidence:
       - ".github/workflows/launchpad-corpus-validate.yml"
       - "launchpad/project-intelligence/corpus/validate.py"
-  - statement: "On issue #636 an authored policy claim was classified INFERENCE citing a schema silent on the subject, reclassified TEAM_KNOWLEDGE attributed to an issue's definition of done, and refused in both forms by successive cross-model reviews, and the accepted fix was for the document to stop making the claim."
+      - "Justfile"
+      - "launchpad/docs/corpus/AGENTS.md"
+  - statement: "On issue #636 an authored policy claim was classified INFERENCE citing a schema silent on the subject, reclassified TEAM_KNOWLEDGE attributed to an issue's definition of done, and refused in both forms by three successive cross-model review passes on the same condition, and the accepted fix was for the document to stop making the claim rather than to relabel it again."
     entry_class: TEAM_KNOWLEDGE
     provided_by: "launchpad-26/buzz#636, recorded in the message of commit a1e8bbcd0846321c6f6684acfe551096da4d974a"
   - statement: "The code-references standard states normative rules about when a claim may carry the class FACT and about how many commit-only FACTs a node may hold, while declaring that classification belongs to this node, and the open question of which of the two owns those rules is filed as an issue asking whichever claims the subject to leave the other an explicit marker."
@@ -360,8 +370,8 @@ not authority.
 
 **GitHub history, team knowledge and inference are never treated as fact on their own.**
 They may supply context; they stay attributed to their source and distinguishable from
-`FACT`. That is not a stylistic preference — it is the ADR's text, and it is why
-`TEAM_KNOWLEDGE` carries `provided_by` at all.
+`FACT`. That is not a stylistic preference — it is the ADR's text, and `provided_by` is
+the field that carries the attribution it requires.
 
 **A real conflict is escalated, not resolved.** Two sources with authority over the *same*
 claim type contradicting each other — two accepted decisions, or a decision and a ratified
@@ -566,8 +576,10 @@ cheaper check, and a green run is not one.
 
 **There is no exception process for the structural requirements.** They are enforced
 before merge and cannot be waived by agreement. Changing them means changing
-`node.schema.json` under `launchpad/docs/corpus/schema/COMPATIBILITY.md`, which is a
-schema change, not an exception.
+`node.schema.json`, which `launchpad/docs/corpus/schema/COMPATIBILITY.md` governs: a change
+that removes a field, removes an enum value or narrows a type is breaking, and needs a
+dated entry there plus a re-validation pass of every existing node in the same pull
+request. That is a schema change, not an exception.
 
 **When a claim will not sit honestly in any class**, work down this list and stop at the
 first that applies:
@@ -664,10 +676,16 @@ now has two owners. This node may not edit `AGENTS.md`; the correction is filed.
 The reason is **merge order**, not an empty corpus. `corpus-agents` is loadable from this
 branch, so an edge to it would validate here — and would become a hard error the moment
 this node reached `launchpad` ahead of the branch that introduces it, because a
-`relationships[].target` matching no loaded node's id fails. At the recorded revision the
-`launchpad` branch carries no corpus node outside `schema/` at all. Every sibling standard
-is likewise unmerged. The edges get declared in one pass once the set has landed, which is
-a follow-up rather than an oversight.
+`relationships[].target` matching no loaded node's id fails. Do not take that on this
+document's word — check what the merge target actually carries, which is the command
+`AGENTS.md` gives for the same purpose:
+
+```bash
+git ls-tree -r --name-only origin/launchpad -- launchpad/docs/corpus
+```
+
+The edges get declared in one pass once the set has landed, which is a follow-up rather
+than an oversight.
 
 ### Expected but not verified when this node was written
 
