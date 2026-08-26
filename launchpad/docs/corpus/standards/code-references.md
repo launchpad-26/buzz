@@ -16,7 +16,7 @@ evidence:
     entry_class: FACT
     evidence:
       - "launchpad/docs/corpus/schema/node.schema.json"
-  - statement: "A bare repository path is opened on disk and must resolve to a real file: a directory, a path that does not exist, and a path naming no file all fail."
+  - statement: "A bare repository path is resolved on disk and must name a real file: a directory, a path that does not exist, and a path naming no file all fail. Resolution establishes only that the file is there; the file's contents are never read."
     entry_class: FACT
     evidence:
       - "launchpad/project-intelligence/corpus/validate.py"
@@ -40,7 +40,7 @@ evidence:
     entry_class: FACT
     evidence:
       - "launchpad/decisions/ADR-0003-handbook-page-provenance-contract.md"
-  - statement: "Commit references, graph edges, tool results and non-GitHub URLs are routed to a non-fatal UNVERIFIED channel that always prints and never changes the exit status."
+  - statement: "Commit references, graph edges, tool results and external URLs that are not pinned repository links -- including GitHub issue and pull-request URLs -- are routed to a non-fatal UNVERIFIED channel that always prints and never changes the exit status."
     entry_class: FACT
     evidence:
       - "launchpad/project-intelligence/corpus/validate.py"
@@ -64,7 +64,7 @@ evidence:
     entry_class: FACT
     evidence:
       - "launchpad/project-intelligence/CONTRACT.md"
-  - statement: "AGENTS.md introduces its citation table as CONTRACT.md section 3's six shapes and then lists seven rows, two of which are URL forms CONTRACT.md does not enumerate."
+  - statement: "AGENTS.md presents a seven-row citation table and states explicitly that it is not a summary of CONTRACT.md section 3, because the two URL rows are forms validate.py recognises and section 3 does not enumerate."
     entry_class: FACT
     evidence:
       - "launchpad/docs/corpus/AGENTS.md"
@@ -311,12 +311,20 @@ forever after going stale.
 
 **A divergence found while writing this node, reported rather than fixed.** `CONTRACT.md`
 §3 enumerates six shapes and none of them is a URL — the section contains no occurrence of
-"url", "http" or "github". `validate.py` nevertheless implements a whole URL branch, and
-`AGENTS.md` presents a seven-row table introduced as "CONTRACT.md §3 defines the six
-shapes", two of whose rows are URL forms §3 does not contain. This node describes the
-forms the validator accepts and says plainly which of them §3 enumerates. Reconciling the
-three documents is not this node's to do: it may not edit `AGENTS.md`, and it does not own
-`CONTRACT.md`.
+"url", "http" or "github". `validate.py` nevertheless implements a whole URL branch.
+`AGENTS.md` presents a seven-row table and says explicitly that it **is not** a summary of
+§3: its two URL rows are forms the validator recognises and §3 does not enumerate. This
+node describes the forms the validator accepts and says plainly which of them §3
+enumerates. Reconciling `CONTRACT.md` with what the validator implements is still open —
+filed as #1478 — but it is not this node's to do: it may not edit `AGENTS.md`, and it does
+not own `CONTRACT.md`.
+
+An earlier draft of this node asserted the opposite — that `AGENTS.md` introduced the table
+*as* §3's six shapes and then listed seven. That was true of an earlier `AGENTS.md`,
+corrected in `ebe2daf72`, and the miscount had already been used here to build a scope
+argument before review caught it. `AGENTS.md` records the same incident from its own side.
+The lesson is the one this standard exists to teach: a claim recorded against one revision
+of a moving document is not a claim about the document that finally ships beside it.
 
 **No `relationships` in this node's frontmatter.** The reason is merge order, not an empty
 corpus. At the recorded revision `corpus-agents` is loadable, so an edge to it would
