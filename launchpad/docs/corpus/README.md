@@ -43,6 +43,22 @@ evidence:
     evidence:
       - "launchpad/docs/corpus/schema/README.md"
       - "launchpad/docs/corpus/AGENTS.md"
+  - statement: "Changes under launchpad/docs/corpus are validated in CI on pull requests and on pushes to the launchpad branch, running the same validator command as a local run."
+    entry_class: FACT
+    evidence:
+      - ".github/workflows/launchpad-corpus-validate.yml"
+  - statement: "UNVERIFIED notices are printed on every run and are never fatal; a run that reports them still exits 0."
+    entry_class: FACT
+    evidence:
+      - "launchpad/project-intelligence/corpus/validate.py"
+  - statement: "Citation checking is structural: the validator confirms a cited path resolves to a real file inside the repository, never that the file supports the statement it sits under."
+    entry_class: FACT
+    evidence:
+      - "launchpad/project-intelligence/corpus/validate.py"
+  - statement: "The corpus's audit mechanism is the human-read pull-request diff, and preserving that is why ADR-0028 chose Markdown over a machine-readable record format."
+    entry_class: FACT
+    evidence:
+      - "launchpad/decisions/ADR-0028-corpus-canonical-representation.md"
 ---
 
 # The Buzz documentation corpus
@@ -109,3 +125,38 @@ them — go to the file, not to a summary of it.
 
 If this page and any of those disagree, **they win** — this one has drifted and
 should be fixed.
+
+## How the corpus is checked
+
+One command, run from the repository root:
+
+```bash
+python3 launchpad/project-intelligence/corpus/validate.py
+```
+
+Exit status 0 is a pass. Exit status 1 means at least one error, and every error
+names the node it came from. `just corpus-validate` runs exactly that command, but
+needs the Hermit environment activated first (`. ./bin/activate-hermit`); the
+interpreter form above does not.
+
+The same command runs in CI on every pull request touching
+`launchpad/docs/corpus/**` and on every push of such a change to the `launchpad`
+branch, so a local failure is a CI failure.
+
+`UNVERIFIED` notices are printed on every run and are **never fatal** — the run can
+report them and still exit 0. They mean the checker recognised a citation's shape
+and had nothing on disk to open, which is not the same as having checked it.
+
+### What a passing run does not establish
+
+A pass is a structural result, not an editorial one. It does not mean a citation
+supports the claim it sits under; it does not mean an `UNVERIFIED` citation was
+checked; and it does not mean a line number in a citation points anywhere real.
+Those three limits, and what a reviewer has to hold instead, are set out in
+[`launchpad/docs/corpus/AGENTS.md`](AGENTS.md) under *Three things a passing run
+does not mean*. They are not repeated here.
+
+**This matters most at review time.** The corpus is audited in the pull-request
+diff a human reads, not after the fact — that is the enforcement mechanism
+[ADR-0028](../../decisions/ADR-0028-corpus-canonical-representation.md) chose this
+file format to preserve. A green check is the floor, not the verdict.
