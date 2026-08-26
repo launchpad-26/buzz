@@ -243,3 +243,17 @@ LEFT OUT  launchpad/docs/corpus/README.md — that is #639, a separate PR; #636'
           length) — a defect in merged code, filed separately; this task routes around it
           by preferring bare-path citations rather than changing the validator. Any change
           to the schema or the validator — both are merged and this task consumes them.
+
+          AMENDED during build, 2026-08-26, authorised by Serina. ONE exception to the
+          line above: `test_real_corpus_root_currently_has_no_content_outside_schema` in
+          launchpad/project-intelligence/corpus/tests/test_validate.py asserted the corpus
+          root is EMPTY. #636 authors the first node, so that test cannot survive this
+          issue — it fails in CI via launchpad-corpus-validate.yml, not merely locally.
+          It is replaced (not deleted) by an assertion of what its author's own comment
+          says it was for: the root holds authored content AND none of it comes from
+          schema/. Both halves are needed; the second alone is satisfied by an exclusion
+          that rejects everything. Neither the review-plan self-pass nor the independent
+          Codex pass caught this — the plan asserted "#623's suite already covers the
+          validator" without running it against a corpus containing a node.
+          CONSEQUENCE: the diff now touches tests, so review-tests JOINS the roster that
+          the GATES line above says does not apply. Treat the GATES line as amended.

@@ -982,11 +982,13 @@ class SchemaDirExclusionTest(unittest.TestCase):
     """schema/ is #622's own infrastructure, never scanned as corpus content.
 
     Proven against a purpose-built fixture tree containing BOTH a schema/ file
-    and a real sibling, not merely against today's real launchpad/docs/corpus/
-    root -- that root currently has zero non-schema content, so a test asserting
-    only "no file under schema/ leaked" against it would pass vacuously even if
-    exclusion were broadened to reject everything. An independent review-tests
-    pass found this.
+    and a real sibling, rather than against the real launchpad/docs/corpus/ root
+    alone. When this suite was written that root held zero non-schema content, so
+    a test asserting only "no file under schema/ leaked" against it would have
+    passed vacuously even if exclusion were broadened to reject everything. An
+    independent review-tests pass found that. The fixture test below stays the
+    primary proof for the same reason: it controls both sides of the comparison,
+    where the real root only ever shows whatever happens to be committed.
     """
 
     def test_sibling_discovered_schema_dir_excluded(self) -> None:
@@ -1003,13 +1005,28 @@ class SchemaDirExclusionTest(unittest.TestCase):
             self.assertIn(real_sibling, files)
             self.assertNotIn(inside_schema, files)
 
-    def test_real_corpus_root_currently_has_no_content_outside_schema(self) -> None:
-        # A documentation-style sanity check on today's real state, not the
-        # primary proof of exclusion (see test_sibling_discovered_schema_dir_
-        # excluded above, which is the one that can actually fail on regression).
+    def test_real_corpus_root_has_content_and_excludes_schema(self) -> None:
+        """The real root holds authored nodes, and none of them come from schema/.
+
+        This replaces `test_real_corpus_root_currently_has_no_content_outside_
+        schema`, which asserted the root was EMPTY. That assertion was true when
+        #623 wrote it and had a shelf life ending at the first authored node --
+        #636's launchpad/docs/corpus/AGENTS.md, which is what broke it. A test
+        encoding a temporary state as a permanent assertion fails on the change
+        it was supposed to permit, and says nothing about the behaviour under
+        test when it does.
+
+        Both halves are asserted deliberately. Without the non-empty check this
+        degrades to the vacuous form the class docstring warns about: an
+        exclusion broadened to reject EVERYTHING would satisfy "nothing from
+        schema/ was discovered" perfectly.
+        """
         root = validate.repo_root() / validate.DEFAULT_ROOT
         files = validate.discover_markdown_files(root)
-        self.assertEqual(files, [])
+        self.assertNotEqual(files, [])
+        self.assertFalse(
+            any("schema" in f.relative_to(root).parts[:1] for f in files)
+        )
 
 
 if __name__ == "__main__":
