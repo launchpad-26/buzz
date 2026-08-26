@@ -91,9 +91,9 @@ checker, so a node placed there is never validated at all.
 
 **Front matter.** Validated against `node.schema.json`. Field names, which fields are
 required, the closed enums and the conditional rules between fields all live in that
-file and in `schema/README.md`; they are not repeated here, because a second copy
-drifts silently — the checker never reads this document's prose, so a stale copy
-would stay green forever.
+file and in `launchpad/docs/corpus/schema/README.md`; they are not repeated here,
+because a second copy drifts silently — the checker never reads this document's
+prose, so a stale copy would stay green forever.
 
 **`id` is permanent.** Kebab-case, assigned once, never renamed. Generated views
 derive from it reproducibly, so renaming an id is a migration, not an edit.
@@ -119,7 +119,8 @@ there too, as a commit citation.
 
 Three classes exist: `FACT`, `INFERENCE`, `TEAM_KNOWLEDGE`. Which one you choose
 decides which additional fields the schema then requires or forbids — those rules are
-in `node.schema.json` and `schema/README.md`, and are not restated here.
+in `node.schema.json` and `launchpad/docs/corpus/schema/README.md`, and are not
+restated here.
 
 What the classes are *for* is the part that is easy to get wrong:
 
@@ -247,3 +248,31 @@ standing in.
 6. **Run the check.**
 
 ## Scope and omissions
+
+**This document covers** how to create, update and retire one corpus node, what the
+front-matter contract is and where it lives, how to classify and cite evidence, and
+what the deterministic check does and does not establish.
+
+**It does not cover, and these are gaps rather than silence:**
+
+| Not covered here | Owned by |
+|---|---|
+| Per-type standards — naming, identifiers, linking, provenance, status, taxonomy, diagrams, evidence | #1307–#1351, none merged yet |
+| Templates for each node type — concept, component, capability, interface, flow, policy, procedure, runbook, reference, specification, and the rest | #1307–#1351, none merged yet |
+| How generated artifacts prove their provenance, and the exception process for them | #1316 |
+| Encoding ADR-0029's claim-type classification and the flagged state in the schema and checker | #1410 |
+| The human-facing entry point to the corpus | #639 |
+| Line numbers in citations not being verified against file length | #1459 |
+
+Until the standards land there is no per-type template to follow: write the node
+against `node.schema.json` and the rules above, and expect a later task to reshape it.
+
+**No `relationships` in this node's own front matter.** At the revision recorded in its
+ledger this was the only authored node in the corpus, so there was nothing to point at
+— and a `relationships[].target` naming an id no node carries is a hard error. The
+absence is deliberate, not an oversight.
+
+**This file is read twice.** It is a corpus node, validated like any other; it is also
+resolved as the nearest `AGENTS.md` for every change under `launchpad/docs/corpus/`,
+so an agent working anywhere in this subtree is handed it as governing instructions.
+Write it to be followed, not merely to be accurate.
