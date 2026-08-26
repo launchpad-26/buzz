@@ -39,10 +39,17 @@ That divergence is granted as a named §3 exception by this record, and §3's ex
 carries the matching bullet so the two documents do not disagree. It is the **sixth**
 exception in §3 as it now stands — issue templates, the pull-request template, the Hermit
 lefthook pin, deployment image provenance, and root MCP server registration (ADR-0046) are
-the five before it. The draft said "fifth"; ADR-0046's bullet landed first, which is
-exactly the collision the *Consequences* section below anticipated. (Counted against
-#13:decision-2's narrower list of two `.github/` exceptions it is the fourth; §3 as
-written is the authority.)
+the five before it. (Counted against #13:decision-2's narrower list of two `.github/`
+exceptions it is the fourth; §3 as written is the authority.)
+
+The draft said "fifth", and it was right when written — the sequence is the reverse of
+what an earlier version of this paragraph claimed. `14b5eafc6` (#1441) added this record
+and its §3 bullet as the fifth exception; `ba61e0b13` (#1442) then landed ADR-0046 and
+**inserted** its root-MCP bullet above this one, displacing this one to sixth. Verified
+with `git merge-base --is-ancestor`: `14b5eafc6` is an ancestor of `ba61e0b13`, and
+`ba61e0b13`'s diff to `launchpad/AGENTS.md` is a pure addition. So the collision the
+*Consequences* section anticipated did happen, but it was resolved by ADR-0046 inserting
+ahead of an already-landed bullet rather than by ADR-0046 merging first.
 
 ## Context
 
@@ -69,17 +76,21 @@ to rejected Option C, not to this one.
   workspace and CI.
 - The root `Cargo.toml` becomes a standing one-line divergence; upstream syncs touching the
   members list are visible conflicts, not silent drift.
-- **`Cargo.lock` conflicts on upstream syncs, and that is the bad part.** A lockfile
-  conflict is mechanical but recurring, arrives on every sync that moves a shared
-  dependency, and is resolved by regenerating rather than by reading — which makes it the
-  kind of conflict people resolve without looking. This is a real ongoing cost, accepted
-  knowingly.
+- **`Cargo.lock` is the divergence most likely to conflict, and that is the bad part.** Not
+  every sync: git merges the lockfile cleanly whenever the changed segments do not overlap,
+  and a conflict needs an actual overlap in the same region. So this is a **recurring risk
+  rather than a certainty** — an earlier draft of this bullet said it "arrives on every sync
+  that moves a shared dependency", which overstated it. What makes the risk matter is not
+  its frequency but its shape: a lockfile conflict is resolved by regenerating rather than
+  by reading, which makes it the kind of conflict people resolve without looking. A real
+  ongoing cost, accepted knowingly.
 - Both divergences are owed a row in the divergence ledger once ADR-0047 (#294) provides
   one; the ledger does not exist yet.
 - Future cohort crates follow the same path without a new ADR per crate.
 - §3 gains a sixth named exception. The collision this bullet anticipated — #1442
-  (ADR-0046, root MCP registration) claiming the same fifth slot — resolved in ADR-0046's
-  favour: its bullet merged first, so this one is placed sixth and last. No renumbering is
+  (ADR-0046, root MCP registration) claiming the same fifth slot — did happen, and resolved
+  without anyone renumbering anything: this record's bullet landed fifth in `14b5eafc6`, and
+  #1442 then inserted ADR-0046's bullet above it, displacing this one to sixth. Nothing is
   outstanding.
 
 ## Security implications
@@ -107,7 +118,18 @@ Drafted by an agent from #1409's options on 2026-08-25 and left `Proposed`. Acce
 2026-08-27 by @serina-mcfall, who selected option B from the four presented in #1409; the
 agent recorded that selection and did not make it. Full alternatives remain in #1409.
 
-Two claims in the 2026-08-25 draft were stale by the time it was accepted and are corrected
-above rather than left standing: the exception is §3's sixth, not its fifth, and the
-renumbering collision with ADR-0046 has resolved. Both were verified by counting §3's
-bullets at `origin/launchpad` rather than by re-reading this record.
+**Corrections made at acceptance, and one made after review.** The 2026-08-25 draft said
+this was §3's fifth exception; it is now the sixth, verified by counting §3's bullets at
+`origin/launchpad` rather than by re-reading this record.
+
+The first attempt at explaining *why* it moved was itself wrong, and the review panel on
+#1497 caught it: that text claimed ADR-0046's bullet "landed first", which inverts the
+history. `git merge-base --is-ancestor 14b5eafc6 ba61e0b13` confirms this record's own
+commit is the **ancestor** — it landed fifth, and #1442 later inserted ADR-0046's bullet
+above it. Worth recording rather than quietly amending, because it is the same class of
+error the correction was fixing: a claim about sequence asserted from the final state
+instead of from the history. The count was right both times; the mechanism was not.
+
+The `Cargo.lock` bullet was also softened after review, from "arrives on every sync that
+moves a shared dependency" to a recurring risk — a lockfile conflict needs the changed
+segments to actually overlap, and git merges cleanly when they do not.
