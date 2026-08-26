@@ -47,7 +47,7 @@ evidence:
     entry_class: FACT
     evidence:
       - "launchpad/scripts/preflight_core.py"
-  - statement: "Every change under launchpad/docs/corpus is gated in CI by the corpus validate workflow."
+  - statement: "Changes under launchpad/docs/corpus are validated in CI on pull requests and on pushes to the launchpad branch."
     entry_class: FACT
     evidence:
       - ".github/workflows/launchpad-corpus-validate.yml"
@@ -142,7 +142,9 @@ human rather than resolving it yourself. `ADR-0029` is the full rule.
 ### What the checker does with each citation shape
 
 `CONTRACT.md` §3 defines the six shapes. What `validate.py` does with them is not
-documented anywhere else, so it is here:
+documented anywhere else, so it is here — provisionally. This table is reference
+material rather than instruction, and belongs in the evidence standard once that
+lands (#1314); when it moves, this section links to it instead.
 
 | Shape | Checker's verdict |
 |---|---|
@@ -166,6 +168,18 @@ subject passes cleanly. Only a human reading the source establishes a `FACT`.
 mean the checker recognised the shape and could not open it. A `FACT` resting only on
 `UNVERIFIED` citations has not been checked by anything — open the source and keep the
 class, or change the class.
+
+There is exactly one carve-out, and widening it defeats the rule. The **provenance
+entry recording the revision** cites a commit id, which no file can corroborate
+because the citation *is* the claim. It is still checkable, just not by this checker:
+
+```bash
+git cat-file -e <sha>   # exit 0 means that revision exists in this repository
+```
+
+Run that, and the entry is a `FACT`. Every other claim needs a source you opened.
+A commit citation attached to a claim *about repository content* is not covered here
+— that claim needs the file, at that revision.
 
 **3. A line number is not verified.** `Justfile:999999` is accepted against a
 1005-line file (#1459). Prefer a bare path until that is fixed; a position that has
