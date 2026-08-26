@@ -98,8 +98,12 @@ ALREADY TRUE  (verified against git in this worktree, not from notes)
     there, so no `relationships` entry can be declared without a hard CI error.
   - `validate.py` never reads body prose: `_load_frontmatter` splits the file and
     discards `_body`. Nothing downstream of it receives the body.
-  - `validate.py` applies no rule keyed to a subdirectory; `standards/` is validated
-    exactly like any other path under the corpus root.
+  - `validate.py` has exactly one directory-keyed rule — `EXCLUDED_TOP_LEVEL_DIRS =
+    {"schema"}`, applied by `_is_excluded` — and nothing below it distinguishes
+    `standards/` from any other path under the corpus root. (CORRECTED after
+    review-code: this line originally claimed *no* directory-keyed rule at all, which
+    the cited file falsifies on sight and which `AGENTS.md` already states correctly.
+    The corrected claim is what the node now carries.)
   - `node.schema.json` `type` enum contains `governance`; it contains no `policy`.
     `required` is id/type/status/origin/audiences/evidence; `additionalProperties` is
     false, so there is no `provenance` field.

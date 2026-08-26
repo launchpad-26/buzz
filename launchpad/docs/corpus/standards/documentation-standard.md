@@ -15,10 +15,11 @@ evidence:
     entry_class: FACT
     evidence:
       - "launchpad/project-intelligence/corpus/validate.py"
-  - statement: "The checker applies no rule keyed to a subdirectory, so a node under standards/ is validated exactly like a node anywhere else beneath the corpus root."
+  - statement: "The only directory-keyed rule that changes whether a node is validated excludes the top-level schema/ subtree; the one other directory-keyed branch reports on non-Markdown files under generated/ and rejects them either way; nothing distinguishes standards/ from any other directory beneath the corpus root, so a standard is validated exactly like any other node."
     entry_class: FACT
     evidence:
       - "launchpad/project-intelligence/corpus/validate.py"
+      - "launchpad/docs/corpus/AGENTS.md"
   - statement: "ADR-0028 names the human-read pull-request diff as the enforcement mechanism the corpus depends on, and chose Markdown over a machine-readable record format for that reason."
     entry_class: FACT
     evidence:
@@ -67,10 +68,11 @@ evidence:
     confidence: 0.9
 ---
 
-# Standard: corpus standards
+# Standard: documentation standard
 
-What a corpus **standard** must itself be and contain. Look up the requirement you
-need; this is a reference, not a tutorial.
+What a corpus **standard** must itself be and contain — the documentation standard the
+other standards are written to. Look up the requirement you need; this is a reference,
+not a tutorial.
 
 ## Scope and authority
 
@@ -175,9 +177,14 @@ A standard with none of D1's six sections passes exactly as cleanly as this one.
 a standard whose H1 is anything at all, whose requirements have no identifiers, and
 whose deference table points at files that were deleted a year ago.
 
-**Nor does the checker know what a standard is.** It applies no rule keyed to a
-directory: a node under `standards/` is validated identically to a node anywhere else.
-`standards/` is a convention held by authors, not a namespace the tooling recognises.
+**Nor does the checker know what a standard is.** Its directory-keyed rules are not
+about standards. One excludes the top-level `schema/` subtree from validation
+altogether, because it holds the schema's own test fixtures rather than corpus content,
+and it is the only one that changes whether a node is validated at all. A second names
+`generated/` when reporting a stray non-Markdown file, and rejects the file either way.
+Past those, nothing distinguishes one directory from another, so a node under
+`standards/` is validated identically to a node anywhere else. `standards/` is a
+convention held by authors, not a namespace the tooling recognises.
 
 **Enforcement is the pull-request review**, and that is by design rather than by
 omission. ADR-0028 chose the canonical representation specifically so the corpus would
