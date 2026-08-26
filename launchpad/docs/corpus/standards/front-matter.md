@@ -28,7 +28,6 @@ evidence:
     entry_class: FACT
     evidence:
       - "launchpad/docs/corpus/schema/node.schema.json"
-      - "launchpad/docs/corpus/AGENTS.md"
   - statement: "A schema violation is reported using the schema's own constraint and never the offending value, so the message says what was demanded without naming which key broke the closed field set."
     entry_class: FACT
     evidence:
@@ -37,16 +36,26 @@ evidence:
     entry_class: FACT
     evidence:
       - "launchpad/project-intelligence/corpus/validate.py"
-  - statement: "Front matter must begin on the file's first line, because the checker requires the text to start with the opening delimiter rather than searching for it; a leading blank line and a byte-order mark were each run and each rejected."
+  - statement: "Front matter must begin on the file's first line, because the checker requires the text to start with the opening delimiter rather than searching for it, which rejects both a leading blank line and a byte-order mark."
     entry_class: FACT
     evidence:
       - "launchpad/project-intelligence/corpus/validate.py"
+  - statement: "An unquoted scalar is exposed to two YAML behaviours that are not alike: implicit typing is caught by the schema's type and enum constraints and exits non-zero, while comment stripping is silent and passes, so quoting free text guards against the second rather than the first."
+    entry_class: FACT
+    evidence:
+      - "launchpad/project-intelligence/corpus/validate.py"
+      - "launchpad/docs/corpus/schema/node.schema.json"
+      - "validate.py('id: 2026-08-26' unquoted) -> exit 1, schema violation at id; same value quoted -> exit 0"
+  - statement: "Each rule this node states as enforced was confirmed by a node that breaks it and exits non-zero, and each rule it states as unenforced by a node that violates it and exits zero; the sole partial case is quoting, which is called out where it is stated."
+    entry_class: FACT
+    evidence:
+      - "launchpad/project-intelligence/corpus/validate.py"
+      - "validate.py(--root <one fixture per rule, both directions>) -> exits as this node states"
   - statement: "Nothing requires a commit citation to be present: a node whose ledger contains no commit citation anywhere validates clean, so recording the revision is a convention a reviewer holds rather than a rule the checker holds."
     entry_class: FACT
     evidence:
       - "launchpad/project-intelligence/corpus/validate.py"
       - "launchpad/docs/corpus/schema/node.schema.json"
-      - "launchpad/docs/corpus/AGENTS.md"
   - statement: "The checker resolves a relationship target only against the nodes loaded by the run that is executing, so it cannot establish that a target exists on the branch being merged into."
     entry_class: FACT
     evidence:
@@ -89,12 +98,16 @@ evidence:
     entry_class: FACT
     evidence:
       - "launchpad/project-intelligence/corpus/validate.py"
-      - "launchpad/docs/corpus/AGENTS.md"
   - statement: "This node declares no relationships because the only other node in the corpus is not present on the branch this one merges into, so any edge to it would validate for the author and fail in CI."
     entry_class: FACT
     evidence:
-      - "launchpad/docs/corpus/AGENTS.md"
+      - "launchpad/project-intelligence/corpus/validate.py"
       - "git.ls_tree('origin/launchpad', 'launchpad/docs/corpus') -> schema/ only, no node outside it"
+  - statement: "A bare-path citation carries the same merge-order hazard as a relationship target: it is resolved against the tree the run sees, so a citation to a file that exists only on the authoring branch passes locally and becomes a hard error once merged."
+    entry_class: FACT
+    evidence:
+      - "launchpad/project-intelligence/corpus/validate.py"
+      - "validate.py(clean origin/launchpad tree + this node citing the unmerged AGENTS.md) -> exit 1, 5 citations do not resolve"
   - statement: "Nothing in the repository reads the audiences field: the schema declares it, the schema's own tests exercise it, and the checker never looks at it."
     entry_class: INFERENCE
     evidence:
@@ -114,7 +127,6 @@ evidence:
     entry_class: FACT
     evidence:
       - "launchpad/project-intelligence/corpus/validate.py"
-      - "launchpad/docs/corpus/AGENTS.md"
   - statement: "Edge kinds and each kind's directionality are defined in relationships.schema.json, which node.schema.json inlines a copy of rather than referencing across files."
     entry_class: FACT
     evidence:
@@ -130,6 +142,9 @@ evidence:
   - statement: "The per-field subjects this node defers are owned by issues #1317 identifiers, #1323 status, #1311 deprecation, #1324 taxonomy, #1309 confidence, #1314 evidence, #1308 code references and #1316 generated content, each read from the issue's own title."
     entry_class: TEAM_KNOWLEDGE
     provided_by: "launchpad-26/buzz issues #1308, #1309, #1311, #1314, #1316, #1317, #1323, #1324 (titles read 2026-08-26)"
+  - statement: "The corpus create procedure covers the merge-order hazard for relationship targets but not for bare-path citations, and that omission has already produced a defect in a sibling node."
+    entry_class: TEAM_KNOWLEDGE
+    provided_by: "launchpad-26/buzz#1488 defect B, and #1473 which records it occurring (titles read 2026-08-27)"
 ---
 
 # Front matter
@@ -222,7 +237,7 @@ Purpose, not permitted values. For the values, open the schema.
 These are MUST, and **each was confirmed by building a node that breaks it and watching
 the checker exit non-zero.** A violation fails CI and blocks the change.
 
-Two rules that read like requirements are deliberately *not* here, because the checker
+Three rules that read like requirements are deliberately *not* here, because the checker
 does not hold them. They are in *Guidance*, and why that line is drawn so sharply is in
 *Where the line actually falls*.
 
@@ -247,12 +262,31 @@ does not hold them. They are in *Guidance*, and why that line is drawn so sharpl
 
 ## Guidance
 
-These are SHOULD. **Nothing below is enforced by any check** — each was confirmed by
-building a node that violates it and watching the checker pass it clean. That is
-precisely why they are written down: they are the conventions a reviewer has to hold.
+These are SHOULD. **No check holds any of them completely**, which is precisely why they
+are written down: they are the conventions a reviewer has to hold. For items 2 to 8 the
+checker holds nothing at all — each was confirmed by building a node that violates it and
+watching the run pass clean. **Item 1 is a partial exception and says so.**
 
-1. **Quote every scalar value.** An unquoted value is subject to YAML's implicit typing
-   and comment stripping. Both failures are silent (see *YAML hazards*).
+1. **Quote values that carry free text** — a `statement`, a `provided_by`, a citation.
+   An unquoted scalar is exposed to two YAML behaviours, and they are *not* alike:
+
+   - **Implicit typing is usually caught, loudly.** An unquoted value that looks like a
+     date or a boolean stops being a string, and the schema's `type` and `enum`
+     constraints reject it. This is the half a check does hold — an unquoted
+     date-shaped `id` exits non-zero — so quoting is protection against a confusing
+     message rather than against a silent pass. The message is confusing: a coerced
+     `id` is no longer a string, so the error falls back to naming the file path
+     instead of the node.
+   - **Comment stripping is silent, and nothing catches it.** A space followed by a
+     number sign begins a comment; the remainder of the value is discarded, the
+     truncated string still satisfies the schema, and the run passes. This half is why
+     the item is here.
+
+   **Enum keywords are exempt and should stay bare.** `type`, `status` and `origin`
+   values, and the members of `audiences`, cannot be coerced into another type or
+   truncated by a number sign. Every node in the corpus leaves them unquoted, including
+   this one — quoting them would be harmless but would diverge from every existing node
+   for no gain. See *YAML hazards*.
 2. **Do not put a delimiter line inside the front-matter block.** This reads like a
    requirement and is not one. A stray delimiter ends the block, and every field after
    it becomes body text that nothing parses and nothing reports — including a
@@ -266,10 +300,29 @@ precisely why they are written down: they are the conventions a reviewer has to 
    at" stops being true the moment a second node merges, and a justification copied
    from a node written earlier is how two sibling nodes have already shipped a false
    one. Give the reason that is true today — usually merge order.
-5. **Check a relationship target against the branch you are merging into**, not the one
-   you are working on. Requirement 6 is enforced only against the nodes present where
-   the checker runs, and it cannot see another branch. A target that exists only in your
-   worktree passes for you and fails for whoever merges without it.
+5. **Check every reference against the branch you are merging into**, not the one you
+   are working on. This applies to *two* kinds of reference, and the second is the one
+   that gets missed:
+   - **Relationship targets.** Requirement 6 is enforced only against the nodes present
+     where the checker runs, and it cannot see another branch.
+   - **Bare-path citations in the ledger.** Identical hazard, same cause. A citation is
+     resolved against the tree the run sees, so one naming a file that exists only on
+     your branch resolves for you and becomes a hard error for whoever merges.
+
+   Both pass locally and fail after merge, which is the worst time to find out. If your
+   branch is stacked on another unmerged branch, everything that branch adds is invisible
+   to the merge target — test it, do not reason about it:
+
+   ```bash
+   git archive origin/<merge-target> | tar -x -C <tmp> && git -C <tmp> init -q .
+   cp <your node> <tmp>/launchpad/docs/corpus/<dir>/ \
+     && (cd <tmp> && python3 launchpad/project-intelligence/corpus/validate.py)
+   ```
+
+   This node cited a file from its own unmerged base and passed every local check; the
+   command above exited 1 with five unresolvable citations. `AGENTS.md`'s create
+   procedure covers the relationship half of this hazard and not the citation half —
+   the gap is #1488, and #1473 is it happening.
 6. **Prefer a bare path to a path with a line number** in citations. The path is opened
    and checked; the line number is not compared against the file at all, so a position
    that has drifted looks precise and is wrong (#1459).
@@ -282,15 +335,26 @@ precisely why they are written down: they are the conventions a reviewer has to 
 
 ### Where the line actually falls
 
-The split above is not stylistic. Three of these conventions — items 2, 3 and 5 — are
-ones an author would reasonably assume CI holds, and it does not. Each was asserted as
-a requirement in an earlier revision of this node, and each moved here only after a
-reviewer built the violating node and watched it pass.
+The split above is not stylistic, and it was got wrong twice while writing this node —
+in both directions. Both errors are recorded here because the second one is the more
+instructive.
 
-That is the shape of the risk in general: **a green run is evidence about structure, not
-about correctness**, and the gap is widest exactly where a rule feels most obviously
-mandatory. When you need to know whether something is enforced, do not reason from how
-important the rule seems — write the node that breaks it and run the checker.
+**Rules asserted as enforced that are not.** Items 2, 3 and 5 are ones an author would
+reasonably assume CI holds. An earlier revision listed all three as requirements. Each
+moved here only after a reviewer built the violating node and watched it pass.
+
+**A rule asserted as unenforced that partly is.** The correction above then over-swung:
+this section claimed *nothing* in Guidance was enforced, which made item 1 false, because
+an unquoted date-shaped `id` does fail. One fix opened its neighbour — which is the
+failure this repository sees most often, and it survived two review rounds before a
+third caught it.
+
+The lesson is not "check harder". It is that **enforcement is a property of the checker,
+never of how important a rule sounds** — and that intuition is wrong in both directions,
+so a claim that something *is* enforced needs a failing run behind it exactly as much as
+a claim that something is not. Write the node that breaks the rule and run the checker.
+The wider point stands underneath: **a green run is evidence about structure, not about
+correctness.**
 
 ## Delimiters
 
@@ -452,11 +516,12 @@ empty corpus, and the edge should be revisited once both nodes are on `launchpad
   not a proof.** A consumer reading the field dynamically, or one outside this
   repository, would not appear in it. It is recorded at 0.9 confidence for that reason.
 - **Every MUST in *Requirements* and every SHOULD in *Guidance* was run, in both
-  directions.** Each requirement has a node that breaks it and fails; each guidance item
-  has a node that violates it and passes. What was *not* done is the converse sweep —
-  enumerating every path through the checker and asking which rule catches it — so a
-  rule this node never thought to state could be enforced without being written down
-  here.
+  directions** — each requirement has a node that breaks it and exits non-zero, and each
+  guidance item bar one has a node that violates it and exits zero. The exception is
+  guidance item 1, which is partly enforced; that is stated at the item rather than
+  hidden here. What was *not* done is the converse sweep — enumerating every path through
+  the checker and asking which rule catches it — so a rule this node never thought to
+  state could be enforced without being written down here.
 - **The claim that a green run says nothing about body prose rests on reading the code,
   not on a fixture.** The checker binds the body to a name it never reads again, which
   is plain in the source; no test was built that puts a false claim in a body and
