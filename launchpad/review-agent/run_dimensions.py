@@ -370,6 +370,72 @@ def _run_dimensions_concurrently(
 
 
 # ---------------------------------------------------------------------------
+# The stages manifest -- launchpad-26/buzz#565
+# ---------------------------------------------------------------------------
+
+
+def build_stages(dimensions: list[str], reports: list[dict]) -> list[dict]:
+    """The ``stages`` manifest entries for #117's dimensions, one per DISPATCHED slug.
+
+    Sourced from ``dimensions`` -- the list this run actually dispatched -- and
+    ``dimensions`` alone. ``reports`` is indexed by ``dimension`` and looked up,
+    never enumerated to produce the name list: a report cannot testify to its own
+    absence, so the manifest is built from what was dispatched, not from what came
+    back. A dimension that was dispatched and produced no report is still named
+    here, with ``status: "no_report"`` -- it does not silently vanish from the
+    manifest just because nothing came back for it. A report for a dimension this
+    run did not dispatch contributes no entry (it cannot -- ``dimensions`` is the
+    only source of names).
+
+    Status/reason per dispatched dimension:
+
+    * report arrived with ``status: "complete"`` -> ``{"status": "complete",
+      "reason": None}``.
+    * no report arrived at all -> ``{"status": "no_report", "reason": <fixed
+      reason naming the absence>}``.
+    * any other status -- ``"failed"`` today, and whatever #117 adds later --
+      passes through verbatim, with ``reason`` taken from the report's own
+      ``error["reason"]`` when it has one.
+
+    Only ``"complete"`` is treated as complete, and every other status is carried
+    through rather than matched against a list. Written the other way round -- an
+    ``elif`` for ``"failed"`` and an ``else`` producing ``"complete"`` -- a status
+    this function had never heard of would render as a clean stage, which is the
+    partial-review-reading-as-complete failure #119's condition (1) exists to
+    catch and the reason #565 was filed. #117's own definition of done already
+    reserves a third case ("a report without a completion marker is treated as
+    truncated rather than clean"), so the unknown status is a matter of time, not
+    a hypothetical. ``_summarise`` at :809 already reads the same way -- ``all(...
+    == "complete")`` -- and this keeps the two consistent.
+    """
+    by_name = {report["dimension"]: report for report in reports}
+    stages = []
+    for dimension in dimensions:
+        report = by_name.get(dimension)
+        if report is None:
+            stages.append(
+                {
+                    "name": dimension,
+                    "status": "no_report",
+                    "reason": "dimension was dispatched but produced no report",
+                }
+            )
+        elif report["status"] == "complete":
+            stages.append({"name": dimension, "status": "complete", "reason": None})
+        else:
+            error = report.get("error")
+            reason = error.get("reason") if isinstance(error, dict) else None
+            stages.append(
+                {
+                    "name": dimension,
+                    "status": report["status"],
+                    "reason": reason,
+                }
+            )
+    return stages
+
+
+# ---------------------------------------------------------------------------
 # The core, testable entry point
 # ---------------------------------------------------------------------------
 
@@ -400,6 +466,7 @@ def build_document(
         "pr": pr,
         "merge_base_sha": merge_base_sha,
         "head_sha": head_sha,
+        "stages": build_stages(dimensions, reports),
         "reports": reports,
         "containment": {
             "findings": [f.as_dict() for f in containment_findings],
