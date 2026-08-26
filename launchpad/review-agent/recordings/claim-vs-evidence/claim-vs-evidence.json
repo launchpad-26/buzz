@@ -1,0 +1,38 @@
+{
+  "_provenance": {
+    "model": "claude-sonnet-5",
+    "date": "2026-08-20",
+    "fixture": "claim-vs-evidence",
+    "dimension": "claim-vs-evidence",
+    "seed": "step8-claim-vs-evidence",
+    "nonce": "fd67113ca5ee05b31650c71b4365032f",
+    "sampling": "Single reasoning pass per fixture: the same session read this fixture's real rendered document (via contain.render with the nonce above) and each dimension's real assembled PROMPT, and judged each of the three dimensions' conclusions against it in turn -- NOT three independent model invocations. Wording may therefore be correlated across dimensions for the same fixture in a way three genuinely separate runs would not be. This is disclosed rather than disguised: STEP 10's live, separately-invoked per-dimension runs are the evidence for genuine independent variation, not this file."
+  },
+  "outcome": "findings",
+  "findings": [
+    {
+      "dimension": "claim-vs-evidence",
+      "severity": "Blocker",
+      "anchor": "line",
+      "file": "scripts/config_loader.py",
+      "line": 23,
+      "defect": "PR body claims --verbose's value is restricted to debug/info/warn via argparse choices=, but the diff adds a plain boolean flag with no validation",
+      "failure": "A reader trusting the PR description believes input validation exists where none does; any --verbose value (or none) passes through unchecked",
+      "finding_id": "0d4a625fa2227bcc",
+      "entry_point": null,
+      "evidence": null
+    },
+    {
+      "dimension": "claim-vs-evidence",
+      "severity": "High",
+      "anchor": "pr",
+      "file": null,
+      "line": null,
+      "defect": "PR body cites scripts/config_schema.py as the validation contract source; no such file exists anywhere in this repository",
+      "failure": "A reviewer or future maintainer following the citation to verify the validation contract finds nothing, and cannot confirm the claim by any means",
+      "finding_id": "f699b70a97ebb6e5",
+      "entry_point": null,
+      "evidence": null
+    }
+  ]
+}

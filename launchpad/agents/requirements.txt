@@ -1,0 +1,37 @@
+# Third-party dependencies for launchpad/agents/*.py.
+#
+# WHY THIS FILE EXISTS. `goose_config.py` imports ruamel.yaml, and until this file
+# existed that dependency was recorded nowhere: not in a manifest, not in a CI
+# install step, only in prose inside the module's own docstring. A reader who
+# cloned the repo and ran the script got an ImportError, and CI could not have
+# caught it because no CI job ran these tests at all
+# (.github/workflows/launchpad-agents-tests.yml now does).
+#
+# ruamel.yaml rather than PyYAML, deliberately, and it is not interchangeable:
+# goose_config.py rewrites an operator's own ~/.config/goose/config.yaml, and
+# PyYAML's load+dump silently strips every comment and re-quotes every scalar on
+# the way through. Measured on a fixture carrying `# managed by ansible` and a
+# quoted host value: both were gone after one round trip. ruamel's round-trip
+# mode preserves them. Anything that edits a human-authored YAML file in place
+# needs the round-trip parser; PyYAML is fine for files only machines write.
+#
+# BOUNDED RANGE, both ends deliberate.
+#
+# Floor 0.17.21: that is what the python3-ruamel.yaml apt package ships on
+# Ubuntu 24.04, and pinning above it would make the apt route unusable for no
+# gain. (An earlier revision of this comment claimed an exact pin "would reject
+# the newer wheel pip installs" — that was simply wrong, pip installs whatever
+# version you name if it is still on the index. Corrected by cross-vendor
+# review; the real reason for a range is the apt/pip split, not pip behaviour.)
+#
+# Ceiling <0.20: a conservative "do not enter an untested release series"
+# boundary, NOT a major-version boundary. ruamel.yaml's own documentation puts
+# its eventual major transition at 1.0, so 0.20 is simply the next 0.x release
+# series -- an earlier revision of this comment called it "the next major
+# series", which was wrong (corrected by cross-vendor review). The reason for
+# any ceiling at all is that this module's whole purpose is round-tripping an
+# operator's hand-written config, so a serializer change in a release series
+# nobody here has tested could silently alter their file with no commit in this
+# repo to point at. Raise it deliberately, after checking round-tripping still
+# holds, rather than leaving it open.
+ruamel.yaml>=0.17.21,<0.20

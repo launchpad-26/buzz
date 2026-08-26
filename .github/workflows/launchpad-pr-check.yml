@@ -1,0 +1,108 @@
+name: launchpad — PR body check
+
+on:
+  pull_request:
+    types: [opened, edited, reopened, labeled, unlabeled, synchronize, ready_for_review]
+
+permissions:
+  contents: read
+  pull-requests: read
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      # THIS CHECK IS NOT A SECURITY BOUNDARY, AND MUST NOT BE DESCRIBED AS ONE.
+      #
+      # An earlier version of this file pinned the checkout to the base commit and
+      # claimed that stopped a fork from supplying the checker that judges it. That
+      # was wrong. `on: pull_request` runs the workflow from the PR's own merge ref
+      # — for forks too — so a fork PR already owns every step in this file and can
+      # overwrite or skip the script whichever commit is checked out. Pinning the
+      # ref bought nothing and made a change to the checker unable to test itself.
+      # (Running the BASE workflow for forks is `pull_request_target` behaviour,
+      # which this workflow deliberately does not use.)
+      #
+      # The real boundary is elsewhere, and it is enough: a fork-triggered run gets
+      # a read-only GITHUB_TOKEN with no repository secrets, and merging needs two
+      # approving reviews from people with write access. A defeated body check
+      # misleads a reviewer; it cannot merge anything or write anywhere.
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      # A missing checker is not a passing body. Cheap insurance against a partial
+      # checkout, or a branch that predates the script.
+      - name: Confirm the checker exists
+        run: |
+          test -f launchpad/scripts/pr_body_check.py || {
+            echo "::error::launchpad/scripts/pr_body_check.py is missing from the commit under check."
+            exit 1
+          }
+
+      # GitHub already knows whether this PR will close an issue. Asking it is the
+      # only reliable answer: a regex over the body cannot tell a real reference
+      # from one written inside code, and CommonMark has more code forms than a
+      # pattern enumerates — four of them defeated the previous version (#125).
+      #
+      # On failure CLOSING_REFS stays empty, which the script reads as "unknown"
+      # rather than "none", and it says so in its output instead of guessing.
+      - name: Ask GitHub which issues this PR closes
+        id: closing
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          OWNER: ${{ github.repository_owner }}
+          REPO: ${{ github.event.repository.name }}
+          NUMBER: ${{ github.event.pull_request.number }}
+        run: |
+          set -uo pipefail
+          refs="$(gh api graphql \
+            -f query='query($owner:String!,$repo:String!,$num:Int!){
+                repository(owner:$owner,name:$repo){
+                  pullRequest(number:$num){
+                    closingIssuesReferences(first:50){nodes{number}}}}}' \
+            -F owner="$OWNER" -F repo="$REPO" -F num="$NUMBER" \
+            --jq '[.data.repository.pullRequest.closingIssuesReferences.nodes[].number]' \
+            2>/dev/null)" || refs=""
+          echo "refs=${refs}" >> "$GITHUB_OUTPUT"
+          if [ -z "$refs" ]; then
+            echo "::warning::Could not read closingIssuesReferences; the check will degrade to a text search and will not verify that the board updates on merge."
+          fi
+
+      - name: Validate PR body
+        env:
+          BODY: ${{ github.event.pull_request.body }}
+          LABELS: ${{ toJSON(github.event.pull_request.labels.*.name) }}
+          CLOSING_REFS: ${{ steps.closing.outputs.refs }}
+        run: python3 launchpad/scripts/pr_body_check.py
+
+  # The controls for launchpad/scripts/. A suite that runs only on the author's
+  # machine is a claim, not a gate: the first commit to break it does so silently.
+  #
+  # These need NO token and NO network. Every read in the pre-flight goes through
+  # an injected runner and every fixture is recorded, so the suite passes under
+  # `env -i` with no HOME and no GH_TOKEN. That is why this does not wait on the
+  # scoped token in #119 — that credential is for RUNNING the pre-flight against a
+  # live PR, which this job does not do.
+  scripts:
+    runs-on: ubuntu-latest
+    steps:
+      # persist-credentials: false for the same reason the job above gives, and
+      # more sharply here: the next step runs mutation_harness.py, which rewrites
+      # and executes repository source by design, from the fork's own commit. The
+      # token is read-only on a public repo either way — leaving it in the git
+      # config would still be a credential this job never needs.
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Controls
+        run: python3 -m unittest discover -s launchpad/scripts -t launchpad/scripts -v
+
+      # Proves the controls can FAIL. It rewrites the modules in place, one at a
+      # time, and restores them — verified byte-for-byte before it exits. On a
+      # throwaway CI checkout there is nothing to lose if it is interrupted, and a
+      # green suite whose controls were never observed failing is what this whole
+      # stage refuses to accept anywhere else.
+      - name: Mutation harness — every control must be shown to fail
+        run: python3 launchpad/scripts/mutation_harness.py

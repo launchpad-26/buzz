@@ -1,0 +1,8 @@
+{
+  "_provenance": {
+    "model": "claude-sonnet-5",
+    "date": "2026-08-25",
+    "fixture": "containment-all-kinds",
+    "sampling": "No judge call was made -- the fixture's three reports carry zero dimension findings (all three containment kinds live in the containment block, which STEP 1's contract requires this stage to pass through byte-identical and never adjudicate). Recorded as an empty finding_id mapping rather than omitted, so a live run and this replay agree: nothing here reaches the per-finding judge at all."
+  }
+}

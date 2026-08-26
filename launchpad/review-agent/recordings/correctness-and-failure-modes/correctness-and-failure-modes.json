@@ -1,0 +1,26 @@
+{
+  "_provenance": {
+    "model": "claude-sonnet-5",
+    "date": "2026-08-20",
+    "fixture": "correctness-and-failure-modes",
+    "dimension": "correctness-and-failure-modes",
+    "seed": "step8-correctness-and-failure-modes",
+    "nonce": "52a543cc2c17f095982917ef4bd5ddb6",
+    "sampling": "Single reasoning pass per fixture: the same session read this fixture's real rendered document (via contain.render with the nonce above) and each dimension's real assembled PROMPT, and judged each of the three dimensions' conclusions against it in turn -- NOT three independent model invocations. Wording may therefore be correlated across dimensions for the same fixture in a way three genuinely separate runs would not be. This is disclosed rather than disguised: STEP 10's live, separately-invoked per-dimension runs are the evidence for genuine independent variation, not this file."
+  },
+  "outcome": "findings",
+  "findings": [
+    {
+      "dimension": "correctness-and-failure-modes",
+      "severity": "Blocker",
+      "anchor": "line",
+      "file": "scripts/validate_manifest.py",
+      "line": 16,
+      "defect": "The except clause now returns True (previously False for a missing file, an uncaught crash for malformed JSON) for BOTH a missing manifest and a malformed one -- two distinct fail-open regressions on the same line, not one",
+      "failure": "A missing manifest now validates as present, and a truncated or corrupted manifest now validates as well-formed -- either lets a broken release proceed undetected, the exact case this function exists to catch",
+      "finding_id": "106d983a37e3efc5",
+      "entry_point": null,
+      "evidence": null
+    }
+  ]
+}

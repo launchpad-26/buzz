@@ -1,0 +1,11 @@
+{
+  "$schema": "https://open-plugin-spec.org/schema/v1/plugin.json",
+  "id": "com.launchpad-26.the-professor",
+  "name": "The Professor",
+  "version": "0.1.0",
+  "description": "A mentoring persona designed to guide learning through questions and insights.",
+  "personas": [
+    "personas/the-professor.persona.md"
+  ],
+  "mcp_config": ".mcp.json"
+}

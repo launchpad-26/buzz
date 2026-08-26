@@ -1,0 +1,33 @@
+---
+# Chunk 04 — Docker. Implements dev-deployment-SOP.md Step 5.
+#
+# `become: true` is declared here as well as in the inventory, on purpose. Every
+# play in this sequence escalates from the unprivileged `dev` account and none
+# connects as root: SOP Step 13.3 sets `PermitRootLogin no`, so a root-connected
+# Ansible would cut off its own access halfway through the hardening chunk and
+# every later chunk would fail with a permission error that looks nothing like its
+# cause. Declaring it on the play means the file is still correct when it is run
+# against hosts.local.yml, which does not inherit the dev inventory's vars.
+#
+# Scope note: the chunk sequence deliberately runs to SOP Step 13 (hardening),
+# which overrides AGENTS.md rule 5's "roles that do not exist yet: firewall, SSH
+# policy, AppArmor, unattended-upgrades". That override is stated rather than
+# silently taken. It does not widen THIS play — a `docker` role is inside rule 5's
+# current scope, and the Docker daemon hardening that is not (daemon.json,
+# hardening-spec.md §C10 / issue #34) is left to the hardening chunk. See the
+# scope-boundary comment in roles/docker/tasks/main.yml.
+#
+# Run one target at a time (ansible/README.md):
+#   ansible-playbook playbooks/04-docker.yml --limit dev-vm
+
+- name: "Chunk 04 — install Docker from the Ubuntu archive (SOP Step 5)"
+  hosts: buzz_relay
+  become: true
+  gather_facts: true
+  roles:
+    # FIRST, ON EVERY PLAY IN THIS TREE. hardening-spec.md §B2's carve-out requires
+    # the plaintext check to be a precondition that "runs before any host change", so
+    # it has to precede the first role that touches the target — here, installing
+    # Docker. It reports ok/changed=0 and costs nothing.
+    - role: tls_mode_guard
+    - role: docker

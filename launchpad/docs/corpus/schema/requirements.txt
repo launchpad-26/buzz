@@ -1,0 +1,21 @@
+# Third-party dependencies for launchpad/docs/corpus/schema/tests/test_schema.py.
+#
+# WHY THIS FILE EXISTS. Until it did, jsonschema and PyYAML were importable on this
+# machine but recorded nowhere -- the identical gap launchpad/agents/requirements.txt
+# was created to close for ruamel.yaml. A machine without them raises ImportError
+# before a single test runs, and .github/workflows/launchpad-corpus-schema-tests.yml
+# installs from this file specifically so that failure mode is caught in CI rather
+# than discovered by the next person to clone the repo.
+#
+# jsonschema: validates node.schema.json/relationships.schema.json fixtures against
+# the JSON Schema 2020-12 draft the schema files declare via `$schema`.
+# Floor 4.0: Draft202012Validator (used throughout test_schema.py) was introduced in
+# jsonschema 4.0; nothing here depends on anything added after.
+jsonschema>=4.0,<5
+
+# PyYAML: parses each fixture's YAML frontmatter (ADR-0028's canonical representation).
+# ruamel.yaml (already a dependency elsewhere in launchpad/) is deliberately NOT reused
+# here -- these tests only read fixtures, never rewrite a human-authored file in place,
+# so PyYAML's plain load/dump is sufficient and this suite needs no round-trip
+# preservation of comments or formatting.
+PyYAML>=6.0,<7

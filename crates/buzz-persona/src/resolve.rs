@@ -13,13 +13,15 @@
 use std::collections::HashMap;
 use std::path::Path;
 
+use serde::Serialize;
+
 use crate::merge::TriggersData;
 use crate::pack::{self, LoadedPack, LoadedPersona, PackError};
 use crate::persona::split_model;
 
 /// A fully resolved persona — ready for ACP consumption.
 /// All merge, composition, and projection is done.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize)]
 pub struct ResolvedPersona {
     // Identity
     pub name: String,
@@ -65,7 +67,7 @@ pub struct ResolvedPersona {
 }
 
 /// An MCP server with env values as literals (no interpolation in this PR).
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Serialize)]
 pub struct ResolvedMcpServer {
     pub name: String,
     pub command: String,
@@ -74,7 +76,7 @@ pub struct ResolvedMcpServer {
 }
 
 /// Lifecycle hooks (pack-relative paths).
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Serialize)]
 pub struct ResolvedHooks {
     pub on_start: Option<String>,
     pub on_stop: Option<String>,
@@ -82,7 +84,7 @@ pub struct ResolvedHooks {
 }
 
 /// What triggers a response (renamed from respond_to per spec discussion).
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Serialize)]
 pub struct ResolvedTriggers {
     pub mentions: bool,
     pub keywords: Vec<String>,
@@ -90,7 +92,7 @@ pub struct ResolvedTriggers {
 }
 
 /// A fully resolved pack.
-#[derive(Debug)]
+#[derive(Debug, Serialize)]
 pub struct ResolvedPack {
     pub id: String,
     pub name: String,
@@ -764,6 +766,51 @@ mod tests {
         // Both inherit thread_replies from defaults
         assert!(pip.thread_replies);
         assert!(lep.thread_replies);
+    }
+
+    #[test]
+    fn resolved_pack_serializes_to_json_with_expected_fields() {
+        // Exercises the Serialize derive added for `buzz pack inspect --format
+        // json` (issue #239 STEP 1) — the projector script this feeds needs
+        // model/temperature/mcp_servers/triggers present with the exact names
+        // PERSONA_PACK_SPEC.md §10 uses.
+        let tmp = tempfile::tempdir().unwrap();
+        let dir = tmp.path();
+        std::fs::create_dir_all(dir.join(".plugin")).unwrap();
+        std::fs::create_dir_all(dir.join("agents")).unwrap();
+
+        std::fs::write(
+            dir.join(".plugin/plugin.json"),
+            r#"{
+                "id": "com.test.jsonshape",
+                "name": "JSON Shape Pack",
+                "version": "1.0.0",
+                "personas": ["agents/bot.persona.md"]
+            }"#,
+        )
+        .unwrap();
+
+        std::fs::write(
+            dir.join("agents/bot.persona.md"),
+            "---\nname: bot\ndisplay_name: Bot\ndescription: A test bot.\nmodel: anthropic:claude-sonnet-5\ntemperature: 0.4\nmcp_servers:\n  - name: my-mcp\n    command: npx\n    args: ['-y', 'my-server']\n    env:\n      TOKEN: abc123\nrespond_to:\n  mentions: true\n  keywords: [hello]\n---\nYou are Bot.\n",
+        )
+        .unwrap();
+
+        let pack = resolve_pack(dir).unwrap();
+        let value = serde_json::to_value(&pack).unwrap();
+
+        assert_eq!(value["id"], "com.test.jsonshape");
+        let persona = &value["personas"][0];
+        assert_eq!(persona["name"], "bot");
+        assert_eq!(persona["model"], "claude-sonnet-5");
+        assert_eq!(persona["temperature"], 0.4);
+        assert_eq!(persona["mcp_servers"][0]["name"], "my-mcp");
+        // env is Vec<(String, String)> — serializes as an array of 2-element
+        // arrays, not a JSON object.
+        assert_eq!(persona["mcp_servers"][0]["env"][0][0], "TOKEN");
+        assert_eq!(persona["mcp_servers"][0]["env"][0][1], "abc123");
+        assert_eq!(persona["triggers"]["mentions"], true);
+        assert_eq!(persona["triggers"]["keywords"][0], "hello");
     }
 
     #[test]

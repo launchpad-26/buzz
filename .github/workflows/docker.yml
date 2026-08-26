@@ -1,6 +1,6 @@
 name: Docker image
 
-# Builds and publishes the public Buzz relay images as ghcr.io/block/buzz.
+# Builds and publishes Launchpad Buzz relay images as ghcr.io/launchpad-26/buzz.
 # Normal tags contain stripped binaries; matching debug-* tags contain the same
 # optimized binaries with line-table debug information for native profilers.
 #
@@ -16,12 +16,13 @@ name: Docker image
 # the relay image version tracks crates/buzz-relay/Cargo.toml, never desktop.
 #
 # Triggers:
-#   - push to main           → :main + :sha-<7>
-#                              + :debug-main + :debug-sha-<7>
+#   - push to launchpad      → :launchpad + :sha-<full-commit>
+#                              + :debug-launchpad + :debug-sha-<full-commit>
 #   - push tags relay-v*.*.* → :{version} + :{major}.{minor} + :{major}
 #                              + matching :debug-* tags
 #                              (+ :latest/:debug-latest for stable releases)
-#   - pull_request           → build only (no push), cache stays warm
+#   - pull_request           → build only (no push); reads the cache when
+#                              anonymously available, never writes it
 #   - workflow_dispatch      → manual relay-tag rescue at the tag itself
 #
 # Why workflow_dispatch carries a version input:
@@ -37,11 +38,11 @@ name: Docker image
 # The :latest tag tracks the latest STABLE relay release: metadata-action's
 # `flavor.latest=auto` (its default) emits :latest only for non-prerelease
 # semver, so relay-v0.3.0-rc.1 publishes :0.3.0-rc.1 without moving :latest,
-# and main pushes (no semver tag) never produce :latest.
+# and launchpad pushes (no semver tag) never produce :latest.
 
 on:
   push:
-    branches: [main]
+    branches: [launchpad]
     tags: ["relay-v[0-9]*"]
   pull_request:
     paths:
@@ -65,7 +66,7 @@ on:
         required: true
 
 # One image build per ref; cancel superseded PR builds, but never cancel
-# tag/main builds (publishing must not be aborted mid-flight).
+# tag/launchpad builds (publishing must not be aborted mid-flight).
 concurrency:
   group: docker-${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: ${{ github.ref_type == 'branch' && github.event_name == 'pull_request' }}
@@ -73,14 +74,96 @@ concurrency:
 permissions: {}
 
 env:
-  # Single source of truth for the image name. Set GHCR_IMAGE as a repo
-  # variable to override (e.g., for forks that want to push to their own
-  # namespace without forking this file).
-  IMAGE_NAME: ${{ vars.GHCR_IMAGE != '' && vars.GHCR_IMAGE || 'ghcr.io/block/buzz' }}
+  # Launchpad publication must never fall back to the upstream Block package.
+  IMAGE_NAME: ghcr.io/launchpad-26/buzz
 
 jobs:
+  # PR-only build validation. Deliberately a separate job from `build` below,
+  # not a conditional inside it: this job's `permissions` block never grants
+  # packages/id-token/attestations, so a pull_request run — same-repo or
+  # fork — never holds GHCR-write or OIDC-attestation credentials in the
+  # first place, regardless of what any `if:` condition inside the job says.
+  # See launchpad-26/buzz#1454: the previous single-job design granted those
+  # scopes unconditionally and already completed GHCR login for same-repo
+  # PRs, leaving only a step-level `push:` flag between a same-repo PR and a
+  # real publish — a flag that lives in the same file a same-repo PR's own
+  # diff controls. Splitting the job doesn't remove every risk a write-access
+  # account editing this file can create (see the PR that introduced this
+  # comment for what's still open), but it does mean an ordinary PR run,
+  # untouched, never holds live publish credentials at all.
+  build-pr:
+    # Same `name:` as `build` below, deliberately — the two are mutually
+    # exclusive per run (never both trigger the same event) and this keeps
+    # whichever job actually runs reporting under the exact status-check
+    # name branch protection may already require, rather than introducing a
+    # new check name a PR could never satisfy.
+    name: Build (${{ matrix.platform }})
+    if: github.event_name == 'pull_request'
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 60
+    permissions:
+      contents: read
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - platform: linux/amd64
+            runner: ubuntu-24.04
+            arch: amd64
+          - platform: linux/arm64
+            runner: ubuntu-24.04-arm
+            arch: arm64
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10  # v6.0.3
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@d7f5e7f509e45cec5c76c4d5afdd7de93d0b3df5  # v4.1.0
+        with:
+          buildkitd-config-inline: |
+            [worker.oci]
+              max-parallelism = 2
+
+      # No GHCR login: this job never authenticates to the registry, on any
+      # trigger, so cache-from below is an anonymous pull. If the buildcache
+      # package isn't public, that's a cache miss (cold build), not a
+      # failure — buildx treats an unreachable cache-from source as "no
+      # cache available." Traded deliberately: same-repo PRs lose the
+      # registry-cache warm-start `build` still gets, in exchange for never
+      # holding a push-capable token during a PR run.
+      - name: Build release image (validation only, never pushed)
+        uses: docker/build-push-action@f9f3042f7e2789586610d6e8b85c8f03e5195baf  # v7.2.0
+        with:
+          context: .
+          file: ./Dockerfile
+          target: runtime
+          platforms: ${{ matrix.platform }}
+          outputs: type=cacheonly
+          cache-from: |
+            type=registry,ref=${{ env.IMAGE_NAME }}-buildcache:${{ matrix.arch }}
+
+      - name: Build debug image (validation only, never pushed)
+        uses: docker/build-push-action@f9f3042f7e2789586610d6e8b85c8f03e5195baf  # v7.2.0
+        with:
+          context: .
+          file: ./Dockerfile
+          target: runtime-debug
+          platforms: ${{ matrix.platform }}
+          outputs: type=cacheonly
+          cache-from: |
+            type=registry,ref=${{ env.IMAGE_NAME }}-buildcache:${{ matrix.arch }}
+
   build:
     name: Build (${{ matrix.platform }})
+    # Never runs on pull_request — see build-pr above. This keeps
+    # packages:write/id-token:write/attestations:write out of the job a
+    # pull_request event executes entirely, not just conditionally unused
+    # within it.
+    if: github.event_name != 'pull_request'
     runs-on: ${{ matrix.runner }}
     timeout-minutes: 60
     permissions:
@@ -138,29 +221,35 @@ jobs:
         uses: docker/metadata-action@80c7e94dd9b9319bd5eb7a0e0fe9291e23a2a2e9  # v6.1.0
         with:
           images: ${{ env.IMAGE_NAME }}
-          # Tag matrix — every main commit gets sha-<7>, relay releases get the
-          # full semver family. The semver entries carry match=^relay-v(.*)$
+          # Tag matrix — every build gets a full commit-SHA tag, while relay
+          # releases also get the semver family. The sha tag carries no
+          # enable= gate, deliberately: a workflow_dispatch rescue still needs
+          # a commit-pinned tag for launchpad/deploy/run.sh's guard to accept,
+          # so it publishes on every event including a rescue dispatch. The
+          # semver entries carry match=^relay-v(.*)$
           # because metadata-action does NOT strip a `relay-v` prefix on its
           # own — it only strips refs/tags/, then runs the raw ref through
           # semver.valid(), which rejects "relay-v0.3.0". The match capture
           # group feeds the bare version to the semver parser. value= supplies
-          # the version on a manual rescue dispatch (github.ref is `main`
+          # the version on a manual rescue dispatch (github.ref is `launchpad`
           # there, not the tag): it is already bare, so match no-ops (warns,
           # value intact) and the bare version validates as-is. On push value=
           # is empty, so the ref drives it and match strips relay-v — push
           # behavior is unchanged. Pull requests get nothing (push: false
           # below). :latest is intentionally absent — flavor.latest defaults to
           # `auto`, which adds :latest for stable semver tags only (not
-          # prereleases, not main pushes).
+          # prereleases, not launchpad pushes).
           tags: |
             type=ref,event=branch,enable=${{ github.event_name != 'workflow_dispatch' || inputs.version == '' }}
-            type=sha,prefix=sha-,format=short,enable=${{ github.event_name != 'workflow_dispatch' || inputs.version == '' }}
+            type=sha,prefix=sha-,format=long
             type=semver,pattern={{version}},match=^relay-v(.*)$,value=${{ inputs.version }}
             type=semver,pattern={{major}}.{{minor}},match=^relay-v(.*)$,value=${{ inputs.version }}
             type=semver,pattern={{major}},match=^relay-v(.*)$,value=${{ inputs.version }}
           labels: |
             org.opencontainers.image.title=Buzz
             org.opencontainers.image.description=WebSocket relay server for the Buzz communications platform
+            org.opencontainers.image.source=https://github.com/launchpad-26/buzz
+            org.opencontainers.image.revision=${{ github.sha }}
             org.opencontainers.image.licenses=Apache-2.0
 
       - name: Build and push release image by digest
@@ -275,7 +364,7 @@ jobs:
             prefix=${{ matrix.tag_prefix }},onlatest=true
           tags: |
             type=ref,event=branch,enable=${{ github.event_name != 'workflow_dispatch' || inputs.version == '' }}
-            type=sha,prefix=${{ matrix.tag_prefix }}sha-,format=short,enable=${{ github.event_name != 'workflow_dispatch' || inputs.version == '' }}
+            type=sha,prefix=${{ matrix.tag_prefix }}sha-,format=long
             type=semver,pattern={{version}},match=^relay-v(.*)$,value=${{ inputs.version }}
             type=semver,pattern={{major}}.{{minor}},match=^relay-v(.*)$,value=${{ inputs.version }}
             type=semver,pattern={{major}},match=^relay-v(.*)$,value=${{ inputs.version }}
@@ -310,7 +399,7 @@ jobs:
 
       - name: Attest provenance for the merged image
         # Sigstore-signed in-toto attestation, verifiable with:
-        #   gh attestation verify oci://ghcr.io/block/buzz:<tag> --owner block
+        #   gh attestation verify oci://ghcr.io/launchpad-26/buzz:<tag> --owner launchpad-26
         uses: actions/attest-build-provenance@0f67c3f4856b2e3261c31976d6725780e5e4c373  # v4.1.1
         with:
           subject-name: ${{ env.IMAGE_NAME }}
@@ -336,12 +425,15 @@ jobs:
             echo
             echo "Verify provenance:"
             echo '```'
-            echo "gh attestation verify oci://${IMAGE_NAME}@${MERGED_DIGEST} --owner block"
+            echo "gh attestation verify oci://${IMAGE_NAME}@${MERGED_DIGEST} --owner launchpad-26"
             echo '```'
           } >> "$GITHUB_STEP_SUMMARY"
 
   push-gateway-build:
     name: Build public push gateway (${{ matrix.platform }})
+    # Launchpad does not operate the separate APNs gateway. Preserve the
+    # inherited lane for upstream while preventing fork publication attempts.
+    if: github.repository == 'block/buzz'
     runs-on: ${{ matrix.runner }}
     timeout-minutes: 60
     permissions:
@@ -419,7 +511,7 @@ jobs:
 
   push-gateway-merge:
     name: Publish public push gateway image
-    if: github.event_name != 'pull_request'
+    if: github.repository == 'block/buzz' && github.event_name != 'pull_request'
     runs-on: ubuntu-24.04
     needs: push-gateway-build
     timeout-minutes: 15
