@@ -169,17 +169,24 @@ mean the checker recognised the shape and could not open it. A `FACT` resting on
 `UNVERIFIED` citations has not been checked by anything — open the source and keep the
 class, or change the class.
 
-There is exactly one carve-out, and widening it defeats the rule. The **provenance
-entry recording the revision** cites a commit id, which no file can corroborate
-because the citation *is* the claim. It is still checkable, just not by this checker:
+One conventional exception: the **provenance entry recording the revision** cites a
+commit id, which no file can corroborate because the citation *is* the claim. It is
+still checkable, just not by this checker:
 
 ```bash
 git cat-file -e <sha>   # exit 0 means that revision exists in this repository
 ```
 
-Run that, and the entry is a `FACT`. Every other claim needs a source you opened.
-A commit citation attached to a claim *about repository content* is not covered here
-— that claim needs the file, at that revision.
+Run that, and the entry is a `FACT`. Every other claim needs a source you opened. A
+commit citation attached to a claim *about repository content* is not covered — that
+claim needs the file, at that revision.
+
+**Nothing enforces this.** The checker treats every commit citation identically: a
+second, third or tenth `FACT` resting only on `commit <sha>` produces nothing but
+extra non-fatal `UNVERIFIED` notices and still exits 0. Verified by adding one and
+watching the run pass. So this is a convention a **reviewer** has to hold, not a rule
+the tooling holds — if a node's ledger shows more than one commit-only `FACT`, that is
+the signal, and no check will raise it for you.
 
 **3. A line number is not verified.** `Justfile:999999` is accepted against a
 1005-line file (#1459). Prefer a bare path until that is fixed; a position that has
@@ -220,7 +227,18 @@ standing in.
 3. **Record what you inspected, before drafting.** The repository revision
    (`git rev-parse HEAD`), the source paths and symbols you read, the tests,
    specifications and configuration you consulted, and — explicitly — anything you
-   expected to verify and could not.
+   expected to verify and could not. Working notes need not be committed, but every
+   category has a destination in the finished node, and they are not the same one:
+
+   | What you recorded | Where it ends up |
+   |---|---|
+   | The revision | A commit citation in the `evidence` ledger (step 6) |
+   | Paths, symbols, tests, specs, configuration you read | Citations on the `evidence` entries whose claims they support (step 7) |
+   | Expected but could not verify | The body's scope-and-omissions section (step 8), named as a gap |
+
+   Anything that reaches none of those three was not needed. If you inspected a source
+   that backs no claim, you have either a missing claim or a stale note — decide which
+   rather than leaving it in a file nobody reads.
 4. **Choose the `id`.** Kebab-case, and permanent from this moment. Pick something that
    describes the idea, not where the file currently sits.
 5. **Create the file** anywhere under `launchpad/docs/corpus/` except `schema/`.
@@ -285,6 +303,18 @@ against `node.schema.json` and the rules above, and expect a later task to resha
 ledger this was the only authored node in the corpus, so there was nothing to point at
 — and a `relationships[].target` naming an id no node carries is a hard error. The
 absence is deliberate, not an oversight.
+
+**Expected but not verified when this node was written**, per the rule in *Creating a
+node* step 3:
+
+- **No agent harness was tested reading this file as its resolved `AGENTS.md`.** The
+  front matter is harmless to the checker, and to `preflight_core.py`, which resolves
+  the path without parsing content. Whether it degrades the file for a harness that
+  *reads* it as instructions is unknown.
+- **`relationships.schema.json` was not read directly.** `node.schema.json` states that
+  a test guards the two relationship enums against drifting apart; that test was not
+  run. Immaterial to this node, which declares no relationships, but a reader relying
+  on the linked file for the enum is relying on that guard, not on a check made here.
 
 **This file is read twice.** It is a corpus node, validated like any other; it is also
 resolved as the nearest `AGENTS.md` for every change under `launchpad/docs/corpus/`,
