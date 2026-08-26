@@ -57,7 +57,7 @@ evidence:
       - "launchpad/docs/corpus/schema/node.schema.json"
       - "launchpad/project-intelligence/corpus/validate.py"
       - "launchpad/project-intelligence/memory.py"
-    confidence: 0.7
+    confidence: 0.6
   - statement: "Because the schema accepts any in-range value without recording how it was chosen, two entries carrying the same number need not represent comparable strength, so values are not safely comparable between authors or nodes."
     entry_class: INFERENCE
     evidence:
@@ -84,9 +84,17 @@ This is a policy node. Look up the section you need.
 | Creating, updating and retiring a node | `launchpad/docs/corpus/AGENTS.md` |
 
 Those files are authoritative. Where this document and any of them disagree, **they
-win** — this one has drifted and should be fixed. The field-combination rules and the
-enum members are deliberately not copied here: the check never reads body prose, so a
-second copy would stay green forever after it went stale.
+win** — this one has drifted and should be fixed.
+
+**One part of the schema's field-combination matrix is restated here and the rest is
+not.** Requirement 1 below states the `confidence` row, because a standard about this
+field cannot omit the field's own rule. Everything else is left to the schema
+deliberately: the other entries' rules, the numeric bounds, and every enum's member list.
+The check never reads body prose, so a copy that goes stale stays green forever — which
+makes the one copy that does exist here a named drift surface rather than an accident.
+**If the schema's confidence rule changes, Requirement 1 and the enforcement table in
+*Enforcement, and where it stops* are the two places in this document that must change
+with it.**
 
 ## Scope and authority
 
@@ -149,7 +157,10 @@ review, and a reviewer who lets one through has approved a defect.
    it to TEAM_KNOWLEDGE and name who decided. See *Reasoning versus deciding*.
 6. **A number MUST NOT be moved because someone pushed back on it.** Re-verify the claim
    or reclassify the entry. Adjusting the number to settle an argument records agreement
-   where there was none.
+   where there was none. Re-encoding an unchanged assessment onto the band values in
+   *Guidance* is not a move under this rule — the judgement is identical and only its
+   expression changed — but say so where the change is recorded, because from the diff
+   alone the two are indistinguishable.
 7. **When a claim is re-verified at a new revision, its confidence MUST be re-considered
    in the same edit.** A number that outlived the reasoning it rated is worse than no
    number, because it still looks current.
@@ -160,14 +171,29 @@ These are SHOULDs. Depart from them with a reason.
 
 **Use a coarse scale.** Three bands carry everything this field can honestly express:
 
-| Band | Means | Typical shape |
-|---|---|---|
-| High | The cited sources constrain the conclusion; a competent reader would reach the same one. | Two independent sources agree, and the step from them to the claim is short. |
-| Medium | The reasoning is sound but rests on a step the sources do not fully close. | One source, plus a general principle. Or an absence-of-evidence argument over a scope you actually checked. |
-| Low | You believe it, and you can see how it could be wrong. | A single weak source, or a long inferential chain. |
+| Band | Value | Means (this column decides the band) | Illustration, not a test |
+|---|---|---|---|
+| High | `0.8` | The cited sources constrain the conclusion; a competent reader given only them would reach the same one, and the step to it is short. | Sources that agree and leave little room to land elsewhere. |
+| Medium | `0.6` | The reasoning is sound but rests on a step the sources do not fully close. | A general principle bridging a gap. An absence-of-evidence argument over a scope you actually checked. |
+| Low | `0.4` | You believe it, and you can see how it could be wrong. | A single weak source, or a long inferential chain. |
+
+**Read the "Means" column, not the illustrations.** The fourth column is there to make the
+bands concrete and is not criterial — a one-source claim can be High if that source really
+does close the question, and a three-source claim can be Medium if all three leave the same
+step open. Count what the sources *settle*, never how many there are.
 
 **Two decimal places are not warranted.** The scale has no calibration behind it, so
-`0.83` claims a precision that nothing supports. Pick one number per band and reuse it.
+`0.83` claims a precision that nothing supports. Use the band's value and nothing else.
+The three values are evenly spaced, carry one decimal, and start at `0.8` because that is
+what the corpus's only pre-existing INFERENCE already used — the convention continues
+practice rather than inventing a fresh scale beside it.
+
+**This node's own ledger follows the convention**, and is the nearest worked example:
+
+| This node's INFERENCE | Band | Why |
+|---|---|---|
+| Values are not comparable between authors or nodes | High, `0.8` | One citation, but it settles the question: a schema that accepts any in-range value and records nothing about how it was chosen leaves no other conclusion available. |
+| No mechanism records whether a past inference was correct, so the number is assessed strength and not observed frequency | Medium, `0.6` | Three citations, all of them silences. An absence-of-evidence argument over a scope that was checked — which is exactly as far as it can be pushed, because the scope is three files rather than the whole repository. |
 
 **Prefer removing the inference to rating it.** If a source would settle the claim, open
 the source and make it a FACT. High confidence is not a substitute for five minutes of
@@ -339,10 +365,14 @@ revisit it.
 
 **Expected but not verified when this node was written:**
 
-- **The bands in *Guidance* are not derived from anything.** They are a proposed
-  convention for keeping values coarse, offered because unbounded precision is the
-  observed failure. No study, no sample, and only one INFERENCE existed in the corpus to
-  look at. Treat them as a starting convention that practice should correct.
+- **The bands in *Guidance*, and the values `0.8` / `0.6` / `0.4`, are not derived from
+  anything.** They are a proposed convention for keeping values coarse and comparable
+  within a node, offered because unbounded precision is the observed failure. No study,
+  no sample, and only one INFERENCE existed in the corpus to look at. `0.8` was chosen to
+  match that one entry and the other two spaced evenly from it — which is a reason, but
+  not evidence. A convention is all this is: three agreed pegs, so that two authors at
+  least mean the same thing by the same numeral. Treat them as a starting point that
+  practice should correct, and do not read the spacing as measuring anything.
 - **No generated view was tested consuming a `confidence` value.** No generator exists
   yet, so how a projection renders or ranks these numbers is unknown, and the
   "not comparable" rule above has not been tested against a consumer that might assume
