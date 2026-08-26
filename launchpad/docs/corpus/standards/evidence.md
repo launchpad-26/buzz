@@ -153,9 +153,9 @@ evidence:
   - statement: "The parent PRD's outcome states that a developer or agent can create one atomic corpus node and deterministic validation accepts or rejects it against one documented contract; it says nothing about who any standard is written for."
     entry_class: TEAM_KNOWLEDGE
     provided_by: "launchpad-26/buzz#605, Outcome section"
-  - statement: "The procedure gap in which AGENTS.md's merge-order guard covers relationship targets but not bare-path citations is filed as a separate issue, and this node's own pull request is gated on the branch that introduces AGENTS.md."
+  - statement: "The procedure gap in which AGENTS.md's merge-order guard covers relationship targets but not bare-path citations is filed as a separate issue; this node was originally gated on the branch introducing AGENTS.md, and that gate discharged when AGENTS.md merged onto launchpad."
     entry_class: TEAM_KNOWLEDGE
-    provided_by: "launchpad-26/buzz#1488 (the procedure gap) and #1462 (the AGENTS.md pull request this node is based on)"
+    provided_by: "launchpad-26/buzz#1488 (the procedure gap) and #1462 (the AGENTS.md pull request this node was originally based on)"
   - statement: "The validator never reads a node's body, so a body claim carrying no ledger entry, and a ledger entry supporting no body claim, are both invisible to every check that exists."
     entry_class: FACT
     evidence:
@@ -194,12 +194,14 @@ evidence:
   - statement: "This node's task requires an audiences field among the front-matter fields it asks to be appropriate to the node, without enumerating which audiences, so the selection is delegated to the author; the author named agents, developers and reviewers, and that selection is the author's own rather than a finding derived from any source."
     entry_class: TEAM_KNOWLEDGE
     provided_by: "launchpad-26/buzz#1314 definition of done: 'schema-valid front matter with a stable node ID, type, status, origin, audiences, provenance/evidence and typed relationships appropriate to the node'"
-  - statement: "Declaring a relationship to any node loadable from this branch would validate here and become a hard error the moment this node reached the launchpad branch ahead of the branch introducing that node, so this node declares no relationships."
-    entry_class: INFERENCE
+  - statement: "corpus-agents (AGENTS.md's node id) is loadable from origin/launchpad, so a depends-on edge to it resolves on the merge target; corpus-standard-code-references (#1308) is not yet on origin/launchpad, so an edge to it would validate on this branch and become a hard error once merged, and is therefore not declared."
+    entry_class: FACT
     evidence:
       - "launchpad/project-intelligence/corpus/validate.py"
-      - "launchpad/docs/corpus/AGENTS.md"
-    confidence: 0.9
+      - "git.ls_tree('origin/launchpad', 'launchpad/docs/corpus') -> AGENTS.md, README.md, standards/confidence.md, standards/decision-references.md, plus the excluded schema/ subtree"
+relationships:
+  - type: depends-on
+    target: corpus-agents
 ---
 
 # Standard: evidence
@@ -347,9 +349,10 @@ front-matter value that tooling can read, never an adjective in a sentence.
 different question from "how much should I trust this". A `FACT` cited to a file whose
 author was wrong is a faithfully-recorded error; a `TEAM_KNOWLEDGE` entry attributed to
 the person who made the decision is the most authoritative record that will ever exist of
-why it was made. Reaching for `FACT` because it sounds stronger is the single most common
-way this ledger goes wrong, and it converts an honest attribution into an unattributable
-assertion.
+why it was made. Reaching for `FACT` because it sounds stronger converts an honest
+attribution into an unattributable assertion — a mislabelling this node's own MUST 2
+forbids, and a temptation worth naming even though no measurement backs how often authors
+give in to it.
 
 ### The one place class has a mechanical consequence
 
@@ -519,8 +522,8 @@ states what each proves and how each is pinned.
 | Graph edge | `is_shared_gated_kind -> is_unshared_gated_event (1 hop)` | `unverified` | Nothing. |
 | Tool result | `find_references('x', crate='buzz-core') -> no callers here` | `unverified` | Nothing. |
 | A URL the repository-link pattern does not match — any non-GitHub URL, and GitHub issue and pull-request URLs | `https://example.com/spec`, `…/buzz/issues/1314` | `unverified` | Nothing. The pattern requires a `blob`, `raw`, `tree`, `blame`, `commits` or `edit` segment, so an issue URL never enters that branch and falls through here. |
-| A repository link satisfying **all three** rules below | `…/blob/<40-lowercase-hex>/Justfile` | `ok` | **Only that the URL has that shape. Nothing is fetched.** A link whose owner, repository and file do not exist is accepted. This is #1308's form; it is here to complete the verdict picture. |
-| A repository link breaking **any** of the three | `…/blob/main/Justfile` | **`error`** | — a hard failure. A *recognised* shape can still fail hard. |
+| A well-formed repository link, pinned per #1308's shape rules | `…/blob/<40-lowercase-hex>/Justfile` | `ok` | **Only that the URL has that shape. Nothing is fetched.** A link whose owner, repository and file do not exist is accepted. This is #1308's form; it is here to complete the verdict picture. |
+| A repository link that is not well-formed by those rules | `…/blob/main/Justfile` | **`error`** | — a hard failure. A *recognised* shape can still fail hard. |
 | Free text matching none of the six forms | `as discussed in the meeting last week` | **`error`** | — "matches none of CONTRACT.md's six supported citation forms". |
 | A bare path that does not resolve, or resolves outside the repository | `launchpad/does-not-exist.md` | **`error`** | — a different error from the row above, and #1308's subject. |
 
@@ -529,22 +532,13 @@ the shape and could not open it, and it prints on passing runs precisely so that
 never claims more than it checked. A `FACT` resting only on `UNVERIFIED` citations has
 been checked by nothing at all. Open the source and keep the class, or change the class.
 
-**These three rules are #1308's, restated here with a reason, because SHOULD 6 requires one.**
-The verdict table above is unusable without them: it distinguishes `ok` from `error` for
-repository links, and a reader cannot apply that distinction without knowing which links
-are well-formed. They are reproduced as **provisional** — #1308 owns them, and where the
-merged text differs, it wins and this block is the stale copy to delete.
-
-The three rules, all measured rather than read off another document — get any one wrong and
-the node does not merge:
-
-1. **The host and shape must match** — a `github.com/<owner>/<repo>/<verb>/<ref>/<path>`
-   URL, or a `raw.githubusercontent.com/<owner>/<repo>/<ref>/<path>` URL.
-2. **The verb must be `blob` or `raw`.** `tree`, `blame`, `commits` and `edit` are
-   recognised and rejected — four verbs, each with its own error message.
-3. **The ref must be forty *lowercase* hexadecimal characters, and the path must be
-   non-empty.** An uppercase full SHA is rejected, and its message says "pinned to a
-   mutable ref", which is misleading — the SHA is fine, its case is not.
+**The shape rules themselves are #1308's, not restated here.** An earlier revision of
+this node reproduced them as a "provisional copy," which is exactly the drift D9-style
+no-duplication rules exist to prevent — a reader has no way to tell the copy went stale
+once #1308's own text moves, because nothing checks body prose against another node's
+body prose. Until #1308 merges, this table names the distinction the shape rules draw
+without asserting what they currently say; read them at #1308's PR (launchpad-26/buzz#1480)
+or, once it lands, at `corpus-standard-code-references` directly.
 
 **The channel is for forms unverifiable by nature.** It is not a soft-failure bucket. A
 form the validator merely failed to establish is an error rather than a notice — which is
@@ -681,14 +675,16 @@ Depart from these with a reason, and say what it was.
    other on a conversation, one entry cannot be classified honestly and the class you pick
    will misdescribe half of it.
 5. **Prefer withdrawing a weak claim to publishing it.** A gap in *Scope and omissions*
-   sends a reader to find out; a thin claim invites them to rely on it. This costs nothing
-   and is almost never chosen.
+   sends a reader to find out; a thin claim invites them to rely on it. Withdrawing costs
+   the author nothing but the discomfort of admitting the gap, which is exactly why it is
+   easy to skip in favour of publishing something.
 6. **Link another document's rules rather than restating them.** The checker never reads
    body prose, so a copy stays green forever after going stale — the ledger cannot keep a
    restatement honest, because the restatement is not a claim anyone is auditing.
 7. **Re-read every `FACT`'s citation adversarially before the pull request opens**, asking
-   only whether the source says the statement. This is the single highest-yield review
-   step, and it is the one nothing else in the pipeline performs.
+   only whether the source says the statement. Nothing else in the pipeline performs this
+   check — not the validator, which only confirms a citation opens, and not a reviewer who
+   was not there when the claim was written.
 
 ## Enforcement, and where it stops
 
@@ -750,7 +746,8 @@ request. That is a schema change, not an exception.
 first that applies:
 
 1. **Can a source settle it?** Open it. The entry becomes a `FACT` and the question goes
-   away. This is nearly always available and nearly never taken.
+   away. This is the option to reach for first, precisely because it is the easiest one
+   to skip past when a claim already feels settled in the author's head.
 2. **Is it two claims?** Split it, and classify each.
 3. **Did somebody actually decide it?** `TEAM_KNOWLEDGE`, naming them.
 4. **None of those?** Withdraw the claim and record it as a gap. That is the answer, not
@@ -852,60 +849,43 @@ code-naming forms and assigns only the tool-output forms here. So the table has 
 destinations and `AGENTS.md` names one. This node takes what nothing else claims and leaves
 the rest; it may not edit `AGENTS.md`, so the discrepancy is reported.
 
-### Merge order: this node must not reach `launchpad` ahead of #1462
+### The bare-path merge-order hazard, and why it no longer bites this node
 
-**This node is authored against `AGENTS.md`, which has not merged.** Nine of its ledger
-entries cite `launchpad/docs/corpus/AGENTS.md` directly, because nine of its claims are
-about what that document says. Those citations resolve here and **do not resolve on
-`origin/launchpad`**, where the corpus contains nothing outside `schema/`.
+**This node cites `launchpad/docs/corpus/AGENTS.md` directly, nine times**, because nine
+of its claims are about what that document says. A citation is resolved against whatever
+tree the validator runs in, so a citation to a file that exists only on the authoring
+branch would pass locally and fail hard once merged — the same hazard `AGENTS.md`'s own
+step 9 names for `relationships` targets, but step 9 is silent on bare-path citations. The
+procedure gap is filed as **#1488**.
 
-That is not a stylistic risk. It was measured, and the measurement is reproducible:
+**That hazard was live while this node was authored and is not live now.** `AGENTS.md`
+merged onto `launchpad` on 2026-08-26 (carried in by #1468, #1469 and #1477), so the nine
+citations above resolve on the merge target today. Re-running the check that would have
+caught the earlier hazard confirms it:
 
 ```bash
-# materialise the merge target, drop this node into it, validate
 git archive origin/launchpad | tar -x -C /tmp/mt && cd /tmp/mt && git init -q .
 mkdir -p launchpad/docs/corpus/standards
 cp <this-node> launchpad/docs/corpus/standards/evidence.md
-python3 launchpad/project-intelligence/corpus/validate.py   # -> FAIL, 9 errors, exit 1
+python3 launchpad/project-intelligence/corpus/validate.py   # -> PASS, exit 0
 ```
 
-Removing only the `AGENTS.md` citations and changing nothing else turns the same run into
-`PASS`, exit 0 — which is what proves those citations are the cause rather than something
-else in the node.
+Do not take that on this document's word; re-run it. #1488 stays open regardless — the
+procedure gap it names applies to every node authored against an unmerged instruction
+node, not only to this one's now-resolved case.
 
-**The general rule this node states, because `AGENTS.md`'s own step 9 does not:** step 9
-forbids a `relationships` target absent from the merge target and supplies a `git ls-tree`
-check for it. **The identical hazard applies to bare-path citations, and step 9 is silent
-on them.** A citation is resolved against whatever tree the validator runs in, so a path
-that exists only on the authoring branch passes locally and fails hard after merge — the
-same defect, discovered later, when it is a broken build on `launchpad` rather than a red
-check on a pull request. The procedure gap is filed as **#1488**; this section is the
-interim guard for anyone authoring against an unmerged instruction node.
+### `relationships` in this node's front matter
 
-**What that experiment is, in this document's own terms.** Its result — nine errors, and
-zero once the citations change — is a measured run, and no citation form expresses one, so
-it is not in the ledger. Neither is the branch state it depends on. The command above is
-given instead: re-run it rather than trusting this paragraph, exactly as with the citation
-verdicts.
+**This node declares `depends-on: corpus-agents`.** `corpus-agents` — `AGENTS.md`'s node
+id — is loadable from `origin/launchpad` (confirmed by the command above resolving
+clean), so the edge is real rather than deferred: nine of this node's claims depend on
+that document's current text.
 
-**What follows for this node:** it is based on `task/636-corpus-agents-md` and must merge
-into it, or land after it. It must never be retargeted at `launchpad` while #1462 is open.
-
-### No `relationships` in this node's front matter
-
-The reason is the same **merge order**, not an empty corpus. `corpus-agents` is loadable from this
-branch, so an edge to it would validate here — and would become a hard error the moment
-this node reached `launchpad` ahead of the branch that introduces it, because a
-`relationships[].target` matching no loaded node's id fails. Do not take that on this
-document's word — check what the merge target actually carries, which is the command
-`AGENTS.md` gives for the same purpose:
-
-```bash
-git ls-tree -r --name-only origin/launchpad -- launchpad/docs/corpus
-```
-
-The edges get declared in one pass once the set has landed, which is a follow-up rather
-than an oversight.
+**No edge is declared to the code-references standard (#1308).** Its node,
+`corpus-standard-code-references`, is not yet on `origin/launchpad` — its PR
+(launchpad-26/buzz#1480) is still open — so a `relationships` target naming it would
+validate on this branch and fail once merged, the same hazard the section above just
+walked through. That edge is a follow-up once #1308 lands, not an oversight now.
 
 ### Expected but not verified when this node was written
 
