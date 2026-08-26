@@ -15,11 +15,24 @@ evidence:
     entry_class: FACT
     evidence:
       - "launchpad/decisions/ADR-0028-corpus-canonical-representation.md"
+  - statement: "Front matter carries the machine-checkable fields and the Markdown body carries the human-readable prose."
+    entry_class: FACT
+    evidence:
+      - "launchpad/decisions/ADR-0028-corpus-canonical-representation.md"
+  - statement: "One node is one independently maintainable idea, so a second concept, contract or procedure discovered while writing becomes its own node rather than another section."
+    entry_class: FACT
+    evidence:
+      - "launchpad/docs/corpus/AGENTS.md"
   - statement: "The corpus root is launchpad/docs/corpus, and validate.py is the deterministic check that governs it."
     entry_class: FACT
     evidence:
       - "launchpad/project-intelligence/corpus/validate.py"
       - "Justfile"
+  - statement: "Exit status 0 is a pass and exit status 1 means at least one error, with every error naming the node it came from; just corpus-validate runs the same command but needs the Hermit environment activated first."
+    entry_class: FACT
+    evidence:
+      - "launchpad/project-intelligence/corpus/validate.py"
+      - "launchpad/docs/corpus/AGENTS.md"
   - statement: "The schema/ subtree is excluded from validation because it is the schema's own testing infrastructure rather than corpus content, so a node placed there is never checked."
     entry_class: FACT
     evidence:
@@ -38,7 +51,7 @@ evidence:
     evidence:
       - "launchpad/docs/corpus/AGENTS.md"
       - "discover_markdown_files('launchpad/docs/corpus') -> AGENTS.md only"
-  - statement: "The corpus is the subject of feature #605, whose child tasks author the remaining standards, templates and instruction documents, none of which have merged."
+  - statement: "The corpus is the subject of feature #605, whose forty-five child tasks #1307-#1351 author the remaining standards and templates and had none merged at the recorded revision; #1316, #1410 and #1459 own the specific gaps named in this node's omissions."
     entry_class: FACT
     evidence:
       - "launchpad/docs/corpus/schema/README.md"
@@ -52,6 +65,10 @@ evidence:
     evidence:
       - "launchpad/project-intelligence/corpus/validate.py"
   - statement: "Citation checking is structural: the validator confirms a cited path resolves to a real file inside the repository, never that the file supports the statement it sits under."
+    entry_class: FACT
+    evidence:
+      - "launchpad/project-intelligence/corpus/validate.py"
+  - statement: "A line number in a citation is checked only for internal consistency, never against the cited file's actual length."
     entry_class: FACT
     evidence:
       - "launchpad/project-intelligence/corpus/validate.py"
@@ -111,7 +128,7 @@ procedure discovered while writing becomes its own node, not another section.
 
 ## What is in the corpus today
 
-Two things, and the difference between them matters:
+Two authored nodes, and one subtree that is deliberately not one:
 
 | Path | What it is | Validated as a node? |
 |---|---|---|
@@ -203,7 +220,7 @@ no loaded node carries is a hard validation error, and at the recorded revision 
 only other node in the corpus was `corpus-agents`. An edge to it would resolve
 today, but every sibling standard this page will eventually point at is unmerged, so
 the corpus gains its graph in one deliberate follow-up once the set has landed rather
-than in forty-six partial ones. The absence is a decision, not an oversight.
+than one partial edge at a time. The absence is a decision, not an oversight.
 
 **`agent` is deliberately absent from `audiences`.** The schema defines that field
 as who the node is written *for*, and this node is written for the humans arriving at
