@@ -98,11 +98,11 @@ evidence:
     entry_class: FACT
     evidence:
       - "launchpad/project-intelligence/corpus/validate.py"
-  - statement: "This node declares no relationships because the only other node in the corpus is not present on the branch this one merges into, so any edge to it would validate for the author and fail in CI."
+  - statement: "The merge target now carries loadable corpus nodes, so the original reason this node declared no relationships -- that no edge could resolve there -- has expired; the edges are deferred to launchpad-26/buzz#1489, the batch-wide backfill pass that owns them, rather than declared here."
     entry_class: FACT
     evidence:
       - "launchpad/project-intelligence/corpus/validate.py"
-      - "git.ls_tree('origin/launchpad', 'launchpad/docs/corpus') -> schema/ only, no node outside it"
+      - "git.ls_tree('origin/launchpad', 'launchpad/docs/corpus') -> AGENTS.md, README.md, standards/confidence.md, standards/decision-references.md, plus the excluded schema/ subtree"
   - statement: "A bare-path citation carries the same merge-order hazard as a relationship target: it is resolved against the tree the run sees, so a citation to a file that exists only on the authoring branch passes locally and becomes a hard error once merged."
     entry_class: FACT
     evidence:
@@ -160,7 +160,7 @@ the answer.
 
 | For | Read |
 |---|---|
-| Which fields exist, which are required, what each accepts, and which combinations are legal | `launchpad/docs/corpus/schema/node.schema.json` |
+| Which fields exist, which are required, what each accepts, which combinations are legal, and what each field is *for* | `launchpad/docs/corpus/schema/node.schema.json` |
 | The same contract in prose | `launchpad/docs/corpus/schema/README.md` |
 | Widening or narrowing a closed field | `launchpad/docs/corpus/schema/COMPATIBILITY.md` |
 | Edge kinds and their directionality | `launchpad/docs/corpus/schema/relationships.schema.json` |
@@ -220,17 +220,17 @@ That asymmetry is the reason for the rule at the top of this node. Prose that
 
 ### What each field is for
 
-Purpose, not permitted values. For the values, open the schema.
+**Read it from the schema.** Every property in `node.schema.json` carries a
+`description`, and those descriptions are what each field is for — not a summary of
+them kept here. A field's purpose is the one thing about front matter that already
+lives in the checked half, beside the field it describes, where it cannot drift away
+from what is enforced. Restating them here would produce exactly the silent
+contradiction the rule at the top of this node exists to prevent.
 
-| Field | What it is for |
-|---|---|
-| `id` | The node's permanent handle. Every edge and every generated view resolves through it, which is why it is assigned once and never renamed. |
-| `type` | Which surface of the product this node documents — the shelf it sits on, not what it says. |
-| `status` | Whether a reader should still act on this node. |
-| `origin` | Whose knowledge this is, so a reader can tell one source of authority from another. |
-| `audiences` | Who the node is written for. |
-| `evidence` | The provenance ledger: one entry per substantive claim, plus the revision the node was checked at. It is what makes a claim auditable instead of asserted. |
-| `relationships` | Typed edges to other nodes. Optional. |
+The one fact about a field that this node does state, because no schema `description`
+can, is the mechanical consequence of the checked/unchecked split for the field this
+node itself leaves out: see *No `relationships` in this node's own front matter* under
+*Scope and omissions*.
 
 ## Requirements
 
@@ -500,11 +500,14 @@ unestablished.
 | Provenance for generated artifacts | #1316 |
 | A line number in a citation not being checked against the file | #1459 |
 
-**No `relationships` in this node's own front matter.** The corpus contains one other
-node, `AGENTS.md`, and it is not on `launchpad` — the branch this node merges into —
-because its own pull request has not landed. An edge to it would resolve in the
-authoring worktree and be a hard error in CI. The reason is **merge order**, not an
-empty corpus, and the edge should be revisited once both nodes are on `launchpad`.
+**No `relationships` in this node's own front matter, and the original reason has
+expired.** It was written when `launchpad` carried no loadable corpus node at all, so
+any edge would have resolved in the authoring worktree and been a hard error in CI.
+That is no longer true: `launchpad` now carries `corpus-agents`, `corpus-readme` and
+two standards nodes, and an edge to any of them would resolve. The block stays empty
+here only because declaring edges is a batch-wide pass with its own owner — **#1489** —
+and not because there is nothing to point at. Stating the expired reason as though it
+still held would be the exact drift this node's own Guidance 4 warns about.
 
 **Expected but not checked when this node was written:**
 
