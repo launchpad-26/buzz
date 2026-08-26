@@ -165,7 +165,7 @@ evidence:
   - statement: "This node's authority to issue the MUST and SHOULD rules below comes from its task, which asks it to state scope and authority, separate MUST requirements from SHOULD guidance, and define enforcement and an exception process; the rules are this document's own normative statements rather than findings derived from a source."
     entry_class: TEAM_KNOWLEDGE
     provided_by: "launchpad-26/buzz#1314 definition of done, under parent PRD #605"
-  - statement: "This node's task delegates the choice of audiences to its author, requiring audiences appropriate to the node; the author named agents, developers and reviewers, and that selection is the author's own rather than a finding derived from any source."
+  - statement: "This node's task requires an audiences field among the front-matter fields it asks to be appropriate to the node, without enumerating which audiences, so the selection is delegated to the author; the author named agents, developers and reviewers, and that selection is the author's own rather than a finding derived from any source."
     entry_class: TEAM_KNOWLEDGE
     provided_by: "launchpad-26/buzz#1314 definition of done: 'schema-valid front matter with a stable node ID, type, status, origin, audiences, provenance/evidence and typed relationships appropriate to the node'"
   - statement: "Declaring a relationship to any node loadable from this branch would validate here and become a hard error the moment this node reached the launchpad branch ahead of the branch introducing that node, so this node declares no relationships."
@@ -234,8 +234,8 @@ reported rather than corrected.
 node decides *which class*; that one decides *what number*.
 
 **Who this is for.** Agents, developers and reviewers. That selection is the author's, and
-the task delegates it — it asks for "audiences appropriate to the node" without saying
-which. The reasoning, offered as reasoning rather than as a sourced claim: #605's outcome
+the task delegates it — its definition of done requires `audiences` among the front-matter
+fields it wants "appropriate to the node", without saying which audiences. The reasoning, offered as reasoning rather than as a sourced claim: #605's outcome
 has both a developer and an agent authoring nodes, so both write ledgers; and reviewers
 are named because the largest part of this document is rules no check can hold, which
 makes a reviewer the only thing standing behind them.
@@ -497,8 +497,14 @@ the shape and could not open it, and it prints on passing runs precisely so that
 never claims more than it checked. A `FACT` resting only on `UNVERIFIED` citations has
 been checked by nothing at all. Open the source and keep the class, or change the class.
 
-The three rules a repository link must satisfy, all measured rather than read off another
-document — get any one wrong and the node does not merge:
+**These three rules are #1308's, restated here with a reason, because SHOULD 6 requires one.**
+The verdict table above is unusable without them: it distinguishes `ok` from `error` for
+repository links, and a reader cannot apply that distinction without knowing which links
+are well-formed. They are reproduced as **provisional** — #1308 owns them, and where the
+merged text differs, it wins and this block is the stale copy to delete.
+
+The three rules, all measured rather than read off another document — get any one wrong and
+the node does not merge:
 
 1. **The host and shape must match** — a `github.com/<owner>/<repo>/<verb>/<ref>/<path>`
    URL, or a `raw.githubusercontent.com/<owner>/<repo>/<ref>/<path>` URL.
@@ -549,7 +555,7 @@ requires GitHub history to stay attributed rather than be promoted to fact.
 `launchpad/project-intelligence/CONTRACT.md` §3 enumerates **six** shapes — file range,
 file line, bare path, graph edge, tool result, commit — and contains **no URL form at
 all**; the section has zero occurrences of `http`. `validate.py` implements a URL branch
-regardless — a whole URL branch, with four hard-error variants of its own — while its own
+regardless — a whole URL branch, with three hard-error conditions of its own — while its own
 module docstring says citations are parsed against §3's six forms.
 
 **`AGENTS.md` is not part of the divergence, and this document said it was.** It states
@@ -772,6 +778,14 @@ not establish.
 | Whether `ADR-0003`'s markdown-link wrapper is required on corpus evidence | #605 |
 | The human-facing entry point to the corpus | #639 |
 | Whether one node holds one claim or several | left open by `ADR-0028`; #605's to decide |
+
+**One position taken without a source, and named as such.** MUST 8 lists a commit among the
+things `provided_by` may name, and this node uses that form. `AGENTS.md` says the field
+names "who or what said it: a person, an issue, a decision record" and does not mention a
+commit message. Nothing settles whether a commit message counts, so this is the author's
+reading — a commit message is a record written by a person — issued as a rule under this
+node's own authority rather than presented as a finding. If #605 rules otherwise, MUST 8
+changes.
 
 ### The boundary with the code-references standard, stated rather than left implicit
 
