@@ -88,3 +88,24 @@ rather than an omission.** Feature #605 owns building it out: forty-five further
 standards, templates and instruction documents are tracked as its child tasks, and
 at the recorded revision none of them had merged. Expect this table to grow and
 expect the shape of a node to be tightened by standards that do not exist yet.
+
+## Where each rule lives
+
+Every row is the authoritative source for its subject. This page owns none of
+them — go to the file, not to a summary of it.
+
+| If you want | Read |
+|---|---|
+| To create, update or retire a node | [`launchpad/docs/corpus/AGENTS.md`](AGENTS.md) |
+| The front-matter contract — fields, enums, conditional rules | [`launchpad/docs/corpus/schema/node.schema.json`](schema/node.schema.json) |
+| Those fields explained in prose | [`launchpad/docs/corpus/schema/README.md`](schema/README.md) |
+| The relationship types and their directionality | [`launchpad/docs/corpus/schema/relationships.schema.json`](schema/relationships.schema.json) |
+| To add a value to a closed enum | [`launchpad/docs/corpus/schema/COMPATIBILITY.md`](schema/COMPATIBILITY.md) |
+| Why Markdown with front matter is the canonical form | [`launchpad/decisions/ADR-0028-corpus-canonical-representation.md`](../../decisions/ADR-0028-corpus-canonical-representation.md) |
+| How to rank evidence when two sources disagree | [`launchpad/decisions/ADR-0029-corpus-evidence-precedence.md`](../../decisions/ADR-0029-corpus-evidence-precedence.md) |
+| The six shapes a citation may take | [`launchpad/project-intelligence/CONTRACT.md`](../../project-intelligence/CONTRACT.md) §3 |
+| What the checker actually enforces | [`launchpad/project-intelligence/corpus/validate.py`](../../project-intelligence/corpus/validate.py) |
+| Where the check runs in CI | [`.github/workflows/launchpad-corpus-validate.yml`](../../../.github/workflows/launchpad-corpus-validate.yml) |
+
+If this page and any of those disagree, **they win** — this one has drifted and
+should be fixed.
