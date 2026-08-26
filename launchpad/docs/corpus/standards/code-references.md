@@ -20,7 +20,7 @@ evidence:
     entry_class: FACT
     evidence:
       - "launchpad/project-intelligence/corpus/validate.py"
-  - statement: "A bare path is resolved against the repository root rather than the citing document, and after resolution it must still lie inside the repository, so an absolute path and a path that escapes the tree are both rejected."
+  - statement: "A repository path is resolved against the repository root rather than the citing document or the current working directory, and after resolution it must still lie inside the repository, so an absolute path and a path that escapes the tree are both rejected."
     entry_class: FACT
     evidence:
       - "launchpad/project-intelligence/corpus/validate.py"
@@ -167,10 +167,15 @@ checked, and a GitHub link is not checked at all.
 1. **A code reference MUST be a citation in the node's frontmatter `evidence` array.**
    The schema defines no other field for one, and rejects any field beyond the seven it
    names.
-2. **A reference to a file in this repository MUST be a bare repository-relative path,
+2. **A reference to a file in this repository MUST be a repository-relative path,
    resolved from the repository root, naming a file that exists.** Not a path relative to
-   the citing document — `validate.py` is a real file, but the citation `validate.py`
-   fails from anywhere except the root.
+   the citing document: `launchpad/project-intelligence/corpus/validate.py` is a real
+   file, and the citation `validate.py` names nothing, because the root is the only
+   anchor. That verdict does not depend on the directory you run the check from — the
+   root is resolved from the validator's own location, so the citation fails identically
+   from anywhere. **Whether the path also carries a position is not this rule's
+   business:** MUST 6 sets the permitted position syntax and SHOULD 1 sets the
+   preference between them. This rule governs the anchor only.
 3. **A reference MUST NOT be an absolute path and MUST NOT resolve outside the
    repository**, before or after `..` segments and symlinks are followed.
 4. **A file in this repository MUST NOT be cited as a GitHub link when a repository path
