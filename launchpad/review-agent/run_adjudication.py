@@ -188,11 +188,15 @@ more than one at once:
 This module never picks a winner among disagreeing nonces and never accepts
 a caller-supplied one -- ``_verify_nonce`` reads only ``document`` itself.
 
-The ``stages`` manifest. #117 emits no top-level ``stages`` array; it is the
-manifest #119 reads for stages -- #116's pre-flight, this one -- that produce
-no envelope of their own. ``adjudicate()`` copies through every entry already
-present on input and appends exactly one new ``{name: "adjudication", status,
-reason}`` entry. An input already carrying an ``adjudication`` entry is a
+The ``stages`` manifest. It names EVERY stage the review depended on -- #116's
+pre-flight, each of #117's dimensions by slug, and this one. #117 populates the
+dimension entries from the set it dispatched (``run_dimensions.build_stages``,
+launchpad-26/buzz#565). The older reading of this paragraph -- that the manifest
+covered only stages producing no envelope of their own -- was superseded by
+#119's plan STEP 5, and is the wording that left a review which lost a whole
+dimension publishing as COMPLETE. ``adjudicate()`` copies through every entry
+already present on input, in order and unaltered, and appends exactly one new
+``{name: "adjudication", status, reason}`` entry. An input already carrying an ``adjudication`` entry is a
 re-run against an already-adjudicated document, and is refused outright
 (``AlreadyAdjudicatedError``) rather than silently overwritten.
 

@@ -395,7 +395,19 @@ def build_stages(dimensions: list[str], reports: list[dict]) -> list[dict]:
       reason naming the absence>}``.
     * any other status -- ``"failed"`` today, and whatever #117 adds later --
       passes through verbatim, with ``reason`` taken from the report's own
-      ``error["reason"]`` when it has one.
+      ``error["reason"]`` when it has one. A status that is not a string at all
+      becomes ``"malformed_report"``: named, and not complete.
+
+    Reports are matched to dimensions BY NAME, never by position. The two coincide
+    today -- ``_run_dimensions_concurrently`` zips its results against the same
+    ``dimensions`` list -- so a positional implementation would pass every test
+    that supplies reports in dispatch order. It would also silently attach each
+    status to the wrong dimension the moment anything resolves reports by
+    completion order instead (an ``as_completed()`` refactor, a replayed
+    recording), which is why the tests hand it reports deliberately out of order.
+
+    Duplicate reports for one dimension resolve fail-closed: a ``"complete"``
+    report never displaces a non-complete one.
 
     Only ``"complete"`` is treated as complete, and every other status is carried
     through rather than matched against a list. Written the other way round -- an
@@ -408,10 +420,36 @@ def build_stages(dimensions: list[str], reports: list[dict]) -> list[dict]:
     a hypothetical. ``_summarise`` at :809 already reads the same way -- ``all(...
     == "complete")`` -- and this keeps the two consistent.
     """
-    by_name = {report["dimension"]: report for report in reports}
+    by_name: dict[str, dict] = {}
+    for report in reports:
+        # Never raises on a malformed report, matching the idiom findings.py and
+        # verdicts.py state explicitly for this directory: a document build that
+        # dies on a bad report takes the whole review with it, and this function
+        # sits on the path every run takes. A report too malformed to name its own
+        # dimension cannot be matched to a dispatched slug by any means, so it
+        # contributes nothing -- and the dimension it was FOR still gets named
+        # below, as "no_report", because the names come from `dimensions`.
+        if not isinstance(report, dict):
+            continue
+        name = report.get("dimension")
+        if not isinstance(name, str):
+            continue
+        kept = by_name.get(name)
+        # Duplicate reports for one dimension: a "complete" one must never
+        # displace a non-complete one. Last-wins would let a partially-failed
+        # dimension publish as clean while `reports` still carried the failure --
+        # a stages/reports split-brain, and the same fail-open shape this
+        # function's status handling exists to refuse. A dimension is complete
+        # only if every report for it is, which is how `_summarise` at :809
+        # already reads.
+        if kept is None or (
+            kept.get("status") == "complete" and report.get("status") != "complete"
+        ):
+            by_name[name] = report
+
     stages = []
     for dimension in dimensions:
-        report = by_name.get(dimension)
+        report = by_name.get(dimension) if isinstance(dimension, str) else None
         if report is None:
             stages.append(
                 {
@@ -420,18 +458,21 @@ def build_stages(dimensions: list[str], reports: list[dict]) -> list[dict]:
                     "reason": "dimension was dispatched but produced no report",
                 }
             )
-        elif report["status"] == "complete":
+            continue
+        status = report.get("status")
+        if status == "complete":
             stages.append({"name": dimension, "status": "complete", "reason": None})
-        else:
-            error = report.get("error")
-            reason = error.get("reason") if isinstance(error, dict) else None
-            stages.append(
-                {
-                    "name": dimension,
-                    "status": report["status"],
-                    "reason": reason,
-                }
-            )
+            continue
+        error = report.get("error")
+        stages.append(
+            {
+                "name": dimension,
+                # A report whose status is not even a string is not a report this
+                # function can vouch for. It is named, and it is not complete.
+                "status": status if isinstance(status, str) else "malformed_report",
+                "reason": error.get("reason") if isinstance(error, dict) else None,
+            }
+        )
     return stages
 
 

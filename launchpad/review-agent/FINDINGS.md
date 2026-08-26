@@ -191,6 +191,26 @@ Status/reason per dimension entry:
 | `complete` | `None` — the report arrived with `status: "complete"` |
 | `no_report` | a fixed string naming the absence — the dimension was dispatched and no report arrived for it at all |
 | anything else (`failed` today, and any status #117 adds later) | passed through verbatim; `reason` is that report's own `error["reason"]` when it has one |
+| `malformed_report` | a report arrived whose `status` is not a string at all. Named, and not complete. |
+
+Reports are matched to dimensions **by name, never by position**. The two coincide
+today — the concurrent runner zips its results against the same dispatched list — so a
+positional implementation is indistinguishable from a correct one on every input the
+pipeline currently produces, and would silently attach each status to the wrong
+dimension the moment reports were resolved by completion order instead.
+
+Two further rules keep the manifest fail-closed, and a naive implementation gets both
+wrong in the same direction — towards reporting clean:
+
+- **A `complete` report never displaces a non-complete one.** Where two reports name the
+  same dimension, the non-complete status wins. Silent last-wins would let a dimension
+  that partly failed publish as clean while `reports` still carried the failure — a
+  `stages`/`reports` split-brain.
+- **A malformed report never raises.** `build_stages` sits on the path every run takes,
+  so a crash there loses the whole review; it follows the never-raises idiom `findings.py`
+  and `verdicts.py` state for this directory. A report too malformed to name its own
+  dimension matches no dispatched slug and contributes nothing — and the dimension it was
+  for is still named, as `no_report`, because the names come from the dispatched list.
 
 #118 (`run_adjudication.py`) appends exactly one `{name: "adjudication", status,
 reason}` entry to whatever `stages` array arrived and passes every entry already in it

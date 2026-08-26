@@ -232,14 +232,32 @@ class StagesManifestSourceTests(unittest.TestCase):
         # correct implementation (iterates `dimensions` as given) apart from one
         # that silently re-sorts its own output. Do not alphabetise this list.
         dimensions = ["dim-gamma", "dim-alpha", "dim-beta"]
-        reports = [make_report("dim-gamma"), make_report("dim-alpha")]
+        # The two surviving reports are deliberately OUT of dispatch order, and
+        # carry DIFFERENT statuses. Both halves are load-bearing. Handed back in
+        # dispatch order, `reports[i]` and `dimensions[i]` coincide, so an
+        # implementation that maps by POSITION rather than by name produces
+        # byte-identical output and passes -- verified: such a mutant passed all
+        # 59 tests before this fixture was reordered. Giving the two reports the
+        # same status would hide the swap even out of order, because the wrong
+        # attribution would still read the same.
+        reports = [
+            make_report("dim-alpha", status="failed", reason="alpha's own reason"),
+            make_report("dim-gamma"),
+        ]
         doc = self._build(dimensions, reports)
         names = [s["name"] for s in doc["stages"]]
         self.assertEqual(names, ["dim-gamma", "dim-alpha", "dim-beta"])
+        by_name = {s["name"]: s for s in doc["stages"]}
+        # Attribution is by name: alpha's failure belongs to alpha, not to
+        # whichever dimension happened to sit at the same index.
+        self.assertEqual(by_name["dim-alpha"]["status"], "failed")
+        self.assertEqual(by_name["dim-alpha"]["reason"], "alpha's own reason")
+        self.assertEqual(by_name["dim-gamma"]["status"], "complete")
+        self.assertIsNone(by_name["dim-gamma"]["reason"])
+        # dim-beta was dispatched and nothing came back for it at all.
         self.assertNotIn("dim-beta", [r["dimension"] for r in doc["reports"]])
-        beta = next(s for s in doc["stages"] if s["name"] == "dim-beta")
-        self.assertEqual(beta["status"], "no_report")
-        self.assertNotEqual(beta["status"], "complete")
+        self.assertEqual(by_name["dim-beta"]["status"], "no_report")
+        self.assertNotEqual(by_name["dim-beta"]["status"], "complete")
 
     def test_report_for_undispatched_dimension_is_not_named(self):
         dimensions = ["dim-alpha", "dim-beta"]
@@ -263,6 +281,50 @@ class StagesManifestSourceTests(unittest.TestCase):
         stage = doc["stages"][0]
         self.assertEqual(stage["status"], "failed")
         self.assertEqual(stage["reason"], "reviewer timed out after 5.0s")
+
+    def test_duplicate_reports_cannot_mask_a_failure_with_a_complete(self):
+        # Both reviewers flagged the dict-comprehension's silent last-wins. If a
+        # "complete" duplicate could displace a failed one, a dimension that
+        # partly failed would publish as clean while doc["reports"] still carried
+        # the failure -- a stages/reports split-brain, and the same fail-open
+        # shape the status handling exists to refuse. Asserted in BOTH orders so
+        # the test cannot pass merely because first-wins happens to be right here.
+        for order in (["failed", "complete"], ["complete", "failed"]):
+            with self.subTest(order=order):
+                reports = [
+                    make_report(
+                        "dim-alpha",
+                        status=s,
+                        reason="alpha failed" if s == "failed" else None,
+                    )
+                    for s in order
+                ]
+                doc = self._build(["dim-alpha"], reports)
+                self.assertEqual(len(doc["stages"]), 1)
+                self.assertEqual(doc["stages"][0]["status"], "failed")
+
+    def test_no_dimensions_dispatched_yields_an_empty_manifest(self):
+        # The literal boundary of the property this class pins: nothing
+        # dispatched, so nothing named. Distinct from the total-outage case
+        # below, where three WERE dispatched and none reported.
+        doc = self._build([], [])
+        self.assertEqual(doc["stages"], [])
+
+    def test_malformed_reports_never_raise_and_never_read_as_complete(self):
+        # findings.py and verdicts.py both state a never-raises contract for this
+        # directory; build_stages sits on the path every run takes, so a crash
+        # here loses the whole review. A report too malformed to name its own
+        # dimension cannot be matched to a dispatched slug, so the dimension it
+        # was for is still named -- as no_report, from `dimensions`.
+        doc = self._build(
+            ["dim-alpha", "dim-beta"],
+            [None, "not-a-dict", {"no": "dimension"}, {"dimension": ["unhashable"]},
+             {"dimension": "dim-beta", "status": 7}],
+        )
+        by_name = {s["name"]: s for s in doc["stages"]}
+        self.assertEqual(by_name["dim-alpha"]["status"], "no_report")
+        self.assertEqual(by_name["dim-beta"]["status"], "malformed_report")
+        self.assertFalse(any(s["status"] == "complete" for s in doc["stages"]))
 
     def test_unknown_status_is_carried_through_and_never_becomes_complete(self):
         # build_stages treats ONLY "complete" as complete, and passes every other
