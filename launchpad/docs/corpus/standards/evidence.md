@@ -165,9 +165,9 @@ evidence:
   - statement: "This node's authority to issue the MUST and SHOULD rules below comes from its task, which asks it to state scope and authority, separate MUST requirements from SHOULD guidance, and define enforcement and an exception process; the rules are this document's own normative statements rather than findings derived from a source."
     entry_class: TEAM_KNOWLEDGE
     provided_by: "launchpad-26/buzz#1314 definition of done, under parent PRD #605"
-  - statement: "This standard addresses developers as well as agents and reviewers, because a developer is one of the two authors the parent feature's outcome names."
+  - statement: "This node's task delegates the choice of audiences to its author, requiring audiences appropriate to the node; the author named agents, developers and reviewers, and that selection is the author's own rather than a finding derived from any source."
     entry_class: TEAM_KNOWLEDGE
-    provided_by: "launchpad-26/buzz#605 outcome: 'A developer or agent can create one atomic corpus node and deterministic validation accepts or rejects it against one documented contract.'"
+    provided_by: "launchpad-26/buzz#1314 definition of done: 'schema-valid front matter with a stable node ID, type, status, origin, audiences, provenance/evidence and typed relationships appropriate to the node'"
   - statement: "Declaring a relationship to any node loadable from this branch would validate here and become a hard error the moment this node reached the launchpad branch ahead of the branch introducing that node, so this node declares no relationships."
     entry_class: INFERENCE
     evidence:
@@ -233,9 +233,20 @@ reported rather than corrected.
 `INFERENCE`, how strongly to rate it belongs to the confidence standard (#1309). This
 node decides *which class*; that one decides *what number*.
 
-**Who this is for.** Agents and developers, because those are the two authors #605's
-outcome names, and reviewers, because the largest part of this document is rules no check
-can hold and a reviewer is the only thing standing behind them.
+**Who this is for.** Agents, developers and reviewers. That selection is the author's, and
+the task delegates it — it asks for "audiences appropriate to the node" without saying
+which. The reasoning, offered as reasoning rather than as a sourced claim: #605's outcome
+has both a developer and an agent authoring nodes, so both write ledgers; and reviewers
+are named because the largest part of this document is rules no check can hold, which
+makes a reviewer the only thing standing behind them.
+
+Note what that paragraph is **not**. An earlier revision of this node classified the
+audience choice `TEAM_KNOWLEDGE` and attributed it to #605's outcome. That outcome says a
+developer can *create* a node; it says nothing about who this standard is written *for*.
+Attributing the choice to it was attributing an extrapolation to the thing it started
+from — a breach of this document's own MUST 9, inside this document's own ledger, found by
+review and not by any check, because the schema only requires `provided_by` to be a
+non-empty string.
 
 ## The ledger
 
