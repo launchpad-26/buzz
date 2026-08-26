@@ -325,10 +325,14 @@ ahead of the branch that introduces `corpus-agents`, because an unmatched target
 Every sibling standard is likewise unmerged. Edges get declared once the set has landed,
 which is a follow-up, not an oversight.
 
-**What the recorded revision means.** It is the revision this node's claims were *checked
-against*, not a record of when the file was last edited. Editing prose without re-checking
-a source leaves it where it is; re-checking the sources moves it whether or not the body
-changed.
+**What the recorded revision means is not settled here.** #636's definition of done
+requires that a draft is "checked against the repository revision recorded in provenance",
+so the revision is at minimum the one this node's claims were checked against. Whether it
+may stay put across later edits, and what to do when only some claims are re-verified, is
+**#1321's** to decide (`document corpus standard for provenance`, unlanded). An earlier
+draft of this section asserted the wider rule as settled — it was copied from a version of
+`AGENTS.md` that has since removed it, after three cross-model passes refused it as a
+corpus-wide policy no authorized source establishes.
 
 **Expected but not verified when this node was written:**
 
