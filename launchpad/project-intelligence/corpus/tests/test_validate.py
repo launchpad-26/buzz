@@ -1005,8 +1005,8 @@ class SchemaDirExclusionTest(unittest.TestCase):
             self.assertIn(real_sibling, files)
             self.assertNotIn(inside_schema, files)
 
-    def test_real_corpus_root_has_content_and_excludes_schema(self) -> None:
-        """The real root holds authored nodes, and none of them come from schema/.
+    def test_real_corpus_root_discovery_matches_an_independent_walk(self) -> None:
+        """Discovery over the real root returns EXACTLY the nodes that are there.
 
         This replaces `test_real_corpus_root_currently_has_no_content_outside_
         schema`, which asserted the root was EMPTY. That assertion was true when
@@ -1016,17 +1016,53 @@ class SchemaDirExclusionTest(unittest.TestCase):
         it was supposed to permit, and says nothing about the behaviour under
         test when it does.
 
-        Both halves are asserted deliberately. Without the non-empty check this
-        degrades to the vacuous form the class docstring warns about: an
-        exclusion broadened to reject EVERYTHING would satisfy "nothing from
-        schema/ was discovered" perfectly.
+        The first replacement asserted only "non-empty AND nothing from schema/",
+        which an independent review-tests pass defeated immediately: replacing
+        discover_markdown_files with a hardcoded `return [root / "AGENTS.md"]`
+        -- a constant that never touches the filesystem -- satisfied both halves
+        while proving neither discovery nor exclusion. Asserting that a check CAN
+        fail is not the same as asserting it can only pass for the right reason.
+
+        So the expectation is now derived from the filesystem independently of
+        the function under test, and compared for equality. Measured against
+        mutants of discover_markdown_files, this test catches:
+
+            returns nothing          -> FAIL (caught)
+            exclusion disabled       -> FAIL (caught)
+            hardcoded constant       -> PASS (NOT caught today)
+
+        The constant is not caught, and cannot be by any assertion made here
+        while the real corpus holds exactly ONE node: `[root / "AGENTS.md"]` is
+        the correct answer today, so a constant and a real walk are
+        indistinguishable from outside. That is a property of the real tree, not
+        of this assertion -- and it resolves itself the moment a second node
+        lands, at which point the equality form catches constants and partial
+        walks for free. `test_sibling_discovered_schema_dir_excluded` catches the
+        constant NOW, because its fixture tree holds names no constant predicts.
+        That test, not this one, is the proof of discovery behaviour.
+
+        `assertNotEqual(expected, [])` is the guard against inheriting the
+        original sin: with an empty corpus both sides would be [] and equality
+        would pass vacuously. If that ever fires, the corpus is empty and this
+        test should be read as reporting that, not as a discovery bug.
+
+        The walk mirrors the canonical-location rule as well as the schema/
+        exclusion, because discover_markdown_files drops symlinks resolving
+        outside the root. A node symlinked in from elsewhere therefore fails
+        here loudly rather than silently widening what counts as corpus content.
         """
         root = validate.repo_root() / validate.DEFAULT_ROOT
-        files = validate.discover_markdown_files(root)
-        self.assertNotEqual(files, [])
-        self.assertFalse(
-            any("schema" in f.relative_to(root).parts[:1] for f in files)
+        resolved_root = root.resolve()
+
+        expected = sorted(
+            path
+            for path in root.rglob("*.md")
+            if path.relative_to(root).parts[0] != "schema"
+            and path.resolve().is_relative_to(resolved_root)
         )
+
+        self.assertNotEqual(expected, [])
+        self.assertEqual(validate.discover_markdown_files(root), expected)
 
 
 if __name__ == "__main__":
