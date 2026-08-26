@@ -105,15 +105,27 @@ def _sort_key(finding: dict) -> tuple:
 
 
 def _reported_dimension_names(reports) -> set:
-    """Dimensions that actually produced a report -- the manifest in `stages`
-    is the EXPECTED set (used for condition (7): did a named dimension fail
-    to report at all), but the clean-case sentence must name what actually
-    ran. The real pipeline's `stages` never carries a dimension entry at all
-    (only `adjudication`, from `run_adjudication.py`), so deriving the clean
-    sentence from `stages` renders "0 dimension(s): none" after real
-    dimensions ran clean -- the same "silence reads as a crashed agent"
-    failure this sentence exists to prevent, arriving through the wrong
-    source.
+    """Dimensions that actually produced a report.
+
+    `stages` is the EXPECTED set -- what the run dispatched -- and is what
+    condition (7) compares against to ask whether a named dimension failed to
+    report at all. The clean-case sentence needs the opposite: what ACTUALLY
+    ran. Deriving it from `stages` is wrong in both directions, which is why
+    this reads `reports` and not the manifest:
+
+    * before launchpad-26/buzz#565, `stages` carried no dimension entry at all
+      (only `adjudication`, from `run_adjudication.py`), so the sentence would
+      render "0 dimension(s): none" after real dimensions ran clean;
+    * after #565, `stages` names every DISPATCHED dimension, so the sentence
+      would credit a dimension that died before producing anything as having
+      run clean.
+
+    Both are the "silence reads as a crashed agent" failure this sentence
+    exists to prevent, arriving through the wrong source. Stated as a pair
+    deliberately: the earlier wording justified this function with the
+    pre-#565 fact alone, which made a correct function look like it depended
+    on a fact that has since stopped being true, and invited condition (7) to
+    be read as dead code.
     """
     return {
         r.get("dimension")
