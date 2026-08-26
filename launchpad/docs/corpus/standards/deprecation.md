@@ -118,11 +118,12 @@ somebody said. So the rules below are this node's own, offered for a reviewer to
 or replace, and every one of them that rests on a mechanism names the mechanism so the
 reasoning is checkable even where the rule is not sourced.
 
-**Where the rest lives** — this node links these rather than restating them:
+**Where the rest lives** — this node links these rather than restating them, **with one
+disclosed exception** in the first row:
 
 | Subject | Owner |
 |---|---|
-| Creating, updating and retiring a node, step by step | `launchpad/docs/corpus/AGENTS.md`, *Retiring a node* |
+| Creating, updating and retiring a node, step by step | `launchpad/docs/corpus/AGENTS.md`, *Retiring a node* — **and the MUST list below restates it**, see the note under the table |
 | The front-matter contract, including the `status` field itself | `launchpad/docs/corpus/schema/node.schema.json` |
 | Relationship types and their directionality | `launchpad/docs/corpus/schema/relationships.schema.json` |
 | Why one canonical representation, and why an id is permanent | `launchpad/decisions/ADR-0028-corpus-canonical-representation.md` |
@@ -130,6 +131,14 @@ reasoning is checkable even where the rule is not sourced.
 | The `status` field's own general standard, across every value | issue #1323 |
 | Making `flagged` mean something to tooling | issue #1410 |
 | Evidence, generated content, linking, provenance | issues #1314, #1316, #1318, #1321 |
+
+**The first row is honest about an overlap, not a link.** Every MUST below maps onto a
+step of the authoring node's *Retiring a node* procedure, two of them close to verbatim,
+so the corpus currently carries the retirement policy twice. Which document should own it
+is not this node's to rule on, and the authoring node was out of scope to edit here, so
+the duplication is recorded rather than resolved: launchpad-26/buzz#1481. Until it is
+resolved, **treat the two as one policy that must be edited together** — nothing detects
+them drifting apart, because the validator never reads body prose.
 
 **Not covered here.** The `status` field as a field — its full value set, and what
 `draft` and `flagged` oblige — is #1323's. This node describes only the three values
