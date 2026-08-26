@@ -100,6 +100,14 @@ The deliberate exceptions, all accepted knowingly:
   gains one append-only entry per cohort crate under `launchpad/crates/`, and
   `Cargo.lock` changes with it. Reasoning and the rejected alternatives are in
   [`decisions/ADR-0045-cohort-crates-in-launchpad-workspace.md`](decisions/ADR-0045-cohort-crates-in-launchpad-workspace.md).
+- **Desktop Settings registration seam** — `desktop/src/features/settings/ui/SettingsPanels.tsx`
+  carries a registration seam so cohort-authored Settings sections can be added from
+  `launchpad/` without further upstream edits. Scoped to that seam in that one file: the
+  section descriptors and their components stay under `launchpad/`, and **adding a cohort
+  panel must not touch any upstream file**. Editing the four per-section registration sites
+  directly is what this exception exists to avoid, not something it permits. Reasoning and
+  the rejected alternatives are in
+  [`decisions/ADR-0051-cohort-settings-registration-seam.md`](decisions/ADR-0051-cohort-settings-registration-seam.md).
 
 The list itself is closed; any further exception needs its own ADR.
 
