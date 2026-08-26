@@ -79,6 +79,9 @@ evidence:
     evidence:
       - "launchpad/project-intelligence/corpus/validate.py"
       - "git.ls_tree('origin/launchpad', 'launchpad/docs/corpus') -> AGENTS.md, README.md, standards/confidence.md, standards/decision-references.md, plus the excluded schema/ subtree"
+  - statement: "Serina confirmed reading (a) -- this node's built scope, a meta-standard for what a corpus standard document must itself be and contain -- as the intended subject of the documentation-standard task, and decided that the four sibling standards drafted alongside it (#1470, #1480, #1468, #1477) reconcile to it before merging, including the two already merged."
+    entry_class: TEAM_KNOWLEDGE
+    provided_by: "launchpad-26/buzz#1486, decided 2026-08-27"
 relationships:
   - type: depends-on
     target: corpus-agents
@@ -157,6 +160,13 @@ ADR-0029's escalation applies, as it does to any same-claim-type conflict.
 **This document obeys its own requirements.** It is the worked example: its sections,
 in their order, are D1's list. A standard that could not be written to its own rule
 would be evidence the rule is wrong.
+
+**Which of three readings of "documentation standard" this document carries was an open
+question, and it is settled.** #1486 named three: this node as built (a meta-standard for
+what a corpus standard document must itself be and contain), a prose-quality standard
+across all corpus nodes, and an apex charter for what "the documentation standard"
+governs as a whole. Serina confirmed reading (a) on 2026-08-27 — this node's scope stands
+as written, and the MUSTs below are binding, not provisional pending a decision.
 
 ## MUST
 
@@ -254,9 +264,14 @@ reviewer decides, and that is where it ends almost always. If the two do not agr
 disagreement is filed as an issue against this standard, because a rule two people read
 differently is a defect in the rule.
 
-**A standard written before this one is non-conforming, not exempt.** Bringing it into
-shape is an ordinary edit to that node by whoever owns it, not a migration and not this
-node's to perform. Four already exist in this position; see *Scope and omissions*.
+**A standard written before this one is non-conforming, not exempt, and this is a
+decision now rather than a default.** #1486 asked whether the four in-flight siblings
+(#1470 atomicity, #1480 code-references, #1468 confidence, #1477 decision-references)
+reconcile before merging, are grandfathered, or make the clause itself wrong. Serina
+decided on 2026-08-27: **reconcile before merging.** That holds even for #1468 and #1477,
+which merged before the decision was recorded — being merged does not exempt a node any
+more than predating this standard does. Bringing each into shape is an ordinary edit by
+whoever owns it, not a migration and not this node's to perform.
 
 **A case none of this covers is escalated, not invented.** Raise it as an issue against
 the parent feature #605 describing the document you needed to write and could not. Do
@@ -293,14 +308,19 @@ Those issue numbers were looked up by subject rather than inferred from a range.
 not a standard and D1-D10 do not apply to it. The instruction node governs how any node
 is created; per-type templates will govern their shapes.
 
-**The four standards already in flight do not conform to this one.** At the revisions
-cited in the ledger, they carry four distinct H1 strings across three conventions, one
-numbers its top-level sections and three do not, and they name their normative sections
-four different ways (`Requirements` with `MUST`/`SHOULD` beneath it; numbered `MUST` and
-`SHOULD`; `Requirements` and `Guidance`; bare `MUST` and `SHOULD`) and their enforcement
-sections four different ways, one of which does not use the word at all. That divergence
-is this document's evidence and its cost in the same breath: the rule is retroactive on
-four documents whose pull requests are open, and reconciling them is their owners' work
+**The four sibling standards drafted alongside this one do not conform to it, and two of
+the four have already merged.** At the revisions cited in the ledger, they carry four
+distinct H1 strings across three conventions, one numbers its top-level sections and
+three do not, and they name their normative sections four different ways (`Requirements`
+with `MUST`/`SHOULD` beneath it; numbered `MUST` and `SHOULD`; `Requirements` and
+`Guidance`; bare `MUST` and `SHOULD`) and their enforcement sections four different ways,
+one of which does not use the word at all. Two (#1468 confidence, #1477 decision-refer
+ences) merged onto `launchpad` on 2026-08-26, before this node's authority was confirmed;
+two (#1470 atomicity, #1480 code-references) remain open. Per Serina's 2026-08-27
+decision on #1486, all four reconcile — merged status is not an exemption, only a
+difference in how the edit reaches `launchpad`. That divergence is this document's
+evidence and its cost in the same breath: the rule now applies to four documents,
+reconciling them is their owners' work
 under the exceptions process above, not something this node does to them.
 
 **This node declares `depends-on: corpus-agents`.** That reading of its authority is
