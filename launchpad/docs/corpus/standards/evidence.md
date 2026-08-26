@@ -190,6 +190,68 @@ machinery, and the difference is discussed in *The three classes, and what each 
 
 ## The three classes, and what each is for
 
+**The class records how you came to know the thing.** Not how sure you are, not how
+important the claim is, and not how good the source looks. Three routes to knowing, three
+classes, and the route you actually took decides which one is honest.
+
+- **`FACT` — you opened the cited source and it says so.** Not "a source exists that
+  probably says so", not "this is the sort of thing that file would say", and not "I read
+  something like this somewhere". You opened it, at the revision the node records, and the
+  words are there.
+- **`INFERENCE` — you reasoned to it from cited evidence.** The sources are real and you
+  read them; the conclusion is a step past what any of them states. Reasoning is not fact,
+  however good the reasoning is. An `INFERENCE` also carries a `confidence`; what that
+  number means and how to choose one is the confidence standard's (#1309), not this
+  document's.
+- **`TEAM_KNOWLEDGE` — something told to the corpus that no openable source corroborates**,
+  with `provided_by` naming who or what said it: a person, an issue, a pull request, a
+  decision record, a commit message. It is the class that exists for uncorroborated
+  statements, and using it honestly beats promoting a recollection to `FACT`.
+
+Which further fields each class then requires and forbids is the schema's business, in
+`node.schema.json` and `launchpad/docs/corpus/schema/README.md`. Two properties of that
+matrix are worth knowing without looking it up, because authors get both wrong:
+`INFERENCE` needs citations just as `FACT` does — reasoning from nothing is not reasoning
+— and `TEAM_KNOWLEDGE` needs none, which is precisely the case it exists for. It may still
+carry them.
+
+**The class is a structural field, not a note.** `ADR-0028` requires classification to
+stay validator-checkable rather than asserted in body prose, so a claim's class is a
+front-matter value that tooling can read, never an adjective in a sentence.
+
+### Class is not a ranking
+
+`FACT` is not the good one and `TEAM_KNOWLEDGE` is not the weak one. They answer a
+different question from "how much should I trust this". A `FACT` cited to a file whose
+author was wrong is a faithfully-recorded error; a `TEAM_KNOWLEDGE` entry attributed to
+the person who made the decision is the most authoritative record that will ever exist of
+why it was made. Reaching for `FACT` because it sounds stronger is the single most common
+way this ledger goes wrong, and it converts an honest attribution into an unattributable
+assertion.
+
+### The one place class has a mechanical consequence
+
+Within the corpus, class changes nothing at runtime — it is a label the validator checks
+the shape of. In `launchpad/project-intelligence/memory.py`, the in-process store that
+enforces the same three classes, it decides what may overwrite what:
+
+| Stored entry | Contradicted by live repository evidence | Contradicted by a person's later statement |
+|---|---|---|
+| `FACT` or `INFERENCE` | Superseded by a **new `FACT`**; the old entry is flagged stale, never deleted or silently rewritten | Superseded |
+| `TEAM_KNOWLEDGE` | **Nothing happens.** The observation does not supersede it and the entry is left exactly as stored | Superseded |
+
+The asymmetry is the point, and it is the clearest statement anywhere of what the classes
+mean. "This subsystem is being migrated off" can be true while the code that runs it is
+untouched, so code alone cannot retire it — only the person who said it can. Code, on the
+other hand, does outrank a stored `FACT` about how the system currently behaves, which is
+`ADR-0029`'s contextual ranking showing up as executable behaviour.
+
+**Do not read that table as corpus behaviour.** It is `memory.py`'s, for its own store.
+The corpus node schema defines no supersession field and no temporal state on an entry, so
+a corpus ledger has no mechanism of this kind at all: an entry is edited or removed by a
+person editing the file, and nothing records that it used to say something else. Git does.
+The ledger does not.
+
 ## Reasoning from evidence, and dressing up a decision
 
 ## When sources disagree
