@@ -185,6 +185,16 @@ did not make them.
 **MUST** — a diagram in a corpus node is **diagram-as-text inside a fenced code block
 in the Markdown body**. There is no other legal form today.
 
+**The permitted set is deliberately open, not closed.** Any fence language is legal —
+` ```mermaid `, ` ```text `, an untagged ` ``` `, box-drawing characters with no
+language tag, even ASCII art — because the corpus has exactly one requirement on the
+form (diagram-as-text, inside a fence, in the body) and none on the dialect. This is a
+choice, stated so it reads as one: closing the set to Mermaid and box-drawing alone
+would contradict section 7's own admission that nothing checks fence language, since
+enforcing a closed set is precisely the enforcement that does not exist. The SHOULD
+below narrows by *preference*, not by *permission* — an untagged code block or an
+unlisted fence language still complies; it is merely not the preferred choice.
+
 **MUST NOT** — do not add an image file under the corpus root. Not a `.png`, not an
 `.svg`, not any non-`.md` file, and **not one placed under a `generated/`
 directory either**. This is not a style preference; the check fails closed, in both
@@ -341,15 +351,21 @@ wrong.
 A diagram drifts from its subject silently. Nothing detects it, and no citation form
 helps: a position citation would be the obvious anchor, and positions are not checked.
 
-- **MUST** — cite **bare repository-relative paths** for the sources a diagram's edges
-  rest on. A bare path is opened on disk and must resolve to a real file inside the
-  repository, so it is one of the few citation forms that proves anything.
-- **MUST NOT** — anchor a diagram with a `path:line` or `path:start-end` citation. The
-  path is checked; the line number is never compared against the file's length, so a
-  position that has silently drifted looks precise while being wrong. Tracked as
-  **#1459**.
+The citation-shape rules — prefer a bare repository-relative path, avoid `path:line`
+(**#1459**), keep the ledger updated in the same edit as the body it backs — are
+`AGENTS.md`'s, corpus-wide, not this standard's. This section states only the
+diagram-specific application:
+
+- **MUST** — for every edge whose backing is a ledger claim (section 5's first case),
+  that claim's own citation follows the corpus-wide rule above. A diagram adds no
+  citation of its own; it inherits the one on the claim it projects.
+- **MUST NOT** — treat an edge backed by a rule this standard states with named
+  authority (section 5's second case) as needing a citation at all. Section 5 already
+  draws that line; requiring a citation here for every edge would contradict it, since a
+  self-authored rule is not evidence and has nothing to cite.
 - **MUST** — when a diagram changes, update the ledger entries it projects **in the same
-  edit**, and re-check them against their sources. A claim whose source moved is not
+  edit** (`AGENTS.md`'s rule, applied here: a diagram is one more place a stale claim can
+  hide), and re-check them against their sources. A claim whose source moved is not
   still a FACT because it used to be.
 - **SHOULD NOT** — draw a value into a diagram that changes more often than the node
   does: counts, version numbers, port numbers, timeouts. **Authority: this standard.**
