@@ -79,9 +79,21 @@ evidence:
       - "launchpad/project-intelligence/corpus/validate.py"
       - "launchpad/decisions/ADR-0028-corpus-canonical-representation.md"
     confidence: 0.8
-  - statement: "The revision recorded in this ledger is the revision the node's claims were checked against, not a record of when the file was last edited."
+  - statement: "Issue #636 requires that the draft is checked against the repository revision recorded in provenance."
     entry_class: TEAM_KNOWLEDGE
-    provided_by: "launchpad-26/buzz#636 definition of done: 'The draft is checked against the repository revision recorded in provenance'"
+    provided_by: "launchpad-26/buzz#636 definition of done"
+  - statement: "Every non-.md file under the corpus root is rejected today, including one placed under generated/, because no generator exists to reproduce it from canonical Markdown."
+    entry_class: FACT
+    evidence:
+      - "launchpad/project-intelligence/corpus/validate.py"
+  - statement: "A second or subsequent FACT resting only on a commit citation produces another non-fatal UNVERIFIED notice and does not fail the run."
+    entry_class: FACT
+    evidence:
+      - "launchpad/project-intelligence/corpus/validate.py"
+  - statement: "A citation naming a line or line range is checked for the path only; the line number is never compared against the file's length."
+    entry_class: FACT
+    evidence:
+      - "launchpad/project-intelligence/corpus/validate.py"
 ---
 
 # Working with the documentation corpus
@@ -159,9 +171,12 @@ What the classes are *for* is the part that is easy to get wrong:
   probably says so."
 - **`INFERENCE`** — you reasoned to it from evidence. Reasoning is not fact, however
   good it is.
-- **`TEAM_KNOWLEDGE`** — a person told you, and nothing corroborates it. This is the
-  class that exists for uncorroborated statements; using it honestly is better than
-  promoting a recollection to `FACT`.
+- **`TEAM_KNOWLEDGE`** — something told to the corpus that no source corroborates, with
+  `provided_by` naming who or what said it: a person, an issue, a decision record. It
+  is the class for uncorroborated statements, and using it honestly beats promoting a
+  recollection to `FACT`. It is **not** a place to park a decision you made yourself —
+  attributing an extrapolation to the thing it started from does not make it something
+  you were told.
 
 When two sources disagree, do not average them and do not pick the newer one. For how
 the system **currently behaves**, executable evidence — code, config, schema, passing
@@ -299,15 +314,13 @@ standing in.
 
 ## Updating a node
 
-**What the recorded revision means.** It is the revision the node's claims were
-*checked against* — the wording comes from #636's definition of done, which requires
-that "the draft is checked against the repository revision recorded in provenance", and
-is attributed to that source in this node's ledger rather than inferred from the schema,
-which says nothing about revisions. It is **not** a last-touched timestamp. Edit
-prose without re-checking a source and the revision stays where it is; re-check the
-sources and it moves, whether or not the body changed. Bumping it on every edit would
-assert a verification that never happened, which is the one thing provenance exists to
-prevent.
+**What the recorded revision means — working practice, not settled policy.** #636's
+definition of done requires that "the draft is checked against the repository revision
+recorded in provenance", so the revision is at minimum the one the claims were checked
+against. Everything beyond that — whether it may stay put across edits, what to do when
+only some claims are re-verified — is **#1321's** to settle and is not established here.
+Until it does, this document works to the rule below, and says so rather than dressing
+it up as a corpus-wide standard.
 
 1. **Confirm the change belongs in this node.** New idea, not new detail about the
    existing one? That is a new node.
@@ -316,11 +329,19 @@ prevent.
    used to be.
 3. **Update the ledger in the same edit as the body.** A new claim without an entry, or
    an entry left behind by a deleted claim, are the two ways these drift apart.
-4. **Move the recorded revision to that `HEAD` only if you re-verified against it.**
-   If you re-verified every claim, move it. If you re-verified some, move it and be
-   sure the rest still hold at that revision too — a single node carries one snapshot,
-   so moving it makes a statement about the whole ledger. If you re-verified nothing,
-   leave it alone.
+4. **Decide whether the recorded revision moves.** A node carries one snapshot, so
+   moving it makes a statement about the whole ledger, not just the claims you touched.
+   - Re-verified every claim at `HEAD` → move it.
+   - Re-verified some → move it only if the rest still hold at `HEAD` too. Check, do
+     not assume.
+   - Re-verified nothing → leave it.
+   - **Every cited source byte-identical between the recorded revision and `HEAD`** →
+     leave it. Checking a claim at either point was the same act, so moving the
+     revision would assert a re-check that added nothing.
+     `git diff --name-only <recorded-sha> -- <the ledger's paths>` returning empty is
+     the test. This case is why the rule is stated as four branches and not as "bump on
+     every edit": that shorter rule was in an earlier draft and contradicted what this
+     very node does.
 5. **Leave the `id` alone.** Always.
 6. **Run the check.**
 
@@ -372,20 +393,23 @@ what the deterministic check does and does not establish.
 Until the standards land there is no per-type template to follow: write the node
 against `node.schema.json` and the rules above, and expect a later task to reshape it.
 
-**No `relationships` in this node's own front matter.** At the revision recorded in its
-ledger the corpus contained **no** authored nodes at all — this one did not exist yet
-either — and it is still the only one, so there is nothing to point at. A
-`relationships[].target` naming an id no node carries is a hard error. The absence is
-deliberate, not an oversight, and the first sibling node is the moment to revisit it.
+**No `relationships` in this node's own front matter.** There is no other node to point
+at, and a `relationships[].target` naming an id no node carries is a hard error. The
+absence is deliberate; the first sibling node is the moment to revisit it.
 
-**Why this node's recorded revision has not moved.** It was edited many times after that
-revision, and claims were added along the way — but every source it cites is
-byte-identical between that revision and now, so checking a claim "at HEAD" and checking
-it at the recorded revision were the same act. The snapshot covers the later claims for
-that reason, not by assumption; it is checkable with `git diff --name-only <sha> -- <the
-cited paths>`, which returns nothing. Per *Updating a node*, the revision tracks
-verification rather than editing, so moving it would say a re-check happened where none
-was needed.
+**How to check this node's own recorded revision.** Run
+`git diff --name-only <recorded-sha> -- <the paths in its ledger>`. Empty output means
+no cited source has moved since the revision was recorded, so every claim still stands
+where it was checked. Do not take that on this document's word — the command is the
+check.
+
+**What the corpus has NOT settled about revisions.** Whether a recorded revision may
+stay put while a node is edited, and what an author must do when only some claims are
+re-verified, is **#1321's** to decide (`document corpus standard for provenance`,
+unlanded). Until it lands, *Updating a node* below states this document's working
+practice, not a corpus-wide rule — three independent review passes rejected earlier
+attempts to present it as one, on the grounds that no authorized source establishes it.
+When #1321 lands, that section defers to it.
 
 **Expected but not verified when this node was written**, per the rule in *Creating a
 node* step 3:
@@ -394,10 +418,11 @@ node* step 3:
   front matter is harmless to the checker, and to `preflight_core.py`, which resolves
   the path without parsing content. Whether it degrades the file for a harness that
   *reads* it as instructions is unknown.
-- **`relationships.schema.json` was not read directly.** `node.schema.json` states that
-  a test guards the two relationship enums against drifting apart; that test was not
-  run. Immaterial to this node, which declares no relationships, but a reader relying
-  on the linked file for the enum is relying on that guard, not on a check made here.
+- **The relationship enums in `node.schema.json` and `relationships.schema.json` were
+  not checked against each other.** `relationships.schema.json` was read for the
+  `supersedes` directionality this node cites. `node.schema.json` states that a test
+  guards the two enum lists against drifting apart; that test was not run, so a reader
+  relying on the two agreeing is relying on that guard rather than on a check made here.
 
 **This file is read twice.** It is a corpus node, validated like any other; it is also
 resolved as the nearest `AGENTS.md` for every change under `launchpad/docs/corpus/`,
