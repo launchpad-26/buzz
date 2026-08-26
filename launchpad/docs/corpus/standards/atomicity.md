@@ -73,10 +73,11 @@ evidence:
     entry_class: FACT
     evidence:
       - "launchpad/docs/corpus/AGENTS.md"
-  - statement: "A second copy of content the checker never reads goes stale without any run reporting it, which is why a node links an authoritative source rather than restating it."
+  - statement: "The checker never reads a node's body prose, so a copy of content held there goes stale without any run reporting it."
     entry_class: FACT
     evidence:
       - "launchpad/docs/corpus/AGENTS.md"
+      - "launchpad/project-intelligence/corpus/validate.py"
   - statement: "Deciding node count by document length tracks prose volume rather than subject boundaries, so it cannot produce the one-idea-per-node property that defines a node."
     entry_class: INFERENCE
     evidence:
@@ -237,13 +238,15 @@ knows why.
 
 `type`, `status` and `origin` each carry exactly one value per node. (`audiences` is an
 array and carries several; the difference is in `node.schema.json`.) Ask whether this
-subject would ever need two of one of them at the same time:
+subject would ever need two of one of them at the same time. The rows below are
+illustrations, not a list of the values each field admits — that list is in
+`node.schema.json`, and a copy of it here would drift:
 
 | The subject | The field it splits | Why one node cannot hold it |
 |---|---|---|
 | Half describes upstream Buzz behaviour, half a Launchpad-only convention | `origin` | The node would claim one provenance for content with two |
 | Half is settled policy, half is a proposal not yet accepted | `status` | `active` would lend the proposal authority it does not have; `draft` would withdraw it from the settled half |
-| Half documents an interface, half the runbook for operating it | `type` | Whichever value is chosen misfiles the other half for every reader and every generated view that groups by type |
+| Half documents an events surface, half the operational procedure for running it | `type` | Whichever value is chosen misfiles the other half for every reader and every generated view that groups by type |
 
 **If any row applies, the answer is two nodes and the procedure stops.** No amount of
 careful prose in the body repairs a front-matter field that is wrong about half its
