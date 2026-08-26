@@ -383,9 +383,10 @@ class StagesShapeError(ValueError):
     ``complete``.
 
     ADJUDICATION.md's rule is unconditional, and this stage cannot lean on
-    its producer to keep it: the ``stages`` manifest is explicitly an output
-    #117 does NOT emit, so there is no upstream guarantee to inherit. Neither
-    ``findings.validate`` nor ``verdicts.validate`` inspects ``stages``.
+    its producer to keep it: the manifest now arrives populated from #117,
+    and this stage still enforces pass-through itself rather than inheriting
+    a guarantee from its producer. Neither ``findings.validate`` nor
+    ``verdicts.validate`` inspects ``stages``.
     """
 
 
