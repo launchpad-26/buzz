@@ -278,6 +278,44 @@ class UrlCitationTest(unittest.TestCase):
                 self.assertEqual(len(errors), 1)
                 self.assertIn("mutable ref", errors[0])
 
+    def test_plain_http_scheme_does_not_bypass_the_pin_check(self) -> None:
+        # An earlier revision anchored the GitHub patterns to `https://` while
+        # routing on a prefix tuple that also contained `http://`, so the same
+        # mutable blob link reopened the whole finding under one changed character
+        # -- it fell past both patterns and came back a non-fatal external URL. An
+        # independent review-code pass found it.
+        errors, unverified = _classify_one(
+            "http://github.com/launchpad-26/buzz/blob/main/.env.example"
+        )
+        self.assertEqual(len(errors), 1)
+        self.assertEqual(unverified, [])
+        self.assertIn("mutable ref", errors[0])
+
+    def test_non_file_github_views_are_not_accepted_as_file_citations(self) -> None:
+        # ADR-0003 cites "the cited file". `tree` is a directory listing; `blame`,
+        # `commits` and `edit` are views of a file rather than citations of it. A
+        # review-final pass found `tree/<sha>/<dir>` accepted as a verified file
+        # citation, and `blame/main/...` slipping past the pin check entirely by
+        # not matching the file-only pattern.
+        sha = "69baedd197e5d35c9ae4736115789da59929e288"
+        for verb in ("tree", "blame", "commits", "edit"):
+            with self.subTest(verb=verb):
+                errors, unverified = _classify_one(
+                    f"https://github.com/launchpad-26/buzz/{verb}/{sha}/Justfile"
+                )
+                self.assertEqual(len(errors), 1)
+                self.assertEqual(unverified, [])
+                self.assertIn(verb, errors[0])
+
+    def test_mutable_non_file_view_fails_on_the_pin_first(self) -> None:
+        # `blame/main` is wrong twice over; it must not escape by being wrong in a
+        # way the file-verb check alone would not catch.
+        errors, unverified = _classify_one(
+            "https://github.com/launchpad-26/buzz/blame/main/Justfile"
+        )
+        self.assertEqual(len(errors), 1)
+        self.assertEqual(unverified, [])
+
     def test_markdown_link_is_unwrapped_before_pinning_is_judged(self) -> None:
         # ADR-0003's prescribed format is a markdown link, so `[label](url)` must
         # be judged by its target. An earlier revision compared the whole string
@@ -313,6 +351,14 @@ class CitationFormTest(unittest.TestCase):
         self.assertEqual(unverified, [])
 
     def test_file_line_citation_accepted(self) -> None:
+        # The line number is deliberately past the end of the file. Positional
+        # citations are checked for their internal consistency and for the file
+        # they name, NOT against the file's length -- bounds-checking a cited line
+        # is staleness detection, which belongs with the staleness work rather than
+        # here (see _classify_citation). Do not "fix" this to an in-range number:
+        # that would silently drop the only coverage of that documented boundary.
+        # A cross-model review-final pass raised the out-of-range line as a
+        # separate, deferred finding; it is tracked, not forgotten.
         errors, unverified = _classify_one(
             "launchpad/project-intelligence/corpus/validate.py:1077"
         )
@@ -356,12 +402,49 @@ class CitationFormTest(unittest.TestCase):
         self.assertEqual(unverified, [])
         self.assertIn("six supported citation forms", errors[0])
 
+    def test_arrow_alone_does_not_make_a_citation_recognised(self) -> None:
+        # An earlier revision treated ANY string containing " -> " as a recognised
+        # graph/tool citation and downgraded it to the non-fatal channel, so
+        # arbitrary text -- including a prohibited path -- laundered past every
+        # check and exited 0. A cross-model review-final pass found this fail-open.
+        # Both forms are now matched by shape.
+        for citation in (
+            "private/path/id_rsa -> not a real citation",
+            "something -> something else",
+            "a -> b (not a hop count)",
+            "not_a_call -> result",
+        ):
+            with self.subTest(citation=citation):
+                errors, unverified = _classify_one(citation)
+                self.assertEqual(len(errors), 1)
+                self.assertEqual(unverified, [])
+                self.assertIn("six supported citation forms", errors[0])
+                self.assertNotIn("id_rsa", errors[0])
+
     def test_malformed_line_position_rejected(self) -> None:
         errors, _ = _classify_one(
             "launchpad/project-intelligence/corpus/validate.py:9-2"
         )
         self.assertEqual(len(errors), 1)
         self.assertIn("malformed line position", errors[0])
+
+    def test_line_numbers_are_one_based(self) -> None:
+        # The `start < 1` half of the same guard, which an independent
+        # review-tests pass found untested: dropping it, or weakening it to
+        # `start < 0`, would have left every other test passing. Both sides of the
+        # boundary are pinned so neither direction can drift.
+        errors, _ = _classify_one("Justfile:0")
+        self.assertEqual(len(errors), 1)
+        self.assertIn("malformed line position", errors[0])
+
+        errors, unverified = _classify_one("Justfile:1")
+        self.assertEqual(errors, [])
+        self.assertEqual(unverified, [])
+
+    def test_empty_citation_rejected(self) -> None:
+        errors, unverified = _classify_one("   ")
+        self.assertEqual(len(errors), 1)
+        self.assertEqual(unverified, [])
 
     def test_positional_citation_still_runs_the_credential_blocklist(self) -> None:
         # Parsing the position off must not become a way to smuggle a prohibited
@@ -387,9 +470,12 @@ class CitationContainmentTest(unittest.TestCase):
         self.assertIn("resolves outside the repository", joined)
         self.assertIn("does not resolve to a real file", joined)
 
-    def test_traversal_is_rejected_even_when_the_target_exists(self) -> None:
+    def test_traversal_is_rejected_before_the_target_is_ever_examined(self) -> None:
         # /etc/passwd genuinely exists on this host, so an existence check alone
-        # would have called this citation valid.
+        # would have called this citation valid. The containment check runs before
+        # the existence check, so this test's outcome does not depend on that file
+        # being present -- an independent review-tests pass flagged the earlier
+        # wording here as overstating a host dependency the code does not have.
         errors, _ = _classify_one("../../../../../../../../etc/passwd")
         self.assertEqual(len(errors), 1)
         self.assertIn("resolves outside the repository", errors[0])
@@ -398,6 +484,147 @@ class CitationContainmentTest(unittest.TestCase):
         errors, _ = _classify_one("launchpad")
         self.assertEqual(len(errors), 1)
         self.assertIn("does not resolve to a real file", errors[0])
+
+    def test_containment_errors_do_not_echo_the_citation(self) -> None:
+        # CitationVerdict.detail is documented as never carrying the citation
+        # value, and that holds for these branches today -- but nothing pinned it,
+        # so a regression adding the resolved path "for debuggability" would leak a
+        # host-filesystem location and pass every other test. An independent
+        # review-tests pass found the gap.
+        errors, _ = _classify_one("../../../../../../../../etc/passwd")
+        self.assertNotIn("passwd", errors[0])
+        self.assertNotIn("..", errors[0])
+
+        errors, _ = _classify_one("launchpad")
+        self.assertNotIn("launchpad/", errors[0])
+
+    def test_citation_symlink_out_of_the_repo_is_rejected(self) -> None:
+        # The symlink half of containment, which the docstring claims and no test
+        # pinned: `.resolve()` dereferences before the containment check, so a link
+        # inside the repo pointing outside is caught rather than followed. Written
+        # into the repo tree because the citation must be repo-relative, and
+        # removed again whatever happens.
+        link = validate.repo_root() / "citation-symlink-probe.md"
+        self.assertFalse(link.exists(), "probe path must not already exist")
+        link.symlink_to("/etc/passwd")
+        try:
+            errors, _ = _classify_one("citation-symlink-probe.md")
+            self.assertEqual(len(errors), 1)
+            self.assertIn("resolves outside the repository", errors[0])
+        finally:
+            link.unlink()
+
+
+class YamlParseFailureTest(unittest.TestCase):
+    """A document that fails to PARSE never reaches schema validation, so the
+    schema-error redaction cannot protect it -- PyYAML's exception text quotes the
+    source line it choked on. A cross-model review-final pass found this leak after
+    the schema-error one had already been closed: same defect, different door."""
+
+    def test_yaml_error_does_not_echo_the_frontmatter(self) -> None:
+        report = validate.validate_corpus(INVALID_DIR / "leaky-yaml-error")
+        self.assertEqual(len(report.errors), 1)
+        self.assertNotIn("id_rsa", report.errors[0])
+        self.assertNotIn("some/private/path", report.errors[0])
+
+    def test_yaml_error_still_locates_the_fault(self) -> None:
+        # Redaction must not cost the author the ability to find it: line and
+        # column are positions, not content, and PyYAML's `problem` text names YAML
+        # tokens rather than the document's values.
+        report = validate.validate_corpus(INVALID_DIR / "leaky-yaml-error")
+        self.assertIn("leaky-yaml-error", report.errors[0])
+        self.assertIn("frontmatter line", report.errors[0])
+
+    def test_missing_delimiter_still_reported(self) -> None:
+        # The non-YAMLError branch of the same handler: our own structural
+        # ValueError, whose message is a fixed string with no document content.
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            (root / "no-frontmatter.md").write_text("no delimiter here\n")
+            report = validate.validate_corpus(root)
+            self.assertEqual(len(report.errors), 1)
+            self.assertIn("frontmatter delimiter", report.errors[0])
+
+
+class UnhashableIdTest(unittest.TestCase):
+    """An unvalidated `id` can be a YAML list or dict, which is unhashable.
+
+    Duplicate detection deliberately includes schema-invalid nodes -- two nodes can
+    collide on an id neither of which validates -- so a non-str id reaches a dict
+    key and a set member. Both crashed with an unhandled TypeError instead of the
+    controlled, node-naming failure the DoD requires; a stack trace names no node.
+    A cross-model review-final pass found the first site, and running its fixture
+    against the whole validator surfaced the second.
+    """
+
+    def test_list_id_reported_not_crashed(self) -> None:
+        report = validate.validate_corpus(INVALID_DIR / "unhashable-id")
+        self.assertEqual(len(report.errors), 1)
+        self.assertIn("unhashable-id", report.errors[0])  # named by path
+        self.assertNotIn("id_rsa", report.errors[0])
+
+    def test_both_id_consuming_checks_survive_a_non_str_id(self) -> None:
+        # Exercised directly, because validate_corpus stops reporting past the
+        # schema error and would mask a crash in either function below.
+        node = validate.LoadedNode(
+            path=Path("synthetic"),
+            id=["some/private/path/id_rsa"],
+            data={"relationships": [{"type": "references", "target": "elsewhere"}]},
+            error="already reported by schema validation",
+        )
+        self.assertEqual(validate.find_duplicate_ids([node]), [])
+        self.assertEqual(validate.find_unresolved_relationship_targets([node]), [])
+
+    def test_dict_id_also_survives(self) -> None:
+        node = validate.LoadedNode(
+            path=Path("synthetic"), id={"nested": "mapping"}, error="reported"
+        )
+        self.assertEqual(validate.find_duplicate_ids([node]), [])
+        self.assertEqual(validate.find_unresolved_relationship_targets([node]), [])
+
+
+class SymlinkedNodeTest(unittest.TestCase):
+    """A `.md` symlink pointing out of the corpus was walked and validated as
+    canonical corpus content. ADR-0028 makes the corpus tree itself the canonical
+    source; validating content that only appears to live there lends it authority
+    it does not have. A cross-model review-final pass found this by symlinking a
+    valid node in from outside and watching the run print PASS.
+
+    Distinct from the citation-target containment in CitationContainmentTest: this
+    governs which files are corpus content in the first place.
+    """
+
+    def test_symlink_out_of_the_corpus_is_not_discovered(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            outside = Path(tmp) / "outside"
+            outside.mkdir()
+            smuggled = outside / "smuggled.md"
+            smuggled.write_text("---\nid: smuggled-node\n---\n\nnot corpus content\n")
+
+            corpus = Path(tmp) / "corpus"
+            corpus.mkdir()
+            real = corpus / "real.md"
+            real.write_text("---\nid: real-node\n---\n\ncorpus content\n")
+            (corpus / "link.md").symlink_to(smuggled)
+
+            files = validate.discover_markdown_files(corpus)
+
+            # The real sibling proves discovery still works -- without it, a
+            # regression that discovered nothing at all would pass this test.
+            self.assertIn(real, files)
+            self.assertNotIn(corpus / "link.md", files)
+
+    def test_symlink_within_the_corpus_is_still_discovered(self) -> None:
+        # The check must reject escapes, not symlinks as such.
+        with tempfile.TemporaryDirectory() as tmp:
+            corpus = Path(tmp) / "corpus"
+            (corpus / "nested").mkdir(parents=True)
+            target = corpus / "nested" / "target.md"
+            target.write_text("---\nid: target-node\n---\n\ncorpus content\n")
+            (corpus / "link.md").symlink_to(target)
+
+            files = validate.discover_markdown_files(corpus)
+            self.assertIn(corpus / "link.md", files)
 
 
 class MutableUrlFixtureTest(unittest.TestCase):
@@ -413,26 +640,30 @@ class OwnershipViolationTest(unittest.TestCase):
         report = validate.validate_corpus(INVALID_DIR / "misplaced-generated")
         self.assertEqual(len(report.errors), 1)
         self.assertIn("index.json", report.errors[0])
+        self.assertIn("outside generated/", report.errors[0])
 
-    def test_non_md_file_under_generated_is_not_a_placement_error(self) -> None:
-        # Only the reject-outside-generated/ direction was tested before -- this
-        # proves the exemption itself has a passing-case fixture, not just that
-        # the whole valid/ directory happens to pass for unrelated reasons.
-        errors, _ = validate.find_ownership_violations(VALID_DIR)
-        self.assertEqual(errors, [])
-
-    def test_generated_artifact_is_reported_unverified_not_silently_passed(self) -> None:
+    def test_correctly_placed_generated_artifact_still_fails(self) -> None:
         # Correct placement is only half of ADR-0028: derived views must also be
-        # "never hand-authored, always reproducible from canonical Markdown", and
-        # placement proves neither. No corpus generator exists yet to reproduce
-        # them against, so the artifact is reported rather than passed in silence
-        # -- a check that cannot run must not read as a check that was satisfied.
-        # A cross-model review panel found the silent pass.
-        errors, unverified = validate.find_ownership_violations(VALID_DIR)
-        self.assertEqual(errors, [])
-        self.assertEqual(len(unverified), 1)
-        self.assertIn("index.json", unverified[0])
-        self.assertIn("reproducibility", unverified[0])
+        # "never hand-authored, always reproducible from canonical Markdown", and a
+        # directory name proves neither. No corpus generator exists yet to
+        # reproduce them against, so the artifact fails rather than passing.
+        #
+        # An earlier revision of this fix reported it as a non-fatal notice, which
+        # a cross-model review-final pass rejected: a hand-authored artifact would
+        # print one line and still exit 0, permitting exactly the state ADR-0028
+        # forbids. The fixture is correctly PLACED on purpose -- if it were
+        # misplaced it would fail for the other reason and prove nothing here.
+        report = validate.validate_corpus(INVALID_DIR / "unestablished-generated")
+        self.assertEqual(len(report.errors), 1)
+        self.assertEqual(report.unverified, [])
+        self.assertIn("index.json", report.errors[0])
+        self.assertIn("reproducibility", report.errors[0])
+        # Distinguishable from the misplacement error above, or the two messages
+        # would send an author to fix the wrong thing.
+        self.assertNotIn("outside generated/", report.errors[0])
+
+    def test_valid_fixtures_contain_no_ownership_violations(self) -> None:
+        self.assertEqual(validate.find_ownership_violations(VALID_DIR), [])
 
 
 class MissingInputTest(unittest.TestCase):

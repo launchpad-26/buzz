@@ -10,7 +10,7 @@ name: launchpad — corpus validate
 # see launchpad/project-intelligence/requirements.txt) so an unrecorded import
 # breaks CI rather than breaking the next person to clone the repo.
 #
-# The final step runs `just corpus-validate` against the REAL launchpad/docs/corpus/
+# The final step runs the validator against the REAL launchpad/docs/corpus/
 # tree, not just the unit tests' private fixtures -- a regression only visible
 # against the real tree (e.g. a real corpus node someone hand-authored with a typo)
 # would not be caught by the fixture-only unit tests alone.
@@ -32,7 +32,9 @@ on:
     branches: [launchpad]
     paths:
       - "launchpad/project-intelligence/corpus/**"
+      - "launchpad/project-intelligence/requirements.txt"
       - "launchpad/docs/corpus/**"
+      - ".github/workflows/launchpad-corpus-validate.yml"
 
 # Read-only. These are pure unit tests plus a read-only validation scan: no
 # network, no relay, no GitHub API, so no token scope is needed.

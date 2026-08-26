@@ -71,6 +71,20 @@ STEP 3  Add reference-existence and prohibited-content checks.                  
         relative to that repo root — "invalid source paths" from #602/#636/#639's own DoD
         language.
 
+        > **SUPERSEDED during review, kept for the record.** "Accepted as-is" was wrong
+        > in both directions and this plan's own reasoning is where the error entered.
+        > ADR-0003 does not merely *use* URLs, it requires the full commit SHA and
+        > forbids `blob/main`, so accepting every URL unchecked let mutable evidence pass
+        > a green run — the failure mode provenance exists to prevent. And "everything
+        > else must resolve to a real file" ignored CONTRACT.md section 3, which
+        > enumerates six citation forms, only three of them openable paths. As built,
+        > citations are parsed by form first: repository file links must be
+        > commit-pinned, repo-relative paths must resolve to a real file *inside* the
+        > repository, and the unopenable forms are reported through a non-fatal
+        > UNVERIFIED channel rather than misreported as missing files. A cross-model
+        > review panel and a later cross-model review-final pass found these between
+        > them; see the fix-round commits on this branch.
+
         Separately, reject any citation matching a SHORT, EXACT list of credential-shaped
         filenames/extensions — exact basename `.env` or matching `.env.*`, basename
         matching `id_rsa*` or `id_ed25519*`, extension `.pem` or `.key`, or a path

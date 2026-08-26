@@ -59,25 +59,38 @@ class ValidationReport:
     """What one validation run found.
 
     Two channels, deliberately separate. `errors` are hard failures: the run exits
-    non-zero. `unverified` names what this validator recognised as a legitimate
-    citation or artifact but genuinely cannot check offline -- a commit reference,
-    a graph edge, a tool result, an external URL, a generated projection with no
-    generator to reproduce it from. `launchpad/project-intelligence/CONTRACT.md`
+    non-zero. `unverified` names citation forms this validator RECOGNISES as
+    legitimate but genuinely cannot check offline -- a commit reference, a graph
+    edge, a tool result, an external URL. `launchpad/project-intelligence/CONTRACT.md`
     section 3 states that discipline directly: "parse what is parseable, and report
     the rest as unverified rather than skipping it". Silently passing them (what an
     earlier revision did) makes a clean PASS mean less than it claims.
+
+    The channel is for forms that are unverifiable BY NATURE, never for things the
+    validator merely failed to establish. Anything matching no known form is an
+    error, and so is a generated artifact whose provenance cannot be established
+    (see find_ownership_violations) -- an earlier revision of that check routed it
+    here, which a cross-model review-final pass correctly called a fail-open.
     """
 
     errors: list[str] = field(default_factory=list)
     unverified: list[str] = field(default_factory=list)
 
 
-# A node's `id` is only trustworthy for display AFTER schema validation -- the
-# schema constrains it to kebab-case, but a node that fails schema validation can
-# carry any string at all, including a path the DoD's "without leaking private
-# source content" forbids echoing. So every message names the node through this
-# helper: a schema-shaped id, or else the file path (never private content -- it
-# is a path inside this repository, which the run already walked).
+# Every message names its node through this helper, and the guarantee is about the
+# SHAPE of what gets printed, not about whether the node passed schema validation.
+# A schema-invalid node can carry any string at all in `id`, including a path the
+# DoD's "without leaking private source content" forbids echoing -- so the label is
+# either a string already matching the schema's kebab-case id pattern (no slashes,
+# dots or spaces, therefore not a path and not a citation value) or else the file
+# path, which is a location inside this repository the run already walked.
+#
+# Deliberately NOT gated on `node.error`: a kebab-case id from a node that failed
+# validation for some unrelated reason is still just a corpus identifier, and
+# degrading every such message to a path would make the common case harder to act
+# on for no gain. An independent cross-model review-final pass read the earlier
+# wording of this comment as promising a post-validation guarantee it never made;
+# the invariant above is the one the code actually enforces.
 _SAFE_ID_RE = re.compile(r"^[a-z0-9]+(-[a-z0-9]+)*$")
 
 
@@ -112,11 +125,31 @@ def _is_excluded(path: Path, corpus_root: Path) -> bool:
     return bool(rel_parts) and rel_parts[0] in EXCLUDED_TOP_LEVEL_DIRS
 
 
+def _escapes_root(path: Path, root: Path) -> bool:
+    """True if `path` resolves outside `root` -- i.e. it is a symlink out of the tree.
+
+    `rglob` yields symlinked files without dereferencing them, so a symlink placed
+    inside the corpus pointing at a Markdown node elsewhere on disk was walked,
+    parsed and validated as though it were canonical corpus content. ADR-0028 makes
+    the corpus tree itself the canonical source; content that only appears to live
+    there is not canonical, and validating it lends it authority it does not have.
+    An independent cross-model review-final pass found this by symlinking a valid
+    node in from outside and watching the run print PASS.
+
+    The sibling check for citation *targets* lives in _classify_repo_path; this one
+    governs which files are corpus content in the first place.
+    """
+    return not path.resolve().is_relative_to(root)
+
+
 def discover_markdown_files(corpus_root: Path) -> list[Path]:
     if not corpus_root.is_dir():
         raise CorpusRootMissing(str(corpus_root))
+    resolved_root = corpus_root.resolve()
     return sorted(
-        p for p in corpus_root.rglob("*.md") if not _is_excluded(p, corpus_root)
+        p
+        for p in corpus_root.rglob("*.md")
+        if not _is_excluded(p, corpus_root) and not _escapes_root(p, resolved_root)
     )
 
 
@@ -127,6 +160,37 @@ def _load_frontmatter(path: Path) -> dict:
         raise ValueError("no leading '---' frontmatter delimiter")
     _, frontmatter, _body = text.split("---\n", 2)
     return yaml.safe_load(frontmatter) or {}
+
+
+def _parse_failure(exc: Exception) -> str:
+    """Describe a frontmatter parse failure WITHOUT echoing the frontmatter.
+
+    PyYAML's exception text quotes the source line it choked on -- so a malformed
+    node whose frontmatter contains a credential-shaped path printed that path
+    straight into CI output. This is the same leak the schema-error path already
+    closed (see _schema_constraint), reached through a different door: a document
+    that fails to parse never reaches schema validation, so that fix could not help
+    it. An independent cross-model review-final pass found it.
+
+    A YAMLError's `problem_mark` carries line and column only -- positions, not
+    content -- so it is safe to print and is what an author actually needs to find
+    the fault. `problem` is PyYAML's own fixed description of the syntax error
+    ("expected <block end>, but found ':'"); it names YAML tokens, never the
+    document's values.
+    """
+    mark = getattr(exc, "problem_mark", None)
+    problem = getattr(exc, "problem", None)
+    if mark is not None:
+        # +1 twice: PyYAML marks are 0-based, and the frontmatter block starts on
+        # the line after the opening '---' delimiter.
+        location = f"frontmatter line {mark.line + 2}, column {mark.column + 1}"
+        if problem:
+            return f"could not be parsed as YAML at {location}: {problem}"
+        return f"could not be parsed as YAML at {location}"
+    if isinstance(exc, ValueError) and not isinstance(exc, yaml.YAMLError):
+        # Our own structural ValueError, raised with a fixed string above.
+        return str(exc)
+    return "could not be parsed as YAML"
 
 
 def _schema_constraint(error: jsonschema.ValidationError) -> str:
@@ -160,7 +224,7 @@ def load_nodes(corpus_root: Path) -> list[LoadedNode]:
         try:
             data = _load_frontmatter(path)
         except (ValueError, yaml.YAMLError) as exc:
-            nodes.append(LoadedNode(path=path, error=f"{path}: {exc}"))
+            nodes.append(LoadedNode(path=path, error=f"{path}: {_parse_failure(exc)}"))
             continue
 
         # Frontmatter is valid YAML but not a mapping (a bare list, string, number,
@@ -208,9 +272,16 @@ def load_nodes(corpus_root: Path) -> list[LoadedNode]:
 
 def find_duplicate_ids(nodes: list[LoadedNode]) -> list[str]:
     """Every node's `id` must be unique across the corpus."""
-    paths_by_id: dict[object, list[Path]] = {}
+    # Keyed on str ids only. `id` is unvalidated at this point -- duplicate detection
+    # deliberately includes schema-invalid nodes -- and YAML happily produces a list
+    # or dict there, which is unhashable: `id: [some/path]` crashed this dict with an
+    # unhandled TypeError instead of the controlled, node-naming failure the DoD
+    # requires. A non-str id is already reported by its own schema violation, so
+    # skipping it here loses nothing. An independent cross-model review-final pass
+    # found this.
+    paths_by_id: dict[str, list[Path]] = {}
     for node in nodes:
-        if node.id is None:
+        if not isinstance(node.id, str):
             continue
         paths_by_id.setdefault(node.id, []).append(node.path)
 
@@ -238,7 +309,14 @@ def find_unresolved_relationship_targets(nodes: list[LoadedNode]) -> list[str]:
     already requires each relationship to be an object, so a schema-invalid node
     is the only way a non-dict entry reaches here at all.
     """
-    known_ids = {node.id for node in nodes if node.id is not None}
+    # `isinstance(..., str)`, not `is not None`: an unvalidated `id` can be a YAML
+    # list or dict, and putting one in a set raises TypeError. This is the sibling
+    # of the same crash in find_duplicate_ids -- a review-final pass named that one;
+    # this second site surfaced when its fixture was run against the whole
+    # validator rather than that one function. A relationship target is
+    # schema-constrained to a kebab-case string, so a non-str id could never have
+    # been a legitimate match anyway.
+    known_ids = {node.id for node in nodes if isinstance(node.id, str)}
 
     errors = []
     for node in nodes:
@@ -305,19 +383,38 @@ def _is_prohibited_citation(citation: str) -> bool:
 _URL_PREFIXES = ("http://", "https://")
 _MARKDOWN_LINK_RE = re.compile(r"^\[[^\]]*\]\((?P<target>[^)\s]+)\)$")
 _FULL_SHA_RE = re.compile(r"^[0-9a-f]{40}$")
-# GitHub's two file-URL shapes. The capture is the ref segment -- a branch, a tag,
-# or a commit SHA -- which ADR-0003 requires to be a full SHA.
-_GITHUB_FILE_URL_RE = re.compile(
-    r"^https://github\.com/[^/\s]+/[^/\s]+/(?:blob|raw|tree)/(?P<ref>[^/\s]+)/\S+$"
+# GitHub repository URLs. `verb` decides whether the URL names a FILE (ADR-0003's
+# subject) or some other repository view; `ref` is the branch, tag or commit it is
+# pinned to. Both schemes are matched: an earlier revision anchored these to
+# `https://` while routing on a prefix tuple that also contained `http://`, so the
+# same mutable blob link reopened the whole finding under the plain-http scheme --
+# it fell past both patterns and came back as a non-fatal "external URL". An
+# independent review-code pass found that one-character bypass.
+_GITHUB_URL_RE = re.compile(
+    r"^https?://github\.com/[^/\s]+/[^/\s]+/"
+    r"(?P<verb>blob|raw|tree|blame|commits|edit)/(?P<ref>[^/\s]+)/\S+$"
 )
 _RAW_GITHUB_URL_RE = re.compile(
-    r"^https://raw\.githubusercontent\.com/[^/\s]+/[^/\s]+/(?P<ref>[^/\s]+)/\S+$"
+    r"^https?://raw\.githubusercontent\.com/[^/\s]+/[^/\s]+/(?P<ref>[^/\s]+)/\S+$"
 )
+# Only these two name a file's contents. `tree` is a directory listing and `blame`,
+# `commits` and `edit` are views of a file rather than a citation of it -- an
+# independent review-final pass found `tree/<sha>/<dir>` being accepted as a
+# verified file citation, and `blame/main/...` slipping past the pin check
+# altogether by not matching the file-only pattern.
+_GITHUB_FILE_VERBS = {"blob", "raw"}
 _COMMIT_CITATION_RE = re.compile(r"^commit\s+[0-9a-fA-F]{7,40}\b")
 _FILE_POSITION_RE = re.compile(r"^(?P<path>\S+?):(?P<start>\d+)(?:-(?P<end>\d+))?$")
-# Graph edges (`a -> b (1 hop)`) and tool results (`find_references(...) -> none`)
-# share this separator, and neither names a file.
-_CITATION_ARROW = " -> "
+# CONTRACT.md's two unopenable non-commit forms, matched by SHAPE rather than by
+# the bare presence of " -> ". An earlier revision treated any string containing
+# that separator as a recognised citation and downgraded it to the non-fatal
+# channel, so `private/path/id_rsa -> not a real citation` laundered arbitrary
+# text -- including a prohibited path -- past every check and exited 0. An
+# independent cross-model review-final pass found that fail-open.
+#   graph edge:  `is_shared_gated_kind -> is_unshared_gated_event (1 hop)`
+#   tool result: `find_references('x', crate='buzz-core') -> no callers here`
+_GRAPH_EDGE_RE = re.compile(r"^\S+ -> \S+ \(\d+ hops?\)$")
+_TOOL_RESULT_RE = re.compile(r"^[A-Za-z_][A-Za-z0-9_.]*\(.*\) -> .+$")
 
 
 @dataclass(frozen=True)
@@ -341,16 +438,23 @@ def _classify_url(url: str) -> CitationVerdict:
     issue) has no commit to pin to and no offline way to check it, so it is
     reported unverified rather than either failed or silently passed.
     """
-    for pattern in (_GITHUB_FILE_URL_RE, _RAW_GITHUB_URL_RE):
-        match = pattern.match(url)
-        if match:
-            if _FULL_SHA_RE.match(match.group("ref")):
-                return CitationVerdict("ok")
+    match = _GITHUB_URL_RE.match(url) or _RAW_GITHUB_URL_RE.match(url)
+    if match:
+        if not _FULL_SHA_RE.match(match.group("ref")):
             return CitationVerdict(
                 "error",
-                "is a repository file link pinned to a mutable ref rather than a "
+                "is a repository link pinned to a mutable ref rather than a "
                 "full commit SHA (ADR-0003)",
             )
+        # raw.githubusercontent.com has no verb segment; it is always file content.
+        verb = match.groupdict().get("verb", "raw")
+        if verb not in _GITHUB_FILE_VERBS:
+            return CitationVerdict(
+                "error",
+                f"is a repository '{verb}' view rather than a link to the cited "
+                "file itself (ADR-0003)",
+            )
+        return CitationVerdict("ok")
     return CitationVerdict(
         "unverified", "is an external URL this validator can neither pin nor open"
     )
@@ -423,7 +527,7 @@ def _classify_citation(citation: str, repo_root_path: Path) -> CitationVerdict:
             "unverified", "is a commit reference, which names no openable file"
         )
 
-    if _CITATION_ARROW in text:
+    if _GRAPH_EDGE_RE.match(text) or _TOOL_RESULT_RE.match(text):
         return CitationVerdict(
             "unverified",
             "is a graph-edge or tool-result citation, which names no openable file",
@@ -488,43 +592,49 @@ def find_citation_problems(
     return errors, unverified
 
 
-def find_ownership_violations(corpus_root: Path) -> tuple[list[str], list[str]]:
-    """Enforce ADR-0028's canonical-vs-generated boundary; return (errors, unverified).
+def find_ownership_violations(corpus_root: Path) -> list[str]:
+    """Enforce ADR-0028's canonical-vs-generated boundary.
 
     Every non-`.md` file (schema/ excluded) must live under a `generated/`
     subdirectory: hand-authored content is Markdown+frontmatter, anything else must
     be clearly segregated as a generated projection, never interleaved with
-    authored nodes. That placement rule is an error when broken.
+    authored nodes.
 
-    Placement is only half of what ADR-0028 asks, though. It also requires derived
-    views to be "never hand-authored, always reproducible from canonical Markdown",
-    and placement alone proves neither -- a file hand-written straight into
-    `generated/` is indistinguishable from a real projection. Verifying the rest
-    means regenerating and comparing, and no corpus generator exists yet to
-    regenerate from. So each artifact is reported unverified rather than passed in
-    silence: the check that cannot run yet stays visible instead of reading as a
-    check that ran and was satisfied. Deciding the provenance contract those
-    artifacts should carry is a corpus-generator decision, explicitly out of this
-    issue's scope ("deciding unresolved ADR outcomes").
+    Placement is only half of what ADR-0028 asks, and it is the only half a
+    directory name can prove. The other half -- derived views are "never
+    hand-authored, always reproducible from canonical Markdown" -- needs a
+    generator to regenerate from and compare against, and none exists yet. A file
+    hand-written straight into `generated/` is, today, indistinguishable from a
+    real projection.
+
+    So both cases fail, with different messages. An earlier revision of this fix
+    reported the `generated/` case as a non-fatal notice instead, which an
+    independent cross-model review-final pass rejected: a hand-authored artifact
+    would print one line and still exit 0, permitting exactly the state ADR-0028
+    forbids and the validator cannot rule out. Failing closed costs nothing today
+    (the corpus contains no such artifact) and forces the provenance contract to
+    exist before the first one lands. Defining that contract belongs to #1316,
+    "document corpus standard for generated content", whose own done-criteria
+    include the enforcement and exception process -- this validator refuses what it
+    cannot establish rather than deciding it, which the issue puts out of scope.
     """
     errors: list[str] = []
-    unverified: list[str] = []
     for path in sorted(corpus_root.rglob("*")):
         if path.is_dir() or path.suffix == ".md" or _is_excluded(path, corpus_root):
             continue
         rel = path.relative_to(corpus_root)
         if "generated" in rel.parts[:-1]:
-            unverified.append(
-                f"{rel}: generated artifact whose generator provenance and "
-                "reproducibility cannot be checked -- no corpus generator exists "
-                "yet to reproduce it from canonical Markdown (ADR-0028)"
+            errors.append(
+                f"{rel}: generated artifact whose provenance and reproducibility "
+                "cannot be established -- no corpus generator exists yet to "
+                "reproduce it from canonical Markdown (ADR-0028); see #1316"
             )
             continue
         errors.append(
             f"{rel}: non-.md file outside generated/ -- misplaced generated "
             "artifact, or hand-authored content in the wrong format"
         )
-    return errors, unverified
+    return errors
 
 
 def validate_corpus(corpus_root: Path) -> ValidationReport:
@@ -540,9 +650,7 @@ def validate_corpus(corpus_root: Path) -> ValidationReport:
     report.errors.extend(citation_errors)
     report.unverified.extend(citation_unverified)
 
-    ownership_errors, ownership_unverified = find_ownership_violations(corpus_root)
-    report.errors.extend(ownership_errors)
-    report.unverified.extend(ownership_unverified)
+    report.errors.extend(find_ownership_violations(corpus_root))
 
     return report
 
