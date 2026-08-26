@@ -19,7 +19,7 @@ evidence:
     entry_class: FACT
     evidence:
       - "launchpad/project-intelligence/corpus/validate.py"
-      - "launchpad/docs/corpus/AGENTS.md"
+      - "https://github.com/launchpad-26/buzz/blob/ebe2daf721c7d7a96fdd84eba0a0a5d37eefa109/launchpad/docs/corpus/AGENTS.md"
   - statement: "ADR-0028 names the human-read pull-request diff as the enforcement mechanism the corpus depends on, and chose Markdown over a machine-readable record format for that reason."
     entry_class: FACT
     evidence:
@@ -31,7 +31,7 @@ evidence:
   - statement: "The instruction node defers per-type standards and per-type templates to tasks #1307-#1351 and states that until they land there is no per-type template to follow."
     entry_class: FACT
     evidence:
-      - "launchpad/docs/corpus/AGENTS.md"
+      - "https://github.com/launchpad-26/buzz/blob/ebe2daf721c7d7a96fdd84eba0a0a5d37eefa109/launchpad/docs/corpus/AGENTS.md"
   - statement: "Four corpus standards drafted in parallel independently converged on the same five-part shape: a scope-and-authority opening, separated normative requirements, an enforcement section, an exceptions-and-escalation section, and a closing scope-and-omissions section."
     entry_class: FACT
     evidence:
@@ -57,9 +57,17 @@ evidence:
   - statement: "Issue #1313's definition of done requires this node to state scope and authority, to separate MUST requirements from SHOULD guidance, to define enforcement and an exception/escalation process, and to link decisions rather than duplicate them."
     entry_class: TEAM_KNOWLEDGE
     provided_by: "launchpad-26/buzz#1313 definition of done"
-  - statement: "All nineteen standards issues #1307-#1325 carry those four required-content clauses verbatim, and so do all five sampled template issues #1326, #1330, #1344, #1346 and #1351, which makes them batch-wide document requirements rather than a contract specific to standards."
+  - statement: "All nineteen standards issues #1307-#1325 carry those four required-content clauses verbatim, and so do all five sampled template issues #1326, #1330, #1344, #1346 and #1351, which makes them shared across the batch's policy-kind tasks rather than a contract specific to standards; they are not batch-wide, because reference-kind tasks such as #639 carry a different four-clause list."
     entry_class: TEAM_KNOWLEDGE
-    provided_by: "launchpad-26/buzz issues #1307-#1325 and #1326, #1330, #1344, #1346, #1351 definition-of-done clauses"
+    provided_by: "launchpad-26/buzz issues #1307-#1325, #1326, #1330, #1344, #1346, #1351 and #639 definition-of-done clauses"
+  - statement: "A repo-relative citation is resolved against the tree being validated, and one that does not resolve there is a hard error rather than an UNVERIFIED notice, so a citation naming a file that exists only on an unmerged branch passes locally and fails once the node reaches its merge target."
+    entry_class: FACT
+    evidence:
+      - "launchpad/project-intelligence/corpus/validate.py"
+  - statement: "The instruction node's create procedure names the merge-target resolution hazard for relationship targets and does not name it for citations, which share the hazard."
+    entry_class: FACT
+    evidence:
+      - "https://github.com/launchpad-26/buzz/blob/ebe2daf721c7d7a96fdd84eba0a0a5d37eefa109/launchpad/docs/corpus/AGENTS.md"
   - statement: "Because no check reads body prose, every requirement stated in this standard and in every sibling standard is held by pull-request review alone."
     entry_class: INFERENCE
     evidence:
@@ -103,20 +111,25 @@ holds it.
 what a confidence number means, how many ideas a node may hold: each is its own
 standard's, and this document has no opinion on any of them.
 
-**Where the authority comes from.** Every task in this batch carries the same four
-required-content clauses — state scope and authority, separate MUST from SHOULD, define
-enforcement and an exception process, link decisions rather than duplicate them. This
-node's own task, #1313, requires exactly those four of it, as every sibling task
-requires them of its own node. They are the requirement; this document is only where
-they stop being a checklist inside issue bodies and become something the corpus itself
-carries after those issues close.
+**Where the authority comes from.** Every task that commissions a *policy-kind* node in
+this batch carries the same four required-content clauses — state scope and authority,
+separate MUST from SHOULD, define enforcement and an exception process, link decisions
+rather than duplicate them. This node's own task, #1313, requires exactly those four of
+it, as every sibling standards task requires them of its own node. They are the
+requirement; this document is only where they stop being a checklist inside issue bodies
+and become something the corpus itself carries after those issues close.
 
-Be precise about what that evidence shows: those four clauses are **batch-wide**, not
-specific to standards. The template tasks sampled alongside the standards tasks carry
-them verbatim too. This document scopes them to `standards/` because that is the family
-it sits in and the only one with drafted documents to check against — not because the
-clauses single that family out. The templates' own required-content rule is a different
-list and is not this node's.
+Be precise about the reach of that evidence, in both directions. The clauses are **not
+specific to standards**: the template tasks sampled alongside the standards tasks carry
+them verbatim, so this document scopes them to `standards/` because that is the family
+it sits in and the only one with drafted documents to check against, not because the
+clauses single that family out. But they are **not batch-wide** either. Reference-kind
+tasks in the same batch carry a different four-clause list — #639, which this document
+cites below as the owner of the corpus entry point, requires instead that its node be
+structured for lookup rather than narrative teaching, contain only facts supported by
+current source, define scope and omissions, and link authoritative sources. The four
+clauses track the kind of node commissioned, not the batch. The templates' own
+required-content rule is a third list and is not this node's.
 
 **Why the shape is the thing worth standardising.** ADR-0028 chose Markdown over a
 machine-readable record format because the corpus is reviewed at the pull request that
@@ -237,10 +250,11 @@ the parent feature #605 describing the document you needed to write and could no
 not widen a requirement locally to fit: a standard that each author quietly adjusts has
 stopped being one, and no check will notice.
 
-**`status: flagged` is not the escape hatch.** ADR-0029 gives that state one meaning:
-two authoritative sources of the same claim type contradict each other and no human has
-resolved it. It is a statement about a node's evidence. A requirement you find
-inconvenient, or a section you would rather not write, is neither.
+**`status: flagged` is not the escape hatch.** It means what ADR-0029 says it means —
+read it there, because a copy of that definition here would be prose no check compares
+against the decision it came from, which is what D9 forbids and why. What matters for
+this section is only that it is a statement about a node's evidence. A requirement you
+find inconvenient, or a section you would rather not write, is not one.
 
 ## Scope and omissions
 
@@ -283,6 +297,17 @@ and on `launchpad` no corpus node exists yet at all. An edge declared here would
 cleanly in this worktree and be a hard error in CI. The reason is merge order; the edges
 are worth adding in one pass once the batch has landed.
 
+**The same merge-order trap applies to citations, and it caught this node.** A
+repo-relative citation is resolved against the tree being validated, so a path that
+exists only on an unmerged branch is a hard error there exactly as a dangling
+relationship target is — but the creation procedure names the hazard only for
+relationships, so nothing prompts an author to check it. This node cited
+`launchpad/docs/corpus/AGENTS.md`, which lives only on the unmerged branch this one is
+stacked on. Materialising a clean `launchpad` tree and validating against it produced
+two hard errors; the citations were changed to revision-pinned links, which resolve from
+anywhere. Both citations of that file are now pinned for that reason and not as a
+stylistic choice. The procedure gap is #1488.
+
 **Expected but not verified when this node was written:**
 
 - **No CI run has exercised this node.** Every claim about the checker comes from
@@ -292,8 +317,11 @@ are worth adding in one pass once the batch has landed.
   a revision and true at it. Whether the merged versions still look that way after their
   own review rounds is unknown, and nothing here tracks it.
 - **The template issues were sampled, not enumerated.** The claim that the four
-  required-content clauses are batch-wide rests on all nineteen standards issues and on
-  five of the twenty-six template issues, not on all of them.
+  required-content clauses reach beyond standards to the other policy-kind tasks rests
+  on all nineteen standards issues and on five of the twenty-six template issues, not on
+  all of them. The counter-half — that they do not reach reference-kind tasks — rests on
+  #639 alone, which is one counterexample, enough to refute "batch-wide" and not enough
+  to characterise what every other kind of task requires.
 - **No agent harness was observed reading this file.** The same gap the instruction node
   records about itself.
 - **Nothing establishes `standards/` as the settled location.** No schema field, checker

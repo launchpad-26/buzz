@@ -54,9 +54,14 @@ BUILDING (a). The reasons, in order of weight:
      pushed branches with open PRs. They converged, independently, on a recognisable
      shape (scope-and-authority first, MUST/SHOULD split, an enforcement section that
      states what is *not* enforced, exceptions-and-escalation, scope-and-omissions
-     last) and diverged on at least seven points, including four different H1 title
-     conventions across four documents. Convergence shows the shape is natural;
-     divergence shows nothing holds it.
+     last) and diverged on at least seven points, including four distinct H1 title
+     strings following three different conventions. Convergence shows the shape is
+     natural; divergence shows nothing holds it.
+     (CORRECTED after review-final: this line originally said "four different H1 title
+     conventions across four documents". There are four distinct strings but only three
+     conventions — `# Standard: code references` and `` # Standard: `confidence` ``
+     share a convention and differ only by a code span. The node was corrected during
+     STEP 4 and the plan was left standing, which is the drift this note closes.)
 
   4. The requirement (a) would codify exists today only in GitHub issue bodies. Those
      four clauses vanish from the project's reach when the issues close. A corpus
