@@ -37,7 +37,17 @@ evidence:
     entry_class: FACT
     evidence:
       - "launchpad/project-intelligence/corpus/validate.py"
-  - statement: "Front matter must begin on the file's first line, because the checker requires the text to start with the opening delimiter rather than searching for it."
+  - statement: "Front matter must begin on the file's first line, because the checker requires the text to start with the opening delimiter rather than searching for it; a leading blank line and a byte-order mark were each run and each rejected."
+    entry_class: FACT
+    evidence:
+      - "launchpad/project-intelligence/corpus/validate.py"
+  - statement: "Nothing requires a commit citation to be present: a node whose ledger contains no commit citation anywhere validates clean, so recording the revision is a convention a reviewer holds rather than a rule the checker holds."
+    entry_class: FACT
+    evidence:
+      - "launchpad/project-intelligence/corpus/validate.py"
+      - "launchpad/docs/corpus/schema/node.schema.json"
+      - "launchpad/docs/corpus/AGENTS.md"
+  - statement: "The checker resolves a relationship target only against the nodes loaded by the run that is executing, so it cannot establish that a target exists on the branch being merged into."
     entry_class: FACT
     evidence:
       - "launchpad/project-intelligence/corpus/validate.py"
@@ -209,14 +219,20 @@ Purpose, not permitted values. For the values, open the schema.
 
 ## Requirements
 
-These are MUST. Each is enforced by the checker, and a run that exits non-zero in CI
-blocks the change.
+These are MUST, and **each was confirmed by building a node that breaks it and watching
+the checker exit non-zero.** A violation fails CI and blocks the change.
 
-1. **The file MUST begin with the opening delimiter on line 1.** The checker tests
-   that the text *starts with* it; it does not search for it. A blank line, a comment,
-   or a byte-order mark before it is rejected as having no front matter at all.
-2. **The block MUST be closed, and MUST NOT contain a delimiter line of its own.** See
-   *Delimiters* below — this is the failure with the sharpest teeth.
+Two rules that read like requirements are deliberately *not* here, because the checker
+does not hold them. They are in *Guidance*, and why that line is drawn so sharply is in
+*Where the line actually falls*.
+
+1. **The file MUST begin with the opening delimiter on line 1.** The checker tests that
+   the text *starts with* it; it does not search for it. A blank line or a byte-order
+   mark before it is rejected as having no front matter at all — both cases were run,
+   both rejected with `no leading '---' frontmatter delimiter`.
+2. **The block MUST be closed.** An unterminated block is rejected, though the message
+   is a Python unpacking error rather than a description of the problem — see
+   *Delimiters*.
 3. **Front matter MUST be a YAML mapping.** A sequence or a bare scalar is valid YAML
    and is rejected before schema validation.
 4. **No key MUST appear twice.** YAML would resolve a repeat to the last value
@@ -224,32 +240,57 @@ blocks the change.
 5. **Every field MUST be one the schema defines, and every required field MUST be
    present.** The field set is closed. A key the schema does not know is an error, not
    an ignored extra.
-6. **The revision the node was checked at MUST be recorded as a commit citation in the
-   `evidence` ledger.** There is no `provenance` field — the ledger is the only place
-   the schema permits it.
-7. **A `relationships` target MUST name a node that exists on the branch being merged
-   into**, not merely on the branch being worked on. Declaring none is always valid.
+6. **A declared `relationships` target MUST resolve to a node the checker loaded.** An
+   unresolvable target is a hard error. Note the scope — *loaded where the run happens*;
+   guidance item 5 is the half of this the checker cannot hold. Declaring no
+   relationships at all is always valid.
 
 ## Guidance
 
-These are SHOULD. **Nothing below is enforced by any check**, which is precisely why
-they are written down: they are the conventions a reviewer has to hold.
+These are SHOULD. **Nothing below is enforced by any check** — each was confirmed by
+building a node that violates it and watching the checker pass it clean. That is
+precisely why they are written down: they are the conventions a reviewer has to hold.
 
-1. **Quote every scalar value.** An unquoted value is subject to YAML's implicit
-   typing and comment stripping. Both failures are silent (see *YAML hazards*).
-2. **State in the body why `relationships` is absent**, when it is. "Nothing to point
+1. **Quote every scalar value.** An unquoted value is subject to YAML's implicit typing
+   and comment stripping. Both failures are silent (see *YAML hazards*).
+2. **Do not put a delimiter line inside the front-matter block.** This reads like a
+   requirement and is not one. A stray delimiter ends the block, and every field after
+   it becomes body text that nothing parses and nothing reports — including a
+   `relationships` block whose target resolves nowhere, which is otherwise requirement 6
+   and a hard error. A node like that **exits 0**. See *Delimiters*; filed as #1482.
+3. **Record the revision the node was checked at as a commit citation in the `evidence`
+   ledger.** There is no `provenance` field, so the ledger is the only place the schema
+   permits it — but nothing requires the citation to be present. A node carrying no
+   commit citation anywhere validates clean; only a reader will notice it missing.
+4. **State in the body why `relationships` is absent**, when it is. "Nothing to point
    at" stops being true the moment a second node merges, and a justification copied
    from a node written earlier is how two sibling nodes have already shipped a false
    one. Give the reason that is true today — usually merge order.
-3. **Prefer a bare path to a path with a line number** in citations. The path is opened
+5. **Check a relationship target against the branch you are merging into**, not the one
+   you are working on. Requirement 6 is enforced only against the nodes present where
+   the checker runs, and it cannot see another branch. A target that exists only in your
+   worktree passes for you and fails for whoever merges without it.
+6. **Prefer a bare path to a path with a line number** in citations. The path is opened
    and checked; the line number is not compared against the file at all, so a position
    that has drifted looks precise and is wrong (#1459).
-4. **Keep the ledger to one commit-only entry** — the revision. A second claim resting
+7. **Keep the ledger to one commit-only entry** — the revision. A second claim resting
    on nothing but a commit id has been checked by nothing, and produces only a
    non-fatal notice. No check will raise it.
-5. **Order fields for a reader.** Order carries no meaning to the parser; it is
+8. **Order fields for a reader.** Order carries no meaning to the parser; it is
    entirely for the human reading the PR diff, which ADR-0028 makes the corpus's actual
    audit mechanism.
+
+### Where the line actually falls
+
+The split above is not stylistic. Three of these conventions — items 2, 3 and 5 — are
+ones an author would reasonably assume CI holds, and it does not. Each was asserted as
+a requirement in an earlier revision of this node, and each moved here only after a
+reviewer built the violating node and watched it pass.
+
+That is the shape of the risk in general: **a green run is evidence about structure, not
+about correctness**, and the gap is widest exactly where a rule feels most obviously
+mandatory. When you need to know whether something is enforced, do not reason from how
+important the rule seems — write the node that breaks it and run the checker.
 
 ## Delimiters
 
@@ -271,7 +312,7 @@ Two related failures are noisy rather than silent, and one of them is confusing:
 | What you wrote | What happens |
 |---|---|
 | Anything before the opening delimiter | Rejected: no front matter delimiter found |
-| No closing delimiter at all | Rejected, but the message is a Python unpacking error about expecting three values and getting two. It names the file, so it is actionable; it does not mention the delimiter. |
+| No closing delimiter at all | Rejected, but the message is a Python unpacking error about expecting three values and getting two. It names the file, so it is actionable; it does not mention the delimiter (#1483). |
 
 ## YAML hazards
 
@@ -337,14 +378,26 @@ and there is no second, laxer gate.
 recognised a citation's shape and had nothing it could open. A run printing them still
 exits 0.
 
-**What a passing run establishes about front matter:** that it is well-formed, that
-its fields are ones the schema defines with values the schema accepts, that its id is
-unique, that its edges resolve, and that its cited paths name real files.
+**What a passing run establishes about front matter:** that the block is well-formed and
+closed, that its fields are ones the schema defines with values the schema accepts, that
+its id is unique, that the edges *it can see* resolve, and that its cited paths name
+real files.
 
-**What it does not:** that any statement in the ledger is true, that a cited file
-backs the claim it sits under, that a cited line number is still the right line, or
-that anything at all in the body is accurate. Checking is structural. Only a reader
-establishes the rest, which is what makes the PR diff the real gate.
+**What it does not:** that any statement in the ledger is true, that a cited file backs
+the claim it sits under, that a cited line number is still the right line, or that
+anything at all in the body is accurate.
+
+Three of those gaps are sharp enough to name individually, because a passing run looks
+like proof of each and is not:
+
+| A green run does not establish | Because |
+|---|---|
+| That the block contains everything you wrote in it | A stray delimiter ends it, and the rest is discarded unread — including a `relationships` block that would otherwise be a hard error |
+| That the node records the revision it was checked at | Nothing requires a commit citation; a ledger with none passes clean |
+| That a relationship target will still resolve after merge | Targets are checked against the nodes loaded *here*, and the checker cannot see the branch you are merging into |
+
+Checking is structural. Only a reader establishes the rest, which is what makes the PR
+diff the real gate.
 
 ## Exceptions and escalation
 
@@ -398,7 +451,13 @@ empty corpus, and the edge should be revisited once both nodes are on `launchpad
 - **The claim that nothing reads `audiences` is an inference from an exhaustive search,
   not a proof.** A consumer reading the field dynamically, or one outside this
   repository, would not appear in it. It is recorded at 0.9 confidence for that reason.
-- **The two noisy delimiter failures were reproduced; the byte-order-mark case was
-  not.** A file beginning with a BOM is expected to be rejected for the same reason a
-  blank first line is — the text would not start with the delimiter — but that was
-  reasoned from the code, not run.
+- **Every MUST in *Requirements* and every SHOULD in *Guidance* was run, in both
+  directions.** Each requirement has a node that breaks it and fails; each guidance item
+  has a node that violates it and passes. What was *not* done is the converse sweep —
+  enumerating every path through the checker and asking which rule catches it — so a
+  rule this node never thought to state could be enforced without being written down
+  here.
+- **The claim that a green run says nothing about body prose rests on reading the code,
+  not on a fixture.** The checker binds the body to a name it never reads again, which
+  is plain in the source; no test was built that puts a false claim in a body and
+  confirms the run stays clean, because there is nothing that could report it.
