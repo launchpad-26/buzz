@@ -110,6 +110,74 @@ owned by #1316; until it lands, a corpus change adds Markdown only.
 
 ## Evidence, citations, and what validation proves
 
+Every substantive claim in a node's body needs an entry in its front-matter
+`evidence` array. That array is also the node's **provenance ledger** — there is no
+separate provenance field, so the revision a node was written against belongs in
+there too, as a commit citation.
+
+### Choosing a class
+
+Three classes exist: `FACT`, `INFERENCE`, `TEAM_KNOWLEDGE`. Which one you choose
+decides which additional fields the schema then requires or forbids — those rules are
+in `node.schema.json` and `schema/README.md`, and are not restated here.
+
+What the classes are *for* is the part that is easy to get wrong:
+
+- **`FACT`** — you opened the cited source and it says so. Not "a source exists that
+  probably says so."
+- **`INFERENCE`** — you reasoned to it from evidence. Reasoning is not fact, however
+  good it is.
+- **`TEAM_KNOWLEDGE`** — a person told you, and nothing corroborates it. This is the
+  class that exists for uncorroborated statements; using it honestly is better than
+  promoting a recollection to `FACT`.
+
+When two sources disagree, do not average them and do not pick the newer one. For how
+the system **currently behaves**, executable evidence — code, config, schema, passing
+tests — outranks documentation and history. For **intended or authorized** behaviour,
+accepted decisions outrank code that has drifted from them. When two sources of the
+*same* claim type conflict, stop: record the conflict and leave the node flagged for a
+human rather than resolving it yourself. `ADR-0029` is the full rule.
+
+### What the checker does with each citation shape
+
+`CONTRACT.md` §3 defines the six shapes. What `validate.py` does with them is not
+documented anywhere else, so it is here:
+
+| Shape | Checker's verdict |
+|---|---|
+| Bare repository path | Resolved; must be a real **file** inside the repo. A directory fails. |
+| Path with a line or line range | Resolved as a path. **The line number is not checked** — see below. |
+| GitHub file link | Must be pinned to a full 40-character commit SHA, and must name a file. |
+| Commit reference | Reported `UNVERIFIED`. Nothing on disk to open. |
+| Graph edge | Reported `UNVERIFIED`. |
+| Tool result | Reported `UNVERIFIED`. |
+
+Anything matching **no** known shape is a hard error, not an `UNVERIFIED` notice.
+
+### Three things a passing run does not mean
+
+**1. It does not mean a citation supports its claim.** Checking is *structural*. The
+checker confirms a path resolves to a real file; it never opens that file and compares
+it against your `statement`. A `FACT` citing a real file that says nothing on the
+subject passes cleanly. Only a human reading the source establishes a `FACT`.
+
+**2. `UNVERIFIED` is not a pass.** Those notices are printed, never fatal, and they
+mean the checker recognised the shape and could not open it. A `FACT` resting only on
+`UNVERIFIED` citations has not been checked by anything — open the source and keep the
+class, or change the class.
+
+**3. A line number is not verified.** `Justfile:999999` is accepted against a
+1005-line file (#1459). Prefer a bare path until that is fixed; a position that has
+silently drifted is worse than no position, because it looks precise.
+
+### Pinning
+
+A GitHub link to a repository file must use the full 40-character commit SHA.
+`blob/main` is rejected, and correctly: evidence that can change underneath a green
+validation run is the exact staleness provenance exists to catch. A link pinned but
+naming no file is also rejected — it cites a repository at a commit, not the source
+of the claim.
+
 ## Creating a node
 
 ## Updating a node
