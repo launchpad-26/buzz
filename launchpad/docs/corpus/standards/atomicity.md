@@ -24,6 +24,10 @@ evidence:
     entry_class: FACT
     evidence:
       - "launchpad/docs/corpus/AGENTS.md"
+  - statement: "The sibling standard tasks this node names carry these subjects: 1313 documentation standard, 1314 evidence, 1316 generated content, 1317 identifiers, 1318 linking, 1319 naming, 1320 normative language, 1322 review requirements, 1324 taxonomy."
+    entry_class: FACT
+    evidence:
+      - "gh_issue_list(repo='launchpad-26/buzz', search='corpus standard in:title') -> titles read for issues 1307 through 1325, all open"
   - statement: "A second concept, contract or procedure discovered while drafting is filed as a separate task rather than folded into the document being written."
     entry_class: TEAM_KNOWLEDGE
     provided_by: "launchpad-26/buzz#1307 definition of done: 'any newly discovered second concept/contract/procedure is filed as a separate task instead of being folded into this document'"
@@ -421,12 +425,12 @@ node split into six fragments.
 accident. ADR-0028 chose Markdown over a machine-readable record format precisely
 because the corpus is reviewed as a human-read diff at the pull request that changes
 it, and named that review as the mechanism the rest of the corpus rests on. Atomicity
-is one of the things it rests on it for.
+is one of the things it is relied on for.
 
 This is not the first such convention. The instruction node already names another — a
 ledger carrying more than one commit-only `FACT` — and says outright that a reviewer
-has to hold it because no check will. Atomicity belongs to the same class, and a
-reviewer who does not look for it is the only failure mode either has.
+has to hold it because no check will. Atomicity belongs to the same class, and the only
+failure mode either has is a reviewer who does not look.
 
 ### What a reviewer checks
 
@@ -435,9 +439,8 @@ Five questions, in the order that finds problems fastest:
 1. **Can the node's subject be stated in one sentence with no conjunction joining two
    nouns?** If the pull-request description needed one, that is the same signal.
 2. **Does any part of the body want a different `type`, `status` or `origin` than the
-   one declared?** This is the decisive test and the only one checkable without
-   guessing at the future. Read the body against the front matter, not the front matter
-   alone.
+   one declared?** This is the decisive test and the only one that settles the question
+   on its own. Read the body against the front matter, not the front matter alone.
 3. **Would an ordinary repository change obsolete half the claims and leave the rest?**
    If so, the recorded revision cannot honestly cover both halves.
 4. **Where the node declined a subject, is the boundary recorded** with a sibling `id`
@@ -491,12 +494,11 @@ when a second concept appears mid-draft, and who enforces any of it.
 
 **No `relationships` in this node's front matter.**
 This node declares no `relationships`, and the absence is deliberate rather than an
-oversight. At the revision recorded in its ledger
-the corpus contained exactly one other node, the instruction node, and every sibling
-standard this document points at — #1313, #1314, #1317, #1318, #1319, #1320, #1322,
-#1324 — is an open task with no node and therefore no `id` to target. A
-`relationships[].target` naming an id no node carries is a hard validation error, so
-the edges wait until the nodes exist.
+oversight. At the revision recorded in its ledger the corpus contained exactly one
+other node, the instruction node, and every sibling standard this document points at
+— #1313, #1314, #1316, #1317, #1318, #1319, #1320, #1322, #1324 — is an open task with
+no node and therefore no `id` to target. A `relationships[].target` naming an id no
+node carries is a hard validation error, so the edges wait until the nodes exist.
 
 **Expected but not verified when this node was written:**
 
