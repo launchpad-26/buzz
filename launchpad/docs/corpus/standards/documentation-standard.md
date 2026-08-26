@@ -38,7 +38,7 @@ evidence:
       - "https://github.com/launchpad-26/buzz/blob/5f7e1330b2d422129bb92148c5d4a2ee4cc8958e/launchpad/docs/corpus/standards/code-references.md"
       - "https://github.com/launchpad-26/buzz/blob/e8ba1ec8e2d605ecfbc6a7d9ee0ca058e95a2d24/launchpad/docs/corpus/standards/confidence.md"
       - "https://github.com/launchpad-26/buzz/blob/8eb2d2658a707c025ba7bcf1c2f2063f5de2e387/launchpad/docs/corpus/standards/decision-references.md"
-  - statement: "Those same four standards carry four different H1 title forms, disagree on whether top-level sections are numbered, and name their normative and enforcement sections four different ways."
+  - statement: "Those same four standards carry four distinct H1 strings following three different title conventions, disagree on whether top-level sections are numbered, and name their normative and their enforcement sections four different ways each."
     entry_class: FACT
     evidence:
       - "https://github.com/launchpad-26/buzz/blob/b899609f677317ebde4ba16620b3dd23b1510d62/launchpad/docs/corpus/standards/atomicity.md"
@@ -75,11 +75,27 @@ need; this is a reference, not a tutorial.
 ## Scope and authority
 
 **This standard governs the shape of one kind of document:** a corpus node that states
-requirements on corpus content. Those live under
-`launchpad/docs/corpus/standards/`, they declare `type: governance`, and there are
-nineteen of them in flight. It governs how such a document is built — which sections it
-carries, how it states a requirement, how it says what holds that requirement — and
-nothing about any particular subject one of them covers.
+requirements on corpus content. Those live under `launchpad/docs/corpus/standards/`,
+they declare `type: governance`, and there are nineteen of them in flight. It governs
+how such a document is built — which sections it carries, how it states a requirement,
+how it says what holds that requirement — and nothing about any particular subject one
+of them covers.
+
+`governance` is the type because it is the enum member that fits and because there is no
+alternative: the schema's `type` enum has no `policy` value. If a standard ever needs
+one, that is a schema change under `launchpad/docs/corpus/schema/COMPATIBILITY.md`, not
+a choice an author makes per node.
+
+**Why this document exists at all.** The instruction node hands per-type standards and
+per-type templates to the tasks in this batch and says outright that until they land
+there is no per-type template to follow. Nineteen standards are being written against
+that gap at once. Four are far enough along to compare, and they show both halves of the
+problem: left to themselves, independent authors converged on the same five-part
+shape — a scope-and-authority opening, separated normative requirements, an enforcement
+section, an exceptions-and-escalation section, and a closing scope-and-omissions
+section — and then diverged on nearly every surface detail of it. Convergence is the
+evidence that the shape is the natural one. Divergence is the evidence that nothing
+holds it.
 
 **It does not govern what those standards say.** Whether a citation may name a line,
 what a confidence number means, how many ideas a node may hold: each is its own
@@ -87,9 +103,11 @@ standard's, and this document has no opinion on any of them.
 
 **Where the authority comes from.** Every task in this batch carries the same four
 required-content clauses — state scope and authority, separate MUST from SHOULD, define
-enforcement and an exception process, link decisions rather than duplicate them. They
-are the requirement; this node is only where they stop being a checklist inside issue
-bodies and become something the corpus itself carries after those issues close.
+enforcement and an exception process, link decisions rather than duplicate them. This
+node's own task, #1313, requires exactly those four of it, as every sibling task
+requires them of its own node. They are the requirement; this document is only where
+they stop being a checklist inside issue bodies and become something the corpus itself
+carries after those issues close.
 
 Be precise about what that evidence shows: those four clauses are **batch-wide**, not
 specific to standards. The template tasks sampled alongside the standards tasks carry
@@ -143,6 +161,134 @@ would be evidence the rule is wrong.
 
 ## Enforcement
 
+**Nothing automated enforces any requirement on this page, and nothing can.**
+
+The deterministic checker splits a node's front matter off and discards the body before
+any check runs. Not "does not currently inspect it" — the body is not passed to
+anything. Every check the corpus has is therefore a check on front matter, ids,
+relationship targets, citation forms and file placement, and none of those is a property
+of how a document's sections are arranged. `AGENTS.md` and
+`launchpad/project-intelligence/corpus/validate.py` are where what *is* checked lives;
+D9 says not to copy it here.
+
+A standard with none of D1's six sections passes exactly as cleanly as this one. So does
+a standard whose H1 is anything at all, whose requirements have no identifiers, and
+whose deference table points at files that were deleted a year ago.
+
+**Nor does the checker know what a standard is.** It applies no rule keyed to a
+directory: a node under `standards/` is validated identically to a node anywhere else.
+`standards/` is a convention held by authors, not a namespace the tooling recognises.
+
+**Enforcement is the pull-request review**, and that is by design rather than by
+omission. ADR-0028 chose the canonical representation specifically so the corpus would
+be reviewed as a human-read diff, and named that review as the enforcement mechanism the
+rest of the corpus contract depends on. This standard exists to give that reviewer
+something to hold: D1-D10 are the checklist, and G1-G4 are what to ask for when the
+checklist passes and the document is still hard to use.
+
+**What a green run does not establish about a standard**, stated plainly because D6
+requires every standard to say this about its own subject:
+
+| Not established | Consequence |
+|---|---|
+| That the six sections are present, or in order | A one-section standard validates |
+| That MUST and SHOULD are separated | A single mixed list validates |
+| That requirements have identifiers | An unciteable requirement validates |
+| That a requirement names its enforcement | Silence on enforcement validates |
+| That a deference table's targets exist | Only citations in the `evidence` ledger are resolved; a link in body prose is never opened |
+| That the H1 follows D10 | Any H1, or none, validates |
+
+The only failure mode any of this has is a reviewer who does not look. That is the same
+failure mode the corpus already accepts elsewhere — the instruction node names a ledger
+carrying more than one commit-only `FACT` as a convention a reviewer has to hold because
+no check will — and this standard belongs to that class rather than introducing it.
+
 ## Exceptions and escalation
 
+**There is no exemption from carrying a section.** D1's six are structural, and a
+standard with nothing to say in one of them writes the section and says so. "Nothing
+here yet, owned by #NNNN" is a useful sentence; a missing section is indistinguishable
+from an oversight, which is exactly what a reviewer scanning for a gap cannot afford.
+
+**A SHOULD is departed from in the open, not waived.** G1-G4 are guidance, so a standard
+may do otherwise — but it says which one it departed from and why, in the section the
+guidance would have applied to. An unexplained departure is not an exercise of
+discretion; it is indistinguishable from not having read this page.
+
+**A requirement whose application is disputed is a judgement, not an exception.** The
+author records the tension in the standard and names it in the pull request; the
+reviewer decides, and that is where it ends almost always. If the two do not agree, the
+disagreement is filed as an issue against this standard, because a rule two people read
+differently is a defect in the rule.
+
+**A standard written before this one is non-conforming, not exempt.** Bringing it into
+shape is an ordinary edit to that node by whoever owns it, not a migration and not this
+node's to perform. Four already exist in this position; see *Scope and omissions*.
+
+**A case none of this covers is escalated, not invented.** Raise it as an issue against
+the parent feature #605 describing the document you needed to write and could not. Do
+not widen a requirement locally to fit: a standard that each author quietly adjusts has
+stopped being one, and no check will notice.
+
+**`status: flagged` is not the escape hatch.** ADR-0029 gives that state one meaning:
+two authoritative sources of the same claim type contradict each other and no human has
+resolved it. It is a statement about a node's evidence. A requirement you find
+inconvenient, or a section you would rather not write, is neither.
+
 ## Scope and omissions
+
+**This document covers** which sections a corpus standard carries and in what order,
+how it states and identifies a requirement, how it declares what enforces that
+requirement, how it defers rather than duplicates, and what its H1 looks like.
+
+**It does not cover, and these are gaps rather than silence:**
+
+| Not covered here | Owned by |
+|---|---|
+| How normative language is worded — the MUST/SHOULD/MAY register itself | #1320 |
+| Which front-matter fields a standard carries, and the rules between them | `node.schema.json`, and #1315 |
+| How many ideas one node may hold | #1307, which states it generically over corpus nodes and so already binds a standard without restatement here |
+| Who reviews a corpus change, against what checklist, with what authority — this document names review as the enforcement mechanism and says nothing about how it is conducted | #1322 |
+| File naming, id naming, and whether `standards/` is the settled directory for these documents | #1319 |
+| The required shape of a per-node-type **template**, which is a different document kind with its own required-content list | #1326-#1351 |
+| The human-facing entry point to the corpus | #639 |
+
+Those issue numbers were looked up by subject rather than inferred from a range.
+
+**It does not govern ordinary content nodes.** A concept, component or runbook node is
+not a standard and D1-D10 do not apply to it. The instruction node governs how any node
+is created; per-type templates will govern their shapes.
+
+**The four standards already in flight do not conform to this one.** At the revisions
+cited in the ledger, they carry four distinct H1 strings across three conventions, one
+numbers its top-level sections and three do not, and they name their normative sections
+four different ways (`Requirements` with `MUST`/`SHOULD` beneath it; numbered `MUST` and
+`SHOULD`; `Requirements` and `Guidance`; bare `MUST` and `SHOULD`) and their enforcement
+sections four different ways, one of which does not use the word at all. That divergence
+is this document's evidence and its cost in the same breath: the rule is retroactive on
+four documents whose pull requests are open, and reconciling them is their owners' work
+under the exceptions process above, not something this node does to them.
+
+**No `relationships` in this node's front matter.** Not because there is nothing to
+point at — `corpus-agents` exists on this branch and this node depends on it. It is
+absent because a relationship target must resolve on the branch being **merged into**,
+and on `launchpad` no corpus node exists yet at all. An edge declared here would validate
+cleanly in this worktree and be a hard error in CI. The reason is merge order; the edges
+are worth adding in one pass once the batch has landed.
+
+**Expected but not verified when this node was written:**
+
+- **No CI run has exercised this node.** Every claim about the checker comes from
+  reading it and running it locally in this worktree. The CI workflow that runs it was
+  not read for this node.
+- **The four sibling standards are unmerged drafts.** Each claim about them is pinned to
+  a revision and true at it. Whether the merged versions still look that way after their
+  own review rounds is unknown, and nothing here tracks it.
+- **The template issues were sampled, not enumerated.** The claim that the four
+  required-content clauses are batch-wide rests on all nineteen standards issues and on
+  five of the twenty-six template issues, not on all of them.
+- **No agent harness was observed reading this file.** The same gap the instruction node
+  records about itself.
+- **Nothing establishes `standards/` as the settled location.** No schema field, checker
+  rule or decision fixes it; it is the path the task named and the four siblings used.
+  That is convention, and #1319 owns turning it into a rule or replacing it.
