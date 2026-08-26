@@ -78,6 +78,25 @@ evidence:
     evidence:
       - "launchpad/docs/corpus/AGENTS.md"
     confidence: 0.85
+  - statement: "The create procedure names two contracts, and a concept together with the procedure that uses it, as cases that are two nodes rather than one."
+    entry_class: FACT
+    evidence:
+      - "launchpad/docs/corpus/AGENTS.md"
+  - statement: "flagged names an unresolved contradiction between two authoritative sources of the same claim type awaiting a human, not a general low-confidence marker."
+    entry_class: FACT
+    evidence:
+      - "launchpad/docs/corpus/schema/node.schema.json"
+      - "launchpad/decisions/ADR-0029-corpus-evidence-precedence.md"
+  - statement: "part-of declares that the source is a constituent section or child of the target, and like every relationship type its target is another node's id."
+    entry_class: FACT
+    evidence:
+      - "launchpad/docs/corpus/schema/relationships.schema.json"
+  - statement: "For claims about how the system currently behaves, executable evidence is authoritative over documentation, so a corpus node restating a volatile implementation detail adds a copy that can only fall behind its own source."
+    entry_class: INFERENCE
+    evidence:
+      - "launchpad/decisions/ADR-0029-corpus-evidence-precedence.md"
+      - "launchpad/docs/corpus/AGENTS.md"
+    confidence: 0.7
   - statement: "Correcting an over-merged node later fails silently while correcting an over-split one fails visibly, so a call the tests leave balanced should resolve toward two nodes."
     entry_class: INFERENCE
     evidence:
@@ -261,3 +280,108 @@ told where to go.
 Neither repair is free — an `id` is spent permanently either way, because it is
 assigned once and never renamed. But one repair leaves a trail and the other leaves a
 silence, and a silence is what nobody finds.
+
+## Which test wins
+
+The tests disagree often enough that the precedence has to be stated, or every
+boundary case below becomes an argument.
+
+- **Test 2 is decisive and cannot be vetoed.** The schema cannot express the merged
+  state, so no reading of the other tests rescues it.
+- **Test 5 vetoes tests 1, 3 and 4.** If neither half can stand alone, they are not two
+  nodes — whatever the other tests say.
+- **A test 5 veto means "not two nodes". It does not mean "one node".** The third
+  possibility is that the content does not belong in the corpus at all, and case C
+  below is where that lands.
+- **Test 1 never overrides anything.** A sentence can always be rewritten. It is a
+  screen, not a verdict.
+
+## Boundary cases
+
+Six calls the procedure does not make by itself. Each resolves one way.
+
+### A. A concept and the procedure that uses it — **two nodes**
+
+The create procedure names this pair outright, alongside two contracts, as a case that
+is two nodes.
+
+Test 3 says why: a procedure changes when the tooling it drives changes, and a concept
+changes when the design changes. Those are different clocks in the ordinary case, not
+by coincidence.
+
+### B. A rule and its exception — **one node**
+
+An exception condition is not a second idea. It is part of the rule's own boundary, it
+is written in the rule's terms, and it goes stale exactly when the rule does — test 3
+finds one clock. Test 5 agrees: an exception node whose body is "except when X, see the
+rule" cannot state a claim standing alone.
+
+**The line is between a condition and a procedure.** "This does not apply to generated
+files" is a condition and stays. An escalation *process* — who is asked, in what order,
+with what outcome — is a procedure, and case A applies to it.
+
+### C. A stable concept and a volatile detail — **two nodes, or neither**
+
+Here test 3 fires alone: the concept is steady and the detail moves whenever the code
+moves. Tests 1 and 5 both say "one".
+
+Test 3 beats test 1, so the answer is not one node. Whether it is two turns on test 5.
+If the detail can stand as its own node, it is one. **If it cannot, the answer is not to
+merge it back — it is that the detail probably does not belong in the corpus.** For
+claims about current behaviour the executable source is authoritative anyway, so a node
+restating it adds a copy that can only fall behind, and nothing in the corpus will
+report that it has.
+
+### D. A flagged claim beside settled ones — **two nodes**
+
+`status` holds one value, and `flagged` names a specific state: two authoritative
+sources of the same claim type contradict each other and no human has resolved it.
+
+A node holding one flagged claim among settled ones has no honest value to carry.
+`flagged` overstates the doubt across everything else in it; `active` asserts a
+confidence the conflict denies. This is test 2's `status` row, and it resolves the same
+way: the contested claim is its own node.
+
+**This is not a way to make a conflict disappear.** A4 still requires the split to be
+recorded, and the flagged node has to be reachable from the settled one. Splitting to
+quarantine an inconvenient conflict out of a reader's path is the same act done for the
+opposite reason, and a reviewer should treat it as one.
+
+### E. A node too small to stand alone — **one node**
+
+A file whose body is a sentence and a link is a fragment, not a node. Test 5 vetoes
+whatever tests 1 and 4 said, and the content folds into the node that gives it meaning.
+
+**Short is not the same as small.** A node that states one complete idea in four lines
+is atomic and passes. The test is whether the body means anything with the neighbour
+closed, not how many lines it runs to.
+
+### F. Splitting a node into sections joined by `part-of` — **not permitted**
+
+`part-of` declares that the source is a constituent section or child of the target, and
+its target is a node `id` like every other relationship's. It is an edge between two
+nodes, each of which must satisfy tests 1–5 on its own.
+
+It is therefore a description of a structure that already exists, never a licence to
+create one. Using it to break a single idea into chapters produces exactly the fragments
+case E rejects, and each of them spends an `id` permanently.
+
+## When the second concept turns up mid-draft
+
+A3 forbids folding it in. This is what to do instead, and the order matters more than it
+looks.
+
+1. **Stop at the sentence where it appeared.** Not at the end of the paragraph — the
+   paragraph is where folding happens, because by the end of it the second concept has
+   an introduction, a justification and a place in the argument.
+2. **Run test 2 and test 3 on the pair.** Not the whole procedure; those two settle it
+   in nearly every case, and test 2 settles it conclusively.
+3. **File the task now**, per B3, naming the concept and stating in one line why it is
+   not in the node you are writing. Filing it at the end of the draft means filing it
+   after you have already written around it.
+4. **Record the boundary** in the node you are writing, per A4: the task number, or the
+   sibling `id` once one exists.
+5. **Resume — and do not summarise what you split off.** A short summary "for context"
+   is the second copy this corpus's linking rules exist to prevent, and it is the exact
+   shape folding takes once an author has agreed not to fold. Link it. A reader who
+   needs it can open it.
