@@ -193,7 +193,13 @@ human rather than resolving it yourself. `ADR-0029` is the full rule.
 
 ### What the checker does with each citation shape
 
-`CONTRACT.md` §3 defines the six shapes. What `validate.py` does with them is not
+`CONTRACT.md` §3 enumerates six shapes — file range, file line, bare path, graph edge,
+tool result, commit. It contains **no URL form at all** (grep it for `http`: zero hits).
+The two URL rows below are forms `validate.py` recognises and §3 does not enumerate, so
+this table is **seven** rows and is not a summary of §3. An earlier version of this
+sentence claimed it was, and an agent authoring a sibling node built a scope argument on
+the miscount before their plan review caught it. What `validate.py` does with any of them
+is not
 documented anywhere else, so it is here — provisionally. This table is reference
 material rather than instruction, and belongs in the evidence standard once that
 lands (#1314); when it moves, this section links to it instead.
@@ -326,8 +332,15 @@ standing in.
    what you expected to verify from step 3 and could not. A boundary and a confidence
    disclosure are different, and an earlier version of this step named only the first,
    leaving step 3's third category with nowhere to go.
-9. **Add relationships only to nodes that exist.** A target no node carries is a hard
-   error. None is a valid answer.
+9. **Add relationships only to nodes that exist on the branch you are merging INTO.**
+   Not the branch you are working on — that distinction is the whole trap. The checker
+   loads whatever is present where it runs, so a target that resolves in your worktree
+   can be a hard error in CI: an agent branched off an unmerged node targeted it,
+   validated clean locally, and would have broken the run on `launchpad` where that node
+   does not exist yet. Check against the merge base
+   (`git ls-tree -r --name-only origin/launchpad -- launchpad/docs/corpus`), not your own
+   tree. None is a valid answer, and while the corpus is being built out it is usually
+   the right one.
 10. **Run the check.** Fix what it names, and re-run until it exits 0.
 
 ## Updating a node
