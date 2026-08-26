@@ -59,28 +59,35 @@ after. Newest-wins ignoring authorship is the one combination worse than either 
 alone: it removes even the timing requirement an attacker would otherwise need, so a
 review planted at any moment wins every run thereafter.
 
-**A NONZERO foreign count also refuses a fresh POST.** If `find_existing`'s first
-element is `None` and the foreign count is nonzero, `post_or_update` raises rather than
-creating a new review. That count cannot be told apart, from the data alone, between a
-planted decoy and this agent's own review orphaned by a changed `--as` value — both
-read identically once the configured login no longer matches whoever it posted as. A
-human looks at the pull request's existing reviews before this proceeds, rather than
-the tool guessing which case it is. The refusal is checked a second time immediately
-before the POST, since two pushes seconds apart produce two workflow runs and a check
-made at the start of a run is stale by the time it posts.
+**A nonzero foreign count is reported, and does NOT withhold publication.** An earlier
+revision raised instead of posting whenever a marked review existed under another author
+and none under ours. That was the same denial of publication described two paragraphs
+above, reintroduced by the defence against it: the marker is public and this very
+document prints it, so anyone able to comment can paste it once on any pull request and
+permanently stop the agent from ever publishing. An independent review panel found it.
 
-**A clean listing — zero foreign count, not merely "no match" — still posts.** These
-two rules are paired on purpose: both a foreign-only listing and an empty listing
-return `None` as `find_existing`'s first element, and only one of them may post. The
-refusal keys on the foreign count, never on the first element being `None` alone.
+The duplicate that refusal guarded against cannot occur. `find_existing` matches on
+marker **and** author, so a foreign marked review is never mistaken for ours; posting
+ours creates the one review object every later run then updates in place. The count is
+printed to stderr, because a foreign marker is worth a human's attention even when it is
+not worth failing over.
+
+**A clean listing — zero foreign count, not merely "no match" — still posts.** Both a
+foreign-only listing and an empty listing return `None` as `find_existing`'s first
+element, and both now post. What separates them is only the stderr note.
 
 ---
 
 ## Exactly one review object, updated in place
 
-`find_existing` paginates the full listing (`gh api ... --paginate`) and resolves to
+`find_existing` paginates the full listing (`gh api ... --paginate --slurp`) and resolves to
 the NEWEST review under the configured login that carries the marker — never the
-oldest. A submitted COMMENT review cannot be deleted, so once two of the agent's own
+oldest. **`--slurp` is not optional.** Without it `--paginate` prints one bare JSON array
+per page, which is not a single JSON value, and the listing stops parsing the moment a
+pull request has a second page of reviews — publication then dies before it can PUT or
+POST. An independent review panel found that; the controls had missed it because their
+injected transport returned a pre-flattened list, so the only code that parses `gh`'s
+real output was never exercised. A submitted COMMENT review cannot be deleted, so once two of the agent's own
 markers exist on one pull request, neither can be retired; the one a human reaches at
 the bottom of the timeline must be the current one, and that is always the newest.
 
@@ -101,7 +108,7 @@ merge base alongside it, see below — so nothing is ambiguous to a reader who r
 
 ---
 
-## The incomplete case — ten conditions, and the default is incomplete
+## The incomplete case — eleven conditions, and the default is incomplete
 
 A review is INCOMPLETE, and renders a banner naming every offending stage, dimension
 or entry point at the TOP of the body — above every finding — when any of:
@@ -118,6 +125,16 @@ or entry point at the TOP of the body — above every finding — when any of:
 9. the `containment` block is absent or unparseable
 10. `set(containment.states)` does not EQUAL `set(contain.ENTRY_POINTS)` — a set
     comparison, never a count. Six real keys plus one typo also counts to seven.
+11. the document's `reviewer` key is absent, or names anything other than an injected
+    reviewer — `FINDINGS.md` specifies that key. `run_dimensions.py`'s stub returns
+    `{"outcome": "clean", "findings": []}` for every dimension without reading
+    anything, and `main()` binds it, so a run that reaches here having used it has
+    reviewed nothing. Publishing "No confirmed findings" from that is a false clean:
+    durable, indexed, and indistinguishable to a reader from a real pass. An
+    independent review panel found this workflow doing exactly that. Absent counts the
+    same as stub — a document that will not say what reviewed it has established
+    nothing. A real dimension reviewer is #116; until it lands, every published review
+    from this pipeline carries this banner, which is the honest state.
 
 Two more conditions apply, inherited from the renderer itself rather than from any
 upstream stage: a finding whose `severity` is outside `review.SEVERITY_ORDER` triggers
@@ -300,11 +317,12 @@ under a fork PR's token anyway. `needs: guard` plus `if: needs.guard.outputs.is-
 != 'true'` skips the whole job at once, visibly, in the job list.
 
 Two controls prove this contract rather than merely stating it: `check_publish_scope.py`
-(the live credential, below) and `check_publish_single.py` (ten offline behavioural
-assertions over recorded fixtures — the single-review invariant, pagination, severity
-ordering, the incomplete banner, fencing, the hard-fail-no-fallback PUT, the clean path
-actually posting, and the foreign-marker refusal keying on count rather than on a `None`
-first element — each with a mutation proof that it can fail). Both are registered in
+(the live credential, below) and `check_publish_single.py` (thirteen offline behavioural
+assertions over recorded fixtures — the single-review invariant, pagination in the shape
+`gh` actually prints, severity ordering, the incomplete banner, fencing, the
+hard-fail-no-fallback PUT, the clean path actually posting, a foreign marker neither
+denying creation nor being updated onto, and the stub reviewer rendering INCOMPLETE
+rather than clean — each with a mutation proof that it can fail). Both are registered in
 `run_controls.py`.
 
 **`check_publish_scope.py`** is three assertions:

@@ -33,10 +33,34 @@ DEFAULT_LOGIN = "github-actions[bot]"
 MARKER = "<!-- launchpad-review-agent:v1 -->"
 
 
+def _flatten_pages(payload) -> list[dict]:
+    """One flat review list from ``gh api --paginate --slurp`` output.
+
+    ``--slurp`` returns a JSON array of PAGES -- an array of arrays -- not a flat
+    array of reviews. Without it, ``--paginate`` concatenates one bare JSON array
+    per page, which is not a single JSON value at all: ``json.loads`` raises
+    ``JSONDecodeError`` as soon as a PR has more than one page of reviews. An
+    independent review panel found that, and the injected transport the controls
+    use returns a pre-flattened list, so no test could have caught it.
+
+    Accepts either shape so a caller injecting a flat list (every existing
+    control) keeps working, and mixed shapes raise rather than silently dropping
+    a page.
+    """
+    if not isinstance(payload, list):
+        raise ValueError(f"review listing must be a JSON array, got {type(payload).__name__}")
+    pages = [item for item in payload if isinstance(item, list)]
+    if not pages:
+        return list(payload)
+    if len(pages) != len(payload):
+        raise ValueError("review listing mixes page arrays with bare review objects")
+    return [review for page in pages for review in page]
+
+
 def _list_reviews(argv: list[str]) -> list[dict]:
     """Real transport for ``find_existing``. Raises on any failure -- see below."""
     result = subprocess.run(argv, capture_output=True, text=True, check=True)
-    return json.loads(result.stdout)
+    return _flatten_pages(json.loads(result.stdout))
 
 
 def _submit(argv: list[str]) -> tuple[int, dict]:
@@ -83,7 +107,9 @@ def find_existing(
     """
     if not login:
         raise ValueError("find_existing requires a non-empty login")
-    argv = ["gh", "api", f"repos/{repo}/pulls/{pr}/reviews", "--paginate"]
+    # --slurp is what makes --paginate's output a single JSON value; see
+    # _flatten_pages for the failure it prevents.
+    argv = ["gh", "api", f"repos/{repo}/pulls/{pr}/reviews", "--paginate", "--slurp"]
     reviews = list_reviews(argv)
     marked = [r for r in reviews if (r.get("body") or "").startswith(MARKER)]
     own = [r for r in marked if r.get("user", {}).get("login") == login]
@@ -111,11 +137,26 @@ def _put(repo: str, pr: int, review_id: int, body: str, submit) -> tuple[int, st
     return review_id, "updated", response["user"]["login"]
 
 
-def _refuse(foreign_count: int, login: str) -> None:
-    raise RuntimeError(
-        f"refusing to post: {foreign_count} marked review(s) exist under an author "
-        f"other than {login!r}, and none under {login!r} -- resolve manually before "
-        f"publishing rather than risk a silent duplicate"
+def _note_foreign(foreign_count: int, login: str) -> None:
+    """Report foreign marked reviews without letting them block publication.
+
+    An earlier revision REFUSED to post whenever a marked review existed under
+    another author and none under ours. The marker is public and this agent's own
+    documentation publishes it, so anyone able to comment could paste it once and
+    permanently deny the agent its required review -- an independent review panel
+    found that denial-of-service. The duplicate this refusal was guarding against
+    cannot happen anyway: ``find_existing`` matches on marker AND author, so a
+    foreign marked review is never mistaken for ours, and posting ours creates the
+    one review every later run then updates in place.
+
+    Still surfaced, on stderr, because a foreign marker is worth a human's
+    attention even when it is not worth failing over.
+    """
+    print(
+        f"note: {foreign_count} marked review(s) exist under an author other than "
+        f"{login!r}; publishing ours regardless -- they are matched by author, not "
+        f"by marker alone, so this cannot duplicate our own review",
+        file=sys.stderr,
     )
 
 
@@ -143,13 +184,13 @@ def post_or_update(
     if existing_id is not None:
         return _put(repo, pr, existing_id, body, submit)
     if foreign_count:
-        _refuse(foreign_count, login)
+        _note_foreign(foreign_count, login)
 
     existing_id, foreign_count = find_existing(pr, repo, login, list_reviews=list_reviews)
     if existing_id is not None:
         return _put(repo, pr, existing_id, body, submit)
     if foreign_count:
-        _refuse(foreign_count, login)
+        _note_foreign(foreign_count, login)
 
     argv = [
         "gh",
@@ -220,6 +261,7 @@ def main(argv: list[str] | None = None) -> int:
         document.get("merge_base_sha"),
         duplicate_groups=duplicate_groups,
         nonce=document.get("nonce"),
+        reviewer=document.get("reviewer"),
     )
 
     if args.dry_run:

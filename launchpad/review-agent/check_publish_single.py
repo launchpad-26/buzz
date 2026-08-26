@@ -1,4 +1,4 @@
-"""STEP 10 control: ten behavioural assertions covering #119's own done-criteria.
+"""STEP 10 control: thirteen behavioural assertions covering #119's own done-criteria.
 
 Recorded inputs, no network, no model. Every assertion below carries a stated
 mutation that must break it -- a control never observed failing has not been
@@ -242,13 +242,18 @@ def assertion_iv() -> bool:
 # (v) clean and incomplete inputs both produce a body, and the bodies differ.
 # ---------------------------------------------------------------------------
 def assertion_v() -> bool:
+    # Both bodies declare an injected reviewer, so containment is the ONLY
+    # difference between them. Without that, condition (11) marks both incomplete
+    # and this assertion stops testing what it names -- which is exactly what
+    # happened when (11) was added.
+    reviewed = {"kind": "injected", "name": "recorded_reviewer"}
     clean_body = publish_render.render_body(
         publish.MARKER, [_make_report(d) for d in DIMS], _make_stages(), _make_containment(),
-        "h", "b", nonce=NONCE,
+        "h", "b", nonce=NONCE, reviewer=reviewed,
     )
     incomplete_body = publish_render.render_body(
         publish.MARKER, [_make_report(d) for d in DIMS], _make_stages(), None,  # containment=None
-        "h", "b", nonce=NONCE,
+        "h", "b", nonce=NONCE, reviewer=reviewed,
     )
     both_nonempty = bool(clean_body) and bool(incomplete_body)
     differ = clean_body != incomplete_body
@@ -340,7 +345,10 @@ def _fake_run(listing_reviews, post_response):
         calls.append(argv)
         result = mock.Mock()
         if "--paginate" in argv:
-            result.stdout = json.dumps(listing_reviews)
+            # Page-shaped, as `gh api --paginate --slurp` actually emits: an array
+            # OF PAGES. Emitting the flat list here was what let the concatenated
+            # -JSON defect survive every control -- see assertion (xi).
+            result.stdout = json.dumps([listing_reviews])
             result.returncode = 0
             return result
         # POST or PUT, run with -i appended by _submit
@@ -357,8 +365,12 @@ def _fake_run(listing_reviews, post_response):
 # (viii) an all-clean input POSTS through main(), exactly one write call.
 # ---------------------------------------------------------------------------
 def assertion_viii() -> bool:
+    # An injected reviewer, so this really is the all-clean case its name claims.
+    # Without it, condition (11) marks the body INCOMPLETE and the "goes silent on
+    # a clean run" mutation this assertion exists to catch never even fires.
     document = {
         "pr": 1421, "head_sha": "h", "merge_base_sha": "b",
+        "reviewer": {"kind": "injected", "name": "recorded_reviewer"},
         "stages": _make_stages(), "reports": [_make_report(d) for d in DIMS],
         "containment": _make_containment(), "nonce": NONCE,
     }
@@ -375,27 +387,70 @@ def assertion_viii() -> bool:
 
 
 # ---------------------------------------------------------------------------
-# (ix) a foreign marked review is neither a PUT candidate nor a POST licence.
+# (ix) a foreign marked review is not a PUT candidate, and does not deny us a POST.
 # ---------------------------------------------------------------------------
 def assertion_ix() -> bool:
+    """Create-then-update, with a foreign marker present throughout.
+
+    This assertion previously demanded the OPPOSITE -- that a foreign marked
+    review make the run refuse to post at all. An independent review panel found
+    the denial-of-service in that: the marker is public and PUBLISHING.md prints
+    it, so anyone able to comment could paste it once and permanently prevent
+    this agent from ever publishing its required review. The duplicate the
+    refusal guarded against cannot occur, because find_existing matches on marker
+    AND author.
+
+    Both halves run here, in sequence, because the risk in relaxing a refusal is
+    that the relaxed path now posts EVERY time -- a duplicate on run two is the
+    failure this must rule out, not just "run one posted".
+    """
     listing = _listing()
     foreign = _marked(listing["recorded_single_page"][0])
     foreign["user"] = dict(foreign["user"])
     foreign["user"]["login"] = "some-outsider"
+    foreign["id"] = 999_001
     document = {
         "pr": 1421, "head_sha": "h", "merge_base_sha": "b",
+        "reviewer": {"kind": "injected", "name": "recorded"},
         "stages": _make_stages(), "reports": [_make_report(d) for d in DIMS],
         "containment": _make_containment(), "nonce": NONCE,
     }
-    fake, calls = _fake_run(listing_reviews=[foreign], post_response=lambda argv: (200, _real_post_response()))
+
+    # Run one: foreign marker only. Must CREATE ours.
+    post_response = _real_post_response()
+    fake, calls = _fake_run(listing_reviews=[foreign], post_response=lambda argv: (200, post_response))
     with mock.patch("publish.subprocess.run", side_effect=fake):
         with mock.patch("sys.stdin", __import__("io").StringIO(json.dumps(document))):
-            rc = publish.main(["--repo", "launchpad-26/buzz", "--as", "github-actions[bot]"])
-    writes = [c for c in calls if "-X" in c and ("POST" in c or "PUT" in c)]
-    ok = rc != 0 and len(writes) == 0
+            rc1 = publish.main(["--repo", "launchpad-26/buzz", "--as", "github-actions[bot]"])
+    posts1 = [c for c in calls if "-X" in c and "POST" in c]
+    puts1 = [c for c in calls if "-X" in c and "PUT" in c]
+    created_ok = rc1 == 0 and len(posts1) == 1 and len(puts1) == 0
+
+    # Run two: the same foreign marker, plus the review run one created. Must
+    # UPDATE ours in place -- never post a second one, and never target theirs.
+    ours = _marked(listing["recorded_single_page"][0])
+    ours["id"] = post_response["id"]
+    ours["user"] = dict(ours["user"])
+    ours["user"]["login"] = "github-actions[bot]"
+    fake2, calls2 = _fake_run(
+        listing_reviews=[foreign, ours], post_response=lambda argv: (200, _real_put_response())
+    )
+    with mock.patch("publish.subprocess.run", side_effect=fake2):
+        with mock.patch("sys.stdin", __import__("io").StringIO(json.dumps(document))):
+            rc2 = publish.main(["--repo", "launchpad-26/buzz", "--as", "github-actions[bot]"])
+    posts2 = [c for c in calls2 if "-X" in c and "POST" in c]
+    puts2 = [c for c in calls2 if "-X" in c and "PUT" in c]
+    targeted_ours = all(f"/{ours['id']}" in c[2] for c in puts2)
+    never_theirs = not any(f"/{foreign['id']}" in c[2] for c in puts2)
+    updated_ok = rc2 == 0 and len(puts2) == 1 and len(posts2) == 0 and targeted_ours and never_theirs
+
+    ok = created_ok and updated_ok
     return check(
-        ok, "(ix) foreign marked review -- neither PUT nor POST, main() exits non-zero",
-        f"exit={rc}, write calls={len(writes)}",
+        ok,
+        "(ix) foreign marker -- does not deny creation, and run two updates OURS in place",
+        f"run1 exit={rc1} posts={len(posts1)} puts={len(puts1)}; "
+        f"run2 exit={rc2} posts={len(posts2)} puts={len(puts2)} "
+        f"targeted_ours={targeted_ours} never_theirs={never_theirs}",
     )
 
 
@@ -405,6 +460,7 @@ def assertion_ix() -> bool:
 def assertion_x() -> bool:
     document = {
         "pr": 1421, "head_sha": "h", "merge_base_sha": "b",
+        "reviewer": {"kind": "injected", "name": "recorded_reviewer"},
         "stages": _make_stages(), "reports": [_make_report(d) for d in DIMS],
         "containment": _make_containment(), "nonce": NONCE,
     }
@@ -420,6 +476,155 @@ def assertion_x() -> bool:
     )
 
 
+# ---------------------------------------------------------------------------
+# (xi) _list_reviews parses what `gh` actually prints, not a pre-flattened list.
+# ---------------------------------------------------------------------------
+def assertion_xi() -> bool:
+    """The real transport, against real CLI-shaped output.
+
+    Every other assertion here injects `list_reviews`, and the injected one
+    returned a flat list -- so `_list_reviews`, the only code that ever parses
+    `gh`'s actual stdout, was never exercised. `gh api --paginate` emits one bare
+    JSON array PER PAGE, which is not a single JSON value: `json.loads` raises
+    JSONDecodeError the moment a PR has a second page of reviews, and publication
+    dies before it can PUT or POST. An independent review panel found it in code
+    that ten assertions had already passed over.
+
+    Asserts both halves: the argv carries `--slurp` (without it the output is
+    unparseable no matter how it is handled), and page-shaped output flattens to
+    every review across every page.
+    """
+    listing = _listing()
+    two_page = listing["constructed_two_page"]
+    page_1 = two_page["page_1"]
+    page_2 = [_marked(r) for r in two_page["page_2"]]
+
+    seen_argv: list[list[str]] = []
+
+    def fake(argv, **kwargs):
+        seen_argv.append(argv)
+        result = mock.Mock()
+        result.stdout = json.dumps([page_1, page_2])  # --slurp: an array of pages
+        result.returncode = 0
+        return result
+
+    with mock.patch("publish.subprocess.run", side_effect=fake):
+        found_id, foreign = publish.find_existing(1421, "launchpad-26/buzz", "serina-mcfall")
+
+    slurp_ok = bool(seen_argv) and "--slurp" in seen_argv[0] and "--paginate" in seen_argv[0]
+    reached_page_two = found_id == page_2[0]["id"]
+
+    # The concatenated-array shape `--paginate` produces WITHOUT `--slurp` is not
+    # decodable at all -- proving that is what makes the flag load-bearing rather
+    # than decorative.
+    concatenated = json.dumps(page_1) + json.dumps(page_2)
+    try:
+        json.loads(concatenated)
+        undecodable = False
+    except json.JSONDecodeError:
+        undecodable = True
+
+    ok = slurp_ok and reached_page_two and undecodable
+    return check(
+        ok,
+        "(xi) _list_reviews parses real --paginate --slurp page output; without --slurp it cannot",
+        f"--slurp in argv={slurp_ok}, found id={found_id!r} (expected {page_2[0]['id']!r}), "
+        f"foreign={foreign}, un-slurped output undecodable={undecodable}",
+    )
+
+
+# ---------------------------------------------------------------------------
+# (xii) a stub-reviewer run publishes INCOMPLETE; an injected finding reaches the body.
+# ---------------------------------------------------------------------------
+def assertion_xii() -> bool:
+    """The false-clean blocker, both directions.
+
+    The publish workflow invokes `run_dimensions.py`'s `main()`, which binds
+    `default_reviewer` -- a stub returning `{"outcome": "clean", "findings": []}`
+    for every dimension without reading anything. An independent review panel
+    found that a successful run therefore published "No confirmed findings" as
+    though a review had happened. A false clean is worse than no review: it is
+    durable, indexed, and reads as a pass.
+
+    Wiring a real dimension reviewer is #116's work and is not in this issue.
+    What IS in scope is refusing to claim a clean pass the pipeline did not earn,
+    so a stub-produced document renders INCOMPLETE with the stub named as the
+    reason. The second half is the regression the panel asked for by name: inject
+    a known finding and prove it reaches the published body -- without it, an
+    "always INCOMPLETE" bug would satisfy the first half perfectly.
+    """
+    reports = [_make_report(d) for d in DIMS]
+    stub_body = publish_render.render_body(
+        publish.MARKER, reports, _make_stages(), _make_containment(), "h", "b",
+        nonce=NONCE, reviewer={"kind": "stub", "name": "default_reviewer"},
+    )
+    stub_incomplete = "## Incomplete" in stub_body and "stub reviewer" in stub_body
+    stub_not_clean = "No confirmed findings" not in stub_body
+
+    # Absent is treated as stub, per the default-is-incomplete rule -- a document
+    # that will not say what reviewed it has established nothing.
+    absent_body = publish_render.render_body(
+        publish.MARKER, reports, _make_stages(), _make_containment(), "h", "b", nonce=NONCE,
+    )
+    absent_incomplete = "## Incomplete" in absent_body
+
+    # An injected reviewer's finding must reach the rendered body verbatim.
+    known = _finding("F-INJECTED-1", "Blocker", defect="an injected dimension finding")
+    reviewed_reports = [
+        _make_report(DIMS[0], outcome="findings", findings=[known], findings_count=1),
+        *[_make_report(d) for d in DIMS[1:]],
+    ]
+    reviewed_body = publish_render.render_body(
+        publish.MARKER, reviewed_reports, _make_stages(), _make_containment(), "h", "b",
+        nonce=NONCE, reviewer={"kind": "injected", "name": "recorded_reviewer"},
+    )
+    finding_reached = "an injected dimension finding" in reviewed_body
+    not_stub_flagged = "stub reviewer" not in reviewed_body
+
+    ok = (
+        stub_incomplete and stub_not_clean and absent_incomplete
+        and finding_reached and not_stub_flagged
+    )
+    return check(
+        ok,
+        "(xii) stub reviewer renders INCOMPLETE, never clean; an injected finding reaches the body",
+        f"stub incomplete={stub_incomplete} not-clean={stub_not_clean} "
+        f"absent incomplete={absent_incomplete} finding reached={finding_reached} "
+        f"injected not stub-flagged={not_stub_flagged}",
+    )
+
+
+# ---------------------------------------------------------------------------
+# (xiii) build_document records which reviewer produced it.
+# ---------------------------------------------------------------------------
+def assertion_xiii() -> bool:
+    """(xii) is worthless if nothing ever sets the key it reads.
+
+    Renders the two ends of the seam: the stub is recorded as a stub, and an
+    injected callable is recorded as injected. Without this, `run_dimensions.py`
+    could stop emitting `reviewer` entirely and every document would silently
+    become "absent" -- which (xii) proves renders INCOMPLETE, so the pipeline
+    would fail safe but for the wrong reason, and nobody would learn why.
+    """
+    sys.path.insert(0, str(HERE))
+    import run_dimensions  # noqa: PLC0415
+
+    def injected(document: str) -> dict:
+        return {"outcome": "clean", "findings": []}
+
+    stub = run_dimensions.reviewer_identity(run_dimensions.default_reviewer)
+    real = run_dimensions.reviewer_identity(injected)
+
+    stub_ok = stub["kind"] == run_dimensions.REVIEWER_STUB and stub["name"] == "default_reviewer"
+    injected_ok = real["kind"] == run_dimensions.REVIEWER_INJECTED and real["name"] == "injected"
+
+    ok = stub_ok and injected_ok
+    return check(
+        ok, "(xiii) build_document's reviewer identity distinguishes stub from injected",
+        f"stub={stub}, injected={real}",
+    )
+
+
 ASSERTIONS = {
     "i": assertion_i,
     "ii": assertion_ii,
@@ -431,14 +636,16 @@ ASSERTIONS = {
     "viii": assertion_viii,
     "ix": assertion_ix,
     "x": assertion_x,
+    "xi": assertion_xi,
+    "xii": assertion_xii,
+    "xiii": assertion_xiii,
 }
 
 #: (name, target file, find, replace) -- each must break EXACTLY the named assertion.
 MUTATIONS = [
     ("i", "publish.py", '"event=COMMENT"', '"event=APPROVE"'),
     ("ii", "publish.py",
-     "    if not login:\n        raise ValueError(\"find_existing requires a non-empty login\")\n"
-     "    argv = [\"gh\", \"api\", f\"repos/{repo}/pulls/{pr}/reviews\", \"--paginate\"]\n"
+     "    argv = [\"gh\", \"api\", f\"repos/{repo}/pulls/{pr}/reviews\", \"--paginate\", \"--slurp\"]\n"
      "    reviews = list_reviews(argv)\n"
      "    marked = [r for r in reviews if (r.get(\"body\") or \"\").startswith(MARKER)]\n"
      "    own = [r for r in marked if r.get(\"user\", {}).get(\"login\") == login]\n"
@@ -447,8 +654,9 @@ MUTATIONS = [
      "    newest = max(own, key=lambda r: r[\"submitted_at\"])\n"
      "    return newest[\"id\"], foreign_count",
      "    return None, 0"),
-    ("iii", "publish.py", '["gh", "api", f"repos/{repo}/pulls/{pr}/reviews", "--paginate"]',
-     '["gh", "api", f"repos/{repo}/pulls/{pr}/reviews"]'),
+    ("iii", "publish.py",
+     '["gh", "api", f"repos/{repo}/pulls/{pr}/reviews", "--paginate", "--slurp"]',
+     '["gh", "api", f"repos/{repo}/pulls/{pr}/reviews", "--slurp"]'),
     ("iv", "publish_render.py",
      "review.SEVERITY_ORDER.get(finding.get(\"severity\"), 9),\n"
      "        finding.get(\"dimension\") or \"\",\n"
@@ -457,9 +665,9 @@ MUTATIONS = [
      "        finding.get(\"finding_id\") or \"\",",
      "finding.get(\"finding_id\") or \"\","),
     ("v", "publish_render.py",
-     "    reasons = _incomplete_reasons(stages, reports, containment, nonce, all_findings)\n"
+     "    reasons = _incomplete_reasons(stages, reports, containment, nonce, all_findings, reviewer)\n"
      "    if reasons:\n        lines.append(_render_incomplete_banner(reasons))",
-     "    reasons = _incomplete_reasons(stages, reports, containment, nonce, all_findings)"),
+     "    reasons = _incomplete_reasons(stages, reports, containment, nonce, all_findings, reviewer)"),
     ("vi", "review.py",
      "def fence_for(evidence: str) -> str:",
      "def fence_for(evidence: str) -> str:\n    return '```'  # mutated: fixed fence\n"),
@@ -482,23 +690,44 @@ MUTATIONS = [
      "    if \"No confirmed findings\" in body and \"Incomplete\" not in body:\n"
      "        return 0  # mutated: a 'reasonable' optimisation that goes silent on a clean run\n\n"
      "    pr = document.get(\"pr\")"),
+    # (ix) now has two ways to fail, and each gets a mutation: matching on the
+    # marker alone (so a foreign review is mistaken for ours and PUT onto), and
+    # restoring the refusal (so a foreign marker denies us publication at all).
     ("ix", "publish.py",
      "    own = [r for r in marked if r.get(\"user\", {}).get(\"login\") == login]",
      "    own = list(marked)"),
+    ("ix", "publish.py",
+     "def _note_foreign(foreign_count: int, login: str) -> None:",
+     "def _note_foreign(foreign_count: int, login: str) -> None:\n"
+     "    raise RuntimeError(  # mutated: back to refusing -- the DoS the panel found\n"
+     "        f\"refusing to post: {foreign_count} foreign marked review(s)\"\n"
+     "    )"),
+    # Mutation (x) must break assertion (x) -- "a clean, EMPTY listing still
+    # posts". The old mutation here restored the unconditional refusal, which
+    # after the foreign-marker fix is caught by (ix) instead, leaving (x) with no
+    # mutation of its own. This one is the plausible off-by-one in its place:
+    # treating "nothing marked yet" as "nothing to do".
     ("x", "publish.py",
-     "    existing_id, foreign_count = find_existing(pr, repo, login, list_reviews=list_reviews)\n"
-     "    if existing_id is not None:\n"
-     "        return _put(repo, pr, existing_id, body, submit)\n"
      "    if foreign_count:\n"
-     "        _refuse(foreign_count, login)\n"
+     "        _note_foreign(foreign_count, login)\n"
      "\n"
      "    existing_id, foreign_count = find_existing(pr, repo, login, list_reviews=list_reviews)",
-     "    existing_id, foreign_count = find_existing(pr, repo, login, list_reviews=list_reviews)\n"
-     "    if existing_id is not None:\n"
-     "        return _put(repo, pr, existing_id, body, submit)\n"
-     "    _refuse(foreign_count, login)  # mutated: refuse unconditionally, not only when foreign_count\n"
+     "    if not foreign_count:\n"
+     "        return None, \"skipped\", login  # mutated: an empty listing never posts\n"
      "\n"
      "    existing_id, foreign_count = find_existing(pr, repo, login, list_reviews=list_reviews)"),
+    # The three fix-round controls. Each mutation restores the exact defect an
+    # independent review panel found, so a regression reproduces the original bug
+    # rather than merely failing somewhere nearby.
+    ("xi", "publish.py",
+     "    return _flatten_pages(json.loads(result.stdout))",
+     "    return json.loads(result.stdout)  # mutated: back to parsing pages as one value"),
+    ("xii", "publish_render.py",
+     "    if not isinstance(reviewer, dict):",
+     "    if False:  # mutated: stub-produced documents render clean again"),
+    ("xiii", "run_dimensions.py",
+     "    kind = REVIEWER_STUB if reviewer is default_reviewer else REVIEWER_INJECTED",
+     "    kind = REVIEWER_INJECTED  # mutated: the stub claims to be a real reviewer"),
 ]
 
 

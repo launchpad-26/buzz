@@ -99,6 +99,19 @@ jobs:
       # repository rather than silently reviewing this one while posting to
       # another.
       #
+      # THE REVIEWER IS A STUB, AND THE PUBLISHED REVIEW SAYS SO. run_dimensions.py
+      # exposes no flag for choosing a reviewer -- #117 puts model choice out of
+      # scope -- so main() binds default_reviewer, which reports every dimension
+      # clean without reading anything. A real dimension reviewer is #116.
+      #
+      # Until it lands, every review this workflow publishes carries the INCOMPLETE
+      # banner naming the stub as the reason (PUBLISHING.md condition 11). That is
+      # deliberate and is the honest state: an independent review panel found this
+      # workflow publishing "No confirmed findings" from a stub run, which reads to
+      # any human as a pass the pipeline never performed. The lifecycle this issue
+      # owns -- one review, updated in place on every push -- is fully exercised
+      # either way; only the findings' content waits on #116.
+      #
       # KNOWN GAP, disclosed rather than silently wrong: run_dimensions.py
       # emits no top-level `stages` key at all, and run_adjudication.py only
       # ever adds its OWN "adjudication" entry to whatever `stages` array

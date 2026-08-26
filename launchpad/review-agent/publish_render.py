@@ -144,14 +144,34 @@ def _containment_unparseable(containment) -> bool:
 
 
 def _incomplete_reasons(
-    stages, reports, containment, nonce, all_findings: list[dict]
+    stages, reports, containment, nonce, all_findings: list[dict], reviewer=None
 ) -> list[str]:
-    """Ten named conditions plus two inherited from STEP 4. The default is
+    """Eleven named conditions plus two inherited from STEP 4. The default is
     incomplete: anything this function cannot classify is added as a reason
     rather than silently passed over, per STEP 5's own rule that absence of a
     failure signal is not evidence of success.
     """
     reasons: list[str] = []
+
+    # (11) The document says which reviewer produced it, and the stub produces
+    # `{"outcome": "clean", "findings": []}` for every dimension without reading
+    # anything. An independent review panel found the publish workflow running
+    # exactly that and publishing "No confirmed findings" as though a review had
+    # happened -- a false clean is worse than no review, because it is indexed,
+    # durable, and looks like a pass. Absent is treated the same as stub, per the
+    # default-is-incomplete rule: a document that will not say what reviewed it
+    # has not established that anything did.
+    if not isinstance(reviewer, dict):
+        reasons.append(
+            "the document does not record which reviewer produced it, so no "
+            "dimension is established to have been reviewed"
+        )
+    elif reviewer.get("kind") != "injected":
+        reasons.append(
+            f"no dimension was actually reviewed: the pipeline ran the "
+            f"{reviewer.get('name', 'stub')!r} stub reviewer, which reports every "
+            "dimension clean without reading it (a real dimension reviewer is #116)"
+        )
 
     if not isinstance(stages, list):
         # A missing or malformed manifest is not "no dimensions expected" --
@@ -305,6 +325,7 @@ def render_body(
     merge_base_sha: str,
     duplicate_groups=(),
     nonce=None,
+    reviewer=None,
 ) -> str:
     """The full review body.
 
@@ -328,7 +349,7 @@ def render_body(
         "",
     ]
 
-    reasons = _incomplete_reasons(stages, reports, containment, nonce, all_findings)
+    reasons = _incomplete_reasons(stages, reports, containment, nonce, all_findings, reviewer)
     if reasons:
         lines.append(_render_incomplete_banner(reasons))
 
