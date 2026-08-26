@@ -59,6 +59,28 @@ evidence:
     entry_class: FACT
     evidence:
       - "launchpad/decisions/ADR-0028-corpus-canonical-representation.md"
+  - statement: "A relationship whose target matches no loaded node's id is a hard validation error."
+    entry_class: FACT
+    evidence:
+      - "launchpad/project-intelligence/corpus/validate.py"
+  - statement: "The schema defines audiences as who the node is written for, and constrains it to a closed enum of agent, developer, operator and reviewer."
+    entry_class: FACT
+    evidence:
+      - "launchpad/docs/corpus/schema/node.schema.json"
+  - statement: "This node therefore omits agent from its audiences, because the node authored for agents is AGENTS.md and this one only redirects there."
+    entry_class: INFERENCE
+    evidence:
+      - "launchpad/docs/corpus/schema/node.schema.json"
+      - "launchpad/docs/corpus/AGENTS.md"
+    confidence: 0.75
+  - statement: "The type enum contains no reference or index member, so governance is the closest true fit for a node whose subject is the corpus's own rules and boundaries."
+    entry_class: INFERENCE
+    evidence:
+      - "launchpad/docs/corpus/schema/node.schema.json"
+    confidence: 0.6
+  - statement: "Declaring no relationships is the corpus-wide convention for every node authored before the sibling standards land, rather than a judgement made for this node alone."
+    entry_class: TEAM_KNOWLEDGE
+    provided_by: "the shared task brief governing #605's document child issues, which settles 'declare NONE' as the convention until the standard set has merged"
 ---
 
 # The Buzz documentation corpus
@@ -160,3 +182,53 @@ does not mean*. They are not repeated here.
 diff a human reads, not after the fact — that is the enforcement mechanism
 [ADR-0028](../../decisions/ADR-0028-corpus-canonical-representation.md) chose this
 file format to preserve. A green check is the floor, not the verdict.
+
+## Scope and omissions
+
+**This node covers** what the corpus is, what it contains today, which file owns
+each rule, and how the corpus is checked.
+
+**It does not cover, and these are gaps rather than silence:**
+
+| Not covered here | Owned by |
+|---|---|
+| How to create, update or retire a node | [`launchpad/docs/corpus/AGENTS.md`](AGENTS.md) |
+| Per-type standards and the template for each node type | #1307–#1351, none merged yet |
+| How generated artifacts prove their provenance | #1316 |
+| Encoding ADR-0029's claim-type classification in the schema and checker | #1410 |
+| Line numbers in citations not being verified against file length | #1459 |
+
+**This node declares no `relationships`.** A `relationships[].target` naming an id
+no loaded node carries is a hard validation error, and at the recorded revision the
+only other node in the corpus was `corpus-agents`. An edge to it would resolve
+today, but every sibling standard this page will eventually point at is unmerged, so
+the corpus gains its graph in one deliberate follow-up once the set has landed rather
+than in forty-six partial ones. The absence is a decision, not an oversight.
+
+**`agent` is deliberately absent from `audiences`.** The schema defines that field
+as who the node is written *for*, and this node is written for the humans arriving at
+the corpus — a developer looking for the rules and a reviewer judging a corpus pull
+request. What it does for an agent is hand it to
+[`AGENTS.md`](AGENTS.md), which is the node authored for agents. Listing `agent`
+here would make an audience-filtered view return two nodes to a cold-start agent, one
+of which only redirects to the other. This is the corpus's first `developer` audience
+and its first deliberate audience *exclusion*; a reader who thinks `audiences` should
+name everyone who might read a node rather than everyone it addresses would add it.
+
+**`type: governance` is the closest true fit, not an exact one.** The enum carries no
+`reference` or `index` member, and this node's subject is the corpus's own rules and
+boundaries, which is what makes `governance` the nearest. If a later standard
+introduces a taxonomy that fits an entry point better, this node's `type` is a
+candidate for revision. Its `id` is not — ids are permanent.
+
+**Expected but not verified when this node was written:**
+
+- **How this file renders on GitHub.** It is a `README.md`, so GitHub displays it
+  automatically when someone opens the corpus directory — with YAML front matter at
+  the top that a plain reader did not ask for. Whether that renders as a table, as
+  raw text, or is hidden was not checked, and it is a real question for a
+  human-facing entry point specifically. The front matter is not optional: this path
+  is scanned by the checker and an unvalidated node here would be worse.
+- **No agent harness was tested to confirm it prefers `AGENTS.md` over this file.**
+  The redirect at the top of this page is written for a human reader. Whether a
+  harness that globs the directory reads both is unknown.
