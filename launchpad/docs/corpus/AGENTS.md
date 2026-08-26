@@ -142,8 +142,14 @@ prose, so a stale copy would stay green forever.
 derive from it reproducibly, so renaming an id is a migration, not an edit.
 
 **Relationships are optional and must resolve.** A `relationships[].target` naming an
-id no node in the corpus carries is a hard error. A node with no sibling to point at
-correctly declares none.
+id no node in the corpus carries is a hard error, so an edge may only name a node that
+is already merged. Declaring none is always valid — but **check before you justify it**.
+"There was nothing to point at" was true when this was the corpus's only node and stops
+being true the moment a second one merges. Enumerate what exists
+(`ls launchpad/docs/corpus/**/*.md`) and give the real reason, which may simply be that
+the edges are being added in one pass later. Two independent agents authoring sibling
+nodes copied an earlier version of this paragraph and produced a **false** justification
+from it, because it read as a general rule rather than a fact about one moment.
 
 **Authored versus generated.** Every non-`.md` file under the corpus root must live
 in a `generated/` directory. Today the checker rejects such files even there, because
@@ -242,6 +248,14 @@ Run that, and the entry is a `FACT`. Every other claim needs a source you opened
 commit citation attached to a claim *about repository content* is not covered — that
 claim needs the file, at that revision.
 
+**When the only source is an issue, a PR or a discussion**, you have no openable file and
+no way to pin one: the validator's repository-link check matches only file and tree views,
+so an issue URL is an external URL and lands on `UNVERIFIED`. Do not force it into a
+`FACT` on a tool-result or URL citation. Use `TEAM_KNOWLEDGE` with `provided_by` naming
+the issue — that is what the class is for, and ADR-0029 requires GitHub history to stay
+attributed rather than be promoted to fact. An earlier draft of this section left that
+case with no honest class at all, which an agent authoring a sibling node hit directly.
+
 **Nothing enforces this.** The checker treats every commit citation identically: a
 second, third or tenth `FACT` resting only on `commit <sha>` produces nothing but
 extra non-fatal `UNVERIFIED` notices and still exits 0. Verified by adding one and
@@ -307,7 +321,11 @@ standing in.
    the revision from step 3 — the ledger is the only schema-legal place for it.
 7. **Write one `evidence` entry per substantive claim** you intend to make. Classify
    honestly; open every source you call a `FACT`.
-8. **Write the body**, structured for lookup. State what the node does not cover.
+8. **Write the body**, structured for lookup, with a scope section carrying **two
+   distinct things**: what the node does not cover and who owns it, and — separately —
+   what you expected to verify from step 3 and could not. A boundary and a confidence
+   disclosure are different, and an earlier version of this step named only the first,
+   leaving step 3's third category with nowhere to go.
 9. **Add relationships only to nodes that exist.** A target no node carries is a hard
    error. None is a valid answer.
 10. **Run the check.** Fix what it names, and re-run until it exits 0.
@@ -383,8 +401,15 @@ what the deterministic check does and does not establish.
 
 | Not covered here | Owned by |
 |---|---|
-| Per-type standards — naming, identifiers, linking, provenance, status, taxonomy, diagrams, evidence | #1307–#1351, none merged yet |
-| Templates for each node type — concept, component, capability, interface, flow, policy, procedure, runbook, reference, specification, and the rest | #1307–#1351, none merged yet |
+| Per-type standards — naming, identifiers, linking, provenance, status, taxonomy, diagrams, evidence | somewhere in #1307–#1351 |
+| Templates for each node type — concept, component, capability, interface, flow, policy, procedure, runbook, reference, specification, and the rest | somewhere in #1307–#1351 |
+
+**That range is a range, not a mapping.** It is 45 issues across those subjects, and this
+table does **not** say which number owns which subject. Look the subject up
+(`gh issue list --repo launchpad-26/buzz --search "corpus standard for <subject>"`) rather
+than citing this table for a subject-to-issue pairing — an agent authoring a sibling node
+did exactly that and produced nine invented mappings, which is the "FACT cited to a file
+that does not discuss the claim" failure this document warns about two sections up.
 | How generated artifacts prove their provenance, and the exception process for them | #1316 |
 | Encoding ADR-0029's claim-type classification and the flagged state in the schema and checker | #1410 |
 | The human-facing entry point to the corpus | #639 |
