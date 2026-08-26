@@ -159,9 +159,43 @@ What the concurrent runner prints on stdout — the whole of this contract's out
 | `pr` | number |
 | `merge_base_sha` | the commit pair every report read |
 | `head_sha` | the commit pair every report read |
+| `stages` | array of `{name, status, reason}` entries, one per stage the review depended on — see below |
 | `reports` | array of exactly the dimension envelopes above, one per slug the runner lists, and nothing else in it |
 | `containment` | the block specified below — findings plus a seven-key `states` map. Present on every run. |
 | `nonce` | the run nonce, once, at the top level |
+
+### The stages manifest
+
+`stages` names EVERY stage the review depended on, including each of #117's dimensions
+by slug — not only the stages that emit no envelope of their own, which is an earlier,
+superseded reading of this rule (struck through in `ADJUDICATION.md`'s "The `stages`
+entry" section and in `launchpad/plans/2026-08-12-issue-117-review-dimensions.md`, both
+amended 2026-08-24/2026-08-27). This section restates the corrected definition rather
+than inventing a fourth wording; see
+`launchpad/plans/2026-08-12-issue-119-publish-one-review.md` STEP 5 and
+`ADJUDICATION.md`'s "The `stages` entry" section for the fuller reasoning.
+
+The dimension entries are sourced from what `run_dimensions.list_dimensions()` actually
+dispatched — the dispatched list, and only the dispatched list — never from
+`reports[].dimension`, because **a report cannot testify to its own absence**. A
+dimension that was dispatched and produced no report at all is still named here, with
+`status: "no_report"`; sourcing the name list from `reports` instead would mean the one
+case this manifest exists to catch — a dimension crashing so completely that #117 emits
+no envelope for it — could never be named, and #119's condition (7) ("a dimension named
+by the manifest produced no report at all") could never fire.
+
+Status/reason per dimension entry:
+
+| status | reason |
+|---|---|
+| `complete` | `None` — the report arrived with `status: "complete"` |
+| `no_report` | a fixed string naming the absence — the dimension was dispatched and no report arrived for it at all |
+| anything else (`failed` today, and any status #117 adds later) | passed through verbatim; `reason` is that report's own `error["reason"]` when it has one |
+
+#118 (`run_adjudication.py`) appends exactly one `{name: "adjudication", status,
+reason}` entry to whatever `stages` array arrived and passes every entry already in it
+through unchanged, in order — it does not derive, reorder, or otherwise alter the
+dimension entries #117 produced.
 
 ### Where containment findings live
 
@@ -264,7 +298,7 @@ accept a caller-supplied nonce.
 
 For #118 and #119 to diff against. #119's plan is committed against revision 3 of this
 contract and names its field list explicitly, so this section exists so its author can
-diff old against new without re-reading a full review. Six changes:
+diff old against new without re-reading a full review. Seven changes:
 
 1. Containment findings are a top-level `containment` sibling key carrying raw
    `contain.Finding` (`severity`, `kind`, `entry_point`, `evidence`) plus a seven-key
@@ -292,6 +326,11 @@ diff old against new without re-reading a full review. Six changes:
    `nonce` instead; and the key is not an authentication token for the document, only
    for a marker echoed out of author text, so it must not be described as making the
    document unforgeable.
+7. The merged document carries a top-level `stages` key — one `{name, status, reason}`
+   entry per stage the review depended on, including each of #117's dimensions by slug,
+   sourced from `run_dimensions.list_dimensions()` (what #117 dispatched), never from
+   `reports[].dimension`. Revision 3 had no such key. See § The merged document > The
+   stages manifest.
 
 The ten finding fields and eleven envelope fields are otherwise unchanged, and no field
 is renamed.
