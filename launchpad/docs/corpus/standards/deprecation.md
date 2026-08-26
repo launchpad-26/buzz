@@ -24,7 +24,7 @@ evidence:
     entry_class: FACT
     evidence:
       - "launchpad/project-intelligence/corpus/validate.py"
-  - statement: "Because a node's status is never read, a corpus where an active node declares depends-on a deprecated node and references a retired node validates exactly as one where all three are active."
+  - statement: "No code branches on which legal status value a node holds, so a corpus where an active node declares depends-on a deprecated node and references a retired node validates exactly as one where all three are active."
     entry_class: FACT
     evidence:
       - "launchpad/project-intelligence/corpus/validate.py"
@@ -37,6 +37,14 @@ evidence:
     evidence:
       - "launchpad/docs/corpus/schema/relationships.schema.json"
       - "launchpad/docs/corpus/schema/node.schema.json"
+  - statement: "A depends-on edge asserts the source requires the target to be true or current for the source's own claims to hold, while a references edge cites the target as supporting context and implies no currency dependency."
+    entry_class: FACT
+    evidence:
+      - "launchpad/docs/corpus/schema/relationships.schema.json"
+  - statement: "The validator reports every id carried by more than one node as an error, so ids are unique across the corpus."
+    entry_class: FACT
+    evidence:
+      - "launchpad/project-intelligence/corpus/validate.py"
   - statement: "A node's id is never renamed once assigned, because ADR-0028 requires every generated projection to derive reproducibly from one canonical source."
     entry_class: FACT
     evidence:
@@ -107,16 +115,25 @@ node's body must tell a reader who still arrives at it.
 | | Backed by | Where to check it |
 |---|---|---|
 | **Claims** — how the tooling behaves | An entry in this node's `evidence` ledger | The cited source, opened |
-| **Rules** — the MUST and SHOULD lists | This node, and nothing else | Nowhere; see below |
+| **Rules** — the MUST list | `AGENTS.md`'s *Retiring a node*, which they restate | That procedure, and the mechanism each names |
+| **Rules** — the SHOULD list, and the `deprecated`/`retired` split | This node, and nothing else | Nowhere; see below |
 
-**The rules have no external authority, and that is stated rather than disguised.** No
-source in this repository defines what `deprecated` or `retired` mean — the schema and
-its README explain `flagged` and no other value. Issue #1311 asked for a policy with a
-MUST/SHOULD separation and an escalation process; it did not supply the content, and
-attributing this node's choices to it would be dressing up a decision as something
-somebody said. So the rules below are this node's own, offered for a reviewer to accept
-or replace, and every one of them that rests on a mechanism names the mechanism so the
-reasoning is checkable even where the rule is not sourced.
+**Two different authorities, and conflating them would be the dishonest move.**
+
+The **MUST list is not this node's invention.** It restates the retirement procedure in
+`AGENTS.md`, the governing authoring node — which is why the corpus now carries that
+policy twice, disclosed under the table below. Those rules have an authority; it is just
+not this document.
+
+**What genuinely has no external authority is the lifecycle distinction and the SHOULD
+list.** No source in this repository defines what `deprecated` or `retired` *mean* — the
+schema and its README explain `flagged` and no other value — so the split between the two,
+and the guidance about when to use which, are this node's own. Issue #1311 asked for a
+policy with a MUST/SHOULD separation and an escalation process; it did not supply that
+content, and attributing this node's choices to it would be dressing up a decision as
+something somebody said. Those parts are offered for a reviewer to accept or replace, and
+every rule that rests on a mechanism names the mechanism, so the reasoning stays checkable
+even where the rule is not sourced.
 
 **Where the rest lives** — this node links these rather than restating them, **with one
 disclosed exception** in the first row:
@@ -133,12 +150,14 @@ disclosed exception** in the first row:
 | Evidence, generated content, linking, provenance | issues #1314, #1316, #1318, #1321 |
 
 **The first row is honest about an overlap, not a link.** Every MUST below maps onto a
-step of the authoring node's *Retiring a node* procedure, two of them close to verbatim,
-so the corpus currently carries the retirement policy twice. Which document should own it
-is not this node's to rule on, and the authoring node was out of scope to edit here, so
-the duplication is recorded rather than resolved: launchpad-26/buzz#1481. Until it is
-resolved, **treat the two as one policy that must be edited together** — nothing detects
-them drifting apart, because the validator never reads body prose.
+step of the authoring node's *Retiring a node* procedure, so the corpus currently carries
+the retirement policy twice. Four phrases are shared near-verbatim — two inside the MUST
+list and two in the prose around it — so the overlap is not confined to the rules. Which
+document should own the procedure is not this node's to rule on, and the authoring node
+was out of scope to edit here, so the duplication is recorded rather than resolved:
+launchpad-26/buzz#1481. Until it is, **treat the two as one policy that must be edited
+together** — nothing detects them drifting apart, because the validator never reads body
+prose.
 
 **Not covered here.** The `status` field as a field — its full value set, and what
 `draft` and `flagged` oblige — is #1323's. This node describes only the three values
@@ -223,8 +242,12 @@ on pull requests and on pushes to `launchpad` touching the corpus tree.
 
 **What it proves about a deprecation:** nothing.
 
-That is not a figure of speech. The validator never reads a node's `status`. The only
-check made on the field anywhere is enum membership, at schema validation. So:
+That is not a figure of speech, and it is worth stating precisely, because the loose
+version of it — "nothing reads `status`" — is false. The field *is* read once: schema
+validation rejects a value outside the enum, so `status: obsolete` fails with an enum
+violation and exit 1. What no code anywhere does is **branch on which legal value it
+holds**. Past that membership check, nothing distinguishes `active` from `deprecated`
+from `retired`. So:
 
 | The check does establish | The check does not establish |
 |---|---|
