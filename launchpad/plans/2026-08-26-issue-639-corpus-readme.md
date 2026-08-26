@@ -97,11 +97,19 @@ STEP 2  Add the routing section — the table that sends a reader to the authori
         done when: validator exits 0, AND every backticked repo-relative path resolves
         from the repo root, AND every Markdown link target resolves from the corpus
         directory, AND both counts are at least 6 so the check cannot pass vacuously:
-          `python3 -c "import re,pathlib,sys;p=pathlib.Path('launchpad/docs/corpus/README.md');b=p.read_text().split('---\n',2)[2];t=[m for m in re.findall(r'\`([^\`]+)\`',b) if '/' in m and m.endswith(('.md','.json','.py','.yml','.txt'))];l=[x for x in re.findall(r'\]\(([^)\s]+)\)',b) if not x.startswith(('http://','https://','#'))];bad=[m for m in t if not pathlib.Path(m).is_file()]+[x for x in l if not (p.parent/x.split('#')[0]).is_file()];print('paths:',len(t),'links:',len(l),'BAD:',bad);sys.exit(0 if not bad and len(t)>=6 and len(l)>=6 else 1)"`
+          `python3 -c "import re,pathlib,sys;p=pathlib.Path('launchpad/docs/corpus/README.md');b=re.sub(r'\`\`\`.*?\`\`\`','',p.read_text().split('---\n',2)[2],flags=re.S);t=[m for m in re.findall(r'\`([^\`]+)\`',b) if '/' in m and m.endswith(('.md','.json','.py','.yml','.txt'))];l=[x for x in re.findall(r'\]\(([^)\s]+)\)',b) if not x.startswith(('http://','https://','#'))];bad=[m for m in t if not pathlib.Path(m).is_file()]+[x for x in l if not (p.parent/x.split('#')[0]).is_file()];print('paths:',len(t),'links:',len(l),'BAD:',bad);sys.exit(0 if not bad and len(t)>=6 and len(l)>=6 else 1)"`
           exits 0 and prints `BAD: []`
         (Raised by review-plan, High: the first draft scanned backtick spans only, so a
         routing table written as plain Markdown links — which is what this step asks for —
         could carry a dead link and still report `BAD: []`. Proved with a fixture.)
+        (Corrected again during the post-review fix pass: the gate scanned the body
+        verbatim, so a fenced code block's ``` delimiters desynchronised inline-span
+        pairing and the path count silently collapsed from 13 to 1 the moment a second
+        code block was added. Fenced blocks are now stripped before scanning — commands
+        belong in fences, citations belong in prose. This is the documented "a fix opens
+        its neighbour" shape: the fix for the review-code High added the code block that
+        broke this gate, and only the >=6 floor made the collapse visible instead of
+        silent.)
 
 STEP 3  Add the "how this corpus is checked" section: the one command, what exit 0 and  [needs 2]
         exit 1 mean, that `just corpus-validate` is the same command behind Hermit, that

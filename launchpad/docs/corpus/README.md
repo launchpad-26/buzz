@@ -7,10 +7,10 @@ audiences:
   - developer
   - reviewer
 evidence:
-  - statement: "This node was authored and checked against repository revision 60d4947b7145a6ef25f185b9c25d43e43d99de3c."
+  - statement: "This node was authored and checked against repository revision a1e8bbcd0846321c6f6684acfe551096da4d974a."
     entry_class: FACT
     evidence:
-      - "commit 60d4947b7145a6ef25f185b9c25d43e43d99de3c"
+      - "commit a1e8bbcd0846321c6f6684acfe551096da4d974a"
   - statement: "Markdown with YAML front matter is the one canonical authored representation of a corpus node; every other serialization is a generated derived view."
     entry_class: FACT
     evidence:
@@ -46,15 +46,17 @@ evidence:
     evidence:
       - "launchpad/docs/corpus/AGENTS.md"
       - "launchpad/scripts/preflight_core.py"
-  - statement: "At the recorded revision the corpus held exactly one authored node -- AGENTS.md, which records in its own scope section that it is still the only one -- so this node is the second."
+  - statement: "The checker's own discovery function enumerates the corpus's authored nodes, so the current set can be listed on demand rather than read from a count written here."
     entry_class: FACT
     evidence:
-      - "launchpad/docs/corpus/AGENTS.md"
-      - "discover_markdown_files('launchpad/docs/corpus') -> AGENTS.md only"
-  - statement: "The corpus is the subject of feature #605, whose forty-five child tasks #1307-#1351 author the remaining standards and templates and had none merged at the recorded revision; #1316, #1410 and #1459 own the specific gaps named in this node's omissions."
+      - "launchpad/project-intelligence/corpus/validate.py"
+  - statement: "The corpus schema was authored under issue #622, whose parent feature is #605 and whose parent PRD is #602."
     entry_class: FACT
     evidence:
       - "launchpad/docs/corpus/schema/README.md"
+  - statement: "AGENTS.md records the per-type standards and templates as owned by issues #1307-#1351 with none of them merged yet, and names #1316, #1410 and #1459 as the owners of three further named gaps."
+    entry_class: FACT
+    evidence:
       - "launchpad/docs/corpus/AGENTS.md"
   - statement: "Changes under launchpad/docs/corpus are validated in CI on pull requests and on pushes to the launchpad branch, running the same validator command as a local run."
     entry_class: FACT
@@ -95,9 +97,6 @@ evidence:
     evidence:
       - "launchpad/docs/corpus/schema/node.schema.json"
     confidence: 0.6
-  - statement: "Declaring no relationships is the corpus-wide convention for every node authored before the sibling standards land, rather than a judgement made for this node alone."
-    entry_class: TEAM_KNOWLEDGE
-    provided_by: "the shared task brief governing #605's document child issues, which settles 'declare NONE' as the convention until the standard set has merged"
 ---
 
 # The Buzz documentation corpus
@@ -106,10 +105,12 @@ The canonical, evidence-backed documentation of the Buzz system, written as one
 node per idea. This page is the door: it says what the corpus is, what is in it
 today, where each rule actually lives, and how the whole thing is checked.
 
-It is a map, not a manual. Nothing here restates a rule that is written down
-somewhere else — every rule below is a link to the file that owns it, because the
-checker never reads this page's prose and a second copy of a rule stays green
-forever after it goes stale.
+It is a map, not a manual. **No rule is *owned* here.** A door has to orient the
+person standing in it, so a few rules are summarised below in one or two lines —
+but every one of them names the file that owns it, and that file wins on any
+disagreement. The checker never reads this page's prose, so a summary here can go
+stale without anything turning red; treat what you read on this page as a pointer,
+never as the authority.
 
 **If you are an agent, you want
 [`launchpad/docs/corpus/AGENTS.md`](AGENTS.md), not this page.** That node carries
@@ -128,21 +129,28 @@ procedure discovered while writing becomes its own node, not another section.
 
 ## What is in the corpus today
 
-Two authored nodes, and one subtree that is deliberately not one:
+Ask the checker rather than trusting a count written on this page — it is the same
+discovery the validator itself runs, and it cannot go stale:
 
-| Path | What it is | Validated as a node? |
+```bash
+python3 -c "import sys; sys.path.insert(0, 'launchpad/project-intelligence/corpus'); \
+import validate as v; \
+print(*(p.name for p in v.discover_markdown_files(v.repo_root() / 'launchpad/docs/corpus')), sep='\n')"
+```
+
+Two kinds of thing live under the corpus root, and the difference matters:
+
+| Path | What it is | A validated node? |
 |---|---|---|
 | [`launchpad/docs/corpus/AGENTS.md`](AGENTS.md) | The agent-facing instruction node — how to create, update and retire a node | Yes |
 | [`launchpad/docs/corpus/README.md`](README.md) | This page — the human-facing entry point | Yes |
-| [`launchpad/docs/corpus/schema/`](schema/README.md) | The front-matter contract, its fixtures and its tests | **No** — deliberately excluded |
+| [`launchpad/docs/corpus/schema/`](schema/README.md) | The front-matter contract, its fixtures and its tests | **No** — deliberately excluded from the scan |
 
-That is the whole corpus. Two authored nodes.
-
-**This is a corpus under construction, and the emptiness is the current state
-rather than an omission.** Feature #605 owns building it out: forty-five further
-standards, templates and instruction documents are tracked as its child tasks, and
-at the recorded revision none of them had merged. Expect this table to grow and
-expect the shape of a node to be tightened by standards that do not exist yet.
+**This is a corpus under construction, and the sparseness is the current state
+rather than an omission.** The per-type standards and templates are owned by issues
+#1307–#1351, none of which had merged when this page was written, and #1316, #1410
+and #1459 own three further named gaps. Expect the list above to grow, and expect
+the shape of a node to be tightened by standards that do not exist yet.
 
 ## Where each rule lives
 
@@ -191,9 +199,10 @@ and had nothing on disk to open, which is not the same as having checked it.
 A pass is a structural result, not an editorial one. It does not mean a citation
 supports the claim it sits under; it does not mean an `UNVERIFIED` citation was
 checked; and it does not mean a line number in a citation points anywhere real.
-Those three limits, and what a reviewer has to hold instead, are set out in
+That is the summary. What each limit means, and what a reviewer has to hold in
+place of the check, is owned by
 [`launchpad/docs/corpus/AGENTS.md`](AGENTS.md) under *Three things a passing run
-does not mean*. They are not repeated here.
+does not mean* — read it there before reviewing a corpus change.
 
 **This matters most at review time.** The corpus is audited in the pull-request
 diff a human reads, not after the fact — that is the enforcement mechanism
@@ -216,11 +225,16 @@ each rule, and how the corpus is checked.
 | Line numbers in citations not being verified against file length | #1459 |
 
 **This node declares no `relationships`.** A `relationships[].target` naming an id
-no loaded node carries is a hard validation error, and at the recorded revision the
-only other node in the corpus was `corpus-agents`. An edge to it would resolve
-today, but every sibling standard this page will eventually point at is unmerged, so
-the corpus gains its graph in one deliberate follow-up once the set has landed rather
-than one partial edge at a time. The absence is a decision, not an oversight.
+no loaded node carries is a hard validation error, and almost every node this page
+will eventually point at does not exist yet. An edge to `corpus-agents` would
+resolve, so the absence is a choice rather than a constraint: this node waits and
+takes its edges in one pass once the standards have landed, instead of accumulating
+them one at a time against a set that is still changing shape.
+
+**That is this node's own decision, not a rule for the corpus.** Whether nodes
+authored before the standard set lands should declare edges as they go is not
+settled anywhere, and this page has no authority to settle it — the per-type
+standards owned by #1307–#1351 do.
 
 **`agent` is deliberately absent from `audiences`.** The schema defines that field
 as who the node is written *for*, and this node is written for the humans arriving at
