@@ -97,6 +97,22 @@ evidence:
       - "launchpad/decisions/ADR-0029-corpus-evidence-precedence.md"
       - "launchpad/docs/corpus/AGENTS.md"
     confidence: 0.7
+  - statement: "The deterministic checker validates front matter against the schema and checks duplicate ids, relationship targets, citation forms, non-canonical files and non-Markdown files, and none of those checks concerns how many ideas a node holds."
+    entry_class: FACT
+    evidence:
+      - "launchpad/project-intelligence/corpus/validate.py"
+  - statement: "Changes under the corpus root run that checker in CI on pull requests."
+    entry_class: FACT
+    evidence:
+      - ".github/workflows/launchpad-corpus-validate.yml"
+  - statement: "The corpus is authored as Markdown specifically so it stays reviewable as a human-read pull-request diff, which ADR-0028 names as the enforcement mechanism the rest of the corpus depends on."
+    entry_class: FACT
+    evidence:
+      - "launchpad/decisions/ADR-0028-corpus-canonical-representation.md"
+  - statement: "The instruction node already names one convention no check enforces -- a ledger carrying more than one commit-only FACT -- and states that a reviewer has to hold it."
+    entry_class: FACT
+    evidence:
+      - "launchpad/docs/corpus/AGENTS.md"
   - statement: "Correcting an over-merged node later fails silently while correcting an over-split one fails visibly, so a call the tests leave balanced should resolve toward two nodes."
     entry_class: INFERENCE
     evidence:
@@ -385,3 +401,113 @@ looks.
    is the second copy this corpus's linking rules exist to prevent, and it is the exact
    shape folding takes once an author has agreed not to fold. Link it. A reader who
    needs it can open it.
+
+## Enforcement
+
+**Nothing automated enforces any requirement on this page.**
+
+The deterministic checker validates front matter against the schema and reports
+duplicate ids, relationship targets matching no loaded node, citations whose form it
+cannot recognise or whose path does not resolve, Markdown that resolves outside the
+corpus root, and non-Markdown files. Every one of those is a property of a node's
+structure. None of them is a property of how many ideas the node holds. CI runs that
+same checker on pull requests touching the corpus, so it adds coverage, not a different
+kind of check.
+
+A node covering six subjects passes exactly as cleanly as one covering one. So does a
+node split into six fragments.
+
+**Enforcement is therefore the pull-request review**, and that is not a gap left by
+accident. ADR-0028 chose Markdown over a machine-readable record format precisely
+because the corpus is reviewed as a human-read diff at the pull request that changes
+it, and named that review as the mechanism the rest of the corpus rests on. Atomicity
+is one of the things it rests on it for.
+
+This is not the first such convention. The instruction node already names another — a
+ledger carrying more than one commit-only `FACT` — and says outright that a reviewer
+has to hold it because no check will. Atomicity belongs to the same class, and a
+reviewer who does not look for it is the only failure mode either has.
+
+### What a reviewer checks
+
+Five questions, in the order that finds problems fastest:
+
+1. **Can the node's subject be stated in one sentence with no conjunction joining two
+   nouns?** If the pull-request description needed one, that is the same signal.
+2. **Does any part of the body want a different `type`, `status` or `origin` than the
+   one declared?** This is the decisive test and the only one checkable without
+   guessing at the future. Read the body against the front matter, not the front matter
+   alone.
+3. **Would an ordinary repository change obsolete half the claims and leave the rest?**
+   If so, the recorded revision cannot honestly cover both halves.
+4. **Where the node declined a subject, is the boundary recorded** with a sibling `id`
+   or a task number, per A4?
+5. **Is a split-off subject also summarised in the body?** This is the tell worth
+   knowing: an author who filed the task and then wrote a paragraph of context anyway
+   has folded the concept in while appearing not to. The filed issue makes it look
+   handled.
+
+## Exceptions and escalation
+
+**There is no exemption from A1.** Every node is one idea; a node is not granted the
+right to be two. What can genuinely be disputed is whether a particular subject *is*
+one idea, and that is a judgement, not an exception — so the process below settles
+disagreements rather than granting waivers.
+
+1. **The author records the tension** in the node and names it in the pull request, per
+   B5. A silent decision cannot be reviewed.
+2. **The reviewer decides.** The reviewer is where enforcement lives, so this is the
+   ordinary path and it ends here almost always.
+3. **If author and reviewer do not agree, the node ships as two nodes** — B2's tie-break
+   applied to a human disagreement rather than to an author's own uncertainty, for the
+   same reason: over-merging is the mistake that leaves no trace.
+4. **File the disagreement as an issue against this standard.** A boundary two people
+   read differently is a defect in the procedure above, and the procedure is the thing
+   that should change.
+
+### `status: flagged` is not this process
+
+`flagged` means two authoritative sources of the same claim type contradict each other
+and no human has resolved it. It is a statement about a node's **evidence**.
+
+A granularity disagreement is a statement about a node's **boundary**. Setting
+`flagged` for one would tell every reader, and every generated view, that the node's
+content is contested when nothing about it is. Use the four steps above.
+
+## Scope and omissions
+
+**This node covers** how many corpus nodes a subject becomes: the requirements, the
+tests that decide, which test wins when they disagree, the boundary cases, what to do
+when a second concept appears mid-draft, and who enforces any of it.
+
+**It does not cover, and these are gaps rather than silence:**
+
+| Not covered here | Owned by |
+|---|---|
+| The adjacent subjects listed in *Scope and authority* — taxonomy, identifiers, naming, linking, normative language, evidence, and the general scope-section convention | #1324, #1317, #1319, #1318, #1320, #1314, #1313 |
+| How the two halves of a split subject should link to each other in practice, and which relationship type expresses it | #1318, linking |
+| Whether a generated projection must preserve node granularity or may merge nodes into one view | #1316, generated content |
+| Whether a reviewer's atomicity check belongs in a stated review requirement | #1322, review requirements |
+
+**No `relationships` in this node's front matter.**
+This node declares no `relationships`, and the absence is deliberate rather than an
+oversight. At the revision recorded in its ledger
+the corpus contained exactly one other node, the instruction node, and every sibling
+standard this document points at — #1313, #1314, #1317, #1318, #1319, #1320, #1322,
+#1324 — is an open task with no node and therefore no `id` to target. A
+`relationships[].target` naming an id no node carries is a hard validation error, so
+the edges wait until the nodes exist.
+
+**Expected but not verified when this node was written:**
+
+- **No test in this procedure has been applied to a real second corpus subject.** The
+  instruction node is the only other node in the corpus, so the five tests are derived
+  from the schema, the ADRs and the instruction node rather than distilled from a body
+  of practice. They are reasoned, not measured, and the first few real uses should be
+  treated as evidence about the procedure as much as about the nodes.
+- **The reviewer checklist has never been run by a reviewer.** It is proposed on the
+  same basis, and its ordering — the claim that these five questions find problems
+  fastest — is a design judgement with nothing behind it yet.
+- **Case C's third outcome is untested.** Whether "the detail belongs in the executable
+  source rather than the corpus" is a call authors will actually make, or one they will
+  route around by merging anyway, is unknown until a subject reaches it.
