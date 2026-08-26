@@ -13,7 +13,7 @@ what does it actually require?**
 ## What it is, and the problem it solves
 
 "Industry standard documentation template" is not one thing. The document types split
-into three tiers by how much authority actually stands behind them, and the tiers are
+into four tiers by how much authority actually stands behind them, and the tiers are
 not what you would guess:
 
 | Tier | What it means | Examples |
@@ -207,7 +207,9 @@ be filled before adoption (reporting route, and whether to keep the suggested la
 
 ### Structure and style, not templates
 
-**Diátaxis** — four forms, no version, no date, no named author on the site. Quoted:
+**Diátaxis** — four forms, no version, no date. Authored by Daniele Procida, credited on
+the colophon ("Diátaxis is the work of Daniele Procida") though not on the landing page.
+Quoted:
 
 > "Diátaxis identifies four distinct needs, and four corresponding forms of
 > documentation - _tutorials_, _how-to guides_, _technical reference_ and _explanation_."
@@ -219,10 +221,17 @@ be filled before adoption (reporting route, and whether to keep the suggested la
 > **information-oriented**." · Explanation: "Explanation is a discursive treatment of a
 > subject, that permits reflection. Explanation is understanding-oriented."
 
-Reference carries an explicit prohibition worth quoting because agent-written docs
-violate it constantly: reference "should explicitly avoid instruction and explanation",
-and introducing "opinion, speculation, instructions or interpretation" into it is
-treated as a category error.
+Reference carries a boundary worth quoting because agent-written docs cross it
+constantly: "Although reference should not attempt to show how to perform tasks, it can
+and often needs to include a description of how something works or the correct way to use
+it." Diátaxis names the pull directly — "It can be tempting to introduce instruction and
+explanation" — and grounds the boundary in the reader: "When you're looking for
+information - relevant facts - you do not want to be confronted by opinions, speculation,
+instructions or interpretation."
+
+Note the boundary is narrower than it is usually reported. Diátaxis does not forbid
+describing how something works; it forbids *instructing*. Calling the violation a
+"category error" is this note's framing, not the source's.
 
 **The Good Docs Project** — 29 fillable templates across three packs, licensed
 **Zero-Clause BSD** ("Permission to use, copy, modify, and/or distribute this software
@@ -290,14 +299,16 @@ nobody's idea of contested territory — have numbered, dated, pinnable specific
 PRDs and design docs, which generate endless template debate, have none at all. The
 argument is not about the format; it exists *because* there is no format to appeal to.
 
-**Diátaxis has no version, no date, and no author on the site.** The most-cited
-documentation framework in the industry cannot be pinned. A claim of the form "per
-Diátaxis, as of 2026…" is not supportable, because the site will not say when anything
-on it was written.
+**Diátaxis has no version and no date.** The most-cited documentation framework in the
+industry cannot be pinned in time. A claim of the form "per Diátaxis, as of 2026…" is not
+supportable, because the site will not say when anything on it was written. Authorship is
+not the gap — the colophon credits Daniele Procida; it is the absence of a version or date
+that defeats citation.
 
-**Reference documentation is defined by what it must not contain.** Diátaxis treats
-adding explanation or instruction to reference as a category error, not a stylistic
-preference. That is the exact failure mode of agent-written reference docs, which drift
+**Reference documentation is defined by what it must not do.** Diátaxis says reference
+"should not attempt to show how to perform tasks", while allowing that it "can and often
+needs to include a description of how something works". The line is instruction, not
+description. That is the exact failure mode of agent-written reference docs, which drift
 into tutorial voice within a paragraph.
 
 **"Industry standard" in practice means "widely adopted free template", not "standard".**
@@ -357,7 +368,7 @@ sections. Rust's RFC template, arc42, and every PRD template found ask none of t
 - Google, *The Site Reliability Workbook*, "Being On-Call" — https://sre.google/workbook/on-call/ — 2018
 - GitHub, community health files — https://docs.github.com/en/communities/setting-up-your-project-for-healthy-contributions/creating-a-default-community-health-file — undated
 - Contributor Covenant 3.0 — https://www.contributor-covenant.org/version/3/0/code_of_conduct/ — v3.0, CC BY-SA 4.0, release date unverified
-- Diátaxis — https://diataxis.fr/ , /tutorials-how-to/ , /reference/ , /explanation/ — undated, no version, no named author on site
+- Diátaxis — https://diataxis.fr/ , /tutorials-how-to/ , /reference/ , /explanation/ , /colophon/ — undated, no version; authored by Daniele Procida, credited on /colophon/ but not on the landing page
 - The Good Docs Project templates — https://www.thegooddocsproject.dev/template and https://raw.githubusercontent.com/thegooddocsproject/templates/main/LICENSE.txt — 29 templates, Zero-Clause BSD, no version stated
 - Google developer documentation style guide — https://developers.google.com/style/highlights — last updated 2025-04-02
 - OpenAPI Specification — https://spec.openapis.org/oas/latest.html — v3.2.0, 19 September 2025
@@ -405,6 +416,23 @@ neither authoritative alone.
 **What was merely incomplete, not false:** RFC 2119 was quoted correctly but without
 RFC 8174, which is what makes lowercase "should" non-normative — a real gap for anyone
 using this note to write requirement language, now filled.
+
+**A second false claim, caught in review: Diátaxis was said to have "no named author on
+the site".** It has one — `diataxis.fr/colophon/` states "Diátaxis is the work of Daniele
+Procida." The claim was built from the landing page and the three form pages, none of
+which name him, and the absence was reported as a property of the site rather than of the
+pages actually read. Same shape as the Keep a Changelog error: a fact read off a subset of
+pages and generalised to the whole source. The pinnability argument survives intact,
+because what defeats citation here is the missing version and date, not the authorship.
+
+**And one quotation was a paraphrase wearing quotation marks.** The note had reference
+documentation "should explicitly avoid instruction and explanation" — that string appears
+nowhere on the page. The source says "Although reference should not attempt to show how to
+perform tasks, it can and often needs to include a description of how something works",
+and separately that "It can be tempting to introduce instruction and explanation". The
+invented wording was also *stronger* than the source: Diátaxis draws its line at
+instructing, not at describing how something works. In a note about which templates you
+can actually cite, a fabricated quotation is the worst available error.
 
 ---
 
