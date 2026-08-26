@@ -7,10 +7,10 @@ audiences:
   - agent
   - reviewer
 evidence:
-  - statement: "This node was authored and checked against repository revision 60d4947b7145a6ef25f185b9c25d43e43d99de3c."
+  - statement: "This node was authored and checked against repository revision a1e8bbcd0846321c6f6684acfe551096da4d974a."
     entry_class: FACT
     evidence:
-      - "commit 60d4947b7145a6ef25f185b9c25d43e43d99de3c"
+      - "commit a1e8bbcd0846321c6f6684acfe551096da4d974a"
   - statement: "Evidence is ranked by claim type rather than by one fixed hierarchy: for a claim about how the system currently behaves, executable evidence is authoritative over documentation and history; for a claim about intended or authorized behaviour, an accepted normative decision is authoritative over everything else, including code that has drifted from it without a corresponding decision update."
     entry_class: FACT
     evidence:
@@ -94,10 +94,10 @@ evidence:
     entry_class: FACT
     evidence:
       - "launchpad/project-intelligence/CONTRACT.md"
-  - statement: "At the recorded revision the corpus's only other authored node is launchpad/docs/corpus/AGENTS.md, whose own body states it is still the only one."
+  - statement: "The corpus checker treats the flagged status exactly as it treats any other status, and compares no two decision records against each other, so nothing in it detects an unresolved conflict."
     entry_class: FACT
     evidence:
-      - "launchpad/docs/corpus/AGENTS.md"
+      - "launchpad/project-intelligence/corpus/validate.py"
   - statement: "Because the checker resolves a decision citation as a path and never reads the record's front matter, an intent claim citing a proposed or superseded record validates exactly as cleanly as one citing an accepted record, so a record's status is a reviewer's responsibility and not the checker's."
     entry_class: INFERENCE
     evidence:
@@ -110,12 +110,12 @@ evidence:
       - "launchpad/decisions/ADR-0029-corpus-evidence-precedence.md"
       - "launchpad/project-intelligence/CONTRACT.md"
     confidence: 0.6
-  - statement: "The procedural requirements this node states, beyond what ADR-0029 and launchpad/decisions/README.md already require, are this node's own policy rather than a restatement of an existing rule."
+  - statement: "Issue #1310 requires this node to state its scope and the authority its policy rests on, to separate MUST requirements from SHOULD guidance, and to define enforcement and an exception or escalation process."
     entry_class: TEAM_KNOWLEDGE
-    provided_by: "launchpad-26/buzz#1310 definition of done: 'States scope and authority/source of the policy', 'Separates MUST requirements from SHOULD guidance', 'Defines enforcement/checks and exception/escalation process'"
-  - statement: "Encoding claim-type classification and the flagged state in the corpus schema and checker is deferred to a separate task rather than attempted here."
+    provided_by: "launchpad-26/buzz#1310 definition of done"
+  - statement: "Issue #1410 owns encoding ADR-0029's claim-type classification and unestablished or flagged state in the corpus schema and validator."
     entry_class: TEAM_KNOWLEDGE
-    provided_by: "launchpad-26/buzz#1410, which owns encoding ADR-0029's claim-type classification and unestablished/flagged state in #605's schema and validator"
+    provided_by: "launchpad-26/buzz#1410"
 ---
 
 # Citing a decision
@@ -161,7 +161,9 @@ which one would a reader call the defect?*
 | "the decision is out of date" | a **behaviour** claim — how the system acts today | code, config, schema, a passing test |
 | "the code has drifted" | an **intent** claim — what was decided, intended or authorized | the accepted decision, *even over the code* |
 
-That asymmetry is the whole of ADR-0029. Neither ordering is right for both claim types:
+That asymmetry is the first half of ADR-0029 — the second half is what happens when two
+sources of the *same* claim type disagree, and it has its own section below. Neither
+ordering is right for both claim types:
 a fixed "the decision always wins" rule would assert wrong behaviour as fact after a
 deliberate code change, and a fixed "the code always wins" rule would let quiet drift
 overwrite what was actually authorized.
@@ -212,15 +214,22 @@ reword it as the intent claim it can actually support.
    directory under the same filename pattern as accepted ones, so the path alone tells you
    nothing.
 5. A `FACT` asserting **what is authorized** **MUST** rest on the record's **Decision**
-   section — that is the load-bearing part. Context and Consequences are legitimate
-   sources for a claim about *rationale* or *expected consequence*, and such a claim
-   **MUST** be worded as one rather than as a statement of what is authorized.
+   section — that is the load-bearing part. Every other section is a legitimate source
+   for a claim about something *other than* authorization — rationale from Context,
+   expected effect from Consequences, where the decision was really made from
+   Provenance, and so on — and such a claim **MUST** be worded as the kind of claim it
+   is. `launchpad/decisions/README.md` lists the sections a record carries; individual
+   records add their own, so do not assume the list is closed.
 6. When two accepted decisions of the **same claim type** contradict each other, the author
    **MUST** stop, **MUST** record the contradiction and both records in the ledger, and
    **MUST NOT** pick a side. See *When two accepted decisions conflict*.
-7. A node citing a **superseded** record **MUST** say so in the entry's `statement`, and
-   **MUST** say why that record is still the right source. Silence there asserts current
-   authorization from a record that no longer carries any.
+7. A node citing a **superseded** record **for an intent claim MUST** say so in the
+   entry's `statement`, and **MUST** say why that record is still the right source.
+   Silence there asserts current authorization from a record that no longer carries any.
+   The rule is scoped to intent claims deliberately: an entry whose claim is *about* the
+   record — that it exists, that it is superseded, what its status field says — is
+   already disclosing the thing MUST 7 exists to force, and this node's own ledger cites
+   `ADR-0001` twice on exactly that basis.
 
 ## SHOULD
 
@@ -254,8 +263,9 @@ unestablished until a human resolves it. Concretely:
 1. Write **one evidence entry per contradicting record**, each citing its own record, each
    stating what that record says. Do not write a third entry stating the resolution.
 2. State the contradiction in the body — both records, and the claim they disagree about.
-3. Set the node's `status` to the value the schema defines for exactly this state. It is
-   not "low confidence"; it names an unresolved conflict.
+3. Set the node's `status` to `flagged`. The schema defines that value for exactly this
+   state, and describes it as naming an unresolved conflict rather than mere low
+   confidence.
 4. Escalate it the way this repository turns an open question into a decision: a `type:adr`
    issue parented to the PRD that raised it, with the decision outcome left blank. **Agents
    draft decisions; they do not make them.** Choosing between two accepted records is
@@ -292,9 +302,10 @@ available to a claim that is explicitly historical.
 
 ## What the checks establish, and what they do not
 
-The checker's verdict on a decision citation is **structural**. A bare repository path is
-resolved and must be a real file inside the repository; the file is never opened. From
-that, three consequences follow, and all three are load-bearing:
+The checker's verdict on a decision citation is **structural**. A repository path — bare,
+or carrying a line position — is resolved, and must be a real file inside the repository;
+the file is never opened, and a line position's number is never compared against the
+file. From that, four consequences follow, and all four are load-bearing:
 
 1. **It cannot tell an accepted record from a proposed or superseded one.** Every ADR path
    under `launchpad/decisions/` looks identical to it.
@@ -302,6 +313,9 @@ that, three consequences follow, and all three are load-bearing:
    real decision that is silent on the subject passes cleanly.
 3. **It cannot tell an intent claim from a behaviour claim**, so it cannot tell that a
    decision is the wrong evidence for the claim it sits under.
+4. **It cannot tell that two cited decisions contradict each other.** It compares no two
+   records, and it never reads a node's `status`, so a node flagged for an unresolved
+   conflict and a node asserting a settled answer validate identically.
 
 The repository's separate automated ADR check does not close any of this: it is scoped to
 one ADR's sanctioned-file list and reads no other record's front matter.
@@ -309,12 +323,18 @@ one ADR's sanctioned-file list and reads no other record's front matter.
 **Every MUST in this node is therefore held by a human reviewer.** A reviewer checking a
 node that cites `launchpad/decisions/`:
 
-- opens each cited record and reads its front-matter `status`;
-- confirms the claim is an intent claim, not a behaviour claim in intent clothing;
-- confirms the record's **Decision** section supports the `statement`;
-- confirms a superseded citation says it is superseded and why it stands;
-- confirms no decision citation carries a line position. The checker accepts one — it
-  checks the path and ignores the number — so MUST 3 is unenforced too.
+- opens each cited record and reads its front-matter `status` (MUST 4);
+- confirms the claim is an intent claim, not a behaviour claim in intent clothing
+  (MUSTs 1 and 2), and that an authorization claim does not cite the issue instead of the
+  record (MUST 1);
+- confirms the record's **Decision** section supports an authorization `statement`, and
+  that a claim drawn from any other section is worded as the kind of claim it is (MUST 5);
+- confirms **two cited decisions do not contradict each other**, and that where they do
+  the node records both and picks neither (MUST 6). Nothing else will catch this, and it
+  is the failure ADR-0029 calls a security concern;
+- confirms a superseded intent citation says it is superseded and why it stands (MUST 7);
+- confirms no decision citation carries a line position (MUST 3). The checker accepts
+  one — it checks the path and ignores the number — so MUST 3 is unenforced too.
 
 A green validation run answers none of these questions and does not claim to.
 
@@ -351,14 +371,25 @@ standing exception.
 | The general evidence contract and how classes are chosen | [#1314][i1314] |
 | Deprecating or retiring a **corpus node** — distinct from superseding a decision | [#1311][i1311] |
 | Encoding claim type and the flagged state in the schema and checker | [#1410][i1410] |
-| Line positions in citations not being verified against file length | [#1459][i1459] |
+| Fixing the unverified line number itself, for citations generally | [#1459][i1459] |
+| Whether a non-accepted record may be cited as *context* generally | [#1314][i1314] |
 | How a specification becomes "ratified" | Undefined in this repository — see below |
 
-**No `relationships` in this node's front matter.** At the recorded revision the corpus
-holds one other authored node, `launchpad/docs/corpus/AGENTS.md`, and none of the sibling
-standards this node would point at exist yet. A `relationships[].target` naming an id no
-node carries is a hard validation error, so declaring none is the correct answer rather
-than an oversight. Edges belong in a follow-up once the standards have landed.
+**Two boundaries worth naming explicitly**, because this node settles a slice of each:
+
+- MUST 3 closes the line-position gap **for decision citations only**, by prohibition. It
+  does not close it anywhere else, and [#1459][i1459] still owns making the number
+  verifiable rather than merely forbidden.
+- The standing exception above settles when a proposed or superseded record may be cited
+  **for a claim about that record**. Whether such a record may be cited as *context* for
+  some other claim is [#1314][i1314]'s, and this node deliberately does not answer it. If
+  #1314 rules differently, it supersedes the exception rather than sitting beside it.
+
+**No `relationships` in this node's front matter.** None of the sibling standards this node
+would point at exist yet, and a `relationships[].target` naming an id no node carries is a
+hard validation error, so declaring none is the correct answer rather than an oversight.
+Do not take that on this document's word — `ls launchpad/docs/corpus/standards/` is the
+check. Edges belong in a follow-up once the standards have landed.
 
 **Expected but not verified when this node was written**, per the rule in *Creating a node*
 step 3 of `launchpad/docs/corpus/AGENTS.md`:

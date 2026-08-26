@@ -6,6 +6,17 @@ Repo: launchpad-26/buzz · Branch: task/1310-corpus-standard-decision-references
 Base: origin/task/636-corpus-agents-md (AGENTS.md is unmerged — PR #1462)
 Worktree: /home/serina/Launchpad/buzz/__worktrees/task-1310-corpus-standard-decision-references
 
+REBASED AFTER PLANNING — the base branch advanced while this was being built.
+  `origin/task/636-corpus-agents-md` moved from 60d4947b7 to a1e8bbcd0
+  ("docs(corpus): stop asserting provenance policy this node cannot source (#636)"),
+  which rewrote `launchpad/docs/corpus/AGENTS.md` — the only cited source that moved.
+  The branch was rebased onto a1e8bbcd0 and the node's recorded revision moved to it
+  after re-verifying every claim there. The facts below were verified at 60d4947b7 and
+  remain true at a1e8bbcd0 except where AGENTS.md's own wording changed; see the
+  node's ledger for what was re-checked. Two consequences of that commit are handled
+  in the node: it deleted the AGENTS.md sentence one FACT quoted, and it narrowed the
+  TEAM_KNOWLEDGE definition so one entry's class became illegal.
+
 ALREADY TRUE  (verified against git and the filesystem at 60d4947b7145a6ef25f185b9c25d43e43d99de3c)
   `git rev-parse HEAD` = 60d4947b7145a6ef25f185b9c25d43e43d99de3c; working tree clean.
   `launchpad/docs/corpus/` contains exactly one authored node, `AGENTS.md` (id
