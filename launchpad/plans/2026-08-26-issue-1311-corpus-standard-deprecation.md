@@ -17,9 +17,12 @@ ALREADY TRUE  (verified against git and against runs, not notes)
     `schema/` is excluded from validation by name (validate.py's
     `EXCLUDED_TOP_LEVEL_DIRS`). `corpus-agents` exists on this branch and NOT on
     `launchpad` — PR #1462 is open, not merged.
-  Nothing reads a node's `status`. `grep -n status validate.py` returns only the
-    `CitationVerdict.status` field ("ok"/"error"/"unverified"), never a node's. The
-    only check on the field anywhere is enum membership in `node.schema.json`.
+  No code branches on WHICH legal `status` a node holds. `grep -n status validate.py`
+    returns only the `CitationVerdict.status` field ("ok"/"error"/"unverified"), never a
+    node's. The field IS read once — schema validation rejects a value outside the enum
+    in `node.schema.json`, so `status: obsolete` fails with exit 1 — but nothing tells
+    `active`, `deprecated` and `retired` apart past that. (Corrected after the
+    cross-model gate refuted the looser "nothing reads `status`" this line first carried.)
   Probe run, retire versus delete: a node with `status: retired` plus an inbound
     `supersedes` edge validates PASS/exit 0; moving that node's FILE away turns the
     same edge into `FAIL ... relationship target 'probe-old' does not match any known
