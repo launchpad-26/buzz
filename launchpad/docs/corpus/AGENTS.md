@@ -5,6 +5,7 @@ status: active
 origin: launchpad
 audiences:
   - agent
+  - reviewer
 evidence:
   - statement: "This node was authored and checked against repository revision 0052f5a7820ca4ca261efa233feb8bb53858ade6."
     entry_class: FACT
@@ -14,7 +15,7 @@ evidence:
     entry_class: FACT
     evidence:
       - "launchpad/decisions/ADR-0028-corpus-canonical-representation.md"
-  - statement: "A node's front matter is validated against node.schema.json, which requires id, type, status, origin, audiences and evidence, and permits no field outside that set."
+  - statement: "A node's front matter is validated against node.schema.json, which requires id, type, status, origin, audiences and evidence, additionally permits relationships, and rejects any field beyond those seven."
     entry_class: FACT
     evidence:
       - "launchpad/docs/corpus/schema/node.schema.json"
@@ -51,6 +52,36 @@ evidence:
     entry_class: FACT
     evidence:
       - ".github/workflows/launchpad-corpus-validate.yml"
+  - statement: "Evidence entries are classified FACT, INFERENCE or TEAM_KNOWLEDGE, and the class chosen decides which further fields the schema requires or forbids."
+    entry_class: FACT
+    evidence:
+      - "launchpad/docs/corpus/schema/node.schema.json"
+      - "launchpad/project-intelligence/CONTRACT.md"
+  - statement: "supersedes is a typed relationship whose declared directionality is that the source replaces the target and the target becomes historical."
+    entry_class: FACT
+    evidence:
+      - "launchpad/docs/corpus/schema/relationships.schema.json"
+  - statement: "A non-GitHub external URL is reported UNVERIFIED, because the validator can neither pin it to a commit nor open it."
+    entry_class: FACT
+    evidence:
+      - "launchpad/project-intelligence/corpus/validate.py"
+  - statement: "A GitHub file link is checked for a full-SHA pin and a non-empty path segment only; the validator never establishes that the named file exists."
+    entry_class: FACT
+    evidence:
+      - "launchpad/project-intelligence/corpus/validate.py"
+  - statement: "Deleting a node breaks every relationship targeting it, while retiring it by status change leaves those relationships resolving."
+    entry_class: FACT
+    evidence:
+      - "launchpad/project-intelligence/corpus/validate.py"
+  - statement: "Retirement is therefore a status change that keeps the file and spends the id permanently, rather than a deletion."
+    entry_class: INFERENCE
+    evidence:
+      - "launchpad/project-intelligence/corpus/validate.py"
+      - "launchpad/decisions/ADR-0028-corpus-canonical-representation.md"
+    confidence: 0.8
+  - statement: "The revision recorded in this ledger is the revision the node's claims were checked against, not a record of when the file was last edited."
+    entry_class: TEAM_KNOWLEDGE
+    provided_by: "launchpad-26/buzz#636 definition of done: 'The draft is checked against the repository revision recorded in provenance'"
 ---
 
 # Working with the documentation corpus
@@ -146,16 +177,31 @@ documented anywhere else, so it is here — provisionally. This table is referen
 material rather than instruction, and belongs in the evidence standard once that
 lands (#1314); when it moves, this section links to it instead.
 
-| Shape | Checker's verdict |
-|---|---|
-| Bare repository path | Resolved; must be a real **file** inside the repo. A directory fails. |
-| Path with a line or line range | Resolved as a path. **The line number is not checked** — see below. |
-| GitHub file link | Must be pinned to a full 40-character commit SHA, and must name a file. |
-| Commit reference | Reported `UNVERIFIED`. Nothing on disk to open. |
-| Graph edge | Reported `UNVERIFIED`. |
-| Tool result | Reported `UNVERIFIED`. |
+Read the middle column carefully: only two rows involve opening anything.
+
+| Shape | Checker's verdict | Does it prove the target exists? |
+|---|---|---|
+| Bare repository path | Opened on disk; must be a real **file** inside the repo. A directory fails. | **Yes** |
+| Path with a line or line range | The path is opened. The line number is **not** checked at all. | File yes, line **no** |
+| GitHub file link | **Syntax only.** Must be pinned to a full 40-character SHA and have a non-empty path segment after it. | **No** |
+| External (non-GitHub) URL | Reported `UNVERIFIED`. Nothing to pin, nothing to open. | No |
+| Commit reference | Reported `UNVERIFIED`. Nothing on disk to open. | No |
+| Graph edge | Reported `UNVERIFIED`. | No |
+| Tool result | Reported `UNVERIFIED`. | No |
 
 Anything matching **no** known shape is a hard error, not an `UNVERIFIED` notice.
+
+**The GitHub row is the trap.** The checker never contacts GitHub. It reads the URL as
+a string, and a link pinned to a real commit but naming a file that has never existed
+passes as cleanly as a correct one:
+
+```
+https://github.com/launchpad-26/buzz/blob/<full-sha>/does-not-exist.md   ->  ok
+```
+
+So a typo in a remote path ships silently. A repo-relative path is checked against the
+filesystem and a GitHub link is not — prefer the former for anything in this
+repository, and treat a GitHub link as a *pin*, not as evidence the target is there.
 
 ### Three things a passing run does not mean
 
@@ -253,31 +299,58 @@ standing in.
 
 ## Updating a node
 
+**What the recorded revision means.** It is the revision the node's claims were
+*checked against* — the wording comes from #636's definition of done, which requires
+that "the draft is checked against the repository revision recorded in provenance", and
+is attributed to that source in this node's ledger rather than inferred from the schema,
+which says nothing about revisions. It is **not** a last-touched timestamp. Edit
+prose without re-checking a source and the revision stays where it is; re-check the
+sources and it moves, whether or not the body changed. Bumping it on every edit would
+assert a verification that never happened, which is the one thing provenance exists to
+prevent.
+
 1. **Confirm the change belongs in this node.** New idea, not new detail about the
    existing one? That is a new node.
-2. **Re-record the revision you are checking against.** `git rev-parse HEAD` now, not
-   the one already in the ledger.
-3. **Re-verify the claims you are touching** against sources at that revision. A claim
-   whose source moved is not still a `FACT` because it used to be.
-4. **Update the ledger in the same edit as the body.** A new claim without an entry, or
+2. **Re-verify the claims you are touching**, against those sources at current `HEAD`
+   (`git rev-parse HEAD`). A claim whose source moved is not still a `FACT` because it
+   used to be.
+3. **Update the ledger in the same edit as the body.** A new claim without an entry, or
    an entry left behind by a deleted claim, are the two ways these drift apart.
-5. **Update the recorded revision** to the one from step 2.
-6. **Leave the `id` alone.** Always.
-7. **Run the check.**
+4. **Move the recorded revision to that `HEAD` only if you re-verified against it.**
+   If you re-verified every claim, move it. If you re-verified some, move it and be
+   sure the rest still hold at that revision too — a single node carries one snapshot,
+   so moving it makes a statement about the whole ledger. If you re-verified nothing,
+   leave it alone.
+5. **Leave the `id` alone.** Always.
+6. **Run the check.**
 
 ## Retiring a node
 
-1. **Find what points at it.** Search the corpus for the node's `id`; any node with a
-   relationship targeting it needs handling first, or the corpus is left with a
-   relationship that no longer resolves.
-2. **Decide what replaces it.** If another node takes over the subject, say so in that
-   node — a reader arriving at a retired node needs somewhere to go.
-3. **Set `status` to the retired value** defined in `node.schema.json`. Do not delete
-   the file: generated views and inbound links resolve through the id, and deleting it
-   breaks them silently.
-4. **Never reuse or rename the `id`.** A retired id stays spent.
-5. **Record why**, in the body and in the ledger, at the revision you checked.
-6. **Run the check.**
+Retiring is a **status change, not a deletion**. The file stays, so the checker keeps
+loading the node and inbound relationships keep resolving. Nothing here is enforced by
+tooling — a retired node with stale inbound edges validates exactly like a healthy one.
+
+1. **Set `status` to the retired value** defined in `node.schema.json`. Do not delete
+   the file. Deleting it is what breaks inbound relationships: a
+   `relationships[].target` naming an id nothing carries is a hard error, and every
+   node pointing at the deleted one starts failing.
+2. **Find what points at it.** Search the corpus for the node's `id`. Those edges will
+   still resolve — that is the problem, not the safety net. Readers and generated
+   views will keep being sent to a node that has stopped being current, and no check
+   will ever mention it.
+3. **Decide what replaces it, and say so in the vocabulary.** If another node takes
+   over the subject, that node declares `supersedes` targeting the retired id — the
+   type exists in `relationships.schema.json` for exactly this. Repointing the inbound
+   edges from step 2 at the replacement is a judgement call: repoint the ones that
+   wanted the subject, leave the ones that genuinely meant the retired node.
+4. **If nothing replaces it**, say that in the retired node's body. A reader arriving
+   from an old link needs to be told the subject is gone, not left guessing.
+5. **Never reuse or rename the `id`.** A retired id stays spent — renaming breaks
+   generated views that resolve through it, and reuse silently points old references
+   at new content.
+6. **Record why**, in the body and in the ledger, at the revision you checked.
+7. **Run the check.** It will pass whether or not you did steps 2-4 correctly. That is
+   the point of doing them deliberately.
 
 ## Scope and omissions
 
@@ -300,9 +373,19 @@ Until the standards land there is no per-type template to follow: write the node
 against `node.schema.json` and the rules above, and expect a later task to reshape it.
 
 **No `relationships` in this node's own front matter.** At the revision recorded in its
-ledger this was the only authored node in the corpus, so there was nothing to point at
-— and a `relationships[].target` naming an id no node carries is a hard error. The
-absence is deliberate, not an oversight.
+ledger the corpus contained **no** authored nodes at all — this one did not exist yet
+either — and it is still the only one, so there is nothing to point at. A
+`relationships[].target` naming an id no node carries is a hard error. The absence is
+deliberate, not an oversight, and the first sibling node is the moment to revisit it.
+
+**Why this node's recorded revision has not moved.** It was edited many times after that
+revision, and claims were added along the way — but every source it cites is
+byte-identical between that revision and now, so checking a claim "at HEAD" and checking
+it at the recorded revision were the same act. The snapshot covers the later claims for
+that reason, not by assumption; it is checkable with `git diff --name-only <sha> -- <the
+cited paths>`, which returns nothing. Per *Updating a node*, the revision tracks
+verification rather than editing, so moving it would say a re-check happened where none
+was needed.
 
 **Expected but not verified when this node was written**, per the rule in *Creating a
 node* step 3:

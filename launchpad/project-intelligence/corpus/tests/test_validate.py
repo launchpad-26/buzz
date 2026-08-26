@@ -1,11 +1,28 @@
 """Unit tests for the deterministic corpus validator -- issue #623.
 
-Run:  python3 -m unittest launchpad.project_intelligence.corpus.tests.test_validate
-  or: python3 -m unittest discover -s launchpad/project-intelligence/corpus/tests -p "test_*.py"
+Run:  python3 -m unittest discover -s launchpad/project-intelligence/corpus/tests -p "test_*.py"
 
-These tests only ever point --root at fixtures under this directory, never at the
-real launchpad/docs/corpus/ -- that root's own content (or lack of it) must never
-change what this suite asserts.
+(The dotted-module form this docstring used to advertise never worked: the directory is
+`project-intelligence`, with a hyphen, which is not a legal Python package name, so it
+raised ModuleNotFoundError. Broken since #623; found by a cross-model review pass.)
+
+Almost every test points --root at fixtures under this directory, so the real
+launchpad/docs/corpus/ cannot change what they assert. That is the rule, and new
+tests should follow it.
+
+ONE test is deliberately outside it:
+`SchemaDirExclusionTest.test_real_corpus_root_discovery_matches_an_independent_walk`
+walks the real corpus root and requires it to be non-empty. It exists to catch a
+discovery regression against real committed content, which no fixture can stand in
+for, and it will legitimately fail if the corpus is ever emptied or relocated -- at
+which point it is reporting that, not a discovery bug. Its own docstring says what it
+can and cannot catch.
+
+An earlier revision of this docstring claimed the never-touch-the-real-root rule was
+absolute. It was not true even then: the test this one replaced also read the real
+root, asserting it was EMPTY. Two independent reviews (an adjudicator and a
+cross-model final pass) flagged the contradiction separately, which is why the rule is
+now stated with its exception rather than as an absolute nobody was keeping.
 """
 
 from __future__ import annotations
