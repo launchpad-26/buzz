@@ -68,6 +68,11 @@ evidence:
     entry_class: FACT
     evidence:
       - "launchpad/project-intelligence/corpus/validate.py"
+  - statement: "A citation carrying a line position has its path component checked against the filesystem exactly as a bare path is, and only the line number itself goes unchecked."
+    entry_class: FACT
+    evidence:
+      - "launchpad/project-intelligence/corpus/validate.py"
+      - "launchpad/docs/corpus/AGENTS.md"
   - statement: "A relationships entry whose target names an id no loaded node carries is a hard validation error."
     entry_class: FACT
     evidence:
@@ -194,9 +199,13 @@ reword it as the intent claim it can actually support.
 2. A **behaviour claim MUST NOT** rest on a decision record alone. It needs executable
    evidence; a decision may accompany it as a *separate* entry making a *separate*
    statement.
-3. A decision **MUST** be cited as a bare repository-relative path —
-   `launchpad/decisions/ADR-NNNN-slug.md`. That is the one citation shape checked against
-   the filesystem, so a typo fails loudly instead of shipping.
+3. A decision **MUST** be cited by repository-relative path —
+   `launchpad/decisions/ADR-NNNN-slug.md` — and that path **MUST NOT** carry a line
+   position. The path component is checked against the filesystem either way, so a typo in
+   the path fails loudly whichever form is used; what a line position adds is a precision
+   nothing verifies. A record is edited in place, so a position drifts silently, and a
+   citation that looks precise while pointing at the wrong paragraph is worse than one
+   that points at the file.
 4. Before citing a decision for an intent claim, the author **MUST** open the record and
    read its front-matter `status`. A record that is not accepted **MUST NOT** be cited as
    authority for an intent claim. Proposed and superseded records live in the same
@@ -220,14 +229,15 @@ reword it as the intent claim it can actually support.
   them opening every citation to find out which nodes are affected.
 - **Cite the decision record, not the issue that argued it.** The record exists precisely
   because a decision left only in a closed issue is lost to the noise. Where the issue adds
-  argument the record omits, cite it as a *second* entry — attributed, and not as `FACT`.
+  argument the record omits, cite it as a *second* entry making a claim about **rationale**
+  — attributed, and not as `FACT`. MUST 1 still holds for the authorization claim itself.
 - **Keep the intent claim and the matching behaviour claim as two entries.** "ADR-0028
   requires X" and "the checker enforces X" are different claims with different evidence and
   different failure modes. Merged into one sentence, the weaker half inherits the stronger
   half's citation.
-- **Prefer a bare path over a line position** on a decision record. Line numbers are not
-  verified against file length, and a position that has silently drifted is worse than no
-  position because it looks precise.
+- **Quote the sentence you are relying on in the `statement`** rather than reaching for a
+  line position to point at it. MUST 3 rules the position out; a short quotation survives
+  the record being reflowed, and it is what a later reader needs anyway.
 - **Re-read the record rather than the memory of it.** A record's status changes without
   its path changing, and nothing about the citation will look different afterwards.
 
@@ -302,7 +312,9 @@ node that cites `launchpad/decisions/`:
 - opens each cited record and reads its front-matter `status`;
 - confirms the claim is an intent claim, not a behaviour claim in intent clothing;
 - confirms the record's **Decision** section supports the `statement`;
-- confirms a superseded citation says it is superseded and why it stands.
+- confirms a superseded citation says it is superseded and why it stands;
+- confirms no decision citation carries a line position. The checker accepts one — it
+  checks the path and ignores the number — so MUST 3 is unenforced too.
 
 A green validation run answers none of these questions and does not claim to.
 
