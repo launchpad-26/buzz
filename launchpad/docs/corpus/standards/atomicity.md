@@ -46,7 +46,7 @@ evidence:
       - "launchpad/docs/corpus/schema/node.schema.json"
       - "launchpad/docs/corpus/schema/README.md"
     confidence: 0.9
-  - statement: "One node carries one recorded revision covering its whole ledger, and moving that revision makes a statement about every claim the node holds rather than only the edited ones."
+  - statement: "AGENTS.md states that a node carries one recorded revision for its whole ledger and that moving it asserts every claim was checked at that revision, and records this as that document's own working practice rather than a corpus-wide rule, because whether a recorded revision may stay put while a node is edited is #1321's to decide and is unlanded."
     entry_class: FACT
     evidence:
       - "launchpad/docs/corpus/AGENTS.md"
@@ -254,8 +254,15 @@ own document.
 
 ### 3. The maintenance-clock test
 
-A node carries one recorded revision for its whole ledger, and moving it asserts that
-the node's claims were checked at that revision — all of them, not the edited ones.
+A node carries one recorded revision for its whole ledger, and on `AGENTS.md`'s working
+practice, moving it asserts that the node's claims were checked at that revision — all of
+them, not the edited ones.
+
+**That premise is working practice, not settled policy.** `AGENTS.md` says so itself:
+whether a recorded revision may stay put while a node is edited, and what an author owes
+when only some claims are re-verified, is **#1321's** to decide and has not landed. This
+test therefore rests on the strictest reading currently in force, and defers to #1321 when
+it lands.
 
 Ask: is there an ordinary change to this repository that would obsolete half this
 node's claims and leave the other half untouched? Not a contrived one — the normal
@@ -265,6 +272,11 @@ If there is, the halves are on different maintenance clocks, and every future up
 faces a choice with no correct answer: re-verify claims that did not need it, or move a
 snapshot that does not cover what it now spans. That is precisely what
 *independently maintainable* means, and it is the test that does the most work.
+
+**If #1321 settles that a revision may stay put across a partial edit, the dilemma
+softens but the test survives** — two halves on different clocks still force a choice
+about what the recorded revision covers. The test is worth running either way; only its
+sharpness depends on the ruling.
 
 ### 4. The edge test
 
@@ -454,7 +466,8 @@ Five questions, in the order that finds problems fastest:
    one declared?** This is the decisive test and the only one that settles the question
    on its own. Read the body against the front matter, not the front matter alone.
 3. **Would an ordinary repository change obsolete half the claims and leave the rest?**
-   If so, the recorded revision cannot honestly cover both halves.
+   If so, the recorded revision cannot honestly cover both halves under the working
+   practice in force today — see §3 for what #1321 may change about that.
 4. **Where the node declined a subject, is the boundary recorded** with a sibling `id`
    or a task number, per A4?
 5. **Is a split-off subject also summarised in the body?** This is the tell worth
