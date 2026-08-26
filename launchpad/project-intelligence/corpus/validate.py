@@ -125,32 +125,70 @@ def _is_excluded(path: Path, corpus_root: Path) -> bool:
     return bool(rel_parts) and rel_parts[0] in EXCLUDED_TOP_LEVEL_DIRS
 
 
-def _escapes_root(path: Path, root: Path) -> bool:
-    """True if `path` resolves outside `root` -- i.e. it is a symlink out of the tree.
+def _is_canonical_location(path: Path, root: Path) -> bool:
+    """True if `path` genuinely lives beneath `root` once symlinks are followed.
 
     `rglob` yields symlinked files without dereferencing them, so a symlink placed
     inside the corpus pointing at a Markdown node elsewhere on disk was walked,
     parsed and validated as though it were canonical corpus content. ADR-0028 makes
     the corpus tree itself the canonical source; content that only appears to live
     there is not canonical, and validating it lends it authority it does not have.
-    An independent cross-model review-final pass found this by symlinking a valid
-    node in from outside and watching the run print PASS.
+    A cross-model review-final pass found this by symlinking a valid node in from
+    outside and watching the run print PASS.
+
+    Resolution failure counts as non-canonical rather than propagating: a symlink
+    loop makes `.resolve()` raise RuntimeError, and an earlier revision of this
+    check let that escape as a traceback. A traceback names no node, which the DoD
+    forbids -- the same review-final pass found the crash by committing a
+    self-referential link.
 
     The sibling check for citation *targets* lives in _classify_repo_path; this one
     governs which files are corpus content in the first place.
     """
-    return not path.resolve().is_relative_to(root)
+    try:
+        return path.resolve().is_relative_to(root)
+    except (OSError, RuntimeError):
+        return False
 
 
 def discover_markdown_files(corpus_root: Path) -> list[Path]:
+    """Every `.md` file that is genuinely corpus content (schema/ excluded)."""
     if not corpus_root.is_dir():
         raise CorpusRootMissing(str(corpus_root))
     resolved_root = corpus_root.resolve()
     return sorted(
         p
         for p in corpus_root.rglob("*.md")
-        if not _is_excluded(p, corpus_root) and not _escapes_root(p, resolved_root)
+        if not _is_excluded(p, corpus_root)
+        and _is_canonical_location(p, resolved_root)
     )
+
+
+def find_non_canonical_nodes(corpus_root: Path) -> list[str]:
+    """Report `.md` files inside the corpus that do not actually live there.
+
+    discover_markdown_files excludes them so they are never validated as corpus
+    content; this reports them so excluding them is not the same as ignoring them.
+    A cross-model review-final pass made exactly that distinction: an escaping
+    symlink that is silently dropped still leaves the run printing PASS while a
+    file sits in the tree that nothing checked, which is a quieter version of the
+    problem the exclusion was added to fix.
+    """
+    if not corpus_root.is_dir():
+        raise CorpusRootMissing(str(corpus_root))
+    resolved_root = corpus_root.resolve()
+    errors = []
+    for path in sorted(corpus_root.rglob("*.md")):
+        if _is_excluded(path, corpus_root):
+            continue
+        if _is_canonical_location(path, resolved_root):
+            continue
+        errors.append(
+            f"{path.relative_to(corpus_root)}: is not canonical corpus content -- "
+            "it resolves outside the corpus root, or cannot be resolved at all "
+            "(ADR-0028)"
+        )
+    return errors
 
 
 def _load_frontmatter(path: Path) -> dict:
@@ -159,6 +197,16 @@ def _load_frontmatter(path: Path) -> dict:
     if not text.startswith("---\n"):
         raise ValueError("no leading '---' frontmatter delimiter")
     _, frontmatter, _body = text.split("---\n", 2)
+
+    duplicate = _find_duplicate_key(yaml.compose(frontmatter))
+    if duplicate is not None:
+        key, mark = duplicate
+        named = f" '{key}'" if key is not None and _SAFE_KEY_RE.match(key) else ""
+        raise ValueError(
+            f"duplicate frontmatter key{named} at line {mark.line + 2}, "
+            f"column {mark.column + 1}"
+        )
+
     return yaml.safe_load(frontmatter) or {}
 
 
@@ -172,25 +220,65 @@ def _parse_failure(exc: Exception) -> str:
     that fails to parse never reaches schema validation, so that fix could not help
     it. An independent cross-model review-final pass found it.
 
-    A YAMLError's `problem_mark` carries line and column only -- positions, not
-    content -- so it is safe to print and is what an author actually needs to find
-    the fault. `problem` is PyYAML's own fixed description of the syntax error
-    ("expected <block end>, but found ':'"); it names YAML tokens, never the
-    document's values.
+    ONLY `problem_mark` is printed -- line and column, positions rather than
+    content. `problem` looks safe (it is usually a fixed token-level description
+    like "expected <block end>, but found ':'"), and an earlier revision of this
+    fix printed it for exactly that reason. It is not safe: for an undefined alias
+    or an unknown tag, PyYAML interpolates the document's own identifier into that
+    string -- `found undefined alias 'PRIVATE_SOURCE_ID_RSA'`. A second cross-model
+    review-final pass found the residual leak by feeding those two shapes in, after
+    the ordinary malformations (indentation, tabs, quotes, control characters, long
+    lines) had all come back clean. A field that is content-free in most cases and
+    content-bearing in some is content-bearing.
     """
     mark = getattr(exc, "problem_mark", None)
-    problem = getattr(exc, "problem", None)
     if mark is not None:
         # +1 twice: PyYAML marks are 0-based, and the frontmatter block starts on
         # the line after the opening '---' delimiter.
-        location = f"frontmatter line {mark.line + 2}, column {mark.column + 1}"
-        if problem:
-            return f"could not be parsed as YAML at {location}: {problem}"
-        return f"could not be parsed as YAML at {location}"
+        return (
+            "could not be parsed as YAML at frontmatter line "
+            f"{mark.line + 2}, column {mark.column + 1}"
+        )
     if isinstance(exc, ValueError) and not isinstance(exc, yaml.YAMLError):
-        # Our own structural ValueError, raised with a fixed string above.
+        # Our own structural ValueErrors, raised with fixed strings that never
+        # interpolate document content -- see _load_frontmatter.
         return str(exc)
     return "could not be parsed as YAML"
+
+
+# Frontmatter keys are schema field names. One is echoed in a duplicate-key error
+# only when it already looks like a field name; anything else is reported by
+# position alone, on the same reasoning as _label.
+_SAFE_KEY_RE = re.compile(r"^[a-z][a-z0-9_]*$")
+
+
+def _find_duplicate_key(node: yaml.Node) -> tuple[str | None, yaml.Mark] | None:
+    """Return the first duplicate mapping key in a composed YAML tree, if any.
+
+    PyYAML resolves `id: first` / `id: second` silently to the last one, so a node
+    could carry two different values for the same field and pass validation, with
+    the reader and the parser disagreeing about which is canonical. A second
+    cross-model review-final pass found this. Detection happens on the composed
+    node tree rather than through a loader hook because the tree is inspectable
+    without executing PyYAML's construction machinery, and it reports positions
+    directly.
+    """
+    if isinstance(node, yaml.MappingNode):
+        seen: set[str] = set()
+        for key_node, value_node in node.value:
+            if isinstance(key_node, yaml.ScalarNode):
+                if key_node.value in seen:
+                    return (key_node.value, key_node.start_mark)
+                seen.add(key_node.value)
+            nested = _find_duplicate_key(value_node)
+            if nested is not None:
+                return nested
+    elif isinstance(node, yaml.SequenceNode):
+        for item in node.value:
+            nested = _find_duplicate_key(item)
+            if nested is not None:
+                return nested
+    return None
 
 
 def _schema_constraint(error: jsonschema.ValidationError) -> str:
@@ -390,12 +478,16 @@ _FULL_SHA_RE = re.compile(r"^[0-9a-f]{40}$")
 # same mutable blob link reopened the whole finding under the plain-http scheme --
 # it fell past both patterns and came back as a non-fatal "external URL". An
 # independent review-code pass found that one-character bypass.
+# The trailing path is optional: `.../blob/main` with no file after it matched
+# neither pattern in an earlier revision and fell through to the non-fatal
+# "external URL" branch, so a truncated mutable link evaded the pin check that a
+# complete one fails. A second cross-model review-final pass found that variant.
 _GITHUB_URL_RE = re.compile(
     r"^https?://github\.com/[^/\s]+/[^/\s]+/"
-    r"(?P<verb>blob|raw|tree|blame|commits|edit)/(?P<ref>[^/\s]+)/\S+$"
+    r"(?P<verb>blob|raw|tree|blame|commits|edit)/(?P<ref>[^/\s]+)(?:/\S*)?$"
 )
 _RAW_GITHUB_URL_RE = re.compile(
-    r"^https?://raw\.githubusercontent\.com/[^/\s]+/[^/\s]+/(?P<ref>[^/\s]+)/\S+$"
+    r"^https?://raw\.githubusercontent\.com/[^/\s]+/[^/\s]+/(?P<ref>[^/\s]+)(?:/\S*)?$"
 )
 # Only these two name a file's contents. `tree` is a directory listing and `blame`,
 # `commits` and `edit` are views of a file rather than a citation of it -- an
@@ -413,8 +505,16 @@ _FILE_POSITION_RE = re.compile(r"^(?P<path>\S+?):(?P<start>\d+)(?:-(?P<end>\d+))
 # independent cross-model review-final pass found that fail-open.
 #   graph edge:  `is_shared_gated_kind -> is_unshared_gated_event (1 hop)`
 #   tool result: `find_references('x', crate='buzz-core') -> no callers here`
-_GRAPH_EDGE_RE = re.compile(r"^\S+ -> \S+ \(\d+ hops?\)$")
-_TOOL_RESULT_RE = re.compile(r"^[A-Za-z_][A-Za-z0-9_.]*\(.*\) -> .+$")
+#
+# A graph edge's endpoints are SYMBOL names, so they are matched as identifiers
+# rather than as `\S+`. The looser form still accepted
+# `private/path/id_rsa -> target (1 hop)`: adding a syntactically valid suffix to a
+# path re-opened the same laundering the shape check was added to close, which a
+# second cross-model review-final pass found. Identifiers cannot contain a path
+# separator, which is what makes the difference.
+_SYMBOL = r"[A-Za-z_][A-Za-z0-9_.:]*"
+_GRAPH_EDGE_RE = re.compile(rf"^{_SYMBOL} -> {_SYMBOL} \(\d+ hops?\)$")
+_TOOL_RESULT_RE = re.compile(rf"^{_SYMBOL}\(.*\) -> .+$")
 
 
 @dataclass(frozen=True)
@@ -437,6 +537,19 @@ def _classify_url(url: str) -> CitationVerdict:
     A URL that is not a repository file link (a spec, a blog post, an upstream
     issue) has no commit to pin to and no offline way to check it, so it is
     reported unverified rather than either failed or silently passed.
+
+    DELIBERATELY NOT ENFORCED: ADR-0003's format is "a markdown link to the cited
+    file at the pinned commit", and a bare pinned URL is accepted here anyway. Two
+    review-final passes have now flagged that as unfinished, so the reasoning
+    belongs in the code rather than in a review thread. ADR-0003 governs handbook
+    PAGE provenance, where the link is rendered prose; this validator governs
+    corpus evidence, and the corpus schema's own description of the field
+    (schema/README.md: "Citations (paths, commit-pinned links)") asks for pinning
+    without prescribing a presentation. Pinning is the property staleness detection
+    depends on and is enforced; requiring the markdown wrapper on corpus evidence
+    would extend a handbook page-format rule to a surface that has not adopted it,
+    which is #605's contract to decide and this issue's out-of-scope list to
+    refuse. If #605 does adopt it, the check is a one-line addition here.
     """
     match = _GITHUB_URL_RE.match(url) or _RAW_GITHUB_URL_RE.match(url)
     if match:
@@ -522,12 +635,24 @@ def _classify_citation(citation: str, repo_root_path: Path) -> CitationVerdict:
     if text.startswith(_URL_PREFIXES):
         return _classify_url(text)
 
-    if _COMMIT_CITATION_RE.match(text):
-        return CitationVerdict(
-            "unverified", "is a commit reference, which names no openable file"
-        )
-
-    if _GRAPH_EDGE_RE.match(text) or _TOOL_RESULT_RE.match(text):
+    if (
+        _COMMIT_CITATION_RE.match(text)
+        or _GRAPH_EDGE_RE.match(text)
+        or _TOOL_RESULT_RE.match(text)
+    ):
+        # Defence in depth: the shape checks above are what stop a path being
+        # laundered into the non-fatal channel, and the blocklist is a second,
+        # independent reason the same laundering fails. Two review rounds have now
+        # found a way to satisfy one of these shapes with hostile content, so the
+        # cheaper check runs too rather than trusting the regex alone.
+        if _is_prohibited_citation(text):
+            return CitationVerdict(
+                "error", "matches a prohibited credential-like pattern"
+            )
+        if _COMMIT_CITATION_RE.match(text):
+            return CitationVerdict(
+                "unverified", "is a commit reference, which names no openable file"
+            )
         return CitationVerdict(
             "unverified",
             "is a graph-edge or tool-result citation, which names no openable file",
@@ -650,6 +775,7 @@ def validate_corpus(corpus_root: Path) -> ValidationReport:
     report.errors.extend(citation_errors)
     report.unverified.extend(citation_unverified)
 
+    report.errors.extend(find_non_canonical_nodes(corpus_root))
     report.errors.extend(find_ownership_violations(corpus_root))
 
     return report

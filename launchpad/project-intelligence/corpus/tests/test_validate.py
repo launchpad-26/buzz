@@ -307,6 +307,22 @@ class UrlCitationTest(unittest.TestCase):
                 self.assertEqual(unverified, [])
                 self.assertIn(verb, errors[0])
 
+    def test_truncated_repository_url_still_faces_the_pin_check(self) -> None:
+        # `.../blob/main` with no file after it matched neither pattern in an
+        # earlier revision and fell through to the non-fatal external-URL branch,
+        # so a truncated mutable link evaded the check a complete one fails. A
+        # second cross-model review-final pass found this variant.
+        for url in (
+            "https://github.com/launchpad-26/buzz/blob/main",
+            "https://github.com/launchpad-26/buzz/blob/main/",
+            "https://raw.githubusercontent.com/launchpad-26/buzz/main",
+        ):
+            with self.subTest(url=url):
+                errors, unverified = _classify_one(url)
+                self.assertEqual(len(errors), 1)
+                self.assertEqual(unverified, [])
+                self.assertIn("mutable ref", errors[0])
+
     def test_mutable_non_file_view_fails_on_the_pin_first(self) -> None:
         # `blame/main` is wrong twice over; it must not escape by being wrong in a
         # way the file-verb check alone would not catch.
@@ -420,6 +436,33 @@ class CitationFormTest(unittest.TestCase):
                 self.assertEqual(unverified, [])
                 self.assertIn("six supported citation forms", errors[0])
                 self.assertNotIn("id_rsa", errors[0])
+
+    def test_a_path_cannot_wear_a_graph_edge_suffix(self) -> None:
+        # Matching the graph-edge shape with `\S+` endpoints still accepted
+        # `private/path/id_rsa -> target (1 hop)`: adding a syntactically valid
+        # suffix to a path re-opened the laundering the shape check was added to
+        # close. A second cross-model review-final pass found it. Endpoints are
+        # symbol names, and a symbol cannot contain a path separator.
+        for citation in (
+            "private/path/id_rsa -> target (1 hop)",
+            "some/path -> other/path (2 hops)",
+        ):
+            with self.subTest(citation=citation):
+                errors, unverified = _classify_one(citation)
+                self.assertEqual(len(errors), 1)
+                self.assertEqual(unverified, [])
+                self.assertNotIn("id_rsa", errors[0])
+
+    def test_prohibited_names_are_blocked_in_the_unopenable_forms_too(self) -> None:
+        # Defence in depth. Two rounds have now found a way to satisfy one of these
+        # shapes with hostile content, so the blocklist runs as a second,
+        # independent reason the same laundering fails -- `id_rsa` alone is a valid
+        # identifier, so the shape check cannot catch this one.
+        errors, unverified = _classify_one("id_rsa -> target (1 hop)")
+        self.assertEqual(len(errors), 1)
+        self.assertEqual(unverified, [])
+        self.assertIn("prohibited", errors[0])
+        self.assertNotIn("id_rsa", errors[0])
 
     def test_malformed_line_position_rejected(self) -> None:
         errors, _ = _classify_one(
@@ -535,6 +578,67 @@ class YamlParseFailureTest(unittest.TestCase):
         self.assertIn("leaky-yaml-error", report.errors[0])
         self.assertIn("frontmatter line", report.errors[0])
 
+    def test_yaml_problem_text_cannot_leak_through_tags_or_aliases(self) -> None:
+        # `problem` looks content-free -- "expected <block end>, but found ':'" --
+        # and an earlier revision of this fix printed it for that reason. For an
+        # undefined alias or an unknown tag, PyYAML interpolates the document's own
+        # identifier into it: `found undefined alias 'PRIVATE_SOURCE_ID_RSA'`. A
+        # second cross-model review-final pass found the residual leak with exactly
+        # these two shapes, after every ordinary malformation came back clean.
+        shapes = {
+            "alias": "---\nid: x\nevidence: *PRIVATE_SOURCE_ID_RSA\n---\n\nbody\n",
+            "tag": "---\nid: x\nevidence: !PRIVATE_SOURCE_ID_RSA v\n---\n\nbody\n",
+        }
+        for name, text in shapes.items():
+            with self.subTest(shape=name), tempfile.TemporaryDirectory() as tmp:
+                root = Path(tmp)
+                (root / "node.md").write_text(text)
+                report = validate.validate_corpus(root)
+                self.assertEqual(len(report.errors), 1)
+                self.assertNotIn("PRIVATE_SOURCE_ID_RSA", report.errors[0])
+                self.assertNotIn("ID_RSA", report.errors[0].upper())
+
+    def test_duplicate_frontmatter_key_rejected(self) -> None:
+        # PyYAML resolves `id: first` / `id: second` silently to the last one, so a
+        # node could carry two values for one field and pass validation with the
+        # reader and the parser disagreeing about which is canonical. A second
+        # cross-model review-final pass found this.
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            (root / "node.md").write_text(
+                "---\nid: first-value\nid: second-value\n---\n\nbody\n"
+            )
+            report = validate.validate_corpus(root)
+            self.assertEqual(len(report.errors), 1)
+            self.assertIn("duplicate frontmatter key 'id'", report.errors[0])
+
+    def test_duplicate_key_error_names_only_schema_shaped_keys(self) -> None:
+        # The key is echoed only when it already looks like a field name, on the
+        # same reasoning as _label -- a key can be any string at all.
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            (root / "node.md").write_text(
+                '---\n"some/private/path/id_rsa": a\n'
+                '"some/private/path/id_rsa": b\n---\n\nbody\n'
+            )
+            report = validate.validate_corpus(root)
+            self.assertEqual(len(report.errors), 1)
+            self.assertIn("duplicate frontmatter key", report.errors[0])
+            self.assertNotIn("id_rsa", report.errors[0])
+
+    def test_nested_duplicate_key_rejected(self) -> None:
+        # Detection recurses; a duplicate inside an evidence entry is the same
+        # ambiguity one level down.
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            (root / "node.md").write_text(
+                "---\nid: x\nevidence:\n  - statement: a\n    statement: b\n"
+                "---\n\nbody\n"
+            )
+            report = validate.validate_corpus(root)
+            self.assertEqual(len(report.errors), 1)
+            self.assertIn("duplicate frontmatter key 'statement'", report.errors[0])
+
     def test_missing_delimiter_still_reported(self) -> None:
         # The non-YAMLError branch of the same handler: our own structural
         # ValueError, whose message is a fixed string with no document content.
@@ -625,6 +729,42 @@ class SymlinkedNodeTest(unittest.TestCase):
 
             files = validate.discover_markdown_files(corpus)
             self.assertIn(corpus / "link.md", files)
+
+    def test_escaping_symlink_is_reported_not_merely_skipped(self) -> None:
+        # Excluding it from validation is not the same as ignoring it. An earlier
+        # revision only dropped it from discovery, so the run still printed PASS
+        # with an unchecked file sitting in the tree -- a quieter version of the
+        # problem the exclusion was added to fix. A second cross-model
+        # review-final pass drew that distinction.
+        with tempfile.TemporaryDirectory() as tmp:
+            outside = Path(tmp) / "outside"
+            outside.mkdir()
+            smuggled = outside / "smuggled.md"
+            smuggled.write_text("---\nid: smuggled-node\n---\n\nnot corpus\n")
+
+            corpus = Path(tmp) / "corpus"
+            corpus.mkdir()
+            (corpus / "link.md").symlink_to(smuggled)
+
+            report = validate.validate_corpus(corpus)
+            self.assertEqual(len(report.errors), 1)
+            self.assertIn("link.md", report.errors[0])
+            self.assertIn("not canonical corpus content", report.errors[0])
+
+    def test_symlink_loop_reports_rather_than_crashing(self) -> None:
+        # `.resolve()` raises RuntimeError on a self-referential link, and an
+        # earlier revision let it escape as a traceback. A traceback names no node,
+        # which the DoD forbids. A second cross-model review-final pass found this
+        # by committing a self-referential link.
+        with tempfile.TemporaryDirectory() as tmp:
+            corpus = Path(tmp) / "corpus"
+            corpus.mkdir()
+            (corpus / "loop.md").symlink_to(corpus / "loop.md")
+
+            report = validate.validate_corpus(corpus)
+            self.assertEqual(len(report.errors), 1)
+            self.assertIn("loop.md", report.errors[0])
+            self.assertIn("cannot be resolved", report.errors[0])
 
 
 class MutableUrlFixtureTest(unittest.TestCase):
