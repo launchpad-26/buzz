@@ -16,10 +16,11 @@ evidence:
     entry_class: FACT
     evidence:
       - "launchpad/docs/corpus/schema/node.schema.json"
-  - statement: "Every entry carries a statement and an entry_class, and the class chosen decides which of evidence, confidence and provided_by the schema then requires and which it forbids."
+  - statement: "Every entry carries a statement and an entry_class, and the class chosen decides which of evidence, confidence and provided_by the schema then requires and which it forbids, a matrix node.schema.json encodes and the schema README explains in prose."
     entry_class: FACT
     evidence:
       - "launchpad/docs/corpus/schema/node.schema.json"
+      - "launchpad/docs/corpus/schema/README.md"
   - statement: "FACT and INFERENCE each require at least one citation, while TEAM_KNOWLEDGE requires none and is permitted to carry them without being required to."
     entry_class: FACT
     evidence:
@@ -42,7 +43,7 @@ evidence:
     entry_class: FACT
     evidence:
       - "launchpad/project-intelligence/corpus/validate.py"
-  - statement: "The citation forms that name no openable file -- a commit reference, a graph edge, a tool result, and any URL that is not a pinned GitHub file link -- are reported on a non-fatal UNVERIFIED channel that always prints and never changes the exit status."
+  - statement: "The commit, graph-edge and tool-result citation forms are reported on a non-fatal UNVERIFIED channel that always prints and never changes the exit status."
     entry_class: FACT
     evidence:
       - "launchpad/project-intelligence/corpus/validate.py"
@@ -62,11 +63,19 @@ evidence:
     entry_class: FACT
     evidence:
       - "launchpad/project-intelligence/CONTRACT.md"
-  - statement: "validate.py implements a URL branch regardless, accepting a GitHub blob or raw link pinned to a full commit SHA and reporting every other URL UNVERIFIED, while its own module docstring says citations are parsed against CONTRACT.md section 3's six forms."
+  - statement: "A URL the validator's repository-link pattern does not match, including a GitHub issue or pull-request URL and any non-GitHub URL, is reported UNVERIFIED."
     entry_class: FACT
     evidence:
       - "launchpad/project-intelligence/corpus/validate.py"
-  - statement: "AGENTS.md introduces its citation table as CONTRACT.md's shapes and then lists seven rows, two of which are the URL forms section 3 does not contain, and says so about itself."
+  - statement: "A URL that does match the validator's repository-link pattern is accepted only as a blob or raw view pinned to a full commit SHA and naming a file within the repository; a mutable ref, a tree or blame view, and a pinned link with no file path are each a hard error rather than an UNVERIFIED notice."
+    entry_class: FACT
+    evidence:
+      - "launchpad/project-intelligence/corpus/validate.py"
+  - statement: "validate.py implements a URL branch that CONTRACT.md section 3 does not describe, while its own module docstring says citations are parsed against section 3's six forms."
+    entry_class: FACT
+    evidence:
+      - "launchpad/project-intelligence/corpus/validate.py"
+  - statement: "AGENTS.md states that CONTRACT.md section 3 enumerates six shapes and contains no URL form, that its own table is seven rows because it adds two URL forms section 3 does not enumerate, and that the table is therefore not a summary of section 3; it also records that an earlier version of that sentence claimed otherwise and that an agent authoring a sibling node built a scope argument on the miscount."
     entry_class: FACT
     evidence:
       - "launchpad/docs/corpus/AGENTS.md"
@@ -100,6 +109,22 @@ evidence:
     entry_class: FACT
     evidence:
       - "launchpad/docs/corpus/schema/COMPATIBILITY.md"
+  - statement: "The schema constrains provided_by only to a non-empty string and status only to membership of its enum, so neither whether an attribution names a real source nor whether a flagged state was warranted is checkable."
+    entry_class: FACT
+    evidence:
+      - "launchpad/docs/corpus/schema/node.schema.json"
+  - statement: "No corpus generator exists yet, so no generated view can be regenerated from a node and compared against it."
+    entry_class: FACT
+    evidence:
+      - "launchpad/project-intelligence/corpus/validate.py"
+  - statement: "AGENTS.md records that generated-artifact provenance is #1316's, encoding ADR-0029's claim-type classification is #1410's, the human-facing entry point is #639's, the unchecked line-number bound is #1459's, and whether a recorded revision may stay put across edits is #1321's."
+    entry_class: FACT
+    evidence:
+      - "launchpad/docs/corpus/AGENTS.md"
+  - statement: "Whether ADR-0003's markdown-link wrapper should be required on corpus evidence is #605's contract to decide and is deliberately not enforced by the validator."
+    entry_class: FACT
+    evidence:
+      - "launchpad/project-intelligence/corpus/validate.py"
   - statement: "The validator never reads a node's body, so a body claim carrying no ledger entry, and a ledger entry supporting no body claim, are both invisible to every check that exists."
     entry_class: FACT
     evidence:
@@ -117,6 +142,15 @@ evidence:
   - statement: "The code-references standard states normative rules about when a claim may carry the class FACT and about how many commit-only FACTs a node may hold, while declaring that classification belongs to this node, and the open question of which of the two owns those rules is filed as an issue asking whichever claims the subject to leave the other an explicit marker."
     entry_class: TEAM_KNOWLEDGE
     provided_by: "launchpad-26/buzz#1476 'task: settle whether code-references or evidence (#1314) owns the FACT and ledger-composition rules'"
+  - statement: "The confidence standard owns what an INFERENCE's confidence value means and how to choose one, the code-references standard owns the citation forms that name code, and the divergence between CONTRACT.md, AGENTS.md and validate.py on the citation forms is filed separately."
+    entry_class: TEAM_KNOWLEDGE
+    provided_by: "launchpad-26/buzz#1309, #1308 and #1478 -- the issues that define each subject"
+  - statement: "An earlier revision of this node's own ledger asserted that AGENTS.md introduces its citation table as CONTRACT.md's shapes, which is the claim AGENTS.md disclaims in the paragraph introducing that table, and the error survived validation because the citation resolved to a real file that discusses the subject."
+    entry_class: TEAM_KNOWLEDGE
+    provided_by: "the source-verification audit of this node, recorded in this branch's review history and in the commit that corrected it"
+  - statement: "The problem statement of the issue filed against the citation-form divergence quotes an earlier revision of AGENTS.md that has since been corrected, so its AGENTS.md limb is stale while its CONTRACT.md and validate.py limbs stand."
+    entry_class: TEAM_KNOWLEDGE
+    provided_by: "launchpad-26/buzz#1478, compared against launchpad/docs/corpus/AGENTS.md at the revision this node records"
   - statement: "This standard addresses developers as well as agents and reviewers, because a developer is one of the two authors the parent feature's outcome names."
     entry_class: TEAM_KNOWLEDGE
     provided_by: "launchpad-26/buzz#605 outcome: 'A developer or agent can create one atomic corpus node and deterministic validation accepts or rejects it against one documented contract.'"
@@ -155,16 +189,25 @@ accepted decision; this is a standard written under it. Where the two appear to 
 the ADR is right.
 
 **Where this document and `validate.py` disagree about behaviour, the program wins** and
-this document has drifted. Every verdict quoted below was measured by running it at the
-revision this node records, not read out of another document.
+this document has drifted. Every verdict quoted below was taken from the program's own
+behaviour at the revision this node records, not from another document's summary of it.
+Reproduce them rather than trusting the tables — the author's run is not itself in the
+ledger, because no citation form can express "I ran this":
+
+```python
+import sys; sys.path.insert(0, "launchpad/project-intelligence/corpus")
+import validate as v
+print(v._classify_citation("https://github.com/o/r/blob/main/Justfile", v.repo_root()))
+```
 
 **The citation forms are split with the code-references standard (#1308), deliberately.**
 `AGENTS.md` says its own citation-shape table is provisional and "belongs in the evidence
 standard once that lands (#1314)". This node takes half of it: the forms that name no
-openable file — commit, graph edge, tool result, and non-GitHub URL — together with what
-any verdict means for an entry's class. The forms that name **code** — a repository path,
-a `path:line` position, a pinned GitHub link, and how each is pinned and resolved — stay
-with #1308, which already treats them in more detail than this node would. Copying them
+openable file — commit, graph edge, tool result, and any URL the validator cannot open,
+which includes issue and pull-request URLs — together with what any verdict means for an
+entry's class. The forms that name **code** — a repository path, a `path:line` position, a
+pinned GitHub link, and how each is pinned and resolved — stay with #1308, which owns
+them. Copying them
 here would create the second stale copy this corpus's conventions exist to prevent. That
 leaves `AGENTS.md`'s pointer half right and half wrong; this node may not edit
 `AGENTS.md`, so the correction is filed rather than made.
@@ -172,6 +215,10 @@ leaves `AGENTS.md`'s pointer half right and half wrong; this node may not edit
 **The `confidence` number is not this node's subject.** Once an entry is honestly an
 `INFERENCE`, how strongly to rate it belongs to the confidence standard (#1309). This
 node decides *which class*; that one decides *what number*.
+
+**Who this is for.** Agents and developers, because those are the two authors #605's
+outcome names, and reviewers, because the largest part of this document is rules no check
+can hold and a reviewer is the only thing standing behind them.
 
 ## The ledger
 
@@ -217,6 +264,11 @@ classes, and the route you actually took decides which one is honest.
   with `provided_by` naming who or what said it: a person, an issue, a pull request, a
   decision record, a commit message. It is the class that exists for uncorroborated
   statements, and using it honestly beats promoting a recollection to `FACT`.
+
+`AGENTS.md` puts the constraint on that last class sharply, and this document adopts it:
+`TEAM_KNOWLEDGE` is not a place to park a decision the author made themselves, and
+attributing an extrapolation to the thing it started from does not make it something the
+author was told.
 
 Which further fields each class then requires and forbids is the schema's business, in
 `node.schema.json` and `launchpad/docs/corpus/schema/README.md`. Two properties of that
@@ -334,9 +386,11 @@ settled it.
 Three cross-model review passes refused the first two rounds on the same condition, and
 the third refusal is what identified why the first two fixes had failed: the node was
 writing policy it had no authority to write, and **reclassifying it only changed the label
-on an unsourced decision.** Nothing about the front matter had ever been invalid. The
-schema was satisfied, every citation resolved, the checker exited 0 on all three rounds.
-Only a person comparing the statement against the source could tell the difference.
+on an unsourced decision.** Nothing about the front matter had ever been invalid, and nothing
+about it could have been: a schema checks shape, and the defect was that a real,
+resolvable, on-topic source did not say the thing above it. Only a person comparing the
+statement against the source could tell the difference — which is why the rounds were
+review passes rather than checker runs.
 
 **The lesson generalises past classification.** When a claim will not sit honestly in any
 class, the problem is usually not the class. It is that the document is asserting
@@ -403,17 +457,22 @@ states what each proves and how each is pinned.
 | Commit reference | `commit 0f3a…` | `unverified` | **Nothing.** Not even that the commit exists — a commit id that has never been in this repository is reported identically to one that has. |
 | Graph edge | `is_shared_gated_kind -> is_unshared_gated_event (1 hop)` | `unverified` | Nothing. |
 | Tool result | `find_references('x', crate='buzz-core') -> no callers here` | `unverified` | Nothing. |
-| External URL, including an issue or pull-request URL | `https://example.com/spec` | `unverified` | Nothing. The repository-link check matches file views only, so an issue URL lands here. |
-| Anything matching no known form | `#1459`, free prose | **`error`** | — a hard failure, never a notice. |
+| A URL the repository-link pattern does not match — any non-GitHub URL, and GitHub issue and pull-request URLs | `https://example.com/spec`, `…/buzz/issues/1314` | `unverified` | Nothing. The pattern requires a `blob`, `raw`, `tree`, `blame`, `commits` or `edit` segment, so an issue URL never enters that branch and falls through here. |
+| A GitHub link pinned to a full commit SHA, naming a file, as `blob` or `raw` | `…/blob/<40-hex>/Justfile` | `ok` | **That the URL is well-formed. Nothing is fetched.** This is #1308's form; it is here only to complete the verdict picture. |
+| A GitHub link on a mutable ref, or as a `tree` or `blame` view, or pinned but naming no file | `…/blob/main/Justfile` | **`error`** | — a hard failure. A *recognised* shape can still fail hard. |
+| Free text matching none of the six forms | `as discussed in the meeting last week` | **`error`** | — "matches none of CONTRACT.md's six supported citation forms". |
+| A bare path that does not resolve, or resolves outside the repository | `launchpad/does-not-exist.md` | **`error`** | — a different error from the row above, and #1308's subject. |
 
 **`UNVERIFIED` is not a pass and it is not a failure.** It means the validator recognised
 the shape and could not open it, and it prints on passing runs precisely so that a `PASS`
 never claims more than it checked. A `FACT` resting only on `UNVERIFIED` citations has
 been checked by nothing at all. Open the source and keep the class, or change the class.
 
-**The channel is for forms unverifiable by nature.** It is not a soft-failure bucket, and
-a form the validator merely failed to establish is an error rather than a notice — which
-is why anything matching no known shape fails hard.
+**The channel is for forms unverifiable by nature.** It is not a soft-failure bucket. A
+form the validator merely failed to establish is an error rather than a notice — which is
+why free text fails hard, and, less obviously, why a **recognised** URL shape that is
+malformed fails hard too. Do not read `unverified` as "the lenient outcome for URLs": four
+distinct GitHub-link mistakes are errors that will stop your node merging.
 
 ### The one permitted exception
 
@@ -449,18 +508,34 @@ requires GitHub history to stay attributed rather than be promoted to fact.
 `launchpad/project-intelligence/CONTRACT.md` §3 enumerates **six** shapes — file range,
 file line, bare path, graph edge, tool result, commit — and contains **no URL form at
 all**; the section has zero occurrences of `http`. `validate.py` implements a URL branch
-regardless, accepting a GitHub `blob` or `raw` link pinned to a full commit SHA and
-reporting every other URL `UNVERIFIED`, while its own module docstring says citations are
-parsed against §3's six forms. `AGENTS.md` presents a **seven**-row table introduced as
-§3's shapes, two of whose rows are URL forms §3 does not contain, and says so about
-itself.
+regardless — a whole URL branch, with four hard-error variants of its own — while its own
+module docstring says citations are parsed against §3's six forms.
 
-The divergence is filed as **#1478**. This node does not resolve it and may not edit
-either of the other two documents. What it does is take a side about *derivation*: **every
-verdict above was measured against `validate.py`**, because the program is what decides
-whether a node merges. `CONTRACT.md` §3 supplies the vocabulary of shapes and is not a
-complete list of what the checker accepts. An author who reads §3 alone will conclude a
-GitHub link is not a legal citation and be wrong.
+**`AGENTS.md` is not part of the divergence, and this document said it was.** It states
+that §3 has six shapes and no URL form, that its own table is **seven** rows because it
+adds the two URL forms `validate.py` recognises, and that the table "is not a summary of
+§3". It goes further and records that an earlier version of its own sentence *did* claim
+that, and that an agent authoring a sibling node built a scope argument on the miscount
+before a plan review caught it.
+
+**This node is that sibling node, and it re-introduced the same miscount.** An earlier
+revision of the ledger above asserted that `AGENTS.md` "introduces its citation table as
+`CONTRACT.md`'s shapes" — the exact claim `AGENTS.md` disclaims in the paragraph
+introducing the table. It survived because the citation resolved: `AGENTS.md` is a real
+file that genuinely discusses the subject, so every check passed. Only opening it and
+reading the sentence caught it. That is this document's own thesis failing on this
+document, and it is left recorded here rather than quietly corrected.
+
+**So the divergence is two-way, not three-way:** `CONTRACT.md` §3 and `validate.py`
+disagree, and `AGENTS.md` describes both accurately. **#1478** is filed against the
+divergence and its problem statement quotes an older `AGENTS.md`; that limb of it is now
+stale, and this node reports rather than edits it.
+
+This node does not resolve any of it and may not edit the other documents. What it does is
+take a side about *derivation*: **the verdicts above come from `validate.py`'s behaviour**,
+because the program is what decides whether a node merges. §3 supplies the vocabulary of
+shapes and is not a complete list of what the checker accepts. An author who reads §3
+alone will conclude a GitHub link is not a legal citation and be wrong.
 
 ### Three things a green run does not mean
 
@@ -636,7 +711,7 @@ not establish.
 | Not covered here | Owned by |
 |---|---|
 | The citation forms that name **code** — repository paths, positions, pinned links, and how each resolves | #1308 |
-| What an `INFERENCE`'s `confidence` value means, how to pick one, and the NaN divergence between the schema and `memory.py` | #1309 and #1463 |
+| What an `INFERENCE`'s `confidence` value means and how to pick one, and the NaN question raised against it | #1309 and #1463 |
 | Provenance for generated artifacts and the exception process for them | #1316 |
 | Whether a recorded revision may stay put across edits, and what to do when only some claims are re-verified | #1321 |
 | Encoding `ADR-0029`'s claim-type classification and the flagged state in the schema and checker | #1410 |
@@ -654,17 +729,18 @@ node's subject and then states normative rules about it — when a claim may car
 document claims the subject leaves the other an explicit marker.
 
 **This node claims it.** Class assignment and ledger composition are stated here as MUSTs
-2 through 11, and this node is their owner. Where the code-references standard states the
-same rules, treat them as provisional and this node as authoritative; where it states the
-**citation-quality** side of the same boundary — that a `FACT` needs a citation something
-can open — the two agree and no precedence is needed.
+1 through 11, and this node is their owner. (MUST 12 is `ADR-0029`'s security clause,
+restated under the ADR's authority rather than this node's.) Where the code-references
+standard states the same rules, treat them as provisional and this node as authoritative;
+where it states the **citation-quality** side of the same boundary — that a `FACT` needs a
+citation something can open — the two agree and no precedence is needed.
 
-**That declaration is prose, and prose is not a mechanism.** Nothing links the two nodes:
-neither declares `relationships`, so a reader arriving at one is not sent to the other by
-anything a generated view could follow. Two `active` governance nodes carrying rules on
-one subject with no machine-readable precedence between them is exactly the risk #1476
-names, and this node reduces it by naming an owner rather than eliminating it. Declaring
-the edge is a follow-up, once both have merged.
+**That declaration is prose, and prose is not a mechanism.** This node declares no
+`relationships`, for the reason below, so nothing machine-readable sends a reader from
+here to the other document or back. Two governance nodes carrying rules on one subject
+with no machine-readable precedence between them is the risk #1476 names, and this node
+reduces it by naming an owner rather than eliminating it. Declaring the edge is a
+follow-up, once both have merged.
 
 **`AGENTS.md`'s pointer is now half wrong.** It says its citation-shape table "belongs in
 the evidence standard once that lands (#1314)". Half of that table has landed here and
@@ -689,11 +765,17 @@ than an oversight.
 
 ### Expected but not verified when this node was written
 
-- **No generated view was tested consuming a ledger.** No corpus generator exists, so how
-  a projection renders or ranks the three classes — and in particular whether it preserves
-  the distinction at all — is unknown. `ADR-0028` requires that generated views must not
-  silently drop provenance their source node carries; nothing was available to test that
-  against.
+- **No generated view was tested consuming a ledger.** `validate.py` records that no
+  corpus generator exists yet, so how a projection would render or rank the three classes —
+  and in particular whether it would preserve the distinction at all — is unknown.
+  `ADR-0028` requires that generated views must not silently drop provenance their source
+  node carries; nothing existed to test that against.
+- **The citation verdicts were produced by calling `validate.py`'s classifier directly on
+  constructed citations, and that run is not in the ledger.** No citation form expresses an
+  execution, so the entries behind those verdicts cite the program's source and the tables
+  are reproducible by the snippet in *Scope and authority* rather than by a recorded
+  result. An earlier revision of this node stated two of those verdicts wrongly, and the
+  ledger passed every check while it did.
 - **`memory.py`'s supersession behaviour was read, not executed.** The class-asymmetry
   table in *The one place class has a mechanical consequence* comes from
   `record_code_contradiction` and `record_team_statement` as written, and from the module's
