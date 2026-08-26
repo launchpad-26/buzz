@@ -178,10 +178,72 @@ validation run is the exact staleness provenance exists to catch. A link pinned 
 naming no file is also rejected — it cites a repository at a commit, not the source
 of the claim.
 
+## Running the check
+
+All three procedures below end with the same command, run from the repository root:
+
+```bash
+python3 launchpad/project-intelligence/corpus/validate.py
+```
+
+Exit status 0 is a pass; 1 means at least one error, and every error names the node it
+came from. `just corpus-validate` runs exactly this, but needs the Hermit environment
+activated first (`. ./bin/activate-hermit`) — the direct form above does not. The same
+command runs in CI on every change under `launchpad/docs/corpus/`, so a local failure
+is a CI failure.
+
+To check a corpus tree somewhere other than the real one, pass `--root <path>`. Without
+it the command always validates `launchpad/docs/corpus/`, whatever directory you are
+standing in.
+
 ## Creating a node
+
+1. **Confirm it is one idea.** If you are describing two contracts, or a concept and
+   the procedure that uses it, that is two nodes. File the second as its own task now.
+2. **Check nothing already covers it.** Read the existing nodes under
+   `launchpad/docs/corpus/`. If one is close, you are updating, not creating.
+3. **Record what you inspected, before drafting.** The repository revision
+   (`git rev-parse HEAD`), the source paths and symbols you read, the tests,
+   specifications and configuration you consulted, and — explicitly — anything you
+   expected to verify and could not.
+4. **Choose the `id`.** Kebab-case, and permanent from this moment. Pick something that
+   describes the idea, not where the file currently sits.
+5. **Create the file** anywhere under `launchpad/docs/corpus/` except `schema/`.
+6. **Write the front matter** against `node.schema.json`. Include a commit citation for
+   the revision from step 3 — the ledger is the only schema-legal place for it.
+7. **Write one `evidence` entry per substantive claim** you intend to make. Classify
+   honestly; open every source you call a `FACT`.
+8. **Write the body**, structured for lookup. State what the node does not cover.
+9. **Add relationships only to nodes that exist.** A target no node carries is a hard
+   error. None is a valid answer.
+10. **Run the check.** Fix what it names, and re-run until it exits 0.
 
 ## Updating a node
 
+1. **Confirm the change belongs in this node.** New idea, not new detail about the
+   existing one? That is a new node.
+2. **Re-record the revision you are checking against.** `git rev-parse HEAD` now, not
+   the one already in the ledger.
+3. **Re-verify the claims you are touching** against sources at that revision. A claim
+   whose source moved is not still a `FACT` because it used to be.
+4. **Update the ledger in the same edit as the body.** A new claim without an entry, or
+   an entry left behind by a deleted claim, are the two ways these drift apart.
+5. **Update the recorded revision** to the one from step 2.
+6. **Leave the `id` alone.** Always.
+7. **Run the check.**
+
 ## Retiring a node
+
+1. **Find what points at it.** Search the corpus for the node's `id`; any node with a
+   relationship targeting it needs handling first, or the corpus is left with a
+   relationship that no longer resolves.
+2. **Decide what replaces it.** If another node takes over the subject, say so in that
+   node — a reader arriving at a retired node needs somewhere to go.
+3. **Set `status` to the retired value** defined in `node.schema.json`. Do not delete
+   the file: generated views and inbound links resolve through the id, and deleting it
+   breaks them silently.
+4. **Never reuse or rename the `id`.** A retired id stays spent.
+5. **Record why**, in the body and in the ledger, at the revision you checked.
+6. **Run the check.**
 
 ## Scope and omissions
