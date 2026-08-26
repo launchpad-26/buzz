@@ -254,7 +254,123 @@ The ledger does not.
 
 ## Reasoning from evidence, and dressing up a decision
 
+**This is the section worth reading twice.** Everything else here is a rule; this is the
+failure the rules exist to catch, and no check that exists or could exist will catch it
+for you.
+
+Two entries can be identical in front matter — a class, some citations, a well-written
+statement — and be completely different objects:
+
+- **Reasoning from evidence.** The sources constrain the conclusion. The claim is a step
+  past what any one of them states, but the step is forced by what they say.
+- **Dressing up a decision.** Somebody chose something. A citation was then attached that
+  is *about the same subject* and does not compel the choice at all. The class makes the
+  claim look derived. It was not derived; it was decided, and the decision has now been
+  laundered into something that reads as a finding.
+
+The second is the more dangerous artefact, and the reason is not that it might be wrong.
+It is that **the choice becomes unattributable**. A reader who believes the claim came
+from the evidence will not go looking for the person who made the call, so nobody can be
+asked why, and the decision cannot be revisited — only rediscovered.
+
+### The test
+
+Read the `statement` and the citations. Nothing else — not the body, not what you know,
+not what the team wanted.
+
+> **Does the cited source say this, or does it merely concern this?**
+
+A source that discusses the subject while saying nothing about the specific thing being
+asserted is the tell. It will feel like support, because it is *relevant*; relevance is
+not entailment. Read your own citation the way an adversary would read it, and assume
+they will not extend you the benefit of the doubt.
+
+The `INFERENCE`-specific version of this question — given that the class is honest, how
+strongly do the sources support it — is the confidence standard's (#1309). What follows
+here is the prior question: **which class, or none at all.**
+
+### Three outcomes, not two
+
+Most treatments of this offer a binary: if it is not really an `INFERENCE`, make it
+`TEAM_KNOWLEDGE` and attribute it. That is right most of the time and **it is not the
+whole rule**, because it assumes there is always somebody to attribute it to.
+
+1. **The sources compel the claim** -> `INFERENCE`. Rate it per #1309.
+2. **The sources leave the choice open, and somebody made it** -> `TEAM_KNOWLEDGE`,
+   with `provided_by` naming that person, issue, decision record or commit. Only if
+   somebody really did — a real source you can name, not a rationalisation.
+3. **The sources leave the choice open and there is nobody to name, because the author
+   made it while writing** -> **withdraw the claim.** No class is honest here. The
+   honest artefact is not a relabelled assertion but a named gap in the node's
+   scope-and-omissions section: *this was expected and could not be established.* A gap
+   sends the reader to find out. A misclassified claim invites them to rely on it.
+
+Outcome 3 is the one that gets missed, and missing it is what turns a classification
+problem into three rounds of review.
+
+### The worked example, from this repository
+
+`AGENTS.md` was written under this contract and got this wrong twice before getting it
+right. The record is in the branch's history, and it is worth reading rather than taking
+on trust — `git log -1 a1e8bbcd0846321c6f6684acfe551096da4d974a` is the commit that
+settled it.
+
+| Round | What the entry claimed | Class | Why it was refused |
+|---|---|---|---|
+| 1 | A corpus-wide policy about provenance | `INFERENCE` | Cited a schema that is silent on the subject. Relevant, not entailing. |
+| 2 | The same policy | `TEAM_KNOWLEDGE` | Attributed to an issue's definition of done, which required something narrower. Attributing an extrapolation to the thing it started from does not make it something you were told. |
+| 3 | — | — | **The document stopped making the claim**, deferred the subject to the standard that owns it, and stated its own approach as working practice rather than as a rule others must follow. |
+
+Three cross-model review passes refused the first two rounds on the same condition, and
+the third refusal is what identified why the first two fixes had failed: the node was
+writing policy it had no authority to write, and **reclassifying it only changed the label
+on an unsourced decision.** Nothing about the front matter had ever been invalid. The
+schema was satisfied, every citation resolved, the checker exited 0 on all three rounds.
+Only a person comparing the statement against the source could tell the difference.
+
+**The lesson generalises past classification.** When a claim will not sit honestly in any
+class, the problem is usually not the class. It is that the document is asserting
+something it is not entitled to assert, and the repair is to stop asserting it.
+
 ## When sources disagree
+
+`ADR-0029` is the rule and this section does not restate it. What it does is say which
+question you are answering, because the ADR's ranking is contextual and picking the wrong
+context gives the wrong answer confidently.
+
+**First decide what kind of claim you are making**, because that decides which source
+wins:
+
+- **How the system currently behaves** — executable evidence is authoritative: code,
+  configuration, schema, passing tests. Documentation and history lose. A specification
+  that was never updated after a deliberate change does not get to assert wrong behaviour
+  as fact.
+- **What is intended or authorized** — accepted normative decisions are authoritative:
+  ADRs, ratified specifications. Code that quietly drifted from an authorized decision
+  does not silently overwrite what was actually authorized.
+
+Most apparent conflicts dissolve here, because the two sources are answering different
+questions and each has its own tiebreaker. "The spec says X, the code does Y" is usually
+not a conflict at all: it is one FACT about intent and one FACT about behaviour, and both
+belong in the ledger as separate entries with separate statements.
+
+**Two rankings the ADR rejects, and so does this document.** Do not apply one fixed
+hierarchy to every claim, and do not let the most recently touched source win. Recency is
+not authority.
+
+**GitHub history, team knowledge and inference are never treated as fact on their own.**
+They may supply context; they stay attributed to their source and distinguishable from
+`FACT`. That is not a stylistic preference — it is the ADR's text, and it is why
+`TEAM_KNOWLEDGE` carries `provided_by` at all.
+
+**A real conflict is escalated, not resolved.** Two sources with authority over the *same*
+claim type contradicting each other — two accepted decisions, or a decision and a ratified
+specification, both governing the same intent — is where an author stops. Record the
+contradiction, set the node's `status` to `flagged`, and leave it for a human. `flagged`
+exists in the schema for exactly this state and means an unresolved conflict between
+authorities, not "low confidence" and not "still a draft". Do not express a conflict as a
+hedge in the prose or as a middling number: a node that reads as merely tentative when it
+is actually unresolved is worse than one that admits it, because it invites use.
 
 ## What a citation establishes
 
