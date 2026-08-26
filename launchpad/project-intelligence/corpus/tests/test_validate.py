@@ -323,6 +323,23 @@ class UrlCitationTest(unittest.TestCase):
                 self.assertEqual(unverified, [])
                 self.assertIn("mutable ref", errors[0])
 
+    def test_pinned_url_naming_no_file_is_rejected(self) -> None:
+        # Making the trailing path optional closed one hole and opened another: a
+        # pinned link with nothing after the ref names a repository at a commit,
+        # not the cited file, and came back "ok". A third cross-model review-final
+        # pass found it. The path is optional to MATCH (so the pin check reaches
+        # truncated links) and required to PASS.
+        sha = "69baedd197e5d35c9ae4736115789da59929e288"
+        for url in (
+            f"https://github.com/launchpad-26/buzz/blob/{sha}",
+            f"https://raw.githubusercontent.com/launchpad-26/buzz/{sha}",
+        ):
+            with self.subTest(url=url):
+                errors, unverified = _classify_one(url)
+                self.assertEqual(len(errors), 1)
+                self.assertEqual(unverified, [])
+                self.assertIn("names no file", errors[0])
+
     def test_mutable_non_file_view_fails_on_the_pin_first(self) -> None:
         # `blame/main` is wrong twice over; it must not escape by being wrong in a
         # way the file-verb check alone would not catch.
@@ -453,6 +470,30 @@ class CitationFormTest(unittest.TestCase):
                 self.assertEqual(unverified, [])
                 self.assertNotIn("id_rsa", errors[0])
 
+    def test_prohibited_paths_embedded_in_expressions_are_caught(self) -> None:
+        # Testing the whole string got this wrong in both directions at once, which
+        # a third cross-model review-final pass demonstrated: it MISSED a path
+        # buried in a tool result's arguments, because the string's basename is the
+        # trailing prose. The blocklist runs per token now.
+        errors, unverified = _classify_one(
+            "find_references('private/path/.env', crate='buzz-core') -> no callers"
+        )
+        self.assertEqual(len(errors), 1)
+        self.assertEqual(unverified, [])
+        self.assertIn("prohibited", errors[0])
+        self.assertNotIn(".env", errors[0])
+
+    def test_safe_env_form_inside_an_expression_is_not_a_false_positive(self) -> None:
+        # The other direction of the same defect: `.env.example` is expressly
+        # exempt, and testing the whole string rejected a legitimate tool result
+        # that merely mentioned it, because the exemption depends on reading the
+        # token as a filename rather than as the suffix of a sentence.
+        errors, unverified = _classify_one(
+            "find_references('.env.example', crate='buzz-core') -> no callers"
+        )
+        self.assertEqual(errors, [])
+        self.assertEqual(len(unverified), 1)
+
     def test_prohibited_names_are_blocked_in_the_unopenable_forms_too(self) -> None:
         # Defence in depth. Two rounds have now found a way to satisfy one of these
         # shapes with hostile content, so the blocklist runs as a second,
@@ -541,6 +582,21 @@ class CitationContainmentTest(unittest.TestCase):
         errors, _ = _classify_one("launchpad")
         self.assertNotIn("launchpad/", errors[0])
 
+    def test_citation_naming_an_unresolvable_symlink_reports_not_crashes(self) -> None:
+        # The sibling of the discovery-side loop crash: a citation naming a
+        # self-referential symlink inside the repository made .resolve() raise, and
+        # it escaped as a traceback. A third cross-model review-final pass found
+        # this second, unguarded site.
+        link = validate.repo_root() / "citation-loop-probe.md"
+        self.assertFalse(link.exists(), "probe path must not already exist")
+        link.symlink_to(link)
+        try:
+            errors, _ = _classify_one("citation-loop-probe.md")
+            self.assertEqual(len(errors), 1)
+            self.assertIn("cannot be resolved", errors[0])
+        finally:
+            link.unlink()
+
     def test_citation_symlink_out_of_the_repo_is_rejected(self) -> None:
         # The symlink half of containment, which the docstring claims and no test
         # pinned: `.resolve()` dereferences before the containment check, so a link
@@ -612,19 +668,60 @@ class YamlParseFailureTest(unittest.TestCase):
             self.assertEqual(len(report.errors), 1)
             self.assertIn("duplicate frontmatter key 'id'", report.errors[0])
 
-    def test_duplicate_key_error_names_only_schema_shaped_keys(self) -> None:
-        # The key is echoed only when it already looks like a field name, on the
-        # same reasoning as _label -- a key can be any string at all.
+    def test_duplicate_key_error_names_only_keys_the_schema_defines(self) -> None:
+        # An earlier revision matched the key's SHAPE (`^[a-z][a-z0-9_]*$`), which a
+        # third cross-model review-final pass defeated at once: `id_rsa` and
+        # `private_source_id_rsa` are both perfectly good-looking field names, so
+        # the shape test let exactly the content it existed to withhold through.
+        # Membership of the committed schema is a fact; shape is a guess.
+        for key in ("id_rsa", "private_source_id_rsa", "some/private/path/id_rsa"):
+            with self.subTest(key=key), tempfile.TemporaryDirectory() as tmp:
+                root = Path(tmp)
+                (root / "node.md").write_text(
+                    f'---\n"{key}": a\n"{key}": b\n---\n\nbody\n'
+                )
+                report = validate.validate_corpus(root)
+                self.assertEqual(len(report.errors), 1)
+                self.assertIn("duplicate frontmatter key", report.errors[0])
+                self.assertNotIn("id_rsa", report.errors[0])
+
+    def test_schema_property_names_covers_nested_definitions(self) -> None:
+        # The allowlist must reach into $defs, or a duplicate `statement` inside an
+        # evidence entry would be reported without naming the field and the error
+        # would be needlessly hard to act on.
+        names = validate._schema_property_names(
+            validate.load_node_schema(validate.repo_root())
+        )
+        self.assertIn("id", names)          # top level
+        self.assertIn("statement", names)   # $defs.evidenceEntry
+        self.assertIn("target", names)      # $defs.relationship
+        self.assertNotIn("id_rsa", names)
+
+    def test_recursive_anchor_does_not_exhaust_the_stack(self) -> None:
+        # `loop: &loop {self: *loop}` is legal YAML and composes to a cyclic node
+        # graph, not a tree, so the duplicate-key walk descended forever and died
+        # with an uncaught RecursionError. A third cross-model review-final pass
+        # found it. The document is still rejected -- on its schema, not by crash.
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
             (root / "node.md").write_text(
-                '---\n"some/private/path/id_rsa": a\n'
-                '"some/private/path/id_rsa": b\n---\n\nbody\n'
+                "---\nloop: &loop {self: *loop}\n---\n\nbody\n"
             )
             report = validate.validate_corpus(root)
             self.assertEqual(len(report.errors), 1)
-            self.assertIn("duplicate frontmatter key", report.errors[0])
-            self.assertNotIn("id_rsa", report.errors[0])
+
+    def test_unreadable_node_reported_not_crashed(self) -> None:
+        # A dangling symlink whose target name resolves lexically inside the root
+        # passes the canonical-location check and then fails to open. A third
+        # cross-model review-final pass found the uncaught FileNotFoundError; the
+        # exception's own text names the target, so it is not echoed.
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            (root / "broken.md").symlink_to("nowhere.md")
+            report = validate.validate_corpus(root)
+            self.assertEqual(len(report.errors), 1)
+            self.assertIn("could not be read", report.errors[0])
+            self.assertNotIn("nowhere.md", report.errors[0])
 
     def test_nested_duplicate_key_rejected(self) -> None:
         # Detection recurses; a duplicate inside an evidence entry is the same

@@ -191,7 +191,7 @@ def find_non_canonical_nodes(corpus_root: Path) -> list[str]:
     return errors
 
 
-def _load_frontmatter(path: Path) -> dict:
+def _load_frontmatter(path: Path, known_keys: frozenset[str] = frozenset()) -> dict:
     """Parse a Markdown-with-YAML-frontmatter node (ADR-0028's representation)."""
     text = path.read_text()
     if not text.startswith("---\n"):
@@ -201,7 +201,7 @@ def _load_frontmatter(path: Path) -> dict:
     duplicate = _find_duplicate_key(yaml.compose(frontmatter))
     if duplicate is not None:
         key, mark = duplicate
-        named = f" '{key}'" if key is not None and _SAFE_KEY_RE.match(key) else ""
+        named = f" '{key}'" if key in known_keys else ""
         raise ValueError(
             f"duplicate frontmatter key{named} at line {mark.line + 2}, "
             f"column {mark.column + 1}"
@@ -246,13 +246,37 @@ def _parse_failure(exc: Exception) -> str:
     return "could not be parsed as YAML"
 
 
-# Frontmatter keys are schema field names. One is echoed in a duplicate-key error
-# only when it already looks like a field name; anything else is reported by
-# position alone, on the same reasoning as _label.
-_SAFE_KEY_RE = re.compile(r"^[a-z][a-z0-9_]*$")
+def _schema_property_names(schema: dict) -> frozenset[str]:
+    """Every property name node.schema.json defines, at any depth.
+
+    A duplicate-key error echoes the key only if it appears here. An earlier
+    revision matched the key's SHAPE instead (`^[a-z][a-z0-9_]*$`), which a third
+    cross-model review-final pass defeated immediately: `id_rsa` and
+    `private_source_id_rsa` are both perfectly good-looking field names, so the
+    shape test let exactly the content it existed to withhold straight through.
+    Shape is a guess about what a value means; membership of a committed, public
+    schema is a fact about it.
+    """
+    names: set[str] = set()
+
+    def walk(node: object) -> None:
+        if isinstance(node, dict):
+            properties = node.get("properties")
+            if isinstance(properties, dict):
+                names.update(key for key in properties if isinstance(key, str))
+            for value in node.values():
+                walk(value)
+        elif isinstance(node, list):
+            for item in node:
+                walk(item)
+
+    walk(schema)
+    return frozenset(names)
 
 
-def _find_duplicate_key(node: yaml.Node) -> tuple[str | None, yaml.Mark] | None:
+def _find_duplicate_key(
+    node: yaml.Node, seen_nodes: set[int] | None = None
+) -> tuple[str, yaml.Mark] | None:
     """Return the first duplicate mapping key in a composed YAML tree, if any.
 
     PyYAML resolves `id: first` / `id: second` silently to the last one, so a node
@@ -262,20 +286,33 @@ def _find_duplicate_key(node: yaml.Node) -> tuple[str | None, yaml.Mark] | None:
     node tree rather than through a loader hook because the tree is inspectable
     without executing PyYAML's construction machinery, and it reports positions
     directly.
+
+    `seen_nodes` guards against a YAML anchor that refers to its own container --
+    `loop: &loop {self: *loop}` is legal YAML and composes to a CYCLIC node graph,
+    not a tree, so a plain recursive walk descends forever and dies with an
+    uncaught RecursionError. A third cross-model review-final pass found that.
+    Identity, not equality: two structurally identical mappings are genuinely two
+    nodes and both must be checked.
     """
+    if seen_nodes is None:
+        seen_nodes = set()
+    if id(node) in seen_nodes:
+        return None
+    seen_nodes.add(id(node))
+
     if isinstance(node, yaml.MappingNode):
-        seen: set[str] = set()
+        seen_keys: set[str] = set()
         for key_node, value_node in node.value:
             if isinstance(key_node, yaml.ScalarNode):
-                if key_node.value in seen:
+                if key_node.value in seen_keys:
                     return (key_node.value, key_node.start_mark)
-                seen.add(key_node.value)
-            nested = _find_duplicate_key(value_node)
+                seen_keys.add(key_node.value)
+            nested = _find_duplicate_key(value_node, seen_nodes)
             if nested is not None:
                 return nested
     elif isinstance(node, yaml.SequenceNode):
         for item in node.value:
-            nested = _find_duplicate_key(item)
+            nested = _find_duplicate_key(item, seen_nodes)
             if nested is not None:
                 return nested
     return None
@@ -306,11 +343,20 @@ def load_nodes(corpus_root: Path) -> list[LoadedNode]:
     """Load and schema-validate every node under corpus_root (schema/ excluded)."""
     schema = load_node_schema(repo_root())
     validator = jsonschema.Draft202012Validator(schema)
+    known_keys = _schema_property_names(schema)
 
     nodes: list[LoadedNode] = []
     for path in discover_markdown_files(corpus_root):
         try:
-            data = _load_frontmatter(path)
+            data = _load_frontmatter(path, known_keys)
+        except OSError:
+            # A dangling symlink whose target name resolves lexically inside the
+            # root passes the canonical-location check and then fails to open. A
+            # third cross-model review-final pass found the uncaught
+            # FileNotFoundError; the exception's own text names the target path,
+            # so it is not echoed.
+            nodes.append(LoadedNode(path=path, error=f"{path}: could not be read"))
+            continue
         except (ValueError, yaml.YAMLError) as exc:
             nodes.append(LoadedNode(path=path, error=f"{path}: {_parse_failure(exc)}"))
             continue
@@ -439,6 +485,25 @@ _CREDENTIAL_LIKE_EXTENSIONS = {".pem", ".key"}
 _ENV_SAFE_SUFFIXES = (".example", ".sample", ".template")
 
 
+# The unopenable forms embed paths inside expressions -- a tool result's arguments
+# are the obvious case -- so the blocklist runs over each token rather than over
+# the whole string. Testing the whole string got it wrong in both directions at
+# once, which a third cross-model review-final pass demonstrated: it MISSED
+# `find_references('private/path/.env', ...) -> no callers`, whose basename is the
+# trailing prose, and it FALSELY REJECTED a tool result mentioning `.env.example`,
+# whose exemption depends on reading the token as a filename rather than as the
+# suffix of a sentence.
+_CITATION_TOKEN_SPLIT_RE = re.compile(r"[\s'\"(),=\[\]{}<>]+")
+
+
+def _contains_prohibited_reference(text: str) -> bool:
+    return any(
+        _is_prohibited_citation(token)
+        for token in _CITATION_TOKEN_SPLIT_RE.split(text)
+        if token
+    )
+
+
 def _is_prohibited_citation(citation: str) -> bool:
     name = PurePosixPath(citation).name
     if name == ".env":
@@ -484,10 +549,12 @@ _FULL_SHA_RE = re.compile(r"^[0-9a-f]{40}$")
 # complete one fails. A second cross-model review-final pass found that variant.
 _GITHUB_URL_RE = re.compile(
     r"^https?://github\.com/[^/\s]+/[^/\s]+/"
-    r"(?P<verb>blob|raw|tree|blame|commits|edit)/(?P<ref>[^/\s]+)(?:/\S*)?$"
+    r"(?P<verb>blob|raw|tree|blame|commits|edit)/(?P<ref>[^/\s]+)"
+    r"(?:/(?P<path>\S*))?$"
 )
 _RAW_GITHUB_URL_RE = re.compile(
-    r"^https?://raw\.githubusercontent\.com/[^/\s]+/[^/\s]+/(?P<ref>[^/\s]+)(?:/\S*)?$"
+    r"^https?://raw\.githubusercontent\.com/[^/\s]+/[^/\s]+/(?P<ref>[^/\s]+)"
+    r"(?:/(?P<path>\S*))?$"
 )
 # Only these two name a file's contents. `tree` is a directory listing and `blame`,
 # `commits` and `edit` are views of a file rather than a citation of it -- an
@@ -560,12 +627,21 @@ def _classify_url(url: str) -> CitationVerdict:
                 "full commit SHA (ADR-0003)",
             )
         # raw.githubusercontent.com has no verb segment; it is always file content.
-        verb = match.groupdict().get("verb", "raw")
+        verb = match.groupdict().get("verb") or "raw"
         if verb not in _GITHUB_FILE_VERBS:
             return CitationVerdict(
                 "error",
                 f"is a repository '{verb}' view rather than a link to the cited "
                 "file itself (ADR-0003)",
+            )
+        # Making the trailing path optional closed one hole and opened another: a
+        # pinned link with nothing after the ref names a repository at a commit,
+        # not the cited file, and came back "ok". A third cross-model review-final
+        # pass found it. The path is optional to MATCH -- so the pin check runs on
+        # truncated links -- and required to PASS.
+        if not match.groupdict().get("path"):
+            return CitationVerdict(
+                "error", "is pinned but names no file within the repository"
             )
         return CitationVerdict("ok")
     return CitationVerdict(
@@ -602,7 +678,14 @@ def _classify_repo_path(path_text: str, repo_root_path: Path) -> CitationVerdict
         )
 
     root = repo_root_path.resolve()
-    candidate = (root / path_text).resolve()
+    try:
+        candidate = (root / path_text).resolve()
+    except (OSError, RuntimeError):
+        # A citation naming a self-referential symlink inside the repository made
+        # .resolve() raise, and it escaped as a traceback. Same class of defect as
+        # the one _is_canonical_location catches for discovery; a third cross-model
+        # review-final pass found this second, unguarded site.
+        return CitationVerdict("error", "cannot be resolved to a path")
     if not candidate.is_relative_to(root):
         return CitationVerdict(
             "error", "resolves outside the repository"
@@ -645,7 +728,7 @@ def _classify_citation(citation: str, repo_root_path: Path) -> CitationVerdict:
         # independent reason the same laundering fails. Two review rounds have now
         # found a way to satisfy one of these shapes with hostile content, so the
         # cheaper check runs too rather than trusting the regex alone.
-        if _is_prohibited_citation(text):
+        if _contains_prohibited_reference(text):
             return CitationVerdict(
                 "error", "matches a prohibited credential-like pattern"
             )
