@@ -998,6 +998,8 @@ benchmark-down:
 
 # Validate the documentation corpus (launchpad/docs/corpus) against its schema
 # and cross-node rules (#623): duplicate ids, unresolved relationship targets,
-# citation existence/prohibited-content, and generated/manual ownership.
+# citation form/containment/pinning/prohibited-content, and generated/manual
+# ownership. Citations that name nothing openable (commit refs, graph edges, tool
+# results, external URLs) print as UNVERIFIED without failing the run.
 corpus-validate:
     python3 launchpad/project-intelligence/corpus/validate.py

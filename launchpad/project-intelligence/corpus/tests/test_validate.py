@@ -10,7 +10,9 @@ change what this suite asserts.
 
 from __future__ import annotations
 
+import contextlib
 import importlib.util
+import io
 import sys
 import tempfile
 import unittest
@@ -32,59 +34,92 @@ _spec.loader.exec_module(validate)
 
 class ValidFixtureTest(unittest.TestCase):
     def test_valid_fixture_passes(self) -> None:
-        errors = validate.validate_corpus(VALID_DIR)
-        self.assertEqual(errors, [])
+        report = validate.validate_corpus(VALID_DIR)
+        self.assertEqual(report.errors, [])
 
     def test_valid_fixture_actually_discovers_its_nodes(self) -> None:
         # errors == [] alone can't distinguish "genuinely clean" from "discovery
-        # silently found nothing" -- assert the positive too. Four nodes as of
-        # this test: node-a, node-b (auth citation), node-c (url citation), node-d
-        # (.env.example citation). generated/index.json is not .md and doesn't count.
+        # silently found nothing" -- assert the positive too. Five nodes as of
+        # this test: node-a, node-b (auth citation), node-c (pinned url citation),
+        # node-d (.env.example citation), node-e (all six citation forms).
+        # generated/index.json is not .md and doesn't count.
         nodes = validate.load_nodes(VALID_DIR)
-        self.assertEqual(len(nodes), 4)
+        self.assertEqual(len(nodes), 5)
 
 
 class SchemaViolationTest(unittest.TestCase):
     def test_bad_schema_fixture_named_and_rejected(self) -> None:
-        errors = validate.validate_corpus(INVALID_DIR / "bad-schema")
-        self.assertEqual(len(errors), 1)
-        self.assertIn("validator-fixture-bad-schema", errors[0])
+        report = validate.validate_corpus(INVALID_DIR / "bad-schema")
+        self.assertEqual(len(report.errors), 1)
+        self.assertIn("validator-fixture-bad-schema", report.errors[0])
+
+    def test_schema_error_does_not_echo_the_offending_value(self) -> None:
+        # The DoD's "without leaking private source content" applied to the one
+        # path that bypasses the citation checks entirely: a node with a schema
+        # error is skipped by find_citation_problems, so jsonschema's own rendered
+        # message -- which quotes the instance verbatim -- was the only thing
+        # printed about it. A cross-model review panel found this by supplying a
+        # credential-shaped path where the schema required an array.
+        report = validate.validate_corpus(INVALID_DIR / "leaky-schema-error")
+        self.assertEqual(len(report.errors), 1)
+        self.assertNotIn("id_rsa", report.errors[0])
+        self.assertNotIn("some/private/path", report.errors[0])
+        # Still actionable: it says where, and what the schema demanded instead.
+        self.assertIn("evidence", report.errors[0])
+        self.assertIn("array", report.errors[0])
+
+    def test_unsafe_node_id_is_not_echoed_as_a_label(self) -> None:
+        # The sibling leak: a schema-invalid node's `id` is unvalidated input, so
+        # naming the node with it would reintroduce exactly what the test above
+        # closes. Messages fall back to the file path when the id isn't kebab-case.
+        report = validate.validate_corpus(INVALID_DIR / "unsafe-id")
+        self.assertEqual(len(report.errors), 1)
+        self.assertNotIn("id_rsa", report.errors[0])
+        self.assertIn("unsafe-id", report.errors[0])  # named by path instead
+
+    def test_label_helper_accepts_schema_shaped_ids(self) -> None:
+        # The fallback must not swallow every id -- a valid kebab-case id is still
+        # the label, otherwise every message would degrade to a path.
+        self.assertEqual(validate._label("some-node-id", Path("x.md")), "some-node-id")
+        self.assertEqual(validate._label("Not Kebab", Path("x.md")), "x.md")
+        self.assertEqual(validate._label(None, Path("x.md")), "x.md")
+        self.assertEqual(validate._label(12345, Path("x.md")), "x.md")
 
 
 class DuplicateIdTest(unittest.TestCase):
     def test_duplicate_id_rejected_and_named(self) -> None:
-        errors = validate.validate_corpus(INVALID_DIR / "duplicate-id")
-        self.assertEqual(len(errors), 1)
-        self.assertIn("validator-fixture-duplicate", errors[0])
-        self.assertIn("duplicate id", errors[0])
+        report = validate.validate_corpus(INVALID_DIR / "duplicate-id")
+        self.assertEqual(len(report.errors), 1)
+        self.assertIn("validator-fixture-duplicate", report.errors[0])
+        self.assertIn("duplicate id", report.errors[0])
 
 
 class UnresolvedRelationshipTargetTest(unittest.TestCase):
     def test_unresolved_target_rejected_and_named(self) -> None:
-        errors = validate.validate_corpus(INVALID_DIR / "unresolved-target")
-        self.assertEqual(len(errors), 1)
-        self.assertIn("validator-fixture-unresolved-target", errors[0])
-        self.assertIn("no-such-node-anywhere", errors[0])
+        report = validate.validate_corpus(INVALID_DIR / "unresolved-target")
+        self.assertEqual(len(report.errors), 1)
+        self.assertIn("validator-fixture-unresolved-target", report.errors[0])
+        self.assertIn("no-such-node-anywhere", report.errors[0])
 
 
 class MissingCitationTest(unittest.TestCase):
     def test_missing_citation_rejected_and_named(self) -> None:
-        errors = validate.validate_corpus(INVALID_DIR / "missing-citation")
-        self.assertEqual(len(errors), 1)
-        self.assertIn("validator-fixture-missing-citation", errors[0])
-        # The offending path itself is not required to be absent from this
-        # particular error class's message -- unlike prohibited-citation below,
-        # a missing-file path is not private content. Only assert the node is named.
+        report = validate.validate_corpus(INVALID_DIR / "missing-citation")
+        self.assertEqual(len(report.errors), 1)
+        self.assertIn("validator-fixture-missing-citation", report.errors[0])
+        # Citations are located by position rather than quoted, so an author can
+        # find the offender without the validator printing any citation value.
+        self.assertIn("evidence entry 1, citation 1", report.errors[0])
 
 
 class ProhibitedCitationTest(unittest.TestCase):
     def test_prohibited_citation_rejected_without_leaking_the_value(self) -> None:
-        errors = validate.validate_corpus(INVALID_DIR / "prohibited-citation")
-        self.assertEqual(len(errors), 1)
-        self.assertIn("validator-fixture-prohibited-citation", errors[0])
+        report = validate.validate_corpus(INVALID_DIR / "prohibited-citation")
+        self.assertEqual(len(report.errors), 1)
+        self.assertIn("validator-fixture-prohibited-citation", report.errors[0])
         # The DoD's "without leaking private source content", taken literally: the
         # rejected value itself must never appear in the error output.
-        self.assertNotIn("id_rsa", errors[0])
+        self.assertNotIn("id_rsa", report.errors[0])
 
     def test_ordinary_auth_path_is_not_prohibited(self) -> None:
         # crates/buzz-auth is a real, ordinary, non-secret crate this repo ships.
@@ -121,9 +156,9 @@ class NonMappingFrontmatterTest(unittest.TestCase):
     malformed entry nested inside an already-parsed dict."""
 
     def test_non_mapping_frontmatter_reported_not_crashed(self) -> None:
-        errors = validate.validate_corpus(INVALID_DIR / "non-mapping-frontmatter")
-        self.assertEqual(len(errors), 1)
-        self.assertIn("not a mapping", errors[0])
+        report = validate.validate_corpus(INVALID_DIR / "non-mapping-frontmatter")
+        self.assertEqual(len(report.errors), 1)
+        self.assertIn("not a mapping", report.errors[0])
 
 
 class MalformedEntryDoesNotCrashTest(unittest.TestCase):
@@ -140,8 +175,11 @@ class MalformedEntryDoesNotCrashTest(unittest.TestCase):
             data={"evidence": ["just a bare string, not an object"]},
             error="already reported by schema validation",
         )
-        errors = validate.find_citation_problems([node], validate.repo_root())
+        errors, unverified = validate.find_citation_problems(
+            [node], validate.repo_root()
+        )
         self.assertEqual(errors, [])
+        self.assertEqual(unverified, [])
 
     def test_non_dict_relationship_item_does_not_crash(self) -> None:
         node = validate.LoadedNode(
@@ -161,58 +199,240 @@ class AbsolutePathCitationTest(unittest.TestCase):
     pass found this by citing a path that genuinely exists on the host."""
 
     def test_absolute_path_citation_rejected(self) -> None:
-        node = validate.LoadedNode(
-            path=Path("synthetic"),
-            id="abs-path-check",
-            data={
-                "evidence": [
-                    {"statement": "x", "entry_class": "FACT", "evidence": ["/etc/passwd"]}
-                ]
-            },
-        )
-        errors = validate.find_citation_problems([node], validate.repo_root())
+        errors, _ = _classify_one("/etc/passwd")
         self.assertEqual(len(errors), 1)
-        self.assertIn("abs-path-check", errors[0])
+        self.assertIn("citation-check", errors[0])
         self.assertIn("repo-relative", errors[0])
 
 
+def _classify_one(citation: str) -> tuple[list[str], list[str]]:
+    """Run one citation through the real find_citation_problems path.
+
+    Deliberately not calling _classify_citation directly: the message-building,
+    node-labelling and redaction all live in find_citation_problems, and a test
+    that skipped them would assert the classifier is right while proving nothing
+    about what actually gets printed.
+    """
+    node = validate.LoadedNode(
+        path=Path("synthetic"),
+        id="citation-check",
+        data={
+            "evidence": [
+                {"statement": "x", "entry_class": "FACT", "evidence": [citation]}
+            ]
+        },
+    )
+    return validate.find_citation_problems([node], validate.repo_root())
+
+
 class UrlCitationTest(unittest.TestCase):
-    """URL citations are accepted as-is, checked BEFORE the credential blocklist
-    -- an independent review-code pass found the blocklist ran first, silently
-    rejecting public URLs whose path merely resembled a credential filename."""
+    """A repository file link must be pinned to a full commit SHA (ADR-0003); any
+    other URL is unpinnable and uncheckable offline, so it is reported unverified.
+
+    An earlier revision waved every `http`-prefixed string through untouched. A
+    cross-model review panel found it, pointing at this repo's own passing fixture,
+    which cited a mutable `blob/main` URL while ADR-0003 forbids exactly that.
+    """
 
     def test_url_accepted_even_when_path_looks_credential_like(self) -> None:
-        node = validate.LoadedNode(
-            path=Path("synthetic"),
-            id="url-check",
-            data={
-                "evidence": [
-                    {
-                        "statement": "x",
-                        "entry_class": "FACT",
-                        "evidence": [
-                            "https://example.com/posts/id_rsa-security-best-practices"
-                        ],
-                    }
-                ]
-            },
+        # The credential blocklist must still run AFTER the URL check -- an
+        # independent review-code pass found it running first, silently rejecting
+        # public URLs whose path merely resembled a credential filename.
+        errors, unverified = _classify_one(
+            "https://example.com/posts/id_rsa-security-best-practices"
         )
-        errors = validate.find_citation_problems([node], validate.repo_root())
         self.assertEqual(errors, [])
+        self.assertEqual(len(unverified), 1)
+        self.assertIn("external URL", unverified[0])
+
+    def test_commit_pinned_github_url_accepted(self) -> None:
+        errors, unverified = _classify_one(
+            "https://github.com/launchpad-26/buzz/blob/"
+            "69baedd197e5d35c9ae4736115789da59929e288/.env.example"
+        )
+        self.assertEqual(errors, [])
+        self.assertEqual(unverified, [])
+
+    def test_commit_pinned_raw_github_url_accepted(self) -> None:
+        errors, unverified = _classify_one(
+            "https://raw.githubusercontent.com/launchpad-26/buzz/"
+            "69baedd197e5d35c9ae4736115789da59929e288/Justfile"
+        )
+        self.assertEqual(errors, [])
+        self.assertEqual(unverified, [])
+
+    def test_blob_main_url_rejected(self) -> None:
+        errors, _ = _classify_one(
+            "https://github.com/launchpad-26/buzz/blob/main/.env.example"
+        )
+        self.assertEqual(len(errors), 1)
+        self.assertIn("mutable ref", errors[0])
+
+    def test_tag_pinned_url_rejected(self) -> None:
+        # A tag is movable, and a short SHA is ambiguous. ADR-0003 says full SHA.
+        for ref in ("v1.2.3", "69baedd"):
+            with self.subTest(ref=ref):
+                errors, _ = _classify_one(
+                    f"https://github.com/launchpad-26/buzz/blob/{ref}/Justfile"
+                )
+                self.assertEqual(len(errors), 1)
+                self.assertIn("mutable ref", errors[0])
+
+    def test_markdown_link_is_unwrapped_before_pinning_is_judged(self) -> None:
+        # ADR-0003's prescribed format is a markdown link, so `[label](url)` must
+        # be judged by its target. An earlier revision compared the whole string
+        # against `http`, so the prescribed format failed as a nonexistent file.
+        pinned = (
+            "[.env.example](https://github.com/launchpad-26/buzz/blob/"
+            "69baedd197e5d35c9ae4736115789da59929e288/.env.example)"
+        )
+        errors, unverified = _classify_one(pinned)
+        self.assertEqual(errors, [])
+        self.assertEqual(unverified, [])
+
+        mutable = "[.env.example](https://github.com/launchpad-26/buzz/blob/main/.env.example)"
+        errors, _ = _classify_one(mutable)
+        self.assertEqual(len(errors), 1)
+        self.assertIn("mutable ref", errors[0])
+
+
+class CitationFormTest(unittest.TestCase):
+    """CONTRACT.md section 3's six shapes, each routed to the right rule.
+
+    An earlier revision passed every non-URL citation straight to Path.exists(),
+    so five of the six were reported as missing files -- including the two
+    positional forms CONTRACT.md uses as its own worked examples. A cross-model
+    review panel found it.
+    """
+
+    def test_file_range_citation_accepted(self) -> None:
+        errors, unverified = _classify_one(
+            "launchpad/project-intelligence/corpus/validate.py:1-5"
+        )
+        self.assertEqual(errors, [])
+        self.assertEqual(unverified, [])
+
+    def test_file_line_citation_accepted(self) -> None:
+        errors, unverified = _classify_one(
+            "launchpad/project-intelligence/corpus/validate.py:1077"
+        )
+        self.assertEqual(errors, [])
+        self.assertEqual(unverified, [])
+
+    def test_bare_path_citation_accepted(self) -> None:
+        errors, unverified = _classify_one("Justfile")
+        self.assertEqual(errors, [])
+        self.assertEqual(unverified, [])
+
+    def test_graph_edge_reported_unverified_not_missing(self) -> None:
+        errors, unverified = _classify_one(
+            "is_shared_gated_kind -> is_unshared_gated_event (1 hop)"
+        )
+        self.assertEqual(errors, [])
+        self.assertEqual(len(unverified), 1)
+        self.assertIn("names no openable file", unverified[0])
+
+    def test_tool_result_reported_unverified_not_missing(self) -> None:
+        errors, unverified = _classify_one(
+            "find_references('x', crate='buzz-core') -> no callers in this crate"
+        )
+        self.assertEqual(errors, [])
+        self.assertEqual(len(unverified), 1)
+
+    def test_commit_reference_reported_unverified_not_missing(self) -> None:
+        errors, unverified = _classify_one(
+            "commit 69baedd197e5d35c9ae4736115789da59929e288 (2026-08-25) by Serina"
+        )
+        self.assertEqual(errors, [])
+        self.assertEqual(len(unverified), 1)
+        self.assertIn("commit reference", unverified[0])
+
+    def test_unrecognised_form_is_an_error_not_a_pass(self) -> None:
+        # The unverified channel is for RECOGNISED-but-uncheckable forms only.
+        # Free prose matching no form at all must fail, or the channel becomes a
+        # way to launder anything past validation.
+        errors, unverified = _classify_one("I read this somewhere once, honest")
+        self.assertEqual(len(errors), 1)
+        self.assertEqual(unverified, [])
+        self.assertIn("six supported citation forms", errors[0])
+
+    def test_malformed_line_position_rejected(self) -> None:
+        errors, _ = _classify_one(
+            "launchpad/project-intelligence/corpus/validate.py:9-2"
+        )
+        self.assertEqual(len(errors), 1)
+        self.assertIn("malformed line position", errors[0])
+
+    def test_positional_citation_still_runs_the_credential_blocklist(self) -> None:
+        # Parsing the position off must not become a way to smuggle a prohibited
+        # path past the blocklist -- the extracted path is what gets checked.
+        errors, _ = _classify_one("some/path/id_rsa:12")
+        self.assertEqual(len(errors), 1)
+        self.assertIn("prohibited", errors[0])
+        self.assertNotIn("id_rsa", errors[0])
+
+
+class CitationContainmentTest(unittest.TestCase):
+    """A repo-relative citation must resolve to a real file INSIDE the repository.
+
+    An earlier revision checked only `(repo_root / citation).exists()`, so a `..`
+    chain resolved out onto the host filesystem and a bare directory name passed
+    as though it were a file. A cross-model review panel found both.
+    """
+
+    def test_traversal_and_directory_citations_rejected(self) -> None:
+        report = validate.validate_corpus(INVALID_DIR / "escaping-citation")
+        self.assertEqual(len(report.errors), 2)
+        joined = " ".join(report.errors)
+        self.assertIn("resolves outside the repository", joined)
+        self.assertIn("does not resolve to a real file", joined)
+
+    def test_traversal_is_rejected_even_when_the_target_exists(self) -> None:
+        # /etc/passwd genuinely exists on this host, so an existence check alone
+        # would have called this citation valid.
+        errors, _ = _classify_one("../../../../../../../../etc/passwd")
+        self.assertEqual(len(errors), 1)
+        self.assertIn("resolves outside the repository", errors[0])
+
+    def test_directory_citation_rejected(self) -> None:
+        errors, _ = _classify_one("launchpad")
+        self.assertEqual(len(errors), 1)
+        self.assertIn("does not resolve to a real file", errors[0])
+
+
+class MutableUrlFixtureTest(unittest.TestCase):
+    def test_mutable_url_fixture_rejected_and_named(self) -> None:
+        report = validate.validate_corpus(INVALID_DIR / "mutable-url-citation")
+        self.assertEqual(len(report.errors), 1)
+        self.assertIn("validator-fixture-mutable-url-citation", report.errors[0])
+        self.assertIn("mutable ref", report.errors[0])
 
 
 class OwnershipViolationTest(unittest.TestCase):
     def test_stray_non_md_file_rejected_and_named(self) -> None:
-        errors = validate.validate_corpus(INVALID_DIR / "misplaced-generated")
-        self.assertEqual(len(errors), 1)
-        self.assertIn("index.json", errors[0])
+        report = validate.validate_corpus(INVALID_DIR / "misplaced-generated")
+        self.assertEqual(len(report.errors), 1)
+        self.assertIn("index.json", report.errors[0])
 
-    def test_non_md_file_under_generated_is_exempt(self) -> None:
+    def test_non_md_file_under_generated_is_not_a_placement_error(self) -> None:
         # Only the reject-outside-generated/ direction was tested before -- this
         # proves the exemption itself has a passing-case fixture, not just that
         # the whole valid/ directory happens to pass for unrelated reasons.
-        errors = validate.find_ownership_violations(VALID_DIR)
+        errors, _ = validate.find_ownership_violations(VALID_DIR)
         self.assertEqual(errors, [])
+
+    def test_generated_artifact_is_reported_unverified_not_silently_passed(self) -> None:
+        # Correct placement is only half of ADR-0028: derived views must also be
+        # "never hand-authored, always reproducible from canonical Markdown", and
+        # placement proves neither. No corpus generator exists yet to reproduce
+        # them against, so the artifact is reported rather than passed in silence
+        # -- a check that cannot run must not read as a check that was satisfied.
+        # A cross-model review panel found the silent pass.
+        errors, unverified = validate.find_ownership_violations(VALID_DIR)
+        self.assertEqual(errors, [])
+        self.assertEqual(len(unverified), 1)
+        self.assertIn("index.json", unverified[0])
+        self.assertIn("reproducibility", unverified[0])
 
 
 class MissingInputTest(unittest.TestCase):
@@ -236,11 +456,56 @@ class MissingInputTest(unittest.TestCase):
         empty_dir = FIXTURES_DIR / "empty-on-purpose"
         empty_dir.mkdir(exist_ok=True)
         try:
-            self.assertEqual(validate.validate_corpus(empty_dir), [])
+            self.assertEqual(validate.validate_corpus(empty_dir).errors, [])
             # errors == [] alone can't distinguish "genuinely empty" from
             # "discovery broke" -- assert zero nodes were found, not merely zero
             # errors, since both would look identical from errors alone.
             self.assertEqual(validate.load_nodes(empty_dir), [])
+        finally:
+            empty_dir.rmdir()
+
+
+class UnverifiedChannelTest(unittest.TestCase):
+    """The unverified channel must be visible and must not decide the exit code.
+
+    Two failure modes it sits between. Failing on an unverifiable-by-nature
+    citation would make CONTRACT.md's own commit/graph-edge/tool-result forms
+    unusable in the corpus. Hiding them would let a green run claim it checked
+    things it never opened. So: always printed, never fatal, and the summary line
+    says how many there were rather than the bare word "clean".
+    """
+
+    def _run_main(self, root: Path) -> tuple[int, str, str]:
+        out, err = io.StringIO(), io.StringIO()
+        with contextlib.redirect_stdout(out), contextlib.redirect_stderr(err):
+            exit_code = validate.main(["--root", str(root)])
+        return exit_code, out.getvalue(), err.getvalue()
+
+    def test_unverified_items_print_but_do_not_fail_the_run(self) -> None:
+        exit_code, stdout, stderr = self._run_main(VALID_DIR)
+        self.assertEqual(exit_code, 0)
+        self.assertIn("UNVERIFIED", stderr)
+        self.assertIn("PASS", stdout)
+        # The summary must not read as an unqualified all-clear when items were
+        # reported but not checked.
+        self.assertNotIn("corpus validation clean", stdout)
+        self.assertIn("unverified", stdout)
+
+    def test_errors_still_fail_even_alongside_unverified_items(self) -> None:
+        exit_code, stdout, stderr = self._run_main(INVALID_DIR / "escaping-citation")
+        self.assertEqual(exit_code, 1)
+        self.assertIn("FAIL", stderr)
+        self.assertNotIn("PASS", stdout)
+
+    def test_fully_clean_root_says_clean(self) -> None:
+        # The unqualified wording must still be reachable, or the distinction the
+        # test above relies on is meaningless.
+        empty_dir = FIXTURES_DIR / "empty-for-clean-summary"
+        empty_dir.mkdir(exist_ok=True)
+        try:
+            exit_code, stdout, _ = self._run_main(empty_dir)
+            self.assertEqual(exit_code, 0)
+            self.assertIn("corpus validation clean", stdout)
         finally:
             empty_dir.rmdir()
 
