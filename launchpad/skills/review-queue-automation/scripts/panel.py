@@ -383,8 +383,12 @@ def _selection_context(config, repo, number, lane, profile):
         routed_log["strategy_reason"] = reason
         run = resolve_route(config, "review")
         routed_log["resolved_model"] = run.as_dict()
-    except Exception:
-        pass  # selection is advisory for logging; default direct_analysis
+    except Exception as exc:
+        # Selection is advisory metadata, so a failure must not fail the panel.
+        # It is recorded rather than swallowed: a silent `pass` here previously
+        # hid real configuration errors (e.g. a routing ladder that resolves to
+        # no model at all) from the attempt artifact.
+        routed_log["selection_error"] = f"{type(exc).__name__}: {exc}"[:200]
     return strategy_name, routed_log
 
 

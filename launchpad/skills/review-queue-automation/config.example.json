@@ -162,30 +162,9 @@
       "specialist_panel"
     ]
   },
-  "routes": {
-    "claude": [
-      {
-        "model": "claude-sonnet-4",
-        "provider": "anthropic"
-      }
-    ],
-    "codex": [
-      {
-        "model": "gpt-5.6-sol",
-        "provider": "openai"
-      }
-    ],
-    "openrouter": [
-      {
-        "model": "deepseek-v4-flash",
-        "provider": "openrouter"
-      }
-    ],
-    "economical": [
-      {
-        "model": "economy-1",
-        "provider": "economical"
-      }
-    ]
+  "notifications": {
+    "transport": "none",
+    "path": "/path/to/repo/pr review logs/notifications.jsonl",
+    "timeout_seconds": 30
   }
 }

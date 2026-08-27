@@ -59,14 +59,43 @@ class RoutedRun:
         }
 
 
+#: How a canonical pool entry's runner maps onto a ladder rung.
+_RUNNER_RUNG = {"claude": "claude", "codex": "codex", "omp": "openrouter"}
+
+
 def _routes_from_config(cfg: dict[str, Any]) -> dict[str, list[dict[str, Any]]]:
+    """Group the configured reviewer candidates into ladder rungs.
+
+    There is ONE source of executable candidates: `models.primary` and
+    `models.secondary`, the same pools `panel.py` runs. Rungs are derived from each
+    entry's `runner` so routing can never disagree with what actually executes.
+
+    Explicit per-rung lists (`models.claude`, `models.codex`, ...) are still
+    honoured when present, so an operator can pin an exact ladder.
+    """
     models = cfg.get("models") or {}
-    return {
-        "claude": models.get("claude", []),
-        "codex": models.get("codex", []),
-        "openrouter": models.get("openrouter", []),
-        "economical": models.get("economical", []),
+    explicit = {rung: list(models.get(rung) or []) for rung in
+                ("claude", "codex", "openrouter", "economical")}
+    if any(explicit.values()):
+        return explicit
+
+    derived: dict[str, list[dict[str, Any]]] = {
+        "claude": [], "codex": [], "openrouter": [], "economical": []
     }
+    for pool in ("primary", "secondary"):
+        for entry in models.get(pool) or []:
+            if not isinstance(entry, dict):
+                continue
+            runner = (entry.get("runner") or "").strip()
+            rung = _RUNNER_RUNG.get(runner)
+            if rung is None:
+                continue
+            # An explicitly economical candidate is a last-resort rung, not a peer
+            # of the provider-diverse fallbacks.
+            if rung == "openrouter" and (entry.get("capability") or "") == "economy":
+                rung = "economical"
+            derived[rung].append(entry)
+    return derived
 
 
 def is_route_available(state, key: str) -> bool:
@@ -114,7 +143,8 @@ def resolve_route(
             break
         for entry in routes.get(rung, []):
             model = entry.get("model") or entry.get("selector")
-            provider = entry.get("provider") or rung
+            # Canonical pools carry `provider_family`; explicit rungs carry `provider`.
+            provider = entry.get("provider") or entry.get("provider_family") or rung
             if not model:
                 continue
             key = f"{provider}:{model}"
