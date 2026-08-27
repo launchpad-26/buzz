@@ -77,13 +77,30 @@ here.
    naming an unknown template, the template is not merged, full stop, no
    matter what you believe about an open PR.
 
-5. **Scaffold the file.**
+5. **Scaffold the file — branching the way step 4 already did.**
+
+   **Merged, or provisional via an open PR:**
    ```python
    scaffold.scaffold_node(root, row, node_type=..., origin=..., revision=revision)
    ```
    This gives you schema-valid front matter with exactly one evidence entry
    — the provenance citation. Everything from here is yours to add, never
    the scaffold's.
+
+   **Absent altogether: do not call `scaffold_node`.** `_known_templates`
+   returns an empty frozenset while `templates/` doesn't exist, so the call
+   raises `ScaffoldError` on every invocation, and step 8 below treats a
+   `ScaffoldError` as ground truth to stop on rather than something to work
+   around — so calling it here would be a dead end, not a scaffold.
+   Instead, hand-author the frontmatter yourself, directly against
+   `launchpad/docs/corpus/schema/node.schema.json`: write the seven
+   required fields, including one evidence entry recording the FACT from
+   step 3 (the same provenance citation `scaffold_node` would otherwise
+   have written), and say in the node's body — its scope section, per
+   `AGENTS.md`'s "Creating a node" step 8 — that it was written with no
+   template because none existed yet at the recorded revision. This
+   continues step 4's "Absent altogether" branch; it is not a new
+   decision.
 
 6. **Classify every claim honestly.** Three classes, and this skill adds
    nothing to `AGENTS.md`'s own explanation of what they're for — read it
