@@ -56,6 +56,13 @@ def _ensure_panel() -> None:
     decide_assurance = _da
 
 
+def _reconcile_queue(local_cfg: dict[str, Any], state: State, repo: str) -> dict[str, Any]:
+    """Refresh queue facts immediately before selecting a scheduled sweep's jobs."""
+    from queue import reconcile
+
+    return reconcile(local_cfg, state, repo)
+
+
 class PartialPanel(Exception):
     """A reviewer slot produced no fresh verdict after its fallback chain ran."""
 
@@ -1343,6 +1350,60 @@ def canary_allowed(local_cfg: dict[str, Any], state: State, lane: str) -> bool:
     return bool((local_cfg.get("dispatch") or {}).get(key, False))
 
 
+def recover_interrupted(
+    local_cfg: dict[str, Any],
+    state: State,
+) -> list[dict[str, Any]]:
+    """Release leases stranded by a crashed worker without re-running its decision.
+
+    Recovery is an explicit operator command. It only touches leases recorded in
+    this state directory, REST-verifies each release through the normal lease
+    helper, and safe-stops a non-terminal job rather than guessing which evidence
+    or model output a terminated process had reached.
+    """
+    from states import can_transition
+
+    login = str(local_cfg.get("login") or "").strip()
+    rows = state.db.execute(
+        "SELECT l.repo, l.number, l.job_id, j.status FROM leases l "
+        "JOIN jobs j ON j.id=l.job_id ORDER BY l.claimed_at, l.repo, l.number"
+    ).fetchall()
+    recovered: list[dict[str, Any]] = []
+    for row in rows:
+        item = {"job": row["job_id"], "repo": row["repo"], "number": row["number"]}
+        if not login:
+            recovered.append({**item, "released": False, "reason": "configured login is empty"})
+            continue
+        try:
+            _lease_release(local_cfg, state, row["repo"], row["number"], row["job_id"], login)
+        except Exception as exc:
+            recovered.append({**item, "released": False, "reason": str(exc)[:500]})
+            continue
+        if can_transition(row["status"], "safe_stop"):
+            state.transition(
+                row["job_id"],
+                "safe_stop",
+                reason="interrupted worker recovered; review lease released",
+            )
+        recovered.append({**item, "released": True, "status": state.current_status(row["job_id"])})
+    return recovered
+
+
+def runtime_status(state: State) -> dict[str, Any]:
+    """Return local, side-effect-free managed-harness health for one state dir."""
+    rows = state.db.execute(
+        "SELECT status, COUNT(*) AS count FROM jobs GROUP BY status ORDER BY status"
+    ).fetchall()
+    leases = state.db.execute("SELECT COUNT(*) AS count FROM leases").fetchone()["count"]
+    return {
+        "status": "ready",
+        "state_dir": str(state.root),
+        "jobs": {row["status"]: row["count"] for row in rows},
+        "leases": leases,
+        "worker_concurrency": 1,
+    }
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="Review-queue dispatch / onboarding gate")
     parser.add_argument("--config", default=None)
@@ -1359,6 +1420,13 @@ def main(argv: list[str] | None = None) -> int:
     one.add_argument("--number", required=True, type=int)
     one.add_argument("--job", required=True)
     one.add_argument("--lane", required=True)
+
+    sub.add_parser(
+        "recover",
+        help="release verified leases left by an interrupted worker; never re-runs a decision",
+    )
+
+    sub.add_parser("status", help="show local state-dir health without network activity")
     args = parser.parse_args(argv)
 
     cfg, cfg_path, issues = load_repo_config(args.repo_root)
@@ -1378,35 +1446,58 @@ def main(argv: list[str] | None = None) -> int:
 
     state_dir = cfg.get("state_dir")
     state = State({"state_dir": state_dir or "~/.config/review-queue-automation"})
+    runtime_lock = state.try_runtime_lock(args.command)
+    if runtime_lock is None:
+        print(json.dumps({
+            "status": "sweep_already_running",
+            "reason": "another command owns this state directory",
+        }, indent=2, sort_keys=True))
+        state.close()
+        return 0
 
-    # Probe capability ONCE per invocation, not per job: it costs two reads and
-    # applies to the whole repository. A repo we cannot write to still produces
-    # drafts and human requests rather than failing.
-    capability_mode = None
-    slug = (cfg.get("repository") or {}).get("slug", "")
-    if slug and not args.no_capability_probe:
-        from github_auth import UNUSABLE, probe as probe_capability
 
+    if args.command == "status":
         try:
-            capability = probe_capability(cfg, state, slug)
-            capability_mode = capability.get("mode")
-        except Exception as exc:  # probing must never abort a sweep
-            capability_mode = None
-            capability = {"error": str(exc)[:200]}
-        if capability_mode == UNUSABLE:
-            print(json.dumps({
-                "status": "capability_unusable",
-                "reason": "the authenticated identity cannot read this repository",
-                "capability": capability,
-            }, indent=2, sort_keys=True))
+            json.dump(runtime_status(state), sys.stdout, indent=2, sort_keys=True)
+            sys.stdout.write("\n")
+        finally:
             state.close()
-            return 1
-
+        return 0
     try:
-        if args.command == "sweep":
+        # Probe capability ONCE per invocation, not per job: it costs two reads and
+        # applies to the whole repository. A repo we cannot write to still produces
+        # drafts and human requests rather than failing.
+        capability_mode = None
+        slug = (cfg.get("repository") or {}).get("slug", "")
+        if slug and not args.no_capability_probe and args.command != "recover":
+            from github_auth import UNUSABLE, probe as probe_capability
+
+            try:
+                capability = probe_capability(cfg, state, slug)
+                capability_mode = capability.get("mode")
+            except Exception as exc:  # probing must never abort a sweep
+                capability_mode = None
+                capability = {"error": str(exc)[:200]}
+            if capability_mode == UNUSABLE:
+                print(json.dumps({
+                    "status": "capability_unusable",
+                    "reason": "the authenticated identity cannot read this repository",
+                    "capability": capability,
+                }, indent=2, sort_keys=True))
+                return 1
+
+        if args.command == "recover":
+            json.dump(recover_interrupted(cfg, state), sys.stdout, indent=2, sort_keys=True)
+        elif args.command == "sweep":
+            if not slug:
+                raise SystemExit("repository.slug is required for a managed sweep")
+            queue_result = _reconcile_queue(cfg, state, slug)
+            # This is intentionally serial per state directory. `limit` controls
+            # batch size, not parallelism, and order is a stable FIFO even when two
+            # jobs were detected in the same second.
             rows = state.db.execute(
                 "SELECT id AS job_id, repo, number, lane FROM jobs "
-                "WHERE lane=? AND status='detected' ORDER BY created_at LIMIT ?",
+                "WHERE lane=? AND status='detected' ORDER BY created_at, id LIMIT ?",
                 (args.lane, args.limit),
             ).fetchall()
             results = []
@@ -1421,7 +1512,12 @@ def main(argv: list[str] | None = None) -> int:
                 except Exception as exc:
                     result = {"job": row["job_id"], "status": "error", "reason": str(exc)[:500]}
                 results.append(result)
-            json.dump(results, sys.stdout, indent=2, sort_keys=True)
+            json.dump(
+                {"queue": queue_result, "results": results},
+                sys.stdout,
+                indent=2,
+                sort_keys=True,
+            )
         else:
             row = state.db.execute(
                 "SELECT repo, number, lane FROM jobs WHERE id=?", (args.job,)
@@ -1437,6 +1533,7 @@ def main(argv: list[str] | None = None) -> int:
             json.dump(result, sys.stdout, indent=2, sort_keys=True)
         sys.stdout.write("\n")
     finally:
+        runtime_lock.release()
         state.close()
     return 0
 

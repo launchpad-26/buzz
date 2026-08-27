@@ -36,68 +36,37 @@ Read in this order before acting:
 
 ## Run the pipeline
 
-Each phase is a script that reads its artifacts and ends on a checkable condition.
-Only perform the named judgment between phases.
+The managed harness owns the whole incoming-review lifecycle. A scheduler invokes
+one command; it reconciles queue facts, selects FIFO jobs, claims/releases each
+lease, and runs the guarded lifecycle. Do **not** manually chain queue, lease,
+evidence, and panel commands: that bypasses the state-dir ownership boundary.
 
-### Incoming review lane (someone else's PR)
+```bash
+python3 scripts/dispatcher.py --repo-root <repo> sweep \
+  --lane incoming_review --limit 2
+```
 
-1. Reconcile the queue:
+`limit` is the number of FIFO jobs in this batch, not parallelism. A state
+directory permits exactly one worker; a concurrent `sweep` or `dispatch-one`
+returns `sweep_already_running` without spending model tokens. The scheduler may
+invoke the command again after the current run exits.
 
-   ```bash
-   python3 scripts/queue.py --config $CONFIG $REPO
-   ```
+Useful noninteractive commands:
 
-   Transitions are JSON jobs keyed by `repo + PR + head_sha + lane`. Read them. A held
-   or `pr_review_batch.py`-blocked PR is reported, not dispatched.
+```bash
+python3 scripts/dispatcher.py --repo-root <repo> status
+python3 scripts/dispatcher.py --repo-root <repo> dispatch-one \
+  --number <pr> --job <job-id> --lane incoming_review
+python3 scripts/dispatcher.py --repo-root <repo> recover
+```
 
-2. Run the deterministic preflight when the repo configures one:
+`recover` is an explicit operator action after a terminated worker. It releases
+only leases recorded by this state directory, REST-verifies each release, and
+safe-stops an incomplete job; it never reruns an unknown partial decision.
 
-   ```bash
-   python3 <repo>/launchpad/scripts/pr_review_batch.py --repo $REPO --pr $PR
-       --self tucktuck101 --session-since $SESSION_SINCE --json
-   ```
-
-   If `blocks_review` is true or `DO NOT DISPATCH` is set, hold the job and spend no
-   reviewer tokens on it.
-
-3. Claim the PR:
-
-   ```bash
-   python3 scripts/lease.py --config $config claim $REPO $PR --job $JOB
-   python3 scripts/lease.py --config $config verify $REPO $PR
-   ```
-
-   Claim first, release on every exit path. Release is not optional.
-
-4. Gather evidence once:
-
-   ```bash
-   python3 scripts/evidence.py --config $config $REPO $PR --lane incoming_review --job $JOB
-   ```
-
-   This writes `evidence.json`, `evidence.txt` (the nonce-enveloped bundle), and
-   `context.json` into `$STATE/jobs/$JOB/`. Reviewers read only `evidence.txt`.
-
-5. Run the panel with the assurance router:
-
-   ```bash
-   python3 scripts/panel.py --config $config $REPO $PR --lane incoming_review --job $JOB
-   ```
-
-   This chooses the minimum capability/effort/independence, applies the fallback
-   pools and cooldowns, and leaves `review-A.txt`, `review-B.txt`. Panel result as
-   its `completed_reviewers` count tells you whether it is full, degraded, or a
-   draft.
-
-6. Adjudicate (judgment). Two independent verdicts; verify each blocker against its
-   primary source; drop unsupported findings; deduplicate.
-
-7. Post only an advisory comment with GraphQL mutation `add_comment_review` (event COMMENT), with
-   `body` pulled from a file path and all PR content nonce-enveloped. Create
-   deduplicated `by:agent` issues only for confirmed High/Medium/Low findings, each
-   once per fingerprint.
-
-8. Release the lease (mandatory), verify it is off, mark the job `completed`.
+Each job's immutable artifact directory contains the evidence bundle and the
+panel outputs `review-A.txt` and `review-B.txt`; inspect those before judging a
+degraded or human-required result.
 
 ### Author-triage lane (your PRs)
 
@@ -118,10 +87,9 @@ GitHub operation.
 
 - `$CONFIG` defaults to `~/.config/review-queue-automation/config.json`. Copy
   `config.example.json` there and fill paths, login, model pools.
-- Job state and leases are SQLite under `$STATE dir`. Only one process writes a job
-  at a time; use the JSON state file under `jobs/` for progress notes.
-- Records every phase in the job dir: which script, when, exit status, output path.
-- Re-reviews are single model when mechanically narrow, otherwise a full panel.
+- Job state and leases are SQLite under `$STATE dir`. A non-blocking OS lock
+  serializes every dispatcher command per state directory; progress artifacts are
+  immutable files under `jobs/<job-id>/`.
 - Panel provider config and cooldowns live in `config, models`; never hardcode a
   model in this file or any prompt. `primary` and `secondary` are ordered
   fallback lanes: keep native Claude then Codex as the preferred pair, followed

@@ -103,7 +103,7 @@
     "full_rereview_ratio": 0.5
   },
   "dispatch": {
-    "incoming_concurrency": 2,
+    "incoming_concurrency": 1,
     "author_concurrency_per_repo": 1,
     "incoming_canary_approved": false,
     "author_canary_approved": false

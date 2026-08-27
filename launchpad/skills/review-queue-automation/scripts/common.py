@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import datetime as dt
+import fcntl
 import hashlib
 import json
 import os
@@ -14,6 +15,7 @@ import tempfile
 import urllib.error
 import urllib.parse
 import urllib.request
+from dataclasses import dataclass
 from typing import Any
 
 try:
@@ -109,6 +111,28 @@ def github_token() -> str:
     return token
 
 
+@dataclass
+class RuntimeLock:
+    """An exclusive, non-blocking process lock for one state directory.
+
+    The descriptor deliberately stays open for the lock's lifetime. `flock`
+    releases it automatically if this process crashes, so a later scheduled
+    sweep can recover without guessing whether the former worker is alive.
+    """
+
+    path: pathlib.Path
+    _handle: Any
+
+    def release(self) -> None:
+        if self._handle is None:
+            return
+        try:
+            fcntl.flock(self._handle.fileno(), fcntl.LOCK_UN)
+        finally:
+            self._handle.close()
+            self._handle = None
+
+
 class State:
     """SQLite-backed durable state: etag/link cache, PR meta, jobs, leases,
     providers, mutations, approval decisions, human requests, canaries."""
@@ -128,6 +152,34 @@ class State:
             raise StatePersistenceError(
                 f"SQLite state persistence did not open cleanly at {self.db_path}: {exc}"
             ) from exc
+
+    def try_runtime_lock(self, command: str) -> RuntimeLock | None:
+        """Acquire the state-dir command lock, or return None when another run owns it.
+
+        A sweep is intentionally serialized per state directory: the configured
+        batch limit controls *how many FIFO jobs one sweep processes*, not parallel
+        model execution. The owner record is diagnostic only; `flock` is the
+        authority and is released by the kernel on crash.
+        """
+        path = self.root / "runtime.lock"
+        try:
+            handle = path.open("a+", encoding="utf-8")
+            fcntl.flock(handle.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
+        except BlockingIOError:
+            try:
+                handle.close()
+            except UnboundLocalError:
+                pass
+            return None
+        except OSError as exc:
+            raise StatePersistenceError(f"runtime lock unavailable at {path}: {exc}") from exc
+
+        handle.seek(0)
+        handle.truncate()
+        handle.write(json.dumps({"command": command, "pid": os.getpid(), "started_at": utcnow()}) + "\n")
+        handle.flush()
+        os.fsync(handle.fileno())
+        return RuntimeLock(path, handle)
 
     def execute(self, sql: str, params: tuple = ()) -> Any:
         """Run a SQL statement through the typed persistence path.

@@ -88,6 +88,14 @@ def test_init_with_usable_pools_is_runtime_ready() -> None:
     assert ready is True, problems
 
 
+def test_config_rejects_parallel_workers_sharing_one_state_dir() -> None:
+    root = _git_repo()
+    config = _real_config(root)
+    config["dispatch"]["incoming_concurrency"] = 2
+    problems = cfgmod.validate_config(config, root)
+    assert "dispatch.incoming_concurrency must be 1: a state directory has one worker" in problems
+
+
 def test_init_refuses_existing_config() -> None:
     root = _git_repo()
     first = onb.init_onboard(root, slug="a/b", base="", preflight=None, login="alice")

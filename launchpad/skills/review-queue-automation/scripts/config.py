@@ -185,6 +185,16 @@ def validate_config(config: dict[str, Any], repo_root: pathlib.Path) -> list[str
     if not (isinstance(ratio, (int, float)) and 0 <= ratio <= 1):
         issues.append("assurance.full_rereview_ratio must be a number in [0,1]")
 
+    # ---- Managed worker ownership ----------------------------------------
+    # One State directory has one exclusive runtime lock. Parallel workers need
+    # separate state directories and explicit operator isolation; accepting a
+    # larger per-state setting would advertise concurrency the dispatcher refuses.
+    dispatch = config.get("dispatch", {}) or {}
+    for key in ("incoming_concurrency", "author_concurrency_per_repo"):
+        value = dispatch.get(key, 1)
+        if not isinstance(value, int) or isinstance(value, bool) or value != 1:
+            issues.append(f"dispatch.{key} must be 1: a state directory has one worker")
+
     # ---- Logging / retention ---------------------------------------------
     if not isinstance(logging_.get("max_stderr_bytes", 0), int) or logging_.get("max_stderr_bytes", 0) <= 0:
         issues.append("logging.max_stderr_bytes must be a positive integer")
@@ -399,7 +409,7 @@ def onboarding_defaults(repo_root) -> dict[str, Any]:
             "full_rereview_ratio": 0.5,
         },
         "dispatch": {
-            "incoming_concurrency": 2,
+            "incoming_concurrency": 1,
             "author_concurrency_per_repo": 1,
             "incoming_canary_approved": False,
             "author_canary_approved": False,
