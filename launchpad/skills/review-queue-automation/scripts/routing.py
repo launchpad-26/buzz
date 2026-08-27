@@ -36,7 +36,7 @@ class ResolvedRoute:
     provider: str
     fallback_position: int  # 0 = first rung
     reason: str = ""
-
+    qualified: dict[str, Any] = field(default_factory=dict)
 
 @dataclass
 class RoutedRun:
@@ -120,6 +120,7 @@ def resolve_route(
     provider_hint: str | None = None,
     state=None,
     cooldown_seconds: int = 1800,
+    effort: str = "medium",
 ) -> RoutedRun:
     """Resolve `requested_alias` to the first available concrete model via the
     subscription-first ladder. A human/escalation fallback position is returned
@@ -152,12 +153,31 @@ def resolve_route(
                 continue  # fallback-loop guard
             if not is_route_available(state, key):
                 continue  # cooldown => try next eligible route
+            from model_registry import qualified_route
+
+            # Explicit ladder entries predate the canonical pools and may omit
+            # runner/provider fields. The rung that selected them supplies those
+            # identities; qualification must not discard an otherwise executable
+            # legacy route.
+            qualified_entry = {
+                **entry,
+                "runner": entry.get("runner") or {"claude": "claude", "codex": "codex", "openrouter": "omp", "economical": "omp"}.get(rung, ""),
+                "provider": entry.get("provider") or entry.get("provider_family") or provider,
+                "selector": entry.get("selector") or model,
+            }
+            qualified = qualified_route(
+                qualified_entry,
+                effort=effort,
+                policy_version=str((cfg.get("policy") or {}).get("version") or "unversioned"),
+                default_prompt_version=str((cfg.get("models") or {}).get("prompt_version") or "v1"),
+            )
             run.record(ResolvedRoute(
                 requested_alias=requested_alias,
                 resolved_model=model,
                 provider=provider,
                 fallback_position=position,
                 reason=f"rung={rung}",
+                qualified=qualified,
             ))
             return run
         position += 1

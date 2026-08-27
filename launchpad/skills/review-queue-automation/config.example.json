@@ -25,12 +25,17 @@
   "models": {
     "cooldown_seconds": 1800,
     "timeout_seconds": 1800,
+    "prompt_version": "review-v1",
     "primary": [
       {
+        "alias": "CLAUDE_FAST",
         "runner": "claude",
-        "selector": "sonnet",
+        "selector": "claude-sonnet-4-5",
+        "model_version": "claude-sonnet-4-5",
         "provider_family": "anthropic",
         "capability": "frontier",
+        "execution_mode": "read_only",
+        "tools": [],
         "efforts": [
           "medium",
           "high",
@@ -60,10 +65,14 @@
     ],
     "secondary": [
       {
+        "alias": "CODEX_STRONG",
         "runner": "codex",
         "selector": "gpt-5.6-sol",
+        "model_version": "gpt-5.6-sol",
         "provider_family": "openai",
         "capability": "frontier",
+        "execution_mode": "read_only",
+        "tools": [],
         "efforts": [
           "medium",
           "high",

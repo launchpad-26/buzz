@@ -590,7 +590,14 @@ def run_panel(
                 # requested effort was enforceable by that transport.
                 try:
                     from ledger import record as _ledger_record
+                    from model_registry import qualified_route
 
+                    route = qualified_route(
+                        pool,
+                        effort=profile.effort,
+                        policy_version=str((config.get("policy") or {}).get("version") or "unversioned"),
+                        default_prompt_version=str((config.get("models") or {}).get("prompt_version") or "v1"),
+                    )
                     _ledger_record(
                         state, job_id=job, repo=repo, number=number,
                         head_sha=state.db.execute(
@@ -600,7 +607,8 @@ def run_panel(
                         payload=dict(pool.get("_invocation") or {},
                                      slot=SLOT_FILES[slot],
                                      capability=pool.get("capability", ""),
-                                     provider_family=pool.get("provider_family", "")),
+                                     provider_family=pool.get("provider_family", ""),
+                                     qualified_route=route),
                     )
                 except Exception:
                     pass  # the ledger explains runs; it must not break one

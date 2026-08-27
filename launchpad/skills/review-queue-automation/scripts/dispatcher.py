@@ -1172,18 +1172,32 @@ def resolve_snapshot(
             return pinned.config, {
                 "pinned": True, "resumed": True, **pinned.as_meta(),
             }
-        # The archive is gone; refuse to silently upgrade the job to a newer
-        # snapshot and say so instead.
+        # The archive is gone; refuse to silently upgrade this in-flight job.
         return local_cfg, {
             "pinned": False,
             "reason": f"pinned snapshot {pinned_hash[:12]} is no longer archived",
         }
-
     from policy import validate_policy
 
     try:
-        snap = build_snapshot(local_cfg, validate_policy=validate_policy)
-    except SnapshotError as exc:
+        # Model slug, prompt, tools, effort, and execution-mode changes must
+        # re-enter shadow. Running jobs returned above retain their old pin.
+        from model_registry import observe_runtime_routes
+
+        route_meta = observe_runtime_routes(
+            state,
+            local_cfg,
+            scope=str((local_cfg.get("repository") or {}).get("slug") or "default"),
+        )
+        effective_cfg = local_cfg
+        if route_meta["shadow_locked"]:
+            effective_cfg = json.loads(json.dumps(local_cfg))
+            effective_cfg.setdefault("approval", {})["mode"] = "shadow"
+            effective_cfg["approval"]["approval_enabled"] = False
+            effective_cfg["approval"]["live_canary_approved"] = False
+            effective_cfg.setdefault("authority", {})["approve"] = "shadow"
+        snap = build_snapshot(effective_cfg, validate_policy=validate_policy)
+    except (SnapshotError, ValueError) as exc:
         return local_cfg, {"pinned": False, "reason": str(exc)}
 
     active = store.active()
@@ -1191,7 +1205,13 @@ def resolve_snapshot(
         store.activate(snap)
     state.execute("UPDATE jobs SET snapshot_hash=? WHERE id=?", (snap.hash, job_id))
     state.db.commit()
-    return snap.config, {"pinned": True, "resumed": False, **snap.as_meta()}
+    return snap.config, {
+        "pinned": True,
+        "resumed": False,
+        **snap.as_meta(),
+        "route_qualification": route_meta,
+    }
+
 
 
 #: Seams over the lease so tests can intercept the GitHub assignee mutations.

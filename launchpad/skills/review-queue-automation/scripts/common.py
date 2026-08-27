@@ -279,6 +279,12 @@ class State:
               expires_at TEXT,
               UNIQUE (repo, number, head_sha, policy_hash)
             );
+            CREATE TABLE IF NOT EXISTS route_qualifications (
+              scope TEXT PRIMARY KEY,
+              fingerprint TEXT NOT NULL,
+              status TEXT NOT NULL,
+              updated_at TEXT NOT NULL
+            );
             CREATE TABLE IF NOT EXISTS human_requests (
               request_id TEXT PRIMARY KEY,
               repo TEXT NOT NULL,
