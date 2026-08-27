@@ -36,6 +36,7 @@ import {
   type SettingsSection,
   type SettingsSectionDescriptor,
 } from "./SettingsPanels";
+import { cohortSettingsSections } from "@/launchpad/settings/registry";
 
 export {
   DEFAULT_SETTINGS_SECTION,
@@ -190,20 +191,30 @@ export function SettingsView({
     () => new Map(visibleSections.map((entry) => [entry.value, entry])),
     [visibleSections],
   );
-  const visibleNavGroups = React.useMemo(
-    () =>
-      settingsNavGroups
-        .map((group) => ({
-          ...group,
-          sections: group.sections
-            .map((value) => visibleSectionByValue.get(value))
-            .filter(
-              (entry): entry is SettingsSectionDescriptor => entry != null,
-            ),
-        }))
-        .filter((group) => group.sections.length > 0),
-    [visibleSectionByValue],
-  );
+  const visibleNavGroups = React.useMemo(() => {
+    const upstreamGroups = settingsNavGroups
+      .map((group) => ({
+        ...group,
+        sections: group.sections
+          .map((value) => visibleSectionByValue.get(value))
+          .filter((entry): entry is SettingsSectionDescriptor => entry != null),
+      }))
+      .filter((group) => group.sections.length > 0);
+
+    // The registration seam (ADR-0051) only widens `settingsSections` — it
+    // doesn't add cohort values to this file's hardcoded nav groups, so a
+    // registered-but-ungrouped section would render (reachable by direct
+    // navigation) but never appear in the sidebar. This synthesizes one
+    // additive group from the registry so registering a cohort section is
+    // enough on its own, matching the seam's own intent.
+    const cohortGroupSections = cohortSettingsSections
+      .map((entry) => visibleSectionByValue.get(entry.value))
+      .filter((entry): entry is SettingsSectionDescriptor => entry != null);
+
+    return cohortGroupSections.length > 0
+      ? [...upstreamGroups, { label: "Help", sections: cohortGroupSections }]
+      : upstreamGroups;
+  }, [visibleSectionByValue]);
 
   return (
     <>
