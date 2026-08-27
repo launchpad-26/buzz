@@ -96,7 +96,7 @@ The system-context view of Buzz: the platform's boundary, every actor and extern
 system that directly touches it, and how each relates to it. This node stays at
 context level on purpose — it does not describe `buzz-relay`'s internal
 decomposition (event pipeline, subscription registry, crate dependency graph).
-For that, see [`ARCHITECTURE.md`](../../../../ARCHITECTURE.md), which every claim
+For that, see [`ARCHITECTURE.md`](../../../../../ARCHITECTURE.md), which every claim
 below cites and which a future `architecture/containers/*` corpus node should
 draw from once one exists.
 
