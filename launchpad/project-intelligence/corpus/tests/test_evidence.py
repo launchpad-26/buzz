@@ -107,6 +107,29 @@ class CollectCodeEvidenceTest(unittest.TestCase):
             with self.assertRaises(ValueError):
                 evidence.collect_code_evidence(root, "f.rs", "claim", "value", evidence_class="commit")
 
+    def test_refuses_an_absolute_path(self) -> None:
+        # An earlier revision checked only `(root / path).exists()`. pathlib's
+        # `/` operator silently discards the left operand when the right is
+        # absolute, so `root / "/etc/hosts"` evaluated to `/etc/hosts` itself
+        # and "validated" against the host filesystem.
+        with tempfile.TemporaryDirectory() as tmp:
+            with self.assertRaises(FileNotFoundError):
+                evidence.collect_code_evidence(Path(tmp), "/etc/hosts", "claim", "value")
+
+    def test_refuses_a_path_that_escapes_the_repository_via_traversal(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            with self.assertRaises(FileNotFoundError):
+                evidence.collect_code_evidence(
+                    Path(tmp), "../../../../etc/passwd", "claim", "value"
+                )
+
+    def test_refuses_a_bare_directory_name(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            (root / "launchpad").mkdir()
+            with self.assertRaises(FileNotFoundError):
+                evidence.collect_code_evidence(root, "launchpad", "claim", "value")
+
 
 class CollectAdrEvidenceTest(unittest.TestCase):
     def test_bundles_an_accepted_adr(self) -> None:
@@ -124,6 +147,13 @@ class CollectAdrEvidenceTest(unittest.TestCase):
 
         self.assertEqual(entry.evidence_class, "adr")
         self.assertTrue(entry.fact_eligible)
+
+    def test_refuses_an_adr_path_that_escapes_the_repository(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            with self.assertRaises(FileNotFoundError):
+                evidence.collect_adr_evidence(
+                    Path(tmp), "../../../../etc/passwd", "claim", "value"
+                )
 
 
 class CollectCommitEvidenceTest(unittest.TestCase):

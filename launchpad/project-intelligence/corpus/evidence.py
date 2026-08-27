@@ -158,6 +158,33 @@ class GitHubClient:
         return self._get(f"repos/{repo}/issues/{number}/comments")
 
 
+def _resolve_contained_path(root: Path, path: str) -> Path:
+    """Resolve a repository-relative citation path, enforcing containment.
+
+    Mirrors `validate.py`'s `_classify_repo_path`. An earlier revision here
+    checked only `(root / path).exists()`, so `../../../../etc/passwd`
+    escaped the repository entirely and a bare directory name like
+    `launchpad` passed as though it were a file -- pathlib's `/` operator
+    also silently discards the left operand when the right is absolute, so
+    an absolute path must be rejected explicitly rather than existence
+    checked. Containment is enforced on the RESOLVED path, not the literal
+    one, so a symlink pointing out of the tree is caught rather than
+    followed.
+    """
+    if PurePosixPath(path).is_absolute():
+        raise FileNotFoundError(f"no such file under repo root: {path}")
+    resolved_root = root.resolve()
+    try:
+        candidate = (resolved_root / path).resolve()
+    except (OSError, RuntimeError) as exc:
+        raise FileNotFoundError(f"no such file under repo root: {path}") from exc
+    if not candidate.is_relative_to(resolved_root):
+        raise FileNotFoundError(f"no such file under repo root: {path}")
+    if not candidate.is_file():
+        raise FileNotFoundError(f"no such file under repo root: {path}")
+    return candidate
+
+
 def collect_code_evidence(
     root: Path,
     path: str,
@@ -172,8 +199,7 @@ def collect_code_evidence(
         raise ValueError(f"collect_code_evidence only accepts code/test/spec, got {evidence_class!r}")
     if _is_credential_like_path(path):
         raise ProhibitedPathError(f"refusing to bundle credential-shaped path: {path}")
-    if not (root / path).exists():
-        raise FileNotFoundError(f"no such file under repo root: {path}")
+    _resolve_contained_path(root, path)
     source_id = f"{path}:{line}" if line is not None else path
     return EvidenceEntry(
         evidence_class=evidence_class,
@@ -188,8 +214,7 @@ def collect_code_evidence(
 def collect_adr_evidence(root: Path, adr_path: str, claim_key: str, value: str) -> EvidenceEntry:
     if _is_credential_like_path(adr_path):
         raise ProhibitedPathError(f"refusing to bundle credential-shaped path: {adr_path}")
-    if not (root / adr_path).exists():
-        raise FileNotFoundError(f"no such file under repo root: {adr_path}")
+    _resolve_contained_path(root, adr_path)
     return EvidenceEntry(
         evidence_class="adr",
         claim_key=claim_key,
