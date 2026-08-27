@@ -86,6 +86,7 @@ def seed_job(
         "deletions": 0,
         "files": [{"filename": "docs/a.md"}],
         "head": {"sha": head},
+        "node_id": f"PR_node_{repo}_{number}",
     }
     state.db.execute(
         "INSERT INTO prs(repo,number,head_sha,updated_at,payload,open,last_seen) VALUES(?,?,?,?,?,1,?)",
@@ -155,22 +156,152 @@ def restore_dispatcher(saved: dict) -> None:
         setattr(dispatcher, k, v)
 
 
+def patch_approval(fake):
+    """Install a fake `approval_action.approve`; returns the previous callable.
+
+    `_execute_live_approval` imports `approve` at call time, so patching the
+    module attribute is what actually intercepts the mutation.
+    """
+    import approval_action
+
+    previous = approval_action.approve
+    approval_action.approve = fake
+    return previous
+
+
+def restore_approval(previous) -> None:
+    import approval_action
+
+    approval_action.approve = previous
+
+
+def fake_approve(ok: bool, status: str, message: str = "", *, calls: list | None = None):
+    def run(state, **kwargs):
+        if calls is not None:
+            calls.append(kwargs)
+        return ok, status, message
+
+    return run
+
+
 # --- persisted facts drive the evaluation (never hardcoded) ------------------
-def test_live_path_consumes_persisted_facts_and_reports_actual_state() -> None:
+def test_live_path_executes_approval_and_completes() -> None:
+    """An eligible live decision must actually reach the verified APPROVE, not
+    dead-end in `approval_revalidation`."""
     state = State({"state_dir": tempfile.mkdtemp()})
     saved = patch_dispatcher(run_panel=fake_panel("SUPPORTED"))
+    calls: list = []
+    previous = patch_approval(fake_approve(True, "approved", calls=calls))
     try:
         cfg = _config("live")
         jid = seed_job(state, number=3, head="h3")
         seed_evidence(state, jid)
         seed_verdicts(state, jid, [_clean_verdict("claude-sonnet", "anthropic"),
                                    _clean_verdict("gpt-5.6", "openai")])
-        result = dispatcher.run_job(cfg, {"job_id": jid, "repo": "o/r", "number": 3, "lane": "incoming_review"}, state=state)
+        result = dispatcher.run_job(
+            cfg, {"job_id": jid, "repo": "o/r", "number": 3, "lane": "incoming_review"},
+            state=state,
+        )
         final = state.current_status(jid)
-        assert result["status"] == final and final == "approval_revalidation", result
+        assert result["status"] == final == "completed_auto_approved", result
         assert result["approval_disposition"] == "live"
+        assert result["approval_outcome"] == "approved"
+        # the eligible decision was persisted and handed to the executor
         assert state.db.execute("SELECT 1 FROM approval_decisions").fetchone() is not None
+        assert len(calls) == 1, "approve must be invoked exactly once"
+        assert calls[0]["pr_node_id"] == "PR_node_o/r_3"
+        assert calls[0]["head_sha"] == "h3"
+        assert calls[0]["login"] == "tucktuck101"
     finally:
+        restore_approval(previous)
+        restore_dispatcher(saved)
+        state.close()
+
+
+def test_live_denial_queues_human_and_does_not_complete() -> None:
+    state = State({"state_dir": tempfile.mkdtemp()})
+    saved = patch_dispatcher(run_panel=fake_panel("SUPPORTED"))
+    previous = patch_approval(fake_approve(False, "denied", "authority not live"))
+    try:
+        cfg = _config("live")
+        jid = seed_job(state, number=4, head="h4")
+        seed_evidence(state, jid)
+        seed_verdicts(state, jid, [_clean_verdict("claude-sonnet", "anthropic"),
+                                   _clean_verdict("gpt-5.6", "openai")])
+        result = dispatcher.run_job(
+            cfg, {"job_id": jid, "repo": "o/r", "number": 4, "lane": "incoming_review"},
+            state=state,
+        )
+        assert state.current_status(jid) == "human_approval_pending", result
+        assert result["approval_outcome"] == "denied"
+        row = state.db.execute(
+            "SELECT job_id FROM human_requests WHERE state='pending'"
+        ).fetchone()
+        assert row and row["job_id"] == jid, "denial must leave a durable human request"
+    finally:
+        restore_approval(previous)
+        restore_dispatcher(saved)
+        state.close()
+
+
+def test_live_uncertain_mutation_safe_stops_without_retry() -> None:
+    """An unconfirmable mutation must never be retried blind."""
+    state = State({"state_dir": tempfile.mkdtemp()})
+    saved = patch_dispatcher(run_panel=fake_panel("SUPPORTED"))
+    calls: list = []
+    previous = patch_approval(
+        fake_approve(False, "uncertain", "cannot confirm review landed", calls=calls)
+    )
+    try:
+        cfg = _config("live")
+        jid = seed_job(state, number=5, head="h5")
+        seed_evidence(state, jid)
+        seed_verdicts(state, jid, [_clean_verdict("claude-sonnet", "anthropic"),
+                                   _clean_verdict("gpt-5.6", "openai")])
+        result = dispatcher.run_job(
+            cfg, {"job_id": jid, "repo": "o/r", "number": 5, "lane": "incoming_review"},
+            state=state,
+        )
+        assert state.current_status(jid) == "safe_stop", result
+        assert result["approval_outcome"] == "uncertain"
+        assert len(calls) == 1, "an uncertain mutation must not be reattempted"
+        # no human request: the mutation may already have landed
+        assert state.db.execute("SELECT 1 FROM human_requests").fetchone() is None
+    finally:
+        restore_approval(previous)
+        restore_dispatcher(saved)
+        state.close()
+
+
+def test_live_missing_node_id_safe_stops_before_any_mutation() -> None:
+    state = State({"state_dir": tempfile.mkdtemp()})
+    saved = patch_dispatcher(run_panel=fake_panel("SUPPORTED"))
+    calls: list = []
+    previous = patch_approval(fake_approve(True, "approved", calls=calls))
+    try:
+        cfg = _config("live")
+        jid = seed_job(state, number=6, head="h6")
+        seed_evidence(state, jid)
+        seed_verdicts(state, jid, [_clean_verdict("claude-sonnet", "anthropic"),
+                                   _clean_verdict("gpt-5.6", "openai")])
+        # Drop the cached node_id so the executor cannot identify the PR.
+        payload = json.loads(state.db.execute(
+            "SELECT payload FROM prs WHERE repo='o/r' AND number=6"
+        ).fetchone()["payload"])
+        payload.pop("node_id")
+        state.db.execute("UPDATE prs SET payload=? WHERE repo='o/r' AND number=6",
+                         (json.dumps(payload),))
+        state.db.commit()
+
+        result = dispatcher.run_job(
+            cfg, {"job_id": jid, "repo": "o/r", "number": 6, "lane": "incoming_review"},
+            state=state,
+        )
+        assert state.current_status(jid) == "safe_stop", result
+        assert result["approval_outcome"] == "missing_node_id"
+        assert calls == [], "no mutation may be attempted without a PR node id"
+    finally:
+        restore_approval(previous)
         restore_dispatcher(saved)
         state.close()
 

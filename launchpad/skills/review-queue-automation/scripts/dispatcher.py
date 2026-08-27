@@ -335,6 +335,137 @@ def degrade(
     return target
 
 
+def _cached_pr_node_id(state: State, repo: str, number: int) -> str:
+    """Read the PR node id cached by queue.py. Empty string when absent."""
+    payload = _pr_payload(state, repo, number)
+    node = payload.get("node_id")
+    return str(node) if node else ""
+
+
+def _execute_live_approval(
+    local_cfg: dict[str, Any],
+    job: dict[str, Any],
+    head_sha: str,
+    logger: JobLogger | None,
+    state: State,
+    *,
+    decision: Any,
+    decision_steps: list[Any],
+    final_profile: Any,
+    verdicts: list[dict[str, Any]],
+    panel_decision: str,
+) -> dict[str, Any]:
+    """Run the guarded APPROVE mutation for an eligible live decision.
+
+    The job stays in `approval_revalidation` for the duration of the call, because
+    `approval_action.approve` performs the mandatory REST revalidation itself and
+    `approval_action` is not a legal predecessor of the human queue. On success the
+    job advances `approval_action -> completed_auto_approved`. Every failure mode
+    lands on a distinct, legal state:
+
+      denied / stale  -> durable human request + `human_approval_pending`
+      uncertain       -> `safe_stop` (the mutation may have landed; never retry blind)
+      no decision / transport failure / missing node id -> `safe_stop`
+
+    The mutation is idempotency-keyed inside `execute_approval`, so a crash during
+    the call is safe to re-enter: revalidation re-runs and the mutation is not
+    duplicated.
+    """
+    from approval_action import (
+        APPROVED,
+        DENIED,
+        STALE,
+        UNCERTAIN,
+        approve,
+    )
+
+    repo = job["repo"]
+    number = job["number"]
+    job_id = job["job_id"]
+
+    def _result(status_note: str, extra: dict[str, Any] | None = None) -> dict[str, Any]:
+        out = {
+            "job": job_id, "repo": repo, "number": number,
+            "decision": panel_decision,
+            "status": state.current_status(job_id),
+            "approval_disposition": decision.disposition,
+            "approval_outcome": status_note,
+            "final_profile": final_profile.as_dict(),
+            "steps": [{"profile": s.profile.as_dict(), "decision": s.decision}
+                      for s in decision_steps],
+        }
+        out.update(extra or {})
+        return out
+
+    pr_node_id = _cached_pr_node_id(state, repo, number)
+    if not pr_node_id:
+        reason = f"no cached PR node_id for {repo}#{number}; run queue.py before approval"
+        _log(logger, "error", body=reason, phase="approval", outcome="safe_stop")
+        _transition_guarded(state, job_id, "safe_stop", logger=logger,
+                            phase="approval", reason=reason)
+        return _result("missing_node_id", {"reason": reason})
+
+    ok, outcome, message = approve(
+        state,
+        decision_id=decision.decision_id,
+        repo=repo,
+        number=number,
+        head_sha=head_sha,
+        policy_hash=decision.policy_hash,
+        pr_node_id=pr_node_id,
+        login=local_cfg.get("login", ""),
+        config=local_cfg,
+    )
+    _log(logger, "info" if ok else "warning",
+         body=f"approval mutation -> {outcome}", phase="approval", outcome=outcome,
+         attributes={"approval.decision_id": decision.decision_id,
+                     "approval.outcome": outcome})
+
+    if ok and outcome == APPROVED:
+        _transition_guarded(state, job_id, "approval_action", logger=logger,
+                            phase="approval", reason="approve mutation verified")
+        _transition_guarded(state, job_id, "completed_auto_approved", logger=logger,
+                            phase="approval", reason="auto-approved on reviewed head")
+        return _result(outcome, {"decision_id": decision.decision_id})
+
+    if outcome in (DENIED, STALE):
+        expiry = int((local_cfg.get("human_queue") or {}).get("expiry_minutes", 1440))
+        request = enqueue_human(
+            state, repo=repo, number=number, head_sha=head_sha,
+            policy=local_cfg, job_id=job_id,
+            summary=f"{repo}#{number} approval blocked at revalidation",
+            assurance=final_profile.as_dict(),
+            reviewers=[v.get("model", "") for v in verdicts],
+            risk_score=decision.risk_score, risk_band=decision.risk_band_name,
+            protected=decision.protected, failed_gates=decision.failed_gates,
+            ci={}, findings=[],
+            recommendation="require human approval",
+            rationale=f"{outcome}: {message}"[:800],
+            action="approve", expiry_minutes=expiry,
+        )
+        notification = "sent"
+        try:
+            notify_human(local_cfg, request)
+        except Exception as exc:  # keep the request queued, nonblocking
+            notification = f"notification failure (request preserved): {exc}"
+            _log(logger, "warning", body="notification failure; request preserved",
+                 phase="approval", outcome="notification_failed")
+        _transition_guarded(state, job_id, "human_approval_pending", logger=logger,
+                            phase="approval", reason=f"{outcome}: {message}"[:200])
+        return _result(outcome, {"reason": message,
+                                 "request_id": request.get("request_id"),
+                                 "notification": notification})
+
+    # UNCERTAIN and every remaining failure: stop safely, never retry blind.
+    reason = f"{outcome}: {message}"
+    severity = "error" if outcome == UNCERTAIN else "warning"
+    _log(logger, severity, body=f"approval halted ({outcome})", phase="approval",
+         outcome="safe_stop")
+    _transition_guarded(state, job_id, "safe_stop", logger=logger,
+                        phase="approval", reason=reason[:200])
+    return _result(outcome, {"reason": message})
+
+
 def _run_job_inner(
     local_cfg: dict[str, Any],
     job: dict[str, Any],
@@ -409,6 +540,11 @@ def _run_job_inner(
     if res.disposition == "live":
         _transition_guarded(state, job_id, "approval_revalidation", logger=logger,
                             phase="approval", reason=res.reason or res.disposition)
+        return _execute_live_approval(
+            local_cfg, job, head_sha, logger, state,
+            decision=res, decision_steps=steps, final_profile=final_profile,
+            verdicts=verdicts, panel_decision=decision,
+        )
     elif res.disposition == "shadow":
         _transition_guarded(state, job_id, "advisory_action", logger=logger,
                             phase="approval",

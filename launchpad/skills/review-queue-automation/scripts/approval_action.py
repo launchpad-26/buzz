@@ -21,6 +21,7 @@ protected trigger always prevents live approval.
 from __future__ import annotations
 
 import argparse
+import json
 import sys
 from typing import Any, Callable
 
@@ -111,6 +112,17 @@ def _real_rest_wiring(config, state, repo, number, head_sha, login):
     return revalidate, verify
 
 
+#: Outcome classifications returned by `approve`. The dispatcher maps these to
+#: distinct job states, so a denial (human can still decide) is never confused
+#: with an uncertain mutation (must stop, never blindly retry).
+APPROVED = "approved"
+NO_DECISION = "no_decision"
+DENIED = "denied"
+STALE = "stale"
+UNCERTAIN = "uncertain"
+FAILED = "failed"
+
+
 def approve(
     state,
     *,
@@ -126,19 +138,20 @@ def approve(
     http_post: Callable[..., tuple[int, dict[str, Any]]] | None = None,
     rest_before: Callable[[], Any] | None = None,
     rest_after: Callable[[], Any] | None = None,
-) -> tuple[bool, str]:
+) -> tuple[bool, str, str]:
     """Execute the APPROVE mutation under an eligible, non-expired decision.
 
-    The decision is loaded from SQLite by ID; current repo/PR/head/policy are
-    compared independently against the stored record, then `execute_approval`
-    enforces mandatory REST revalidation (before) and review verification
-    (after). Transport/read callables are injectable for fake tests; when absent
-    they are wired to the real REST allowlist so production never approves
-    without live revalidation + verification.
+    Returns `(ok, status, message)` where `status` is one of the module-level
+    classifications. The decision is loaded from SQLite by ID; current
+    repo/PR/head/policy are compared independently against the stored record,
+    then `execute_approval` enforces mandatory REST revalidation (before) and
+    review verification (after). Transport/read callables are injectable for fake
+    tests; when absent they are wired to the real REST allowlist so production
+    never approves without live revalidation + verification.
     """
     decision = load_eligible_decision(state, decision_id)
     if decision is None:
-        return False, f"no eligible decision record for id {decision_id}"
+        return False, NO_DECISION, f"no eligible decision record for id {decision_id}"
 
     if rest_before is None or rest_after is None:
         rest_before, rest_after = _real_rest_wiring(
@@ -160,14 +173,14 @@ def approve(
             rest_after=rest_after,
         )
     except (ApprovalRecordRequiredError, PermissionAuthorityError) as exc:
-        return False, str(exc)
+        return False, DENIED, str(exc)
     except DecisionStaleError as exc:
-        return False, str(exc)
+        return False, STALE, str(exc)
     except MutationUncertainError as exc:
-        return False, str(exc)
+        return False, UNCERTAIN, str(exc)
     except RuntimeError as exc:
-        return False, str(exc)
-    return True, "approved"
+        return False, FAILED, str(exc)
+    return True, APPROVED, "approved"
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -188,7 +201,7 @@ def main(argv: list[str] | None = None) -> int:
         return 1
     state = make_state(cfg)
     try:
-        ok, msg = approve(
+        ok, status, msg = approve(
             state,
             decision_id=args.decision_id,
             repo=args.repo, number=args.number,
@@ -196,7 +209,7 @@ def main(argv: list[str] | None = None) -> int:
             pr_node_id=args.pr_node_id, login=args.login,
             body=args.body, config=cfg,
         )
-        print({"ok": ok, "message": msg})
+        print(json.dumps({"ok": ok, "status": status, "message": msg}, indent=2))
         return 0 if ok else 1
     finally:
         state.close()
