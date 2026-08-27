@@ -11,7 +11,7 @@ import tempfile
 
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent.parent / "scripts"))
 
-from action_gate import approve_gate, request_changes_gate, Gate  # noqa: E402
+from action_gate import request_changes_gate, Gate  # noqa: E402
 from approval import RequestQueueError, set_execution_state  # noqa: E402
 from common import State, job_id  # noqa: E402
 from risk import AssuranceEvaluation, compute_assurance  # noqa: E402
@@ -37,26 +37,55 @@ def _assurance_ok(**kw) -> AssuranceEvaluation:
     )
 
 
-# ---- request-changes gate: separate live authority + verified blocker ---------
-def test_approve_and_rc_gates_are_independent() -> None:
-    # approve live but request_changes disabled => approve gate path only
+# ---- approve / request-changes authorities are independent --------------------
+def _approve_gate_allows(cfg: dict) -> bool:
+    """Run the REAL approval eligibility path and report whether authority passed.
+
+    Approval eligibility lives in `approval_evaluate.compute_gates`, not in
+    `action_gate`; this asserts the authority axis through the path that actually
+    runs in production.
+    """
+    from approval_evaluate import PRFacts, compute_gates
+
+    clean = {"signal": "SUPPORTED", "recommendation": "clean", "findings": [],
+             "good": ["x"], "missing_evidence": [], "_schema_ok": True}
+    facts = PRFacts(draft=False, author_login="alice", head_sha="H",
+                    files=["docs/a.md"], additions=2, checks_ok=True,
+                    adjudication_complete=True, complexity=0, evidence_fresh=True)
+    gates = compute_gates(
+        {**cfg, "repository": {"slug": "o/r"},
+         "approval": {"mode": "live", "approval_enabled": True,
+                       "live_canary_approved": True, "effective_risk_max": 24,
+                       "complexity_max": 2, "file_limit": 50, "line_limit": 1000}},
+        facts,
+        [dict(clean, model="opus", provider_family="anthropic"),
+         dict(clean, model="ds", provider_family="openrouter")],
+        ["opus", "ds"], 0, "low", "me",
+        head_sha="H", profile={"independence": "challenger"},
+    )
+    return gates.approve_authority_live
+
+
+def test_disabling_request_changes_does_not_disable_approve() -> None:
     cfg = _cfg(approve="live", request_changes="disabled", comment="live")
-    pr = {"draft": False, "head": "H"}
-    # request-changes must be denied when its own authority is disabled
-    g = request_changes_gate(
-        cfg=cfg, repo="o/r", head_sha="H", pr=pr, verified_blocker=True,
-        blocker_evidence_sufficient=True, assurance=_assurance_ok(),
-        revalidate=lambda: True,
+    gate = request_changes_gate(
+        cfg=cfg, repo="o/r", head_sha="H", pr={"draft": False, "head": "H"},
+        verified_blocker=True, blocker_evidence_sufficient=True,
+        assurance=_assurance_ok(), revalidate=lambda: True,
     )
-    assert not g.allowed and "authority" in g.failed
-    # approve still independent
-    g2 = approve_gate(
-        cfg=cfg, repo="o/r", head_sha="H", pr=pr, reviewers_complete=True,
-        no_self_approval=True, blockers=[], high_findings=[],
-        assurance=_assurance_ok(), policy_permits=True, decision_usable=True,
-        idempotency_key_unused=True, revalidate=lambda: True,
+    assert not gate.allowed and "authority" in gate.failed
+    assert _approve_gate_allows(cfg) is True
+
+
+def test_disabling_approve_does_not_disable_request_changes() -> None:
+    cfg = _cfg(approve="disabled", request_changes="live", comment="live")
+    gate = request_changes_gate(
+        cfg=cfg, repo="o/r", head_sha="H", pr={"draft": False, "head": "H"},
+        verified_blocker=True, blocker_evidence_sufficient=True,
+        assurance=_assurance_ok(), revalidate=lambda: True,
     )
-    assert g2.allowed
+    assert gate.allowed, gate.failed
+    assert _approve_gate_allows(cfg) is False
 
 
 def test_rc_rejects_no_verified_blocker() -> None:
@@ -95,13 +124,16 @@ def test_final_revalidation_not_hardcoded() -> None:
         assurance=_assurance_ok(), revalidate=lambda: False,
     )
     assert not g.allowed and "final_revalidation" in g.failed
-    a = approve_gate(
+
+
+def test_absent_revalidation_is_a_denial() -> None:
+    """An unavailable revalidation is never treated as a pass."""
+    g = request_changes_gate(
         cfg=_cfg(), repo="o/r", head_sha="H", pr={"draft": False, "head": "H"},
-        reviewers_complete=True, no_self_approval=True, blockers=[], high_findings=[],
-        assurance=_assurance_ok(), policy_permits=True, decision_usable=True,
-        idempotency_key_unused=True, revalidate=None,
+        verified_blocker=True, blocker_evidence_sufficient=True,
+        assurance=_assurance_ok(), revalidate=None,
     )
-    assert not a.allowed and "final_revalidation" in a.failed
+    assert not g.allowed and "final_revalidation" in g.failed
 
 
 def test_rc_allows_verified_blocker() -> None:

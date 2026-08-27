@@ -39,10 +39,11 @@ from common import State
 VALID_OUTCOMES = {"clean", "adverse", "contested", "unknown"}
 
 # Gates that reflect whether live approval is *activated* rather than whether the
-# PR is eligible. In shadow mode they are definitionally false (mode != live), so
-# they are excluded when deciding "would_auto_approve". The decision signal is the
-# PR-quality gate set; activation is a separate authorization precondition.
-ACTIVATION_GATES = {"approval_enabled", "live_canary_approved"}
+# PR is eligible. In shadow mode they are definitionally false (mode != live and
+# authority is not granted), so they are excluded when deciding
+# "would_auto_approve". The decision signal is the PR-quality gate set;
+# activation is a separate authorization precondition.
+ACTIVATION_GATES = {"approval_enabled", "live_canary_approved", "approve_authority_live"}
 
 
 @dataclass

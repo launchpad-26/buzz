@@ -50,6 +50,8 @@ def _config(mode: str = "human_escalation") -> dict:
     if mode == "live":
         cfg["approval"]["approval_enabled"] = True
         cfg["approval"]["live_canary_approved"] = True
+        # authority.approve is conjunctive with approval.mode; both are required.
+        cfg["authority"] = {**(cfg.get("authority") or {}), "approve": "live"}
     return cfg
 
 

@@ -208,6 +208,10 @@ class ApprovalState:
     evaluation; no other module re-implements the per-gate semantics."""
 
     approval_enabled: bool = False
+    #: `authority.approve` must independently be `live`. The config carries two
+    #: authority mechanisms (per-activity `authority.*` and `approval.mode`); they
+    #: are conjunctive, so disabling either one disables auto-approval.
+    approve_authority_live: bool = False
     live_canary_approved: bool = False
     pr_open_not_draft: bool = False
     author_not_identity: bool = False
@@ -233,6 +237,7 @@ class ApprovalState:
         return all(
             (
                 self.approval_enabled,
+                self.approve_authority_live,
                 self.live_canary_approved,
                 self.pr_open_not_draft,
                 self.author_not_identity,
@@ -261,8 +266,9 @@ class ApprovalState:
 
     def all_gates(self) -> list[str]:
         return [
-            "approval_enabled", "live_canary_approved", "pr_open_not_draft",
-            "author_not_identity", "head_matches", "no_protected_trigger",
+            "approval_enabled", "approve_authority_live", "live_canary_approved",
+            "pr_open_not_draft", "author_not_identity", "head_matches",
+            "no_protected_trigger",
             "bounded_change", "effective_risk_le", "complexity_le", "limits_pass",
             "checks_complete_ok", "evidence_fresh", "assurance_met",
             "required_reviewers_complete", "distinct_reviewers", "valid_verdicts",

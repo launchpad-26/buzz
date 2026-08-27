@@ -140,6 +140,15 @@ def compute_gates(
     mode = approval.get("mode", "disabled")
     live_enabled = approval.get("approval_enabled", False)
     live_canary = approval.get("live_canary_approved", False)
+    # The config carries two authority mechanisms. `approval.mode`/`approval_enabled`
+    # is the approval-specific switch; `authority.approve` is the per-activity
+    # switch that `request_changes` already honours. They are CONJUNCTIVE: an
+    # operator who disables either one has disabled auto-approval. Previously only
+    # the former was consulted, so `authority.approve: disabled` was ignored.
+    from authority import mode_for
+
+    slug = (cfg.get("repository") or {}).get("slug", "")
+    approve_authority = mode_for(cfg, slug, "approve") == "live"
     eff_max = int(approval.get("effective_risk_max", 24))
     compl_max = int(approval.get("complexity_max", 2))
     file_limit = int(approval.get("file_limit", 50))
@@ -172,6 +181,7 @@ def compute_gates(
 
     g = ApprovalState(
         approval_enabled=bool(live_enabled) and mode == "live",
+        approve_authority_live=approve_authority,
         live_canary_approved=bool(live_canary),
         pr_open_not_draft=not pr.draft,
         author_not_identity=pr.author_login != login,

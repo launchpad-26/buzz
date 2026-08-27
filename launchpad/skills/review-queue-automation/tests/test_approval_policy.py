@@ -50,6 +50,9 @@ def _cfg(**over) -> dict:
             "protected_triggers": [r"(^|/)security/", r"(^|/)migrations/"],
         },
         "github": {"read_only": True, "api_version": "2022-11-28"},
+        # `authority.approve` is conjunctive with `approval.mode`; a fixture that
+        # means "live approval is configured" must grant both.
+        "authority": {"approve": "live", "request_changes": "disabled"},
     }
     cfg.update(over)
     return cfg

@@ -45,6 +45,7 @@ def minimal_cfg(**over) -> dict:
         "models": {"primary": [], "secondary": []},
         "assurance": {"large_diff_lines": 700},
         "dispatch": {"incoming_canary_approved": True, "author_canary_approved": True},
+        "authority": {"approve": "live", "request_changes": "disabled"},
         "approval": {
             "mode": "disabled", "approval_enabled": False, "live_canary_approved": False,
             "effective_risk_max": 24, "complexity_max": 2, "file_limit": 50, "line_limit": 1000,
