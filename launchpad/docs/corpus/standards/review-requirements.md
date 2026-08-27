@@ -11,10 +11,15 @@ evidence:
     entry_class: FACT
     evidence:
       - "commit 919886b4192df6251de50c547548ecae5d85afce"
-  - statement: "The launchpad branch is protected: a pull request there requires at least two approving reviews from reviewers with write access, and an author cannot approve their own pull request."
+  - statement: "The launchpad branch is protected: a pull request there requires at least one approving review from a reviewer with write access, and an author cannot approve their own pull request. `launchpad/AGENTS.md`'s own text still states two approving reviews are required; `ADR-0019` corrects that figure, verified live with repository admin on 2026-08-21 -- the setting was already 1 before any change that day -- and under `decision-references.md`'s rule that configuration outranks documentation for a behaviour claim, the ADR's figure governs."
     entry_class: FACT
     evidence:
       - "launchpad/AGENTS.md"
+      - "launchpad/decisions/ADR-0019-review-checks-gate-only-when-deterministic.md"
+  - statement: "Zero required status checks are configured on the launchpad branch, and there are zero repository rulesets; enforcement is classic branch protection only. The corpus-validate workflow that runs validate.py reports on every pull request touching the corpus root but is not a required check, so it does not by itself block a merge. ADR-0019 records this as a known, deliberate gap, deferred until buzz-infrastructure #105's CI/CD pipeline lands."
+    entry_class: FACT
+    evidence:
+      - "launchpad/decisions/ADR-0019-review-checks-gate-only-when-deterministic.md"
   - statement: "Agents may draft any issue, pull request or ADR in full, but may not decide an ADR outcome, approve a pull request, or close another agent's escalation; they raise concerns and never clear them."
     entry_class: FACT
     evidence:
@@ -179,7 +184,7 @@ before approving a corpus change.
 - No document found -- `AGENTS.md`, `README.md`, `schema/README.md`, `node.schema.json`,
   `ADR-0028`, `ADR-0029`, `CONTRACT.md` -- describes a second approval step, a required
   corpus reviewer role, or a distinct sign-off beyond `launchpad/AGENTS.md` §6's ordinary
-  two-approval rule.
+  one-approval rule.
 
 So "review requirements for a corpus node" is not a second gate stacked on top of ordinary
 review. It is `launchpad/AGENTS.md` §5-§6's ordinary process, **plus a content-verification
@@ -274,16 +279,23 @@ since nothing mechanical does.
 
 ## Enforcement, and where it stops
 
-**Enforced mechanically**, by `validate.py` in CI on every pull request touching the
+**Runs mechanically**, via `validate.py` in CI on every pull request touching the
 corpus root: schema conformance, citation shape and resolution, relationship *target*
-existence, duplicate ids, non-canonical files, and the generated-content boundary. A node
-violating any of these does not merge.
+existence, duplicate ids, non-canonical files, and the generated-content boundary. **This
+is not currently a required status check.** `ADR-0019` records zero required status
+checks configured on `launchpad` (and zero repository rulesets -- enforcement is classic
+branch protection only), deferred until `buzz-infrastructure` #105's CI/CD pipeline
+lands. So today a node violating any of these can still be merged; nothing mechanical
+stops it, and a reviewer failing to notice a red run is the only thing standing in the
+way, same as for the MUSTs below.
 
-**Enforced by review only**, and by nothing else: every MUST above. There is no
-corpus-specific approval gate distinct from `launchpad/AGENTS.md` §6's ordinary two-review
-requirement -- see *Is there a corpus-specific approval gate beyond ordinary pull-request
-review?* -- so that ordinary review is the only mechanism available to hold these MUSTs,
-and this document is what that review has to include when the diff touches the corpus.
+**Enforced by review, and today by nothing else**: both the MUSTs above and the
+mechanical checks just described, since neither is a required status check yet. There is
+no corpus-specific approval gate distinct from `launchpad/AGENTS.md` §6's ordinary
+one-review requirement -- see *Is there a corpus-specific approval gate beyond ordinary
+pull-request review?* -- so that ordinary review is the only mechanism actually holding
+any of this, mechanical or MUST, and this document is what that review has to include
+when the diff touches the corpus.
 
 | What passes mechanically | What it does not mean |
 |---|---|
@@ -291,13 +303,18 @@ and this document is what that review has to include when the diff touches the c
 | An `INFERENCE` carries an in-range `confidence` | The entry is reasoning rather than a disguised decision (MUST 2) |
 | A `relationships[].target` matches a known node id | The declared `type`'s direction is true (MUST 6) |
 | `status: flagged` validates like any other status | The contradiction was actually recorded and escalated (MUST 8) |
-| The pull request carries two approvals | Either reviewer opened even one cited source |
+| The pull request carries one approval | The approving reviewer opened even one cited source |
+| `validate.py` runs green in CI | The run was a required check -- it is not (`ADR-0019`) |
 
 ## Exceptions and escalation
 
-**There is no exception process for the structural checks.** They are enforced before
-merge and cannot be waived by agreement; changing them is a schema change under
-`launchpad/docs/corpus/schema/COMPATIBILITY.md`, not an exception to this document.
+**There is no documented exception process for the structural checks, but there is also
+no platform enforcement to except from today.** `validate.py`'s checks are the accepted
+rule set, and changing them is a schema change under
+`launchpad/docs/corpus/schema/COMPATIBILITY.md`, not an exception to this document --
+but until `ADR-0019`'s deferred required-check work lands, nothing mechanical stops a
+merge that ignores a red run, and a reviewer approving one anyway is the actual and only
+barrier.
 
 **For the review-enforced MUSTs**, the routine exception is the one *Status transitions*
 already names: a `draft`-to-`active` promotion carries no requirement beyond the MUSTs
@@ -344,14 +361,12 @@ node* step 3 of `launchpad/docs/corpus/AGENTS.md`:
   written from `ADR-0029` and `decision-references.md`'s own procedure, never from a worked
   instance of a reviewer actually clearing one. `decision-references.md` makes the identical
   admission about authoring a flagged node; this document makes it about reviewing one.
-- **Whether the two required pull-request approvals are enforced by a GitHub ruleset as a
-  required status check, or held only by convention, was not established.**
-  `launchpad/AGENTS.md` itself states the ruleset enforcing branch protection on `launchpad`
-  is not readable without `admin:org`, and this document did not attempt to re-verify that.
-- **Whether an agent reviewer may currently satisfy one of the two required approvals, or
+- **Whether an agent reviewer may currently satisfy the one required approval, or
   whether that is blocked at the platform level rather than by convention alone, was not
-  verified.** `launchpad/AGENTS.md` §5.1 states agents may not approve; whether GitHub's
-  branch protection enforces that mechanically or leaves it to reviewers to honour was not
-  checked here.
+  verified.** `launchpad/AGENTS.md` §5.1 states agents may not approve, and `ADR-0019`
+  records that a GitHub App submitting a literal `APPROVE` review is rejected as a
+  mechanism precisely because it would be indistinguishable from a person's; whether an
+  ordinary agent-authored review is blocked from counting toward the one required
+  approval, or merely discouraged by convention, was not checked here.
 - **No author or reviewer has applied this document's MUST list in practice.** Whether the
   checklist is followable at review time, rather than merely correct on paper, is untested.
