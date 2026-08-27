@@ -392,6 +392,74 @@ def _selection_context(config, repo, number, lane, profile):
     return strategy_name, routed_log
 
 
+
+def _plan_for_job(config, state, repo, number, job):
+    """Build the review plan from PERSISTED facts. Returns None when unavailable.
+
+    Never raises: an unavailable plan means the reviewer falls back to the generic
+    prompt, which is weaker but not wrong. The plan is recorded in the ledger so an
+    omitted question is visible rather than silently absent.
+    """
+    try:
+        import json as _json
+
+        from planner import plan_review
+
+        row = state.db.execute(
+            "SELECT payload FROM prs WHERE repo=? AND number=?", (repo, number)
+        ).fetchone()
+        payload = _json.loads(row["payload"]) if row else {}
+        if not isinstance(payload, dict):
+            payload = {}
+
+        raw_files = payload.get("files") or []
+        files = [f.get("filename", "") if isinstance(f, dict) else str(f) for f in raw_files]
+
+        evidence_path = state.job_dir(job) / "evidence.json"
+        checks: list = []
+        if evidence_path.is_file():
+            evidence = _json.loads(evidence_path.read_text(encoding="utf-8"))
+            checks = (evidence or {}).get("checks") or []
+        checks_failing = any(
+            isinstance(c, dict)
+            and (c.get("conclusion") or "").upper() not in ("SUCCESS", "NEUTRAL", "SKIPPED", "")
+            for c in checks
+        )
+
+        head_row = state.db.execute(
+            "SELECT head_sha FROM jobs WHERE id=?", (job,)
+        ).fetchone()
+        head_sha = head_row["head_sha"] if head_row else ""
+
+        # A prior reviewed revision of the same PR makes this a re-review.
+        prior = state.db.execute(
+            "SELECT COUNT(*) AS c FROM jobs WHERE repo=? AND number=? AND head_sha<>?",
+            (repo, number, head_sha),
+        ).fetchone()
+        is_rereview = bool(prior and int(prior["c"]) > 0)
+
+        plan = plan_review(
+            files=files,
+            additions=int(payload.get("additions", 0) or 0),
+            deletions=int(payload.get("deletions", 0) or 0),
+            large_diff_lines=int((config.get("assurance") or {}).get("large_diff_lines", 700) or 700),
+            checks_failing=checks_failing,
+            is_rereview=is_rereview,
+            head_sha=head_sha,
+        )
+        try:
+            from ledger import record as _record
+
+            _record(state, job_id=job, repo=repo, number=number, head_sha=head_sha,
+                    kind="strategy", entry_key="review_plan",
+                    payload={"name": "review_plan", **plan.as_dict()})
+        except Exception:
+            pass
+        return plan
+    except Exception:
+        return None
+
+
 def run_panel(
     config,
     state,
@@ -438,13 +506,38 @@ def run_panel(
     # candidate stays empty -> the panel is degraded rather than lowered in quality.
     lanes = [lane for lane in lanes if lane]
 
+    # The deterministic plan decides WHICH questions this change requires, so a
+    # security or compatibility question is asked when the paths warrant it rather
+    # than left to the reviewer's discretion.
+    review_plan = _plan_for_job(config, state, repo, number, job)
+    activities = ""
+    if review_plan is not None:
+        from planner import render_activities
+
+        activities = render_activities(review_plan)
+
+    # The full verdict contract is stated explicitly. Leaving `recommendation` or
+    # the finding fields unspecified caused schema rejections, and each rejection
+    # cools that candidate down for the configured cooldown — so an under-specified
+    # prompt silently burns reviewers.
     prompt = (
         f"Independently review {repo} PR #{number} (lane {lane}, job {job}). "
-        f"Read the evidence envelope at {evidence_text}. Return only a strict JSON "
-        f"object with signal equal to exactly one of {', '.join(SIGNAL_TOKENS)}. "
-        f"Emit raw JSON only: no markdown code fence, no backticks, and no "
-        f"commentary before or after the object. "
-        f"Do not call GitHub or modify files."
+        f"Read the evidence envelope at {evidence_text}. "
+        + (f"{activities} " if activities else "")
+        + "Return ONLY a strict JSON object with exactly these keys: "
+        "signal, recommendation, summary, findings, good, missing_evidence. "
+        f"signal must be exactly one of: {', '.join(SIGNAL_TOKENS)}. "
+        "recommendation must be exactly one of: clean, findings, human. "
+        "summary is a non-empty string. findings is an array; each finding needs "
+        "severity (one of blocker, high, medium, low), title, location formatted "
+        "as path:line, evidence, and primary_source. good and missing_evidence are "
+        "arrays of non-empty strings. "
+        "Use signal SUPPORTED only with recommendation clean and no findings; use "
+        "DEFECTS_FOUND when you have located a real defect, with at least one "
+        "finding. "
+        "Emit raw JSON only: no markdown code fence, no backticks, and no "
+        "commentary before or after the object. "
+        "Do not call GitHub or modify files."
     )
 
     timeout = int(config["models"].get("timeout_seconds", 1800))
