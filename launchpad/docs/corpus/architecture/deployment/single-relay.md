@@ -145,17 +145,17 @@ evidence:
 One relay process, on one host, backed by Postgres, Redis, and S3-compatible
 object storage — the deployment topology this repository calls **single-relay**:
 one relay URL is authoritative for exactly one community
-([README.md](../../../../README.md), [NOSTR.md](../../../../NOSTR.md)). This
+([README.md](../../../../../README.md), [NOSTR.md](../../../../../NOSTR.md)). This
 node documents the canonical implementation of that topology in this
 repository: the single-node/VPS Docker Compose bundle under
-[`deploy/compose/`](../../../../deploy/compose/), governed for this fork by
-[`launchpad/deploy/run.sh`](../../../../launchpad/deploy/run.sh). It also notes
+[`deploy/compose/`](../../../../../deploy/compose/), governed for this fork by
+[`launchpad/deploy/run.sh`](../../../../../launchpad/deploy/run.sh). It also notes
 the Kubernetes-topology analogue — see [Scope and omissions](#scope-and-omissions).
 
 ## Environment and topology
 
 One physical or virtual host running Docker Engine with Compose v2.24.4+
-([deploy/compose/README.md](../../../../deploy/compose/README.md)) is the
+([deploy/compose/README.md](../../../../../deploy/compose/README.md)) is the
 entire execution environment. `deploy/compose/compose.yml` defines five
 containers on that one host — `relay`, `postgres`, `redis`, `minio`, and the
 one-shot `minio-init` job — joined by a single bridge network, `buzz-net`.
@@ -168,7 +168,7 @@ nothing partitioning. This is the whole point of the name: a single execution
 node hosts the single relay for the single community it serves.
 
 The relay container image is built by the repository's root
-[`Dockerfile`](../../../../Dockerfile) — a multi-stage build that compiles
+[`Dockerfile`](../../../../../Dockerfile) — a multi-stage build that compiles
 `buzz-relay`, `buzz-admin`, and `buzz-pair-relay` from Rust 1.95, bundles the
 `web`/`admin-web` static frontends, and produces a `debian-slim` runtime
 running as a non-root `buzz:buzz` user. `.github/workflows/docker.yml` builds
