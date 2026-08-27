@@ -44,6 +44,12 @@ def _well_formed_located(text: str = ROW) -> LocatedBlock:
     return LocatedBlock(start_line=1, end_line=3, closed=True, info="verdict", raw_rows=text)
 
 
+def _malformed_located() -> LocatedBlock:
+    return LocatedBlock(
+        start_line=1, end_line=3, closed=True, info="verdict", raw_rows="not enough fields"
+    )
+
+
 class ZeroBlocksTests(unittest.TestCase):
     """Shape 1: no ```verdict block anywhere -- "none found", not an error."""
 
@@ -109,6 +115,53 @@ class DifferentCommentsRealFixtureTests(unittest.TestCase):
         # The named promotion: row 1's severity moved High -> Blocker.
         row1 = resolution.accepted.rows[0]
         self.assertEqual(row1.severity, "Blocker")
+
+
+class TieBreakTests(unittest.TestCase):
+    """The accept-branch sort key is (created_at, comment_id): created_at is
+    only second-resolution, so when two well-formed blocks in DIFFERENT
+    comments share an identical created_at, comment_id alone must break the
+    tie. Dropping comment_id from the sort key would leave this case
+    resolving arbitrarily (dict/list order) rather than deterministically to
+    the higher comment_id -- this is what proves it does not."""
+
+    def test_identical_created_at_breaks_tie_on_comment_id(self) -> None:
+        tb_lower = TaggedBlock(
+            _well_formed_located(), comment_id=100, surface="issue", created_at="2026-08-21T01:00:00Z", position=0
+        )
+        tb_higher = TaggedBlock(
+            _well_formed_located(), comment_id=200, surface="issue", created_at="2026-08-21T01:00:00Z", position=0
+        )
+        # Insertion order deliberately puts the higher comment_id FIRST, so a
+        # sort keyed on created_at alone (a stable sort) would pick the lower
+        # id -- the wrong answer -- rather than happening to pick the right
+        # one by list order.
+        results = {
+            "issue": CommentFetch(state="ok", blocks=[tb_higher, tb_lower]),
+            "review": _empty_fetch(),
+        }
+        resolution = resolve(results)
+        self.assertEqual(resolution.outcome, "accepted")
+        self.assertEqual(resolution.accepted.location.comment_id, 200)
+        self.assertEqual([loc.comment_id for loc in resolution.superseded], [100])
+
+
+class MalformedRowAnywhereTests(unittest.TestCase):
+    """Branch 3: any malformed row anywhere (here, in the second of two
+    otherwise-clean blocks in DIFFERENT comments) refuses the whole set,
+    naming every block's location -- not only the offending one. Network-free
+    twin of `check_verdict_resolution.py`'s equivalent live-control assertion,
+    per #287 STEP 5's MEDIUM finding: that assertion doesn't need network and
+    belongs in this suite too, not only inside a needs_network=True control."""
+
+    def test_malformed_row_in_second_of_two_different_comments_refused(self) -> None:
+        tb1 = TaggedBlock(_well_formed_located(), comment_id=1, surface="issue", created_at="t1", position=0)
+        tb2 = TaggedBlock(_malformed_located(), comment_id=2, surface="issue", created_at="t2", position=0)
+        results = {"issue": CommentFetch(state="ok", blocks=[tb1, tb2]), "review": _empty_fetch()}
+        resolution = resolve(results)
+        self.assertEqual(resolution.outcome, "refused")
+        self.assertIsNone(resolution.accepted)
+        self.assertEqual({loc.comment_id for loc in resolution.refused_locations}, {1, 2})
 
 
 class QuotedAndIndentedLookalikeTests(unittest.TestCase):
