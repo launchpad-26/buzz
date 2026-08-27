@@ -319,3 +319,41 @@ requires). The pass-through above honours the *intent* of the table's row, but t
 table's own literal wording is not corrected by this document — that edit is left for
 whoever owns #120, since `CONTAINMENT.md` is a cross-cutting contract this document does
 not have unilateral authority to amend.
+
+## PR comment verdict blocks: refusing more than one (#287)
+
+A ` ```verdict ` fence posted in a PR comment (the row shape `review-gate.sh`'s
+`cmd_verdict` already validates for a single local file — see that script for the row
+grammar) is not unique to one comment on a PR. Reviewers re-post a corrected block after
+noticing a mistake, and nothing before #287 distinguished a deliberate correction from
+two independent, disagreeing verdicts left standing at once.
+
+**The rule: no amendment marker. The parser deterministically takes the last complete,
+closed, well-formed block by comment order (highest `(created_at, comment_id)`), and
+refuses anything that does not reduce to exactly one candidate that way** — a malformed
+row, an unclosed block, or two-or-more blocks inside the *same* comment are all refused
+outright, never resolved by picking one. This was Option B of two readings put to
+Serina: Option A would have required a new explicit "supersedes" marker before a later
+block could override an earlier one; Option A was not chosen.
+
+**Why B, not A — the evidence, not a preference.** Two real double-block PR threads were
+pulled via `gh api repos/launchpad-26/buzz/issues/<n>/comments --paginate --slurp` and
+read in full before this decision was recorded, not assumed:
+
+- **PR #261** — comment `5364185647` (2026-08-21T01:45:48Z) and comment `5364261676`
+  (2026-08-21T01:58:30Z), same author, 13 minutes apart. Both are full 4-row
+  restatements of the same finding set; the second comment's row 2 severity moved
+  Medium → Low from the first.
+- **PR #264** — comment `5364221899` (2026-08-21T01:51:51Z) and comment `5364504768`
+  (2026-08-21T02:36:23Z), same author, 45 minutes apart. Both are full 3-row
+  restatements; the second comment's row 1 severity moved High → Blocker from the
+  first — the named promotion #287 cites.
+
+In neither real case does the later comment carry any marker referencing the earlier
+one — no "supersedes", no "correction to comment `<id>`", nothing machine-parseable. Both
+are simply a complete re-post of the whole block, later in the comment stream. Requiring
+a marker (Option A) would have made both of these real, already-happened corrections
+retroactively unparseable, and would have needed a reviewer-side convention change no
+reviewer today follows. Taking the later complete block by comment order (Option B)
+resolves both cases exactly as the reviewer who wrote them intended, with no new syntax
+to adopt.
