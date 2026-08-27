@@ -52,8 +52,10 @@ from errors import (
     CANDIDATE_TERMINAL,
     JOB_BLOCKING,
     JobBlockingError,
+    PROVIDER_TERMINAL,
     TRANSIENT,
 )
+from fallback import order_candidates, recipe_for
 from logging_otel import MAX_STDERR_BYTES
 from runners import (
     EffortUnsupportedError,
@@ -330,15 +332,20 @@ def _attempt_candidate(
             mark_unavailable(state, entry["_key"], summary, cooldown)
             if run_count == 1:
                 continue  # retry the SAME candidate exactly once on genuine timeout
+            # A transport that never answered twice is a provider problem, not a
+            # quirk of this model: its siblings are not worth a second timeout.
             return False, TRANSIENT, summary
         except Exception as exc:
             # Only a genuine runner timeout is transient; everything else is a
-            # deterministic candidate_terminal (never blanket-labeled transient).
+            # deterministic terminal failure (never blanket-labeled transient).
+            # A non-zero exit or OSError is attributable to the PROVIDER (auth,
+            # quota, missing binary), so it is provider-scoped rather than
+            # candidate-scoped.
             summary = str(exc)[:200]
             stderr = getattr(exc, "stderr", "") or ""
             _record_diagnostic(logger, entry, run_count, stderr or summary)
             mark_unavailable(state, entry["_key"], summary, cooldown)
-            return False, CANDIDATE_TERMINAL, summary
+            return False, PROVIDER_TERMINAL, summary
 
         # Runner returned cleanly: the output must be a schema-valid verdict.
         try:
@@ -499,12 +506,19 @@ def run_panel(
             return False
         return True
 
+    # The strategy is resolved BEFORE candidate ordering, because which tier leads
+    # is a property of the review strategy, not of config file order. It is also
+    # reused for the attempt log below, so it is computed exactly once.
+    strategy_name, route_log = _selection_context(config, repo, number, lane, profile)
+    recipe = recipe_for(strategy_name)
+
     lanes = [
-        [c for c in lane if _qualifying(c)] for lane in candidate_lanes
+        order_candidates([c for c in lane_entries if _qualifying(c)], recipe)
+        for lane_entries in candidate_lanes
     ]
     # Deliberately DO NOT fall back to unfiltered lanes: a lane with no qualifying
     # candidate stays empty -> the panel is degraded rather than lowered in quality.
-    lanes = [lane for lane in lanes if lane]
+    lanes = [lane_entries for lane_entries in lanes if lane_entries]
 
     # The deterministic plan decides WHICH questions this change requires, so a
     # security or compatibility question is asked when the paths warrant it rather
@@ -558,18 +572,31 @@ def run_panel(
     skipped: list[str] = []
     used_selectors: set[str] = set()
     used_families: set[str] = set()
+    #: Families whose PROVIDER failed this run (auth/quota/transport). Their
+    #: sibling models are not retried: provider-level failures are correlated, so
+    #: a sibling costs another full timeout for the same outcome.
+    failed_families: set[str] = set()
     filled = 0
     diag_paths: list[str] = []
 
-    for slot, lane_list in enumerate(lanes):
+    # `lane_index` selects the candidate lane; the SLOT is allocated by fill
+    # order. Indexing slot files by lane meant a lane-0 wipeout followed by a
+    # lane-1 success wrote review-B.txt while `_parse_signals` (which reads the
+    # first `required` slot files) only looked at review-A.txt: real model spend,
+    # a valid verdict on disk, and a panel reported degraded.
+    for lane_index, lane_list in enumerate(lanes):
         if filled >= required:
             break
         for pos, pool in enumerate(lane_list):
             family = pool.get("provider_family")
+            if family and family in failed_families:
+                skipped.append(pool["_key"])
+                continue
             if pool["selector"] in used_selectors or (family and family in used_families):
                 skipped.append(pool["_key"])
                 continue
             considered.append(pool["_key"])
+            slot = filled
             out = artifact_dir / SLOT_FILES[slot]
             attempted.append(pool["_key"])
             ok, classification, failure = _attempt_candidate(
@@ -623,6 +650,10 @@ def run_panel(
                 filled += 1
                 break
             failed.append(pool["_key"])
+            # A provider-scoped failure retires the whole family for this run; a
+            # model emitting invalid output retires only that model.
+            if family and classification in (TRANSIENT, PROVIDER_TERMINAL):
+                failed_families.add(family)
         if filled >= required:
             break
 
@@ -633,10 +664,14 @@ def run_panel(
     attempt = {
         "phase": "assurance",
         "profile": profile.as_dict(),
+        "strategy": strategy_name,
+        "recipe": recipe.name,
+        "recipe_tiers": list(recipe.tiers),
         "considered": considered,
         "skipped": skipped,
         "attempted": attempted,
         "failed": failed,
+        "failed_families": sorted(failed_families),
         "selected": selected,
         "cooldowns": ["cooldown:" + c for c in failed],
         "signals": signals,
@@ -646,7 +681,7 @@ def run_panel(
     }
     if logger is not None:
         try:
-            _strategy, _route_log = _selection_context(config, repo, number, lane, profile)
+            # Strategy/route selection was already resolved before ordering.
             logger.attempt(attempt)
             logger.info(
                 body=f"panel attempt {repo}#{number} -> {outcome}",
@@ -657,8 +692,9 @@ def run_panel(
                     "review.completed": len(completed),
                     "review.attempt": 1,
                     "ai.models": completed,
-                    "reasoning.strategy": _strategy,
-                    "reasoning.resolved_model": _route_log.get("resolved_model"),
+                    "reasoning.strategy": strategy_name,
+                    "reasoning.recipe": recipe.name,
+                    "reasoning.resolved_model": route_log.get("resolved_model"),
                 },
                 event_name="panel_attempt",
             )
@@ -678,6 +714,9 @@ def run_panel(
         "complete": complete,
         "signals": signals,
         "outcome": outcome,
+        "failed_families": sorted(failed_families),
+        "strategy": strategy_name,
+        "recipe": recipe.name,
     }
 
 

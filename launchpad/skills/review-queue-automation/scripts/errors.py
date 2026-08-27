@@ -21,6 +21,14 @@ TRANSIENT = "transient"
 CANDIDATE_TERMINAL = "candidate_terminal"
 JOB_BLOCKING = "job_blocking"
 
+#: A failure attributable to the PROVIDER rather than to one model's output:
+#: auth, quota, a missing binary, or a transport that never answered. It is
+#: distinguished from CANDIDATE_TERMINAL because provider-level failures are
+#: correlated across that provider's models, so trying a sibling model wastes a
+#: full timeout. A model emitting invalid JSON stays CANDIDATE_TERMINAL: its
+#: siblings may well comply.
+PROVIDER_TERMINAL = "provider_terminal"
+
 # ---- detailed dispositions (spec) -------------------------------------------
 TRANSIENT_INFRA = "transient_infrastructure"
 EVIDENCE_INCOMPLETE = "evidence_incomplete"

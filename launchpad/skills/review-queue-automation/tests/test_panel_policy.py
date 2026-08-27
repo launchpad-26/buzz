@@ -272,7 +272,9 @@ def test_terminal_failure_attempted_once_no_retry() -> None:
             panel._run_reviewer = original
         assert not ok
         assert fake.calls["claude"] == 1
-        assert classification == "candidate_terminal"
+        # "quota exceeded" is a PROVIDER failure, not this model's output being
+        # wrong, so it is provider-scoped and retires the family for the run.
+        assert classification == "provider_terminal"
     finally:
         state.close()
 
