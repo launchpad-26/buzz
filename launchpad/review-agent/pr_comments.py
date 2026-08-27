@@ -98,16 +98,32 @@ def fetch_and_locate(pr: int, repo: str = DEFAULT_REPO) -> dict[str, CommentFetc
         if state != "ok":
             result[surface] = CommentFetch(state=state, reason=reason)
             continue
-        tagged: list[TaggedBlock] = []
-        for item in items:
-            comment_id = item.get("id")
-            created_at = item.get("created_at") or ""
-            body = item.get("body") or ""
-            located = locate_verdict_blocks(body)
-            for position, block in enumerate(located):
-                tagged.append(TaggedBlock(block, comment_id, surface, created_at, position))
-        result[surface] = CommentFetch(state="ok", blocks=tagged)
+        result[surface] = from_items(items, surface)
     return result
+
+
+def _tag_items(items: list[dict], surface: str) -> list[TaggedBlock]:
+    tagged: list[TaggedBlock] = []
+    for item in items:
+        comment_id = item.get("id")
+        created_at = item.get("created_at") or ""
+        body = item.get("body") or ""
+        located = locate_verdict_blocks(body)
+        for position, block in enumerate(located):
+            tagged.append(TaggedBlock(block, comment_id, surface, created_at, position))
+    return tagged
+
+
+def from_items(items: list[dict], surface: str) -> CommentFetch:
+    """Build a readable ``CommentFetch`` from an already-fetched list of raw
+    comment dicts (``id``/``created_at``/``body``), running the real locator
+    over each body -- the same tagging ``fetch_and_locate`` performs, minus
+    the live ``gh api`` call. Lets a recorded fixture (see
+    ``fixtures/verdict_blocks/``) replay through the real locate/tag pipeline
+    rather than a hand-written stand-in for it, the same pattern
+    ``fetch.from_payload`` gives #117's own fixtures.
+    """
+    return CommentFetch(state="ok", blocks=_tag_items(items, surface))
 
 
 def degrade(results: dict[str, CommentFetch], spec: str) -> dict[str, CommentFetch]:
