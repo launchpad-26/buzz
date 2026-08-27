@@ -148,6 +148,7 @@ def test_two_pending_requests_while_another_job_proceeds() -> None:
 
 
 def test_resume_revalidation() -> None:
+    """Resume transitions the job once the decision revalidates against the head."""
     state = fresh_state()
     try:
         jid = _human_pending_job(state, number=5, head="h5")
@@ -158,9 +159,45 @@ def test_resume_revalidation() -> None:
         # job still awaiting approval until resume
         assert _status(state, jid) == "human_approval_pending"
         from human_cli import _cmd_resume
-        res = _cmd_resume(state, jid, policy())
-        assert res["status"] == "approval_revalidation"
+
+        # `execute=False` stops before the mutation so this test stays offline;
+        # the head is supplied explicitly instead of being read from GitHub.
+        res = _cmd_resume(state, jid, policy(), current_head_sha="h5", execute=False)
+        assert res["status"] == "approval_revalidation", res
+        assert res["head_source"] == "caller"
         assert _status(state, jid) == "approval_revalidation"
+    finally:
+        state.close()
+
+
+def test_resume_refuses_when_the_live_head_cannot_be_read() -> None:
+    """An unreadable live head is a refusal, never a pass."""
+    state = fresh_state()
+    try:
+        jid = _human_pending_job(state, number=15, head="h15")
+        req = enqueue_for(state, jid, "o/r", 15, "h15")
+        decide(state, req["request_id"], "approve", actor="human")
+        from human_cli import _cmd_resume
+
+        res = _cmd_resume(state, jid, policy())  # no head, no GitHub reachable
+        assert "error" in res
+        assert "refusing to resume" in res["error"]
+        assert _status(state, jid) == "human_approval_pending", "must not transition"
+    finally:
+        state.close()
+
+
+def test_resume_recorded_head_escape_hatch_is_explicit_and_reported() -> None:
+    state = fresh_state()
+    try:
+        jid = _human_pending_job(state, number=16, head="h16")
+        req = enqueue_for(state, jid, "o/r", 16, "h16")
+        decide(state, req["request_id"], "approve", actor="human")
+        from human_cli import _cmd_resume
+
+        res = _cmd_resume(state, jid, policy(), allow_recorded_head=True, execute=False)
+        assert res["status"] == "approval_revalidation"
+        assert "unverified" in res["head_source"], res
     finally:
         state.close()
 
@@ -187,16 +224,17 @@ def test_expired_approval_cannot_resume() -> None:
         state.db.commit()
         assert is_expired(get(state, req["request_id"])) is True
         assert find_approved(state, jid, "o/r", 6, "h6", policy()) is None
-        try:
-            _cmd_resume(state, jid, policy())
-            raise AssertionError("expired approval must not resume")
-        except SystemExit as exc:
-            assert "no usable approved" in json.dumps(exc.args), exc.args
+
+        res = _cmd_resume(state, jid, policy(), current_head_sha="h6")
+        assert "error" in res, res
+        assert "no usable approved" in res["error"]
+        assert _status(state, jid) == "human_approval_pending", "must not transition"
     finally:
         state.close()
 
 
 def test_stale_sha_cannot_resume() -> None:
+    """A decision made for an older head must never approve a newer revision."""
     from human_cli import _cmd_resume
 
     state = fresh_state()
@@ -206,11 +244,13 @@ def test_stale_sha_cannot_resume() -> None:
         decide(state, req["request_id"], "approve", actor="human")
         # the PR's head changed since the approval
         assert find_approved(state, jid, "o/r", 7, "h8", policy()) is None
-        try:
-            _cmd_resume(state, jid, policy(), current_head_sha="h8")
-            raise AssertionError("stale-SHA approval must not resume")
-        except SystemExit as exc:
-            assert "no usable approved" in json.dumps(exc.args), exc.args
+
+        res = _cmd_resume(state, jid, policy(), current_head_sha="h8")
+        assert "error" in res, res
+        assert "advanced since review" in res["error"]
+        assert res["reviewed_head"] == "h7"
+        assert res["current_head"] == "h8"
+        assert _status(state, jid) == "human_approval_pending", "must not transition"
     finally:
         state.close()
 

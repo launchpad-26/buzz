@@ -320,6 +320,50 @@ def _persist_eligible(state, decision_id, repo, number, head_sha, policy_hash, c
     state.db.commit()
 
 
+def persist_human_approval(
+    state,
+    *,
+    repo: str,
+    number: int,
+    head_sha: str,
+    policy_hash: str,
+    cfg: dict[str, Any],
+    actor: str,
+    risk_score: int = 0,
+) -> str:
+    """Record a HUMAN-authorized approval decision and return its id.
+
+    A human decision is an authorization, not a bypass: it produces the same kind
+    of eligible decision record as the automatic path, so the identical guarded
+    executor runs (mandatory REST revalidation before the mutation and REST
+    verification after). `mode` is `human` purely so the audit trail distinguishes
+    who authorized it.
+    """
+    decision_id = uuid.uuid4().hex[:16]
+    created_at = utcnow()
+    ttl = decision_expiry_minutes(cfg)
+    try:
+        expires_at = (
+            dt.datetime.fromisoformat(created_at.replace("Z", "+00:00"))
+            + dt.timedelta(minutes=ttl)
+        ).isoformat().replace("+00:00", "Z")
+    except ValueError:
+        expires_at = created_at
+    state.db.execute(
+        "INSERT INTO approval_decisions(id,repo,number,head_sha,policy_hash,status,mode,risk_score,created_at,expires_at) "
+        "VALUES(?,?,?,?,?,?,?,?,?,?) ON CONFLICT(repo,number,head_sha,policy_hash) DO UPDATE SET "
+        "status='eligible', mode='human', expires_at=excluded.expires_at",
+        (decision_id, repo, int(number), head_sha, policy_hash, "eligible", "human",
+         int(risk_score), created_at, expires_at),
+    )
+    state.db.commit()
+    row = state.db.execute(
+        "SELECT id FROM approval_decisions WHERE repo=? AND number=? AND head_sha=? AND policy_hash=?",
+        (repo, int(number), head_sha, policy_hash),
+    ).fetchone()
+    return row["id"] if row else decision_id
+
+
 def persist_human_request(
     state: State,
     cfg: dict[str, Any],
