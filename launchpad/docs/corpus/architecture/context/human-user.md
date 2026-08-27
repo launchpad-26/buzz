@@ -41,13 +41,13 @@ evidence:
     entry_class: FACT
     evidence:
       - "VISION.md"
-  - statement: "Neither authentication implementation reviewed gates on actor role: NIP-42's challenge/response verification (crates/buzz-auth/src/nip42.rs) validates any signed kind:22242 event over a WebSocket connection, and NIP-98's verification (crates/buzz-auth/src/nip98.rs) validates any signed kind:27235 event carrying a matching URL/method/payload hash — so VISION.md's human-uses-NIP-42/agent-uses-NIP-98 split is a stated convention that connecting clients are expected to follow, not a constraint the relay's auth code was found to enforce by actor type."
+  - statement: "Neither authentication implementation reviewed gates on actor role: verify_nip42_event's full body checks only kind, Schnorr signature, challenge match, relay-URL match, and timestamp tolerance, and verify_nip98_event's full body checks only kind, Schnorr signature, timestamp tolerance, URL match, method match, and an optional payload hash — neither function inspects who signed the event or what kind of actor they are. So VISION.md's human-uses-NIP-42/agent-uses-NIP-98 split is a stated convention that connecting clients are expected to follow, not a constraint the relay's auth code enforces by actor type."
     entry_class: INFERENCE
     evidence:
       - "crates/buzz-auth/src/nip42.rs"
       - "crates/buzz-auth/src/nip98.rs"
       - "VISION.md"
-    confidence: 0.6
+    confidence: 0.8
   - statement: "A Buzz community is the tenant-visible workspace selected by the request host; in the self-hosted default this is one host, one relay process, one implicit community, and community resolution happens before AUTH, EVENT, REQ, REST, media, git, search, workflow, or pub/sub handling — the human user always acts inside exactly one resolved community per connection."
     entry_class: FACT
     evidence:
@@ -157,14 +157,15 @@ differ only in which auth flow they are expected to use: NIP-42 (WebSocket
 challenge/response) for humans, NIP-98 (stateless HTTP request signing) for agents.
 
 That split is a stated convention rather than something this review found enforced by
-actor type in the relay's own auth code: `nip42.rs`'s verification accepts any correctly
-signed kind:22242 challenge event over a WebSocket connection, and `nip98.rs`'s
-verification accepts any correctly signed kind:27235 event with a matching URL, method,
-and payload hash — neither checks who is on the other end. A human client happening to use
-NIP-98 for an HTTP route (uploads, git operations) is not something the auth layer itself
-would reject on the grounds that the caller "should" have used NIP-42. Treat the
-human-uses-NIP-42/agent-uses-NIP-98 pairing as the documented intended usage, not as a
-constraint a human user's client is prevented from violating.
+actor type in the relay's own auth code: `verify_nip42_event`'s full body checks only
+kind, Schnorr signature, challenge match, relay-URL match, and timestamp tolerance, and
+`verify_nip98_event`'s full body checks only kind, Schnorr signature, timestamp
+tolerance, URL match, method match, and an optional payload hash — neither function
+inspects who signed the event. A human client happening to use NIP-98 for an HTTP route
+(uploads, git operations) is not something the auth layer itself would reject on the
+grounds that the caller "should" have used NIP-42. Treat the human-uses-NIP-42/
+agent-uses-NIP-98 pairing as the documented intended usage, not as a constraint a human
+user's client is prevented from violating.
 
 ## Scope and omissions
 
