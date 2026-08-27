@@ -168,6 +168,15 @@ verification gap, not a claim this node makes.
 
 ## Scope and omissions
 
+**No `relationships` in this node's front matter.** The corpus's merged nodes at this
+revision — `corpus-agents`, `corpus-readme`, `corpus-standard-confidence`,
+`corpus-standard-decision-references` — govern the corpus's own authoring process, not
+Buzz's architecture, so none is a topical neighbor a typed edge from this node would
+serve. This is a fact about what is merged right now, not a general claim that this
+node has nothing to point at: the first architecture-surface sibling that merges (for
+example a node describing `docs/multi-tenant-conformance.md`'s full obligation table,
+or one describing `TenantContext` itself) is the edge to add.
+
 **Not covered here, and out of scope for this node:**
 
 - The full per-surface obligation table (search, git object storage, presence,
