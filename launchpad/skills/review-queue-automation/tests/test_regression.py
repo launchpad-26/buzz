@@ -179,6 +179,7 @@ def test_partial_panel_is_degraded_draft_not_held() -> None:
                 cfg(),
                 {"job_id": jid, "repo": REPO, "number": 9, "lane": "incoming_review"},
                 state=state,
+                claim_lease=False,  # offline test: no GitHub assignee mutation
             )
         assert result["status"] == "degraded_draft"
         assert result["decision"] == "PARTIAL_PANEL"

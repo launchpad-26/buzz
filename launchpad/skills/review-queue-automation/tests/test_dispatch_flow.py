@@ -147,6 +147,14 @@ def patch_dispatcher(**overrides):
             return Profile("workhorse", "medium", "challenger")
 
         overrides["decide_assurance"] = _min
+
+    # The review lease is an external GitHub effect, so it is faked here alongside
+    # the others. A test that wants to exercise lease behaviour overrides these
+    # explicitly (see test_lease_lifecycle.py).
+    overrides.setdefault("_lease_claim",
+                         lambda cfg, state, repo, number, job, login: True)
+    overrides.setdefault("_lease_release",
+                         lambda cfg, state, repo, number, job, login: None)
     saved = {k: getattr(dispatcher, k) for k in overrides}
     for k, v in overrides.items():
         setattr(dispatcher, k, v)

@@ -1089,12 +1089,34 @@ def resolve_snapshot(
     return snap.config, {"pinned": True, "resumed": False, **snap.as_meta()}
 
 
+#: Seams over the lease so tests can intercept the GitHub assignee mutations.
+def _lease_claim(local_cfg, state, repo, number, job, login):
+    from lease import claim
+
+    return claim(local_cfg, state, repo, number, job, login)
+
+
+def _lease_release(local_cfg, state, repo, number, job, login):
+    from lease import release
+
+    return release(local_cfg, state, repo, number, job, login)
+
+
+def _local_lease_holder(state: State, repo: str, number: int) -> str:
+    row = state.db.execute(
+        "SELECT job_id FROM leases WHERE repo=? AND number=?", (repo, number)
+    ).fetchone()
+    return row["job_id"] if row else ""
+
+
+
 def run_job(
     local_cfg: dict[str, Any],
     job: dict[str, Any],
     *,
     state: State,
     capability_mode: str | None = None,
+    claim_lease: bool = True,
 ) -> dict[str, Any]:
     """Drive one job to a terminal state.
 
@@ -1146,13 +1168,68 @@ def run_job(
     supersede_for_head(state, repo, number, head_sha)
     supersede_for_policy(state, repo, number, local_cfg)
 
+    # Claim the review lease BEFORE any model spend. A PR already claimed by
+    # someone else is not ours to review: concurrent sweeps must not duplicate work
+    # or post duplicate advisory comments.
+    #
+    # The claim runs INSIDE the guarded block so that an audit-logging failure here
+    # safe-stops the job like any other, rather than escaping run_job.
+    login = local_cfg.get("login", "")
+    lease_held = False
     try:
+        if claim_lease and login:
+            held_by = _local_lease_holder(state, repo, number)
+            if held_by and held_by != job_id:
+                return {"job": job_id, "repo": repo, "number": number,
+                        "status": "gated",
+                        "reason": f"lease already held by job {held_by}",
+                        "snapshot": snapshot_meta}
+            try:
+                lease_held = bool(
+                    _lease_claim(local_cfg, state, repo, number, job_id, login)
+                )
+            except Exception as exc:
+                _log(logger, "warning", body=f"lease claim failed: {exc}",
+                     phase="dispatch", outcome="lease_unavailable")
+                return {"job": job_id, "repo": repo, "number": number,
+                        "status": "gated",
+                        "reason": f"could not claim the review lease: {exc}",
+                        "snapshot": snapshot_meta}
+            if not lease_held:
+                return {"job": job_id, "repo": repo, "number": number,
+                        "status": "gated",
+                        "reason": "the PR is claimed by another reviewer",
+                        "snapshot": snapshot_meta}
+            _log(logger, "info", body="review lease claimed", phase="dispatch",
+                 outcome="lease_claimed", attributes={"lease.login": login})
+
         result = _run_job_inner(local_cfg, job, head_sha, logger, state, snapshot_meta)
     except SafeStopSignal as exc:
         result = _arrive_safe_stop(state, job, logger, reason=str(exc))
     except JobBlockingError as exc:
         result = {"job": job_id, "repo": repo, "number": number,
                   "status": "error", "decision": "JOB_BLOCKING", "reason": str(exc)}
+    finally:
+        # Release on EVERY exit path, including an unexpected exception. A retained
+        # lease blocks the queue indefinitely. This block cannot raise: a failure
+        # here must never replace the review outcome.
+        if lease_held:
+            release_error = ""
+            try:
+                _lease_release(local_cfg, state, repo, number, job_id, login)
+            except Exception as exc:
+                release_error = str(exc)
+            try:
+                if release_error:
+                    _log(logger, "error",
+                         body=f"lease release failed: {release_error}",
+                         phase="dispatch", outcome="lease_release_failed")
+                else:
+                    _log(logger, "info", body="review lease released",
+                         phase="dispatch", outcome="lease_released")
+            except Exception:
+                pass
+
     result["snapshot"] = snapshot_meta
     return result
 

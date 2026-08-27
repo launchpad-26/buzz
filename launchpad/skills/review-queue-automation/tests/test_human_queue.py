@@ -135,6 +135,7 @@ def test_two_pending_requests_while_another_job_proceeds() -> None:
                 _dispatch_cfg(),
                 {"job_id": jid_c, "repo": "o/r", "number": 3, "lane": "incoming_review"},
                 state=state,
+                claim_lease=False,  # offline test: no GitHub assignee mutation
             )
         finally:
             dispatcher.run_panel = saved_panel
