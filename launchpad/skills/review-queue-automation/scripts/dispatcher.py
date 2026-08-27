@@ -692,6 +692,89 @@ def _job_assurance(
     )
 
 
+
+def _post_advisory_review(
+    local_cfg: dict[str, Any],
+    state: State,
+    job: dict[str, Any],
+    head_sha: str,
+    logger,
+    *,
+    disposition: str,
+    failed_gates: list[str] | None = None,
+    verdicts: list[dict[str, Any]] | None = None,
+    snapshot_meta: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    """Publish the advisory review for this job. Never raises.
+
+    Advisory output is the default product of the pipeline, so the corroboration
+    split, achieved assurance and executed routes are all reported. Posting is
+    idempotent per job, so a re-dispatch of the same revision does not duplicate.
+    """
+    from advisory import build_body, post_advisory
+    from findings import blocking_summary, corroborate
+    from ledger import entries
+
+    repo, number, job_id = job["repo"], job["number"], job["job_id"]
+    verdicts = verdicts if verdicts is not None else _collected_verdicts(state, job_id)
+    evidence = _evidence_meta(state, job_id)
+
+    blocking_severities = tuple(
+        (local_cfg.get("findings") or {}).get("blocking_severities") or ("blocker",)
+    )
+    results = corroborate(verdicts, checks=evidence.get("checks") or [],
+                          blocking_severities=blocking_severities)
+    summary = blocking_summary(results)
+
+    # Routes and activities come from the ledger, so the comment describes what
+    # actually ran rather than what was configured.
+    routes: list[dict[str, Any]] = []
+    activities: list[str] = []
+    try:
+        for item in entries(state, job_id):
+            if item["kind"] == "route":
+                routes.append(item["payload"])
+            elif item["kind"] == "strategy":
+                activities = list(item["payload"].get("activities") or []) or activities
+    except Exception:
+        pass
+
+    assurance = _job_assurance(
+        local_cfg, state, job_id,
+        required_slots=max(1, len(verdicts)),
+        achieved_slots=len(verdicts),
+        blockers=tuple(f"blocker:{r.finding.location}" for r in results if r.verified),
+    ).as_dict()
+
+    body = build_body(
+        repo=repo, number=number, head_sha=head_sha, disposition=disposition,
+        verified=summary["verified"], unverified=summary["unverified"],
+        routes=routes, assurance=assurance, activities=activities,
+        failed_gates=failed_gates or [],
+        snapshot_hash=(snapshot_meta or {}).get("snapshot_hash", "") or "",
+    )
+    record = post_advisory(
+        state, local_cfg=local_cfg, repo=repo, number=number, job_id=job_id,
+        pr_node_id=_cached_pr_node_id(state, repo, number), body=body,
+        login=local_cfg.get("login", ""), head_sha=head_sha,
+    )
+    _log(logger, "info" if record.get("posted") else "warning",
+         body=("advisory review posted" if record.get("posted")
+               else f"advisory review not posted: {record.get('reason', '')}"),
+         phase="advisory",
+         outcome="posted" if record.get("posted") else "withheld")
+    _ledger_record(state, job, head_sha, "action", {
+        "operation": "add_comment_review",
+        "outcome": "posted" if record.get("posted") else "withheld",
+        "verified": bool(record.get("posted")),
+        "reason": record.get("reason", ""),
+        "verified_findings": summary["verified_count"],
+        "unverified_findings": summary["unverified_count"],
+    }, entry_key="advisory", snapshot_meta=snapshot_meta)
+    record["findings"] = summary
+    return record
+
+
 def _execute_request_changes(
     local_cfg: dict[str, Any],
     job: dict[str, Any],
@@ -992,6 +1075,13 @@ def _run_job_inner(
         _transition_guarded(state, job_id, "advisory_action", logger=logger,
                             phase="approval",
                             reason="shadow mode: would-approve recorded, no mutation")
+        advisory = _post_advisory_review(
+            local_cfg, state, job, head_sha, logger,
+            disposition=res.disposition, failed_gates=res.failed_gates,
+            verdicts=verdicts, snapshot_meta=snapshot_meta,
+        )
+        _transition_guarded(state, job_id, "completed_advisory", logger=logger,
+                            phase="advisory", reason="advisory review published")
     elif res.disposition == "human_escalation":
         expiry = int((local_cfg.get("human_queue") or {}).get("expiry_minutes", 1440))
         request = enqueue_human(
@@ -1025,11 +1115,19 @@ def _run_job_inner(
         _transition_guarded(state, job_id, "advisory_action", logger=logger,
                             phase="approval",
                             reason="approval mode disabled; advisory only")
+        advisory = _post_advisory_review(
+            local_cfg, state, job, head_sha, logger,
+            disposition=res.disposition, failed_gates=res.failed_gates,
+            verdicts=verdicts, snapshot_meta=snapshot_meta,
+        )
+        _transition_guarded(state, job_id, "completed_advisory", logger=logger,
+                            phase="advisory", reason="advisory review published")
 
     return {
         "job": job_id, "repo": repo, "number": number,
         "decision": decision, "status": state.current_status(job_id),
         "approval_disposition": res.disposition,
+        "advisory": advisory,
         "final_profile": final_profile.as_dict(),
         "steps": [{"profile": s.profile.as_dict(), "decision": s.decision} for s in steps],
     }
