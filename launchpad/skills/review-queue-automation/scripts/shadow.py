@@ -208,6 +208,30 @@ def backtest(
     sensitivity = _threshold_sensitivity(results, eff_max)
     suggestions = _suggestions(results, false_approval)
 
+    # Reviewer-evidence gates are fail-closed, so a run with no supplied verdicts
+    # can only ever produce a 0% would-approve rate. That is an ABSENCE OF DATA,
+    # not evidence that the policy is safe, and the report must not let the two be
+    # confused when someone reads it to justify enabling autonomy.
+    with_verdicts = len([s for s in calibrate if verdicts.get(s.number)])
+    verdict_coverage = with_verdicts / max(len(calibrate), 1)
+    warnings: list[str] = []
+    if with_verdicts == 0:
+        warnings.append(
+            "no reviewer verdicts supplied: every reviewer-evidence gate is "
+            "fail-closed, so would-approve is 0 by construction. This run measures "
+            "the deterministic gates only and CANNOT support an autonomy decision."
+        )
+    elif verdict_coverage < 1.0:
+        warnings.append(
+            f"reviewer verdicts supplied for only {with_verdicts}/{len(calibrate)} "
+            "samples; the would-approve rate is understated."
+        )
+    if len(calibrated) < len(results):
+        warnings.append(
+            f"{len(unknown)} sample(s) have an unknown outcome and cannot confirm "
+            "or refute a decision."
+        )
+
     report = {
         "policy_hash": policy_hash_of(cfg),
         "pinned_heads": sorted({r["head_sha"] for r in results}),
@@ -216,6 +240,10 @@ def backtest(
         "train_count": len(train),
         "calibrate_count": len(calibrate),
         "coverage": len(calibrated) / max(len(results), 1),
+        "verdict_coverage": verdict_coverage,
+        "samples_with_verdicts": with_verdicts,
+        "decision_capable": with_verdicts > 0,
+        "warnings": warnings,
         "unknown_rate": len(unknown) / max(len(results), 1),
         "escalation_rate": escalation_rate,
         "false_auto_approval_candidates": [r["number"] for r in false_approval],
@@ -311,12 +339,17 @@ def render_summary(report: dict[str, Any]) -> str:
         f"  outcomes: {report['outcome_counts']}",
         f"  coverage: {report['coverage']:.0%}   unknown rate: {report['unknown_rate']:.0%}   escalation: {report['escalation_rate']:.0%}",
         f"  would-approve: {report['approval_candidate_count']}   false-auto candidates: {report['false_auto_approval_count']} -> {report['false_auto_approval_candidates']}",
+        f"  reviewer verdicts: {report.get('samples_with_verdicts', 0)}/{report['calibrate_count']}"
+        f" ({report.get('verdict_coverage', 0):.0%})"
+        f"   decision-capable: {'yes' if report.get('decision_capable') else 'NO'}",
         f"  threshold sweep (current {sens['current']}): ",
     ]
     for point in sens["sweep"]:
         lines.append(
             f"    threshold {point['threshold']:>5}  would-approve {point['approval_candidates']:>3}  false-auto {point['false_auto']:>3}"
         )
+    for warning in report.get("warnings", []):
+        lines.append(f"  WARNING: {warning}")
     for suggestion in report.get("suggestions", []):
         lines.append(f"  SUGGESTION (advisory only): {suggestion}")
     lines.append(

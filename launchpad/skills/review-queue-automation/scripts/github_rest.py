@@ -15,23 +15,35 @@ class RestReader:
     def __init__(self, config: dict[str, Any], state: State):
         self.rest = GithubRest(config, state)
 
-    def open_prs(self, repo: str) -> list[dict[str, Any]]:
+    def _pulls(self, repo: str, state: str, operation: str, page_cap: int = 5) -> list[dict[str, Any]]:
         owner, name = repo.split("/", 1)
         pages: list[dict[str, Any]] = []
         page = 1
         while True:
             batch = self.rest.get(
                 f"/repos/{owner}/{name}/pulls",
-                "list_prs",
-                {"state": "open", "sort": "updated", "direction": "desc", "per_page": 100, "page": page},
+                operation,
+                {"state": state, "sort": "updated", "direction": "desc",
+                 "per_page": 100, "page": page},
             )
             pages.extend(batch)
             if len(batch) < 100:
                 break
             page += 1
-            if page > 5:
-                raise RuntimeError("refusing to walk more than 5 PR pages")
+            if page > page_cap:
+                raise RuntimeError(f"refusing to walk more than {page_cap} PR pages")
         return pages
+
+    def open_prs(self, repo: str) -> list[dict[str, Any]]:
+        return self._pulls(repo, "open", "list_prs")
+
+    def closed_prs(self, repo: str, page_cap: int = 5) -> list[dict[str, Any]]:
+        """Closed (including merged) PRs, newest-updated first.
+
+        Used only by historical calibration, which replays policy against past
+        revisions and never mutates anything.
+        """
+        return self._pulls(repo, "closed", "list_closed_prs", page_cap=page_cap)
 
     def pr_meta(self, repo: str, number: int) -> dict[str, Any]:
         owner, name = repo.split("/", 1)
