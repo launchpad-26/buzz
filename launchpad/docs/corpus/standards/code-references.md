@@ -91,6 +91,9 @@ evidence:
   - statement: "This standard addresses developers as well as agents and reviewers, because a developer is one of the two authors the parent feature names."
     entry_class: TEAM_KNOWLEDGE
     provided_by: "launchpad-26/buzz#605 outcome: 'A developer or agent can create one atomic corpus node and deterministic validation accepts or rejects it against one documented contract.'"
+  - statement: "Per Serina's decision on launchpad-26/buzz#1486, this node reconciles to #1313's documentation-standard: top-level sections are no longer numbered (G4), and internal cross-references that pointed at a section by its number now name the section instead."
+    entry_class: TEAM_KNOWLEDGE
+    provided_by: "launchpad-26/buzz#1486, decided 2026-08-27"
 ---
 
 # Standard: code references
@@ -99,7 +102,7 @@ How a corpus node points at code, what each reference form actually proves, and 
 reference stays honest once the code moves underneath it. Look up the rule you need;
 this is reference material, not a tutorial.
 
-## 1. Scope and authority
+## Scope and authority
 
 **This node governs** every citation, in any node's `evidence` ledger, that names code
 in a repository: which forms are permitted, which are forbidden, how they are pinned and
@@ -124,7 +127,7 @@ accepts a bare pinned URL and documents in its own docstring that requiring the 
 wrapper on corpus evidence is #605's call, not the validator's. This node describes that
 state and leaves it open.
 
-## 2. The forms, and what a pass proves
+## The forms, and what a pass proves
 
 Six shapes are enumerated in `CONTRACT.md` §3. Four of them can name code in this
 repository; the validator additionally accepts a seventh form — a URL — that §3 does not
@@ -141,7 +144,7 @@ revision this node records.
 | Path with a line, out of range | `Justfile:999999` | `ok` | **The file exists.** Nothing else — the file is 1005 lines long. |
 | Path with a range | `Justfile:1-99999999` | `ok` | Same: path checked, bounds not. |
 | Path with a malformed position | `Justfile:0`, `Justfile:5-1` | `error` | — the position is inconsistent with itself |
-| Path with a column or fragment | `…kind.rs:219:5`, `…kind.rs#symbol=Kind` | `error` | — not a supported form; see §5 for the misleading message |
+| Path with a column or fragment | `…kind.rs:219:5`, `…kind.rs#symbol=Kind` | `error` | — not a supported form; see *Enforcement* for the misleading message |
 | GitHub file link, pinned | `…/blob/<40-hex>/Justfile` | `ok` | **Nothing about the target.** Syntax only. |
 | GitHub file link, pinned, target never existed | `…/blob/<40-hex>/does-not-exist.md` | `ok` | **Nothing.** The validator never contacts GitHub. |
 | GitHub file link, mutable ref | `…/blob/main/Justfile` | `error` | — not pinned to a full SHA |
@@ -151,7 +154,7 @@ revision this node records.
 | `raw.githubusercontent.com`, pinned | `…/<40-hex>/Justfile` | `ok` | Syntax only, as above. |
 | GitHub issue or pull-request URL | `…/issues/1459` | `unverified` | Nothing. Recognised, unopenable. |
 | Other external URL | `https://example.com/spec` | `unverified` | Nothing. |
-| Commit reference | `commit <7-40 hex>` | `unverified` | Nothing on disk. See §6. |
+| Commit reference | `commit <7-40 hex>` | `unverified` | Nothing on disk. See *Exceptions and escalation*. |
 | Graph edge, tool result | `a -> b (1 hop)` | `unverified` | Nothing. Owned by #1314. |
 | Anything else | `#1459`, `issue #1459`, free text | `error` | — hard error, never a notice |
 
@@ -162,7 +165,7 @@ accepted wherever its bare target would be, and rejected wherever its target wou
 return `ok` while establishing less than an author would assume: a line number is not
 checked, and a GitHub link is not checked at all.
 
-## 3. MUST
+## MUST
 
 1. **A code reference MUST be a citation in the node's frontmatter `evidence` array.**
    The schema defines no other field for one, and rejects any field beyond the seven it
@@ -187,18 +190,18 @@ checked, and a GitHub link is not checked at all.
    is the source of the pinning rule; the other two are the validator's.
 6. **A citation MUST NOT carry a column, a symbol fragment, or any suffix beyond `:line`
    or `:start-end`.** Editor and compiler output (`file:219:5`) and index fragments
-   (`file#symbol=Name`) are hard errors, reported confusingly — see §5.
+   (`file#symbol=Name`) are hard errors, reported confusingly — see *Enforcement*.
 7. **An issue or pull request MUST NOT be cited as `#1459` or `owner/repo#1459`.** Both
    are hard errors. Cite the full URL, which is recorded `unverified`, or attribute the
-   claim through `provided_by` — see §6.
+   claim through `provided_by` — see *Exceptions and escalation*.
 8. **A claim classified `FACT` MUST rest on at least one citation the validator can
-   open**, with exactly one exception, in §6. A `FACT` supported only by `unverified`
-   citations has been checked by nothing.
+   open**, with exactly one exception, in *Exceptions and escalation*. A `FACT` supported
+   only by `unverified` citations has been checked by nothing.
 9. **A node MUST carry at most one commit-only `FACT`** — the entry recording the
    revision the node was checked against. Nothing enforces this; a second one produces
    another non-fatal notice and still exits 0. It is a rule a reviewer holds.
 
-## 4. SHOULD
+## SHOULD
 
 1. **Prefer a bare path to `path:line`.** The line is not verified against the file, so a
    position that has silently drifted is worse than no position: it looks precise. This
@@ -215,7 +218,7 @@ checked, and a GitHub link is not checked at all.
 5. **For code in another repository, use a pinned `blob` link** — and record, in the
    `statement` itself, what you actually opened, because nothing downstream will.
 
-## 5. Enforcement
+## Enforcement
 
 Run it locally, from the repository root:
 
@@ -249,7 +252,7 @@ on every pull request and every push to `launchpad` that touches
 MUST 8 (a `FACT` rests on something openable), MUST 9 (one commit-only `FACT`), and every
 SHOULD. All four pass validation whether honoured or not.
 
-## 6. Exceptions and escalation
+## Exceptions and escalation
 
 **The one permitted commit-only `FACT`** is the entry recording the revision the node's
 claims were checked against. It is exempt from MUST 8 because the citation *is* the
@@ -280,7 +283,7 @@ sources, not an inconvenient rule.
 document is the defect. Fix it here, with a new measured verdict, rather than working
 around it in a node.
 
-## 7. Read these instead of trusting a copy here
+## Read these instead of trusting a copy here
 
 | For | Read |
 |---|---|
@@ -297,7 +300,7 @@ Enum member lists and the schema's field-combination rules are **not** repeated 
 document. The validator never reads body prose, so a copy of them here would stay green
 forever after going stale.
 
-## 8. Scope and omissions
+## Scope and omissions
 
 **Not covered here, and these are gaps rather than silence:**
 
@@ -352,4 +355,4 @@ corpus-wide policy no authorized source establishes.
   other's paths.** Nothing in `find_citation_problems` treats a corpus path differently
   from any other, so no difference is expected; it was not confirmed.
 - **`git cat-file -e` was run for this node's own recorded revision and no other.** The
-  §6 procedure is stated from that one use.
+  *Exceptions and escalation* procedure is stated from that one use.
