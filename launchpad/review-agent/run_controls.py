@@ -32,6 +32,10 @@ CONTROLS = [
     ("check_unit_suites.py", False),
     ("check_adjudication.py", False),
     ("check_adjudication_mutations.py", False),
+    ("check_verdict_blocks.py", False),
+    ("check_verdict_rows.py", False),
+    ("check_pr_comments.py", True),
+    ("check_verdict_resolution.py", True),
 ]
 
 
