@@ -262,7 +262,19 @@ class State:
             );
             """
         )
+        # Additive column migrations for databases created by an earlier version.
+        # `CREATE TABLE IF NOT EXISTS` above cannot add a column to an existing
+        # table, so each new column is applied idempotently here.
+        self._add_column_if_missing("jobs", "snapshot_hash", "TEXT")
         self._commit()
+
+    def _add_column_if_missing(self, table: str, column: str, decl: str) -> bool:
+        """Add `column` to `table` when absent. Returns True when it was added."""
+        existing = {row["name"] for row in self.db.execute(f"PRAGMA table_info({table})")}
+        if column in existing:
+            return False
+        self.db.execute(f"ALTER TABLE {table} ADD COLUMN {column} {decl}")
+        return True
 
     def close(self) -> None:
         self.db.close()

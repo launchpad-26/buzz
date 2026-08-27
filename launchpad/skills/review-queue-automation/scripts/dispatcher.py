@@ -31,7 +31,7 @@ from typing import Any
 
 from assurance import Profile, drive
 from authority import mode_for
-from common import State
+from common import State, expand_path
 from config import load_repo_config
 from errors import EvidenceIncompleteError, JobBlockingError
 from evidence import collect as collect_evidence
@@ -862,6 +862,60 @@ def _run_job_inner(
     }
 
 
+def resolve_snapshot(
+    local_cfg: dict[str, Any], state: State, job_id: str
+) -> tuple[dict[str, Any], dict[str, Any]]:
+    """Return (effective_config, snapshot_meta) for this job.
+
+    A job runs under the snapshot it STARTED with. On first dispatch the active
+    snapshot is recorded against the job; on resume the pinned snapshot is
+    reloaded and used, so editing the config mid-flight cannot retroactively
+    change an in-flight job's authority, thresholds, or model routes.
+
+    When no policy is configured the snapshot cannot be built; the caller's config
+    is used unchanged and the reason is reported rather than failing the job, so
+    snapshotting is additive for repos that have not adopted policy-as-data.
+    """
+    from snapshot import SnapshotError, SnapshotStore, build_snapshot
+
+    try:
+        store = SnapshotStore(expand_path(local_cfg.get("state_dir") or "."))
+    except OSError as exc:
+        return local_cfg, {"pinned": False, "reason": f"snapshot store unavailable: {exc}"}
+
+    row = state.db.execute(
+        "SELECT snapshot_hash FROM jobs WHERE id=?", (job_id,)
+    ).fetchone()
+    pinned_hash = (row["snapshot_hash"] if row else None) or ""
+
+    if pinned_hash:
+        pinned = store.get(pinned_hash)
+        if pinned is not None:
+            return pinned.config, {
+                "pinned": True, "resumed": True, **pinned.as_meta(),
+            }
+        # The archive is gone; refuse to silently upgrade the job to a newer
+        # snapshot and say so instead.
+        return local_cfg, {
+            "pinned": False,
+            "reason": f"pinned snapshot {pinned_hash[:12]} is no longer archived",
+        }
+
+    from policy import validate_policy
+
+    try:
+        snap = build_snapshot(local_cfg, validate_policy=validate_policy)
+    except SnapshotError as exc:
+        return local_cfg, {"pinned": False, "reason": str(exc)}
+
+    active = store.active()
+    if active is None or active.hash != snap.hash:
+        store.activate(snap)
+    state.execute("UPDATE jobs SET snapshot_hash=? WHERE id=?", (snap.hash, job_id))
+    state.db.commit()
+    return snap.config, {"pinned": True, "resumed": False, **snap.as_meta()}
+
+
 def run_job(local_cfg: dict[str, Any], job: dict[str, Any], *, state: State) -> dict[str, Any]:
     repo = job["repo"]
     number = job["number"]
@@ -873,22 +927,36 @@ def run_job(local_cfg: dict[str, Any], job: dict[str, Any], *, state: State) -> 
         return {"job": job_id, "status": "error", "reason": f"job not found: {job_id}"}
     head_sha = row["head_sha"]
 
+    # Everything below runs under the job's pinned snapshot, not the caller's
+    # possibly-newer config.
+    local_cfg, snapshot_meta = resolve_snapshot(local_cfg, state, job_id)
+
     logger = _make_logger(local_cfg, job_id, repo, number, lane)
+    if snapshot_meta.get("pinned"):
+        _log(logger, "info", body="running under pinned runtime snapshot",
+             phase="dispatch", outcome="pinned",
+             attributes={"snapshot.hash": snapshot_meta.get("snapshot_hash"),
+                         "config.version": snapshot_meta.get("config_version"),
+                         "policy.version": snapshot_meta.get("policy_version"),
+                         "snapshot.resumed": snapshot_meta.get("resumed")})
 
     if not canary_allowed(local_cfg, state, lane):
-        return {"job": job_id, "status": "gated", "reason": f"{lane} canary not approved"}
+        return {"job": job_id, "status": "gated", "reason": f"{lane} canary not approved",
+                "snapshot": snapshot_meta}
 
     # Supersede stale human requests for this PR whose head or policy no longer match.
     supersede_for_head(state, repo, number, head_sha)
     supersede_for_policy(state, repo, number, local_cfg)
 
     try:
-        return _run_job_inner(local_cfg, job, head_sha, logger, state)
+        result = _run_job_inner(local_cfg, job, head_sha, logger, state)
     except SafeStopSignal as exc:
-        return _arrive_safe_stop(state, job, logger, reason=str(exc))
+        result = _arrive_safe_stop(state, job, logger, reason=str(exc))
     except JobBlockingError as exc:
-        return {"job": job_id, "repo": repo, "number": number,
-                "status": "error", "decision": "JOB_BLOCKING", "reason": str(exc)}
+        result = {"job": job_id, "repo": repo, "number": number,
+                  "status": "error", "decision": "JOB_BLOCKING", "reason": str(exc)}
+    result["snapshot"] = snapshot_meta
+    return result
 
 
 def canary_allowed(local_cfg: dict[str, Any], state: State, lane: str) -> bool:

@@ -149,26 +149,30 @@ def build_snapshot(
 
 
 class SnapshotStore:
-    """Durable single-file snapshot store under a state directory.
+    """Durable snapshot store under a state directory.
 
     Layout:
-      <state>/snapshots/active.json   one payload: meta + config + policy
+      <state>/snapshots/active.json          the currently active payload
+      <state>/snapshots/by-hash/<hash>.json  every activated payload, kept so an
+                                             in-flight job can be resumed under
+                                             the exact snapshot it started with
 
-    A single file means a restart either sees the complete previous snapshot or
-    the complete new one — never a half-applied mixture.
+    Each payload is one file, so a restart either sees the complete previous
+    snapshot or the complete new one — never a half-applied mixture.
     """
 
     def __init__(self, state_dir: str | os.PathLike[str]):
         self.dir = pathlib.Path(state_dir) / "snapshots"
-        self.dir.mkdir(parents=True, exist_ok=True)
+        self.by_hash_dir = self.dir / "by-hash"
+        self.by_hash_dir.mkdir(parents=True, exist_ok=True)
         self.active_path = self.dir / "active.json"
 
-    def active(self) -> RuntimeSnapshot | None:
-        """Reconstruct the exact stored snapshot, or None when absent/corrupt."""
-        if not self.active_path.is_file():
+    def _load(self, path: pathlib.Path) -> RuntimeSnapshot | None:
+        """Reconstruct a stored snapshot, or None when absent/unreadable/corrupt."""
+        if not path.is_file():
             return None
         try:
-            payload = json.loads(self.active_path.read_text(encoding="utf-8"))
+            payload = json.loads(path.read_text(encoding="utf-8"))
         except (json.JSONDecodeError, OSError):
             return None
         if not isinstance(payload, dict):
@@ -191,8 +195,26 @@ class SnapshotStore:
             created_at=meta.get("created_at", ""),
         )
 
+    def active(self) -> RuntimeSnapshot | None:
+        """The currently active snapshot, or None when absent/corrupt."""
+        return self._load(self.active_path)
+
+    def get(self, snapshot_hash: str) -> RuntimeSnapshot | None:
+        """Retrieve a previously activated snapshot by hash.
+
+        This is what lets an in-flight job be resumed under the exact snapshot it
+        started with, so a config edit cannot retroactively change its authority.
+        """
+        if not snapshot_hash:
+            return None
+        return self._load(self.by_hash_dir / f"{snapshot_hash}.json")
+
     def activate(self, snapshot: RuntimeSnapshot) -> RuntimeSnapshot:
-        """Atomically make `snapshot` active, retaining last-known-good on failure."""
+        """Atomically make `snapshot` active, retaining last-known-good on failure.
+
+        The payload is also archived by hash so any job pinned to it stays
+        resumable after later activations.
+        """
         payload = {
             "payload_version": PAYLOAD_VERSION,
             "meta": snapshot.as_meta(),
@@ -203,13 +225,18 @@ class SnapshotStore:
             body = json.dumps(payload, indent=2, sort_keys=True) + "\n"
         except (TypeError, ValueError) as exc:
             raise SnapshotError(f"snapshot is not serializable: {exc}") from exc
-        tmp = self.active_path.with_name(self.active_path.name + ".tmp")
-        try:
-            tmp.write_text(body, encoding="utf-8")
-            tmp.replace(self.active_path)
-        except OSError as exc:
-            tmp.unlink(missing_ok=True)
-            raise SnapshotError(f"could not activate snapshot: {exc}") from exc
+
+        # Archive first: an archived-but-not-active payload is harmless, whereas an
+        # active payload with no archive would break resume-under-original-pin.
+        archive = self.by_hash_dir / f"{snapshot.hash}.json"
+        for target in (archive, self.active_path):
+            tmp = target.with_name(target.name + ".tmp")
+            try:
+                tmp.write_text(body, encoding="utf-8")
+                tmp.replace(target)
+            except OSError as exc:
+                tmp.unlink(missing_ok=True)
+                raise SnapshotError(f"could not activate snapshot: {exc}") from exc
         return snapshot
 
     def pin(self, result: dict[str, Any], snapshot: RuntimeSnapshot) -> dict[str, Any]:
