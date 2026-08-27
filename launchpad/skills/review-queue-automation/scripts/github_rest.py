@@ -45,6 +45,18 @@ class RestReader:
         """
         return self._pulls(repo, "closed", "list_closed_prs", page_cap=page_cap)
 
+    def repo_meta(self, repo: str) -> dict[str, Any]:
+        """Repository metadata, including the authenticated user's `permissions`.
+
+        Used by the auth probe to establish capability WITHOUT mutating anything.
+        """
+        owner, name = repo.split("/", 1)
+        return self.rest.get(f"/repos/{owner}/{name}", "repo_meta")
+
+    def viewer(self) -> dict[str, Any]:
+        """The authenticated user. Confirms the token resolves to an identity."""
+        return self.rest.get("/user", "viewer")
+
     def pr_meta(self, repo: str, number: int) -> dict[str, Any]:
         owner, name = repo.split("/", 1)
         return self.rest.get(f"/repos/{owner}/{name}/pulls/{number}", "pr_meta")

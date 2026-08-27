@@ -916,7 +916,20 @@ def resolve_snapshot(
     return snap.config, {"pinned": True, "resumed": False, **snap.as_meta()}
 
 
-def run_job(local_cfg: dict[str, Any], job: dict[str, Any], *, state: State) -> dict[str, Any]:
+def run_job(
+    local_cfg: dict[str, Any],
+    job: dict[str, Any],
+    *,
+    state: State,
+    capability_mode: str | None = None,
+) -> dict[str, Any]:
+    """Drive one job to a terminal state.
+
+    `capability_mode` is the proven GitHub capability for this repo (see
+    `github_auth.probe`). It can only ever REDUCE the authority the snapshot
+    authorises, never grant it, and is re-applied on every run because capability
+    is current state rather than something the snapshot pins.
+    """
     repo = job["repo"]
     number = job["number"]
     lane = job["lane"]
@@ -931,6 +944,14 @@ def run_job(local_cfg: dict[str, Any], job: dict[str, Any], *, state: State) -> 
     # possibly-newer config.
     local_cfg, snapshot_meta = resolve_snapshot(local_cfg, state, job_id)
 
+    capability_note = ""
+    if capability_mode:
+        from github_auth import FULL, downgrade_config_for_mode
+
+        if capability_mode != FULL:
+            local_cfg = downgrade_config_for_mode(local_cfg, capability_mode)
+            capability_note = f"authority clamped to proven capability: {capability_mode}"
+
     logger = _make_logger(local_cfg, job_id, repo, number, lane)
     if snapshot_meta.get("pinned"):
         _log(logger, "info", body="running under pinned runtime snapshot",
@@ -939,6 +960,10 @@ def run_job(local_cfg: dict[str, Any], job: dict[str, Any], *, state: State) -> 
                          "config.version": snapshot_meta.get("config_version"),
                          "policy.version": snapshot_meta.get("policy_version"),
                          "snapshot.resumed": snapshot_meta.get("resumed")})
+    if capability_note:
+        _log(logger, "warning", body=capability_note, phase="dispatch",
+             outcome="capability_clamped",
+             attributes={"github.capability_mode": capability_mode})
 
     if not canary_allowed(local_cfg, state, lane):
         return {"job": job_id, "status": "gated", "reason": f"{lane} canary not approved",
@@ -974,6 +999,8 @@ def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="Review-queue dispatch / onboarding gate")
     parser.add_argument("--config", default=None)
     parser.add_argument("--repo-root", required=True)
+    parser.add_argument("--no-capability-probe", action="store_true",
+                        help="skip the GitHub capability probe (offline/testing)")
     sub = parser.add_subparsers(dest="command", required=True)
 
     sw = sub.add_parser("sweep")
@@ -1003,6 +1030,30 @@ def main(argv: list[str] | None = None) -> int:
 
     state_dir = cfg.get("state_dir")
     state = State({"state_dir": state_dir or "~/.config/review-queue-automation"})
+
+    # Probe capability ONCE per invocation, not per job: it costs two reads and
+    # applies to the whole repository. A repo we cannot write to still produces
+    # drafts and human requests rather than failing.
+    capability_mode = None
+    slug = (cfg.get("repository") or {}).get("slug", "")
+    if slug and not args.no_capability_probe:
+        from github_auth import UNUSABLE, probe as probe_capability
+
+        try:
+            capability = probe_capability(cfg, state, slug)
+            capability_mode = capability.get("mode")
+        except Exception as exc:  # probing must never abort a sweep
+            capability_mode = None
+            capability = {"error": str(exc)[:200]}
+        if capability_mode == UNUSABLE:
+            print(json.dumps({
+                "status": "capability_unusable",
+                "reason": "the authenticated identity cannot read this repository",
+                "capability": capability,
+            }, indent=2, sort_keys=True))
+            state.close()
+            return 1
+
     try:
         if args.command == "sweep":
             rows = state.db.execute(
@@ -1017,6 +1068,7 @@ def main(argv: list[str] | None = None) -> int:
                         cfg,
                         {"job_id": row["job_id"], "repo": row["repo"], "number": row["number"], "lane": row["lane"]},
                         state=state,
+                        capability_mode=capability_mode,
                     )
                 except Exception as exc:
                     result = {"job": row["job_id"], "status": "error", "reason": str(exc)[:500]}
@@ -1032,6 +1084,7 @@ def main(argv: list[str] | None = None) -> int:
                 cfg,
                 {"job_id": args.job, "repo": row["repo"], "number": row["number"], "lane": row["lane"]},
                 state=state,
+                capability_mode=capability_mode,
             )
             json.dump(result, sys.stdout, indent=2, sort_keys=True)
         sys.stdout.write("\n")
