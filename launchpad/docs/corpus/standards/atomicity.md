@@ -132,9 +132,12 @@ evidence:
       - "launchpad/project-intelligence/corpus/validate.py"
       - "launchpad/docs/corpus/AGENTS.md"
     confidence: 0.7
+  - statement: "Per Serina's decision on launchpad-26/buzz#1486, this node reconciles to #1313's documentation-standard: the H1 now reads 'Standard: atomicity', and MUST/SHOULD are top-level sections rather than subsections of a Requirements wrapper."
+    entry_class: TEAM_KNOWLEDGE
+    provided_by: "launchpad-26/buzz#1486, decided 2026-08-27"
 ---
 
-# Atomicity
+# Standard: atomicity
 
 How many corpus nodes a subject becomes, and how an author decides.
 
@@ -176,9 +179,7 @@ in here would break the very rule this node states:
 This node uses MUST and SHOULD in the ordinary normative sense and links #1320 rather
 than defining them.
 
-## Requirements
-
-### MUST
+## MUST
 
 | | Requirement |
 |---|---|
@@ -197,7 +198,7 @@ covered content it does not.
 neither saying so, reads to the next author as two subjects that were never related —
 and they will not know to look for the other half.
 
-### SHOULD
+## SHOULD
 
 | | Guidance |
 |---|---|
