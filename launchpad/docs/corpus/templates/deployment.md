@@ -346,20 +346,46 @@ standard, per the *Scope and authority* note above.)
    no inline diagram does not validate today and would not survive review even if
    it did.
 
-4. **Environment inventory.** One row per named environment: its name, its
+4. **Secrets and sensitive values.** A node built from this template **must
+   never record a live secret, key, token, credential, or private
+   hostname/endpoint value** — not even as a "just this once" example — per the
+   repository's root `AGENTS.md` §8: "Never add a secret, key, token, or private
+   hostname to a tracked file." A corpus node is a tracked file like any other;
+   nothing about being a deployment document exempts it, and nothing
+   automatically catches a violation (`launchpad/SECURITY-POSTURE.md`) — this
+   template states the rule because compliance otherwise rests entirely on
+   whoever is writing. The rule binds every table in this document and every
+   citation in *Evidence expectations* below, including one that states what
+   another repository's own documentation says: `launchpad/ENVIRONMENTS.md`
+   applies the identical "no hostnames" rule to naming this repository's own
+   environments, and the same reasoning extends to any deployment or
+   infrastructure node named here. Point the reader at the *role* and the
+   *reference*, never the *value* — name the managed service or node and the
+   configuration key, Secret name, or Terraform/Pulumi resource that addresses
+   it (for example, "the managed Postgres addressed by
+   `externalPostgresql.url`", "the cluster Secret named by
+   `secrets.existingSecret`", "the load balancer, its DNS name held in
+   Terraform state this repository does not check in") — never the literal
+   hostname, connection string, IP address, or credential itself. Where an
+   example is genuinely needed, use an obviously fake placeholder and say so.
+
+5. **Environment inventory.** One row per named environment: its name, its
    purpose (development, evaluation, staging, production, or whatever the system
    calls it), and what is materially different about it from its neighbours —
    replica counts, whether dependencies are external/managed or bundled/in-cluster,
-   how secrets are provisioned, whether it is GitOps-managed. This is the table
-   that keeps "which environment" answerable without re-reading every diagram.
+   how secrets are provisioned (a mechanism — Kubernetes Secret, Terraform-managed,
+   chart `lookup`-generated — never the secret value itself, per item 4 above),
+   whether it is GitOps-managed. This is the table that keeps "which environment"
+   answerable without re-reading every diagram.
 
-5. **Deployment and infrastructure node inventory.** One row per deployment node
+6. **Deployment and infrastructure node inventory.** One row per deployment node
    (a host, VM, Kubernetes cluster or namespace, PaaS instance) and per
    infrastructure node (load balancer, ingress, DNS, firewall) shown in the
-   diagram(s): its name, its kind, and a one-line statement of what runs on it or
-   what it fronts.
+   diagram(s): its name (a logical or role name — "production ingress", not a
+   literal hostname or IP address; see item 4), its kind, and a one-line
+   statement of what runs on it or what it fronts.
 
-6. **Container-to-infrastructure mapping.** For each container (named per the
+7. **Container-to-infrastructure mapping.** For each container (named per the
    architecture-container document, if one exists) in each environment: which
    deployment node it runs on, how many instances, and what is different about
    that mapping from the same container's mapping in another environment. This is
@@ -368,7 +394,7 @@ standard, per the *Scope and authority* note above.)
    reader can verify against real deployment configuration rather than trusting
    the arrows alone.
 
-7. **Scope and omissions**, per `AGENTS.md`'s own required shape for this
+8. **Scope and omissions**, per `AGENTS.md`'s own required shape for this
    section: what this document does not cover and who owns it (the containers'
    own identity and technology → the architecture-container template, #1327;
    what operators do when a deployment misbehaves → the runbook template, #1347;
@@ -438,7 +464,10 @@ classified honestly, not defaulted to `FACT`:
   actual deployment configuration: a Helm chart's `templates/`, a Kubernetes
   manifest, a Terraform/Pulumi resource, a `docker-compose.yml` service, a CI/CD
   pipeline step that provisions it. Do not cite a README's prose description
-  alone — configuration is what actually runs; prose drifts from it.
+  alone — configuration is what actually runs; prose drifts from it. Citing that
+  configuration means naming the file, resource, or pipeline step — never
+  quoting a secret, hostname, or credential value the configuration happens to
+  contain; see *Secrets and sensitive values* above.
 - **A difference between two environments** (replica count, external versus
   bundled dependencies, secret provisioning) is a `FACT` when it cites the
   values or manifests that actually differ between them — for example two
@@ -455,7 +484,11 @@ classified honestly, not defaulted to `FACT`:
   Kubernetes cluster, but that is a `FACT` about what `CLAUDE.md` states, not a
   `FACT` about the Terraform itself — the Terraform was not opened while writing
   this template, and a real instance document should open it before promoting
-  the claim.
+  the claim. Stating what the other repository or its own documentation says is
+  itself bound by *Secrets and sensitive values* above: name that repository,
+  the resource type, and the mechanism (a Terraform resource, a Helm value) —
+  never a hostname, endpoint, or credential value that other documentation
+  might contain, even when quoting it accurately.
 - **A planned or intended deployment topology** — something a diagram shows
   because it is planned, not because it is live — is `TEAM_KNOWLEDGE` attributed
   to the issue, PR, or decision that intends it, never `FACT`.
@@ -470,6 +503,13 @@ classified honestly, not defaulted to `FACT`:
 itself, `confidence`'s meaning, or the citation shapes.** `AGENTS.md` and
 `standards/confidence.md` own those, and a second copy here would be exactly the
 drift-prone duplication `AGENTS.md` warns against.
+
+**None of the citation forms above license recording a secret, key, token, or
+private hostname/endpoint value.** *Secrets and sensitive values* (required
+section 4) binds every citation in this document, including one made solely to
+satisfy an evidence requirement — a `FACT` citation to real configuration, or a
+`TEAM_KNOWLEDGE` citation to another repository's documentation, is still
+naming the reference, never quoting the value.
 
 ## Relationships an instance node should consider
 
