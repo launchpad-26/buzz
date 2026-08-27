@@ -493,6 +493,24 @@ def run_panel(
             if ok:
                 selected.append(pool["_key"])
                 completed.append(pool["selector"])
+                # Record the route that ACTUALLY executed, including whether the
+                # requested effort was enforceable by that transport.
+                try:
+                    from ledger import record as _ledger_record
+
+                    _ledger_record(
+                        state, job_id=job, repo=repo, number=number,
+                        head_sha=state.db.execute(
+                            "SELECT head_sha FROM jobs WHERE id=?", (job,)
+                        ).fetchone()["head_sha"],
+                        kind="route", entry_key=pool["_key"],
+                        payload=dict(pool.get("_invocation") or {},
+                                     slot=SLOT_FILES[slot],
+                                     capability=pool.get("capability", ""),
+                                     provider_family=pool.get("provider_family", "")),
+                    )
+                except Exception:
+                    pass  # the ledger explains runs; it must not break one
                 used_selectors.add(pool["selector"])
                 if family:
                     used_families.add(family)

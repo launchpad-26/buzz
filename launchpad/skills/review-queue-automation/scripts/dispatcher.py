@@ -147,6 +147,26 @@ def _arrive_safe_stop(state: State, job: dict[str, Any], logger, reason: str) ->
     }
 
 
+
+def _ledger_record(state: State, job: dict[str, Any], head_sha: str, kind: str,
+                   payload: dict[str, Any], *, entry_key: str = "",
+                   snapshot_meta: dict[str, Any] | None = None) -> None:
+    """Append a ledger entry. Never raises: the ledger explains decisions, so a
+    ledger problem must not change one. Failures surface in the JSONL log."""
+    try:
+        from ledger import record
+
+        meta = snapshot_meta or {}
+        record(
+            state, job_id=job["job_id"], repo=job["repo"], number=job["number"],
+            head_sha=head_sha, kind=kind, payload=payload, entry_key=entry_key,
+            snapshot_hash=meta.get("snapshot_hash", "") or "",
+            policy_version=meta.get("policy_version", "") or "",
+        )
+    except Exception:
+        pass
+
+
 def _pr_payload(state: State, repo: str, number: int) -> dict[str, Any]:
     row = state.db.execute(
         "SELECT payload FROM prs WHERE repo=? AND number=?", (repo, number)
@@ -390,6 +410,7 @@ def _execute_live_approval(
     final_profile: Any,
     verdicts: list[dict[str, Any]],
     panel_decision: str,
+    snapshot_meta: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     """Run the guarded APPROVE mutation for an eligible live decision.
 
@@ -457,6 +478,13 @@ def _execute_live_approval(
          attributes={"approval.decision_id": decision.decision_id,
                      "approval.outcome": outcome})
 
+    _ledger_record(state, job, head_sha, "action", {
+        "operation": "approve_review",
+        "outcome": outcome,
+        "verified": bool(ok and outcome == APPROVED),
+        "decision_id": decision.decision_id,
+        "message": message,
+    }, entry_key="approve", snapshot_meta=snapshot_meta)
     if ok and outcome == APPROVED:
         _transition_guarded(state, job_id, "approval_action", logger=logger,
                             phase="approval", reason="approve mutation verified")
@@ -576,6 +604,7 @@ def _execute_request_changes(
     final_profile: Any,
     verdicts: list[dict[str, Any]],
     steps: list[Any],
+    snapshot_meta: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     """Handle a panel that unanimously located defects.
 
@@ -602,6 +631,16 @@ def _execute_request_changes(
             "steps": [{"profile": s.profile.as_dict(), "decision": s.decision} for s in steps],
         }
         out.update(extra or {})
+        # Single exit point, so every terminal outcome of this path lands in the
+        # ledger and the timeline is never missing its conclusion.
+        _ledger_record(state, job, head_sha, "decision", {
+            "disposition": outcome,
+            "panel_decision": "REQUEST_CHANGES",
+            "status": out["status"],
+            "reason": out.get("reason", ""),
+            "failed_gates": out.get("failed_gates", []),
+            "profile": final_profile.as_dict(),
+        }, entry_key="request_changes_outcome", snapshot_meta=snapshot_meta)
         return out
 
     _transition_guarded(state, job_id, "adjudication", logger=logger,
@@ -620,6 +659,11 @@ def _execute_request_changes(
          outcome="corroborated" if verified else "uncorroborated",
          attributes={"findings.verified": summary["verified_count"],
                      "findings.unverified": summary["unverified_count"]})
+    for item in results:
+        entry = item.as_dict()
+        _ledger_record(state, job, head_sha, "finding", entry,
+                       entry_key=f"{entry.get('severity')}:{entry.get('location')}",
+                       snapshot_meta=snapshot_meta)
 
     # Uncorroborated defects are a human question, never an authoritative action.
     if not verified:
@@ -646,6 +690,8 @@ def _execute_request_changes(
         achieved_slots=len(verdicts),
         blockers=tuple(f"blocker:{r.finding.location}" for r in verified),
     )
+    _ledger_record(state, job, head_sha, "assurance", assurance.as_dict(),
+                   entry_key="request_changes_assurance", snapshot_meta=snapshot_meta)
     payload = _pr_payload(state, repo, number)
     gate = request_changes_gate(
         cfg=local_cfg, repo=repo, head_sha=head_sha,
@@ -700,6 +746,12 @@ def _execute_request_changes(
                             phase="decision", reason=reason[:200])
         return _result("mutation_failed", {"reason": str(exc), "findings": summary})
 
+    _ledger_record(state, job, head_sha, "action", {
+        "operation": "request_changes_review",
+        "outcome": "changes_requested",
+        "verified": True,
+        "verified_findings": summary["verified_count"],
+    }, entry_key="request_changes", snapshot_meta=snapshot_meta)
     _transition_guarded(state, job_id, "changes_requested", logger=logger,
                         phase="decision", reason="verified defects; changes requested")
     return _result("changes_requested", {"findings": summary})
@@ -739,6 +791,7 @@ def _run_job_inner(
     head_sha: str,
     logger: JobLogger | None,
     state: State,
+    snapshot_meta: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     repo = job["repo"]
     number = job["number"]
@@ -786,6 +839,7 @@ def _run_job_inner(
             final_profile=final_profile,
             verdicts=_collected_verdicts(state, job_id),
             steps=steps,
+            snapshot_meta=snapshot_meta,
         )
 
     if decision != "SUCCESS":
@@ -811,6 +865,16 @@ def _run_job_inner(
          outcome=res.disposition,
          attributes={"risk.score": res.risk_score, "risk.band": res.risk_band_name,
                      "approval.failed_gates": res.failed_gates})
+    _ledger_record(state, job, head_sha, "decision", {
+        "disposition": res.disposition,
+        "failed_gates": res.failed_gates,
+        "risk_score": res.risk_score,
+        "risk_band": res.risk_band_name,
+        "protected": res.protected,
+        "reason": res.reason,
+        "panel_decision": decision,
+        "profile": final_profile.as_dict(),
+    }, entry_key="approval_evaluation", snapshot_meta=snapshot_meta)
 
     if res.disposition == "live":
         _transition_guarded(state, job_id, "approval_revalidation", logger=logger,
@@ -819,6 +883,7 @@ def _run_job_inner(
             local_cfg, job, head_sha, logger, state,
             decision=res, decision_steps=steps, final_profile=final_profile,
             verdicts=verdicts, panel_decision=decision,
+            snapshot_meta=snapshot_meta,
         )
     elif res.disposition == "shadow":
         _transition_guarded(state, job_id, "advisory_action", logger=logger,
@@ -979,7 +1044,7 @@ def run_job(
     supersede_for_policy(state, repo, number, local_cfg)
 
     try:
-        result = _run_job_inner(local_cfg, job, head_sha, logger, state)
+        result = _run_job_inner(local_cfg, job, head_sha, logger, state, snapshot_meta)
     except SafeStopSignal as exc:
         result = _arrive_safe_stop(state, job, logger, reason=str(exc))
     except JobBlockingError as exc:

@@ -260,6 +260,21 @@ class State:
               job_id TEXT,
               updated_at TEXT NOT NULL
             );
+            CREATE TABLE IF NOT EXISTS ledger_entries (
+              id INTEGER PRIMARY KEY AUTOINCREMENT,
+              job_id TEXT NOT NULL,
+              repo TEXT NOT NULL,
+              number INTEGER NOT NULL,
+              head_sha TEXT NOT NULL,
+              recorded_at TEXT NOT NULL,
+              kind TEXT NOT NULL,
+              entry_key TEXT,
+              payload TEXT NOT NULL,
+              snapshot_hash TEXT,
+              policy_version TEXT
+            );
+            CREATE INDEX IF NOT EXISTS ledger_by_job ON ledger_entries(job_id, id);
+            CREATE INDEX IF NOT EXISTS ledger_by_pr ON ledger_entries(repo, number, head_sha);
             """
         )
         # Additive column migrations for databases created by an earlier version.
