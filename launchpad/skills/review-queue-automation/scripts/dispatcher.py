@@ -288,13 +288,43 @@ def _evidence_missing(
             "status": "degraded_draft", "decision": "EVIDENCE_INCOMPLETE", "reason": reason}
 
 
-def notify_human(local_cfg: dict[str, Any], request: dict[str, Any]) -> None:
-    """Best-effort human notification hook (default no-op).
+def notify_human(local_cfg: dict[str, Any], request: dict[str, Any]) -> dict[str, Any]:
+    """Deliver a queued human request over the configured transport.
 
     A failure here must NOT remove or decline the request: the item stays in the
-    pending queue so it is never lost to a transient notification problem.
+    pending queue so it is never lost to a transient notification problem. Every
+    caller therefore wraps this and preserves the row on exception.
+
+    Returns the delivery record from `notify.deliver`.
     """
-    return None
+    from notify import deliver
+
+    return deliver(local_cfg, request)
+
+
+def _deliver_notification(
+    local_cfg: dict[str, Any], request: dict[str, Any], logger
+) -> str:
+    """Deliver a queued request and describe the outcome truthfully.
+
+    Never raises: the durable queue row is the record of work, so a delivery
+    problem must not fail the job. The returned string distinguishes an actual
+    delivery from "queued but nothing was sent", so a missing transport cannot
+    look like a successful notification.
+    """
+    try:
+        record = notify_human(local_cfg, request)
+    except Exception as exc:  # delivery only; the request stays pending
+        _log(logger, "warning", body="notification failure; request preserved",
+             phase="approval", outcome="notification_failed")
+        return f"notification failure (request preserved): {exc}"
+    if isinstance(record, dict) and not record.get("delivered", False):
+        detail = record.get("detail", "no transport configured")
+        _log(logger, "warning", body=f"human request queued but not delivered: {detail}",
+             phase="approval", outcome="not_delivered")
+        return f"not delivered ({detail})"
+    transport = record.get("transport", "unknown") if isinstance(record, dict) else "unknown"
+    return f"delivered via {transport}"
 
 
 def degrade(
@@ -443,13 +473,7 @@ def _execute_live_approval(
             rationale=f"{outcome}: {message}"[:800],
             action="approve", expiry_minutes=expiry,
         )
-        notification = "sent"
-        try:
-            notify_human(local_cfg, request)
-        except Exception as exc:  # keep the request queued, nonblocking
-            notification = f"notification failure (request preserved): {exc}"
-            _log(logger, "warning", body="notification failure; request preserved",
-                 phase="approval", outcome="notification_failed")
+        notification = _deliver_notification(local_cfg, request, logger)
         _transition_guarded(state, job_id, "human_approval_pending", logger=logger,
                             phase="approval", reason=f"{outcome}: {message}"[:200])
         return _result(outcome, {"reason": message,
@@ -565,13 +589,7 @@ def _run_job_inner(
             expiry_minutes=expiry,
         )
         # Notification failure must NOT drop the request from the pending queue.
-        notification = "sent"
-        try:
-            notify_human(local_cfg, request)
-        except Exception as notify_exc:  # keep the request queued, nonblocking
-            notification = f"notification failure (request preserved): {notify_exc}"
-            _log(logger, "warning", body="notification failure; request preserved",
-                 phase="approval", outcome="notification_failed")
+        notification = _deliver_notification(local_cfg, request, logger)
         _transition_guarded(state, job_id, "human_approval_pending", logger=logger,
                             phase="approval", reason="queued for human approval")
         return {

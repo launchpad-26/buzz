@@ -281,6 +281,34 @@ def validate_config(config: dict[str, Any], repo_root: pathlib.Path) -> list[str
         if "evaluated_sha_only" in shadow and not isinstance(shadow.get("evaluated_sha_only"), bool):
             issues.append("shadow.evaluated_sha_only must be a boolean")
 
+    # ---- Notifications (optional; fail-closed when malformed) -------------
+    # Absent section == no delivery, which is safe: the human queue is still the
+    # durable record. A PRESENT but malformed section is an error, so a typo can
+    # never silently disable the operator's only notification path.
+    if "notifications" in config:
+        notifications = config.get("notifications")
+        if not isinstance(notifications, dict):
+            issues.append("notifications must be an object")
+        else:
+            transport = (notifications.get("transport") or "none").strip().lower()
+            if transport not in ("none", "file", "command"):
+                issues.append(
+                    "notifications.transport must be one of none|file|command, "
+                    f"got {transport!r}"
+                )
+            if transport == "file" and not (notifications.get("path") or "").strip():
+                issues.append("notifications.path is required when transport is file")
+            if transport == "command":
+                command = notifications.get("command")
+                if isinstance(command, list):
+                    if not command or not all(isinstance(c, str) and c for c in command):
+                        issues.append("notifications.command list must be non-empty strings")
+                elif not (command or "").strip():
+                    issues.append("notifications.command is required when transport is command")
+            timeout = notifications.get("timeout_seconds", 30)
+            if not isinstance(timeout, int) or isinstance(timeout, bool) or timeout <= 0:
+                issues.append("notifications.timeout_seconds must be a positive integer")
+
     return issues
 
 
