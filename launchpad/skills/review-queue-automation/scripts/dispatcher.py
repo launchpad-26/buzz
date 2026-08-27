@@ -398,6 +398,104 @@ def _cached_pr_node_id(state: State, repo: str, number: int) -> str:
     return str(node) if node else ""
 
 
+def _recent_approval_count(state: State, hours: int = 24) -> int:
+    """Verified approval mutations inside the trailing window."""
+    since = (dt.datetime.now(dt.timezone.utc) - dt.timedelta(hours=hours)) \
+        .isoformat().replace("+00:00", "Z")
+    row = state.db.execute(
+        "SELECT COUNT(*) AS c FROM mutations WHERE operation='approve_review' "
+        "AND status='verified' AND updated_at>=?",
+        (since,),
+    ).fetchone()
+    return int(row["c"]) if row else 0
+
+
+def _rest_remaining(state: State) -> int | None:
+    """Most recent recorded REST rate-limit remaining, or None if unknown."""
+    row = state.db.execute(
+        "SELECT remaining FROM api_calls WHERE remaining IS NOT NULL "
+        "ORDER BY id DESC LIMIT 1"
+    ).fetchone()
+    return int(row["remaining"]) if row and row["remaining"] is not None else None
+
+
+def _approval_evidence(
+    local_cfg: dict[str, Any],
+    state: State,
+    job: dict[str, Any],
+    head_sha: str,
+    *,
+    verdicts: list[dict[str, Any]],
+    required_slots: int,
+) -> Any:
+    """Compute the external-evidence gates from ACTUAL state.
+
+    `compute_gates` keeps a backward-compatible fallback in which these gates
+    default to True when no evidence object is supplied. That fallback must never
+    apply to the live path: the dispatcher therefore always supplies real values,
+    and each one fails closed when it cannot be established.
+    """
+    from approval_evaluate import ApprovalEvidence
+
+    approval = local_cfg.get("approval") or {}
+    assurance_cfg = local_cfg.get("assurance") or {}
+
+    # Achieved assurance, computed from the evidence and reviewer completion that
+    # this job actually obtained.
+    assurance = _job_assurance(
+        local_cfg, state, job["job_id"],
+        required_slots=required_slots,
+        achieved_slots=len(verdicts),
+        blockers=(),
+    )
+
+    # Bounded change: the diff must be inside the configured large-diff threshold.
+    payload = _pr_payload(state, job["repo"], job["number"])
+    try:
+        additions = int(payload.get("additions", 0) or 0)
+        deletions = int(payload.get("deletions", 0) or 0)
+    except (TypeError, ValueError):
+        additions = deletions = 0
+    large = int(assurance_cfg.get("large_diff_lines", 700) or 700)
+    bounded_change = bool(payload) and (additions + deletions) <= large
+
+    # Audit writable: the job directory must accept the audit artefacts.
+    try:
+        probe = state.job_dir(job["job_id"]) / ".audit-probe"
+        probe.write_text("ok", encoding="utf-8")
+        probe.unlink()
+        audit_writable = True
+    except OSError:
+        audit_writable = False
+
+    # Rate limits: the daily approval cap and the REST remaining floor. An unknown
+    # REST remaining is not a pass.
+    daily_limit = approval.get("daily_limit")
+    within_daily = True
+    if isinstance(daily_limit, int) and daily_limit >= 0:
+        within_daily = _recent_approval_count(state) < daily_limit
+    floor = int((local_cfg.get("poll") or {}).get("rest_remaining_floor", 0) or 0)
+    remaining = _rest_remaining(state)
+    within_rest = True if floor <= 0 else (remaining is not None and remaining >= floor)
+    rate_limit_ok = within_daily and within_rest
+
+    # A cheap pre-check only. The AUTHORITATIVE revalidation is the mandatory live
+    # REST read inside `approval_action.execute_approval`, immediately before the
+    # mutation; this gate exists so an already-known-stale head is rejected earlier.
+    observed = (payload.get("head") or {}).get("sha", "") if isinstance(payload.get("head"), dict) else ""
+    revalidation_ok = bool(observed) and observed == head_sha
+
+    return ApprovalEvidence(
+        required_reviewers=required_slots,
+        completed_reviewers=len(verdicts),
+        bounded_change=bounded_change,
+        audit_writable=audit_writable,
+        assurance_met=assurance.assurance_met,
+        revalidation_ok=revalidation_ok,
+        rate_limit_ok=rate_limit_ok,
+    )
+
+
 def _execute_live_approval(
     local_cfg: dict[str, Any],
     job: dict[str, Any],
@@ -855,11 +953,16 @@ def _run_job_inner(
                         phase="approval", reason="evaluating approval")
     verdicts = _collected_verdicts(state, job_id)
     pr_facts = _load_pr_facts(state, job, head_sha, local_cfg)
+    required_slots = 1 if final_profile.independence == "single" else 2
     res = eval_approval(
         state, local_cfg, repo=repo, number=number, head_sha=head_sha,
         pr=pr_facts, verdicts=verdicts, profile=final_profile.as_dict(),
         reviewers=[v.get("model", "") for v in verdicts],
         assessments={}, login=local_cfg.get("login", ""),
+        evidence=_approval_evidence(
+            local_cfg, state, job, head_sha,
+            verdicts=verdicts, required_slots=required_slots,
+        ),
     )
     _log(logger, "info", body=f"approval evaluation -> {res.disposition}", phase="approval",
          outcome=res.disposition,
