@@ -219,9 +219,14 @@ def _load_pr_facts(state: State, job: dict[str, Any], head_sha: str, local_cfg: 
         isinstance(c, dict) and c.get("conclusion") == "SUCCESS" for c in checks
     )
 
+    # PRFacts.head_sha must be the OBSERVED current head, so the `head_matches`
+    # gate can actually compare it against the head that was reviewed. Falling
+    # back to the job's own head_sha here would make that gate tautological (it
+    # would compare the reviewed head with itself and could never fail). An
+    # unknown observed head stays empty, which fails the gate closed.
     ph = payload.get("head")
     payload_head = ph.get("sha", "") if isinstance(ph, dict) else ""
-    resolved_head = head_sha or payload_head or context.get("head", "")
+    observed_head = payload_head or context.get("head", "")
 
     try:
         complexity = int(payload.get("complexity", 0) or 0)
@@ -231,7 +236,7 @@ def _load_pr_facts(state: State, job: dict[str, Any], head_sha: str, local_cfg: 
     return PRFacts(
         draft=draft,
         author_login=author,
-        head_sha=resolved_head,
+        head_sha=observed_head,
         files=files,
         additions=additions,
         checks_ok=checks_ok,
