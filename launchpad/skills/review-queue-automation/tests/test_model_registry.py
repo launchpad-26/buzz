@@ -14,6 +14,7 @@ import dispatcher  # noqa: E402
 from common import State  # noqa: E402
 from model_registry import qualified_route, resolve, route_material_fingerprint  # noqa: E402
 from routing import resolve_route  # noqa: E402
+from route_probe import OK, TRANSPORT_FAILED, persist_probe_result  # noqa: E402
 from test_dispatch_flow import _config, seed_evidence, seed_job  # noqa: E402
 
 
@@ -110,5 +111,27 @@ def test_changed_route_material_forces_new_job_to_shadow() -> None:
         resumed, resumed_meta = dispatcher.resolve_snapshot(_cfg(state_dir, _entry("gpt-5.7-sol")), state, first)
         assert resumed_meta["resumed"] is True
         assert resumed["approval"]["mode"] == "live"
+    finally:
+        state.close()
+
+
+def test_probe_persists_provider_health_and_qualifies_current_routes() -> None:
+    from model_registry import mark_runtime_qualified, observe_runtime_routes
+
+    state_dir = tempfile.mkdtemp()
+    state = State({"state_dir": state_dir})
+    try:
+        cfg = _cfg(state_dir, _entry())
+        persist_probe_result(state, cfg, _entry(), {"status": OK})
+        row = state.db.execute("SELECT unavailable_until,last_error FROM providers").fetchone()
+        assert row["unavailable_until"] is None and row["last_error"] is None
+        qualified = mark_runtime_qualified(state, cfg, scope="o/r")
+        assert qualified["status"] == "qualified"
+        assert observe_runtime_routes(state, cfg, scope="o/r")["shadow_locked"] is False
+
+        persist_probe_result(state, cfg, _entry(), {"status": TRANSPORT_FAILED, "detail": "quota exhausted"})
+        row = state.db.execute("SELECT unavailable_until,last_error FROM providers").fetchone()
+        assert row["unavailable_until"] is not None
+        assert row["last_error"] == "quota exhausted"
     finally:
         state.close()

@@ -19,6 +19,7 @@ Usage:
 from __future__ import annotations
 
 import argparse
+import datetime as dt
 import json
 import pathlib
 import subprocess
@@ -109,6 +110,31 @@ def probe_route(
     return result
 
 
+def persist_probe_result(state, config: dict[str, Any], entry: dict[str, Any], result: dict[str, Any]) -> None:
+    """Persist real transport health; a probe result is not a guess from history."""
+    from common import utcnow
+
+    provider = str(entry.get("provider") or entry.get("provider_family") or entry.get("runner") or "")
+    model = str(entry.get("selector") or entry.get("model") or "")
+    key = f"{provider}:{model}"
+    if result["status"] == OK:
+        unavailable_until = None
+        error = None
+    else:
+        cooldown = int((config.get("models") or {}).get("cooldown_seconds") or 1800)
+        unavailable_until = (
+            dt.datetime.now(dt.timezone.utc) + dt.timedelta(seconds=cooldown)
+        ).replace(microsecond=0).isoformat().replace("+00:00", "Z")
+        error = str(result.get("detail") or result["status"])[:300]
+    state.db.execute(
+        "INSERT INTO providers(key,unavailable_until,last_error,updated_at) VALUES(?,?,?,?) "
+        "ON CONFLICT(key) DO UPDATE SET unavailable_until=excluded.unavailable_until,"
+        "last_error=excluded.last_error,updated_at=excluded.updated_at",
+        (key, unavailable_until, error, utcnow()),
+    )
+    state.db.commit()
+
+
 def _entries_from_config(config: dict[str, Any]) -> list[tuple[dict[str, Any], str]]:
     """Flatten configured pools into (entry, effort) probe targets."""
     targets: list[tuple[dict[str, Any], str]] = []
@@ -132,8 +158,7 @@ def main(argv: list[str] | None = None) -> int:
     args = parser.parse_args(argv)
 
     repo_path = args.repo_root or "/tmp"
-    targets: list[tuple[dict[str, Any], str]] = []
-
+    config: dict[str, Any] | None = None
     if args.runner:
         if not args.selector:
             parser.error("--runner requires --selector")
@@ -159,27 +184,45 @@ def main(argv: list[str] | None = None) -> int:
 
     results = [probe_route(entry, effort, repo_path=repo_path, timeout=args.timeout)
                for entry, effort in targets]
-    usable = [r for r in results if r["status"] == OK]
+    usable = [result for result in results if result["status"] == OK]
+    qualification: dict[str, Any] | None = None
+    if config is not None:
+        from common import State
+
+        state = State(config)
+        try:
+            for entry, result in zip((entry for entry, _effort in targets), results, strict=True):
+                persist_probe_result(state, config, entry, result)
+            if len(usable) == len(results):
+                from model_registry import mark_runtime_qualified
+
+                qualification = mark_runtime_qualified(
+                    state, config,
+                    scope=str((config.get("repository") or {}).get("slug") or "default"),
+                )
+            else:
+                qualification = {"status": "unqualified", "shadow_locked": True}
+        finally:
+            state.close()
 
     report = {
         "probed": len(results),
         "usable": len(usable),
         "all_usable": len(usable) == len(results),
         "results": results,
+        "qualification": qualification,
     }
     if args.json:
         print(json.dumps(report, indent=2, sort_keys=True))
     else:
-        for r in results:
-            mark = "PASS" if r["status"] == OK else "FAIL"
-            extra = "" if r["status"] == OK else f" — {r.get('detail', '')}"
-            enforced = r.get("effort_enforced")
+        for result in results:
+            mark = "PASS" if result["status"] == OK else "FAIL"
+            extra = "" if result["status"] == OK else f" — {result.get('detail', '')}"
+            enforced = result.get("effort_enforced")
             note = "" if enforced in (None, True) else " [effort not enforced by transport]"
-            print(f"{mark}  {r['route']}  ({r['status']}){note}{extra}")
+            print(f"{mark}  {result['route']}  ({result['status']}){note}{extra}")
         print(f"\n{len(usable)}/{len(results)} route(s) usable")
-
     return 0 if report["all_usable"] and usable else 1
-
 
 if __name__ == "__main__":
     sys.exit(main())

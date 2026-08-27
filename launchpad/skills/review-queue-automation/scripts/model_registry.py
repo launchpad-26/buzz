@@ -136,3 +136,18 @@ def observe_runtime_routes(state, config: dict[str, Any], *, scope: str) -> dict
     )
     state.db.commit()
     return {"fingerprint": fingerprint, "status": "shadow_locked", "shadow_locked": True}
+
+
+def mark_runtime_qualified(state, config: dict[str, Any], *, scope: str) -> dict[str, Any]:
+    """Mark the current route material qualified after every configured probe passes."""
+    from common import utcnow
+
+    fingerprint = route_material_fingerprint(config)
+    state.db.execute(
+        "INSERT INTO route_qualifications(scope,fingerprint,status,updated_at) VALUES(?,?,?,?) "
+        "ON CONFLICT(scope) DO UPDATE SET fingerprint=excluded.fingerprint,"
+        "status=excluded.status,updated_at=excluded.updated_at",
+        (scope, fingerprint, "qualified", utcnow()),
+    )
+    state.db.commit()
+    return {"fingerprint": fingerprint, "status": "qualified", "shadow_locked": False}
