@@ -95,7 +95,7 @@ evidence:
   - statement: "This repository's own AGENTS.md documents that squareup/block-coder-tf-stacks is the Terraform + ArgoCD project that deploys buzz-relay's Helm chart to the staging Kubernetes cluster; that document does not state whether the same stack also provisions the backing Redis instance, or whether that is owned by separate infrastructure tooling."
     entry_class: FACT
     evidence:
-      - "CLAUDE.md"
+      - "AGENTS.md"
   - statement: "Every Redis write path inside buzz-pubsub is either a TTL-bounded key (presence: 180s; nip98 replay: caller-supplied ttl; rate-limit counters: window_secs, repaired via EXPIRE if found without one) or a transient pub/sub PUBLISH with nothing persisted -- across the six Redis-touching modules in the crate, none writes a key without an expiry or a script that is not itself pub/sub. This makes Redis a volatile coordination and rate-limiting layer rather than a system of record, consistent with the crash-safety comments in publish_cache_invalidation and publish_conn_control describing a durable Postgres backstop for both."
     entry_class: INFERENCE
     evidence:
