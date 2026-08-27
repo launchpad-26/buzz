@@ -169,8 +169,8 @@ specific invocation.
 
 | Form | Example | Checker's verdict | What it proves |
 |---|---|---|---|
-| Bare repository path to a test file | `crates/buzz-core/tests/kind_registry.rs` | `ok` | The file exists. Nothing about its contents. |
-| Path with a line, naming a test function | `crates/buzz-core/tests/kind_registry.rs:42` | `ok` | The file exists. The line is not checked. |
+| Bare repository path to a test file | `crates/buzz-core/src/kind.rs` | `ok` | The file exists. Nothing about its contents. |
+| Path with a line, naming a test function | `crates/buzz-core/src/kind.rs:903` | `ok` | The file exists. The line is not checked. |
 | Tool result, invocation written as prose | `cargo test -p buzz-core --lib kind::tests:: -> 3 passed; 0 failed` | **error** | Nothing -- rejected outright. Contains whitespace and matches no recognised shape. |
 | Tool result, invocation wrapped as an argument | `run_command('cargo test -p buzz-core --lib kind::tests::') -> 3 passed; 0 failed` | `unverified` | Nothing on disk. The checker cannot confirm this was ever run. |
 | Graph edge (for contrast, not a test form) | `is_shared_gated_kind -> is_unshared_gated_event (1 hop)` | `unverified` | Nothing on disk -- and it reads deceptively like a tool result. See MUST 2. |
