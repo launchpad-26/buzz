@@ -48,6 +48,10 @@ evidence:
     entry_class: FACT
     evidence:
       - "https://mermaid.js.org/syntax/c4.html"
+  - statement: "GitHub renders Mermaid diagrams in Issues, Discussions, pull requests, wikis and Markdown files generally (flow charts, sequence diagrams, pie charts and more), but GitHub's own documentation does not enumerate which specific Mermaid diagram types are or are not supported, so it does not confirm the experimental C4Context type by name."
+    entry_class: FACT
+    evidence:
+      - "https://docs.github.com/en/get-started/writing-on-github/working-with-advanced-formatting/creating-diagrams"
   - statement: "The C4 model's System Context diagram depicts the software system as a single box surrounded by the people and external software systems it interacts with, deliberately omitting technologies, protocols and other low-level details so the diagram stays readable by both technical and non-technical audiences."
     entry_class: FACT
     evidence:
@@ -160,14 +164,16 @@ checker rejects such files there too, because no generator exists yet to prove o
 reproducible projection rather than a hand-authored artifact wearing the right directory
 name. A context diagram therefore cannot be a separate image or diagram-source file
 right now. *Required sections* below requires a **Mermaid `C4Context` block embedded in
-the node's own Markdown body** for exactly this reason — it is text, so it is canonical,
-and it renders as a diagram wherever Mermaid is supported (GitHub included). Mermaid
-documents `C4Context` as experimental and warns its syntax may still change; if it
-breaks, fall back to a plain Mermaid flowchart with the same boundary/actor/system shapes
-and an explicit legend, never to an image file. Any future canonical diagram mechanism
-for the corpus generally — a generated rendering pipeline, for instance — belongs to
-issue #1312, the open corpus-diagrams standard; this template does not anticipate its
-answer and should be revisited once #1312 lands.
+the node's own Markdown body** for exactly this reason — it is text, so it is canonical.
+GitHub renders Mermaid fences generally (Issues, Discussions, pull requests, wikis and
+Markdown files), but its documentation does not confirm the experimental `C4Context`
+type by name among the diagram types it supports. Mermaid's own documentation calls
+`C4Context` experimental and warns its syntax may still change; if it breaks, or does not
+render where this corpus is read, fall back to a plain Mermaid flowchart with the same
+boundary/actor/system shapes and an explicit legend, never to an image file. Any future
+canonical diagram mechanism for the corpus generally — a generated rendering pipeline,
+for instance — belongs to issue #1312, the open corpus-diagrams standard; this template
+does not anticipate its answer and should be revisited once #1312 lands.
 
 ## Boundary against the sibling architecture templates
 
@@ -376,10 +382,11 @@ needs, and what relationships this template document itself does and does not de
   is the real test of it.
 - **Mermaid's `C4Context` rendering was not exercised inside this repository's own
   Markdown pipeline** (GitHub's corpus browser, or any other renderer this repo uses).
-  Mermaid's own documentation states GitHub renders Mermaid fences generally; whether
-  the experimental `C4Context` syntax specifically renders there was not checked.
-  Requirement 2 keeps a same-shape flowchart fallback for exactly this reason.
-  A person or a viewer arriving from a broken render is why the fallback exists.
+  GitHub's documentation confirms Mermaid fences render generally but does not name
+  `C4Context` among its examples, so whether this specific, experimental diagram type
+  renders on GitHub was not checked. Requirement 2 keeps a same-shape flowchart fallback
+  for exactly this reason — a person or a viewer arriving from a broken render is why
+  the fallback exists.
 - **No sibling architecture template (#1327, #1326) was read as a finished document**,
   because neither is merged. The boundary section above is checked against arc42 and C4
   directly, not against the siblings' own text, so a divergence discovered once they
