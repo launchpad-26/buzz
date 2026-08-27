@@ -1,0 +1,30 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["signal", "recommendation", "summary", "findings", "good", "missing_evidence"],
+  "properties": {
+    "signal": {
+      "enum": ["SUPPORTED", "MISSING_EVIDENCE", "INSUFFICIENT_CAPABILITY", "MATERIAL_DISAGREEMENT", "HUMAN_RESERVED"]
+    },
+    "recommendation": {"enum": ["clean", "findings", "human"]},
+    "summary": {"type": "string", "minLength": 1},
+    "findings": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["severity", "title", "location", "evidence", "primary_source"],
+        "properties": {
+          "severity": {"enum": ["blocker", "high", "medium", "low"]},
+          "title": {"type": "string", "minLength": 1},
+          "location": {"type": "string", "pattern": "^.+:[1-9][0-9]*$"},
+          "evidence": {"type": "string", "minLength": 1},
+          "primary_source": {"type": "string", "minLength": 1}
+        }
+      }
+    },
+    "good": {"type": "array", "items": {"type": "string", "minLength": 1}},
+    "missing_evidence": {"type": "array", "items": {"type": "string", "minLength": 1}}
+  }
+}
