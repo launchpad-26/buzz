@@ -130,11 +130,19 @@ def test_locally_held_lease_by_another_job_is_respected() -> None:
         jid = seed_job(state, number=703, head="h703")
         seed_evidence(state, jid)
         # `leases.job_id` references `jobs(id)`, so the rival holder must be a real
-        # job — here an earlier revision of the same PR.
-        other = seed_job(state, number=703, head="h703-earlier")
+        # job. It is inserted directly: `seed_job` would also write `prs`, which is
+        # keyed on (repo, number) and already holds this PR.
+        other = "o-r-703-incoming_review-earlier"
+        now = utcnow()
+        state.db.execute(
+            "INSERT INTO jobs(id,repo,number,head_sha,lane,status,artifact_dir,"
+            "created_at,updated_at) VALUES(?,?,?,?,?,?,?,?,?)",
+            (other, "o/r", 703, "h703-earlier", "incoming_review", "detected",
+             str(state.job_dir(other)), now, now),
+        )
         state.db.execute(
             "INSERT INTO leases(repo,number,job_id,claimed_at) VALUES(?,?,?,?)",
-            ("o/r", 703, other, utcnow()),
+            ("o/r", 703, other, now),
         )
         state.db.commit()
 
