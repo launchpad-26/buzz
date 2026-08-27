@@ -22,7 +22,6 @@ from authority import (  # noqa: E402
     validate_authority,
 )
 from policy import (  # noqa: E402
-    PolicyStore,
     PolicyValidationError,
     canonicalize,
     content_hash,
@@ -105,37 +104,38 @@ def test_policy_rejects_malformed() -> None:
         pass
 
 
-def test_policy_store_atomic_reload_and_lkg() -> None:
-    store = PolicyStore(tempfile.mkdtemp())
-    # no active yet
-    assert store.active()[0] is None
-    vp = store.reload(_good_policy())
-    assert store.active()[0].hash == vp.hash
-    # malformed candidate -> last-known-good retained
-    bad = _good_policy()
-    bad["approval"]["effective_risk_max"] = "nonsense"
-    try:
-        store.reload(bad)
-        raise AssertionError("must reject malformed candidate")
-    except PolicyValidationError:
-        pass
-    # LKG still active
-    active, err = store.active()
-    assert active is not None and active.hash == vp.hash, err
+def test_policy_activation_is_atomic_and_retains_last_known_good() -> None:
+    """Property formerly covered by policy.PolicyStore, which had no callers.
 
+    The runtime store is snapshot.SnapshotStore, which activates config+policy as
+    one validated pair; a malformed candidate must leave the active payload intact.
+    """
+    import tempfile as _tempfile
 
-def test_policy_reload_with_rollback_retains_lkg() -> None:
-    store = PolicyStore(tempfile.mkdtemp())
-    vp = store.reload(_good_policy())
+    from policy import validate_policy
+    from snapshot import SnapshotError, SnapshotStore, build_snapshot
+
+    store = SnapshotStore(_tempfile.mkdtemp())
+    assert store.active() is None  # nothing active yet
+
+    good = build_snapshot({"version": 1, "policy": _good_policy()},
+                          validate_policy=validate_policy)
+    store.activate(good)
+    assert store.active().hash == good.hash
+    before = store.active_path.read_bytes()
+
+    # A malformed policy must not activate, and must not disturb the active payload.
     bad = _good_policy()
-    bad.pop("approval")  # missing required key
+    bad.pop("approval")
     try:
-        store.reload_with_rollback(bad)
-        raise AssertionError("malformed reload must not apply")
-    except Exception:
+        build_snapshot({"version": 1, "policy": bad}, validate_policy=validate_policy)
+    except SnapshotError:
         pass
-    active, _ = store.active()
-    assert active is not None and active.hash == vp.hash
+    else:
+        raise AssertionError("a malformed policy must not produce a snapshot")
+
+    assert store.active_path.read_bytes() == before
+    assert store.active().hash == good.hash
 
 
 # -- assurance compute ---------------------------------------------------

@@ -6,13 +6,16 @@ model routes. It is carried as data, validated on load, and versioned by both a
 monotonic version and a content hash so in-flight decisions can be pinned to the
 exact policy that produced them.
 
-Guarantees:
-- atomic reload: a new policy is written and switched only after full validation;
-  a failed validation leaves the last-known-good active and never widens authority.
-- last-known-good retention across restarts via a durable marker.
-- in-flight pinning: every decision records the policy version + hash it was made
-  under; a later reload does not silently alter it.
-- malformed policy is rejected (schema + semantic) rather than partially applied.
+This module owns policy VALIDATION and versioning only. The durable runtime store
+is `snapshot.SnapshotStore`, which activates config and policy together as one
+content-hashed snapshot — they must be validated as a pair, and a policy-only
+store previously duplicated that machinery without ever being called.
+
+Guarantees provided here:
+- deterministic schema + semantic validation; a malformed policy is rejected
+  rather than partially applied, so it can never widen authority.
+- stable content hashing and version extraction, used to pin a decision to the
+  exact policy that produced it.
 """
 
 from __future__ import annotations
@@ -33,10 +36,6 @@ REQUIRED_KEYS = {"version", "authority", "approval", "risk", "human_queue"}
 
 class PolicyValidationError(ValueError):
     """Raised when a policy fails schema or semantic validation. Existing policy stands."""
-
-
-class PolicyReloadError(RuntimeError):
-    """Raised when a reload cannot be applied; last-known-good is retained."""
 
 
 def content_hash(policy: dict[str, Any]) -> str:
@@ -131,70 +130,3 @@ def canonicalize(policy: dict[str, Any]) -> ValidatedPolicy:
     """Validate and return a pinned ValidatedPolicy (version + content hash)."""
     validate_or_raise(policy)
     return ValidatedPolicy(policy=policy, version=policy_version(policy), hash=content_hash(policy))
-
-
-# ---- durable last-known-good store --------------------------------------
-class PolicyStore:
-    """A small atomic policy store under a state directory.
-
-    The active policy is kept at `<state>/policy/active.json` with a sidecar
-    `active.meta.json` (version + hash). Reload is atomic: write a temp file,
-    validate the new candidate, then swap. A failed reload keeps the prior file.
-    """
-
-    def __init__(self, state_dir: str | pathlib.Path):
-        self.dir = pathlib.Path(state_dir) / "policy"
-        self.dir.mkdir(parents=True, exist_ok=True)
-        self.active_path = self.dir / "active.json"
-        self.meta_path = self.dir / "active.meta.json"
-
-    def _read(self) -> tuple[ValidatedPolicy | None, str | None]:
-        if not self.active_path.is_file():
-            return None, "no active policy"
-        try:
-            policy = json.loads(self.active_path.read_text(encoding="utf-8"))
-            vp = canonicalize(policy)
-            return vp, None
-        except Exception as exc:
-            return None, f"stored policy invalid: {exc}"
-
-    def active(self) -> tuple[ValidatedPolicy | None, str | None]:
-        """Current active policy, or last-known-good if the file is stale/corrupt."""
-        return self._read()
-
-    def reload(self, candidate: dict[str, Any]) -> ValidatedPolicy:
-        """Atomically replace the active policy with a validated candidate.
-
-        On validation failure the existing active policy is retained (last-known-good)
-        and PolicyReloadError is raised with the validation issues.
-        """
-        vp = canonicalize(candidate)  # raises PolicyValidationError on bad policy
-        # write temp then rename (atomic on same filesystem)
-        tmp = self.active_path.with_suffix(".json.tmp")
-        tmp.write_text(json.dumps(candidate, indent=2) + "\n", encoding="utf-8")
-        tmp.replace(self.active_path)
-        self.meta_path.write_text(
-            json.dumps(vp.as_record(), indent=2) + "\n", encoding="utf-8"
-        )
-        return vp
-
-    def reload_with_rollback(self, candidate: dict[str, Any]) -> ValidatedPolicy:
-        """Reload; on any failure attempt to restore the prior active file.
-
-        Returns the new or last-known-good ValidatedPolicy. Never leaves a
-        half-applied policy and never widens authority on failure.
-        """
-        try:
-            return self.reload(candidate)
-        except Exception:
-            prior, err = self._read()
-            if prior is not None:
-                # re-assert the last-known-good file back if it was disturbed
-                self.active_path.write_text(
-                    json.dumps(prior.policy, indent=2) + "\n", encoding="utf-8"
-                )
-                self.meta_path.write_text(
-                    json.dumps(prior.as_record(), indent=2) + "\n", encoding="utf-8"
-                )
-                return prior
-            raise PolicyReloadError(f"policy reload failed and no last-known-good to retain: {err}")

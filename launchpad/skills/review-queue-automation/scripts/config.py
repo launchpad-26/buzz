@@ -201,7 +201,7 @@ def validate_config(config: dict[str, Any], repo_root: pathlib.Path) -> list[str
         issues.extend(validate_authority(config.get("authority")))
 
     # A `policy` inline section, when present, must validate; malformed policy never
-    # widens authority. We call the same validator used by policy.PolicyStore.
+    # widens authority. This is the same validator the runtime snapshot uses.
     if "policy" in config:
         from policy import validate_policy
 
