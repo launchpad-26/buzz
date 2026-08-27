@@ -139,14 +139,32 @@ def degrade(results: dict[str, CommentFetch], spec: str) -> dict[str, CommentFet
     return results
 
 
-def _main(argv: list[str]) -> int:
-    """CLI: ``python3 pr_comments.py <pr> [repo]`` -- prints every tagged block found."""
-    if not argv:
-        print("usage: pr_comments.py <pr> [repo]", file=__import__("sys").stderr)
-        return 2
-    pr = int(argv[0])
-    repo = argv[1] if len(argv) > 1 else DEFAULT_REPO
-    results = fetch_and_locate(pr, repo)
+def _main(argv: list[str] | None = None) -> int:
+    """CLI: ``python3 pr_comments.py --pr <n> [--repo owner/repo] [--degrade
+    SURFACE=STATE ...]`` -- prints every tagged block found, mirroring
+    `contain.py`/`run_dimensions.py`'s own `--degrade` shape (fetch first,
+    then apply any forced-state overrides on top)."""
+    import argparse
+
+    parser = argparse.ArgumentParser(
+        prog="pr_comments.py",
+        description="Fetch and locate every ```verdict block in one PR's comments.",
+    )
+    parser.add_argument("--pr", type=int, required=True, help="pull request number to fetch live")
+    parser.add_argument("--repo", default=DEFAULT_REPO)
+    parser.add_argument(
+        "--degrade",
+        action="append",
+        default=[],
+        metavar="SURFACE=STATE",
+        help="force a surface into a degenerate state, e.g. review=absent",
+    )
+    args = parser.parse_args(argv)
+
+    results = fetch_and_locate(args.pr, args.repo)
+    for spec in args.degrade:
+        results = degrade(results, spec)
+
     for surface, cf in results.items():
         if not cf.readable:
             print(f"{surface}: UNREADABLE state={cf.state!r} reason={cf.reason!r}")

@@ -33,10 +33,8 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 
-from pr_comments import CommentFetch, TaggedBlock, fetch_and_locate
+from pr_comments import CommentFetch, DEFAULT_REPO, TaggedBlock, fetch_and_locate
 from verdict_blocks import MalformedRow, ParsedRow, parse_rows
-
-DEFAULT_REPO = "launchpad-26/buzz"
 
 #: The four outcomes `resolve` can reach. Never any other string.
 OUTCOMES = ("unreadable", "refused", "none_found", "accepted")

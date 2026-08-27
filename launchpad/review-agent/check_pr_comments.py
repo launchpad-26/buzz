@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import sys
 
-from pr_comments import fetch_and_locate
+from pr_comments import degrade, fetch_and_locate
 
 REPO = "launchpad-26/buzz"
 
@@ -24,29 +24,37 @@ def check(label: str, condition: bool, detail: str = "") -> None:
         print(f"FAIL  {label}  {detail}")
 
 
-def _issue_comment_ids(pr: int) -> list[int]:
+def _check_pr(pr: int, expected_issue_ids: list[int]) -> None:
+    """Asserts on BOTH surfaces `fetch_and_locate` returns -- not only "issue".
+    Without checking "review" too, this control never actually proves PR
+    #261/#264 have EXACTLY the two known blocks: an unnoticed extra block on
+    the review-comment surface would sail through silently."""
     results = fetch_and_locate(pr, REPO)
-    cf = results["issue"]
-    check(f"PR #{pr} issue surface is readable", cf.readable, f"state={cf.state} reason={cf.reason}")
-    return sorted(tb.comment_id for tb in cf.blocks)
+
+    issue = results["issue"]
+    check(f"PR #{pr} issue surface is readable", issue.readable, f"state={issue.state} reason={issue.reason}")
+    ids = sorted(tb.comment_id for tb in issue.blocks)
+    check(
+        f"PR #{pr}: exactly the two known blocks on the issue surface, right comment ids",
+        ids == sorted(expected_issue_ids),
+        f"got {ids}",
+    )
+
+    review = results["review"]
+    check(f"PR #{pr} review (inline-comment) surface is readable", review.readable, f"state={review.state} reason={review.reason}")
+    check(
+        f"PR #{pr} review surface carries zero ```verdict blocks",
+        review.blocks == [],
+        f"got {review.blocks!r}",
+    )
 
 
 def test_pr_261() -> None:
-    ids = _issue_comment_ids(261)
-    check(
-        "PR #261: exactly the two known blocks, tagged with the right comment ids",
-        ids == sorted([5364185647, 5364261676]),
-        f"got {ids}",
-    )
+    _check_pr(261, [5364185647, 5364261676])
 
 
 def test_pr_264() -> None:
-    ids = _issue_comment_ids(264)
-    check(
-        "PR #264: exactly the two known blocks, tagged with the right comment ids",
-        ids == sorted([5364221899, 5364504768]),
-        f"got {ids}",
-    )
+    _check_pr(264, [5364221899, 5364504768])
 
 
 def test_invalid_pr_is_unreadable() -> None:
@@ -59,10 +67,33 @@ def test_invalid_pr_is_unreadable() -> None:
     )
 
 
+def test_degrade_forces_a_distinguishable_unreadable_state() -> None:
+    """`degrade()` (STEP 4's stated alternate way to force "forced-unreadable",
+    alongside the invalid-PR-number path above) actually gets called from
+    somewhere -- this control, and the CLI's own `--degrade` flag."""
+    results = fetch_and_locate(261, REPO)
+    degraded = degrade(results, "review=oversized")
+    check(
+        "degrade() forces the named surface into the requested state",
+        degraded["review"].state == "oversized" and not degraded["review"].readable,
+        f"got {degraded['review']}",
+    )
+    check(
+        "degrade() leaves the other surface untouched",
+        degraded["issue"] is results["issue"],
+    )
+    check(
+        "degrade()'s reason names the forcing spec",
+        "--degrade review=oversized" in degraded["review"].reason,
+        degraded["review"].reason,
+    )
+
+
 def main() -> int:
     test_pr_261()
     test_pr_264()
     test_invalid_pr_is_unreadable()
+    test_degrade_forces_a_distinguishable_unreadable_state()
 
     if FAILURES:
         print(f"\n{len(FAILURES)} failed: {FAILURES}")
