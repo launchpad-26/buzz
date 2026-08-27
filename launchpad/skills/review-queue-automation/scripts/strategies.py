@@ -16,7 +16,10 @@ from dataclasses import dataclass, field
 from typing import Any
 
 VALID_AGGREGATIONS = frozenset(
-    {"single", "consensus", "majority", "unanimous", "panel_adjudicated", "sequenced"}
+    {
+        "single", "consensus", "majority", "unanimous", "panel_adjudicated",
+        "sequenced", "checklist_score", "hypothesis_register", "calibrated",
+    }
 )
 
 
@@ -66,6 +69,14 @@ STRATEGIES: tuple[Strategy, ...] = (
 )
 
 STRATEGY_BY_NAME: dict[str, Strategy] = {s.name: s for s in STRATEGIES}
+
+# `VALID_AGGREGATIONS` was previously declared and never enforced, and three
+# registry rows had drifted outside it. Assert at import so a new row cannot
+# introduce an aggregation no execution mode knows how to run.
+assert {s.aggregation for s in STRATEGIES} <= VALID_AGGREGATIONS, (
+    "strategy registry uses aggregations outside VALID_AGGREGATIONS: "
+    + ", ".join(sorted({s.aggregation for s in STRATEGIES} - VALID_AGGREGATIONS))
+)
 
 
 class StrategyError(ValueError):

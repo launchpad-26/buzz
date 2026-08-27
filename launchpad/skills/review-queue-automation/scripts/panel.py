@@ -56,6 +56,7 @@ from errors import (
     TRANSIENT,
 )
 from fallback import order_candidates, recipe_for
+from modes import Participant, aggregate, for_profile as mode_for_profile
 from logging_otel import MAX_STDERR_BYTES
 from runners import (
     EffortUnsupportedError,
@@ -188,6 +189,38 @@ def _parse_signals(artifact_dir: pathlib.Path, expected: int) -> list[str]:
         if vf.is_file():
             signals.append(_signal_for_file(vf))
     return signals
+
+
+def _mode_participants(artifact_dir: pathlib.Path, expected: int) -> list[Participant]:
+    """Build mode participants for the filled slots.
+
+    `provider_family` is read from the trusted sidecar the machinery wrote, never
+    from model-controlled verdict content, so a model cannot claim independence it
+    does not have. A slot with no verdict file contributes an invalid participant
+    rather than being silently omitted, so the discount reason is recorded.
+    """
+    participants: list[Participant] = []
+    for idx in range(min(expected, len(SLOT_FILES))):
+        slot_file = artifact_dir / SLOT_FILES[idx]
+        role = "reviewer" if expected <= 1 else f"reviewer_{'ab'[idx] if idx < 2 else idx}"
+        if not slot_file.is_file():
+            participants.append(Participant(role=role, model=f"<{SLOT_FILES[idx]}>", valid=False))
+            continue
+        meta: dict[str, Any] = {}
+        sidecar = slot_file.with_suffix(".meta.json")
+        if sidecar.is_file():
+            try:
+                meta = json.loads(sidecar.read_text(encoding="utf-8"))
+            except (json.JSONDecodeError, OSError):
+                meta = {}
+        participants.append(Participant(
+            role=role,
+            model=str(meta.get("model") or SLOT_FILES[idx]),
+            provider_family=str(meta.get("provider_family") or ""),
+            valid=True,
+            signal=_signal_for_file(slot_file),
+        ))
+    return participants
 
 
 def _trust_meta(slot: str, entry: dict[str, Any], effort: str) -> dict[str, Any]:
@@ -658,7 +691,18 @@ def run_panel(
             break
 
     signals = _parse_signals(artifact_dir, required)
-    complete = len(signals) >= required and filled >= required
+
+    # Counting slot files cannot see that a slot produced no valid verdict, or
+    # that two slots came from one provider family. The mode contract discounts
+    # both, so completeness reflects participants that actually count. It can
+    # only ever be stricter than the slot count, never looser.
+    mode_spec = mode_for_profile(profile.independence, required)
+    mode_result = aggregate(mode_spec, _mode_participants(artifact_dir, required))
+    complete = (
+        len(signals) >= required
+        and filled >= required
+        and len(mode_result.counted) >= required
+    )
     outcome = "complete" if complete else ("degraded" if completed else "retryable")
 
     attempt = {
