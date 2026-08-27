@@ -6,7 +6,7 @@ The core flow is:
     adjudication -> approval_evaluation
     approval_evaluation -> would_auto_approve | approval_revalidation |
                            human_approval_pending | advisory_action |
-                           degraded | safe_stop | superseded
+                           changes_requested | degraded | safe_stop | superseded
     would_auto_approve -> approval_revalidation
     approval_revalidation -> approval_action
     approval_action -> completed_auto_approved
@@ -88,7 +88,8 @@ TRANSITIONS: dict[str, frozenset[str]] = {
     "assurance": frozenset({"adjudication", "degraded_draft", "retryable", "held", "human_required", "superseded", "safe_stop"}),
     "adjudication": frozenset({"action", "approval_evaluation", "human_required", "held", "retryable", "superseded", "safe_stop"}),
     "approval_evaluation": frozenset(
-        {"would_auto_approve", "approval_revalidation", "human_approval_pending", "advisory_action", "degraded", "safe_stop", "superseded"}
+        {"would_auto_approve", "approval_revalidation", "human_approval_pending",
+         "advisory_action", "changes_requested", "degraded", "safe_stop", "superseded"}
     ),
     "would_auto_approve": frozenset({"approval_revalidation", "superseded", "safe_stop"}),
     "approval_revalidation": frozenset(

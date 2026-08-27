@@ -22,6 +22,7 @@ REVIEW_SCHEMA = SCHEMA_DIR / "reviewer-verdict.json"
 VALID_RECOMMENDATIONS = {"clean", "findings", "human"}
 VALID_SIGNALS = {
     "SUPPORTED",
+    "DEFECTS_FOUND",
     "MISSING_EVIDENCE",
     "INSUFFICIENT_CAPABILITY",
     "MATERIAL_DISAGREEMENT",
@@ -37,6 +38,10 @@ _CONTRADICTIONS = (
     # SUPPORTED and clean both require no findings
     (lambda d: d.get("signal") == "SUPPORTED" and bool(d.get("findings")), "SUPPORTED signal conflicts with findings"),
     (lambda d: d.get("recommendation") == "clean" and bool(d.get("findings")), "clean recommendation conflicts with findings"),
+    # DEFECTS_FOUND asserts a completed review that located real defects, so it
+    # must carry at least one finding and must not claim the change is clean.
+    (lambda d: d.get("signal") == "DEFECTS_FOUND" and not d.get("findings"), "DEFECTS_FOUND signal requires at least one finding"),
+    (lambda d: d.get("signal") == "DEFECTS_FOUND" and d.get("recommendation") == "clean", "DEFECTS_FOUND signal conflicts with clean recommendation"),
 )
 
 

@@ -26,6 +26,7 @@ INDEPENDENCE = ("single", "challenger", "panel", "human")
 
 SIGNALS = {
     "SUPPORTED",
+    "DEFECTS_FOUND",
     "MISSING_EVIDENCE",
     "INSUFFICIENT_CAPABILITY",
     "MATERIAL_DISAGREEMENT",
@@ -34,6 +35,7 @@ SIGNALS = {
 
 DECISIONS = {
     "SUCCESS",
+    "REQUEST_CHANGES",
     "GATHER_EVIDENCE",
     "RAISE_EFFORT",
     "RAISE_CAPABILITY",
@@ -97,6 +99,14 @@ def classify(profile: Profile, signals: list[str]) -> str:
     if any(s == "HUMAN_RESERVED" for s in signals):
         return "HUMAN"
 
+    # One reviewer says the change is clean while another located defects. That is
+    # a disagreement about the core question, so it escalates rather than acting:
+    # neither "approve" nor "request changes" is supported by the panel.
+    if "DEFECTS_FOUND" in signals and "SUPPORTED" in signals:
+        if profile.independence in ("single", "challenger"):
+            return "CONVENE_PANEL"
+        return "HUMAN"
+
     if "MATERIAL_DISAGREEMENT" in signals:
         if profile.independence in ("single", "challenger"):
             return "CONVENE_PANEL"
@@ -112,8 +122,14 @@ def classify(profile: Profile, signals: list[str]) -> str:
     if "MISSING_EVIDENCE" in signals:
         return "GATHER_EVIDENCE"
 
-    if signals and all(s == "SUPPORTED" for s in signals):
+    if all(s == "SUPPORTED" for s in signals):
         return "SUCCESS"
+
+    # Every reviewer that completed agrees defects are present. Whether that may
+    # become a formal change request is decided downstream by the corroboration
+    # rule and the request-changes authority gate, never here.
+    if all(s == "DEFECTS_FOUND" for s in signals):
+        return "REQUEST_CHANGES"
 
     return "HUMAN"
 
@@ -145,6 +161,10 @@ def drive(
         steps.append(Step(profile=profile, decision=decision, order=step_index))
         if decision == "SUCCESS":
             return profile, "SUCCESS", steps
+        # A corroborated defect finding is a terminal assessment outcome: raising
+        # effort or capability cannot make a located defect go away.
+        if decision == "REQUEST_CHANGES":
+            return profile, "REQUEST_CHANGES", steps
         if decision == "HUMAN":
             return profile, "HUMAN", steps
         if decision == "GATHER_EVIDENCE":

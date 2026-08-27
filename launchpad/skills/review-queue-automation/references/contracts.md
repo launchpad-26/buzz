@@ -74,12 +74,43 @@ Fallbacks:
 
 ## Severity and authority
 
-- `blocker`: wrong now or violates a stated rule. Advisory comment plus immediate human handoff; no automated gate.
+- `blocker`: wrong now or violates a stated rule. Always an advisory comment. May
+  additionally become a formal `CHANGES_REQUESTED` review, but only when the
+  finding is CORROBORATED and `authority.request_changes` is `live` (see below).
 - `high`: wrong when the next planned dependency lands.
 - `medium`: works, but a maintainer will predictably infer the wrong contract.
 - `low`: bounded clarity or maintainability defect.
 
 Confirmed High/Medium/Low findings create one deduplicated `by:agent` issue each. Incoming review actions are always advisory comments. Automated approval happens only on the deterministic live path: every gate in `approval_evaluate.py` passes, a persisted approval-eligible decision record exists, and final revalidation reconfirms SHA/draft/checks/protected triggers before one `APPROVE` review is posted. It never merges changes, arms auto-merge, dismisses a review, bypasses protection, force-pushes, or approves the automation identity's own PR.
+
+### Completed review that located defects
+
+A reviewer that finds a real defect returns signal `DEFECTS_FOUND` with at least
+one finding and a non-`clean` recommendation. When every completed reviewer
+returns `DEFECTS_FOUND`, the assurance decision is `REQUEST_CHANGES`; raising
+effort or capability is not attempted, because escalation cannot make a located
+defect disappear. A mix of `DEFECTS_FOUND` and `SUPPORTED` is a disagreement
+about the core question and escalates (panel, then human) rather than acting.
+
+`REQUEST_CHANGES` is a *candidate* action, never an entitlement. Before any
+mutation:
+
+1. **Corroboration.** A blocking finding is verified only when the same finding
+   (fingerprinted by severity + normalised location) is reported by two DISTINCT
+   provider families, OR is reported by one family and cites a check that
+   actually failed. Two models from the same provider family are not
+   independent. A finding cannot borrow credibility from an unrelated failing
+   check. Findings lacking evidence or a primary source are dropped.
+2. **Authority.** `authority.request_changes` must be `live`. It is `disabled` by
+   default, so verified defects escalate to a human until an operator enables it.
+3. **Gate.** `action_gate.request_changes_gate` must pass, including a fresh
+   revalidation that the head SHA is unchanged and the PR is not a draft.
+   Revalidation fails closed: a transport error is a denial, never a pass, and
+   never aborts the sweep.
+
+Only corroborated findings appear in the posted review body; uncorroborated ones
+are escalated to a human instead. The mutation is REST-verified after posting; an
+unconfirmable mutation stops the job (`safe_stop`) and is never retried blind.
 
 ## Canary
 

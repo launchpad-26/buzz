@@ -5,7 +5,7 @@
   "required": ["signal", "recommendation", "summary", "findings", "good", "missing_evidence"],
   "properties": {
     "signal": {
-      "enum": ["SUPPORTED", "MISSING_EVIDENCE", "INSUFFICIENT_CAPABILITY", "MATERIAL_DISAGREEMENT", "HUMAN_RESERVED"]
+      "enum": ["SUPPORTED", "DEFECTS_FOUND", "MISSING_EVIDENCE", "INSUFFICIENT_CAPABILITY", "MATERIAL_DISAGREEMENT", "HUMAN_RESERVED"]
     },
     "recommendation": {"enum": ["clean", "findings", "human"]},
     "summary": {"type": "string", "minLength": 1},

@@ -30,6 +30,7 @@ import sys
 from typing import Any
 
 from assurance import Profile, drive
+from authority import mode_for
 from common import State
 from config import load_repo_config
 from errors import EvidenceIncompleteError, JobBlockingError
@@ -490,6 +491,243 @@ def _execute_live_approval(
     return _result(outcome, {"reason": message})
 
 
+def _rc_execute(state: State, variables: dict[str, Any], job: str, **kwargs) -> dict[str, Any]:
+    """Seam over the CHANGES_REQUESTED mutation so tests can intercept it."""
+    from github_mutate import execute_request_changes
+
+    return execute_request_changes(state, variables, job, **kwargs)
+
+
+def _rc_transport(local_cfg: dict[str, Any], state: State, repo: str, number: int):
+    """Return (revalidate, rest_probe) bound to the REST allowlist.
+
+    `execute_request_changes` only verifies when a probe, login and head are all
+    supplied, so the caller must always provide them; otherwise the mutation would
+    be posted unverified.
+    """
+    from github_rest import RestReader
+
+    reader = RestReader(local_cfg or {}, state)
+
+    def revalidate_factory(head_sha: str):
+        def revalidate() -> bool:
+            # Fail closed on ANY transport problem. A revalidation that cannot be
+            # performed is not a pass, and it must not raise out of the gate: one
+            # PR's REST hiccup may never abort the whole sweep.
+            try:
+                meta = reader.pr_meta(repo, number) or {}
+            except Exception:
+                return False
+            if not meta:
+                return False
+            if (meta.get("head", {}) or {}).get("sha") != head_sha:
+                return False
+            return bool(meta.get("draft")) is False
+
+        return revalidate
+
+    return revalidate_factory, (lambda: reader.pr_reviews(repo, number))
+
+
+def _job_assurance(
+    local_cfg: dict[str, Any],
+    state: State,
+    job_id: str,
+    *,
+    required_slots: int,
+    achieved_slots: int,
+    blockers: tuple[str, ...],
+    disagreement: bool = False,
+):
+    """Compute achieved assurance from facts actually gathered for this job."""
+    from risk import compute_assurance
+
+    evidence = _evidence_meta(state, job_id)
+    present = [
+        bool(evidence.get("checks") is not None),
+        bool(evidence.get("context")),
+        bool(evidence.get("pr") or evidence.get("files") is not None),
+    ]
+    completeness = sum(1 for p in present if p) / len(present)
+    return compute_assurance(
+        required_rpn=0,
+        bands=(local_cfg.get("risk") or {}).get("bands"),
+        evidence_completeness=completeness,
+        achieved_slots=achieved_slots,
+        required_slots=max(1, required_slots),
+        fresh=_evidence_fresh(local_cfg, evidence.get("collected_at", "")),
+        disagreement=disagreement,
+        blockers=blockers,
+    )
+
+
+def _execute_request_changes(
+    local_cfg: dict[str, Any],
+    job: dict[str, Any],
+    head_sha: str,
+    logger: JobLogger | None,
+    state: State,
+    *,
+    final_profile: Any,
+    verdicts: list[dict[str, Any]],
+    steps: list[Any],
+) -> dict[str, Any]:
+    """Handle a panel that unanimously located defects.
+
+    A model asserting a defect is never sufficient to block a PR. The finding must
+    be corroborated (two distinct provider families, or one family citing a check
+    that actually failed), the `request_changes` authority must be live, and the
+    deterministic gate must pass with a fresh revalidation. Anything short of that
+    escalates to a human with the findings attached.
+    """
+    from action_gate import request_changes_gate
+    from findings import blocking_summary, corroborate
+
+    repo = job["repo"]
+    number = job["number"]
+    job_id = job["job_id"]
+
+    def _result(outcome: str, extra: dict[str, Any] | None = None) -> dict[str, Any]:
+        out = {
+            "job": job_id, "repo": repo, "number": number,
+            "decision": "REQUEST_CHANGES",
+            "status": state.current_status(job_id),
+            "request_changes_outcome": outcome,
+            "final_profile": final_profile.as_dict(),
+            "steps": [{"profile": s.profile.as_dict(), "decision": s.decision} for s in steps],
+        }
+        out.update(extra or {})
+        return out
+
+    _transition_guarded(state, job_id, "adjudication", logger=logger,
+                        phase="adjudication", reason="panel located defects")
+
+    evidence = _evidence_meta(state, job_id)
+    blocking_severities = tuple(
+        (local_cfg.get("findings") or {}).get("blocking_severities") or ("blocker",)
+    )
+    results = corroborate(verdicts, checks=evidence.get("checks") or [],
+                          blocking_severities=blocking_severities)
+    summary = blocking_summary(results)
+    verified = [r for r in results if r.verified]
+
+    _log(logger, "info", body="finding corroboration complete", phase="adjudication",
+         outcome="corroborated" if verified else "uncorroborated",
+         attributes={"findings.verified": summary["verified_count"],
+                     "findings.unverified": summary["unverified_count"]})
+
+    # Uncorroborated defects are a human question, never an authoritative action.
+    if not verified:
+        reason = (f"{summary['unverified_count']} uncorroborated finding(s); "
+                  "no independent corroboration or reproducing check failure")
+        _transition_guarded(state, job_id, "human_required", logger=logger,
+                            phase="adjudication", reason=reason[:200])
+        return _result("uncorroborated", {"reason": reason, "findings": summary})
+
+    mode = mode_for(local_cfg, repo, "request_changes")
+    if mode != "live":
+        reason = f"request_changes authority is {mode}; verified defects need a human"
+        _transition_guarded(state, job_id, "human_required", logger=logger,
+                            phase="adjudication", reason=reason[:200])
+        return _result("authority_not_live", {"reason": reason, "findings": summary})
+
+    _transition_guarded(state, job_id, "approval_evaluation", logger=logger,
+                        phase="decision", reason="evaluating request-changes gate")
+
+    revalidate_factory, rest_probe = _rc_transport(local_cfg, state, repo, number)
+    assurance = _job_assurance(
+        local_cfg, state, job_id,
+        required_slots=len(verdicts) or 1,
+        achieved_slots=len(verdicts),
+        blockers=tuple(f"blocker:{r.finding.location}" for r in verified),
+    )
+    payload = _pr_payload(state, repo, number)
+    gate = request_changes_gate(
+        cfg=local_cfg, repo=repo, head_sha=head_sha,
+        pr={"draft": bool(payload.get("draft")),
+            "head": (payload.get("head") or {}).get("sha", head_sha)},
+        verified_blocker=True,
+        blocker_evidence_sufficient=True,
+        assurance=assurance,
+        revalidate=revalidate_factory(head_sha),
+    )
+    if not gate.allowed:
+        expiry = int((local_cfg.get("human_queue") or {}).get("expiry_minutes", 1440))
+        request = enqueue_human(
+            state, repo=repo, number=number, head_sha=head_sha,
+            policy=local_cfg, job_id=job_id,
+            summary=f"{repo}#{number} has verified defects but the gate denied action",
+            assurance=final_profile.as_dict(),
+            reviewers=[v.get("model", "") for v in verdicts],
+            risk_score=0, risk_band=assurance.required_assurance,
+            protected=[], failed_gates=gate.failed,
+            ci={}, findings=[r.as_dict() for r in verified],
+            recommendation="request changes",
+            rationale=gate.reason[:800], action="request_changes",
+            expiry_minutes=expiry,
+        )
+        notification = _deliver_notification(local_cfg, request, logger)
+        _transition_guarded(state, job_id, "human_approval_pending", logger=logger,
+                            phase="decision", reason=gate.reason[:200])
+        return _result("gate_denied", {"reason": gate.reason, "failed_gates": gate.failed,
+                                       "findings": summary,
+                                       "request_id": request.get("request_id"),
+                                       "notification": notification})
+
+    pr_node_id = _cached_pr_node_id(state, repo, number)
+    if not pr_node_id:
+        reason = f"no cached PR node_id for {repo}#{number}; run queue.py first"
+        _transition_guarded(state, job_id, "safe_stop", logger=logger,
+                            phase="decision", reason=reason)
+        return _result("missing_node_id", {"reason": reason, "findings": summary})
+
+    body = _render_request_changes_body(repo, number, head_sha, verified)
+    try:
+        _rc_execute(
+            state, {"pullRequestId": pr_node_id, "body": body}, job_id,
+            rest_probe=rest_probe, login=local_cfg.get("login", ""), head_sha=head_sha,
+        )
+    except Exception as exc:
+        reason = f"request-changes mutation failed: {exc}"
+        _log(logger, "error", body="request-changes halted", phase="decision",
+             outcome="safe_stop")
+        _transition_guarded(state, job_id, "safe_stop", logger=logger,
+                            phase="decision", reason=reason[:200])
+        return _result("mutation_failed", {"reason": str(exc), "findings": summary})
+
+    _transition_guarded(state, job_id, "changes_requested", logger=logger,
+                        phase="decision", reason="verified defects; changes requested")
+    return _result("changes_requested", {"findings": summary})
+
+
+def _render_request_changes_body(
+    repo: str, number: int, head_sha: str, verified: list[Any]
+) -> str:
+    """Body for the CHANGES_REQUESTED review: only corroborated findings."""
+    lines = [
+        f"Automated review of {repo}#{number} at `{head_sha}` found "
+        f"{len(verified)} corroborated blocking finding(s).",
+        "",
+    ]
+    for item in verified:
+        finding = item.finding
+        basis = ("independently reported by two provider families"
+                 if item.basis == "two_provider_families"
+                 else f"corroborated by failing check `{item.citation}`")
+        lines.extend([
+            f"- **{finding.severity}** `{finding.location}` — {finding.title}",
+            f"  - evidence: {finding.evidence}",
+            f"  - primary source: {finding.primary_source}",
+            f"  - basis: {basis}",
+        ])
+    lines.extend([
+        "",
+        "Findings without independent corroboration are not listed here; they are "
+        "escalated to a human reviewer instead.",
+    ])
+    return "\n".join(lines)
+
+
 def _run_job_inner(
     local_cfg: dict[str, Any],
     job: dict[str, Any],
@@ -536,6 +774,14 @@ def _run_job_inner(
                 "decision": "JOB_BLOCKING"}
     except EvidenceIncompleteError as exc:
         return _evidence_missing(state, local_cfg, job, logger, message=str(exc))
+
+    if decision == "REQUEST_CHANGES":
+        return _execute_request_changes(
+            local_cfg, job, head_sha, logger, state,
+            final_profile=final_profile,
+            verdicts=_collected_verdicts(state, job_id),
+            steps=steps,
+        )
 
     if decision != "SUCCESS":
         _transition_guarded(state, job_id, "human_required", logger=logger,
