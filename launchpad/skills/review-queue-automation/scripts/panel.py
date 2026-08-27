@@ -55,6 +55,11 @@ from errors import (
     TRANSIENT,
 )
 from logging_otel import MAX_STDERR_BYTES
+from runners import (
+    EffortUnsupportedError,
+    UnknownRunnerError,
+    build_invocation,
+)
 from verdict import signal_from_verdict, validate_verdict
 
 SENSITIVE = re.compile(
@@ -235,40 +240,24 @@ def select_candidate_pools(config: dict[str, Any], state: State) -> list[list[di
     return lanes
 
 
-def _omp_command(entry: dict[str, Any], prompt: str, effort: str, repo_path: str) -> list[str]:
-    """Build the demonstrably read-only review invocation.
-
-    `--no-tools` is the strictest supported read-only profile for this CLI. We
-    keep it (a tool allowlist would permit more surface, not less), pass the target
-    repository via `--cwd`, send evidence in the prompt, and never persist a session.
-    """
-    return [
-        "omp",
-        "-p",
-        "--no-session",
-        "--cwd=" + repo_path,
-        "--no-tools",
-        "--model",
-        entry["selector"],
-        "--thinking",
-        effort,
-        prompt,
-    ]
-
-
 def _run_reviewer(entry, prompt, out_path, effort, repo_path, timeout, logger=None) -> None:
     """Invoke one candidate runner and write its raw stdout to `out_path`.
 
-    Only the `omp` runner is supported; anything else is a hard job_blocking
-    configuration error that must reach the operator, not a candidate failure.
-    A non-zero exit raises ReviewerError carrying the bounded stderr for the
-    diagnostic artifact (never for our own schema-validation rejections).
+    Command construction is delegated to `runners.build_invocation`, which owns the
+    read-only invocation for each supported transport (omp / claude / codex). A
+    runner with no adapter is a hard job_blocking configuration error that must
+    reach the operator, not a candidate failure that silently falls through to the
+    next model. A non-zero exit raises ReviewerError carrying the bounded stderr
+    for the diagnostic artifact (never for our own schema-validation rejections).
     """
-    runner = entry.get("runner")
-    if runner == "omp":
-        cmd = _omp_command(entry, prompt, effort, repo_path)
-    else:
-        raise JobBlockingError(f"unknown runner: {runner or '<unset>'}")
+    try:
+        invocation = build_invocation(entry, prompt, effort, repo_path)
+    except (UnknownRunnerError, EffortUnsupportedError) as exc:
+        raise JobBlockingError(str(exc)) from exc
+    # Record what actually enforced read-only, and whether the requested effort
+    # was enforceable, so a route cannot later claim an axis it did not apply.
+    entry["_invocation"] = invocation.as_meta()
+    cmd = list(invocation.cmd)
     result = subprocess.run(
         cmd, capture_output=True, timeout=timeout, stdin=subprocess.DEVNULL
     )
@@ -449,6 +438,8 @@ def run_panel(
         f"Independently review {repo} PR #{number} (lane {lane}, job {job}). "
         f"Read the evidence envelope at {evidence_text}. Return only a strict JSON "
         f"object with signal equal to exactly one of {', '.join(SIGNAL_TOKENS)}. "
+        f"Emit raw JSON only: no markdown code fence, no backticks, and no "
+        f"commentary before or after the object. "
         f"Do not call GitHub or modify files."
     )
 

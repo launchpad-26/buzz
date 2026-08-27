@@ -49,10 +49,36 @@ def load_review_schema() -> dict[str, Any]:
         return json.load(handle)
 
 
+#: Matches ONE markdown fence that wraps the ENTIRE payload. Anchored at both
+#: ends on purpose: if any prose sits outside the fence the match fails and the
+#: verdict is rejected, so this never extracts JSON out of surrounding prose.
+_FULL_PAYLOAD_FENCE = re.compile(
+    r"\A```[ \t]*[A-Za-z0-9_+.-]*[ \t]*\r?\n(?P<body>.*?)\r?\n?[ \t]*```\Z",
+    re.DOTALL,
+)
+
+
+def strip_code_fence(text: str) -> str:
+    """Strip one markdown fence when it wraps the whole payload, else return as-is.
+
+    Several models reliably emit an otherwise-correct verdict inside a ```json
+    fence. Removing that wrapper is a formatting normalisation, not a relaxation:
+    the signal is still read from a parsed JSON field, and a fence with prose
+    outside it does not match, so a prose-embedded signal stays rejected.
+    """
+    if not text:
+        return ""
+    stripped = text.strip()
+    match = _FULL_PAYLOAD_FENCE.match(stripped)
+    if match is None:
+        return stripped
+    return match.group("body").strip()
+
+
 def parse_verdict(text: str) -> dict[str, Any]:
     """Parse strict JSON. Raises VerdictError on malformed JSON (not a completed review)."""
     try:
-        return json.loads(text)
+        return json.loads(strip_code_fence(text))
     except json.JSONDecodeError as exc:
         raise VerdictError(f"malformed review JSON: {exc.msg}") from exc
 
@@ -101,7 +127,7 @@ def validate_structure(text: str) -> tuple[bool, list[str]]:
 
 def parse_verdict_or_none(text: str) -> dict[str, Any] | None:
     try:
-        return json.loads(text)
+        return json.loads(strip_code_fence(text))
     except json.JSONDecodeError:
         return None
 
