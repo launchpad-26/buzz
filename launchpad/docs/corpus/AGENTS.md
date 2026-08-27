@@ -82,6 +82,13 @@ evidence:
   - statement: "Issue #636 requires that the draft is checked against the repository revision recorded in provenance."
     entry_class: TEAM_KNOWLEDGE
     provided_by: "launchpad-26/buzz#636 definition of done"
+  - statement: "Issue #636 requires that a node represent one independently maintainable idea, and that a newly discovered second concept, contract or procedure be filed as its own task rather than folded in."
+    entry_class: TEAM_KNOWLEDGE
+    provided_by: "launchpad-26/buzz#636 definition of done"
+  - statement: "A git pathspec carrying a citation's :line or :start-end suffix matches nothing and reports empty output with exit status 0, so an unnormalized file citation makes a changed file indistinguishable from an unchanged one."
+    entry_class: FACT
+    evidence:
+      - "git_diff_name_only(0052f5a7820ca4ca261efa233feb8bb53858ade6, pathspec='launchpad/docs/corpus/AGENTS.md:127') -> empty output, exit status 0, while the same pathspec without the ':127' suffix reports that file as changed"
   - statement: "Every non-.md file under the corpus root is rejected today, including one placed under generated/, because no generator exists to reproduce it from canonical Markdown."
     entry_class: FACT
     evidence:
@@ -368,11 +375,17 @@ it up as a corpus-wide standard.
    - Re-verified nothing → leave it.
    - **Every cited source byte-identical between the recorded revision and `HEAD`** →
      leave it. Checking a claim at either point was the same act, so moving the
-     revision would assert a re-check that added nothing.
-     `git diff --name-only <recorded-sha> -- <the ledger's paths>` returning empty is
-     the test. This case is why the rule is stated as four branches and not as "bump on
-     every edit": that shorter rule was in an earlier draft and contradicted what this
-     very node does.
+     revision would assert a re-check that added nothing. This case is why the rule is
+     stated as four branches and not as "bump on every edit": that shorter rule was in
+     an earlier draft and contradicted what this very node does.
+
+     **Establishing that requires re-verification, not a diff.** A `git diff` can tell
+     you that some *files* did not move; it cannot tell you a claim still holds, and it
+     cannot speak to a citation that names no file at all. See *Checking whether cited
+     files moved* below for what the command does and does not establish. Only the
+     file-naming citations in the ledger are in its reach, and if any citation is a
+     graph edge, tool result, commit or URL, this branch is not available to you —
+     re-verify those claims or leave the revision alone.
 5. **Leave the `id` alone.** Always.
 6. **Run the check.**
 
@@ -435,16 +448,40 @@ against `node.schema.json` and the rules above, and expect a later task to resha
 at, and a `relationships[].target` naming an id no node carries is a hard error. The
 absence is deliberate; the first sibling node is the moment to revisit it.
 
-**How to check this node's own recorded revision.** Run
-`git diff --name-only <recorded-sha> -- <the paths in its ledger>`. Empty output means
-no cited source has moved since the revision was recorded, so every claim still stands
-where it was checked. Do not take that on this document's word — the command is the
-check.
+**Checking whether cited files moved — and what that does not establish.** Run
+
+```
+git diff --name-only <recorded-sha> -- <the normalized file paths in the ledger>
+```
+
+Empty output means **those files** are unchanged between the recorded revision and
+`HEAD`. That is all it means. It is a narrowing step, not a certification: only
+re-verifying a claim against its source establishes that the claim still holds.
+
+Two limits decide which citations the command can even be pointed at, and both come
+from `CONTRACT.md` §3's six shapes:
+
+- **Normalize first.** A file citation may carry a position — `path:1077` or
+  `path:219-221`. Those are not pathspecs. Strip the trailing `:<line>` or
+  `:<start>-<end>` before passing the path to `git diff`, or git resolves nothing and
+  reports empty output for a file it never looked at. **An empty result from a
+  malformed pathspec is indistinguishable from an empty result from an unchanged
+  file**, which is what makes this the dangerous one.
+- **Only three of the six shapes name a file.** Bare path, file line and file range are
+  in reach. **Graph edge, tool result and commit are not**, and neither are the two URL
+  forms the validator recognises beyond §3. Exclude them explicitly rather than
+  silently — a claim resting on a tool result or an external URL is untouched by any
+  `git diff`, so its status after the command is exactly what it was before: unknown.
+
+So the honest reading is one sentence: *the file-naming citations I normalized and
+passed are unchanged; every other claim in this ledger is unverified by this command.*
+Do not take the narrowing on this document's word either — run it, and read what it
+covered.
 
 **What the corpus has NOT settled about revisions.** Whether a recorded revision may
 stay put while a node is edited, and what an author must do when only some claims are
 re-verified, is **#1321's** to decide (`document corpus standard for provenance`,
-unlanded). Until it lands, *Updating a node* below states this document's working
+unlanded). Until it lands, *Updating a node* above states this document's working
 practice, not a corpus-wide rule — three independent review passes rejected earlier
 attempts to present it as one, on the grounds that no authorized source establishes it.
 When #1321 lands, that section defers to it.
