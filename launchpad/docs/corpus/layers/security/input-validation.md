@@ -73,6 +73,11 @@ evidence:
     evidence:
       - "crates/buzz-media/src/validation.rs"
       - "crates/buzz-relay/src/router.rs:34-46"
+  - statement: "The size and structural limits documented here are exercised by unit tests colocated with the validators: verification.rs's own test module covers tampered-ID and tampered-signature rejection, and ingest.rs's test module includes boundary-value pairs such as project_envelope_rejects_name_too_long / project_envelope_accepts_name_at_max_length for PROJECT_NAME_MAX_LEN and the equivalent pair for PROJECT_DESCRIPTION_MAX_LEN."
+    entry_class: FACT
+    evidence:
+      - "crates/buzz-core/src/verification.rs:34-71"
+      - "crates/buzz-relay/src/handlers/ingest.rs:4959-4990"
   - statement: "The pipeline order documented here -- transport parse, then signature/ID verification, then timestamp drift, then content size, then structural/per-kind tag checks -- is this node's own reading of a single ~5,200-line function file rather than a rule stated anywhere as an explicit ordering contract, so a future refactor of ingest.rs could reorder these checks without violating any written invariant this node is aware of."
     entry_class: INFERENCE
     evidence:
