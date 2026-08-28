@@ -53,11 +53,12 @@ evidence:
     entry_class: FACT
     evidence:
       - "crates/buzz-ws-client/src/connection.rs"
-  - statement: "crates/buzz-ws-client's connect_authenticated and NostrWsConnection are consumed directly, within this repository's Rust crates, only by crates/buzz-test-client/src/lib.rs -- the desktop app's WebSocket client is implemented separately in TypeScript, not through this Rust crate."
+  - statement: "crates/buzz-ws-client's connect_authenticated and NostrWsConnection are consumed directly, within this repository's Rust crates, by crates/buzz-test-client/src/lib.rs and, as an exception, by crates/buzz-cli/src/client.rs -- Client::publish_ephemeral_event delegates to buzz_ws_client::publish_event (used for ephemeral-kind events, which the relay rejects over HTTP), which drives a NostrWsConnection through the same connect/authenticate/send_event path -- the desktop app's WebSocket client is implemented separately in TypeScript, not through this Rust crate."
     entry_class: FACT
     evidence:
       - "crates/buzz-ws-client/src/lib.rs"
       - "crates/buzz-test-client/src/lib.rs"
+      - "crates/buzz-cli/src/client.rs"
   - statement: "The desktop app's relayAuthPolicy.ts implements its own client-side policy for interpreting NIP-42 AUTH OK responses: its module doc states that historically any OK false latched the session terminal, but the relay sends OK false for conditions that are transient from the client's side (a duplicate AUTH on an already-authenticated connection, or a verification failure covering clock-skew and fail-closed DB-lookup errors on retry), and only restricted:/blocked: rejections are treated as permanent, with a MAX_CONSECUTIVE_AUTH_REJECTIONS latch guarding against flapping on a genuinely broken identity."
     entry_class: FACT
     evidence:
@@ -123,9 +124,12 @@ A reader needs this concept when:
   document advertises `auth_required: true` for exactly this reason
   (`crates/buzz-relay/src/nip11.rs`). `crates/buzz-ws-client` is Buzz's own
   Rust implementation of the client half (`NostrWsConnection::authenticate`),
-  and `crates/buzz-test-client` is, within this repository's Rust crates, its
-  only direct consumer -- the desktop app's WebSocket client is written
-  separately in TypeScript.
+  consumed directly, within this repository's Rust crates, by
+  `crates/buzz-test-client` and, as an exception, by `crates/buzz-cli` --
+  `Client::publish_ephemeral_event` delegates to `buzz_ws_client::publish_event`
+  for ephemeral-kind events (which the relay rejects over HTTP), driving the
+  same NIP-42 WebSocket round trip -- the desktop app's WebSocket client is
+  written separately in TypeScript.
 - **Interpreting a NIP-42 `OK false` response correctly on the client
   side.** The desktop app's `relayAuthPolicy.ts` exists because not every
   `OK false` means the same thing: a duplicate AUTH on an already-authenticated
