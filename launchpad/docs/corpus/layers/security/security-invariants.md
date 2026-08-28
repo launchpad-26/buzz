@@ -102,17 +102,27 @@ relationships:
 
 ## Invariant statement
 
-Every tenant- and security-relevant decision the relay makes at its
-ingest/auth/read accept-reject boundary — connection binding, event ingest,
-and `REQ`/`COUNT` reads — corresponds to a named conjunct of the `Safety`
-property in `docs/spec/MultiTenantRelay.tla`, and Buzz maintains an
-independent, non-production Rust reimplementation of that model
-(`buzz-conformance::check_trace`) capable of judging a captured runtime trace
-against every one of those conjuncts. The security properties Buzz claims to
-hold at this boundary are not merely asserted in prose: they are named,
-formally specified, and machine-checkable against real code paths, even
-where — see *Enforcement today* below — the checking machinery is not yet
-wired to run against live traffic.
+Every observation, accepted write, and recorded duplicate/no-op outcome the
+relay produces at its ingest/auth/read accept-reject boundary **MUST**
+satisfy every conjunct of the `Safety` property defined in
+`docs/spec/MultiTenantRelay.tla` (`TypeOK` and the twelve `Inv_*` invariants
+named in *Scope* below) simultaneously. No accepted decision **MUST NOT**
+violate any one of them, regardless of which handler or code path produced
+it — the conjuncts are not independent options a given surface may satisfy
+selectively.
+
+This is stated as one property, not twelve, because the spec itself states
+it that way: `Safety` is a single top-level definition, and a trace that
+satisfies eleven conjuncts and fails a twelfth is not "mostly compliant," it
+is a Safety violation. Buzz additionally maintains an independent,
+non-production Rust reimplementation of that same model
+(`buzz-conformance::check_trace`) capable of judging a captured runtime
+trace against every one of those conjuncts — this second fact documents how
+the first is checked, not a second invariant. The security properties Buzz
+claims to hold at this boundary are not merely asserted in prose: they are
+named, formally specified, and machine-checkable against real code paths,
+even where — see *Enforcement today* below — the checking machinery is not
+yet wired to run against live traffic.
 
 ## Scope
 
