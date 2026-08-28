@@ -183,6 +183,26 @@ If the fix is in a file you are already touching and it is small, fix it and not
 the PR body. Anything else gets an issue. Without a threshold you get either invisible
 work or issue spam.
 
+### Sprints and iterations
+
+[Project 20](https://github.com/orgs/launchpad-26/projects/20) ("Buzz delivery", this
+repo) and [Project 22](https://github.com/orgs/launchpad-26/projects/22)
+(`buzz-infrastructure`) each carry an **Iteration** field: weekly blocks starting Monday,
+one sprint per calendar week. Set an issue's Iteration to the sprint it's actively being
+worked in — an issue with no Iteration is not yet scheduled, not a signal that it's
+unimportant.
+
+GitHub's iteration field has no concept of skipping weekends — each block is a full
+7-day calendar week (Monday through the following Sunday) so that iterations tile back
+to back with no gaps. The working expectation is still Monday–Friday; the weekend inside
+a sprint's date range is not extra time, it's just how the field has to be shaped to stay
+contiguous. Don't read a sprint's end date as "due Sunday."
+
+Sprint ≠ Milestone: a milestone is a dated, demonstrable outcome that a PRD (or several)
+delivers, independent of who's working when; a sprint is a fixed week of calendar time
+that issues get scheduled into regardless of which milestone they belong to. An issue
+carries both fields when it's both scheduled and part of a larger outcome.
+
 ---
 
 ## 5. Rules for agents
