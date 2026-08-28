@@ -64,7 +64,7 @@ evidence:
     evidence:
       - "crates/git-sign-nostr/README.md"
       - "crates/buzz-dev-mcp/Cargo.toml"
-  - statement: "The Helm chart's operator-facing documentation states plainly that rotating `BUZZ_RELAY_PRIVATE_KEY` changes the relay's identity and that federation peers will not recognize the relay afterward, and lists it as one of four items whose loss is data loss for a deployment -- corroborating from the deployment side what this node establishes from the code side, that `relay_keypair` is a durable, load-bearing identity rather than an ordinary rotatable secret."
+  - statement: "The Helm chart's operator-facing documentation states plainly that rotating `BUZZ_RELAY_PRIVATE_KEY` changes the relay's identity and that federation peers will not recognize the relay afterward, and lists it as one of five items whose loss is data loss for a deployment -- corroborating from the deployment side what this node establishes from the code side, that `relay_keypair` is a durable, load-bearing identity rather than an ordinary rotatable secret."
     entry_class: FACT
     evidence:
       - "deploy/charts/buzz/README.md:214"
