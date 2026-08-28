@@ -71,6 +71,12 @@ evidence:
 ---
 
 # Standard: `confidence`
+  - statement: "Per Serina's decision on launchpad-26/buzz#1486, this node reconciles to #1313's documentation-standard: the H1 no longer code-formats the topic, and the normative sections are named MUST and SHOULD rather than Requirements and Guidance."
+    entry_class: TEAM_KNOWLEDGE
+    provided_by: "launchpad-26/buzz#1486, decided 2026-08-27"
+---
+
+# Standard: confidence
 
 What the `confidence` number on an evidence entry means, when it is required, how an
 author picks one, and what a reader may conclude from it.
@@ -146,6 +152,7 @@ as calibrated and reasons onward from it. The number then carries more weight th
 anything that produced it. Everything below is aimed at that.
 
 ## Requirements
+## MUST
 
 These are MUSTs. The first two are enforced mechanically. Requirement 3 is a MUST that
 no check reaches — see *Enforcement, and where it stops*. The rest are enforced by
@@ -171,6 +178,7 @@ review, and a reviewer who lets one through has approved a defect.
 6. **A number MUST NOT be moved because someone pushed back on it.** Re-verify the claim
    or reclassify the entry. Adjusting the number to settle an argument records agreement
    where there was none. Re-encoding an existing value onto the band values in *Guidance*
+   where there was none. Re-encoding an existing value onto the band values in *SHOULD*
    is not a move under this rule, but do not tell yourself nothing changed: snapping to a
    peg preserves the assessment while it can and does alter the entry's **rank** against
    its neighbours, which is the one thing the number legitimately does. So the record must
@@ -182,6 +190,7 @@ review, and a reviewer who lets one through has approved a defect.
    number, because it still looks current.
 
 ## Guidance
+## SHOULD
 
 These are SHOULDs. Depart from them with a reason.
 
@@ -385,6 +394,7 @@ edge to make first.
 **Expected but not verified when this node was written:**
 
 - **The bands in *Guidance*, and the values `0.8` / `0.6` / `0.4`, are not derived from
+- **The bands in *SHOULD*, and the values `0.8` / `0.6` / `0.4`, are not derived from
   anything.** They are a proposed convention for keeping values coarse, offered because
   unbounded precision is the observed failure. No study, no sample, and one authored
   INFERENCE in the corpus to look at. `0.8` was chosen to match that entry and the other

@@ -78,3 +78,9 @@ id_ed25519
 
 # Helm dependency tarballs — regenerable from Chart.lock via `helm dependency build`
 deploy/charts/*/charts/*.tgz
+
+# review-queue-automation (local, optional)
+.review-queue-automation/
+
+# review-queue-automation (local, optional)
+pr review logs

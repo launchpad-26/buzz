@@ -8,6 +8,10 @@ Normative, and a sibling to `CONTAINMENT.md` in the same voice. This is the cont
 planning first, so it is settled here in enough detail that #118 and #119 implement
 against it without renegotiating.
 
+**Consumed by `PUBLISHING.md`** (#119): the finding record, the report envelope, and
+the merged document's `nonce` key are read verbatim by the renderer that document
+specifies — see its own cross-references section.
+
 **Follow-up owed to `CONTAINMENT.md`, not yet paid.** `CONTAINMENT.md`'s own "Contract
 for later stages" table lives on `feat/review-agent-untrusted-input`
 ([#120](https://github.com/launchpad-26/buzz/issues/120)), which is committed but
@@ -159,9 +163,26 @@ What the concurrent runner prints on stdout — the whole of this contract's out
 | `pr` | number |
 | `merge_base_sha` | the commit pair every report read |
 | `head_sha` | the commit pair every report read |
+| `reviewer` | `{kind, name}` — **which** reviewer produced this document. `kind` is `stub` or `injected`. See below. |
 | `reports` | array of exactly the dimension envelopes above, one per slug the runner lists, and nothing else in it |
 | `containment` | the block specified below — findings plus a seven-key `states` map. Present on every run. |
 | `nonce` | the run nonce, once, at the top level |
+
+### `reviewer`, and why the document has to carry it
+
+`run_dimensions.py` ships a stub reviewer that returns `{"outcome": "clean",
+"findings": []}` for every dimension without reading anything, and `main()` binds it —
+#117 puts choosing a model out of scope, and a real dimension reviewer is
+[#116](https://github.com/launchpad-26/buzz/issues/116). Without this key, a
+stub-produced document and a real review that genuinely found nothing are byte-identical
+downstream, so the publish stage cannot tell them apart and publishes "No confirmed
+findings" either way. An independent review panel found the publish workflow doing
+exactly that.
+
+`kind` is `injected` only when the runner was handed a reviewer other than the stub. A
+consumer must treat **absent** the same as `stub`: a document that will not say what
+reviewed it has not established that anything did. `PUBLISHING.md` names the condition
+this drives.
 
 ### Where containment findings live
 

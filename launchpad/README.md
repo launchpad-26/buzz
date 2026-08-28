@@ -135,7 +135,7 @@ the clone too.
 | [`VISION.md`](VISION.md) | What this cohort is building on Buzz, for whom, and what "done" looks like |
 | [`ARCHITECTURE.md`](ARCHITECTURE.md) | Target architecture: what runs where, who owns which part, what does not exist yet |
 | [`ENVIRONMENTS.md`](ENVIRONMENTS.md) | Where Buzz runs, what each place proves, and what must hold in all of them |
-| [`SECURITY-POSTURE.md`](SECURITY-POSTURE.md) | Where security controls stand today, which risks are accepted, and the gap nothing owns |
+| [`SECURITY-POSTURE.md`](SECURITY-POSTURE.md) | Accepted risks, the gap nothing owns, and the public-repository disclosure rule — current control status is tracked privately, not here |
 | [`REQUIREMENTS.md`](REQUIREMENTS.md) | What the cohort's environment must do and must be, prioritised, traced to a source, and verifiable |
 | [`labels.yml`](labels.yml) | Label source of truth |
 | [`sync-labels.sh`](sync-labels.sh) | Applies `labels.yml` to the repo |

@@ -62,6 +62,7 @@ launchpad/
   labels.yml           label source of truth
   sync-labels.sh       applies labels.yml
   agents/              persona packs for Buzz-native agents (see launchpad/Research/the-professor-design.md)
+  skills/              Launchpad-26 organization skills
   decisions/           ADRs, once accepted
   docs/                MkDocs knowledge layer
   deploy/              host configuration and hardening
@@ -69,6 +70,8 @@ launchpad/
 ```
 
 Note: `launchpad/AGENTS.md` (contributor guide) and `launchpad/agents/` (persona packs) are different things with adjacent names. No bare `.md` file may sit directly in `launchpad/agents/`—this session's `check-models.sh` hook scans that exact shape as a Claude Code subagent roster and blocks the commit. Pack documentation belongs inside each pack's own subdirectory (e.g., `launchpad/agents/the-professor/README.md`), never at the top level.
+
+`launchpad/skills/` is where the `launchpad-26` GitHub organization keeps its reusable skills. Check it before looking elsewhere for a cohort skill.
 
 **Never move or rename upstream files.** Upstream is ~3,800 files and we merge from it
 regularly; a rename turns every future merge into manual work.
@@ -100,6 +103,14 @@ The deliberate exceptions, all accepted knowingly:
   gains one append-only entry per cohort crate under `launchpad/crates/`, and
   `Cargo.lock` changes with it. Reasoning and the rejected alternatives are in
   [`decisions/ADR-0045-cohort-crates-in-launchpad-workspace.md`](decisions/ADR-0045-cohort-crates-in-launchpad-workspace.md).
+- **Desktop Settings registration seam** — `desktop/src/features/settings/ui/SettingsPanels.tsx`
+  carries a registration seam so cohort-authored Settings sections can be added from
+  `launchpad/` without further upstream edits. Scoped to that seam in that one file: the
+  section descriptors and their components stay under `launchpad/`, and **adding a cohort
+  panel must not touch any upstream file**. Editing the four per-section registration sites
+  directly is what this exception exists to avoid, not something it permits. Reasoning and
+  the rejected alternatives are in
+  [`decisions/ADR-0051-cohort-settings-registration-seam.md`](decisions/ADR-0051-cohort-settings-registration-seam.md).
 
 The list itself is closed; any further exception needs its own ADR.
 
@@ -179,6 +190,26 @@ remains valid history — do not re-parent closed or in-flight work.
 If the fix is in a file you are already touching and it is small, fix it and note it in
 the PR body. Anything else gets an issue. Without a threshold you get either invisible
 work or issue spam.
+
+### Sprints and iterations
+
+[Project 20](https://github.com/orgs/launchpad-26/projects/20) ("Buzz delivery", this
+repo) and [Project 22](https://github.com/orgs/launchpad-26/projects/22)
+(`buzz-infrastructure`) each carry an **Iteration** field: weekly blocks starting Monday,
+one sprint per calendar week. Set an issue's Iteration to the sprint it's actively being
+worked in — an issue with no Iteration is not yet scheduled, not a signal that it's
+unimportant.
+
+GitHub's iteration field has no concept of skipping weekends — each block is a full
+7-day calendar week (Monday through the following Sunday) so that iterations tile back
+to back with no gaps. The working expectation is still Monday–Friday; the weekend inside
+a sprint's date range is not extra time, it's just how the field has to be shaped to stay
+contiguous. Don't read a sprint's end date as "due Sunday."
+
+Sprint ≠ Milestone: a milestone is a dated, demonstrable outcome that a PRD (or several)
+delivers, independent of who's working when; a sprint is a fixed week of calendar time
+that issues get scheduled into regardless of which milestone they belong to. An issue
+carries both fields when it's both scheduled and part of a larger outcome.
 
 ---
 
