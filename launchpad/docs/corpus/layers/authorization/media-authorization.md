@@ -246,7 +246,11 @@ reported over HTTP.
 - **Live execution of the flow** (a running relay against a real Blossom client) was
   not performed for this node; the claims above rest on reading source and the
   existing unit/integration test assertions, matching the same caveat both
-  referenced flow nodes already state about themselves.
+  referenced flow nodes already state about themselves. The three
+  `crates/buzz-test-client/tests/e2e_media.rs` functions cited above are each marked
+  `#[ignore]` and call a live `relay_http_url()`, meaning they require a running
+  relay and do not execute under a plain `cargo test` — their assertions were read
+  directly from source, not observed passing in a run performed for this node.
 - **Whether `layers-authorization-authorization` (#1031/PR #1796) will, once merged,
   add media as a fifth layer or leave it structurally separate** is explicitly
   unresolved — see the front-matter `INFERENCE` entry and *Not to be confused with*
