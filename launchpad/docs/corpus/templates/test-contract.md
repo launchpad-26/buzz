@@ -219,6 +219,18 @@ This template covers **one obligation and its verifying test(s)**. It does not c
 - **A decision about whether an obligation should exist at all** — that is an ADR or a
   PRD, referenced by a test-contract node via a `references` edge once one exists to
   point at, not restated inside it.
+- **A system invariant considered on its own, independent of one named verifying
+  test** — that is `#1343`'s invariant template. This template owns one obligation
+  paired with a named verifying test and a runnable command to run it, fixed at
+  `type: verification`; the invariant template owns an always-holds property of
+  the system paired with whichever of five enforcement tiers actually holds it
+  (only one of which is test-enforced), choosing `type` by the subject matter the
+  invariant concerns rather than fixing it to `verification`. An invariant whose
+  sole enforcement tier is test-enforced is the closest case to this template —
+  the tell is which node the obligation lives in: this template's whole content
+  *is* the obligation-plus-test pairing, where an invariant node states the
+  property itself and cites its verifying test as one line inside a broader
+  *Enforcement today* section.
 
 ## Required sections
 
