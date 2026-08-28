@@ -59,9 +59,13 @@ evidence:
       - "crates/buzz-relay/src/handlers/moderation_authz.rs"
       - "crates/buzz-core/src/git_perms.rs"
     confidence: 0.85
-  - statement: "Issue #1034 requires this node to draw a clear boundary against the sibling task #1184 (`layers/tenancy/community-membership.md`), so that the two documents — one on tenancy admission, one on authorization — do not collide in meaning."
-    entry_class: TEAM_KNOWLEDGE
-    provided_by: "launchpad-26/buzz#1034 task body"
+  - statement: "This node must draw a clear boundary against the sibling task #1184 (`layers/tenancy/community-membership.md`), so that the two documents — one on tenancy admission, one on authorization — do not collide in meaning; this follows from the admission/authorization split being handled by disjoint code paths, not from any explicit instruction in issue #1034's own body text."
+    entry_class: INFERENCE
+    evidence:
+      - "crates/buzz-relay/src/api/mod.rs"
+      - "crates/buzz-relay/src/handlers/moderation_authz.rs"
+      - "crates/buzz-core/src/git_perms.rs"
+    confidence: 0.8
 ---
 
 # Community membership authorization
