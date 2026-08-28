@@ -31,10 +31,6 @@ evidence:
       - "crates/buzz-core/src/tenant.rs:1-30"
       - "crates/buzz-core/src/tenant.rs:37-38"
       - "crates/buzz-core/src/tenant.rs:68-90"
-  - statement: "buzz-core's normalize_host lowercases a host, strips a single trailing FQDN-root dot, and strips a default port (:80 or :443) while preserving non-default ports and IPv6 bracket literals, so that Relay.Example, relay.example., and relay.example:443 all normalize to the identical community lookup key and can never split into distinct tenants."
-    entry_class: FACT
-    evidence:
-      - "crates/buzz-core/src/tenant.rs:121-150"
   - statement: "buzz-relay's tenant.rs defines a HostResolver trait (resolve_host: normalized host -> Option<CommunityId>) and a bind_community function documented as 'the single row-zero entry point,' which normalizes the host, resolves it, and returns a BindError on any non-success -- an unmapped host or a lookup error -- with no code path that yields a default or fallback community; a sibling bind_deployment_community resolves a relay's own deployment community from its configured relay_url host for server-internal paths (git Smart-HTTP, the pre-receive hook callback, the workflow execution sink, startup tasks) that have no inbound request Host header, through that same fail-closed path rather than a separate default."
     entry_class: FACT
     evidence:
@@ -42,15 +38,6 @@ evidence:
       - "crates/buzz-relay/src/tenant.rs:48-58"
       - "crates/buzz-relay/src/tenant.rs:60-95"
       - "crates/buzz-relay/src/tenant.rs:97-114"
-  - statement: "migrations/0001_initial_schema.sql creates a communities table (id UUID primary key, host VARCHAR(255), signing_key BYTEA, created_at) with a unique index on lower(host), documented in an adjoining comment as 'OPERATOR-GLOBAL: it is the registry of tenants, not itself tenant-scoped, so it carries no community_id of its own (its id IS the community key),' and states that resolve_host(host) reads exactly one row from this table to mint the request's TenantContext."
-    entry_class: FACT
-    evidence:
-      - "migrations/0001_initial_schema.sql:39-61"
-  - statement: "migrations/0001_initial_schema.sql's header states the schema is 'multi-tenant' and that community_id is 'a first-class, server-resolved key on every tenant-scoped row,' and its migration-lint obligations require every tenant-scoped table to carry community_id NOT NULL and no UNIQUE/PRIMARY KEY/FK observable across communities; the immediately following channels table comment confirms this concretely for one such table, stating channels.community_id is immutable (enforced by a trigger, no UPDATE path) and that the channels primary key is (community_id, id), so the same channel UUID may legitimately exist in two different communities without collision."
-    entry_class: FACT
-    evidence:
-      - "migrations/0001_initial_schema.sql:1-22"
-      - "migrations/0001_initial_schema.sql:63-70"
   - statement: "crates/buzz-core/src/kind.rs defines KIND_NIP29_GROUP_METADATA = 39000, KIND_NIP29_GROUP_ADMINS = 39001, and KIND_NIP29_GROUP_MEMBERS = 39002 as NIP-29 group-state kinds in the addressable range 39000-39003; these events describe a channel's metadata and membership (a channel is Buzz's implementation of a NIP-29 group), not a community -- a community has no NIP-29-shaped event of its own and is instead a purely server-side row (communities.id) selected by host, never advertised to clients as a signed event kind."
     entry_class: FACT
     evidence:
@@ -71,10 +58,6 @@ evidence:
     evidence:
       - "migrations/0001_initial_schema.sql:1-8"
       - "migrations/0002_git_repo_names.sql"
-  - statement: "crates/buzz-test-client/tests/conformance_multitenant.rs documents, as a named obligation checked by an executable test, that 'the same channel UUID legitimately co-exists in two communities (DB PK (community_id, id)); an h tag resolving to a channel in another community is rejected generically' -- the same isolation property migrations/0001_initial_schema.sql's schema comment states, here confirmed at the verification layer rather than the schema layer alone."
-    entry_class: FACT
-    evidence:
-      - "crates/buzz-test-client/tests/conformance_multitenant.rs:1471-1473"
   - statement: "launchpad/docs/corpus/architecture/context/buzz-platform.md already states, at context level, that 'A Buzz community is the tenant-visible workspace selected by the request host; the self-hosted default is one host, one relay process, one implicit community, and every connection binds a TenantContext resolved from that host before any Nostr or HTTP handler runs' -- the same claim this node develops in depth, so this node references rather than duplicates it."
     entry_class: FACT
     evidence:
@@ -82,6 +65,10 @@ evidence:
 relationships:
   - type: references
     target: architecture-context-buzz-platform
+  - type: references
+    target: architecture-principles-host-selects-community
+  - type: references
+    target: architecture-principles-community-is-security-boundary
 ---
 
 # Community (tenancy)
@@ -129,37 +116,23 @@ why it exists, not how the type system enforces it.
 
 ## How a community is resolved
 
-```mermaid
-flowchart LR
-    A["Inbound connection\n(WebSocket / REST / media / git / webhook)"] --> B["Host header"]
-    B --> C["normalize_host()\n(lowercase, strip default port,\nstrip trailing FQDN dot)"]
-    C --> D{"communities table\nlower(host) lookup"}
-    D -->|"match"| E["TenantContext bound\n(CommunityId + normalized host)"]
-    D -->|"no match / empty"| F["Reject: generic error\n(fail closed, never a default tenant)"]
-    E --> G["Every scoped handler\n(auth, events, REQ, media, git,\nsearch, pub/sub, workflow)"]
-```
+In brief: a community is resolved exactly once, from the request's `Host`
+header, before any handler observes tenant data — normalized, looked up
+against the `communities` table, and bound as a `TenantContext`, or rejected
+generically (fail closed, never a default tenant) on any unmapped host or
+lookup failure. Server-internal paths with no inbound `Host` header (git
+Smart-HTTP, the pre-receive hook callback, the workflow execution sink,
+startup tasks) resolve the relay's own configured `relay_url` host through
+that identical fail-closed path rather than a separate shortcut.
 
-The `communities` table is deliberately **operator-global**, not itself
-tenant-scoped — it carries no `community_id` of its own because its own `id`
-*is* the community key, and it is the one table the migration-lint harness
-allowlists as an exception to "every scoped table carries `community_id`."
-Every other tenant-scoped table (channels, events, workflows, audit entries,
-and the rest) instead carries `community_id NOT NULL`, and the schema's own
-migration-lint obligations forbid any `UNIQUE`/`PRIMARY KEY`/foreign key on
-such a table that is observable across communities — each key leads with
-`community_id` (or a joined parent already pins it). `channels`, for example,
-has a compound primary key `(community_id, id)`, so the very same channel UUID
-may legitimately exist in two different communities without colliding — an
-isolation property `crates/buzz-test-client/tests/conformance_multitenant.rs`
-exercises directly as a named obligation, not merely a schema-level
-assertion.
-
-Server-internal code paths that have no inbound request `Host` header at all
-(the git Smart-HTTP transport, the localhost pre-receive hook callback, the
-workflow execution sink, startup tasks) still go through the same fail-closed
-binding path: they resolve the relay's own configured `relay_url` host through
-the identical lookup, rather than taking a separate "internal" shortcut that
-bypasses host resolution.
+The resolution mechanism itself — `bind_community`, `normalize_host`,
+`bind_deployment_community`, and every call site that invokes them — is
+documented in full by `architecture-principles-host-selects-community`. The
+security invariant this binding enforces, and why no client-supplied signal
+may ever override it, is documented by
+`architecture-principles-community-is-security-boundary`. This node covers
+only what a community *is*; see those two nodes for how binding works and why
+it is a security boundary, rather than restating either here.
 
 ## Use cases
 
