@@ -9,13 +9,13 @@ import { SettingsSectionHeader } from "@/features/settings/ui/SettingsSectionHea
  */
 function KnowledgeSettingsPanel() {
   return (
-    <section aria-labelledby="knowledge-settings-heading">
+    <section data-testid="settings-knowledge">
       <SettingsSectionHeader
-        title={<span id="knowledge-settings-heading">Help</span>}
+        title="Help"
         description="Buzz's built-in help is coming soon."
       />
       <SettingsOptionGroup title="Coming soon">
-        <p className="px-4 py-3 text-sm text-muted-foreground/70">
+        <p className="px-4 py-3 text-sm text-muted-foreground">
           This panel will surface Buzz's documentation once it is seeded.
         </p>
       </SettingsOptionGroup>

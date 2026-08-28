@@ -138,6 +138,20 @@ function isUpstreamSettingsSection(
   );
 }
 
+const cohortSectionCollidingWithUpstream = cohortSettingsSections.find(
+  (section) =>
+    (UPSTREAM_SETTINGS_SECTION_VALUES as readonly string[]).includes(
+      section.value,
+    ),
+);
+if (cohortSectionCollidingWithUpstream) {
+  // A colliding id would silently shadow the real upstream panel of that
+  // name, since the cohort lookup in renderSettingsSection runs first.
+  throw new Error(
+    `Cohort Settings section "${cohortSectionCollidingWithUpstream.value}" collides with an existing upstream section id.`,
+  );
+}
+
 const SETTINGS_SECTION_VALUES: readonly SettingsSection[] = [
   ...UPSTREAM_SETTINGS_SECTION_VALUES,
   ...cohortSettingsSections.map((section) => section.value),

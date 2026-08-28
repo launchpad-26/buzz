@@ -15,13 +15,15 @@ belongs in this crate or in the desktop build that packages it. That pipeline
 runs once, out-of-band, and commits its output; this crate only reads that
 output.
 
-This is Ruling 11 / Ruling 12 from PRD #4, stated here so a contributor sees
-the constraint before writing code against it. **It is not yet ratified** —
-issue #578 is open and flags a real conflict between this rule and the
-`knowledge.*` query interface's free-text `find` method, which cannot be
-served from a static artefact alone. If #578 changes the ruling, this file and
-the crate's shape both need revisiting; until then, treat re-derivation as
-disallowed.
+This is Ruling 11 / Ruling 12 from PRD #4, **ratified by ADR-0027** (#578,
+closed 2026-08-24): the crate serves two pre-rendered front doors over the
+committed corpus (a human Settings surface and a keyed `knowledge.*` agent
+surface) and resolves neither live. `knowledge.find`'s free-text search (and
+`knowledge.ask`, which routes to it) has no finite answer set a pipeline could
+pre-render against arbitrary text — ADR-0027 first deferred both out of v1,
+and **ADR-0031** (#1418, closed 2026-08-25) later made that permanent: both
+methods are out of scope for the shipped crate, full stop, not a pending gap
+to revisit here.
 
 ## What is not here yet
 

@@ -18,6 +18,26 @@ export type CohortSettingsSectionDescriptor = {
   render: () => React.ReactNode;
 };
 
-export const cohortSettingsSections: CohortSettingsSectionDescriptor[] = [
-  knowledgeSettingsSection,
-];
+/**
+ * Keyed by `CohortSettingsSectionId` so widening that union without adding a
+ * matching entry here is a compile error, not a panel that silently renders
+ * `null` at runtime (review-code finding on #551: the seam had no equivalent
+ * of `renderSettingsSection`'s upstream exhaustiveness check).
+ */
+const cohortSettingsSectionRegistry: Record<
+  CohortSettingsSectionId,
+  CohortSettingsSectionDescriptor
+> = {
+  knowledge: knowledgeSettingsSection,
+};
+
+for (const [key, descriptor] of Object.entries(cohortSettingsSectionRegistry)) {
+  if (descriptor.value !== key) {
+    throw new Error(
+      `Cohort Settings section registered under key "${key}" but its descriptor's value is "${descriptor.value}" — they must match.`,
+    );
+  }
+}
+
+export const cohortSettingsSections: CohortSettingsSectionDescriptor[] =
+  Object.values(cohortSettingsSectionRegistry);
