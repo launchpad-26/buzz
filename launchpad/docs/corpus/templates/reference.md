@@ -23,7 +23,7 @@ evidence:
       - "launchpad/docs/corpus/README.md"
       - "launchpad/docs/corpus/standards/confidence.md"
       - "launchpad/docs/corpus/standards/decision-references.md"
-  - statement: "relationships.schema.json defines five relationship types -- depends-on, supersedes, implements, references, part-of -- and states references' directionality as 'source cites target as supporting context; no ownership or currency dependency implied', with a generated inverse named referenced-by."
+  - statement: "relationships.schema.json defines five relationship types -- depends-on, supersedes, implements, references, part-of -- and states references' directionality as 'source cites target as supporting context; no ownership or currency dependency implied', with an inverse named referenced-by that is authored, not generated -- the only one of the five relationship types whose inverse is authored rather than generated."
     entry_class: FACT
     evidence:
       - "launchpad/docs/corpus/schema/relationships.schema.json"
@@ -43,7 +43,7 @@ evidence:
     entry_class: FACT
     evidence:
       - "https://diataxis.fr/explanation/"
-  - statement: "Diátaxis's compass places reference at the intersection of 'informs cognition' (theoretical/propositional knowledge, thinking) and 'application of skill' (work), while explanation sits at 'informs cognition' crossed with 'acquisition of skill' (study) -- the two forms share the cognition axis and split on acquisition versus application, which is the axis that does not apply to the concept/reference boundary this template states in prose."
+  - statement: "Diátaxis's compass places reference at the intersection of 'informs cognition' (theoretical/propositional knowledge, thinking) and 'application of skill' (work), while explanation sits at 'informs cognition' crossed with 'acquisition of skill' (study) -- the two forms share the cognition axis and split on acquisition versus application."
     entry_class: FACT
     evidence:
       - "https://diataxis.fr/compass/"
@@ -67,17 +67,18 @@ evidence:
     entry_class: FACT
     evidence:
       - "https://gitlab.com/tgdp/templates/-/raw/main/reference/guide_reference.md"
-  - statement: "The Good Docs Project templates repository's LICENSE file (gitlab.com/tgdp/templates, current canonical home; the archived github.com/thegooddocsproject/templates mirror carries no usable SPDX license) is the MIT No Attribution License, copyright The Good Docs Project 2024, granting free use/copy/modify/distribute with no attribution requirement -- not 'Zero-Clause BSD' as an unmerged research note (cited below) states; the two licenses grant materially the same no-attribution freedom but are textually distinct instruments, and this discrepancy was found by opening the primary source rather than trusting the note's prose, the same kind of check that caught the note's separate MADR-naming error."
+  - statement: "The Good Docs Project templates repository's LICENSE file (gitlab.com/tgdp/templates, current canonical home) is the MIT No Attribution License, copyright The Good Docs Project 2024, granting free use/copy/modify/distribute with no attribution requirement -- not 'Zero-Clause BSD' as an unmerged research note (cited below) states; the two licenses grant materially the same no-attribution freedom but are textually distinct instruments, and this discrepancy was found by opening the primary source rather than trusting the note's prose, the same kind of check that caught the note's separate MADR-naming error. The archived github.com/thegooddocsproject/templates mirror does carry a usable SPDX license: its LICENSE.txt at pinned commit 104c4e69179166d18eebd752ed9901916ef5e348 is the verbatim Zero-Clause BSD (SPDX 0BSD) text. GitHub's automatic license detection reports NOASSERTION for that repo -- a detection artifact from the file's non-canonical header, not an absence of a usable license."
     entry_class: FACT
     evidence:
       - "https://gitlab.com/tgdp/templates/-/raw/main/LICENSE"
+      - "https://github.com/thegooddocsproject/templates/blob/104c4e69179166d18eebd752ed9901916ef5e348/LICENSE.txt"
+      - "gh_api_repo_license(repo='thegooddocsproject/templates') -> {\"key\":\"other\",\"name\":\"Other\",\"node_id\":\"MDc6TGljZW5zZTA=\",\"spdx_id\":\"NOASSERTION\",\"url\":null}"
   - statement: "An unmerged research note frames Diátaxis's reference/how-to boundary as 'Diátaxis does not forbid describing how something works; it forbids instructing', calls the Good Docs Project's license 'Zero-Clause BSD ... so they can be copied into a repo with no attribution burden', and lists Reference under the Good Docs Project's Core pack alongside Concept, How-to, README, Release notes, Troubleshooting and Tutorial."
     entry_class: TEAM_KNOWLEDGE
     provided_by: "launchpad-26/buzz#1466 (unmerged research note, launchpad/Research/project-documentation-templates.md on branch docs/research-project-doc-templates)"
   - statement: "Parent Feature #605's acceptance criteria require that 'every template states its purpose, required sections, evidence expectations and the industry model/standard it adapts', and this is the acceptance bar this node is built against rather than issue #1346's own copied-over standards-track Definition of Done."
-    entry_class: FACT
-    evidence:
-      - "https://github.com/launchpad-26/buzz/issues/605"
+    entry_class: TEAM_KNOWLEDGE
+    provided_by: "launchpad-26/buzz#605"
   - statement: "Issue #1346's own Definition of Done is byte-identical to the standards-track boilerplate ('States scope and authority/source of the policy. Separates MUST requirements from SHOULD guidance. Defines enforcement/checks and exception/escalation process. Links decisions or higher-order policy instead of duplicating them.'), the same text independently found copied across #1326-#1351 by the batch dispatch brief for this task set."
     entry_class: FACT
     evidence:
@@ -350,10 +351,11 @@ A node built from this template:
   subsection of, when the reference is one part of a larger capability or interface
   node rather than independently standing.
 - **may** declare `references` toward this template node itself (target:
-  `corpus-template-reference`) once this node is merged, if the author wants the
-  generated `referenced-by` edge; this is optional, since a node's shape (Reference
-  description / structured entries / optional Commands) already shows which
-  template it followed.
+  `corpus-template-reference`) once this node is merged; this is optional, since a
+  node's shape (Reference description / structured entries / optional Commands)
+  already shows which template it followed. Note that `references`' inverse is
+  `authored`, not `generated` (see the evidence ledger above) -- declaring the
+  forward edge does not automatically produce the `referenced-by` back-edge.
 - **must**, per `AGENTS.md`'s own rule, resolve every declared target against
   `origin/launchpad` (or whatever the merge-target branch is at the time), never
   against the author's own worktree.
