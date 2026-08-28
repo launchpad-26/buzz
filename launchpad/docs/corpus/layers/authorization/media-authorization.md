@@ -15,7 +15,7 @@ evidence:
       - "commit 338b4d0cf2dd76cc43964bb717ce9f0a94a9c7a5"
   - statement: "PR #1444 ('fix(relay): remove media bearer-token auth', merged 2026-07-01 as commit 0701f47f4a31a904ebcd9f360cbd6aadaff9d784, present in this repository) states in its own body that it removed the media upload `X-Auth-Token`/`api_tokens` authorization path and replaced it with Blossom kind:24242 (BUD-11) hash/server validation plus the existing NIP-43 relay membership check, giving the rationale 'Buzz media auth should be Nostr-native, not bearer tokens' and noting that relay endpoints parse NIP-98 `Authorization: Nostr`, never `Authorization: Bearer`."
     entry_class: TEAM_KNOWLEDGE
-    provided_by: "launchpad-26/buzz#1444 pull request body"
+    provided_by: "block/buzz#1444 pull request body"
   - statement: "At the recorded revision, no `X-Auth-Token` or bearer-token check exists anywhere in `crates/buzz-relay/src/api/media.rs` or `crates/buzz-media/src/auth.rs`; the only authorization inputs the upload and read paths read are the `Authorization: Nostr <event>` header (a Blossom kind:24242 event) and, for relay-membership admission, an optional `X-Auth-Tag` header carrying a NIP-OA delegation tag."
     entry_class: FACT
     evidence:
