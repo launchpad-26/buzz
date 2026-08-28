@@ -50,6 +50,10 @@ evidence:
       - "launchpad/docs/corpus/standards/confidence.md"
       - "launchpad/docs/corpus/standards/decision-references.md"
     confidence: 0.8
+  - statement: "C4's abstractions page for 'container' opens with an explicit disambiguation before defining the term: 'Not Docker! In the C4 model, a container represents an application or a data store,' distinguishing the model's own vocabulary from the Docker/OCI container runtime technology that shares the same word."
+    entry_class: FACT
+    evidence:
+      - "https://c4model.com/abstractions/container"
   - statement: "In the C4 model, a container represents an application or a data store — a runtime boundary around some code that is being executed or some data that is being stored, and something that needs to be running for the overall software system to work; examples given include server-side and client-side applications, desktop and mobile apps, serverless functions, databases and blob stores."
     entry_class: FACT
     evidence:
@@ -70,6 +74,14 @@ evidence:
     entry_class: FACT
     evidence:
       - "https://c4model.com/"
+  - statement: "C4's abstractions page for 'component' defines a component as 'a grouping of related functionality encapsulated behind a well-defined interface,' executing inside a container's shared process space rather than being a separately deployable unit; its FAQ, addressing whether a Java JAR, C# assembly, DLL, module, package, namespace or folder is a component, answers 'Perhaps but, again, typically not,' because the C4 model is about showing runtime units (containers) and how functionality is partitioned across them (components) rather than organisational units such as modules, packages, namespaces or folder structures."
+    entry_class: FACT
+    evidence:
+      - "https://c4model.com/abstractions/component"
+  - statement: "C4's abstractions page for 'component' distinguishes the Code level (classes, interfaces, functions and other language-specific constructs) from the Component level (groupings of related code elements), stating a component is 'a way to step up one level of abstraction from the code-level building blocks' — so classes exist at C4's Code level, not its Component level."
+    entry_class: FACT
+    evidence:
+      - "https://c4model.com/abstractions/component"
   - statement: "arc42's overview page states section 5, Building Block View, as 'Structure of source code, modularization, hierarchically refined,' describing it as usually the most extensive section of an architecture documentation; it states section 3, Context & Scope, as 'External systems and interfaces,' and section 7, Deployment View, as 'Hardware, infrastructure and deployment' — three separate, non-overlapping sections."
     entry_class: FACT
     evidence:
@@ -84,9 +96,12 @@ evidence:
       - "https://c4model.com/"
       - "https://docs.arc42.org/section-5/"
     confidence: 0.6
-  - statement: "The research note at launchpad/Research/project-documentation-templates.md, on unmerged PR #1466, groups the three architecture template issues (#1326 component, #1327 container, #1328 context) under the C4 model's System Context, Container and Component diagram layers, cites C4 as 'diagrams, not prose' that 'slots into arc42 §3/§5/§7 rather than competing with it,' and separately notes arc42 is 'too heavy for a component' with the recommendation to 'lift only §5/§9' for a component-scale document."
+  - statement: "The research note at launchpad/Research/project-documentation-templates.md, on unmerged PR #1466, describes the C4 model generically as 'System context diagram · Container diagram · Component diagram · Code diagram,' cites C4 as 'diagrams, not prose' that 'slots into arc42 §3/§5/§7 rather than competing with it,' and separately notes arc42 is 'too heavy for a component' with the recommendation to 'lift only §5/§9' for a component-scale document. The note is issue-agnostic: it contains zero issue-number references (confirmed by `grep -coE '#[0-9]{3,4}'` against its full text, which returns 0) and does not itself name or group #1326, #1327 or #1328 under any C4 layer."
     entry_class: TEAM_KNOWLEDGE
     provided_by: "launchpad-26/buzz#1466 (unmerged research note)"
+  - statement: "Grouping the three architecture template issues (#1326 component, #1327 container, #1328 context) under the C4 model's System Context, Container and Component diagram layers is this corpus-templates batch's own authoring — each issue's stated subject names the C4 layer it corresponds to — not a grouping the research note above states or implies."
+    entry_class: TEAM_KNOWLEDGE
+    provided_by: "launchpad-26/buzz#1326, launchpad-26/buzz#1327, launchpad-26/buzz#1328 (corpus-templates batch dispatch brief)"
   - statement: "The unmerged research note does not itself discuss the C4 Deployment diagram or the container/deployment boundary at all -- it names only System Context, Container, Component and Code for C4. The boundary this template draws against issue #1336's deployment template therefore rests entirely on the two c4model.com pages fetched directly for this node (see the two FACT entries above citing https://c4model.com/diagrams/container and https://c4model.com/diagrams/deployment), not on anything the note says, so there is nothing here to defer to the note about or to disagree with it on."
     entry_class: TEAM_KNOWLEDGE
     provided_by: "launchpad-26/buzz#1466 (unmerged research note) -- absence claim, confirmed by reading the note's full text via git show origin/docs/research-project-doc-templates:launchpad/Research/project-documentation-templates.md"
@@ -118,9 +133,8 @@ evidence:
     entry_class: TEAM_KNOWLEDGE
     provided_by: "launchpad-26/buzz#1327 definition of done"
   - statement: "Issue #1336 (task: define the deployment corpus template) exists as a sibling, out-of-scope-for-this-batch template task, so this node's boundary statement against deployment content names a real, filed issue rather than a hypothetical future one."
-    entry_class: FACT
-    evidence:
-      - "https://github.com/launchpad-26/buzz/issues/1336"
+    entry_class: TEAM_KNOWLEDGE
+    provided_by: "launchpad-26/buzz#1336"
 ---
 
 # Template: architecture container
@@ -182,10 +196,12 @@ being told where any of them physically run.
 
 **The failure this template exists to prevent.** Left unscoped, an
 architecture-container document drifts in one of two directions: down into
-component-level internals (classes, modules, request handlers — arc42's own
-"Level 2" concern, C4's Component diagram), or sideways into deployment concerns
-(clusters, replicas, load balancers, which environment runs what — arc42 section 7,
-C4's Deployment diagram, and issue #1336's territory). Both drifts produce a
+component-level internals (modules, request handlers — arc42's own
+"Level 2" concern, C4's Component diagram; classes go a level deeper still,
+into C4's Code diagram, which is out of scope for a component-level document
+too), or sideways into deployment concerns (clusters, replicas, load
+balancers, which environment runs what — arc42 section 7, C4's Deployment
+diagram, and issue #1336's territory). Both drifts produce a
 document that is not wrong so much as mis-shelved: the facts might be true, but a
 reader looking for "what are the moving parts" has to wade through "how many
 replicas does each one have" or "which method calls which" to find them. The
@@ -194,7 +210,16 @@ sections below exist to keep those two concerns out.
 ## The industry model this adapts
 
 **C4 model, Container diagram** (Simon Brown, `https://c4model.com/`, undated —
-no version number is published). The primary source defines a container as
+no version number is published). **"Not Docker!"** is how the primary source
+opens its own definition of the term, before defining anything else — because
+"container" is heavily overloaded by the Docker/OCI container runtime
+technology, and this repository ships one (`Dockerfile`, `crates/buzz-backend-kubernetes`)
+that makes the two words easy to conflate. A C4 container is an architectural
+abstraction — an application or a data store that has to be running for the
+system to work — not a synonym for a Docker container. The two are related (a
+C4 container is often literally deployed as one or more Docker containers) but
+are not the same thing, and this document uses "container" in the C4 sense
+throughout. With that disambiguated, the primary source defines a container as
 "an application or a data store... a runtime boundary around some code that is
 being executed or some data that is being stored" and "something that needs to be
 running in order for the overall software system to work." The Container diagram
@@ -275,9 +300,16 @@ template, not a standard, per the *Scope and authority* note above.)
 
 **The test, from the primary source:** would the system stop working if this
 stopped running? A compiled library linked into another artifact's binary is not
-a container by that test, however large or important it is — it is a building
-block *inside* whichever container links it, which is component-level, not
-container-level.
+a container by that test, however large or important it is — it runs *inside*
+whichever container links it, not as a container of its own. That test settles
+container membership only. It does **not** by itself make the library a C4
+*component*: a library crate, module, package, namespace or folder is an
+organizational unit, and C4's own FAQ says these are "typically not"
+components, because the model shows how functionality is partitioned across
+runtime units rather than how it is packaged. Whether a given library
+constitutes one component, several, or is folded into a larger one depends on
+how the container's functionality is actually decomposed at runtime — a
+separate question this test does not answer.
 
 **A worked, evidence-checked illustration from this repository** (illustrative
 only — not a claim that this is Buzz's authoritative or complete container
@@ -288,7 +320,7 @@ template):
 |---|---|---|
 | `buzz-relay` (`crates/buzz-relay`) | Yes | Declares a `[[bin]]` target and a `src/main.rs` — an independently runnable binary, described in this repository's own crate map as the relay server's "main entry point." |
 | `buzz-cli` (`crates/buzz-cli`) | Yes | Same test: a `[[bin]]` target and `src/main.rs` of its own, producing a separate binary a user runs directly. |
-| `buzz-db` (`crates/buzz-db`) | No | No `[[bin]]` target; only a `src/lib.rs`. It is Postgres data-access code *linked into* `buzz-relay`'s binary — a component within that container, not a second container. |
+| `buzz-db` (`crates/buzz-db`) | No | No `[[bin]]` target; only a `src/lib.rs`. It is Postgres data-access code *linked into* `buzz-relay`'s binary, so it is not itself a container. **This table does not conclude it is therefore a component.** A Rust library crate is an organizational unit — comparable to a JAR, assembly, DLL, module, package, namespace or folder — and C4's own FAQ says these are "typically not" components, because the model shows runtime partitioning of functionality, not packaging structure. Whether `buzz-db` constitutes one C4 component, several, or is folded into a larger one depends on how `buzz-relay`'s functionality is actually decomposed at runtime — a question this illustration does not answer, since it only establishes container membership, not component boundaries. See `https://c4model.com/abstractions/component`. |
 
 The same test applies to third-party runtime dependencies: a Postgres or Redis
 instance the system requires to run is a container in the C4 sense (a data store
@@ -303,9 +335,11 @@ any corpus node — classified honestly, not defaulted to FACT:
 
 - **A container's existence and technology** is a `FACT` when it cites something
   that runs or builds it: a `Cargo.toml`/`package.json`/`pubspec.yaml` manifest,
-  a `Dockerfile`, a CI build step, an entry point file (`main.rs`, `main.ts`). Do
-  not cite a README's prose description alone — descriptions drift; build
-  configuration is what actually runs.
+  a `Dockerfile`, a CI build step, an entry point file (`main.rs`, `main.ts`). A
+  `Dockerfile` is evidence *of* a container's existence and technology — it
+  names what runs — not itself the definition of a C4 container; see the
+  "Not Docker!" disambiguation above. Do not cite a README's prose description
+  alone — descriptions drift; build configuration is what actually runs.
 - **A communication edge between two containers** is a `FACT` when it cites the
   client/server code that makes the call (an HTTP client, a WebSocket connection,
   a queue publish/subscribe) — not a diagram from another document, and not an
@@ -372,8 +406,8 @@ overlap is where duplicated, silently-drifting claims come from.
 | This template (container) | Its neighbors |
 |---|---|
 | **Above:** architecture-context (#1328) | Shows the system as one box plus its external actors. This template does not repeat that box's contents — it names the context node and moves straight to what is inside the boundary. |
-| **Below:** architecture-component (#1326) | Shows what is inside one container. This template stops at "what is this container, in what technology, talking to what" — it does not describe a container's internal modules, classes or request handlers. |
-| **Sideways:** deployment (#1336, not yet written) | Shows where containers run — clustering, replicas, environments, infrastructure. Checked directly against the C4 primary source while drafting this node: `c4model.com`'s own Deployment diagram page independently states this is a separate diagram type answering "where do these run," not a section of the Container diagram. The boundary is not ambiguous at the primary-source level; #1336, when written, owns it. |
+| **Below:** architecture-component (#1326) | Shows what is inside one container. This template stops at "what is this container, in what technology, talking to what" — it does not describe a container's internal modules or request handlers (C4's Component level), nor the classes inside them (C4's Code level, one layer deeper still). |
+| **Sideways:** deployment (`corpus-template-deployment`, #1336) | Shows where containers run — clustering, replicas, environments, infrastructure. Checked directly against the C4 primary source while drafting this node: `c4model.com`'s own Deployment diagram page independently states this is a separate diagram type answering "where do these run," not a section of the Container diagram. The boundary is not ambiguous at the primary-source level; `corpus-template-deployment` owns it. |
 
 ## Scope and omissions
 
@@ -387,7 +421,7 @@ Container diagram, arc42 section 5) it adapts.
 |---|---|
 | The system's external boundary and actors | #1328 (architecture-context template) |
 | One container's internal building blocks | #1326 (architecture-component template) |
-| Where containers physically or virtually run | #1336 (deployment template, not yet written) |
+| Where containers physically or virtually run | `corpus-template-deployment` (#1336) |
 | The evidence-class contract itself (FACT/INFERENCE/TEAM_KNOWLEDGE, citation shapes) | `launchpad/docs/corpus/AGENTS.md` |
 | The `confidence` field's meaning and requirements | `launchpad/docs/corpus/standards/confidence.md` |
 | Citing an accepted decision as evidence | `launchpad/docs/corpus/standards/decision-references.md` |

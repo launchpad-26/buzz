@@ -56,8 +56,13 @@ evidence:
   - statement: "Issues #1341 (\"define the implementation reference corpus template\") and #1346 (\"define the reference corpus template\") are sibling #605 child tasks establishing \"reference\" as a corpus document genre, of which this node's decision-reference is one subject-specific instance."
     entry_class: TEAM_KNOWLEDGE
     provided_by: "launchpad-26/buzz#1341 and #1346 issue objectives"
+  - statement: "node.schema.json's type enum has no decision-reference-specific member, so a decision-reference instance's closest fit is governance -- the node's subject is the decision's own authorization and confirmation, not the domain the decision reaches into, which parallels how sibling templates (concept.md, architecture-container.md) reason about their own instances' type against the same closed enum."
+    entry_class: INFERENCE
+    evidence:
+      - "launchpad/docs/corpus/schema/node.schema.json"
+    confidence: 0.6
 relationships:
-  - type: references
+  - type: depends-on
     target: corpus-standard-decision-references
 ---
 
@@ -82,13 +87,16 @@ This is a different job from `corpus-standard-decision-references` (#1310), whic
 governs how *any* corpus node cites a decision as one evidence entry among others. This
 template governs a node whose *only* subject is the decision — every section below
 exists to summarize and index that one decision for corpus consumers, not to make an
-unrelated claim that happens to lean on it. The `references` relationship declared
-above points there for exactly that reason: an author following this template still
-needs that standard's MUST list (cite the Decision section, check `status`, no line
-position, handle supersession) once they start writing evidence entries about what the
-decision says. `references` rather than `depends-on` because this template's own
-structure does not stop being correct if that standard's citation rules change —
-only the advice inside it would need re-reading.
+unrelated claim that happens to lean on it. The `depends-on` relationship declared
+above points there for that reason: *Evidence expectations* below cites that standard's
+MUST list **by number** (MUST 1, MUST 3, MUST 4, MUST 5) rather than restating each
+rule in full. If the standard is amended and those MUSTs are renumbered, this
+template's own citations go stale and stop pointing at the rules they claim to — this
+template's claims about what the standard requires no longer hold unless the standard's
+numbering does. That is `depends-on`'s own definition
+(`relationships.schema.json`: "source requires target to be true/current for source's
+own claims to hold"), not `references`'s ("no ownership or currency dependency
+implied").
 
 ## Note on DoD
 
@@ -140,6 +148,29 @@ The **Confirmation** section is the one MADR section worth calling out specifica
 hand-rolled ADR formats omit it, and it is the section that keeps a decision-reference
 node from being an unenforced opinion — see *Evidence expectations* below.
 
+## A note on `type`
+
+`node.schema.json`'s `type` enum (`architecture`, `layers`, `capabilities`,
+`platforms`, `implementation`, `interfaces-events`, `verification`, `operations`,
+`development`, `release`, `governance`, `agent`, `ingestion`) names the corpus
+**surface** a node documents — it has no `decision-reference` member, and this
+template does not invent one. This template document itself carries `type:
+governance`, for the same reason every other corpus meta-document does (see the
+ledger above): it documents *how to author* a decision-reference node, not an
+instance of one.
+
+**An instance node built from this template should also carry `type: governance`.**
+A decision-reference node's subject is the decision itself — that something was
+decided, by whom, and how compliance is confirmed — not the domain the decision
+happens to reach into. A decision-reference indexing an architecture decision is
+still documenting the act and record of deciding, not the architecture; picking
+`architecture` for it would describe the wrong subject. This mirrors how sibling
+templates (`concept.md`, `architecture-container.md`) reason about their own
+instances' `type` against the same closed enum, even though their answers differ —
+their instances take whatever surface their subject calls for, while a
+decision-reference instance's subject (a decision's authorization) is itself a
+governance concern regardless of the decision's own domain.
+
 ## Required sections
 
 A decision-reference instance's front matter is a corpus node's own front matter (this
@@ -165,9 +196,14 @@ Every substantive claim about what the decision says is an **intent claim** unde
 `ADR-0029` and `corpus-standard-decision-references`, so:
 
 - The **Decision Outcome** section's evidence entries **must** cite the accepted
-  decision's own **Decision** section (MUST 1 and MUST 5 of `corpus-standard-decision-
-  references`) — never the issue that argued it, and never a MADR-shaped paraphrase with
-  no citation at all.
+  decision by repository-relative path only —
+  `launchpad/decisions/ADR-NNNN-slug.md`, with no line position (MUST 3 of
+  `corpus-standard-decision-references`) — never the issue that argued it, and never a
+  MADR-shaped paraphrase with no citation at all (MUST 1). The claim itself must rest on
+  what the record's own **Decision** section says (MUST 5); rather than pointing at that
+  section with a line number or anchor, **quote the relied-on sentence in the
+  `statement`** (the standard's SHOULD) — a bare path is what MUST 3 allows, and the
+  quotation is what actually tells a later reader which sentence was relied on.
 - Before writing those entries, open the decision record and confirm its front-matter
   `status` is accepted (MUST 4). A proposed or superseded record cannot back an intent
   claim about what is authorized *today* — the one standing exception is a claim that is
@@ -233,7 +269,11 @@ node* step 3 of `launchpad/docs/corpus/AGENTS.md`:
 - **No decision-reference instance exists yet.** This template is unexercised — the
   Required Sections table and the Evidence Expectations section are built from MADR
   4.0.0, `ADR-0029` and `corpus-standard-decision-references`'s own MUST list, not from a
-  worked example. The first real instance will test whether the mapping actually holds.
+  worked example. The first real instance will test whether the mapping actually holds,
+  including whether `type: governance` (see *A note on `type`* above) is what a reviewer
+  actually expects an instance to carry — that recommendation is reasoned by analogy to
+  sibling templates, not drawn from any settled corpus-wide rule about decision-shaped
+  content.
 - **Whether every accepted ADR needs a decision-reference node was not settled.** No
   corpus document found says so either way; this node's own row above states that as an
   open gap rather than asserting an answer.

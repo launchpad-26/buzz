@@ -55,9 +55,12 @@ evidence:
     entry_class: FACT
     evidence:
       - "https://arc42.org/overview"
-  - statement: "An unmerged research note frames the C4 model as 'diagrams, not prose' that 'slots into arc42 §3/§5/§7 rather than competing with it', and names the architecture-context/-container/-component template trio as mapping 1:1 onto C4's System Context, Container and Component diagram layers."
+  - statement: "An unmerged research note frames the C4 model as 'diagrams, not prose' that 'slots into arc42 §3/§5/§7 rather than competing with it'."
     entry_class: TEAM_KNOWLEDGE
     provided_by: "launchpad-26/buzz#1466 (unmerged research note, launchpad/Research/project-documentation-templates.md on branch docs/research-project-doc-templates)"
+  - statement: "Grouping the three architecture template issues (#1326 component, #1327 container, #1328 context) under the C4 model's System Context, Container and Component diagram layers is this corpus-templates batch's own authoring — each issue's stated subject names the C4 layer it corresponds to — not a grouping the research note above states or implies."
+    entry_class: TEAM_KNOWLEDGE
+    provided_by: "launchpad-26/buzz#1326, launchpad-26/buzz#1327, launchpad-26/buzz#1328 (corpus-templates batch dispatch brief)"
   - statement: "Parent Feature #605's acceptance criteria require that 'every template states its purpose, required sections, evidence expectations and the industry model/standard it adapts', and this is the acceptance bar this node is built against rather than the MUST/SHOULD/enforcement/escalation checklist that issue #1326's own Definition of Done carries."
     entry_class: TEAM_KNOWLEDGE
     provided_by: "launchpad-26/buzz#605 (parent Feature acceptance criteria) and the #1307-#1351 batch dispatch brief, which identified #1326's DoD text as boilerplate copied from the standards-track issues"
