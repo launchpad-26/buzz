@@ -24,7 +24,7 @@ evidence:
       - "docs/multi-tenant-conformance.md:47"
       - "docs/multi-tenant-conformance.md:48"
       - "docs/multi-tenant-conformance.md:50"
-  - statement: "The `channels` table defines `community_id UUID NOT NULL REFERENCES communities(id)`, a primary key `(community_id, id)`, and a `BEFORE UPDATE` trigger `channels_community_id_immutable` that raises an exception whenever `NEW.community_id IS DISTINCT FROM OLD.community_id` — a channel can never be re-tenanted after creation."
+  - statement: "The `channels` table defines `community_id UUID NOT NULL REFERENCES communities(id)`, a primary key `(community_id, id)`, and a `BEFORE UPDATE` trigger `trg_channels_community_id_immutable` (executing the `channels_community_id_immutable()` function) that raises an exception whenever `NEW.community_id IS DISTINCT FROM OLD.community_id` — a channel can never be re-tenanted after creation."
     entry_class: FACT
     evidence:
       - "migrations/0001_initial_schema.sql:74-127"
@@ -95,10 +95,8 @@ evidence:
       - "launchpad/docs/corpus/architecture/principles/community-is-security-boundary.md"
     confidence: 0.75
   - statement: "Issue #1185's own Objective is to create `launchpad/docs/corpus/layers/tenancy/community-scoped-cache.md` 'as the single canonical concept node for community scoped cache' — a distinct target path from this node's, so the in-memory/Redis pub-sub, presence, typing, and cache-invalidation key-scoping surface named in `docs/multi-tenant-conformance.md`'s 'Redis pub/sub, presence, typing, and cache invalidation' row belongs to that sibling node, not this one."
-    entry_class: FACT
-    evidence:
-      - "https://github.com/launchpad-26/buzz/issues/1185"
-      - "docs/multi-tenant-conformance.md:51"
+    entry_class: TEAM_KNOWLEDGE
+    provided_by: "launchpad-26/buzz#1185 Objective, cross-referenced against docs/multi-tenant-conformance.md:51"
   - statement: "Issue #1186 requires that every substantive factual claim be traceable to current code, test, specification, accepted decision, migration/configuration, or attributed GitHub evidence, with FACT, INFERENCE and TEAM KNOWLEDGE not conflated, and that the document define the term in one sentence, state boundaries/non-goals, and link related concepts, implementation and verification."
     entry_class: TEAM_KNOWLEDGE
     provided_by: "launchpad-26/buzz#1186 definition of done"
