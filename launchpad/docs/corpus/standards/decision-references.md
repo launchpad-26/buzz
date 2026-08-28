@@ -116,9 +116,12 @@ evidence:
   - statement: "Issue #1410 owns encoding ADR-0029's claim-type classification and unestablished or flagged state in the corpus schema and validator."
     entry_class: TEAM_KNOWLEDGE
     provided_by: "launchpad-26/buzz#1410"
+  - statement: "Per Serina's decision on launchpad-26/buzz#1486, this node reconciles to #1313's documentation-standard: the H1 is now 'Standard: decision references', and the enforcement section's name now uses the word 'Enforcement'."
+    entry_class: TEAM_KNOWLEDGE
+    provided_by: "launchpad-26/buzz#1486, decided 2026-08-27"
 ---
 
-# Citing a decision
+# Standard: decision references
 
 How a corpus node cites an **accepted decision** — an ADR, or a ratified specification —
 as evidence for a claim, and when a decision is the wrong citation entirely.
@@ -300,7 +303,7 @@ record and take one of three routes:
 The third route is the only one that leaves a superseded citation in place, and it is only
 available to a claim that is explicitly historical.
 
-## What the checks establish, and what they do not
+## Enforcement, and what the checks establish
 
 The checker's verdict on a decision citation is **structural**. A repository path — bare,
 or carrying a line position — is resolved, and must be a real file inside the repository;
