@@ -23,7 +23,7 @@ evidence:
       - "launchpad/docs/corpus/README.md"
       - "launchpad/docs/corpus/standards/confidence.md"
       - "launchpad/docs/corpus/standards/decision-references.md"
-  - statement: "relationships.schema.json defines five relationship types -- depends-on, supersedes, implements, references, part-of -- and states references' directionality as 'source cites target as supporting context; no ownership or currency dependency implied', with a generated inverse named referenced-by."
+  - statement: "relationships.schema.json defines five relationship types -- depends-on, supersedes, implements, references, part-of -- and states references' directionality as 'source cites target as supporting context; no ownership or currency dependency implied', with an inverse named referenced-by classed authored -- the only one of the five relationship types whose inverse is authored rather than generated."
     entry_class: FACT
     evidence:
       - "launchpad/docs/corpus/schema/relationships.schema.json"
@@ -47,6 +47,10 @@ evidence:
     entry_class: FACT
     evidence:
       - "https://diataxis.fr/reference/"
+  - statement: "Diátaxis's 'What how-to guides are not' section states 'solving a problem or accomplishing a task cannot always be reduced to a procedure ... Real-world problems do not always offer themselves up to linear solutions', and 'The sequences of action in a how-to guide sometimes need to fork and overlap, and they have multiple entry and exit-points' -- an explicit allowance against a strictly linear numbered sequence that this template's own Required sections previously omitted."
+    entry_class: FACT
+    evidence:
+      - "https://diataxis.fr/how-to-guides/"
   - statement: "Diátaxis's compass places how-to guides at the intersection of 'informs action' and 'application of skill' (work, not study), while tutorials sit at 'informs action' crossed with 'acquisition of skill' -- the two forms share the action axis and split on acquisition versus application, which is why Diátaxis treats how-to guides and tutorials as 'wholly distinct' despite both being action-oriented and 'often confused'."
     entry_class: FACT
     evidence:
@@ -79,14 +83,13 @@ evidence:
     entry_class: TEAM_KNOWLEDGE
     provided_by: "launchpad-26/buzz#1534 (PR body, corpus-template-reference)"
   - statement: "Parent Feature #605's acceptance criteria require that 'every template states its purpose, required sections, evidence expectations and the industry model/standard it adapts', and this is the acceptance bar this node is built against rather than issue #1345's own copied-over standards-track Definition of Done."
-    entry_class: FACT
-    evidence:
-      - "https://github.com/launchpad-26/buzz/issues/605"
+    entry_class: TEAM_KNOWLEDGE
+    provided_by: "launchpad-26/buzz#605 acceptance criteria"
   - statement: "Issue #1345's own Definition of Done is byte-identical to the standards-track boilerplate ('States scope and authority/source of the policy. Separates MUST requirements from SHOULD guidance. Defines enforcement/checks and exception/escalation process. Links decisions or higher-order policy instead of duplicating them.'), the same text independently found copied across #1326-#1351 by the batch dispatch brief for this task set."
     entry_class: FACT
     evidence:
       - "https://github.com/launchpad-26/buzz/issues/1345"
-  - statement: "No open or closed launchpad-26/buzz issue matches a search for a corpus template task covering Diátaxis's Tutorial form, as distinct from the How-to form this node covers; Diátaxis itself treats the two as 'wholly distinct' despite both being action-oriented, so a corpus node built from this how-to/procedure template would be the wrong shape for tutorial (acquisition-of-skill) content."
+  - statement: "No open or closed launchpad-26/buzz issue matches a search for a corpus template task covering Diátaxis's Tutorial form, as distinct from the How-to form this node covers; Diátaxis itself treats the two as 'wholly distinct' despite both being action-oriented, so a corpus node built from this how-to/procedure template would be the wrong shape for tutorial (acquisition-of-skill) content -- at the time of the search; #1538 was then filed to own it."
     entry_class: FACT
     evidence:
       - "gh_issue_list(repo='launchpad-26/buzz', search='corpus template tutorial', state='all') -> []"
@@ -220,6 +223,15 @@ Read this section before drafting.
   that is `#1346`'s form. If a reader wants to be walked through completing one task
   correctly, that is this template's form. A node that spends more of its steps
   cataloguing facts than instructing action has picked the wrong template.
+- **Not a runbook**, this template's other action-oriented neighbor. Both are
+  Diátaxis how-to-shaped, but they split on when the reader needs the guide, not
+  on whether the content instructs action. A procedure is for a task the reader
+  chooses to perform on their own schedule -- "cut a relay release" -- sequenced
+  in the order its steps must happen. A runbook is for a condition that has
+  already occurred and demands a response -- "the relay is 5xx-ing, what do I
+  do" -- triggered by an alert or failure, not chosen. A node walking through
+  routine, planned work is this template's territory; a node responding to an
+  already-firing operational condition is a runbook's.
 - **Not a tutorial**, per the compass distinction in *Industry model* above --
   acquisition of skill for a newcomer, not application of skill for someone already
   competent. No corpus template task currently exists for the Tutorial form (checked,
@@ -273,7 +285,15 @@ to whatever schema-required front matter `node.schema.json` demands of every nod
    guidance -- a task that needs more should be split into `{Sub-task}` sections with
    decimal numbering, or, if the sub-tasks are independently useful, filed as a
    separate procedure node per `AGENTS.md`'s "one node, one idea" rule rather than
-   grown into a single oversized page.
+   grown into a single oversized page. **A single strictly linear numbering is the
+   default, not an absolute rule.** Diátaxis warns against forcing one where the
+   task does not allow it: *"solving a problem or accomplishing a task cannot always
+   be reduced to a procedure ... The sequences of action in a how-to guide sometimes
+   need to fork and overlap, and they have multiple entry and exit-points."* When a
+   task genuinely forks -- a decision point sends the reader down one of several
+   branches, or the guide has more than one valid starting point -- number each
+   branch's steps in its own sequence (e.g. `2a.`/`2b.`, or a labeled sub-section per
+   branch) rather than flattening a fork into a single misleading numbered list.
 4. **See also.** Links to related how-to, conceptual (`#1331`-shaped), reference
    (`#1346`-shaped), or troubleshooting content the reader may need next -- per
    Diátaxis's own advice to defer completeness to reference material rather than
