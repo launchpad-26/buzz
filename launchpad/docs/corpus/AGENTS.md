@@ -383,9 +383,12 @@ it up as a corpus-wide standard.
      you that some *files* did not move; it cannot tell you a claim still holds, and it
      cannot speak to a citation that names no file at all. See *Checking whether cited
      files moved* below for what the command does and does not establish. Only the
-     file-naming citations in the ledger are in its reach, and if any citation is a
-     graph edge, tool result, commit or URL, this branch is not available to you —
-     re-verify those claims or leave the revision alone.
+     file-naming citations in the ledger are in its reach. The **provenance entry
+     recording the revision** is itself a mandatory commit citation on every node — it
+     is not one of the substantive claims this branch is deciding whether to re-verify,
+     so it does not count against the check below. If any *other* citation is a graph
+     edge, tool result, commit or URL, this branch is not available to you — re-verify
+     those claims or leave the revision alone.
 5. **Leave the `id` alone.** Always.
 6. **Run the check.**
 
