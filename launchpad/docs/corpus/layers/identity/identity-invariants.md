@@ -20,12 +20,13 @@ evidence:
     entry_class: FACT
     evidence:
       - "crates/buzz-core/src/verification.rs:34-71"
-  - statement: "buzz-relay's event-ingestion handler calls verify_event via spawn_blocking at two call sites -- the ephemeral-event path and the standard (persisted) event path -- and in both, a verification failure sends the client OK false \"invalid: {e}\" and returns immediately, before any storage, fan-out, or further processing of the event."
+  - statement: "buzz-relay's event-ingestion code calls verify_event via spawn_blocking at three call sites -- the ephemeral-event path, the agent-observer-event path, and the real persisted-event path in ingest_event_inner -- and in all three, a verification failure sends the client OK false \"invalid: {e}\" (or an internal-error message if the verification task itself panics) and returns immediately, before any storage, fan-out, or further processing of the event."
     entry_class: FACT
     evidence:
       - "crates/buzz-relay/src/handlers/event.rs:805"
       - "crates/buzz-relay/src/handlers/event.rs:960"
-  - statement: "verify_nip42_event, the check that authenticates a WebSocket connection via NIP-42, calls buzz_core::verify_event first (inside the same function body) and only proceeds to the kind, challenge, relay-URL, and timestamp checks once the event's id and signature both pass; a forged or malformed AUTH event never reaches those later checks."
+      - "crates/buzz-relay/src/handlers/ingest.rs:1990"
+  - statement: "verify_nip42_event, the check that authenticates a WebSocket connection via NIP-42, checks the event's kind first and only then calls buzz_core::verify_event (inside the same function body), proceeding to the challenge, relay-URL, and timestamp checks once the event's id and signature both pass; a wrong-kind AUTH event is rejected before signature verification ever runs, and a forged or malformed AUTH event of the correct kind never reaches those later challenge/relay/timestamp checks."
     entry_class: FACT
     evidence:
       - "crates/buzz-auth/src/nip42.rs:47-86"
@@ -89,8 +90,9 @@ intermediate instruction): a connection is momentarily un-identified between
 socket-open and a successful AUTH, and once identified, a second AUTH message
 cannot change which pubkey the connection is bound to. It also binds NIP-98 HTTP
 Auth events (kind:27235) at request-authentication time, verified the same way
-(signature-first, then claim checks), though that path was not independently
-re-read this session beyond `AuthMethod::Nip98`'s existence in `buzz-auth`.
+(kind check first, then signature, then the remaining claim checks), though
+that path was not independently re-read this session beyond `AuthMethod::Nip98`'s
+existence in `buzz-auth`.
 
 It does not bind which actions an already-identified pubkey is authorized to
 perform inside a community or channel -- that is a separate authorization layer
@@ -197,8 +199,9 @@ connection binding, and for private-key custody staying client-side.
   recorded as an `INFERENCE` at confidence 0.7 above, not a `FACT`.
 - **NIP-98 HTTP Auth's own verification function (`buzz-auth/src/nip98.rs`) was
   not independently re-read this session** beyond confirming `AuthMethod::Nip98`
-  exists; this node's claims about "signature-first, then claim checks" for
-  NIP-98 are extrapolated from the NIP-42 pattern (`verify_nip42_event` calling
-  `buzz_core::verify_event` first), not verified against NIP-98's own code.
+  exists; this node's claims about "kind check first, then signature, then the
+  remaining claim checks" for NIP-98 are extrapolated from the NIP-42 pattern
+  (`verify_nip42_event` checking the event's kind before calling
+  `buzz_core::verify_event`), not verified against NIP-98's own code.
 - **No-rebind-on-reauth has no test today**, named honestly in *Enforcement
   today* above rather than rounded up to "enforced."
