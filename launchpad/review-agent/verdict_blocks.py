@@ -63,12 +63,19 @@ _VERDICT_INFO = "verdict"
 
 @dataclass
 class LocatedBlock:
-    """One ` ```verdict ` fence found in a comment body, 1-indexed line numbers."""
+    """One ` ```verdict ` fence found in a comment body, 1-indexed line numbers.
+
+    No ``info`` field: every returned block's info string is already exactly
+    ``verdict`` (that's what qualifies it for the returned list at all -- see
+    ``locate_verdict_blocks``), so a stored copy would be produced and never
+    read for anything a caller couldn't already assume. ``start_line``/
+    ``end_line`` ARE read -- ``verdict_resolution.BlockLocation`` propagates
+    them so a refusal can point at the actual fence line within a comment.
+    """
 
     start_line: int
     end_line: int | None  # None when the fence never closes (runs to EOF)
     closed: bool
-    info: str
     raw_rows: str  # the raw text between the fence lines; "" if none
 
 
@@ -98,9 +105,7 @@ def locate_verdict_blocks(text: str) -> list[LocatedBlock]:
             return
         if info.strip() != _VERDICT_INFO:
             return
-        blocks.append(
-            LocatedBlock(start_line, end_line, closed, info.strip(), "\n".join(row_lines))
-        )
+        blocks.append(LocatedBlock(start_line, end_line, closed, "\n".join(row_lines)))
 
     i = 0
     n = len(lines)
@@ -157,7 +162,10 @@ class ParsedRow:
 
 @dataclass
 class MalformedRow:
-    raw: str
+    """``reason`` alone carries the offending row's own text embedded in the
+    message (see the three call sites below) -- a separate ``raw`` field
+    would be produced and never read, so it isn't one."""
+
     reason: str
 
 
@@ -176,7 +184,6 @@ def parse_rows(raw_rows: str) -> list[ParsedRow | MalformedRow]:
         if len(fields) < 4:
             results.append(
                 MalformedRow(
-                    raw=line,
                     reason=f"{len(fields)} tab-separated field(s), need 4 or more: {line}",
                 )
             )
@@ -186,7 +193,6 @@ def parse_rows(raw_rows: str) -> list[ParsedRow | MalformedRow]:
         if verdict not in VERDICTS:
             results.append(
                 MalformedRow(
-                    raw=line,
                     reason=f"verdict {verdict!r} not in {sorted(VERDICTS)}: {line}",
                 )
             )
@@ -194,7 +200,6 @@ def parse_rows(raw_rows: str) -> list[ParsedRow | MalformedRow]:
         if severity not in SEVERITY_ORDER:
             results.append(
                 MalformedRow(
-                    raw=line,
                     reason=f"severity {severity!r} not in {sorted(SEVERITY_ORDER)}: {line}",
                 )
             )

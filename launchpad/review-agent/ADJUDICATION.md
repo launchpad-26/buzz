@@ -357,3 +357,32 @@ retroactively unparseable, and would have needed a reviewer-side convention chan
 reviewer today follows. Taking the later complete block by comment order (Option B)
 resolves both cases exactly as the reviewer who wrote them intended, with no new syntax
 to adopt.
+
+**Reconciling #287's own done-when bullets 1 and 3.** Bullet 1 says the parser "refuses
+rather than guesses when it finds more than one block"; bullet 3 says it accepts the
+last one across different comments, when every candidate is well-formed. These are not
+in tension once the shapes are told apart: **more than one block always refuses when the
+set is not reducible to a single well-formed candidate** — two-or-more blocks inside the
+*same* comment, or any malformed row or unclosed block anywhere — and **only** resolves
+deterministically by comment order, rather than refusing, when every candidate is
+individually closed and well-formed and each lives in its own, different (issue-surface)
+comment. "More than one block" is a guess only when the parser would have to pick
+between genuinely ambiguous candidates; ordering a set of unambiguous, well-formed
+restatements is not a guess, it is applying the recorded Option-B rule.
+
+**Scope decision: which surface can be authoritative (resolves this plan's OPEN item).**
+Both the issue-comment surface and the review (inline code-comment) surface are fetched
+and scanned for a ` ```verdict ` fence — narrowing detection to one surface would be
+weaker than what #287 asks for, and `fetch.py` already distinguishes the two. But only
+the **issue-comment surface** may supply the authoritative block. A well-formed, closed
+` ```verdict ` fence found on the review surface is refused outright, never accepted and
+never silently dropped: an inline code comment is normally a narrow, line-scoped
+annotation, not a full review restatement, and nothing establishes that a reviewer ever
+means one to stand as the authoritative verdict for the whole PR. Concretely, without
+this rule, a reviewer's real, complete issue-comment block could be silently outranked by
+an unrelated later inline annotation that happens to carry a well-formed one-row fence —
+exactly the "pick the last one and silently drop everything the first block carried"
+failure #287 exists to prevent, just relocated to a surface boundary instead of a
+same-surface timestamp. Both real production examples (#261, #264) only ever used the
+issue-comment surface, which is the entire evidentiary basis Option B itself rests on —
+there is no comparable evidence a review-surface block was ever meant to be authoritative.

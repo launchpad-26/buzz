@@ -60,13 +60,11 @@ def test_pr_264_live() -> None:
 
 
 def _well_formed_block(text: str) -> LocatedBlock:
-    return LocatedBlock(start_line=1, end_line=3, closed=True, info="verdict", raw_rows=text)
+    return LocatedBlock(start_line=1, end_line=3, closed=True, raw_rows=text)
 
 
 def _malformed_block() -> LocatedBlock:
-    return LocatedBlock(
-        start_line=1, end_line=3, closed=True, info="verdict", raw_rows="not enough fields"
-    )
+    return LocatedBlock(start_line=1, end_line=3, closed=True, raw_rows="not enough fields")
 
 
 ROW = "CONFIRMED\tHigh\tfoo.py:1\tsomething"

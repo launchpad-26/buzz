@@ -41,13 +41,11 @@ def _empty_fetch() -> CommentFetch:
 
 
 def _well_formed_located(text: str = ROW) -> LocatedBlock:
-    return LocatedBlock(start_line=1, end_line=3, closed=True, info="verdict", raw_rows=text)
+    return LocatedBlock(start_line=1, end_line=3, closed=True, raw_rows=text)
 
 
 def _malformed_located() -> LocatedBlock:
-    return LocatedBlock(
-        start_line=1, end_line=3, closed=True, info="verdict", raw_rows="not enough fields"
-    )
+    return LocatedBlock(start_line=1, end_line=3, closed=True, raw_rows="not enough fields")
 
 
 class ZeroBlocksTests(unittest.TestCase):
@@ -162,6 +160,54 @@ class MalformedRowAnywhereTests(unittest.TestCase):
         self.assertEqual(resolution.outcome, "refused")
         self.assertIsNone(resolution.accepted)
         self.assertEqual({loc.comment_id for loc in resolution.refused_locations}, {1, 2})
+
+        # review-final HIGH #1: the refusal must carry verdict_blocks.parse_rows's
+        # own specific reason for the offending row, not the fixed generic
+        # branch-level sentence alone -- and must NOT invent a reason for the
+        # well-formed sibling location that has nothing wrong with it.
+        by_comment = {loc.comment_id: loc for loc in resolution.refused_locations}
+        self.assertIn("not enough fields", by_comment[2].reason)
+        self.assertIn("need 4 or more", by_comment[2].reason)
+        self.assertEqual(by_comment[1].reason, "")
+
+
+class ReviewSurfaceNeverAuthoritativeTests(unittest.TestCase):
+    """review-final HIGH #2: a well-formed, closed block on the "review"
+    (inline code-comment) surface must never be silently accepted, never
+    silently folded into cross-comment ordering, and never silently dropped
+    as if it were "none found". Both real fixtures (#261, #264) only ever
+    used the issue-comment surface -- see ADJUDICATION.md's #287 section."""
+
+    def test_review_only_block_is_refused_not_accepted_not_none_found(self) -> None:
+        tb = TaggedBlock(_well_formed_located(), comment_id=1, surface="review", created_at="t1", position=0)
+        results = {"issue": _empty_fetch(), "review": CommentFetch(state="ok", blocks=[tb])}
+        resolution = resolve(results)
+        self.assertEqual(resolution.outcome, "refused")
+        self.assertNotEqual(resolution.outcome, "accepted")
+        self.assertNotEqual(resolution.outcome, "none_found")
+        self.assertIsNone(resolution.accepted)
+        self.assertEqual([loc.comment_id for loc in resolution.refused_locations], [1])
+
+    def test_review_block_does_not_silently_lose_to_a_real_issue_block_either(self) -> None:
+        """A well-formed issue-surface block PLUS a later-created_at,
+        well-formed review-surface block: proves the fix does not silently
+        pick the "good" issue block while quietly discarding the review one
+        (that would be "silently ignoring it", which the fix must not do
+        either) -- the whole set is refused."""
+        issue_tb = TaggedBlock(
+            _well_formed_located(), comment_id=1, surface="issue", created_at="2026-01-01T00:00:00Z", position=0
+        )
+        review_tb = TaggedBlock(
+            _well_formed_located(), comment_id=2, surface="review", created_at="2026-01-02T00:00:00Z", position=0
+        )
+        results = {
+            "issue": CommentFetch(state="ok", blocks=[issue_tb]),
+            "review": CommentFetch(state="ok", blocks=[review_tb]),
+        }
+        resolution = resolve(results)
+        self.assertEqual(resolution.outcome, "refused")
+        self.assertIsNone(resolution.accepted)
+        self.assertEqual([loc.comment_id for loc in resolution.refused_locations], [2])
 
 
 class QuotedAndIndentedLookalikeTests(unittest.TestCase):
