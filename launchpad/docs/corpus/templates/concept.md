@@ -123,11 +123,11 @@ evidence:
 
 # Template: concept
 
-How to write a corpus node whose subject is a **concept** — an idea, abstraction,
-mechanism or term in the Buzz system that a reader needs to understand before the
-reference material or the how-to material about it will make sense. This node is
-the template itself, not an instance of one: it states what a concept node must
-contain, not an explanation of any real Buzz concept.
+How to write a corpus node whose subject is a **concept** — an idea, abstraction, or
+mechanism in the Buzz system that a reader needs to understand before the reference
+material or the how-to material about it will make sense. This node is the template
+itself, not an instance of one: it states what a concept node must contain, not an
+explanation of any real Buzz concept.
 
 ## Scope and authority
 
@@ -286,6 +286,10 @@ here for the same reason the template gives.
    becomes a `relationships` edge instead, so the corpus's own graph carries the
    link rather than a paragraph that can drift out of sync with it.
 
+8. **Scope and omissions**, per `AGENTS.md`'s own required step 8: what the node
+   does not cover and who owns it, and — separately — what was expected to be
+   verified when the node was written and could not be.
+
 ## Evidence expectations
 
 **The definition (required section 2) is where FACT is most reachable.** If the
@@ -337,11 +341,35 @@ is it, and how does it relate to what I know" stays here. "What does it require 
 to do" or "what exactly does it accept as input" belongs to one of the two siblings
 above.
 
+**Against glossary term (#1340).** A subject that is a single defined term — one
+piece of jargon needing only a one-to-three-sentence, dictionary-style meaning —
+is not a concept. `glossary-term.md` (#1340) is the narrower template for exactly
+that case, and its own boundary table already routes the other direction: a term
+needing several paragraphs of discursive "why does this exist and how does it fit
+together" reasoning is not a glossary term any more, and belongs here instead. If
+what is being drafted is a short, lookup-shaped definition with no reflection or
+surrounding narrative, use `glossary-term.md`, not this template.
+
+## A note on `type`
+
+`node.schema.json`'s `type` enum (`architecture`, `layers`, `capabilities`,
+`platforms`, `implementation`, `interfaces-events`, `verification`, `operations`,
+`development`, `release`, `governance`, `agent`, `ingestion`) names the corpus
+**surface** a node documents, not the documentation form (explanation, reference,
+how-to) its prose takes. A corpus node instance actually written from this
+template — a real concept document about a real Buzz idea — may take a `type`
+value other than `governance`, decided by that instance's own subject against PRD
+#602's corpus-surface list. This template document itself carries
+`type: governance` because it documents the corpus's own authoring rules, per the
+precedent in the evidence ledger above, not because concept-shaped nodes in
+general use `governance`.
+
 ## Scope and omissions
 
 **This document covers** the purpose of a concept node, the sections it must
-contain, what evidence each section needs, and the industry model it adapts. It
-does not itself explain any real Buzz concept.
+contain (including its own required scope-and-omissions section), what evidence
+each section needs, the industry model it adapts, and what `type` a concept
+instance carries. It does not itself explain any real Buzz concept.
 
 **It does not cover, and these are gaps rather than silence:**
 
@@ -349,6 +377,7 @@ does not itself explain any real Buzz concept.
 |---|---|
 | The reference document form and its required sections | #1346 |
 | The procedure/how-to document form and its required sections | #1345 |
+| The glossary-term document form, for a single defined term needing only a short lookup definition | #1340, `glossary-term.md` |
 | The front-matter contract itself | `launchpad/docs/corpus/schema/node.schema.json` |
 | Evidence classification mechanics beyond what this template's own sections need | `launchpad/docs/corpus/AGENTS.md`, `standards/confidence.md` |
 | Whether a diagram-authoring convention (e.g. a fixed Mermaid style) should be standardized corpus-wide | Not yet filed as its own issue at the recorded revision |
