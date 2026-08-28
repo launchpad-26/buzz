@@ -7,6 +7,7 @@ so they all consume the single authoritative repo-local config and fail toward
 
 from __future__ import annotations
 
+import json
 import os
 import pathlib
 import sys
@@ -34,15 +35,30 @@ def resolve(repo_root: str) -> tuple[dict[str, Any], pathlib.Path, list[str]] | 
 def resolve_or_onboarding(
     repo_root: str,
 ) -> tuple[dict[str, Any] | None, pathlib.Path | None]:
-    """Return (config|None, path). On failure print onboarding_required and return None,None."""
+    """Return `(config, path)`, or `(None, None)` after printing `onboarding_required`.
+
+    NOTE FOR CALLERS: this ALWAYS returns a 2-tuple, so `if result is None` can
+    never be true. Unpack first, then test the config:
+
+        config, _ = resolve_or_onboarding(repo_root)
+        if config is None:
+            return 1
+    """
     resolved = resolve(repo_root)
     if resolved is None:
         print(
-            {
-                "status": "onboarding_required",
-                "reason": "repo-local config missing or invalid",
-                "onboarding": f"python3 {project_root() / 'scripts' / 'onboarding.py'} init {repo_root}",
-            },
+            json.dumps(
+                {
+                    "status": "onboarding_required",
+                    "reason": "repo-local config missing or invalid",
+                    "onboarding": (
+                        f"python3 {project_root() / 'scripts' / 'onboarding.py'} "
+                        f"init {repo_root}"
+                    ),
+                },
+                indent=2,
+                sort_keys=True,
+            ),
             file=sys.stdout,
         )
         return None, None

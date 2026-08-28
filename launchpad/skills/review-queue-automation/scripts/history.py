@@ -152,6 +152,11 @@ def build_entry(
         "checks_ok_at": checks_ok_at,
         "adjudication_at": stamps["adjudication_at"],
         "evidence_at": stamps["evidence_at"],
+        # A CLOSED pull request's head SHA cannot advance, so the close/merge
+        # time is the moment the head became final. `shadow.historical_evidence`
+        # uses this in place of the live pre-mutation REST revalidation the
+        # backtest cannot replay; an entry without it fails that gate closed.
+        "head_frozen_at": stamps["cutoff"] or None,
         "files": files,
         "additions": int(pr.get("additions") or 0),
         "pr_facts": {
@@ -268,9 +273,15 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--repo", help="OWNER/REPO (defaults to the configured slug)")
     parser.add_argument("--limit", type=int, default=50)
     parser.add_argument("--with-files", action="store_true",
-                        help="also read changed files (one extra REST call per PR)")
+                        help="also read changed files (one extra REST call per PR). "
+                             "Without it no protected-trigger or file-limit "
+                             "evidence exists for any sample")
     parser.add_argument("--with-checks", action="store_true",
-                        help="also read check runs (one extra REST call per PR)")
+                        help="also read check runs (one extra REST call per PR). "
+                             "WITHOUT this flag no check evidence is ingested and "
+                             "the checks_complete_ok gate stays fail-closed for "
+                             "every sample, so the backtest can only ever report a "
+                             "0%% would-approve rate")
     parser.add_argument("--out", help="write entries here instead of stdout")
     args = parser.parse_args(argv)
 

@@ -236,10 +236,11 @@ def main(argv: list[str] | None = None) -> int:
     args = parser.parse_args(argv)
 
     repo_root = args.repo_root or "."
-    resolved = resolve_or_onboarding(repo_root)
-    if resolved is None:
+    # `resolve_or_onboarding` always returns a 2-tuple; unpack, then test the
+    # config (testing the tuple for None never fires).
+    config, _ = resolve_or_onboarding(repo_root)
+    if config is None:
         return 1
-    config, _ = resolved
     state = make_state(config)
     try:
         if args.command == "list":
