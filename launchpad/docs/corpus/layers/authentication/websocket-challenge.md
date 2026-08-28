@@ -159,6 +159,24 @@ signs it with the same `nostr::EventBuilder::auth(&challenge, relay_url)` constr
 `buzz-ws-client` uses internally -- a real, working example of the minimum a
 hand-rolled client needs to implement this half of NIP-42.
 
+## Verification
+
+- **Shape and uniqueness:** `crates/buzz-auth/src/nip42.rs`'s `challenge_is_64_hex_chars_and_unique`
+  asserts the 64-hex-character format and that two successive calls to `generate_challenge`
+  never collide.
+- **The matching rule specifically:** the same file's `wrong_challenge_rejected` asserts a
+  signed event carrying the wrong challenge string is rejected with
+  `AuthError::ChallengeMismatch`, distinct in the same test module from `wrong_kind_rejected`,
+  `wrong_relay_rejected`, and `expired_event_rejected`, which cover the matching rule's four
+  sibling checks.
+- **No end-to-end test exercises a wrong-challenge `AUTH` submission against a live relay.**
+  `crates/buzz-test-client/tests/e2e_relay.rs` does construct one `kind:22242` event with a
+  placeholder `"fake-challenge"` string (`test_auth_event_kind_rejected`), but that test submits
+  it via `EVENT` rather than `AUTH` -- it exercises the ingest path's kind-22242-as-EVENT
+  rejection, not the challenge-matching rule, and the placeholder value is incidental to what it
+  checks. Coverage of `ChallengeMismatch` specifically is unit-level only, in
+  `crates/buzz-auth/src/nip42.rs`, as cited above.
+
 ## Use cases
 
 - **Implementing or auditing a Nostr client against this relay.** A client author
