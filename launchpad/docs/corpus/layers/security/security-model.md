@@ -50,7 +50,7 @@ evidence:
   - statement: "buzz-auth's crate root confirms the shape of that limitation directly: AlwaysAllowRateLimiter is exported only behind #[cfg(any(test, feature = \"test-utils\"))], meaning it is not compiled into a production build at all, let alone wired into the relay's request path as an enforced limiter."
     entry_class: FACT
     evidence:
-      - "crates/buzz-auth/src/lib.rs:44-46"
+      - "crates/buzz-auth/src/lib.rs:50-51"
   - statement: "ARCHITECTURE.md's Security Model table states 'Frame size | MAX_FRAME_BYTES = 65,536 -- oversized frames rejected, connection closed,' but crates/buzz-relay/src/config.rs defines the actual constant as DEFAULT_MAX_FRAME_BYTES: usize = 512 * 1024 (524,288 bytes), overridable via the BUZZ_MAX_FRAME_BYTES environment variable; the only occurrence of the literal 65536 found anywhere under crates/buzz-relay/src/ is an unrelated max_content_len field in the NIP-11 relay-information document builder (nip11.rs:226), not the frame-size limit."
     entry_class: FACT
     evidence:
@@ -371,6 +371,17 @@ grounded in what was directly verified while authoring this node.
 | The full, curated residual-risk catalogue | `layers/security/residual-risks.md`, issue #1174 |
 | The `layers/tenancy/` node set (community id, membership, host resolution, and related subjects) | Nine separate tasks, #1183-#1192, a sibling subtree rather than this Feature's `layers/security/` scope |
 | Correcting ARCHITECTURE.md's stale frame-size figure | Not filed as a task at time of writing; named as a residual observation above instead |
+
+**`type: layers` is the fit chosen over `architecture`, not an exact one.** The 13-member
+`type` enum has no member named `security`; of the two closer candidates, `layers` fits
+this node's subject better than `architecture` because parent Feature #607's own title
+frames this whole subtree as domain-layer content -- identity, tenancy,
+authentication/authorization, and security -- distinct from the `architecture/`
+subtree's existing content (system containers, deployment topologies, cross-cutting
+design principles) under `launchpad/docs/corpus/architecture/` (see evidence ledger).
+Precedent could not be checked against another `layers`-typed node because this is the
+first one in the corpus. If a later standard or sibling node makes a better-fitting
+choice apparent, this node's `type` is a candidate for revision; its `id` is not.
 
 **Expected but not verified when this node was written:**
 
