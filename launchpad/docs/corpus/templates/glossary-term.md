@@ -63,6 +63,10 @@ evidence:
     entry_class: FACT
     evidence:
       - "https://www.thegooddocsproject.dev/template/glossary"
+  - statement: "The companion Glossary template guide states a definition should be 'no more than one to three sentences,' which is the hard limit this template's Required section 2 makes binding on every glossary-term instance's Definition section."
+    entry_class: FACT
+    evidence:
+      - "https://www.thegooddocsproject.dev/template/glossary"
   - statement: "The same guide distinguishes a base glossary ('a term, definition, and abbreviation (if there is one)') from a richer document type it names a terminology system, which 'can include additional information, including localization notes, related terms, term provenance, and more' -- a terminology system is a named, more complex sibling document type, not a larger glossary."
     entry_class: FACT
     evidence:
@@ -261,6 +265,19 @@ and no source corroborates it yet. This maps directly onto the primary
 source's own guidance to prefer an existing authoritative definition and
 write one only when none exists.
 
+A fourth case fits none of those three: two authoritative sources of the
+*same* claim type -- for example two accepted decisions, or two ratified
+specs -- define the term differently. Per ADR-0029, that is a material
+conflict of the kind the corpus author does not resolve by picking a side,
+averaging the two, or downgrading the disputed one to `INFERENCE`. Record
+both definitions in the body, cite both sources in the Definition's
+`evidence` entry, set the node's `status` to `flagged` --
+`node.schema.json`'s value for exactly this, ADR-0029's
+"unestablished/flagged" state -- and cite
+`launchpad/decisions/ADR-0029-corpus-evidence-precedence.md` itself as the
+authority for stopping rather than choosing. The node stays flagged until a
+human resolves the contradiction.
+
 ## What this template deliberately excludes
 
 Everything below is something the primary source's own richer sibling
@@ -278,7 +295,15 @@ signal that the document being written is not actually a glossary term:
   glossary-term node with its own `id`, connected by `references`, not a
   second name folded into one node -- per `AGENTS.md`'s one-node-one-idea
   rule, a term and its synonym are still two independently maintainable
-  lookup entries even when their definitions are nearly identical.
+  *lookup entries*. That does not license two independently maintained
+  *definitions* of the same concept: the synonym node's Definition states
+  that the term is an alternative name for the canonical term and defers to
+  that term's node via `references` for the actual meaning, rather than
+  restating a near-duplicate definition nothing keeps in sync -- the
+  validator only confirms a cited path resolves, never that two
+  definitions of the same concept still agree, and per `AGENTS.md` and
+  issue #1340's own definition of done a node links to a neighboring
+  node's canonical content instead of duplicating it.
 - **No "term provenance" or "localization notes" fields.** These are named,
   specific features of a terminology system the primary source describes as a
   distinct, more complex document type. A glossary-term node's provenance is
