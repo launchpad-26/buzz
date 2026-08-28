@@ -1,0 +1,179 @@
+{
+  "version": 1,
+  "login": "your-github-login",
+  "state_dir": "~/.config/review-queue-automation",
+  "repository": {
+    "slug": "OWNER/REPO",
+    "root": "/path/to/repo",
+    "base": "launchpad",
+    "preflight": "/path/to/repo/launchpad/scripts/pr_review_batch.py"
+  },
+  "logging": {
+    "directory": "/path/to/repo/pr review logs",
+    "format": "otel-jsonl",
+    "max_stderr_bytes": 8192
+  },
+  "poll": {
+    "active_seconds": 300,
+    "idle_seconds": [
+      600,
+      1200,
+      1800
+    ],
+    "rest_remaining_floor": 200
+  },
+  "models": {
+    "cooldown_seconds": 1800,
+    "timeout_seconds": 1800,
+    "prompt_version": "review-v1",
+    "primary": [
+      {
+        "alias": "CLAUDE_FAST",
+        "runner": "claude",
+        "selector": "claude-sonnet-4-5",
+        "model_version": "claude-sonnet-4-5",
+        "provider_family": "anthropic",
+        "capability": "frontier",
+        "execution_mode": "read_only",
+        "tools": [],
+        "efforts": [
+          "medium",
+          "high",
+          "xhigh"
+        ]
+      },
+      {
+        "runner": "omp",
+        "selector": "openrouter/z-ai/glm-5.3-flash",
+        "provider_family": "z-ai-openrouter",
+        "capability": "frontier",
+        "efforts": [
+          "medium",
+          "high"
+        ]
+      },
+      {
+        "runner": "omp",
+        "selector": "openrouter/qwen/qwen3.8-flash",
+        "provider_family": "qwen-openrouter",
+        "capability": "workhorse",
+        "efforts": [
+          "medium",
+          "high"
+        ]
+      }
+    ],
+    "secondary": [
+      {
+        "alias": "CODEX_STRONG",
+        "runner": "codex",
+        "selector": "gpt-5.6-sol",
+        "model_version": "gpt-5.6-sol",
+        "provider_family": "openai",
+        "capability": "frontier",
+        "execution_mode": "read_only",
+        "tools": [],
+        "efforts": [
+          "medium",
+          "high",
+          "xhigh"
+        ]
+      },
+      {
+        "runner": "omp",
+        "selector": "openrouter/deepseek/deepseek-v4-flash-0731",
+        "provider_family": "deepseek-openrouter",
+        "capability": "workhorse",
+        "efforts": [
+          "medium",
+          "high"
+        ]
+      },
+      {
+        "runner": "omp",
+        "selector": "openrouter/google/gemini-3.7-flash",
+        "provider_family": "google-openrouter",
+        "capability": "frontier",
+        "efforts": [
+          "medium",
+          "high",
+          "xhigh"
+        ]
+      }
+    ]
+  },
+  "assurance": {
+    "sensitive_paths": [
+      "(^|/)(security|migrations?|provisioning)(/|$)",
+      "^\\.github/workflows/",
+      "(^|/)deploy/"
+    ],
+    "large_diff_lines": 700,
+    "full_rereview_ratio": 0.5
+  },
+  "dispatch": {
+    "incoming_concurrency": 1,
+    "author_concurrency_per_repo": 1,
+    "incoming_canary_approved": false,
+    "author_canary_approved": false
+  },
+  "github": {
+    "api_version": "2022-11-28",
+    "timeout_seconds": 30,
+    "read_only": true
+  },
+  "approval": {
+    "mode": "disabled",
+    "live_canary_approved": false,
+    "approval_enabled": false,
+    "effective_risk_max": 24,
+    "complexity_max": 2,
+    "file_limit": 50,
+    "line_limit": 1000,
+    "approval_rate_max": 0.5
+  },
+  "risk": {
+    "bands": {
+      "low": 24,
+      "medium": 99,
+      "high": 100
+    },
+    "protected_triggers": [
+      "(^|/)(security|auth|authentication|authorization|credentials?)(/|$)",
+      "(^|/)migrations?/",
+      "\\.(sql|prisma|graphql)$",
+      "(^|/)deploy/",
+      "(^|/)\\.github/workflows/",
+      "schema/",
+      "policy"
+    ]
+  },
+  "human_queue": {
+    "expiry_minutes": 1440
+  },
+  "shadow": {
+    "history_window_months": 12,
+    "evaluated_sha_only": true
+  },
+  "authority": {
+    "review": "disabled",
+    "comment": "disabled",
+    "approve": "disabled",
+    "request_changes": "disabled",
+    "triage": "disabled",
+    "fix": "disabled"
+  },
+  "strategies": {
+    "active": [
+      "direct_analysis",
+      "checklist",
+      "independent_parallel",
+      "specialist_panel"
+    ]
+  },
+  "notifications": {
+    "transport": "none",
+    "path": "/path/to/repo/pr review logs/notifications.jsonl",
+    "timeout_seconds": 30
+  }
+}
