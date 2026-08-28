@@ -53,7 +53,7 @@ evidence:
     entry_class: FACT
     evidence:
       - "crates/buzz-admin/src/main.rs"
-  - statement: "buzz-admin's own top-of-file doc comment documents its deployment shape: the CLI is invoked as 'compose exec relay buzz-admin ...', i.e. inside the already-running relay container, and its AddMember/RemoveMember role validation (validate_role()) rejects role \"owner\" with the same message pattern the relay-admin command handler uses -- 'use RELAY_OWNER_PUBKEY config' -- so both surfaces agree that ownership is never grantable at runtime, only through relay restart configuration."
+  - statement: "buzz-admin's deployment shape -- the CLI is invoked as 'compose exec relay buzz-admin ...', i.e. inside the already-running relay container -- is documented in a function-level doc comment on resolve_admin_tenant(), not in a top-of-file/module doc comment. Separately, its AddMember/RemoveMember role validation (validate_role()) rejects role \"owner\" with the error \"role 'owner' cannot be set via CLI -- use RELAY_OWNER_PUBKEY config\"; that phrasing echoes a code comment in relay_admin.rs's kind:9032 handler ('Use RELAY_OWNER_PUBKEY config to change ownership'), not any runtime error string relay_admin.rs itself returns -- relay_admin.rs's actual owner-rejection error strings are 'invalid role: use kind:9032 to promote to owner' (kind:9030) and 'cannot set role to owner' (kind:9032), neither of which mentions RELAY_OWNER_PUBKEY. Both surfaces still agree, in effect, that ownership is never grantable at runtime, only through relay restart configuration."
     entry_class: FACT
     evidence:
       - "crates/buzz-admin/src/main.rs"
