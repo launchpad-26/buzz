@@ -89,18 +89,14 @@ evidence:
     evidence:
       - "launchpad/AGENT_PR_TEMPLATE.md"
   - statement: "Parent Feature #605's acceptance criteria require that 'every template states its purpose, required sections, evidence expectations and the industry model/standard it adapts', and this is the acceptance bar this node is built against rather than issue #1332's own copied-over standards-track Definition of Done."
-    entry_class: FACT
-    evidence:
-      - "https://github.com/launchpad-26/buzz/issues/605"
+    entry_class: TEAM_KNOWLEDGE
+    provided_by: "launchpad-26/buzz#605 acceptance criteria"
   - statement: "Issue #1332's own Definition of Done is byte-identical to the standards-track boilerplate ('States scope and authority/source of the policy. Separates MUST requirements from SHOULD guidance. Defines enforcement/checks and exception/escalation process. Links decisions or higher-order policy instead of duplicating them.'), the same text independently found copied across #1326-#1351."
-    entry_class: FACT
-    evidence:
-      - "https://github.com/launchpad-26/buzz/issues/1332"
+    entry_class: TEAM_KNOWLEDGE
+    provided_by: "launchpad-26/buzz#1332 definition of done"
   - statement: "Issue #1332's Objective reads 'Create launchpad/docs/corpus/templates/configuration.md as the single canonical policy node for configuration', and issue #1326's Objective reads 'Create launchpad/docs/corpus/templates/architecture-component.md as the single canonical policy node for architecture component' -- the identical phrase 'policy node' applied to a different template task, confirming the word is boilerplate carried by the planning apparatus rather than a considered classification specific to #1332."
-    entry_class: FACT
-    evidence:
-      - "https://github.com/launchpad-26/buzz/issues/1332"
-      - "https://github.com/launchpad-26/buzz/issues/1326"
+    entry_class: TEAM_KNOWLEDGE
+    provided_by: "launchpad-26/buzz#1332 Objective, compared against launchpad-26/buzz#1326 Objective"
   - statement: "An unmerged research note cataloguing industry-standard project documentation templates does not mention configuration, config files, environment variables or the Twelve-Factor App anywhere in its text."
     entry_class: TEAM_KNOWLEDGE
     provided_by: "launchpad-26/buzz#1466 (unmerged research note, launchpad/Research/project-documentation-templates.md on branch docs/research-project-doc-templates)"
