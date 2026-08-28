@@ -34,6 +34,11 @@ CONTROLS = [
     ("check_adjudication_mutations.py", False),
     ("check_publish_scope.py", True),
     ("check_publish_single.py", False),
+    ("check_verdict_blocks.py", False),
+    ("check_verdict_rows.py", False),
+    ("check_pr_comments.py", True),
+    ("check_verdict_resolution.py", True),
+    ("check_resolve_verdict_contract.py", False),
 ]
 
 
