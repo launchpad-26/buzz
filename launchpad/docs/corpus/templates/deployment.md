@@ -433,10 +433,10 @@ topology, which is future work for whoever writes that instance node, not this
 template). The container used below (`buzz-relay`) is the same container issue
 #1327's template established by the same test it uses (a `[[bin]]` target and
 `src/main.rs`); this node reuses that identity rather than re-arguing it, and
-maps how its deployment topology differs across one row this repository's own
-operated environments actually define (`launchpad/ENVIRONMENTS.md`) and two rows
-that are not additional cohort-operated environments at all, but the
-`deploy/charts/buzz` Helm chart's own two values profiles — `deploy/charts/buzz/README.md`
+maps its deployment topology across a table whose rows are of two different
+kinds: one row is an environment this repository's own `launchpad/ENVIRONMENTS.md`
+actually defines, and two rows are not additional cohort-operated environments at
+all, but the `deploy/charts/buzz` Helm chart's own two values profiles — `deploy/charts/buzz/README.md`
 labels them "Quickstart (eval)" and "Production (GitOps)", and they belong to
 upstream Block's chart, not to this fork's own environment list:
 

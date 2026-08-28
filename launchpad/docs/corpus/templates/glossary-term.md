@@ -366,8 +366,8 @@ term that is never named.
 
 | This template (glossary term) | Its neighbors |
 |---|---|
-| **Up:** concept (#1331, not yet written) | Covers understanding-oriented, discursive explanation of a subject. This template stops at a one-to-three-sentence definition; if a term needs reflection or "why this matters" reasoning, that content belongs in a concept node, linked via `references`, not folded into the term's definition. |
-| **Sideways:** reference (#1346, not yet written) | Covers technical descriptions of machinery and how to operate it -- information-oriented, like this template, but scoped to a system's operable surface rather than to one word's meaning. A glossary term that starts describing how to *use* something, not just what it *means*, has drifted into reference territory. |
+| **Up:** concept (`corpus-template-concept`, #1331) | Covers understanding-oriented, discursive explanation of a subject. This template stops at a one-to-three-sentence definition; if a term needs reflection or "why this matters" reasoning, that content belongs in a concept node, linked via `references`, not folded into the term's definition. |
+| **Sideways:** reference (`corpus-template-reference`, #1346) | Covers technical descriptions of machinery and how to operate it -- information-oriented, like this template, but scoped to a system's operable surface rather than to one word's meaning. A glossary term that starts describing how to *use* something, not just what it *means*, has drifted into reference territory. |
 | **Sideways, within the same primary source:** terminology system (Good Docs Project misc pack, not assigned to any issue in this batch) | Adds alternative terms, related terms, provenance and localization notes on top of a base glossary entry. This template deliberately stops short of that richer shape -- see *What this template deliberately excludes* above. |
 
 ## Scope and omissions
@@ -380,8 +380,8 @@ Project's Glossary template, misc pack) it adapts.
 
 | Not covered here | Owned by |
 |---|---|
-| Discursive explanation of a term's surrounding concept | #1331 (concept template, not yet written) |
-| Technical description of machinery or how to operate something | #1346 (reference template, not yet written) |
+| Discursive explanation of a term's surrounding concept | `corpus-template-concept` (#1331) |
+| Technical description of machinery or how to operate something | `corpus-template-reference` (#1346) |
 | Alternative terms, related-term webs, provenance and localization notes as a document's primary subject | Good Docs Project's terminology system template (no corpus issue currently assigned) |
 | The evidence-class contract itself (FACT/INFERENCE/TEAM_KNOWLEDGE, citation shapes) | `launchpad/docs/corpus/AGENTS.md` |
 | The `confidence` field's meaning and requirements | `launchpad/docs/corpus/standards/confidence.md` |

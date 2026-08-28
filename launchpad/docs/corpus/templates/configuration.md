@@ -29,7 +29,7 @@ evidence:
     evidence:
       - "git_show(ref='origin/task/1335-corpus-template-decision-reference', path='launchpad/docs/corpus/templates/decision-reference.md') -> front matter type: governance"
       - "git_show(ref='origin/task/1346-corpus-template-reference', path='launchpad/docs/corpus/templates/reference.md') -> front matter type: governance"
-  - statement: "relationships.schema.json defines five relationship types -- depends-on, supersedes, implements, references, part-of -- with references' directionality stated as 'source cites target as supporting context; no ownership or currency dependency implied', generated inverse referenced-by."
+  - statement: "relationships.schema.json defines five relationship types -- depends-on, supersedes, implements, references, part-of -- with references' directionality stated as 'source cites target as supporting context; no ownership or currency dependency implied', and an inverse named referenced-by that is authored, not generated -- the only one of the five relationship types whose inverse is authored rather than generated."
     entry_class: FACT
     evidence:
       - "launchpad/docs/corpus/schema/relationships.schema.json"
@@ -154,7 +154,7 @@ review-enforced half.
 | Relationship types and their directionality | `launchpad/docs/corpus/schema/relationships.schema.json` |
 | Creating, updating and retiring a node | `launchpad/docs/corpus/AGENTS.md` |
 | Citing an accepted decision as evidence | `launchpad/docs/corpus/standards/decision-references.md` |
-| The generic reference template this one specializes | `launchpad/docs/corpus/templates/reference.md` (`#1346`, once merged) |
+| The generic reference template this one specializes | `launchpad/docs/corpus/templates/reference.md` (`corpus-template-reference`, #1346) |
 | The industry models this template adapts | *Industry model* below, and the primary sources it cites |
 
 If this node and any of those disagree, **they win** -- this one has drifted and
@@ -423,12 +423,13 @@ A node built from this template:
 - **may** declare `part-of` toward a broader capability, deployment, or operations
   node this configuration surface is a subsection of, when the settings are one
   part of a larger documented surface rather than independently standing.
-- **may** declare `references` toward the generic reference template (`#1346`,
-  once merged) or toward this template node itself (target:
-  `corpus-template-configuration`), if the author wants the generated
-  `referenced-by` edge; this is optional, since a node's shape (Configuration
-  description / Settings / Litmus test / Secrets discipline / Boundary) already
-  shows which template it followed.
+- **may** declare `references` toward the generic reference template
+  (`corpus-template-reference`, #1346) when the author defers completeness to it.
+- **should** declare `implements` targeting `corpus-template-configuration` (this
+  node's id) once this node is merged. `relationships.schema.json` names *"a
+  template instance of a standard"* as `implements`' own worked example -- not
+  the weaker `references` edge, and not a `referenced-by` edge, since no
+  generator produces one for this relationship type.
 - **must**, per `AGENTS.md`'s own rule, resolve every declared target against
   `origin/launchpad` (or whatever the merge-target branch is at the time), never
   against the author's own worktree.

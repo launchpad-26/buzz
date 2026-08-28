@@ -122,8 +122,8 @@ the adaptation).
   `#1320`'s normative-language standard (PR #1518, unmerged) governs that, and it
   is a rule about document wording, not a system property. See *Boundary* below.
 - What a participant (developer, agent, reviewer) must or must not do -- a
-  **policy** node's territory, tracked separately by `#1344` (not yet written, not
-  in this batch). See *Boundary* below.
+  **policy** node's territory, owned by `corpus-template-policy` (#1344). See
+  *Boundary* below.
 - A full interface contract's versioning/compatibility/error-semantics guarantees
   -- `#1342`'s template (interface), which may `references` an invariant node this
   template produces rather than restate it.
@@ -143,7 +143,7 @@ their own review-enforced half.
 | Relationship types and their directionality | `launchpad/docs/corpus/schema/relationships.schema.json` |
 | Creating, updating and retiring a node | `launchpad/docs/corpus/AGENTS.md` |
 | MUST/SHOULD/MAY wording inside corpus prose | `#1320`'s standard (PR #1518, unmerged) |
-| What a participant must do | `#1344`'s template (policy, not yet written) |
+| What a participant must do | `corpus-template-policy` (#1344) |
 | An interface's operations and stability contract | `#1342`'s template (interface, PR #1541) |
 
 If this node and any of those disagree, **they win** -- this one has drifted and
@@ -228,7 +228,7 @@ Read this section before drafting.
   expectations (as this template does, below) without becoming a normative-language
   document itself; using those words is not the same as governing their usage
   corpus-wide.
-- **Not `#1344`'s policy template (not yet written, not in this batch).** A policy
+- **Not `corpus-template-policy`'s territory (#1344).** A policy
   states what a participant -- developer, agent, reviewer -- must or must not do.
   An invariant states what always holds, independent of anyone's compliance. The
   sharpest case in this repository's own evidence is `tenant.rs`'s fence: it reads
@@ -471,7 +471,7 @@ built from this template should use.
 | Not covered here | Owned by |
 |---|---|
 | MUST/SHOULD/MAY wording inside corpus prose | `#1320` (normative-language standard, PR #1518, unmerged) |
-| What a participant must or must not do | `#1344` (policy template, not yet written) |
+| What a participant must or must not do | `corpus-template-policy` (#1344) |
 | An interface's operations and versioning/compatibility contract | `#1342` (interface template, PR #1541) |
 | A single Nostr event kind's own wire contract | `#1337` (event-kind template) |
 | The front-matter contract itself | `node.schema.json` |
