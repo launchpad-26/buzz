@@ -64,6 +64,24 @@ evidence:
     entry_class: FACT
     evidence:
       - "docs/nips/NIP-PMA.md"
+  - statement: "desktop/src-tauri/src/identity_storage.rs's `IdentityStorage` enum (`Ephemeral`=0, `SystemKeyring`=1, `LocalFile`=2, `Environment`=3) names the four possible backends for the desktop app's active human identity key, stored on `AppState` as an `AtomicU8` (`identity_storage`/`set_identity_storage`) so any command can read the active backend without locking the identity mutex; `RecoveryState` (`None`/`Lost`/`KeyringLocked`) and `ResolvedIdentity` (a `Keys`/`RecoveryState`/`IdentityStorage` bundle) are the other two types startup identity resolution produces."
+    entry_class: FACT
+    evidence:
+      - "desktop/src-tauri/src/identity_storage.rs:6-33"
+      - "desktop/src-tauri/src/identity_storage.rs:49-62"
+  - statement: "desktop/src-tauri/src/app_state.rs implements the actual fallback chain in strict priority order at startup: `build_app_state`'s `identity_from_env` check wins outright over any persisted key when `BUZZ_PRIVATE_KEY` is set and parses (`IdentityStorage::Environment`), and a malformed value is logged and treated as absent rather than left ephemeral; otherwise `resolve_persisted_identity` calls `load_or_create_identity`, which probes the OS keyring (`IdentityStorage::SystemKeyring`) when the `system-keyring` Cargo feature is compiled in; the `0o600` `identity.key` file is the fallback (`IdentityStorage::LocalFile`) when that feature is absent, when the keyring is unreachable with a recoverable file, or when a keyring write fails during generation or import; and an in-memory `Keys::generate()` (`IdentityStorage::Ephemeral`) is the last resort."
+    entry_class: FACT
+    evidence:
+      - "desktop/src-tauri/src/app_state.rs:142-157"
+      - "desktop/src-tauri/src/app_state.rs:180-192"
+      - "desktop/src-tauri/src/app_state.rs:358-389"
+      - "desktop/src-tauri/src/app_state.rs:447-462"
+  - statement: "`resolve_identity_with_store` (app_state.rs) branches on `IdentityKeyStore::probe`'s three-way `KeyringProbe` result rather than a single try/fallback: `Present` with a parseable nsec resolves to `SystemKeyring` immediately and falls through to `recover_from_keyring` only on a parse failure; `ReachableButEmpty` one-time-migrates a leftover `identity.key` via `migrate_identity_file` (store, read-back verify, then delete) or, with the migration marker present and no file to recover, returns an ephemeral key with `RecoveryState::Lost`; `Unreachable` uses a leftover file directly without migrating it (`load_file_or_generate`, since migrating a stale file this late could resurrect a rotated key) or, with the marker present and no file, returns an ephemeral key with `RecoveryState::KeyringLocked`; and a genuine first launch (no keyring value, no file, no marker) falls through to `generate_and_persist`, which resolves to `SystemKeyring` or `LocalFile` via `store_key_preferring_keyring` depending on whether the keyring write succeeds -- never to `Ephemeral`, which is reserved for the two recovery states above."
+    entry_class: FACT
+    evidence:
+      - "desktop/src-tauri/src/app_state.rs:467-660"
+      - "desktop/src-tauri/src/app_state.rs:933-955"
+      - "desktop/src-tauri/src/app_state.rs:962-979"
   - statement: "Across the desktop keychain blob, the mobile secure-storage blob, the CLI's env-var-only handling, and the dev-mcp session keyfile, the pattern each surface independently converges on is: the raw private key is durably written to at most one place by exactly one component for exactly one purpose, and every hop after that (subprocess env for the ACP harness, a Kubernetes Secret for a remote pod) either avoids writing the key to a file at all or writes it once with restrictive permissions and strips it from the environment that produced it once its consumer has read it."
     entry_class: INFERENCE
     evidence:
@@ -74,9 +92,11 @@ evidence:
       - "crates/buzz-dev-mcp/src/shim.rs"
       - "crates/git-sign-nostr/src/lib.rs"
     confidence: 0.7
-  - statement: "Issue #1110's definition of done requires this node to define the term in one sentence before deeper explanation, state boundaries/non-goals, link related concepts, implementation and verification without duplicating their content, and use examples only to clarify the concept rather than introduce a second canonical concept; it also states this node should be the canonical, comprehensive identity-storage treatment across all surfaces, with sibling node #1106 (human-identity) expected to reference it rather than duplicate its content once both are merged."
-    entry_class: TEAM_KNOWLEDGE
-    provided_by: "launchpad-26/buzz#1110 definition of done"
+  - statement: "Issue #1110's definition of done requires this node to define the term in one sentence before deeper explanation, state boundaries/non-goals, link related concepts, implementation and verification without duplicating their content, and use examples only to clarify the concept rather than introduce a second canonical concept; the issue's objective separately describes the node as \"the single canonical concept node for identity storage,\" but neither the objective nor the DoD checklist names sibling node #1106 (human-identity) or states that #1106 should reference this node rather than duplicate it -- that expectation is inferred from the DoD's general anti-duplication requirement plus this node's own single-canonical-treatment framing, not a literal statement in the issue text."
+    entry_class: INFERENCE
+    evidence:
+      - "https://github.com/launchpad-26/buzz/issues/1110"
+    confidence: 0.7
 ---
 
 # Identity Storage
@@ -137,6 +157,54 @@ Sign-out uses `delete_all_with_legacy_cleanup`, which removes the blob plus ever
 legacy per-key entry (so a stale entry cannot resurrect an identity on the next boot),
 and `verify_fully_wiped` fails **closed**: if the keychain is unreachable it reports
 "not confirmed wiped" rather than assuming success.
+
+## Desktop: startup resolution fallback chain
+
+The `SecretStore` blob above is where the human identity key ends up once resolved --
+but resolving *which* key that is, and *where* it currently lives, happens earlier, at
+startup. `identity_storage.rs` names the four possible answers as `IdentityStorage`
+(`Ephemeral`, `SystemKeyring`, `LocalFile`, `Environment`), tracked on `AppState` as an
+`AtomicU8` so any command can read the active backend without locking the identity
+mutex, alongside `RecoveryState` (`None`, `Lost`, `KeyringLocked`) and `ResolvedIdentity`
+(the `Keys`/`RecoveryState`/`IdentityStorage` bundle resolution produces).
+
+`app_state.rs` implements the actual chain, in strict priority order, once per boot:
+
+1. **Environment.** `build_app_state`'s `identity_from_env` check runs first: if
+   `BUZZ_PRIVATE_KEY` is set and parses, it wins outright over any persisted key (the
+   dev/CI/harness override) and resolution stops here. A malformed value is logged and
+   treated as absent rather than left on an ephemeral identity -- it falls through to
+   the next tier instead.
+2. **SystemKeyring.** With no env override, `resolve_persisted_identity` calls
+   `load_or_create_identity`, which -- when the `system-keyring` Cargo feature is
+   compiled in -- probes the OS keyring through a three-way `KeyringProbe`. A
+   `Present`, parseable key resolves to `SystemKeyring` immediately, with no
+   fall-through to lower tiers.
+3. **LocalFile.** The `0o600` `identity.key` file backs three distinct paths to this
+   tier: the `system-keyring` feature not being compiled in at all (the file is the
+   only store); the keyring being `Unreachable` this boot with a leftover file present
+   (`load_file_or_generate` reads it directly and deliberately does **not** migrate it
+   into the keyring -- a stale file could resurrect a rotated key, so migration retries
+   next boot when the keyring is reachable again); and a keyring *write* failing during
+   key generation (`store_key_preferring_keyring`) or import
+   (`persist_identity_to_keyring`), which demotes the outcome to `LocalFile` rather
+   than failing startup.
+4. **Ephemeral.** The last resort: an in-memory-only `Keys::generate()` with nothing
+   ever persisted under it, reserved for two specific unrecoverable-this-boot states
+   rather than for creating a new identity -- `ReachableButEmpty` with the migration
+   marker present but no importable file (`RecoveryState::Lost`: a prior identity
+   existed and is now gone), and `Unreachable` with the marker present but no file
+   (`RecoveryState::KeyringLocked`: the prior identity still exists in the keyring,
+   merely inaccessible this boot). `AppState.identity_lost`/`keyring_locked` (set from
+   `RecoveryState` in `resolve_persisted_identity`) drive distinct frontend recovery
+   screens for the two cases.
+
+A genuine first-ever launch -- no keyring value, no leftover file, no migration
+marker -- falls through all of the above to `generate_and_persist`, which resolves to
+`SystemKeyring` or `LocalFile` via `store_key_preferring_keyring` depending on whether
+the keyring write succeeds. It never lands on `Ephemeral`: that backend is reserved
+exclusively for the two recovery scenarios above, not the normal case of creating a
+brand-new identity.
 
 ## Mobile: one secure-storage blob for all communities
 
@@ -219,7 +287,7 @@ itself describes.
 
 | Surface | What's stored | Where | Granularity |
 |---|---|---|---|
-| Desktop (owner + local agents) | nsec, keyed by identity/agent pubkey | One OS-keychain blob per `service` (`secret_store.rs`); `0o600` `managed-agents.json` inline fallback only when the keyring is unreachable | One blob for everything under that service |
+| Desktop (owner + local agents) | nsec, keyed by identity/agent pubkey | Resolved at startup via a fallback chain (`identity_storage.rs`/`app_state.rs`: `Environment` → `SystemKeyring` → `LocalFile` → `Ephemeral`), then held in one OS-keychain blob per `service` (`secret_store.rs`); `0o600` `managed-agents.json` inline fallback only when the keyring is unreachable | One blob for everything under that service |
 | Mobile | nsec, per community | One `flutter_secure_storage` entry (`buzz_communities`) holding all communities' credentials | One blob for every community |
 | CLI | nsec | Not stored by the CLI itself — read fresh from `--private-key`/`BUZZ_PRIVATE_KEY` on each invocation | N/A — caller's environment |
 | Remote agent (Kubernetes) | nsec, in transit then at rest as a Secret | In-memory only across `D`→`P`; a Kubernetes Secret at the substrate (`env.rs`) | One Secret per deploy generation |
@@ -243,7 +311,9 @@ worktree.
 **This document covers** where and how the raw Nostr private key is kept at rest and
 in transit across desktop, mobile, the CLI, the server/remote-agent launch path, and
 an agent's own git-signing runtime, plus one not-yet-live relay-side sync format
-reserved for the same purpose.
+reserved for the same purpose. On desktop, this includes both the at-rest blob
+(`secret_store.rs`) and the startup fallback chain that decides which backend and
+which key are active in the first place (`identity_storage.rs`/`app_state.rs`).
 
 **This document does not cover, deliberately:**
 
