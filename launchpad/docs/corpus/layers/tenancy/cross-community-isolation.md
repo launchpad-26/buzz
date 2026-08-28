@@ -115,12 +115,13 @@ relationships:
 
 # Cross-community isolation: invariant
 
-**No connection resolved to community B may observe, anywhere in the relay's
-client-visible interface, a value that originated from another community's
-state.** Concretely: for every WebSocket `EVENT`/`OK`/`COUNT` frame, REST
-response body or status code, and audit-chain entry a B-scoped connection
-receives, every row, count, and error it is built from carries community
-label `B` and no other. This is the property `docs/multi-tenant-relay.md`
+**A connection resolved to community B MUST NOT observe, anywhere in the
+relay's client-visible interface, any value that originated from another
+community's state.** Concretely: every WebSocket `EVENT`/`OK`/`COUNT` frame,
+REST response body or status code, and audit-chain entry a B-scoped
+connection receives MUST be built only from rows, counts, and errors that
+carry community label `B`, and MUST NOT be influenced by any community-A-only
+row, error, or side effect. This is the property `docs/multi-tenant-relay.md`
 proves as non-interference and `docs/spec/MultiTenantRelay.tla` mechanizes as
 `Inv_NonInterference` (with `Inv_ReadConfinement` as its read-specific
 corollary).
