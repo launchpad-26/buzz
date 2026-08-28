@@ -1,11 +1,28 @@
 """Unit tests for the deterministic corpus validator -- issue #623.
 
-Run:  python3 -m unittest launchpad.project_intelligence.corpus.tests.test_validate
-  or: python3 -m unittest discover -s launchpad/project-intelligence/corpus/tests -p "test_*.py"
+Run:  python3 -m unittest discover -s launchpad/project-intelligence/corpus/tests -p "test_*.py"
 
-These tests only ever point --root at fixtures under this directory, never at the
-real launchpad/docs/corpus/ -- that root's own content (or lack of it) must never
-change what this suite asserts.
+(The dotted-module form this docstring used to advertise never worked: the directory is
+`project-intelligence`, with a hyphen, which is not a legal Python package name, so it
+raised ModuleNotFoundError. Broken since #623; found by a cross-model review pass.)
+
+Almost every test points --root at fixtures under this directory, so the real
+launchpad/docs/corpus/ cannot change what they assert. That is the rule, and new
+tests should follow it.
+
+ONE test is deliberately outside it:
+`SchemaDirExclusionTest.test_real_corpus_root_discovery_matches_an_independent_walk`
+walks the real corpus root and requires it to be non-empty. It exists to catch a
+discovery regression against real committed content, which no fixture can stand in
+for, and it will legitimately fail if the corpus is ever emptied or relocated -- at
+which point it is reporting that, not a discovery bug. Its own docstring says what it
+can and cannot catch.
+
+An earlier revision of this docstring claimed the never-touch-the-real-root rule was
+absolute. It was not true even then: the test this one replaced also read the real
+root, asserting it was EMPTY. Two independent reviews (an adjudicator and a
+cross-model final pass) flagged the contradiction separately, which is why the rule is
+now stated with its exception rather than as an absolute nobody was keeping.
 """
 
 from __future__ import annotations
@@ -982,11 +999,13 @@ class SchemaDirExclusionTest(unittest.TestCase):
     """schema/ is #622's own infrastructure, never scanned as corpus content.
 
     Proven against a purpose-built fixture tree containing BOTH a schema/ file
-    and a real sibling, not merely against today's real launchpad/docs/corpus/
-    root -- that root currently has zero non-schema content, so a test asserting
-    only "no file under schema/ leaked" against it would pass vacuously even if
-    exclusion were broadened to reject everything. An independent review-tests
-    pass found this.
+    and a real sibling, rather than against the real launchpad/docs/corpus/ root
+    alone. When this suite was written that root held zero non-schema content, so
+    a test asserting only "no file under schema/ leaked" against it would have
+    passed vacuously even if exclusion were broadened to reject everything. An
+    independent review-tests pass found that. The fixture test below stays the
+    primary proof for the same reason: it controls both sides of the comparison,
+    where the real root only ever shows whatever happens to be committed.
     """
 
     def test_sibling_discovered_schema_dir_excluded(self) -> None:
@@ -1003,13 +1022,64 @@ class SchemaDirExclusionTest(unittest.TestCase):
             self.assertIn(real_sibling, files)
             self.assertNotIn(inside_schema, files)
 
-    def test_real_corpus_root_currently_has_no_content_outside_schema(self) -> None:
-        # A documentation-style sanity check on today's real state, not the
-        # primary proof of exclusion (see test_sibling_discovered_schema_dir_
-        # excluded above, which is the one that can actually fail on regression).
+    def test_real_corpus_root_discovery_matches_an_independent_walk(self) -> None:
+        """Discovery over the real root returns EXACTLY the nodes that are there.
+
+        This replaces `test_real_corpus_root_currently_has_no_content_outside_
+        schema`, which asserted the root was EMPTY. That assertion was true when
+        #623 wrote it and had a shelf life ending at the first authored node --
+        #636's launchpad/docs/corpus/AGENTS.md, which is what broke it. A test
+        encoding a temporary state as a permanent assertion fails on the change
+        it was supposed to permit, and says nothing about the behaviour under
+        test when it does.
+
+        The first replacement asserted only "non-empty AND nothing from schema/",
+        which an independent review-tests pass defeated immediately: replacing
+        discover_markdown_files with a hardcoded `return [root / "AGENTS.md"]`
+        -- a constant that never touches the filesystem -- satisfied both halves
+        while proving neither discovery nor exclusion. Asserting that a check CAN
+        fail is not the same as asserting it can only pass for the right reason.
+
+        So the expectation is now derived from the filesystem independently of
+        the function under test, and compared for equality. Measured against
+        mutants of discover_markdown_files, this test catches:
+
+            returns nothing          -> FAIL (caught)
+            exclusion disabled       -> FAIL (caught)
+            hardcoded constant       -> PASS (NOT caught today)
+
+        The constant is not caught, and cannot be by any assertion made here
+        while the real corpus holds exactly ONE node: `[root / "AGENTS.md"]` is
+        the correct answer today, so a constant and a real walk are
+        indistinguishable from outside. That is a property of the real tree, not
+        of this assertion -- and it resolves itself the moment a second node
+        lands, at which point the equality form catches constants and partial
+        walks for free. `test_sibling_discovered_schema_dir_excluded` catches the
+        constant NOW, because its fixture tree holds names no constant predicts.
+        That test, not this one, is the proof of discovery behaviour.
+
+        `assertNotEqual(expected, [])` is the guard against inheriting the
+        original sin: with an empty corpus both sides would be [] and equality
+        would pass vacuously. If that ever fires, the corpus is empty and this
+        test should be read as reporting that, not as a discovery bug.
+
+        The walk mirrors the canonical-location rule as well as the schema/
+        exclusion, because discover_markdown_files drops symlinks resolving
+        outside the root. A node symlinked in from elsewhere therefore fails
+        here loudly rather than silently widening what counts as corpus content.
+        """
         root = validate.repo_root() / validate.DEFAULT_ROOT
-        files = validate.discover_markdown_files(root)
-        self.assertEqual(files, [])
+        resolved_root = root.resolve()
+
+        expected = sorted(
+            path
+            for path in root.rglob("*.md")
+            if path.relative_to(root).parts[0] != "schema"
+            and path.resolve().is_relative_to(resolved_root)
+        )
+
+        self.assertNotEqual(expected, [])
+        self.assertEqual(validate.discover_markdown_files(root), expected)
 
 
 if __name__ == "__main__":

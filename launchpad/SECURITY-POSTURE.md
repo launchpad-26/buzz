@@ -22,54 +22,28 @@ means something is protecting something right now.
 
 ## What is true today
 
-As of 2026-08-11 the cohort's security controls are **designed, not applied.**
+This section previously listed host-hardening and repository-hygiene controls one by one,
+each marked `Open`, `Implemented` or similar, as of 2026-08-11. That table is retired, not
+updated.
 
-Nothing the hardening work describes is deployed — the cohort runs Buzz on `localhost`
-only, per
-[ARCHITECTURE.md § What exists today](ARCHITECTURE.md#what-exists-today). Every child
-issue of [#5](https://github.com/launchpad-26/buzz/issues/5), the PRD that owns host
-hardening, was open when this section was written, as was every child of
-[#62](https://github.com/launchpad-26/buzz/issues/62), the PRD that owns repository
-hygiene. Both sit on
-[M0 — Buzz MVP](https://github.com/launchpad-26/buzz/milestone/1).
+Two things made retiring it the right call rather than correcting it. First, it made a
+dated, present-tense operational claim — that the cohort ran Buzz on `localhost` only — of
+exactly the kind a public document should not carry: a reader has no way to tell, from the
+document alone, whether a present-tense claim like that is still current, and a public
+repository is not the place to answer that question either way. Second, and more
+fundamentally: a control-by-control readiness table in a public, world-readable file is a
+gap map for anyone who reads it, independent of whether any single row in it is correct.
+Correcting individual rows would not have closed that problem — a table's *shape* is what
+makes it a gap map, not the accuracy of what it currently says.
 
-| Control | Status |
-|---|---|
-| Deny-by-default host firewall exposing only the public Buzz service | `OPEN` — [#30](https://github.com/launchpad-26/buzz/issues/30), [#44](https://github.com/launchpad-26/buzz/issues/44) |
-| Named administrative identities, with remote root access restricted after bootstrap | `OPEN` — [#29](https://github.com/launchpad-26/buzz/issues/29), [#26](https://github.com/launchpad-26/buzz/issues/26) |
-| Buzz and supporting services constrained below root under declared identities | `OPEN` — [#31](https://github.com/launchpad-26/buzz/issues/31), [#45](https://github.com/launchpad-26/buzz/issues/45) |
-| Security update policy applied, with reboot-required state visible | `OPEN` — [#32](https://github.com/launchpad-26/buzz/issues/32), [#27](https://github.com/launchpad-26/buzz/issues/27) |
-| Routine deployment through a dedicated CI/CD machine identity | `OPEN` — [#37](https://github.com/launchpad-26/buzz/issues/37), [#25](https://github.com/launchpad-26/buzz/issues/25) |
-| Security-relevant events still observable after hardening | `OPEN` — [#34](https://github.com/launchpad-26/buzz/issues/34) |
-| External verification of the deployed host from an untrusted client | `OPEN` — [#35](https://github.com/launchpad-26/buzz/issues/35), [#47](https://github.com/launchpad-26/buzz/issues/47) |
-| Detection of secret material in pull-request diffs and in git history | `OPEN` — [#67](https://github.com/launchpad-26/buzz/issues/67), [#63](https://github.com/launchpad-26/buzz/issues/63) |
-| Ignore coverage, tracked files and the agent config surface asserted rather than assumed | `OPEN` — [#68](https://github.com/launchpad-26/buzz/issues/68) |
-| A dependency alerting path that covers more than Cargo | `OPEN` — [#71](https://github.com/launchpad-26/buzz/issues/71), [#64](https://github.com/launchpad-26/buzz/issues/64) |
-| `cargo-deny check` runs in CI and covers Rust advisories, and only those | `IMPLEMENTED` — [`.github/workflows/ci.yml`](../.github/workflows/ci.yml); scope stated in [#62](https://github.com/launchpad-26/buzz/issues/62) |
-
-The markers above cover only the rows present when this section was written. A control
-added later does not inherit one — give the new row its own status marker and its own
-link to evidence.
-
-Two repository-level facts were checked against the live repository on 2026-08-11 rather
-than taken from an issue body. Dependabot alerts are disabled on this fork
-(`gh api repos/launchpad-26/buzz/dependabot/alerts` returns
-`Dependabot alerts are disabled for this repository.`, HTTP 403). That measurement carries
-no status marker, and deliberately so: none of the four fits a measured *absence*, and
-marking it `IMPLEMENTED` would say a control exists when what exists is the hole where one
-would go. The control itself is `OPEN` —
-[#71](https://github.com/launchpad-26/buzz/issues/71). Whether secret scanning and push
-protection are enabled cannot be answered from a non-admin account at all, which
-[#62](https://github.com/launchpad-26/buzz/issues/62) records as part of the problem:
-"nobody without admin can currently answer 'is push protection on?', and that question
-should not require privilege to answer." Making that answer visible is
-[#70](https://github.com/launchpad-26/buzz/issues/70); obtaining it is
-[#72](https://github.com/launchpad-26/buzz/issues/72).
-
-One row above is a control that runs: `cargo-deny check`, which guards this repository's
-Rust dependency surface in CI and nothing beyond it. Nothing above protects a running
-system, because the cohort is not running one. A reader who finishes this section
-believing otherwise has misread it, and this document has failed at the only job it has.
+Detailed, current security posture is tracked in the cohort's private companion
+repository, `buzz-infrastructure`, under the disclosure boundary
+[`AGENTS.md` §8](AGENTS.md) states here and that repository inverts for itself. This
+document still states what's safe to say publicly and nothing more: accepted risks with
+their reasoning ([below](#accepted-risks)), the gap this document exists to surface
+([below](#the-gap-this-document-exists-to-surface)), and which decisions remain open
+([below](#open-security-decisions)) — policy and process, not a status reading on any
+control.
 
 ---
 
@@ -89,7 +63,7 @@ rather than merely present. No row here protects anything.
 | Host hardening does not make the application itself invulnerable | `DECIDED` | The objective is "a **reproducible, defensible internet-facing cohort server**, not a complete enterprise security platform"; product defects go upstream under [`AGENTS.md` §1](AGENTS.md) | [#5](https://github.com/launchpad-26/buzz/issues/5) non-goals: "No claim that host hardening makes the application itself invulnerable" |
 | No SOC, SIEM or enterprise security operations platform | `DECIDED` | Ruling 13 draws the line where the cohort can still diagnose a failure: "A larger observability or SIEM platform is outside scope; establishing enough evidence to diagnose access and security failures is not." | [#5](https://github.com/launchpad-26/buzz/issues/5) non-goals and Ruling 13 |
 | Zero trust is applied proportionately to one cohort server, not as enterprise zero-trust infrastructure | `DECIDED` | Ruling 4 requires the principle — explicit identity, least privilege, no permission granted by location — without requiring the infrastructure | [#5](https://github.com/launchpad-26/buzz/issues/5) Ruling 4 |
-| Every repository-level control the cohort can build without admin will detect rather than prevent, and on a public repository detection lands after disclosure. None of that detection runs yet — it is `OPEN` in [What is true today](#what-is-true-today); what is accepted here is its shape | `DECIDED` | Push protection "can only be *enabled* by a repository admin", so detection is deliberately scoped to need none — "closing it is a separate, human, privileged act", requested under [#72](https://github.com/launchpad-26/buzz/issues/72) | [#62](https://github.com/launchpad-26/buzz/issues/62) security implications |
+| Every repository-level control the cohort can build without admin will detect rather than prevent, and on a public repository detection lands after disclosure; what is accepted here is that shape, not any claim about which such controls currently run | `DECIDED` | Push protection "can only be *enabled* by a repository admin", so detection is deliberately scoped to need none — "closing it is a separate, human, privileged act", requested under [#72](https://github.com/launchpad-26/buzz/issues/72) | [#62](https://github.com/launchpad-26/buzz/issues/62) security implications |
 | Secret-shaped material already in git history is not removed by the hygiene work | `DECIDED` | "remediation is a separate decision with its own blast radius — this PRD delivers the finding, not the force-push" | [#62](https://github.com/launchpad-26/buzz/issues/62) non-goals |
 
 The markers above cover only the rows present when this section was written. A risk added
@@ -191,11 +165,9 @@ as [`SECURITY.md`](../SECURITY.md) directs — still never as a public issue her
 split is recorded in [#62](https://github.com/launchpad-26/buzz/issues/62)'s non-goals.
 
 `IMPLEMENTED` above marks the rule's existence and its binding force, and nothing beyond
-that. **A rule that binds is not a mechanism that checks.** Nothing detects a violation of
-§8: detection of secret material in diffs and history is `OPEN`, and whether secret
-scanning and push protection are even switched on cannot be answered without admin — both
-in [What is true today](#what-is-true-today). Compliance therefore rests on the attention
-of whoever is writing, which
+that. **A rule that binds is not a mechanism that checks.** No mechanism described in this
+public document detects a violation of §8 — compliance rests on the attention of whoever
+is writing, which
 [#62](https://github.com/launchpad-26/buzz/issues/62) already measured and declined to
 treat as a control. Of the near-misses it records: "All three were caught by human
 attention alone." Its verdict on that: "Three catches in one session is not evidence that

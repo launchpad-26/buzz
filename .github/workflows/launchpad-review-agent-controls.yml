@@ -13,10 +13,16 @@ on:
     paths:
       - "launchpad/review-agent/**"
       - ".github/workflows/launchpad-review-agent-controls.yml"
+      # check_publish_scope.py's static half (STEP 9) parses this file and
+      # has five mutation proofs guarding it -- none of them ran on a PR
+      # that touched only this file, since it wasn't in the filter that
+      # decides whether run_controls.py runs at all.
+      - ".github/workflows/launchpad-review-agent-publish.yml"
   push:
     branches: [launchpad]
     paths:
       - "launchpad/review-agent/**"
+      - ".github/workflows/launchpad-review-agent-publish.yml"
 
 # Read-only, and no write scope of any kind. The controls read public issues and pull
 # requests; they never post, label, or modify anything.

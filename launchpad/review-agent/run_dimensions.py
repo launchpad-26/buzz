@@ -147,6 +147,33 @@ def default_reviewer(document: str) -> dict:
     return {"outcome": "clean", "findings": []}
 
 
+#: What ``build_document`` records under the document's ``reviewer`` key so a
+#: downstream stage can tell a real review from this stub's unconditional
+#: ``{"outcome": "clean"}``.
+REVIEWER_STUB = "stub"
+REVIEWER_INJECTED = "injected"
+
+
+def reviewer_identity(reviewer: Reviewer) -> dict:
+    """Name the reviewer that produced a document, for the published body's sake.
+
+    Without this the two cases are indistinguishable downstream: a real review
+    that found nothing, and this module's stub, which returns
+    ``{"outcome": "clean", "findings": []}`` for every dimension without reading
+    anything. An independent review panel found the publish workflow doing
+    exactly that -- invoking ``main()``, which binds ``default_reviewer``, and
+    publishing "No confirmed findings" as though a review had happened.
+
+    ``main()`` still exposes no flag for choosing a reviewer -- #117 puts model
+    choice out of scope and that stays true. This records which one ran; it does
+    not select one. Wiring a real dimension reviewer is #116's work, and until it
+    lands, ``publish_render`` turns this marker into a named INCOMPLETE reason
+    rather than letting a stub run render as a clean pass.
+    """
+    kind = REVIEWER_STUB if reviewer is default_reviewer else REVIEWER_INJECTED
+    return {"kind": kind, "name": getattr(reviewer, "__name__", type(reviewer).__name__)}
+
+
 # ---------------------------------------------------------------------------
 # Report assembly
 # ---------------------------------------------------------------------------
@@ -525,6 +552,7 @@ def build_document(
         "merge_base_sha": merge_base_sha,
         "head_sha": head_sha,
         "stages": build_stages(dimensions, reports),
+        "reviewer": reviewer_identity(reviewer),
         "reports": reports,
         "containment": {
             "findings": [f.as_dict() for f in containment_findings],
