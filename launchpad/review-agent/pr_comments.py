@@ -33,6 +33,25 @@ SURFACE_ENDPOINTS = {
     "review": "pulls/{pr}/comments",
 }
 
+#: `fetch.py` (same directory, same two GitHub endpoints) calls these surfaces
+#: `pr_issue_comments`/`pr_review_comments` -- the vocabulary `contain.py`/
+#: `run_dimensions.py`'s own `--degrade` flags already use. Without this map,
+#: an operator who knows that convention and tries `--degrade
+#: pr_issue_comments=absent` here hits an uncaught `ValueError` traceback
+#: instead of the normal refusal a genuine typo would get. `_normalize_surface`
+#: accepts either spelling; this module's own short names stay canonical
+#: everywhere else (`SURFACE_ENDPOINTS` keys, `TaggedBlock.surface`, the
+#: `results` dict `fetch_and_locate`/`resolve` pass around) rather than
+#: renaming those, which would touch every caller for a purely cosmetic gain.
+_SURFACE_ALIASES = {
+    "pr_issue_comments": "issue",
+    "pr_review_comments": "review",
+}
+
+
+def _normalize_surface(name: str) -> str:
+    return _SURFACE_ALIASES.get(name, name)
+
 
 @dataclass
 class TaggedBlock:
@@ -128,8 +147,12 @@ def from_items(items: list[dict], surface: str) -> CommentFetch:
 
 def degrade(results: dict[str, CommentFetch], spec: str) -> dict[str, CommentFetch]:
     """Force a surface into a degenerate state, mirroring `fetch.degrade`'s CLI shape:
-    ``degrade(results, "issue=absent")``."""
+    ``degrade(results, "issue=absent")``. Accepts either this module's own short
+    surface name or `fetch.py`'s longer one (`_SURFACE_ALIASES`) -- the reason
+    string still names the spec exactly as given, unnormalized, so the caller
+    sees what they actually typed."""
     surface, _, state = spec.partition("=")
+    surface = _normalize_surface(surface)
     if surface not in SURFACE_ENDPOINTS:
         raise ValueError(f"unknown surface: {surface!r}")
     if state not in fetch.UNREADABLE:
@@ -162,8 +185,13 @@ def _main(argv: list[str] | None = None) -> int:
     args = parser.parse_args(argv)
 
     results = fetch_and_locate(args.pr, args.repo)
-    for spec in args.degrade:
-        results = degrade(results, spec)
+    try:
+        for spec in args.degrade:
+            results = degrade(results, spec)
+    except ValueError as exc:
+        # A normal refusal (usage error, exit 2), not an uncaught traceback --
+        # the failure mode finding 5 (#287) was filed against.
+        parser.error(str(exc))
 
     for surface, cf in results.items():
         if not cf.readable:

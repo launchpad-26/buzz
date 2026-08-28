@@ -89,11 +89,28 @@ def test_degrade_forces_a_distinguishable_unreadable_state() -> None:
     )
 
 
+def test_degrade_accepts_fetch_pys_longer_surface_names() -> None:
+    """review-final MEDIUM #5: `fetch.py` (same directory, same two GitHub
+    endpoints) calls these surfaces `pr_issue_comments`/`pr_review_comments`
+    -- the vocabulary `contain.py`/`run_dimensions.py`'s own `--degrade`
+    flags already use. Both spellings must reach the identical state, not
+    just avoid crashing."""
+    results = fetch_and_locate(261, REPO)
+    via_alias = degrade(results, "pr_review_comments=absent")
+    via_short = degrade(results, "review=absent")
+    check(
+        "the fetch.py-style alias forces the same state as the short name",
+        via_alias["review"].state == via_short["review"].state == "absent",
+        f"alias={via_alias['review'].state} short={via_short['review'].state}",
+    )
+
+
 def main() -> int:
     test_pr_261()
     test_pr_264()
     test_invalid_pr_is_unreadable()
     test_degrade_forces_a_distinguishable_unreadable_state()
+    test_degrade_accepts_fetch_pys_longer_surface_names()
 
     if FAILURES:
         print(f"\n{len(FAILURES)} failed: {FAILURES}")
