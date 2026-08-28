@@ -74,6 +74,30 @@ class RequiredFieldsTest(unittest.TestCase):
         self.assertIn("template", str(ctx.exception))
 
 
+class ScalarSequenceFieldTest(unittest.TestCase):
+    def test_a_scalar_blockers_value_is_rejected_not_exploded_into_characters(self) -> None:
+        entry = _entry(blockers="#607")
+
+        with self.assertRaises(manifest.ManifestValidationError) as ctx:
+            manifest.build_manifest([entry])
+        self.assertIn("blockers", str(ctx.exception))
+        self.assertIn("not a list", str(ctx.exception))
+
+    def test_a_scalar_audiences_value_is_rejected_not_exploded_into_characters(self) -> None:
+        entry = _entry(audiences="agent")
+
+        with self.assertRaises(manifest.ManifestValidationError) as ctx:
+            manifest.build_manifest([entry])
+        self.assertIn("audiences", str(ctx.exception))
+
+    def test_a_scalar_source_start_points_value_is_rejected_not_exploded_into_characters(self) -> None:
+        entry = _entry(source_start_points="desktop_feature:chat")
+
+        with self.assertRaises(manifest.ManifestValidationError) as ctx:
+            manifest.build_manifest([entry])
+        self.assertIn("source_start_points", str(ctx.exception))
+
+
 class DuplicatePathTest(unittest.TestCase):
     def test_the_same_document_assigned_to_two_tasks_is_rejected(self) -> None:
         first = _entry(issue_title="task: document capabilities/chat.md")

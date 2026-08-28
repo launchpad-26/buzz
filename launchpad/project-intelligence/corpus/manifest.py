@@ -98,6 +98,22 @@ class Manifest:
         return json.dumps(payload, indent=2, sort_keys=True) + "\n"
 
 
+def _sequence(entry: dict, key: str) -> tuple[str, ...]:
+    """Coerce entry[key] to a tuple, raising on a scalar instead of exploding it.
+
+    `tuple("#607")` silently iterates the string's characters rather than
+    treating it as one element -- the exact hand-authoring mistake this guards
+    against for a plan entry with a single blocker/audience/source.
+    """
+    value = entry[key]
+    if not isinstance(value, (list, tuple)):
+        raise ManifestValidationError(
+            f"plan entry for {entry.get('path', '<no path given>')!r} "
+            f"has {key!r} as {type(value).__name__}, not a list: {value!r}"
+        )
+    return tuple(value)
+
+
 def _row_from_plan_entry(entry: dict) -> ManifestRow:
     missing = _REQUIRED_KEYS - entry.keys()
     if missing:
@@ -114,11 +130,11 @@ def _row_from_plan_entry(entry: dict) -> ManifestRow:
         start_date=entry["start_date"],
         target_date=entry["target_date"],
         effort=entry["effort"],
-        blockers=tuple(entry["blockers"]),
+        blockers=_sequence(entry, "blockers"),
         template=entry["template"],
         purpose=entry["purpose"],
-        audiences=tuple(entry["audiences"]),
-        source_start_points=tuple(entry["source_start_points"]),
+        audiences=_sequence(entry, "audiences"),
+        source_start_points=_sequence(entry, "source_start_points"),
     )
 
 
