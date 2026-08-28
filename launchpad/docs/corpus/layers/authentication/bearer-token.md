@@ -37,7 +37,6 @@ evidence:
     entry_class: FACT
     evidence:
       - "crates/buzz-relay/src/config.rs"
-      - "crates/buzz-relay/src/main.rs"
   - statement: "A source comment on the relay's NIP-11 `relay_limitation` builder states that `auth_required: true` (the WebSocket-side advertisement) is independent of `config.require_auth_token`, which it names 'the REST API token toggle' — the two auth surfaces (WebSocket NIP-42, REST NIP-98) are gated by separate configuration."
     entry_class: FACT
     evidence:
