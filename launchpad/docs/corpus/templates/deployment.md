@@ -532,6 +532,11 @@ to declare once its siblings exist:
   ("source is the concrete realization of target, e.g. a template instance of a
   standard") for a template pointing at its governing standard. #1312 is unmerged
   today and this relationship would not resolve in CI.
+- **`implements`**, targeting `corpus-template-deployment` (this template's own
+  id), once this node is merged. `relationships.schema.json` names *"a template
+  instance of a standard"* as `implements`' own worked example — the same edge
+  the corpus's other templates declare toward their own template node, in place
+  of a weaker `references` edge.
 
 **Whether a deployment document should also declare `part-of` targeting an
 architecture-context node was considered and deliberately left open.** The
