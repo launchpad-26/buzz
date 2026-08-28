@@ -140,8 +140,8 @@ Work down this list. **The first "yes" wins.** Do not reorder it.
 | 2 | Does something **exist and behave incorrectly**? | **Bug** | You ran it and observed the failure |
 | 3 | Does something **exist and work, but insufficiently**? | **Enhancement** | Behaviour is correct, just not good enough |
 | 4 | Is it a **problem statement with evidence**, whose delivery spans more than one capability? | **PRD** | It states why; features deliver it |
-| 5 | Does it need **child issues** to finish? | **Feature** | One demonstrable capability; holds acceptance criteria and decomposes into tasks |
-| 6 | Otherwise | **Task** | One agent, one branch, one PR |
+| 5 | Does it need **child issues** to finish? | **Feature** | One demonstrable capability; holds acceptance criteria, decomposes into tasks, **and is the unit that gets a PR** |
+| 6 | Otherwise | **Task** | One agent, one branch. Its changes land in its Feature's batch PR, not a PR of its own |
 
 ADR is first on purpose: **decisions masquerade as work.** "Pick a config management
 tool" looks like a Task until you notice nothing ships when it closes.
@@ -151,8 +151,9 @@ tool" looks like a Task until you notice nothing ships when it closes.
 ```
 Milestone  (a dated, demonstrable outcome)
 └── PRD                    problem, evidence, success criteria — the why
-    ├── Feature            one demonstrable capability; holds acceptance criteria
-    │   ├── Task           executable child: one branch, one PR
+    ├── Feature            one demonstrable capability; holds acceptance criteria.
+    │                      THE PR UNIT — its children land in one batch PR (§7)
+    │   ├── Task           executable child: one branch, batched into the Feature's PR
     │   ├── Bug            found while building this feature
     │   └── ADR            a decision only this feature depends on
     ├── ADR                an open question the PRD cannot proceed without,
@@ -168,15 +169,16 @@ remains valid history — do not re-parent closed or in-flight work.
 1. **An ADR is never a work item and never has children.** Work a decision creates is
    filed separately afterwards and linked back.
 2. **A PRD's open questions are raised as ADR issues, parented to that PRD.** Link it
-   the same way as for a Task — see §5's "Filing an issue" for the actual mechanism,
-   since `gh issue create` has no `--parent` flag. An open question that stays in a PRD
-   body is invisible on the board, and gets decided by accident inside whichever task
-   hits it first — which buries a decision with real consequences in a task nobody reads
-   again. An ADR that no PRD raised is filed standalone.
+   the same way as for a Task, with `gh issue create --parent`. An open question that
+   stays in a PRD body is invisible on the board, and gets decided by accident inside
+   whichever task hits it first — which buries a decision with real consequences in a
+   task nobody reads again. An ADR that no PRD raised is filed standalone.
 3. **A resolved ADR is written to `launchpad/decisions/ADR-XXXX-slug.md` in the same PR
    that closes its issue.** A decision that exists only in a closed issue is lost to the
    noise. Closing the issue without writing the document is not done. This does not make
    an ADR a work item — no code or config moves; the decision record is the only artifact.
+   An agent may fill the *Decision outcome* only under §5's delegated authority, quoting
+   the deciding human verbatim; on its own judgement, never.
 4. **A Task never has children.** If a Task grows children, it was a Feature — relabel it.
 5. **Bug and Enhancement** are children of a PRD if found while building it, standalone
    if found later against shipped work.
@@ -184,6 +186,10 @@ remains valid history — do not re-parent closed or in-flight work.
    Enhancement.** Comment on the PRD instead. Without this rule, Enhancement becomes the
    dumping ground for "we didn't finish", and PRDs look done while their gaps live in a
    parallel queue.
+7. **A deferred blocker is a child of the Feature whose batch PR merged past it**, filed
+   as a Bug or Task with the `deferred-blocker` label — never as an Enhancement, which
+   rule 6 already forbids for unshipped work. It cites the PR that deferred it, and its
+   Feature cannot close while it is open (§7).
 
 ### When to raise at all
 
@@ -217,16 +223,21 @@ carries both fields when it's both scheduled and part of a larger outcome.
 
 These are hard constraints, not style preferences.
 
-1. **Draft everything. Approve nothing.** You may write any issue, PR, or ADR in full.
-   You may not decide an ADR outcome, approve a PR, or close another agent's escalation.
-   Raise concerns; never clear them.
+1. **Draft on your own authority. Decide only on a human's.** You may write any issue,
+   PR, or ADR in full. You may not decide an ADR outcome, approve a PR, merge one, or
+   close another agent's escalation **on your own judgement** — those four are a human's
+   to make. Three of them you may *exercise on a human's behalf*, under the delegated
+   authority below; closing another agent's escalation is never delegable, because the
+   agent that raised it is not the one who should clear it.
 2. **When the type is unclear, file a Task, add `needs-triage`, and say so in the
    Objective.** Never guess silently between PRD and Task — misfiling a PRD as a Task
    hides an approval gate.
 3. **Add `by:agent`** to every issue and PR you create. Agents run under a human's
    token, so GitHub's author field cannot distinguish us. The label restores that signal.
-4. **Never claim a check you did not run.** Do not write "tests pass". Paste the command
-   and its raw output. If you could not run something, say so in *Not verified*.
+4. **Never claim a check you did not run, or an instruction you did not receive.** Do not
+   write "tests pass". Paste the command and its raw output. If you could not run
+   something, say so in *Not verified*. The same standard governs a quoted instruction:
+   quote it, link where the human said it, or do not claim it.
 5. **Never invent sections.** Fill the template's fields. If a field does not apply,
    write `N/A - <one-line reason>`.
 6. **Do not fabricate.** No invented file paths, issue numbers, model names, or command
@@ -240,6 +251,61 @@ These are hard constraints, not style preferences.
    changes what the figures mean and belongs at the top. A caveat present but sitting
    below the conclusion it qualifies reads as agreement to everyone who stops at the
    headline.
+
+### Acting on a human's instruction
+
+Rule 1 withholds four acts. Three of them — deciding an ADR outcome, approving a PR,
+merging one — you may exercise **on a human's behalf**, under
+[ADR-0052](decisions/ADR-0052-delegated-authority-and-feature-batching.md). All five
+conditions below hold together, or you do not have the authority:
+
+1. **A human explicitly instructed the specific action, in this session.** Standing
+   permission does not exist. "While you're in there" does not accumulate, and an
+   instruction to approve one PR is not an instruction to approve the next one.
+2. **Quote the instruction verbatim in the artifact, and name who gave it.** The review
+   body, the merge commit, or the ADR *Decision outcome* carries the quote; the
+   provenance table's *Initiating human* row names the person. **A chat session is not a
+   record** — it is not addressable, not durable, and not readable by whoever audits this
+   later, which is why the quote is copied into the artifact rather than pointed at.
+   Linking a comment as well is fine and sometimes useful, but it is not required: while
+   you run under a human's token, a comment you link carries the same authorship as the
+   body it sits beside, so it adds no attribution. If the only place the instruction exists is a
+   conversation, ask for it as a comment first.
+3. **Below 75% confidence in what is being asked, stop and ask.** Guessing at intent
+   while holding a merge button is how unreviewed work lands. A clarifying question
+   costs a minute.
+4. **Scope is exactly what was instructed.** One instruction, one action. One ruling,
+   one ADR question. One approval, one PR.
+5. **Say what you did.** The artifact names itself as agent-exercised and names the
+   instructing human. An approval that does not is invalid — see ADR-0052 part B, and
+   the reason it exists: an automated approval indistinguishable from a person's is the
+   specific thing ADR-0019 refused, and being distinguishable is how that objection is
+   answered rather than ignored.
+
+**Never route around the platform.** Delegated authority is permission to act inside
+GitHub's gates, never around them. Concretely, and none of these is negotiable:
+
+- **No `gh pr merge --admin`**, and no other bypass of branch protection. Your token holds
+  admin and `enforce_admins` is off, so you *can*. That is not permission.
+- **Do not approve or merge while checks are failing or still running.** Prefer
+  `gh pr merge --auto` and let the platform merge when the gates go green.
+- **Do not dismiss reviews, force-push over a review, or change branch protection,
+  required checks or rulesets** to get a change in.
+- **A blocked merge is an answer.** Fix the change or escalate to a human. Reaching for a
+  stronger credential is the failure mode this whole record exists to prevent — on
+  2026-08-28, 132 pull requests were merged with `--admin` past 77 changes-requested
+  reviews and unresolved CI, and that is the event ADR-0052 cites as its own motivation.
+
+**Quoting is the load-bearing part, and it is the part nothing can check.** No script
+verifies that a quote matches what was said; rule 6 is the only control, and it is
+unenforceable. Do not paraphrase, do not tidy, do not repair grammar. A dictated
+instruction is quoted with its transcription noise intact — the noise is evidence that
+the quote was not composed after the fact.
+
+**What this does not extend to.** Nothing here grants authority over a live host. In
+`launchpad-26/buzz-infrastructure` that is governed by its own §6 rules 7 and 8 and by
+ADR-0015, all unchanged. Delegated review authority is authority over a diff, not over a
+machine.
 
 ### Filing an issue
 
@@ -256,29 +322,22 @@ an `AGENT INSTRUCTIONS` comment block — read it.
 gh issue create \
   --title "task: add Redis role to the relay playbook" \
   --body-file /tmp/issue.md \
-  --label type:task --label area:deploy --label by:agent
+  --label type:task --label area:deploy --label by:agent \
+  --parent 587
 ```
 
-**`gh issue create` has no `--parent` flag** — confirmed absent from `gh issue create
---help` in gh 2.93.0, and passing it aborts at argument parsing before the issue is
-created. To create a real GitHub sub-issue link, create the issue first, then link it
-in a second step using the REST sub-issues endpoint. It takes the child's **database
-`id`** (not its issue number) as a typed integer — `gh api -F`, not `-f`:
+**`--parent` creates a real GitHub sub-issue link.** Use it for every Task under a
+Feature, every Feature under a PRD, and every ADR raised from a PRD's or Feature's open
+questions. Only an ADR that nothing raised is filed without one.
 
-```bash
-link_child() {  # $1 = child issue number, $2 = parent issue number
-  local sub_id
-  sub_id=$(gh api "repos/launchpad-26/buzz/issues/$1" --jq .id)
-  gh api -X POST "repos/launchpad-26/buzz/issues/$2/sub_issues" -F "sub_issue_id=$sub_id"
-}
-```
+Verify the link by listing sub-issues afterwards:
+`gh api repos/launchpad-26/buzz/issues/<parent>/sub_issues --jq '.[].number'`.
 
-The POST response is the **parent** issue, so reading `.number` off it reports the parent
-for every child and looks identical whichever child was passed — verify the link by
-listing sub-issues afterwards instead: `gh api repos/launchpad-26/buzz/issues/<parent>/sub_issues --jq '.[].number'`.
-
-Use this for every Task under a PRD, and for every ADR raised from a PRD's open
-questions. Only an ADR that no PRD raised is filed without one.
+A note on history, because this file said the opposite until 2026-08-28: `--parent` was
+genuinely absent from `gh issue create` at 2.93.0, and the workaround here was a two-step
+POST to the REST sub-issues endpoint with the child's database id. The flag exists as of
+2.98.0. If you are on an older `gh` and the flag is rejected, upgrade rather than
+reviving the workaround.
 
 **Filing an ADR from the CLI does not apply its template's `needs-decision` label.**
 `.github/ISSUE_TEMPLATE/05-adr.yml` declares it, but issue-form template labels apply
@@ -316,19 +375,52 @@ gh pr create --base launchpad
   `Signed-off-by` trailer.
 - **Conventional commit titles**: `feat(deploy): ...`, `fix(ci): ...`, `docs(...): ...`.
   We squash-merge, so the **PR title** becomes the commit subject on `launchpad`.
-- **One issue, one PR.** Use a closing keyword — `Closes #12` — so the board updates on
-  merge. If the PR genuinely completes nothing — a plan, one step of a larger task, a
-  docs correction — use `Refs #12` instead. Both satisfy the PR body check; only
-  `Closes` moves the board, so do not reach for it to make a check go green.
-  **Write the reference as plain text, not inside backticks or a code block.** GitHub
-  creates no link from a reference inside code, so one written there closes nothing.
-- **The `launchpad` branch is protected.** PRs require **at least two approving reviews
-  from reviewers with write access**, and you cannot approve your own. The ruleset that
-  enforces this is not readable without `admin:org` — `rules/branches/launchpad`,
-  `rulesets` and `branches/launchpad/protection` all report nothing. A live PR's
-  `reviewDecision` confirms that review is *required* (`REVIEW_REQUIRED`) but exposes no
-  count; the figure of two comes from GitHub's merge box on an open PR, which is the only
-  place it is stated without admin.
+  - **Open, and not decided by ADR-0052:** squashing a batch of 10 Tasks into one commit
+    collapses per-Task history and makes `git bisect` coarser. Until it is settled, keep
+    one commit per child Task on the branch so the history exists to preserve if the
+    answer turns out to be a merge commit.
+- **One Feature, one PR.** A Feature is the PR-worthy unit: the child Tasks of one
+  Feature land in one batch PR, not one PR each. Name the Feature in the PR body's
+  `### Feature` section, and carry one closing keyword per child — `Closes #12`, one per
+  line. Every issue a batch closes must be a child of the Feature it names, or be that
+  Feature; the PR body check enforces it.
+  - **The batch is capped: 1,500 added lines or 10 changed files, whichever binds
+    first.** A Feature above the cap splits into sequential batch PRs rather than one
+    oversized PR. Features here run 15–41 children, so an uncapped batch would be
+    ~16,000 additions across ~80 files — fewer PRs bought at the price of a review
+    nobody can actually perform.
+  - If a PR genuinely completes nothing — a plan, one step, a docs correction — use
+    `Refs #12`. Both satisfy the PR body check; only `Closes` moves the board, so do not
+    reach for it to make a check go green.
+  - **Write every reference as plain text, not inside backticks or a code block.**
+    GitHub creates no link from a reference inside code, so one written there closes
+    nothing — and a check that text-searches without stripping fences will pass it
+    anyway.
+- **A blocker becomes a deferred issue; the merge proceeds.** A defect found while
+  preparing or reviewing a batch is filed as a child of that PR's Feature, labelled
+  `deferred-blocker`, and named in the PR body's `### Deferred blockers` section. Then
+  merge. Deferring anything OUTSIDE the never-deferrable list below is pre-authorised
+  by ADR-0052 and needs no per-case instruction; the four classes in that list are
+  never deferrable at all, with or without an instruction.
+  - **Four classes are never deferrable, and the list is closed:** a credential, secret
+    or password hash in the diff; a disclosure-boundary violation; a failing
+    deterministic check; anything that leaves `launchpad` broken for other agents. The
+    first two are unrecoverable once merged — a pushed secret is on every clone and
+    rotation becomes the remedy. The third is the one thing permitted to gate. The
+    fourth is how one merge becomes everyone's problem.
+  - **A Feature may not close while it holds open `deferred-blocker` issues**, and a
+    Feature holding more than five has its next batch refused. Without that ceiling this
+    rule reproduces the parallel queue §4's rule 6 forbids.
+- **`launchpad` is protected, and thinner than this file used to claim.** Measured
+  2026-08-28 via `repos/launchpad-26/buzz/branches/launchpad/protection`, which *is*
+  readable: **one** approving review is required — not two — `dismiss_stale_reviews` is
+  on, `required_status_checks` is **empty**, `enforce_admins` is **off**, and push is
+  restricted to 11 users. ADR-0019 recorded the count as 1 back on 2026-08-21; the "two
+  approving reviews" figure in this file came from a merge box read on 2026-08-13 and was
+  already wrong. Note what an empty required-checks list means: the nine checks you see
+  on a PR are informational, and marking them required waits on #153 and #146.
+  - `dismiss_stale_reviews` matters more under batching: every push to a long-lived
+    Feature branch dismisses the approval you just earned.
 - **Do not force-push during review.** Push new commits instead — force-pushing hides
   what changed from the reviewer.
 - **Run `gh repo set-default launchpad-26/buzz` once per clone, before the first

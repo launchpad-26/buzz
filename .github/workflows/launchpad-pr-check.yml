@@ -7,6 +7,7 @@ on:
 permissions:
   contents: read
   pull-requests: read
+  issues: read
 
 jobs:
   check:
@@ -24,8 +25,8 @@ jobs:
       # which this workflow deliberately does not use.)
       #
       # The real boundary is elsewhere, and it is enough: a fork-triggered run gets
-      # a read-only GITHUB_TOKEN with no repository secrets, and merging needs two
-      # approving reviews from people with write access. A defeated body check
+      # a read-only GITHUB_TOKEN with no repository secrets, and merging needs an
+      # approving review from someone with write access. A defeated body check
       # misleads a reviewer; it cannot merge anything or write anywhere.
       - uses: actions/checkout@v4
         with:
@@ -69,11 +70,54 @@ jobs:
             echo "::warning::Could not read closingIssuesReferences; the check will degrade to a text search and will not verify that the board updates on merge."
           fi
 
+      # ADR-0052: a batch PR closes the children of one Feature. The membership test
+      # needs that Feature's child list, and the same reasoning as the step above
+      # applies — ask GitHub, do not infer. The Feature number is parsed from the body
+      # here rather than in the script so the script stays free of network calls and
+      # testable without fixtures.
+      #
+      # An empty FEATURE_CHILDREN reads as "unknown", not "no children", and the script
+      # reports the membership check as unverified rather than passing it quietly.
+      - name: Ask GitHub which issues belong to the named Feature
+        id: feature
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          OWNER: ${{ github.repository_owner }}
+          REPO: ${{ github.event.repository.name }}
+          BODY: ${{ github.event.pull_request.body }}
+        run: |
+          set -uo pipefail
+          # First "#<n>" under the "### Feature" heading, ignoring an N/A answer.
+          # Strip HTML comments FIRST. Both PR templates carry a literal "#1234" example
+          # inside the comment under "### Feature"; without this the next grep returns
+          # 1234 and the whole membership check validates against an unrelated issue.
+          # The heading pattern mirrors pr_body_check.py's section() — any heading depth,
+          # optional whitespace — so the two parsers cannot disagree about what counts as
+          # the Feature section.
+          fnum="$(printf '%s' "$BODY" \
+            | perl -0777 -pe 's/<!--.*?-->//gs' \
+            | awk '/^#+[[:space:]]*Feature[[:space:]]*$/{f=1;next} /^#+[[:space:]]*[A-Za-z]/{f=0} f' \
+            | grep -oE '#[0-9]+' | head -1 | tr -d '#')" || fnum=""
+          if [ -z "${fnum:-}" ]; then
+            echo "children=" >> "$GITHUB_OUTPUT"
+            echo "No Feature number in the body; membership check will be skipped."
+            exit 0
+          fi
+          children="$(gh api "repos/$OWNER/$REPO/issues/$fnum/sub_issues?per_page=100" \
+            --jq '[.[].number]' 2>/dev/null)" || children=""
+          echo "children=${children}" >> "$GITHUB_OUTPUT"
+          if [ -z "$children" ]; then
+            echo "::warning::Could not read sub-issues for Feature #${fnum}; the batch membership check will report itself unverified."
+          fi
+
       - name: Validate PR body
         env:
           BODY: ${{ github.event.pull_request.body }}
           LABELS: ${{ toJSON(github.event.pull_request.labels.*.name) }}
           CLOSING_REFS: ${{ steps.closing.outputs.refs }}
+          FEATURE_CHILDREN: ${{ steps.feature.outputs.children }}
+          PR_ADDITIONS: ${{ github.event.pull_request.additions }}
+          PR_CHANGED_FILES: ${{ github.event.pull_request.changed_files }}
         run: python3 launchpad/scripts/pr_body_check.py
 
   # The controls for launchpad/scripts/. A suite that runs only on the author's

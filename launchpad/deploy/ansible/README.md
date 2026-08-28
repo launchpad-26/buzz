@@ -7,7 +7,9 @@ entire reason the VM's starting state is kept identical to the VPS's.
 Pending ratification of **ADR #24**, which bundles three questions: config-management tool,
 Ubuntu baseline, and runtime shape. Proceeding here answers all three de facto (Ansible, noble,
 containers via `deploy/compose/`) — every one of which is that ADR's *expected* option, but
-`launchpad/AGENTS.md` rule 1 is "draft everything, approve nothing," so the cohort still ratifies.
+`launchpad/AGENTS.md` rule 1 is "draft on your own authority, decide only on a human's" —
+an agent may act on an explicit quoted instruction (ADR-0052) but never decide alone, so
+the cohort still ratifies.
 
 ## Scope right now
 
