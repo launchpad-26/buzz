@@ -10,6 +10,11 @@ supersedes: none
 
 ## Decision
 
+**Option E.** `knowledge.find(query)` and `knowledge.ask(text)` — the two of #211's
+seven methods with an unbounded free-text input domain — are permanently out of scope
+for the shipped knowledge crate. #1400 (the task that would have implemented them)
+closes as won't-do rather than staying open against a design nobody is committing to
+build. `#211`'s existing Python implementation of both methods stays in the tree,
 **Option E.** `knowledge.find(query)` — one of #211's seven methods — and
 `knowledge.ask(text)` — a separate eighth entry point that shares `find`'s routing
 rather than being one of the seven (`CONTRACT.md`: "an eighth public function, not one
@@ -91,6 +96,9 @@ written.
 
 - Ruling 11 and Ruling 12 both continue to hold as ratified by ADR-0027; this decision
   does not reopen or reinterpret either.
+- `find`/`.ask` are the only two of #211's seven methods with an unbounded input
+  domain — the other six are keyed on a symbol, an area, or a task name, and all six
+  already return correct content from the packaged corpus.
 - `find` (one of #211's seven methods) and `ask` (a separate eighth entry point that
   shares `find`'s routing, not one of the seven) are the only two surfaces with an
   unbounded input domain — the other six methods are keyed on a symbol, an area, or a
@@ -105,6 +113,9 @@ written.
   (A) or as a called sidecar (C) — inherits that gap; Option B would too, since it
   reuses the same computation, only relocated.
 - `#533`'s own milestone entry is scoped Effort: Low against a 2026-09-11 date. Six of
+  seven methods already ship real, working capability; the concrete cases an agent
+  actually asks (explain a symbol, its dependencies, impact, setup, conventions,
+  history) are already covered.
   seven methods already work end-to-end in `#211`'s Python prototype — real, tested
   capability, not yet packaged into the shipped crate (`#551`/`#552`); the concrete
   cases an agent actually asks (explain a symbol, its dependencies, impact, setup,
@@ -144,6 +155,8 @@ written.
 ## Consequences
 
 **Good.** #1400 stops carrying an undecided architecture question inside a Task's
+Definition of done. The project board reflects reality: six methods ship, one is
+permanently out of scope, instead of an open task against a design nobody is building.
 Definition of done. The project board reflects reality: six of #211's seven methods are
 implemented and validated in the Python prototype awaiting crate packaging, while `find`
 — the seventh — and the separate `ask` entry point are both permanently out of scope,

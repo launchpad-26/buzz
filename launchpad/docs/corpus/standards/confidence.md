@@ -68,6 +68,9 @@ evidence:
   - statement: "An INFERENCE whose citation supports the subject of the claim but not the choice the claim makes is a decision in disguise, and belongs in TEAM_KNOWLEDGE attributed to whoever decided it."
     entry_class: TEAM_KNOWLEDGE
     provided_by: "launchpad-26/buzz#636 cross-model final review, relayed in the #1309 task brief: a second INFERENCE on AGENTS.md was rejected as laundering an unsourced policy choice into a class that made it look derived, and was reclassified to TEAM_KNOWLEDGE attributed to the issue's definition of done"
+---
+
+# Standard: `confidence`
   - statement: "Per Serina's decision on launchpad-26/buzz#1486, this node reconciles to #1313's documentation-standard: the H1 no longer code-formats the topic, and the normative sections are named MUST and SHOULD rather than Requirements and Guidance."
     entry_class: TEAM_KNOWLEDGE
     provided_by: "launchpad-26/buzz#1486, decided 2026-08-27"
@@ -148,6 +151,7 @@ it feels about right, and a reader — or a generated view, or a later agent —
 as calibrated and reasons onward from it. The number then carries more weight than
 anything that produced it. Everything below is aimed at that.
 
+## Requirements
 ## MUST
 
 These are MUSTs. The first two are enforced mechanically. Requirement 3 is a MUST that
@@ -173,6 +177,7 @@ review, and a reviewer who lets one through has approved a defect.
    it to TEAM_KNOWLEDGE and name who decided. See *Reasoning versus deciding*.
 6. **A number MUST NOT be moved because someone pushed back on it.** Re-verify the claim
    or reclassify the entry. Adjusting the number to settle an argument records agreement
+   where there was none. Re-encoding an existing value onto the band values in *Guidance*
    where there was none. Re-encoding an existing value onto the band values in *SHOULD*
    is not a move under this rule, but do not tell yourself nothing changed: snapping to a
    peg preserves the assessment while it can and does alter the entry's **rank** against
@@ -184,6 +189,7 @@ review, and a reviewer who lets one through has approved a defect.
    in the same edit.** A number that outlived the reasoning it rated is worse than no
    number, because it still looks current.
 
+## Guidance
 ## SHOULD
 
 These are SHOULDs. Depart from them with a reason.
@@ -387,6 +393,7 @@ edge to make first.
 
 **Expected but not verified when this node was written:**
 
+- **The bands in *Guidance*, and the values `0.8` / `0.6` / `0.4`, are not derived from
 - **The bands in *SHOULD*, and the values `0.8` / `0.6` / `0.4`, are not derived from
   anything.** They are a proposed convention for keeping values coarse, offered because
   unbounded precision is the observed failure. No study, no sample, and one authored
