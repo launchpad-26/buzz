@@ -377,10 +377,11 @@ class StagesShapeError(ValueError):
     not a list, or carrying an entry that is not an object with a string
     ``name``.
 
-    Absent is legal and stays legal: #117 emits no top-level ``stages`` key
-    at all, so "no manifest yet" is the normal case. What is refused is a
-    manifest that exists in a shape this stage cannot honour. Treating that
-    as absent -- which both readers previously did -- loses data twice over:
+    Absent is legal and stays legal: this stage does not assume its producer
+    always populates ``stages``, so "no manifest yet" must still read as
+    clean rather than refused. What is refused is a manifest that exists in
+    a shape this stage cannot honour. Treating that as absent -- which both
+    readers previously did -- loses data twice over:
     the re-run guard has nothing to scan so a duplicate ``adjudication``
     entry slips through, and every entry already recorded is dropped, so a
     ``blocked`` pre-flight disappears and the document publishes as

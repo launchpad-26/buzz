@@ -157,8 +157,10 @@ class BuildDocumentShapeTests(unittest.TestCase):
         )
         self.assertEqual(
             set(doc.keys()),
-            {"pr", "merge_base_sha", "head_sha", "stages", "reports", "containment", "nonce"},
-            {"pr", "merge_base_sha", "head_sha", "reviewer", "reports", "containment", "nonce"},
+            {
+                "pr", "merge_base_sha", "head_sha", "stages", "reviewer",
+                "reports", "containment", "nonce",
+            },
         )
         # `reviewer` records WHICH reviewer produced the document, so publish.py
         # can tell a real clean pass from the stub's unconditional one. See
