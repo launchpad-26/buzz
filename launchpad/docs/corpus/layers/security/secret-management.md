@@ -82,9 +82,11 @@ evidence:
       - "crates/buzz-relay/src/main.rs"
       - "crates/buzz-relay/src/config.rs"
     confidence: 0.6
-  - statement: "Issue #1175 scopes this node to secrets other than identity private keys -- relay operator env vars, database credentials, API keys for third-party services, and Kubernetes Secrets in the deploy path -- and names #1110/#1112 as the separate task covering identity private keys."
-    entry_class: TEAM_KNOWLEDGE
-    provided_by: "launchpad-26/buzz#1175 issue body"
+  - statement: "This node scopes itself to secrets other than identity private keys -- relay operator env vars, database credentials, API keys for third-party services, and Kubernetes Secrets in the deploy path -- and treats #1110/#1112 as the separate task covering identity private keys; issue #1175's own body states neither the exclusion nor the #1110/#1112 attribution, which comes from the author's planning analysis for this task instead."
+    entry_class: INFERENCE
+    evidence:
+      - "launchpad/plans/2026-08-28-issue-1175-security-secret-management.md"
+    confidence: 0.7
 relationships:
   - type: references
     target: architecture-deployment-kubernetes
@@ -222,8 +224,8 @@ per-agent signing key) and `BUZZ_RELAY_PRIVATE_KEY` (the relay's own posting
 identity) are both `nsec`-format Nostr private keys, cryptographically and
 in custody terms identical to any other identity private key this corpus
 covers. Their cryptographic handling, formats, and desktop-side keyring
-storage are explicitly out of scope for this node -- issue #1175 names
-#1110/#1112 (`layers/identity/private-key.md`) as the task that owns them.
+storage are explicitly out of scope for this node -- #1110/#1112
+(`layers/identity/private-key.md`) is treated as the task that owns them.
 That node is unmerged at this node's recorded revision, so no
 `relationships` edge targets it; a future edit to this node, once it lands,
 should add one.
