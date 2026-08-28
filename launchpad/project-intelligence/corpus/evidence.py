@@ -1,0 +1,336 @@
+"""Git and GitHub evidence bundle collection for corpus nodes -- issue #625.
+
+Assembles a reproducible bundle of evidence for ONE planned corpus node: code,
+tests and specs read from this repository, plus commits, pull-request reviews,
+pull-request comments and issue discussion pulled through a `GitHubClient`.
+This is a working-notes artifact for whoever authors the node next (issue
+#629's corpus-author skill) -- it is not the node's own front-matter
+`evidence:` ledger, and it does not itself classify anything FACT, INFERENCE
+or TEAM_KNOWLEDGE. `launchpad/docs/corpus/AGENTS.md` reserves that judgment
+for whoever opens the sources and writes the node.
+
+What this module guarantees instead, per #625's definition of done:
+
+- Every entry carries a stable identifier (a repo-relative path, a commit
+  SHA, a `pr:<n>`/`issue:<n>` reference, or a comment id) and a URL where one
+  exists, never unattributed copied prose.
+- `evidence_class` keeps code, commits, PR reviews, PR comments, issue
+  discussion and ADRs distinguishable from each other.
+- `fact_eligible` is always `False` for the three discussion classes
+  (`pr_review`, `pr_comment`, `issue_discussion`) -- historical discussion can
+  be bundled for context, but this module never marks it eligible for
+  promotion to `FACT`; only a human opening the source does that, and only
+  for classes where opening the source means something (code, tests, specs,
+  commits, ADRs).
+- Two entries sharing a `claim_key` with different `value`s are always
+  surfaced in `conflicts`, never silently resolved -- `AGENTS.md`'s citation
+  of ADR-0029: "record the conflict and leave the node flagged for a human
+  rather than resolving it yourself."
+- A code/test/spec path matching a credential-shaped name is refused, not
+  bundled -- the same short, exact list `validate.py` uses, not a broad
+  substring guess (see `_is_credential_like_path`).
+
+Run as a library, not a CLI -- callers (the future corpus-author skill,
+tests) construct entries with `collect_*` and assemble them with
+`build_bundle`. There is no `main()`.
+"""
+
+from __future__ import annotations
+
+import json
+import subprocess
+from dataclasses import dataclass, field
+from pathlib import Path, PurePosixPath
+
+# The same short, exact credential-shaped list validate.py uses (see its
+# _is_prohibited_citation) -- deliberately not broad substrings like
+# *auth*/*token*/*secret*, which would reject real, ordinary, non-secret
+# paths such as crates/buzz-auth/. Kept in sync by hand; both modules cite
+# the same rationale so a future edit to one is a prompt to check the other.
+_CREDENTIAL_LIKE_BASENAME_PREFIXES = ("id_rsa", "id_ed25519")
+_CREDENTIAL_LIKE_EXTENSIONS = {".pem", ".key"}
+_ENV_SAFE_SUFFIXES = (".example", ".sample", ".template")
+
+# Discussion classes never eligible for FACT promotion by this module --
+# opening the source (a review or a comment) never establishes present
+# repository truth, only that someone said something at some point.
+# Code/test/spec/commit/ADR classes ARE eligible -- eligible, not
+# automatically FACT; the author still has to open the source, per
+# AGENTS.md.
+_TEAM_KNOWLEDGE_ONLY_CLASSES = {"pr_review", "pr_comment", "issue_discussion"}
+
+_VALID_CLASSES = {
+    "code",
+    "test",
+    "spec",
+    "commit",
+    "pr_review",
+    "pr_comment",
+    "issue_discussion",
+    "adr",
+}
+
+
+class ProhibitedPathError(Exception):
+    """A caller tried to bundle a credential-shaped path as evidence."""
+
+
+def _is_credential_like_path(path: str) -> bool:
+    name = PurePosixPath(path).name
+    if name == ".env":
+        return True
+    if name.startswith(".env.") and not name.endswith(_ENV_SAFE_SUFFIXES):
+        return True
+    if any(name.startswith(prefix) for prefix in _CREDENTIAL_LIKE_BASENAME_PREFIXES):
+        return True
+    return PurePosixPath(name).suffix in _CREDENTIAL_LIKE_EXTENSIONS
+
+
+@dataclass(frozen=True)
+class EvidenceEntry:
+    evidence_class: str
+    claim_key: str
+    value: str
+    source_id: str
+    url: str | None
+    fact_eligible: bool
+
+    def __post_init__(self) -> None:
+        if self.evidence_class not in _VALID_CLASSES:
+            raise ValueError(f"unknown evidence_class: {self.evidence_class!r}")
+        expected_fact_eligible = self.evidence_class not in _TEAM_KNOWLEDGE_ONLY_CLASSES
+        if self.fact_eligible != expected_fact_eligible:
+            raise ValueError(
+                f"fact_eligible={self.fact_eligible!r} is inconsistent with "
+                f"evidence_class={self.evidence_class!r}; construct entries "
+                "through the collect_* helpers, which set this correctly"
+            )
+
+
+@dataclass
+class EvidenceBundle:
+    entries: list[EvidenceEntry] = field(default_factory=list)
+    conflicts: list[dict] = field(default_factory=list)
+
+    def to_json(self) -> str:
+        payload = {
+            "entries": [
+                {
+                    "evidence_class": e.evidence_class,
+                    "claim_key": e.claim_key,
+                    "value": e.value,
+                    "source_id": e.source_id,
+                    "url": e.url,
+                    "fact_eligible": e.fact_eligible,
+                }
+                for e in sorted(self.entries, key=lambda e: (e.claim_key, e.evidence_class, e.source_id))
+            ],
+            "conflicts": sorted(self.conflicts, key=lambda c: c["claim_key"]),
+        }
+        return json.dumps(payload, indent=2, sort_keys=True) + "\n"
+
+
+class GitHubClient:
+    """Thin wrapper over `gh api`, read-only. Override for tests -- see FakeGitHubClient."""
+
+    def _get(self, path: str) -> dict:
+        out = subprocess.run(
+            ["gh", "api", path],
+            capture_output=True,
+            text=True,
+            check=True,
+        )
+        return json.loads(out.stdout)
+
+    def get_commit(self, repo: str, sha: str) -> dict:
+        return self._get(f"repos/{repo}/commits/{sha}")
+
+    def get_pull_request(self, repo: str, number: int) -> dict:
+        return self._get(f"repos/{repo}/pulls/{number}")
+
+    def get_pull_request_reviews(self, repo: str, number: int) -> list[dict]:
+        return self._get(f"repos/{repo}/pulls/{number}/reviews")
+
+    def get_issue(self, repo: str, number: int) -> dict:
+        return self._get(f"repos/{repo}/issues/{number}")
+
+    def get_issue_comments(self, repo: str, number: int) -> list[dict]:
+        return self._get(f"repos/{repo}/issues/{number}/comments")
+
+
+def _resolve_contained_path(root: Path, path: str) -> Path:
+    """Resolve a repository-relative citation path, enforcing containment.
+
+    Mirrors `validate.py`'s `_classify_repo_path`. An earlier revision here
+    checked only `(root / path).exists()`, so `../../../../etc/passwd`
+    escaped the repository entirely and a bare directory name like
+    `launchpad` passed as though it were a file -- pathlib's `/` operator
+    also silently discards the left operand when the right is absolute, so
+    an absolute path must be rejected explicitly rather than existence
+    checked. Containment is enforced on the RESOLVED path, not the literal
+    one, so a symlink pointing out of the tree is caught rather than
+    followed.
+    """
+    if PurePosixPath(path).is_absolute():
+        raise FileNotFoundError(f"no such file under repo root: {path}")
+    resolved_root = root.resolve()
+    try:
+        candidate = (resolved_root / path).resolve()
+    except (OSError, RuntimeError) as exc:
+        raise FileNotFoundError(f"no such file under repo root: {path}") from exc
+    if not candidate.is_relative_to(resolved_root):
+        raise FileNotFoundError(f"no such file under repo root: {path}")
+    if not candidate.is_file():
+        raise FileNotFoundError(f"no such file under repo root: {path}")
+    return candidate
+
+
+def collect_code_evidence(
+    root: Path,
+    path: str,
+    claim_key: str,
+    value: str,
+    *,
+    evidence_class: str = "code",
+    line: int | None = None,
+) -> EvidenceEntry:
+    """Bundle one repository-relative path (or `path:line`) as code/test/spec evidence."""
+    if evidence_class not in {"code", "test", "spec"}:
+        raise ValueError(f"collect_code_evidence only accepts code/test/spec, got {evidence_class!r}")
+    if _is_credential_like_path(path):
+        raise ProhibitedPathError(f"refusing to bundle credential-shaped path: {path}")
+    _resolve_contained_path(root, path)
+    source_id = f"{path}:{line}" if line is not None else path
+    return EvidenceEntry(
+        evidence_class=evidence_class,
+        claim_key=claim_key,
+        value=value,
+        source_id=source_id,
+        url=None,
+        fact_eligible=True,
+    )
+
+
+def collect_adr_evidence(root: Path, adr_path: str, claim_key: str, value: str) -> EvidenceEntry:
+    if _is_credential_like_path(adr_path):
+        raise ProhibitedPathError(f"refusing to bundle credential-shaped path: {adr_path}")
+    _resolve_contained_path(root, adr_path)
+    return EvidenceEntry(
+        evidence_class="adr",
+        claim_key=claim_key,
+        value=value,
+        source_id=adr_path,
+        url=None,
+        fact_eligible=True,
+    )
+
+
+def collect_commit_evidence(
+    repo: str, sha: str, claim_key: str, value: str, client: GitHubClient
+) -> EvidenceEntry:
+    commit = client.get_commit(repo, sha)
+    resolved_sha = commit.get("sha", sha)
+    return EvidenceEntry(
+        evidence_class="commit",
+        claim_key=claim_key,
+        value=value,
+        source_id=f"sha:{resolved_sha}",
+        url=commit.get("html_url"),
+        fact_eligible=True,
+    )
+
+
+def collect_pr_review_evidence(
+    repo: str, pr_number: int, claim_key: str, value: str, client: GitHubClient
+) -> list[EvidenceEntry]:
+    """One entry per review left on the PR -- reviews are the class DoD names, not general PR comments."""
+    reviews = client.get_pull_request_reviews(repo, pr_number)
+    entries = []
+    for review in reviews:
+        review_id = review.get("id")
+        entries.append(
+            EvidenceEntry(
+                evidence_class="pr_review",
+                claim_key=claim_key,
+                value=value,
+                source_id=f"pr:{pr_number}#review:{review_id}",
+                url=review.get("html_url"),
+                fact_eligible=False,
+            )
+        )
+    return entries
+
+
+def collect_pr_comment_evidence(
+    repo: str, pr_number: int, comment: dict, claim_key: str, value: str
+) -> EvidenceEntry:
+    """One entry for one already-fetched PR (issue-style) comment dict."""
+    comment_id = comment.get("id")
+    return EvidenceEntry(
+        evidence_class="pr_comment",
+        claim_key=claim_key,
+        value=value,
+        source_id=f"pr:{pr_number}#comment:{comment_id}",
+        url=comment.get("html_url"),
+        fact_eligible=False,
+    )
+
+
+def collect_issue_discussion_evidence(
+    repo: str, issue_number: int, claim_key: str, value: str, client: GitHubClient
+) -> list[EvidenceEntry]:
+    """The issue body plus every comment, each its own entry -- never merged into one blob."""
+    issue = client.get_issue(repo, issue_number)
+    entries = [
+        EvidenceEntry(
+            evidence_class="issue_discussion",
+            claim_key=claim_key,
+            value=value,
+            source_id=f"issue:{issue_number}",
+            url=issue.get("html_url"),
+            fact_eligible=False,
+        )
+    ]
+    for comment in client.get_issue_comments(repo, issue_number):
+        comment_id = comment.get("id")
+        entries.append(
+            EvidenceEntry(
+                evidence_class="issue_discussion",
+                claim_key=claim_key,
+                value=value,
+                source_id=f"issue:{issue_number}#comment:{comment_id}",
+                url=comment.get("html_url"),
+                fact_eligible=False,
+            )
+        )
+    return entries
+
+
+def find_conflicts(entries: list[EvidenceEntry]) -> list[dict]:
+    """Any two entries sharing a claim_key with a different value -- always reported, never resolved.
+
+    Per ADR-0029 as AGENTS.md cites it: "When two sources of the same claim
+    type conflict, stop: record the conflict... rather than resolving it
+    yourself." This function is the "record", not a resolver -- it ranks
+    nothing and picks no winner, regardless of evidence_class.
+    """
+    by_key: dict[str, list[EvidenceEntry]] = {}
+    for entry in entries:
+        by_key.setdefault(entry.claim_key, []).append(entry)
+
+    conflicts = []
+    for claim_key, group in by_key.items():
+        distinct_values = sorted({e.value for e in group})
+        if len(distinct_values) > 1:
+            conflicts.append(
+                {
+                    "claim_key": claim_key,
+                    "values": distinct_values,
+                    "source_ids": sorted(e.source_id for e in group),
+                }
+            )
+    return conflicts
+
+
+def build_bundle(entries: list[EvidenceEntry]) -> EvidenceBundle:
+    return EvidenceBundle(entries=list(entries), conflicts=find_conflicts(entries))
