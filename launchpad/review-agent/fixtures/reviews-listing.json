@@ -1,0 +1,1294 @@
+{
+  "_comment": "#119 STEP 1 -- two artefacts, never conflated. 'recorded_single_page' is the genuine GET /pulls/1421/reviews response (one review, this session's own). 'constructed_two_page' is built by replicating that SAME real object with distinct ids across two pages, so a marked review lands on page two only -- this is what proves find_existing's pagination, and it is CONSTRUCTED, never called recorded, per this plan's own honesty rule.",
+  "recorded_single_page": [
+    {
+      "id": 5014996076,
+      "node_id": "PRR_kwDOTv8O788AAAABKurEbA",
+      "user": {
+        "login": "serina-mcfall",
+        "id": 240091489,
+        "node_id": "U_kgDODk-BYQ",
+        "avatar_url": "https://avatars.githubusercontent.com/u/240091489?u=88323f14a5709f7a5b99bb20d21bd279d1cdb326&v=4",
+        "gravatar_id": "",
+        "url": "https://api.github.com/users/serina-mcfall",
+        "html_url": "https://github.com/serina-mcfall",
+        "followers_url": "https://api.github.com/users/serina-mcfall/followers",
+        "following_url": "https://api.github.com/users/serina-mcfall/following{/other_user}",
+        "gists_url": "https://api.github.com/users/serina-mcfall/gists{/gist_id}",
+        "starred_url": "https://api.github.com/users/serina-mcfall/starred{/owner}{/repo}",
+        "subscriptions_url": "https://api.github.com/users/serina-mcfall/subscriptions",
+        "organizations_url": "https://api.github.com/users/serina-mcfall/orgs",
+        "repos_url": "https://api.github.com/users/serina-mcfall/repos",
+        "events_url": "https://api.github.com/users/serina-mcfall/events{/privacy}",
+        "received_events_url": "https://api.github.com/users/serina-mcfall/received_events",
+        "type": "User",
+        "user_view_type": "public",
+        "site_admin": false
+      },
+      "body": "STEP 1 probe: updated body, second commit.",
+      "state": "COMMENTED",
+      "html_url": "https://github.com/launchpad-26/buzz/pull/1421#pullrequestreview-5014996076",
+      "pull_request_url": "https://api.github.com/repos/launchpad-26/buzz/pulls/1421",
+      "author_association": "MEMBER",
+      "_links": {
+        "html": {
+          "href": "https://github.com/launchpad-26/buzz/pull/1421#pullrequestreview-5014996076"
+        },
+        "pull_request": {
+          "href": "https://api.github.com/repos/launchpad-26/buzz/pulls/1421"
+        }
+      },
+      "submitted_at": "2026-08-25T04:39:04Z",
+      "commit_id": "f31f57bc3cd6e567be505b2b7d7e8b8f08f0f980"
+    }
+  ],
+  "constructed_two_page": {
+    "page_1": [
+      {
+        "id": 5014997076,
+        "node_id": "CONSTRUCTED_0",
+        "user": {
+          "login": "serina-mcfall",
+          "id": 240091489,
+          "node_id": "U_kgDODk-BYQ",
+          "avatar_url": "https://avatars.githubusercontent.com/u/240091489?u=88323f14a5709f7a5b99bb20d21bd279d1cdb326&v=4",
+          "gravatar_id": "",
+          "url": "https://api.github.com/users/serina-mcfall",
+          "html_url": "https://github.com/serina-mcfall",
+          "followers_url": "https://api.github.com/users/serina-mcfall/followers",
+          "following_url": "https://api.github.com/users/serina-mcfall/following{/other_user}",
+          "gists_url": "https://api.github.com/users/serina-mcfall/gists{/gist_id}",
+          "starred_url": "https://api.github.com/users/serina-mcfall/starred{/owner}{/repo}",
+          "subscriptions_url": "https://api.github.com/users/serina-mcfall/subscriptions",
+          "organizations_url": "https://api.github.com/users/serina-mcfall/orgs",
+          "repos_url": "https://api.github.com/users/serina-mcfall/repos",
+          "events_url": "https://api.github.com/users/serina-mcfall/events{/privacy}",
+          "received_events_url": "https://api.github.com/users/serina-mcfall/received_events",
+          "type": "User",
+          "user_view_type": "public",
+          "site_admin": false
+        },
+        "body": "STEP 1 probe: updated body, second commit.",
+        "state": "COMMENTED",
+        "html_url": "https://github.com/launchpad-26/buzz/pull/1421#pullrequestreview-5014996076",
+        "pull_request_url": "https://api.github.com/repos/launchpad-26/buzz/pulls/1421",
+        "author_association": "MEMBER",
+        "_links": {
+          "html": {
+            "href": "https://github.com/launchpad-26/buzz/pull/1421#pullrequestreview-5014996076"
+          },
+          "pull_request": {
+            "href": "https://api.github.com/repos/launchpad-26/buzz/pulls/1421"
+          }
+        },
+        "submitted_at": "2026-08-25T04:39:04Z",
+        "commit_id": "f31f57bc3cd6e567be505b2b7d7e8b8f08f0f980"
+      },
+      {
+        "id": 5014997077,
+        "node_id": "CONSTRUCTED_1",
+        "user": {
+          "login": "serina-mcfall",
+          "id": 240091489,
+          "node_id": "U_kgDODk-BYQ",
+          "avatar_url": "https://avatars.githubusercontent.com/u/240091489?u=88323f14a5709f7a5b99bb20d21bd279d1cdb326&v=4",
+          "gravatar_id": "",
+          "url": "https://api.github.com/users/serina-mcfall",
+          "html_url": "https://github.com/serina-mcfall",
+          "followers_url": "https://api.github.com/users/serina-mcfall/followers",
+          "following_url": "https://api.github.com/users/serina-mcfall/following{/other_user}",
+          "gists_url": "https://api.github.com/users/serina-mcfall/gists{/gist_id}",
+          "starred_url": "https://api.github.com/users/serina-mcfall/starred{/owner}{/repo}",
+          "subscriptions_url": "https://api.github.com/users/serina-mcfall/subscriptions",
+          "organizations_url": "https://api.github.com/users/serina-mcfall/orgs",
+          "repos_url": "https://api.github.com/users/serina-mcfall/repos",
+          "events_url": "https://api.github.com/users/serina-mcfall/events{/privacy}",
+          "received_events_url": "https://api.github.com/users/serina-mcfall/received_events",
+          "type": "User",
+          "user_view_type": "public",
+          "site_admin": false
+        },
+        "body": "STEP 1 probe: updated body, second commit.",
+        "state": "COMMENTED",
+        "html_url": "https://github.com/launchpad-26/buzz/pull/1421#pullrequestreview-5014996076",
+        "pull_request_url": "https://api.github.com/repos/launchpad-26/buzz/pulls/1421",
+        "author_association": "MEMBER",
+        "_links": {
+          "html": {
+            "href": "https://github.com/launchpad-26/buzz/pull/1421#pullrequestreview-5014996076"
+          },
+          "pull_request": {
+            "href": "https://api.github.com/repos/launchpad-26/buzz/pulls/1421"
+          }
+        },
+        "submitted_at": "2026-08-25T04:39:04Z",
+        "commit_id": "f31f57bc3cd6e567be505b2b7d7e8b8f08f0f980"
+      },
+      {
+        "id": 5014997078,
+        "node_id": "CONSTRUCTED_2",
+        "user": {
+          "login": "serina-mcfall",
+          "id": 240091489,
+          "node_id": "U_kgDODk-BYQ",
+          "avatar_url": "https://avatars.githubusercontent.com/u/240091489?u=88323f14a5709f7a5b99bb20d21bd279d1cdb326&v=4",
+          "gravatar_id": "",
+          "url": "https://api.github.com/users/serina-mcfall",
+          "html_url": "https://github.com/serina-mcfall",
+          "followers_url": "https://api.github.com/users/serina-mcfall/followers",
+          "following_url": "https://api.github.com/users/serina-mcfall/following{/other_user}",
+          "gists_url": "https://api.github.com/users/serina-mcfall/gists{/gist_id}",
+          "starred_url": "https://api.github.com/users/serina-mcfall/starred{/owner}{/repo}",
+          "subscriptions_url": "https://api.github.com/users/serina-mcfall/subscriptions",
+          "organizations_url": "https://api.github.com/users/serina-mcfall/orgs",
+          "repos_url": "https://api.github.com/users/serina-mcfall/repos",
+          "events_url": "https://api.github.com/users/serina-mcfall/events{/privacy}",
+          "received_events_url": "https://api.github.com/users/serina-mcfall/received_events",
+          "type": "User",
+          "user_view_type": "public",
+          "site_admin": false
+        },
+        "body": "STEP 1 probe: updated body, second commit.",
+        "state": "COMMENTED",
+        "html_url": "https://github.com/launchpad-26/buzz/pull/1421#pullrequestreview-5014996076",
+        "pull_request_url": "https://api.github.com/repos/launchpad-26/buzz/pulls/1421",
+        "author_association": "MEMBER",
+        "_links": {
+          "html": {
+            "href": "https://github.com/launchpad-26/buzz/pull/1421#pullrequestreview-5014996076"
+          },
+          "pull_request": {
+            "href": "https://api.github.com/repos/launchpad-26/buzz/pulls/1421"
+          }
+        },
+        "submitted_at": "2026-08-25T04:39:04Z",
+        "commit_id": "f31f57bc3cd6e567be505b2b7d7e8b8f08f0f980"
+      },
+      {
+        "id": 5014997079,
+        "node_id": "CONSTRUCTED_3",
+        "user": {
+          "login": "serina-mcfall",
+          "id": 240091489,
+          "node_id": "U_kgDODk-BYQ",
+          "avatar_url": "https://avatars.githubusercontent.com/u/240091489?u=88323f14a5709f7a5b99bb20d21bd279d1cdb326&v=4",
+          "gravatar_id": "",
+          "url": "https://api.github.com/users/serina-mcfall",
+          "html_url": "https://github.com/serina-mcfall",
+          "followers_url": "https://api.github.com/users/serina-mcfall/followers",
+          "following_url": "https://api.github.com/users/serina-mcfall/following{/other_user}",
+          "gists_url": "https://api.github.com/users/serina-mcfall/gists{/gist_id}",
+          "starred_url": "https://api.github.com/users/serina-mcfall/starred{/owner}{/repo}",
+          "subscriptions_url": "https://api.github.com/users/serina-mcfall/subscriptions",
+          "organizations_url": "https://api.github.com/users/serina-mcfall/orgs",
+          "repos_url": "https://api.github.com/users/serina-mcfall/repos",
+          "events_url": "https://api.github.com/users/serina-mcfall/events{/privacy}",
+          "received_events_url": "https://api.github.com/users/serina-mcfall/received_events",
+          "type": "User",
+          "user_view_type": "public",
+          "site_admin": false
+        },
+        "body": "STEP 1 probe: updated body, second commit.",
+        "state": "COMMENTED",
+        "html_url": "https://github.com/launchpad-26/buzz/pull/1421#pullrequestreview-5014996076",
+        "pull_request_url": "https://api.github.com/repos/launchpad-26/buzz/pulls/1421",
+        "author_association": "MEMBER",
+        "_links": {
+          "html": {
+            "href": "https://github.com/launchpad-26/buzz/pull/1421#pullrequestreview-5014996076"
+          },
+          "pull_request": {
+            "href": "https://api.github.com/repos/launchpad-26/buzz/pulls/1421"
+          }
+        },
+        "submitted_at": "2026-08-25T04:39:04Z",
+        "commit_id": "f31f57bc3cd6e567be505b2b7d7e8b8f08f0f980"
+      },
+      {
+        "id": 5014997080,
+        "node_id": "CONSTRUCTED_4",
+        "user": {
+          "login": "serina-mcfall",
+          "id": 240091489,
+          "node_id": "U_kgDODk-BYQ",
+          "avatar_url": "https://avatars.githubusercontent.com/u/240091489?u=88323f14a5709f7a5b99bb20d21bd279d1cdb326&v=4",
+          "gravatar_id": "",
+          "url": "https://api.github.com/users/serina-mcfall",
+          "html_url": "https://github.com/serina-mcfall",
+          "followers_url": "https://api.github.com/users/serina-mcfall/followers",
+          "following_url": "https://api.github.com/users/serina-mcfall/following{/other_user}",
+          "gists_url": "https://api.github.com/users/serina-mcfall/gists{/gist_id}",
+          "starred_url": "https://api.github.com/users/serina-mcfall/starred{/owner}{/repo}",
+          "subscriptions_url": "https://api.github.com/users/serina-mcfall/subscriptions",
+          "organizations_url": "https://api.github.com/users/serina-mcfall/orgs",
+          "repos_url": "https://api.github.com/users/serina-mcfall/repos",
+          "events_url": "https://api.github.com/users/serina-mcfall/events{/privacy}",
+          "received_events_url": "https://api.github.com/users/serina-mcfall/received_events",
+          "type": "User",
+          "user_view_type": "public",
+          "site_admin": false
+        },
+        "body": "STEP 1 probe: updated body, second commit.",
+        "state": "COMMENTED",
+        "html_url": "https://github.com/launchpad-26/buzz/pull/1421#pullrequestreview-5014996076",
+        "pull_request_url": "https://api.github.com/repos/launchpad-26/buzz/pulls/1421",
+        "author_association": "MEMBER",
+        "_links": {
+          "html": {
+            "href": "https://github.com/launchpad-26/buzz/pull/1421#pullrequestreview-5014996076"
+          },
+          "pull_request": {
+            "href": "https://api.github.com/repos/launchpad-26/buzz/pulls/1421"
+          }
+        },
+        "submitted_at": "2026-08-25T04:39:04Z",
+        "commit_id": "f31f57bc3cd6e567be505b2b7d7e8b8f08f0f980"
+      },
+      {
+        "id": 5014997081,
+        "node_id": "CONSTRUCTED_5",
+        "user": {
+          "login": "serina-mcfall",
+          "id": 240091489,
+          "node_id": "U_kgDODk-BYQ",
+          "avatar_url": "https://avatars.githubusercontent.com/u/240091489?u=88323f14a5709f7a5b99bb20d21bd279d1cdb326&v=4",
+          "gravatar_id": "",
+          "url": "https://api.github.com/users/serina-mcfall",
+          "html_url": "https://github.com/serina-mcfall",
+          "followers_url": "https://api.github.com/users/serina-mcfall/followers",
+          "following_url": "https://api.github.com/users/serina-mcfall/following{/other_user}",
+          "gists_url": "https://api.github.com/users/serina-mcfall/gists{/gist_id}",
+          "starred_url": "https://api.github.com/users/serina-mcfall/starred{/owner}{/repo}",
+          "subscriptions_url": "https://api.github.com/users/serina-mcfall/subscriptions",
+          "organizations_url": "https://api.github.com/users/serina-mcfall/orgs",
+          "repos_url": "https://api.github.com/users/serina-mcfall/repos",
+          "events_url": "https://api.github.com/users/serina-mcfall/events{/privacy}",
+          "received_events_url": "https://api.github.com/users/serina-mcfall/received_events",
+          "type": "User",
+          "user_view_type": "public",
+          "site_admin": false
+        },
+        "body": "STEP 1 probe: updated body, second commit.",
+        "state": "COMMENTED",
+        "html_url": "https://github.com/launchpad-26/buzz/pull/1421#pullrequestreview-5014996076",
+        "pull_request_url": "https://api.github.com/repos/launchpad-26/buzz/pulls/1421",
+        "author_association": "MEMBER",
+        "_links": {
+          "html": {
+            "href": "https://github.com/launchpad-26/buzz/pull/1421#pullrequestreview-5014996076"
+          },
+          "pull_request": {
+            "href": "https://api.github.com/repos/launchpad-26/buzz/pulls/1421"
+          }
+        },
+        "submitted_at": "2026-08-25T04:39:04Z",
+        "commit_id": "f31f57bc3cd6e567be505b2b7d7e8b8f08f0f980"
+      },
+      {
+        "id": 5014997082,
+        "node_id": "CONSTRUCTED_6",
+        "user": {
+          "login": "serina-mcfall",
+          "id": 240091489,
+          "node_id": "U_kgDODk-BYQ",
+          "avatar_url": "https://avatars.githubusercontent.com/u/240091489?u=88323f14a5709f7a5b99bb20d21bd279d1cdb326&v=4",
+          "gravatar_id": "",
+          "url": "https://api.github.com/users/serina-mcfall",
+          "html_url": "https://github.com/serina-mcfall",
+          "followers_url": "https://api.github.com/users/serina-mcfall/followers",
+          "following_url": "https://api.github.com/users/serina-mcfall/following{/other_user}",
+          "gists_url": "https://api.github.com/users/serina-mcfall/gists{/gist_id}",
+          "starred_url": "https://api.github.com/users/serina-mcfall/starred{/owner}{/repo}",
+          "subscriptions_url": "https://api.github.com/users/serina-mcfall/subscriptions",
+          "organizations_url": "https://api.github.com/users/serina-mcfall/orgs",
+          "repos_url": "https://api.github.com/users/serina-mcfall/repos",
+          "events_url": "https://api.github.com/users/serina-mcfall/events{/privacy}",
+          "received_events_url": "https://api.github.com/users/serina-mcfall/received_events",
+          "type": "User",
+          "user_view_type": "public",
+          "site_admin": false
+        },
+        "body": "STEP 1 probe: updated body, second commit.",
+        "state": "COMMENTED",
+        "html_url": "https://github.com/launchpad-26/buzz/pull/1421#pullrequestreview-5014996076",
+        "pull_request_url": "https://api.github.com/repos/launchpad-26/buzz/pulls/1421",
+        "author_association": "MEMBER",
+        "_links": {
+          "html": {
+            "href": "https://github.com/launchpad-26/buzz/pull/1421#pullrequestreview-5014996076"
+          },
+          "pull_request": {
+            "href": "https://api.github.com/repos/launchpad-26/buzz/pulls/1421"
+          }
+        },
+        "submitted_at": "2026-08-25T04:39:04Z",
+        "commit_id": "f31f57bc3cd6e567be505b2b7d7e8b8f08f0f980"
+      },
+      {
+        "id": 5014997083,
+        "node_id": "CONSTRUCTED_7",
+        "user": {
+          "login": "serina-mcfall",
+          "id": 240091489,
+          "node_id": "U_kgDODk-BYQ",
+          "avatar_url": "https://avatars.githubusercontent.com/u/240091489?u=88323f14a5709f7a5b99bb20d21bd279d1cdb326&v=4",
+          "gravatar_id": "",
+          "url": "https://api.github.com/users/serina-mcfall",
+          "html_url": "https://github.com/serina-mcfall",
+          "followers_url": "https://api.github.com/users/serina-mcfall/followers",
+          "following_url": "https://api.github.com/users/serina-mcfall/following{/other_user}",
+          "gists_url": "https://api.github.com/users/serina-mcfall/gists{/gist_id}",
+          "starred_url": "https://api.github.com/users/serina-mcfall/starred{/owner}{/repo}",
+          "subscriptions_url": "https://api.github.com/users/serina-mcfall/subscriptions",
+          "organizations_url": "https://api.github.com/users/serina-mcfall/orgs",
+          "repos_url": "https://api.github.com/users/serina-mcfall/repos",
+          "events_url": "https://api.github.com/users/serina-mcfall/events{/privacy}",
+          "received_events_url": "https://api.github.com/users/serina-mcfall/received_events",
+          "type": "User",
+          "user_view_type": "public",
+          "site_admin": false
+        },
+        "body": "STEP 1 probe: updated body, second commit.",
+        "state": "COMMENTED",
+        "html_url": "https://github.com/launchpad-26/buzz/pull/1421#pullrequestreview-5014996076",
+        "pull_request_url": "https://api.github.com/repos/launchpad-26/buzz/pulls/1421",
+        "author_association": "MEMBER",
+        "_links": {
+          "html": {
+            "href": "https://github.com/launchpad-26/buzz/pull/1421#pullrequestreview-5014996076"
+          },
+          "pull_request": {
+            "href": "https://api.github.com/repos/launchpad-26/buzz/pulls/1421"
+          }
+        },
+        "submitted_at": "2026-08-25T04:39:04Z",
+        "commit_id": "f31f57bc3cd6e567be505b2b7d7e8b8f08f0f980"
+      },
+      {
+        "id": 5014997084,
+        "node_id": "CONSTRUCTED_8",
+        "user": {
+          "login": "serina-mcfall",
+          "id": 240091489,
+          "node_id": "U_kgDODk-BYQ",
+          "avatar_url": "https://avatars.githubusercontent.com/u/240091489?u=88323f14a5709f7a5b99bb20d21bd279d1cdb326&v=4",
+          "gravatar_id": "",
+          "url": "https://api.github.com/users/serina-mcfall",
+          "html_url": "https://github.com/serina-mcfall",
+          "followers_url": "https://api.github.com/users/serina-mcfall/followers",
+          "following_url": "https://api.github.com/users/serina-mcfall/following{/other_user}",
+          "gists_url": "https://api.github.com/users/serina-mcfall/gists{/gist_id}",
+          "starred_url": "https://api.github.com/users/serina-mcfall/starred{/owner}{/repo}",
+          "subscriptions_url": "https://api.github.com/users/serina-mcfall/subscriptions",
+          "organizations_url": "https://api.github.com/users/serina-mcfall/orgs",
+          "repos_url": "https://api.github.com/users/serina-mcfall/repos",
+          "events_url": "https://api.github.com/users/serina-mcfall/events{/privacy}",
+          "received_events_url": "https://api.github.com/users/serina-mcfall/received_events",
+          "type": "User",
+          "user_view_type": "public",
+          "site_admin": false
+        },
+        "body": "STEP 1 probe: updated body, second commit.",
+        "state": "COMMENTED",
+        "html_url": "https://github.com/launchpad-26/buzz/pull/1421#pullrequestreview-5014996076",
+        "pull_request_url": "https://api.github.com/repos/launchpad-26/buzz/pulls/1421",
+        "author_association": "MEMBER",
+        "_links": {
+          "html": {
+            "href": "https://github.com/launchpad-26/buzz/pull/1421#pullrequestreview-5014996076"
+          },
+          "pull_request": {
+            "href": "https://api.github.com/repos/launchpad-26/buzz/pulls/1421"
+          }
+        },
+        "submitted_at": "2026-08-25T04:39:04Z",
+        "commit_id": "f31f57bc3cd6e567be505b2b7d7e8b8f08f0f980"
+      },
+      {
+        "id": 5014997085,
+        "node_id": "CONSTRUCTED_9",
+        "user": {
+          "login": "serina-mcfall",
+          "id": 240091489,
+          "node_id": "U_kgDODk-BYQ",
+          "avatar_url": "https://avatars.githubusercontent.com/u/240091489?u=88323f14a5709f7a5b99bb20d21bd279d1cdb326&v=4",
+          "gravatar_id": "",
+          "url": "https://api.github.com/users/serina-mcfall",
+          "html_url": "https://github.com/serina-mcfall",
+          "followers_url": "https://api.github.com/users/serina-mcfall/followers",
+          "following_url": "https://api.github.com/users/serina-mcfall/following{/other_user}",
+          "gists_url": "https://api.github.com/users/serina-mcfall/gists{/gist_id}",
+          "starred_url": "https://api.github.com/users/serina-mcfall/starred{/owner}{/repo}",
+          "subscriptions_url": "https://api.github.com/users/serina-mcfall/subscriptions",
+          "organizations_url": "https://api.github.com/users/serina-mcfall/orgs",
+          "repos_url": "https://api.github.com/users/serina-mcfall/repos",
+          "events_url": "https://api.github.com/users/serina-mcfall/events{/privacy}",
+          "received_events_url": "https://api.github.com/users/serina-mcfall/received_events",
+          "type": "User",
+          "user_view_type": "public",
+          "site_admin": false
+        },
+        "body": "STEP 1 probe: updated body, second commit.",
+        "state": "COMMENTED",
+        "html_url": "https://github.com/launchpad-26/buzz/pull/1421#pullrequestreview-5014996076",
+        "pull_request_url": "https://api.github.com/repos/launchpad-26/buzz/pulls/1421",
+        "author_association": "MEMBER",
+        "_links": {
+          "html": {
+            "href": "https://github.com/launchpad-26/buzz/pull/1421#pullrequestreview-5014996076"
+          },
+          "pull_request": {
+            "href": "https://api.github.com/repos/launchpad-26/buzz/pulls/1421"
+          }
+        },
+        "submitted_at": "2026-08-25T04:39:04Z",
+        "commit_id": "f31f57bc3cd6e567be505b2b7d7e8b8f08f0f980"
+      },
+      {
+        "id": 5014997086,
+        "node_id": "CONSTRUCTED_10",
+        "user": {
+          "login": "serina-mcfall",
+          "id": 240091489,
+          "node_id": "U_kgDODk-BYQ",
+          "avatar_url": "https://avatars.githubusercontent.com/u/240091489?u=88323f14a5709f7a5b99bb20d21bd279d1cdb326&v=4",
+          "gravatar_id": "",
+          "url": "https://api.github.com/users/serina-mcfall",
+          "html_url": "https://github.com/serina-mcfall",
+          "followers_url": "https://api.github.com/users/serina-mcfall/followers",
+          "following_url": "https://api.github.com/users/serina-mcfall/following{/other_user}",
+          "gists_url": "https://api.github.com/users/serina-mcfall/gists{/gist_id}",
+          "starred_url": "https://api.github.com/users/serina-mcfall/starred{/owner}{/repo}",
+          "subscriptions_url": "https://api.github.com/users/serina-mcfall/subscriptions",
+          "organizations_url": "https://api.github.com/users/serina-mcfall/orgs",
+          "repos_url": "https://api.github.com/users/serina-mcfall/repos",
+          "events_url": "https://api.github.com/users/serina-mcfall/events{/privacy}",
+          "received_events_url": "https://api.github.com/users/serina-mcfall/received_events",
+          "type": "User",
+          "user_view_type": "public",
+          "site_admin": false
+        },
+        "body": "STEP 1 probe: updated body, second commit.",
+        "state": "COMMENTED",
+        "html_url": "https://github.com/launchpad-26/buzz/pull/1421#pullrequestreview-5014996076",
+        "pull_request_url": "https://api.github.com/repos/launchpad-26/buzz/pulls/1421",
+        "author_association": "MEMBER",
+        "_links": {
+          "html": {
+            "href": "https://github.com/launchpad-26/buzz/pull/1421#pullrequestreview-5014996076"
+          },
+          "pull_request": {
+            "href": "https://api.github.com/repos/launchpad-26/buzz/pulls/1421"
+          }
+        },
+        "submitted_at": "2026-08-25T04:39:04Z",
+        "commit_id": "f31f57bc3cd6e567be505b2b7d7e8b8f08f0f980"
+      },
+      {
+        "id": 5014997087,
+        "node_id": "CONSTRUCTED_11",
+        "user": {
+          "login": "serina-mcfall",
+          "id": 240091489,
+          "node_id": "U_kgDODk-BYQ",
+          "avatar_url": "https://avatars.githubusercontent.com/u/240091489?u=88323f14a5709f7a5b99bb20d21bd279d1cdb326&v=4",
+          "gravatar_id": "",
+          "url": "https://api.github.com/users/serina-mcfall",
+          "html_url": "https://github.com/serina-mcfall",
+          "followers_url": "https://api.github.com/users/serina-mcfall/followers",
+          "following_url": "https://api.github.com/users/serina-mcfall/following{/other_user}",
+          "gists_url": "https://api.github.com/users/serina-mcfall/gists{/gist_id}",
+          "starred_url": "https://api.github.com/users/serina-mcfall/starred{/owner}{/repo}",
+          "subscriptions_url": "https://api.github.com/users/serina-mcfall/subscriptions",
+          "organizations_url": "https://api.github.com/users/serina-mcfall/orgs",
+          "repos_url": "https://api.github.com/users/serina-mcfall/repos",
+          "events_url": "https://api.github.com/users/serina-mcfall/events{/privacy}",
+          "received_events_url": "https://api.github.com/users/serina-mcfall/received_events",
+          "type": "User",
+          "user_view_type": "public",
+          "site_admin": false
+        },
+        "body": "STEP 1 probe: updated body, second commit.",
+        "state": "COMMENTED",
+        "html_url": "https://github.com/launchpad-26/buzz/pull/1421#pullrequestreview-5014996076",
+        "pull_request_url": "https://api.github.com/repos/launchpad-26/buzz/pulls/1421",
+        "author_association": "MEMBER",
+        "_links": {
+          "html": {
+            "href": "https://github.com/launchpad-26/buzz/pull/1421#pullrequestreview-5014996076"
+          },
+          "pull_request": {
+            "href": "https://api.github.com/repos/launchpad-26/buzz/pulls/1421"
+          }
+        },
+        "submitted_at": "2026-08-25T04:39:04Z",
+        "commit_id": "f31f57bc3cd6e567be505b2b7d7e8b8f08f0f980"
+      },
+      {
+        "id": 5014997088,
+        "node_id": "CONSTRUCTED_12",
+        "user": {
+          "login": "serina-mcfall",
+          "id": 240091489,
+          "node_id": "U_kgDODk-BYQ",
+          "avatar_url": "https://avatars.githubusercontent.com/u/240091489?u=88323f14a5709f7a5b99bb20d21bd279d1cdb326&v=4",
+          "gravatar_id": "",
+          "url": "https://api.github.com/users/serina-mcfall",
+          "html_url": "https://github.com/serina-mcfall",
+          "followers_url": "https://api.github.com/users/serina-mcfall/followers",
+          "following_url": "https://api.github.com/users/serina-mcfall/following{/other_user}",
+          "gists_url": "https://api.github.com/users/serina-mcfall/gists{/gist_id}",
+          "starred_url": "https://api.github.com/users/serina-mcfall/starred{/owner}{/repo}",
+          "subscriptions_url": "https://api.github.com/users/serina-mcfall/subscriptions",
+          "organizations_url": "https://api.github.com/users/serina-mcfall/orgs",
+          "repos_url": "https://api.github.com/users/serina-mcfall/repos",
+          "events_url": "https://api.github.com/users/serina-mcfall/events{/privacy}",
+          "received_events_url": "https://api.github.com/users/serina-mcfall/received_events",
+          "type": "User",
+          "user_view_type": "public",
+          "site_admin": false
+        },
+        "body": "STEP 1 probe: updated body, second commit.",
+        "state": "COMMENTED",
+        "html_url": "https://github.com/launchpad-26/buzz/pull/1421#pullrequestreview-5014996076",
+        "pull_request_url": "https://api.github.com/repos/launchpad-26/buzz/pulls/1421",
+        "author_association": "MEMBER",
+        "_links": {
+          "html": {
+            "href": "https://github.com/launchpad-26/buzz/pull/1421#pullrequestreview-5014996076"
+          },
+          "pull_request": {
+            "href": "https://api.github.com/repos/launchpad-26/buzz/pulls/1421"
+          }
+        },
+        "submitted_at": "2026-08-25T04:39:04Z",
+        "commit_id": "f31f57bc3cd6e567be505b2b7d7e8b8f08f0f980"
+      },
+      {
+        "id": 5014997089,
+        "node_id": "CONSTRUCTED_13",
+        "user": {
+          "login": "serina-mcfall",
+          "id": 240091489,
+          "node_id": "U_kgDODk-BYQ",
+          "avatar_url": "https://avatars.githubusercontent.com/u/240091489?u=88323f14a5709f7a5b99bb20d21bd279d1cdb326&v=4",
+          "gravatar_id": "",
+          "url": "https://api.github.com/users/serina-mcfall",
+          "html_url": "https://github.com/serina-mcfall",
+          "followers_url": "https://api.github.com/users/serina-mcfall/followers",
+          "following_url": "https://api.github.com/users/serina-mcfall/following{/other_user}",
+          "gists_url": "https://api.github.com/users/serina-mcfall/gists{/gist_id}",
+          "starred_url": "https://api.github.com/users/serina-mcfall/starred{/owner}{/repo}",
+          "subscriptions_url": "https://api.github.com/users/serina-mcfall/subscriptions",
+          "organizations_url": "https://api.github.com/users/serina-mcfall/orgs",
+          "repos_url": "https://api.github.com/users/serina-mcfall/repos",
+          "events_url": "https://api.github.com/users/serina-mcfall/events{/privacy}",
+          "received_events_url": "https://api.github.com/users/serina-mcfall/received_events",
+          "type": "User",
+          "user_view_type": "public",
+          "site_admin": false
+        },
+        "body": "STEP 1 probe: updated body, second commit.",
+        "state": "COMMENTED",
+        "html_url": "https://github.com/launchpad-26/buzz/pull/1421#pullrequestreview-5014996076",
+        "pull_request_url": "https://api.github.com/repos/launchpad-26/buzz/pulls/1421",
+        "author_association": "MEMBER",
+        "_links": {
+          "html": {
+            "href": "https://github.com/launchpad-26/buzz/pull/1421#pullrequestreview-5014996076"
+          },
+          "pull_request": {
+            "href": "https://api.github.com/repos/launchpad-26/buzz/pulls/1421"
+          }
+        },
+        "submitted_at": "2026-08-25T04:39:04Z",
+        "commit_id": "f31f57bc3cd6e567be505b2b7d7e8b8f08f0f980"
+      },
+      {
+        "id": 5014997090,
+        "node_id": "CONSTRUCTED_14",
+        "user": {
+          "login": "serina-mcfall",
+          "id": 240091489,
+          "node_id": "U_kgDODk-BYQ",
+          "avatar_url": "https://avatars.githubusercontent.com/u/240091489?u=88323f14a5709f7a5b99bb20d21bd279d1cdb326&v=4",
+          "gravatar_id": "",
+          "url": "https://api.github.com/users/serina-mcfall",
+          "html_url": "https://github.com/serina-mcfall",
+          "followers_url": "https://api.github.com/users/serina-mcfall/followers",
+          "following_url": "https://api.github.com/users/serina-mcfall/following{/other_user}",
+          "gists_url": "https://api.github.com/users/serina-mcfall/gists{/gist_id}",
+          "starred_url": "https://api.github.com/users/serina-mcfall/starred{/owner}{/repo}",
+          "subscriptions_url": "https://api.github.com/users/serina-mcfall/subscriptions",
+          "organizations_url": "https://api.github.com/users/serina-mcfall/orgs",
+          "repos_url": "https://api.github.com/users/serina-mcfall/repos",
+          "events_url": "https://api.github.com/users/serina-mcfall/events{/privacy}",
+          "received_events_url": "https://api.github.com/users/serina-mcfall/received_events",
+          "type": "User",
+          "user_view_type": "public",
+          "site_admin": false
+        },
+        "body": "STEP 1 probe: updated body, second commit.",
+        "state": "COMMENTED",
+        "html_url": "https://github.com/launchpad-26/buzz/pull/1421#pullrequestreview-5014996076",
+        "pull_request_url": "https://api.github.com/repos/launchpad-26/buzz/pulls/1421",
+        "author_association": "MEMBER",
+        "_links": {
+          "html": {
+            "href": "https://github.com/launchpad-26/buzz/pull/1421#pullrequestreview-5014996076"
+          },
+          "pull_request": {
+            "href": "https://api.github.com/repos/launchpad-26/buzz/pulls/1421"
+          }
+        },
+        "submitted_at": "2026-08-25T04:39:04Z",
+        "commit_id": "f31f57bc3cd6e567be505b2b7d7e8b8f08f0f980"
+      },
+      {
+        "id": 5014997091,
+        "node_id": "CONSTRUCTED_15",
+        "user": {
+          "login": "serina-mcfall",
+          "id": 240091489,
+          "node_id": "U_kgDODk-BYQ",
+          "avatar_url": "https://avatars.githubusercontent.com/u/240091489?u=88323f14a5709f7a5b99bb20d21bd279d1cdb326&v=4",
+          "gravatar_id": "",
+          "url": "https://api.github.com/users/serina-mcfall",
+          "html_url": "https://github.com/serina-mcfall",
+          "followers_url": "https://api.github.com/users/serina-mcfall/followers",
+          "following_url": "https://api.github.com/users/serina-mcfall/following{/other_user}",
+          "gists_url": "https://api.github.com/users/serina-mcfall/gists{/gist_id}",
+          "starred_url": "https://api.github.com/users/serina-mcfall/starred{/owner}{/repo}",
+          "subscriptions_url": "https://api.github.com/users/serina-mcfall/subscriptions",
+          "organizations_url": "https://api.github.com/users/serina-mcfall/orgs",
+          "repos_url": "https://api.github.com/users/serina-mcfall/repos",
+          "events_url": "https://api.github.com/users/serina-mcfall/events{/privacy}",
+          "received_events_url": "https://api.github.com/users/serina-mcfall/received_events",
+          "type": "User",
+          "user_view_type": "public",
+          "site_admin": false
+        },
+        "body": "STEP 1 probe: updated body, second commit.",
+        "state": "COMMENTED",
+        "html_url": "https://github.com/launchpad-26/buzz/pull/1421#pullrequestreview-5014996076",
+        "pull_request_url": "https://api.github.com/repos/launchpad-26/buzz/pulls/1421",
+        "author_association": "MEMBER",
+        "_links": {
+          "html": {
+            "href": "https://github.com/launchpad-26/buzz/pull/1421#pullrequestreview-5014996076"
+          },
+          "pull_request": {
+            "href": "https://api.github.com/repos/launchpad-26/buzz/pulls/1421"
+          }
+        },
+        "submitted_at": "2026-08-25T04:39:04Z",
+        "commit_id": "f31f57bc3cd6e567be505b2b7d7e8b8f08f0f980"
+      },
+      {
+        "id": 5014997092,
+        "node_id": "CONSTRUCTED_16",
+        "user": {
+          "login": "serina-mcfall",
+          "id": 240091489,
+          "node_id": "U_kgDODk-BYQ",
+          "avatar_url": "https://avatars.githubusercontent.com/u/240091489?u=88323f14a5709f7a5b99bb20d21bd279d1cdb326&v=4",
+          "gravatar_id": "",
+          "url": "https://api.github.com/users/serina-mcfall",
+          "html_url": "https://github.com/serina-mcfall",
+          "followers_url": "https://api.github.com/users/serina-mcfall/followers",
+          "following_url": "https://api.github.com/users/serina-mcfall/following{/other_user}",
+          "gists_url": "https://api.github.com/users/serina-mcfall/gists{/gist_id}",
+          "starred_url": "https://api.github.com/users/serina-mcfall/starred{/owner}{/repo}",
+          "subscriptions_url": "https://api.github.com/users/serina-mcfall/subscriptions",
+          "organizations_url": "https://api.github.com/users/serina-mcfall/orgs",
+          "repos_url": "https://api.github.com/users/serina-mcfall/repos",
+          "events_url": "https://api.github.com/users/serina-mcfall/events{/privacy}",
+          "received_events_url": "https://api.github.com/users/serina-mcfall/received_events",
+          "type": "User",
+          "user_view_type": "public",
+          "site_admin": false
+        },
+        "body": "STEP 1 probe: updated body, second commit.",
+        "state": "COMMENTED",
+        "html_url": "https://github.com/launchpad-26/buzz/pull/1421#pullrequestreview-5014996076",
+        "pull_request_url": "https://api.github.com/repos/launchpad-26/buzz/pulls/1421",
+        "author_association": "MEMBER",
+        "_links": {
+          "html": {
+            "href": "https://github.com/launchpad-26/buzz/pull/1421#pullrequestreview-5014996076"
+          },
+          "pull_request": {
+            "href": "https://api.github.com/repos/launchpad-26/buzz/pulls/1421"
+          }
+        },
+        "submitted_at": "2026-08-25T04:39:04Z",
+        "commit_id": "f31f57bc3cd6e567be505b2b7d7e8b8f08f0f980"
+      },
+      {
+        "id": 5014997093,
+        "node_id": "CONSTRUCTED_17",
+        "user": {
+          "login": "serina-mcfall",
+          "id": 240091489,
+          "node_id": "U_kgDODk-BYQ",
+          "avatar_url": "https://avatars.githubusercontent.com/u/240091489?u=88323f14a5709f7a5b99bb20d21bd279d1cdb326&v=4",
+          "gravatar_id": "",
+          "url": "https://api.github.com/users/serina-mcfall",
+          "html_url": "https://github.com/serina-mcfall",
+          "followers_url": "https://api.github.com/users/serina-mcfall/followers",
+          "following_url": "https://api.github.com/users/serina-mcfall/following{/other_user}",
+          "gists_url": "https://api.github.com/users/serina-mcfall/gists{/gist_id}",
+          "starred_url": "https://api.github.com/users/serina-mcfall/starred{/owner}{/repo}",
+          "subscriptions_url": "https://api.github.com/users/serina-mcfall/subscriptions",
+          "organizations_url": "https://api.github.com/users/serina-mcfall/orgs",
+          "repos_url": "https://api.github.com/users/serina-mcfall/repos",
+          "events_url": "https://api.github.com/users/serina-mcfall/events{/privacy}",
+          "received_events_url": "https://api.github.com/users/serina-mcfall/received_events",
+          "type": "User",
+          "user_view_type": "public",
+          "site_admin": false
+        },
+        "body": "STEP 1 probe: updated body, second commit.",
+        "state": "COMMENTED",
+        "html_url": "https://github.com/launchpad-26/buzz/pull/1421#pullrequestreview-5014996076",
+        "pull_request_url": "https://api.github.com/repos/launchpad-26/buzz/pulls/1421",
+        "author_association": "MEMBER",
+        "_links": {
+          "html": {
+            "href": "https://github.com/launchpad-26/buzz/pull/1421#pullrequestreview-5014996076"
+          },
+          "pull_request": {
+            "href": "https://api.github.com/repos/launchpad-26/buzz/pulls/1421"
+          }
+        },
+        "submitted_at": "2026-08-25T04:39:04Z",
+        "commit_id": "f31f57bc3cd6e567be505b2b7d7e8b8f08f0f980"
+      },
+      {
+        "id": 5014997094,
+        "node_id": "CONSTRUCTED_18",
+        "user": {
+          "login": "serina-mcfall",
+          "id": 240091489,
+          "node_id": "U_kgDODk-BYQ",
+          "avatar_url": "https://avatars.githubusercontent.com/u/240091489?u=88323f14a5709f7a5b99bb20d21bd279d1cdb326&v=4",
+          "gravatar_id": "",
+          "url": "https://api.github.com/users/serina-mcfall",
+          "html_url": "https://github.com/serina-mcfall",
+          "followers_url": "https://api.github.com/users/serina-mcfall/followers",
+          "following_url": "https://api.github.com/users/serina-mcfall/following{/other_user}",
+          "gists_url": "https://api.github.com/users/serina-mcfall/gists{/gist_id}",
+          "starred_url": "https://api.github.com/users/serina-mcfall/starred{/owner}{/repo}",
+          "subscriptions_url": "https://api.github.com/users/serina-mcfall/subscriptions",
+          "organizations_url": "https://api.github.com/users/serina-mcfall/orgs",
+          "repos_url": "https://api.github.com/users/serina-mcfall/repos",
+          "events_url": "https://api.github.com/users/serina-mcfall/events{/privacy}",
+          "received_events_url": "https://api.github.com/users/serina-mcfall/received_events",
+          "type": "User",
+          "user_view_type": "public",
+          "site_admin": false
+        },
+        "body": "STEP 1 probe: updated body, second commit.",
+        "state": "COMMENTED",
+        "html_url": "https://github.com/launchpad-26/buzz/pull/1421#pullrequestreview-5014996076",
+        "pull_request_url": "https://api.github.com/repos/launchpad-26/buzz/pulls/1421",
+        "author_association": "MEMBER",
+        "_links": {
+          "html": {
+            "href": "https://github.com/launchpad-26/buzz/pull/1421#pullrequestreview-5014996076"
+          },
+          "pull_request": {
+            "href": "https://api.github.com/repos/launchpad-26/buzz/pulls/1421"
+          }
+        },
+        "submitted_at": "2026-08-25T04:39:04Z",
+        "commit_id": "f31f57bc3cd6e567be505b2b7d7e8b8f08f0f980"
+      },
+      {
+        "id": 5014997095,
+        "node_id": "CONSTRUCTED_19",
+        "user": {
+          "login": "serina-mcfall",
+          "id": 240091489,
+          "node_id": "U_kgDODk-BYQ",
+          "avatar_url": "https://avatars.githubusercontent.com/u/240091489?u=88323f14a5709f7a5b99bb20d21bd279d1cdb326&v=4",
+          "gravatar_id": "",
+          "url": "https://api.github.com/users/serina-mcfall",
+          "html_url": "https://github.com/serina-mcfall",
+          "followers_url": "https://api.github.com/users/serina-mcfall/followers",
+          "following_url": "https://api.github.com/users/serina-mcfall/following{/other_user}",
+          "gists_url": "https://api.github.com/users/serina-mcfall/gists{/gist_id}",
+          "starred_url": "https://api.github.com/users/serina-mcfall/starred{/owner}{/repo}",
+          "subscriptions_url": "https://api.github.com/users/serina-mcfall/subscriptions",
+          "organizations_url": "https://api.github.com/users/serina-mcfall/orgs",
+          "repos_url": "https://api.github.com/users/serina-mcfall/repos",
+          "events_url": "https://api.github.com/users/serina-mcfall/events{/privacy}",
+          "received_events_url": "https://api.github.com/users/serina-mcfall/received_events",
+          "type": "User",
+          "user_view_type": "public",
+          "site_admin": false
+        },
+        "body": "STEP 1 probe: updated body, second commit.",
+        "state": "COMMENTED",
+        "html_url": "https://github.com/launchpad-26/buzz/pull/1421#pullrequestreview-5014996076",
+        "pull_request_url": "https://api.github.com/repos/launchpad-26/buzz/pulls/1421",
+        "author_association": "MEMBER",
+        "_links": {
+          "html": {
+            "href": "https://github.com/launchpad-26/buzz/pull/1421#pullrequestreview-5014996076"
+          },
+          "pull_request": {
+            "href": "https://api.github.com/repos/launchpad-26/buzz/pulls/1421"
+          }
+        },
+        "submitted_at": "2026-08-25T04:39:04Z",
+        "commit_id": "f31f57bc3cd6e567be505b2b7d7e8b8f08f0f980"
+      },
+      {
+        "id": 5014997096,
+        "node_id": "CONSTRUCTED_20",
+        "user": {
+          "login": "serina-mcfall",
+          "id": 240091489,
+          "node_id": "U_kgDODk-BYQ",
+          "avatar_url": "https://avatars.githubusercontent.com/u/240091489?u=88323f14a5709f7a5b99bb20d21bd279d1cdb326&v=4",
+          "gravatar_id": "",
+          "url": "https://api.github.com/users/serina-mcfall",
+          "html_url": "https://github.com/serina-mcfall",
+          "followers_url": "https://api.github.com/users/serina-mcfall/followers",
+          "following_url": "https://api.github.com/users/serina-mcfall/following{/other_user}",
+          "gists_url": "https://api.github.com/users/serina-mcfall/gists{/gist_id}",
+          "starred_url": "https://api.github.com/users/serina-mcfall/starred{/owner}{/repo}",
+          "subscriptions_url": "https://api.github.com/users/serina-mcfall/subscriptions",
+          "organizations_url": "https://api.github.com/users/serina-mcfall/orgs",
+          "repos_url": "https://api.github.com/users/serina-mcfall/repos",
+          "events_url": "https://api.github.com/users/serina-mcfall/events{/privacy}",
+          "received_events_url": "https://api.github.com/users/serina-mcfall/received_events",
+          "type": "User",
+          "user_view_type": "public",
+          "site_admin": false
+        },
+        "body": "STEP 1 probe: updated body, second commit.",
+        "state": "COMMENTED",
+        "html_url": "https://github.com/launchpad-26/buzz/pull/1421#pullrequestreview-5014996076",
+        "pull_request_url": "https://api.github.com/repos/launchpad-26/buzz/pulls/1421",
+        "author_association": "MEMBER",
+        "_links": {
+          "html": {
+            "href": "https://github.com/launchpad-26/buzz/pull/1421#pullrequestreview-5014996076"
+          },
+          "pull_request": {
+            "href": "https://api.github.com/repos/launchpad-26/buzz/pulls/1421"
+          }
+        },
+        "submitted_at": "2026-08-25T04:39:04Z",
+        "commit_id": "f31f57bc3cd6e567be505b2b7d7e8b8f08f0f980"
+      },
+      {
+        "id": 5014997097,
+        "node_id": "CONSTRUCTED_21",
+        "user": {
+          "login": "serina-mcfall",
+          "id": 240091489,
+          "node_id": "U_kgDODk-BYQ",
+          "avatar_url": "https://avatars.githubusercontent.com/u/240091489?u=88323f14a5709f7a5b99bb20d21bd279d1cdb326&v=4",
+          "gravatar_id": "",
+          "url": "https://api.github.com/users/serina-mcfall",
+          "html_url": "https://github.com/serina-mcfall",
+          "followers_url": "https://api.github.com/users/serina-mcfall/followers",
+          "following_url": "https://api.github.com/users/serina-mcfall/following{/other_user}",
+          "gists_url": "https://api.github.com/users/serina-mcfall/gists{/gist_id}",
+          "starred_url": "https://api.github.com/users/serina-mcfall/starred{/owner}{/repo}",
+          "subscriptions_url": "https://api.github.com/users/serina-mcfall/subscriptions",
+          "organizations_url": "https://api.github.com/users/serina-mcfall/orgs",
+          "repos_url": "https://api.github.com/users/serina-mcfall/repos",
+          "events_url": "https://api.github.com/users/serina-mcfall/events{/privacy}",
+          "received_events_url": "https://api.github.com/users/serina-mcfall/received_events",
+          "type": "User",
+          "user_view_type": "public",
+          "site_admin": false
+        },
+        "body": "STEP 1 probe: updated body, second commit.",
+        "state": "COMMENTED",
+        "html_url": "https://github.com/launchpad-26/buzz/pull/1421#pullrequestreview-5014996076",
+        "pull_request_url": "https://api.github.com/repos/launchpad-26/buzz/pulls/1421",
+        "author_association": "MEMBER",
+        "_links": {
+          "html": {
+            "href": "https://github.com/launchpad-26/buzz/pull/1421#pullrequestreview-5014996076"
+          },
+          "pull_request": {
+            "href": "https://api.github.com/repos/launchpad-26/buzz/pulls/1421"
+          }
+        },
+        "submitted_at": "2026-08-25T04:39:04Z",
+        "commit_id": "f31f57bc3cd6e567be505b2b7d7e8b8f08f0f980"
+      },
+      {
+        "id": 5014997098,
+        "node_id": "CONSTRUCTED_22",
+        "user": {
+          "login": "serina-mcfall",
+          "id": 240091489,
+          "node_id": "U_kgDODk-BYQ",
+          "avatar_url": "https://avatars.githubusercontent.com/u/240091489?u=88323f14a5709f7a5b99bb20d21bd279d1cdb326&v=4",
+          "gravatar_id": "",
+          "url": "https://api.github.com/users/serina-mcfall",
+          "html_url": "https://github.com/serina-mcfall",
+          "followers_url": "https://api.github.com/users/serina-mcfall/followers",
+          "following_url": "https://api.github.com/users/serina-mcfall/following{/other_user}",
+          "gists_url": "https://api.github.com/users/serina-mcfall/gists{/gist_id}",
+          "starred_url": "https://api.github.com/users/serina-mcfall/starred{/owner}{/repo}",
+          "subscriptions_url": "https://api.github.com/users/serina-mcfall/subscriptions",
+          "organizations_url": "https://api.github.com/users/serina-mcfall/orgs",
+          "repos_url": "https://api.github.com/users/serina-mcfall/repos",
+          "events_url": "https://api.github.com/users/serina-mcfall/events{/privacy}",
+          "received_events_url": "https://api.github.com/users/serina-mcfall/received_events",
+          "type": "User",
+          "user_view_type": "public",
+          "site_admin": false
+        },
+        "body": "STEP 1 probe: updated body, second commit.",
+        "state": "COMMENTED",
+        "html_url": "https://github.com/launchpad-26/buzz/pull/1421#pullrequestreview-5014996076",
+        "pull_request_url": "https://api.github.com/repos/launchpad-26/buzz/pulls/1421",
+        "author_association": "MEMBER",
+        "_links": {
+          "html": {
+            "href": "https://github.com/launchpad-26/buzz/pull/1421#pullrequestreview-5014996076"
+          },
+          "pull_request": {
+            "href": "https://api.github.com/repos/launchpad-26/buzz/pulls/1421"
+          }
+        },
+        "submitted_at": "2026-08-25T04:39:04Z",
+        "commit_id": "f31f57bc3cd6e567be505b2b7d7e8b8f08f0f980"
+      },
+      {
+        "id": 5014997099,
+        "node_id": "CONSTRUCTED_23",
+        "user": {
+          "login": "serina-mcfall",
+          "id": 240091489,
+          "node_id": "U_kgDODk-BYQ",
+          "avatar_url": "https://avatars.githubusercontent.com/u/240091489?u=88323f14a5709f7a5b99bb20d21bd279d1cdb326&v=4",
+          "gravatar_id": "",
+          "url": "https://api.github.com/users/serina-mcfall",
+          "html_url": "https://github.com/serina-mcfall",
+          "followers_url": "https://api.github.com/users/serina-mcfall/followers",
+          "following_url": "https://api.github.com/users/serina-mcfall/following{/other_user}",
+          "gists_url": "https://api.github.com/users/serina-mcfall/gists{/gist_id}",
+          "starred_url": "https://api.github.com/users/serina-mcfall/starred{/owner}{/repo}",
+          "subscriptions_url": "https://api.github.com/users/serina-mcfall/subscriptions",
+          "organizations_url": "https://api.github.com/users/serina-mcfall/orgs",
+          "repos_url": "https://api.github.com/users/serina-mcfall/repos",
+          "events_url": "https://api.github.com/users/serina-mcfall/events{/privacy}",
+          "received_events_url": "https://api.github.com/users/serina-mcfall/received_events",
+          "type": "User",
+          "user_view_type": "public",
+          "site_admin": false
+        },
+        "body": "STEP 1 probe: updated body, second commit.",
+        "state": "COMMENTED",
+        "html_url": "https://github.com/launchpad-26/buzz/pull/1421#pullrequestreview-5014996076",
+        "pull_request_url": "https://api.github.com/repos/launchpad-26/buzz/pulls/1421",
+        "author_association": "MEMBER",
+        "_links": {
+          "html": {
+            "href": "https://github.com/launchpad-26/buzz/pull/1421#pullrequestreview-5014996076"
+          },
+          "pull_request": {
+            "href": "https://api.github.com/repos/launchpad-26/buzz/pulls/1421"
+          }
+        },
+        "submitted_at": "2026-08-25T04:39:04Z",
+        "commit_id": "f31f57bc3cd6e567be505b2b7d7e8b8f08f0f980"
+      },
+      {
+        "id": 5014997100,
+        "node_id": "CONSTRUCTED_24",
+        "user": {
+          "login": "serina-mcfall",
+          "id": 240091489,
+          "node_id": "U_kgDODk-BYQ",
+          "avatar_url": "https://avatars.githubusercontent.com/u/240091489?u=88323f14a5709f7a5b99bb20d21bd279d1cdb326&v=4",
+          "gravatar_id": "",
+          "url": "https://api.github.com/users/serina-mcfall",
+          "html_url": "https://github.com/serina-mcfall",
+          "followers_url": "https://api.github.com/users/serina-mcfall/followers",
+          "following_url": "https://api.github.com/users/serina-mcfall/following{/other_user}",
+          "gists_url": "https://api.github.com/users/serina-mcfall/gists{/gist_id}",
+          "starred_url": "https://api.github.com/users/serina-mcfall/starred{/owner}{/repo}",
+          "subscriptions_url": "https://api.github.com/users/serina-mcfall/subscriptions",
+          "organizations_url": "https://api.github.com/users/serina-mcfall/orgs",
+          "repos_url": "https://api.github.com/users/serina-mcfall/repos",
+          "events_url": "https://api.github.com/users/serina-mcfall/events{/privacy}",
+          "received_events_url": "https://api.github.com/users/serina-mcfall/received_events",
+          "type": "User",
+          "user_view_type": "public",
+          "site_admin": false
+        },
+        "body": "STEP 1 probe: updated body, second commit.",
+        "state": "COMMENTED",
+        "html_url": "https://github.com/launchpad-26/buzz/pull/1421#pullrequestreview-5014996076",
+        "pull_request_url": "https://api.github.com/repos/launchpad-26/buzz/pulls/1421",
+        "author_association": "MEMBER",
+        "_links": {
+          "html": {
+            "href": "https://github.com/launchpad-26/buzz/pull/1421#pullrequestreview-5014996076"
+          },
+          "pull_request": {
+            "href": "https://api.github.com/repos/launchpad-26/buzz/pulls/1421"
+          }
+        },
+        "submitted_at": "2026-08-25T04:39:04Z",
+        "commit_id": "f31f57bc3cd6e567be505b2b7d7e8b8f08f0f980"
+      },
+      {
+        "id": 5014997101,
+        "node_id": "CONSTRUCTED_25",
+        "user": {
+          "login": "serina-mcfall",
+          "id": 240091489,
+          "node_id": "U_kgDODk-BYQ",
+          "avatar_url": "https://avatars.githubusercontent.com/u/240091489?u=88323f14a5709f7a5b99bb20d21bd279d1cdb326&v=4",
+          "gravatar_id": "",
+          "url": "https://api.github.com/users/serina-mcfall",
+          "html_url": "https://github.com/serina-mcfall",
+          "followers_url": "https://api.github.com/users/serina-mcfall/followers",
+          "following_url": "https://api.github.com/users/serina-mcfall/following{/other_user}",
+          "gists_url": "https://api.github.com/users/serina-mcfall/gists{/gist_id}",
+          "starred_url": "https://api.github.com/users/serina-mcfall/starred{/owner}{/repo}",
+          "subscriptions_url": "https://api.github.com/users/serina-mcfall/subscriptions",
+          "organizations_url": "https://api.github.com/users/serina-mcfall/orgs",
+          "repos_url": "https://api.github.com/users/serina-mcfall/repos",
+          "events_url": "https://api.github.com/users/serina-mcfall/events{/privacy}",
+          "received_events_url": "https://api.github.com/users/serina-mcfall/received_events",
+          "type": "User",
+          "user_view_type": "public",
+          "site_admin": false
+        },
+        "body": "STEP 1 probe: updated body, second commit.",
+        "state": "COMMENTED",
+        "html_url": "https://github.com/launchpad-26/buzz/pull/1421#pullrequestreview-5014996076",
+        "pull_request_url": "https://api.github.com/repos/launchpad-26/buzz/pulls/1421",
+        "author_association": "MEMBER",
+        "_links": {
+          "html": {
+            "href": "https://github.com/launchpad-26/buzz/pull/1421#pullrequestreview-5014996076"
+          },
+          "pull_request": {
+            "href": "https://api.github.com/repos/launchpad-26/buzz/pulls/1421"
+          }
+        },
+        "submitted_at": "2026-08-25T04:39:04Z",
+        "commit_id": "f31f57bc3cd6e567be505b2b7d7e8b8f08f0f980"
+      },
+      {
+        "id": 5014997102,
+        "node_id": "CONSTRUCTED_26",
+        "user": {
+          "login": "serina-mcfall",
+          "id": 240091489,
+          "node_id": "U_kgDODk-BYQ",
+          "avatar_url": "https://avatars.githubusercontent.com/u/240091489?u=88323f14a5709f7a5b99bb20d21bd279d1cdb326&v=4",
+          "gravatar_id": "",
+          "url": "https://api.github.com/users/serina-mcfall",
+          "html_url": "https://github.com/serina-mcfall",
+          "followers_url": "https://api.github.com/users/serina-mcfall/followers",
+          "following_url": "https://api.github.com/users/serina-mcfall/following{/other_user}",
+          "gists_url": "https://api.github.com/users/serina-mcfall/gists{/gist_id}",
+          "starred_url": "https://api.github.com/users/serina-mcfall/starred{/owner}{/repo}",
+          "subscriptions_url": "https://api.github.com/users/serina-mcfall/subscriptions",
+          "organizations_url": "https://api.github.com/users/serina-mcfall/orgs",
+          "repos_url": "https://api.github.com/users/serina-mcfall/repos",
+          "events_url": "https://api.github.com/users/serina-mcfall/events{/privacy}",
+          "received_events_url": "https://api.github.com/users/serina-mcfall/received_events",
+          "type": "User",
+          "user_view_type": "public",
+          "site_admin": false
+        },
+        "body": "STEP 1 probe: updated body, second commit.",
+        "state": "COMMENTED",
+        "html_url": "https://github.com/launchpad-26/buzz/pull/1421#pullrequestreview-5014996076",
+        "pull_request_url": "https://api.github.com/repos/launchpad-26/buzz/pulls/1421",
+        "author_association": "MEMBER",
+        "_links": {
+          "html": {
+            "href": "https://github.com/launchpad-26/buzz/pull/1421#pullrequestreview-5014996076"
+          },
+          "pull_request": {
+            "href": "https://api.github.com/repos/launchpad-26/buzz/pulls/1421"
+          }
+        },
+        "submitted_at": "2026-08-25T04:39:04Z",
+        "commit_id": "f31f57bc3cd6e567be505b2b7d7e8b8f08f0f980"
+      },
+      {
+        "id": 5014997103,
+        "node_id": "CONSTRUCTED_27",
+        "user": {
+          "login": "serina-mcfall",
+          "id": 240091489,
+          "node_id": "U_kgDODk-BYQ",
+          "avatar_url": "https://avatars.githubusercontent.com/u/240091489?u=88323f14a5709f7a5b99bb20d21bd279d1cdb326&v=4",
+          "gravatar_id": "",
+          "url": "https://api.github.com/users/serina-mcfall",
+          "html_url": "https://github.com/serina-mcfall",
+          "followers_url": "https://api.github.com/users/serina-mcfall/followers",
+          "following_url": "https://api.github.com/users/serina-mcfall/following{/other_user}",
+          "gists_url": "https://api.github.com/users/serina-mcfall/gists{/gist_id}",
+          "starred_url": "https://api.github.com/users/serina-mcfall/starred{/owner}{/repo}",
+          "subscriptions_url": "https://api.github.com/users/serina-mcfall/subscriptions",
+          "organizations_url": "https://api.github.com/users/serina-mcfall/orgs",
+          "repos_url": "https://api.github.com/users/serina-mcfall/repos",
+          "events_url": "https://api.github.com/users/serina-mcfall/events{/privacy}",
+          "received_events_url": "https://api.github.com/users/serina-mcfall/received_events",
+          "type": "User",
+          "user_view_type": "public",
+          "site_admin": false
+        },
+        "body": "STEP 1 probe: updated body, second commit.",
+        "state": "COMMENTED",
+        "html_url": "https://github.com/launchpad-26/buzz/pull/1421#pullrequestreview-5014996076",
+        "pull_request_url": "https://api.github.com/repos/launchpad-26/buzz/pulls/1421",
+        "author_association": "MEMBER",
+        "_links": {
+          "html": {
+            "href": "https://github.com/launchpad-26/buzz/pull/1421#pullrequestreview-5014996076"
+          },
+          "pull_request": {
+            "href": "https://api.github.com/repos/launchpad-26/buzz/pulls/1421"
+          }
+        },
+        "submitted_at": "2026-08-25T04:39:04Z",
+        "commit_id": "f31f57bc3cd6e567be505b2b7d7e8b8f08f0f980"
+      },
+      {
+        "id": 5014997104,
+        "node_id": "CONSTRUCTED_28",
+        "user": {
+          "login": "serina-mcfall",
+          "id": 240091489,
+          "node_id": "U_kgDODk-BYQ",
+          "avatar_url": "https://avatars.githubusercontent.com/u/240091489?u=88323f14a5709f7a5b99bb20d21bd279d1cdb326&v=4",
+          "gravatar_id": "",
+          "url": "https://api.github.com/users/serina-mcfall",
+          "html_url": "https://github.com/serina-mcfall",
+          "followers_url": "https://api.github.com/users/serina-mcfall/followers",
+          "following_url": "https://api.github.com/users/serina-mcfall/following{/other_user}",
+          "gists_url": "https://api.github.com/users/serina-mcfall/gists{/gist_id}",
+          "starred_url": "https://api.github.com/users/serina-mcfall/starred{/owner}{/repo}",
+          "subscriptions_url": "https://api.github.com/users/serina-mcfall/subscriptions",
+          "organizations_url": "https://api.github.com/users/serina-mcfall/orgs",
+          "repos_url": "https://api.github.com/users/serina-mcfall/repos",
+          "events_url": "https://api.github.com/users/serina-mcfall/events{/privacy}",
+          "received_events_url": "https://api.github.com/users/serina-mcfall/received_events",
+          "type": "User",
+          "user_view_type": "public",
+          "site_admin": false
+        },
+        "body": "STEP 1 probe: updated body, second commit.",
+        "state": "COMMENTED",
+        "html_url": "https://github.com/launchpad-26/buzz/pull/1421#pullrequestreview-5014996076",
+        "pull_request_url": "https://api.github.com/repos/launchpad-26/buzz/pulls/1421",
+        "author_association": "MEMBER",
+        "_links": {
+          "html": {
+            "href": "https://github.com/launchpad-26/buzz/pull/1421#pullrequestreview-5014996076"
+          },
+          "pull_request": {
+            "href": "https://api.github.com/repos/launchpad-26/buzz/pulls/1421"
+          }
+        },
+        "submitted_at": "2026-08-25T04:39:04Z",
+        "commit_id": "f31f57bc3cd6e567be505b2b7d7e8b8f08f0f980"
+      },
+      {
+        "id": 5014997105,
+        "node_id": "CONSTRUCTED_29",
+        "user": {
+          "login": "serina-mcfall",
+          "id": 240091489,
+          "node_id": "U_kgDODk-BYQ",
+          "avatar_url": "https://avatars.githubusercontent.com/u/240091489?u=88323f14a5709f7a5b99bb20d21bd279d1cdb326&v=4",
+          "gravatar_id": "",
+          "url": "https://api.github.com/users/serina-mcfall",
+          "html_url": "https://github.com/serina-mcfall",
+          "followers_url": "https://api.github.com/users/serina-mcfall/followers",
+          "following_url": "https://api.github.com/users/serina-mcfall/following{/other_user}",
+          "gists_url": "https://api.github.com/users/serina-mcfall/gists{/gist_id}",
+          "starred_url": "https://api.github.com/users/serina-mcfall/starred{/owner}{/repo}",
+          "subscriptions_url": "https://api.github.com/users/serina-mcfall/subscriptions",
+          "organizations_url": "https://api.github.com/users/serina-mcfall/orgs",
+          "repos_url": "https://api.github.com/users/serina-mcfall/repos",
+          "events_url": "https://api.github.com/users/serina-mcfall/events{/privacy}",
+          "received_events_url": "https://api.github.com/users/serina-mcfall/received_events",
+          "type": "User",
+          "user_view_type": "public",
+          "site_admin": false
+        },
+        "body": "STEP 1 probe: updated body, second commit.",
+        "state": "COMMENTED",
+        "html_url": "https://github.com/launchpad-26/buzz/pull/1421#pullrequestreview-5014996076",
+        "pull_request_url": "https://api.github.com/repos/launchpad-26/buzz/pulls/1421",
+        "author_association": "MEMBER",
+        "_links": {
+          "html": {
+            "href": "https://github.com/launchpad-26/buzz/pull/1421#pullrequestreview-5014996076"
+          },
+          "pull_request": {
+            "href": "https://api.github.com/repos/launchpad-26/buzz/pulls/1421"
+          }
+        },
+        "submitted_at": "2026-08-25T04:39:04Z",
+        "commit_id": "f31f57bc3cd6e567be505b2b7d7e8b8f08f0f980"
+      }
+    ],
+    "page_1_link_header": "<https://api.github.com/repositories/1325338351/pulls/1421/reviews?per_page=30&page=2>; rel=\"next\", <https://api.github.com/repositories/1325338351/pulls/1421/reviews?per_page=30&page=2>; rel=\"last\"",
+    "page_1_link_header_provenance": "Link header SYNTAX copied from a genuine paginated response on this fork (gh api 'repos/launchpad-26/buzz/pulls?state=all&per_page=2' --include, 2026-08-25), with the path substituted for this endpoint -- the header SHAPE is real, the specific URL is not a response GitHub actually sent for this exact request.",
+    "page_2": [
+      {
+        "id": 5014996076,
+        "node_id": "PRR_kwDOTv8O788AAAABKurEbA",
+        "user": {
+          "login": "serina-mcfall",
+          "id": 240091489,
+          "node_id": "U_kgDODk-BYQ",
+          "avatar_url": "https://avatars.githubusercontent.com/u/240091489?u=88323f14a5709f7a5b99bb20d21bd279d1cdb326&v=4",
+          "gravatar_id": "",
+          "url": "https://api.github.com/users/serina-mcfall",
+          "html_url": "https://github.com/serina-mcfall",
+          "followers_url": "https://api.github.com/users/serina-mcfall/followers",
+          "following_url": "https://api.github.com/users/serina-mcfall/following{/other_user}",
+          "gists_url": "https://api.github.com/users/serina-mcfall/gists{/gist_id}",
+          "starred_url": "https://api.github.com/users/serina-mcfall/starred{/owner}{/repo}",
+          "subscriptions_url": "https://api.github.com/users/serina-mcfall/subscriptions",
+          "organizations_url": "https://api.github.com/users/serina-mcfall/orgs",
+          "repos_url": "https://api.github.com/users/serina-mcfall/repos",
+          "events_url": "https://api.github.com/users/serina-mcfall/events{/privacy}",
+          "received_events_url": "https://api.github.com/users/serina-mcfall/received_events",
+          "type": "User",
+          "user_view_type": "public",
+          "site_admin": false
+        },
+        "body": "STEP 1 probe: updated body, second commit.",
+        "state": "COMMENTED",
+        "html_url": "https://github.com/launchpad-26/buzz/pull/1421#pullrequestreview-5014996076",
+        "pull_request_url": "https://api.github.com/repos/launchpad-26/buzz/pulls/1421",
+        "author_association": "MEMBER",
+        "_links": {
+          "html": {
+            "href": "https://github.com/launchpad-26/buzz/pull/1421#pullrequestreview-5014996076"
+          },
+          "pull_request": {
+            "href": "https://api.github.com/repos/launchpad-26/buzz/pulls/1421"
+          }
+        },
+        "submitted_at": "2026-08-25T04:39:04Z",
+        "commit_id": "f31f57bc3cd6e567be505b2b7d7e8b8f08f0f980"
+      }
+    ],
+    "page_2_holds_the_marked_review": true
+  }
+}
