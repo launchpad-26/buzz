@@ -24,7 +24,7 @@ win:
      the issue-comment surface; see ADJUDICATION.md's #287 section for the
      scope decision this codifies -- only the issue-comment surface can
      supply an authoritative block.
-  5. zero well-formed blocks anywhere                     -> "none_found"
+  5. zero blocks anywhere                                  -> "none_found"
   6. exactly one closed, well-formed block                -> "accepted"
   7. two or more closed, well-formed blocks, each in a
      DIFFERENT comment                                    -> "accepted",
@@ -55,10 +55,7 @@ class BlockLocation:
     counts against the set.
 
     ``comment_id``/``surface``/``position`` (0-indexed within that comment)
-    satisfy STEP 5's naming requirement. ``start_line``/``end_line`` (from
-    `verdict_blocks.LocatedBlock`, 1-indexed, ``end_line`` is ``None`` for an
-    unclosed fence) point at the actual fence within the comment body, not
-    only the comment as a whole. ``reason`` carries `verdict_blocks.
+    satisfy STEP 5's naming requirement. ``reason`` carries `verdict_blocks.
     parse_rows`'s own specific per-row reason string(s) when this location is
     part of a malformed refusal (branch 3) -- "" everywhere else -- so a
     refusal names the specific row and specific problem, never a single fixed
@@ -68,8 +65,6 @@ class BlockLocation:
     comment_id: int
     surface: str
     position: int
-    start_line: int
-    end_line: int | None
     created_at: str = ""
     reason: str = ""
 
@@ -96,8 +91,6 @@ def _location(tb: TaggedBlock, reason: str = "") -> BlockLocation:
         comment_id=tb.comment_id,
         surface=tb.surface,
         position=tb.position,
-        start_line=tb.block.start_line,
-        end_line=tb.block.end_line,
         created_at=tb.created_at,
         reason=reason,
     )
@@ -182,7 +175,11 @@ def resolve(results: dict[str, CommentFetch]) -> Resolution:
     # later-created_at inline annotation could otherwise silently outrank a
     # real, complete issue-comment block), and never silently dropped as if
     # it were not there (that would make it indistinguishable from branch 5's
-    # "none found"). See ADJUDICATION.md's #287 section.
+    # "none found"). See ADJUDICATION.md's #287 section. Names every block in
+    # the set, not only the review-surface one(s) -- same reasoning as branch
+    # 3: a refusal that shows only the objectionable block hides a real,
+    # complete issue-comment block sitting in the same set, which is the
+    # partial picture DoD bullet 2 exists to prevent.
     review_well_formed = [
         tb for tb, well_formed, _rows, _malformed in evaluations
         if well_formed and tb.surface == "review"
@@ -195,7 +192,18 @@ def resolve(results: dict[str, CommentFetch]) -> Resolution:
                 "(inline code-comment) surface; only the issue-comment "
                 "surface can supply an authoritative block"
             ),
-            refused_locations=[_location(tb) for tb in review_well_formed],
+            refused_locations=[
+                _location(
+                    tb,
+                    reason=(
+                        "well-formed block on the review surface, which cannot "
+                        "be authoritative"
+                    )
+                    if tb.surface == "review"
+                    else "",
+                )
+                for tb, _well_formed, _rows, _malformed in evaluations
+            ],
         )
 
     # Branch 5: zero blocks found anywhere -- a distinguishable "none found",

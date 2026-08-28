@@ -169,20 +169,41 @@ STEP 5  Implement the Option-B resolution rule.                    [needs 1, 3, 
           any comment)                                   → refuse, naming every block's
                                        comment id, surface, and position — not only the
                                        offending one
+          a well-formed, closed block found on the **review** (inline code-comment)
+          surface                                         → refuse outright, naming the
+                                       whole evaluated set (not only the review-surface
+                                       block) — added post-review-final (see ADDENDUM
+                                       below): resolves this section's own earlier
+                                       "merged across both surfaces" wording and the OPEN
+                                       item on review-comment scope, in the direction of
+                                       never letting a partial inline annotation silently
+                                       outrank or silently supersede a real issue-comment
+                                       block
           zero blocks                                    → a distinguishable "none found"
                                        result, not an error
           one closed, well-formed block                  → accept it
-          two+ blocks, all closed and fully well-formed, in **different** comments
-                                                           → accept the block with the
-                                       highest `(created_at, comment_id)` pair, merged
-                                       across both surfaces — `created_at` is only
-                                       second-resolution, so `comment_id` (monotonically
-                                       increasing on GitHub) is the deciding tie-break, not
-                                       "position within a comment" (that tie-break only
-                                       ever applied to the always-refused same-comment
-                                       case, so it's dropped rather than kept as dead
-                                       code). Report every earlier one as superseded,
-                                       naming its comment id, surface, and position
+          two+ blocks, all closed and fully well-formed, in **different** comments, all
+          on the **issue-comment surface** (the review branch above already removed any
+          review-surface block from contention)           → accept the block with the
+                                       highest `(created_at, comment_id)` pair —
+                                       `created_at` is only second-resolution, so
+                                       `comment_id` (monotonically increasing on GitHub)
+                                       is the deciding tie-break, not "position within a
+                                       comment" (that tie-break only ever applied to the
+                                       always-refused same-comment case, so it's dropped
+                                       rather than kept as dead code). Report every
+                                       earlier one as superseded, naming its comment id,
+                                       surface, and position
+
+ADDENDUM (post-build, after two review-final passes): this section originally said the
+accept branch's ordering was "merged across both surfaces". Review-final's second pass
+(finding 1, High) correctly caught that the shipped code instead refuses any well-formed
+review-surface block outright — a stricter, evidence-backed answer to the OPEN item below,
+not an oversight — and that this section hadn't been updated to say so. Fixed here rather
+than left contradicting the code: only the issue-comment surface can supply an
+authoritative block; a well-formed block on the review surface always refuses. See
+ADJUDICATION.md's #287 section for the same decision recorded where a consumer would
+actually read it.
         done when: run against #261's real comment set → resolves to `5364261676`'s block,
         reports `5364185647` as superseded; against #264 → resolves to `5364504768`'s
         block (the Blocker promotion), reports `5364221899` as superseded; a synthetic
@@ -256,13 +277,13 @@ BUDGET  STEP 5 is the step most likely to eat the budget, more so after review-p
   or-forced-state assertions depend on getting it right.
 
 OPEN  Not for a builder to decide silently:
-  Whether GitHub *review-line* comments (`pulls/{pr}/comments`, inline code comments) are
-  in scope alongside issue-level PR comments. The issue says "pull-request comments"
-  without specifying which surface; the two real double-block examples are both
-  issue-level. This plan includes both surfaces in STEP 4's fetch (since `fetch.py`
-  already distinguishes them and excluding one silently would be a narrower guard than
-  the issue asks for), but that inclusion itself wasn't asked for explicitly and should be
-  confirmed at review-plan time.
+  RESOLVED (post-build, see STEP 5's ADDENDUM): whether GitHub *review-line* comments
+  (`pulls/{pr}/comments`, inline code comments) are in scope. Both surfaces are fetched
+  (STEP 4), but only the issue-comment surface can supply an authoritative block — a
+  well-formed block found on the review surface always refuses, never silently accepted,
+  never silently merged into the ordering, never silently dropped. Both real double-block
+  examples (#261, #264) only ever used the issue-comment surface, which is the evidence
+  this rests on.
   Whether an actual consumer (#119's banner path or #426's pre-review packet) gets wired
   to call STEP 7's entry point, and when — deliberately left to whichever of those issues
   builds next, per the issue's own "no consumer yet to migrate."

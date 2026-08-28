@@ -68,9 +68,7 @@ class LocatedBlock:
     No ``info`` field: every returned block's info string is already exactly
     ``verdict`` (that's what qualifies it for the returned list at all -- see
     ``locate_verdict_blocks``), so a stored copy would be produced and never
-    read for anything a caller couldn't already assume. ``start_line``/
-    ``end_line`` ARE read -- ``verdict_resolution.BlockLocation`` propagates
-    them so a refusal can point at the actual fence line within a comment.
+    read for anything a caller couldn't already assume.
     """
 
     start_line: int

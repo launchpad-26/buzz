@@ -193,7 +193,10 @@ class ReviewSurfaceNeverAuthoritativeTests(unittest.TestCase):
         well-formed review-surface block: proves the fix does not silently
         pick the "good" issue block while quietly discarding the review one
         (that would be "silently ignoring it", which the fix must not do
-        either) -- the whole set is refused."""
+        either) -- the whole set is refused, and BOTH locations are named
+        (review-final Medium #4: a refusal naming only the objectionable
+        block would hide the real issue-comment block sitting in the same
+        set -- the partial picture DoD bullet 2 exists to prevent)."""
         issue_tb = TaggedBlock(
             _well_formed_located(), comment_id=1, surface="issue", created_at="2026-01-01T00:00:00Z", position=0
         )
@@ -207,7 +210,10 @@ class ReviewSurfaceNeverAuthoritativeTests(unittest.TestCase):
         resolution = resolve(results)
         self.assertEqual(resolution.outcome, "refused")
         self.assertIsNone(resolution.accepted)
-        self.assertEqual([loc.comment_id for loc in resolution.refused_locations], [2])
+        self.assertEqual([loc.comment_id for loc in resolution.refused_locations], [1, 2])
+        by_id = {loc.comment_id: loc.reason for loc in resolution.refused_locations}
+        self.assertEqual(by_id[1], "")
+        self.assertNotEqual(by_id[2], "")
 
 
 class QuotedAndIndentedLookalikeTests(unittest.TestCase):

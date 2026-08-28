@@ -69,7 +69,7 @@ def test_resolved_block_shape_stable() -> None:
 
 def test_block_location_shape_stable() -> None:
     fields = {f.name for f in dataclasses.fields(vr.BlockLocation)}
-    expected = {"comment_id", "surface", "position", "start_line", "end_line", "created_at", "reason"}
+    expected = {"comment_id", "surface", "position", "created_at", "reason"}
     check("BlockLocation carries exactly the documented fields", fields == expected, f"got {fields}")
 
 

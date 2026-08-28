@@ -150,13 +150,22 @@ def degrade(results: dict[str, CommentFetch], spec: str) -> dict[str, CommentFet
     ``degrade(results, "issue=absent")``. Accepts either this module's own short
     surface name or `fetch.py`'s longer one (`_SURFACE_ALIASES`) -- the reason
     string still names the spec exactly as given, unnormalized, so the caller
-    sees what they actually typed."""
+    sees what they actually typed.
+
+    State vocabulary is `fetch.UNREADABLE` plus ``"empty"`` -- narrower than
+    `fetch.degrade`'s (no ``"oversized"``-only-for-diffs equivalent needed
+    here beyond what `fetch.UNREADABLE` already covers), but ``"empty"`` is
+    included deliberately: a surface with zero comments is READABLE
+    (``CommentFetch.readable`` only excludes `fetch.UNREADABLE`), so this
+    forces the "zero blocks on this surface" shape without needing a real PR
+    that happens to have none.
+    """
     surface, _, state = spec.partition("=")
     surface = _normalize_surface(surface)
     if surface not in SURFACE_ENDPOINTS:
         raise ValueError(f"unknown surface: {surface!r}")
-    if state not in fetch.UNREADABLE:
-        raise ValueError(f"unknown unreadable state: {state!r}")
+    if state not in fetch.UNREADABLE and state != "empty":
+        raise ValueError(f"unknown state: {state!r}")
     results = dict(results)
     results[surface] = CommentFetch(state=state, reason=f"forced by --degrade {spec}")
     return results
