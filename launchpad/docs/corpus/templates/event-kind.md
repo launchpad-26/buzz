@@ -247,11 +247,16 @@ requirement for the shape of an instance node, not a restatement of any MUST/SHO
 normative-policy framework — this document is a template, not a standard, per the
 *Scope and authority* note above.)
 
-1. **Title and kind identity.** The kind's name, its integer number, and its exact
+1. **Title and kind identity.** The kind's name, its integer number, its exact
    constant name in `crates/buzz-core/src/kind.rs` (e.g. `KIND_AGENT_TURN_METRIC =
-   44200`). If the kind is proposed but not yet implemented, say so explicitly and
-   name the constant it will need — do not let a reader assume every documented
-   kind already ships.
+   44200`), and this node's own front-matter `type: interfaces-events` — the
+   corpus-surface value `node.schema.json`'s enum reserves for the combined
+   interface/event surface, the same value the sibling interface template
+   (`#1342`) states a node built from *its* template carries. State the type
+   explicitly here rather than leaving an instance author to guess it: `type` is
+   a closed enum, and a wrong guess hard-fails schema validation. If the kind is
+   proposed but not yet implemented, say so explicitly and name the constant it
+   will need — do not let a reader assume every documented kind already ships.
 
 2. **Referenced NIP.** Name the exact specification the kind conforms to: a
    numbered NIP in `nostr-protocol/nips` (pin the citation to a commit SHA, per

@@ -28,9 +28,8 @@ evidence:
     evidence:
       - "launchpad/docs/corpus/schema/relationships.schema.json"
   - statement: "Parent Feature #602's success criteria list the corpus's in-scope surfaces as a single combined item -- 'architecture, layers, capabilities, platforms, implementation, interfaces/events, verification, operations, development, release, governance, agent and ingestion' -- so interface-shaped and event-kind-shaped instance nodes share one corpus surface rather than being enumerated as two."
-    entry_class: FACT
-    evidence:
-      - "https://github.com/launchpad-26/buzz/issues/602"
+    entry_class: TEAM_KNOWLEDGE
+    provided_by: "launchpad-26/buzz#602 success criteria"
   - statement: "node.schema.json's corresponding enum member for that combined surface is the single hyphenated token interfaces-events, not two separate values."
     entry_class: FACT
     evidence:
@@ -97,13 +96,11 @@ evidence:
     entry_class: TEAM_KNOWLEDGE
     provided_by: "launchpad-26/buzz#1532"
   - statement: "Parent Feature #605's acceptance criteria require that 'every template states its purpose, required sections, evidence expectations and the industry model/standard it adapts', and this is the acceptance bar this node is built against rather than issue #1342's own copied-over standards-track Definition of Done."
-    entry_class: FACT
-    evidence:
-      - "https://github.com/launchpad-26/buzz/issues/605"
+    entry_class: TEAM_KNOWLEDGE
+    provided_by: "launchpad-26/buzz#605 acceptance criteria"
   - statement: "Issue #1342's own Definition of Done is byte-identical to the standards-track boilerplate ('States scope and authority/source of the policy. Separates MUST requirements from SHOULD guidance. Defines enforcement/checks and exception/escalation process. Links decisions or higher-order policy instead of duplicating them.'), the same text independently found copied across #1326-#1351 by the batch dispatch brief for this task set."
-    entry_class: FACT
-    evidence:
-      - "https://github.com/launchpad-26/buzz/issues/1342"
+    entry_class: TEAM_KNOWLEDGE
+    provided_by: "launchpad-26/buzz#1342 definition of done"
 ---
 
 # Template: interface

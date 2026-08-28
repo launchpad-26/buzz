@@ -244,6 +244,16 @@ Read this section before drafting.
   invariant node may underpin several such contracts at once (see *Industry model
   adapted* point 3) and is the deeper claim an interface's contract can point at
   via `references`, rather than a contract itself.
+- **Not `#1349`'s test-contract template.** A test-contract node's whole content
+  *is* one obligation paired with a named verifying test and a runnable command to
+  run it, fixed at `type: verification`. An invariant node states a property that
+  always holds, across whichever of five enforcement tiers actually holds it
+  (type-system-enforced, structurally enforced, test-enforced, predicate-enforced,
+  or convention-and-review only) — only one of those tiers is test-enforced, and
+  `type` is picked by the subject matter the invariant concerns rather than fixed
+  to `verification`. **The test**: is the node's job to name and run one specific
+  test (test-contract), or to state a property true of the system and say which
+  tier — possibly, but not necessarily, a test — actually holds it (invariant)?
 - **Not the front-matter contract or corpus procedure.** Those are
   `node.schema.json` and `AGENTS.md`'s territory, unconditionally, for every node
   type including this one's own instances.
