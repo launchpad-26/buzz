@@ -204,16 +204,28 @@ export function SettingsView({
     // The registration seam (#1502, PR #1503) only widens `settingsSections` — it
     // doesn't add cohort values to this file's hardcoded nav groups, so a
     // registered-but-ungrouped section would render (reachable by direct
-    // navigation) but never appear in the sidebar. This synthesizes one
-    // additive group from the registry so registering a cohort section is
-    // enough on its own, matching the seam's own intent.
-    const cohortGroupSections = cohortSettingsSections
-      .map((entry) => visibleSectionByValue.get(entry.value))
-      .filter((entry): entry is SettingsSectionDescriptor => entry != null);
+    // navigation) but never appear in the sidebar. This synthesizes groups
+    // from each descriptor's own `navGroup` (review-final finding on #551:
+    // an earlier version hardcoded the group label to the first registrant's
+    // own name, so a second registrant would have landed under a group
+    // named after the first panel).
+    const cohortGroups: Array<{
+      label: string;
+      sections: SettingsSectionDescriptor[];
+    }> = [];
+    const cohortGroupIndexByLabel = new Map<string, number>();
+    for (const entry of cohortSettingsSections) {
+      if (!visibleSectionByValue.has(entry.value)) continue;
+      let index = cohortGroupIndexByLabel.get(entry.navGroup);
+      if (index === undefined) {
+        index = cohortGroups.length;
+        cohortGroupIndexByLabel.set(entry.navGroup, index);
+        cohortGroups.push({ label: entry.navGroup, sections: [] });
+      }
+      cohortGroups[index].sections.push(entry);
+    }
 
-    return cohortGroupSections.length > 0
-      ? [...upstreamGroups, { label: "Help", sections: cohortGroupSections }]
-      : upstreamGroups;
+    return [...upstreamGroups, ...cohortGroups];
   }, [visibleSectionByValue]);
 
   return (

@@ -18,6 +18,13 @@ export type CohortSettingsSectionDescriptor = {
   label: string;
   icon: LucideIcon;
   render: () => React.ReactNode;
+  /**
+   * Sidebar nav group this section is synthesized into (review-final finding
+   * on #551: this used to be hardcoded to one panel's own label in
+   * `SettingsView.tsx`, so a second registrant would have landed under a
+   * group named after the first panel).
+   */
+  navGroup: string;
 };
 
 /**

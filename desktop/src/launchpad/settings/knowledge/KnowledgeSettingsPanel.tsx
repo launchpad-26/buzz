@@ -28,4 +28,5 @@ export const knowledgeSettingsSection: CohortSettingsSectionDescriptor = {
   label: "Help",
   icon: BookOpen,
   render: () => <KnowledgeSettingsPanel />,
+  navGroup: "Help",
 };

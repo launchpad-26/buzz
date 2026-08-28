@@ -29,3 +29,13 @@ named as the one upgrade worth reconsidering later, but is not adopted now.
 
 No seeded content (`#552`) and no `knowledge.*` query interface (`#553`,
 `F22`) exist in this crate yet — both are separate, later work.
+
+**Not yet wired to the desktop app, and that path is an open question.** This
+crate is a root-workspace member (`Cargo.toml`'s `members` list), but root
+`Cargo.toml` excludes `desktop/src-tauri` from that workspace. Root-workspace
+membership alone does not make this crate reachable from the Tauri backend —
+depending on it from `desktop/src-tauri` would mean editing
+`desktop/src-tauri/Cargo.toml`, a third upstream file ADR-0045's granted
+exception (the root `Cargo.toml` members list) does not cover. Whoever wires
+the crate into the desktop build (`#552` or later) needs to resolve that, not
+assume it falls out of this scaffold.

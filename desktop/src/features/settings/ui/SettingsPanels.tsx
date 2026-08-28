@@ -83,7 +83,7 @@ import { UpdateChecker } from "../UpdateChecker";
 import { SettingsSectionHeader } from "./SettingsSectionHeader";
 import { VoiceSettingsCard } from "./VoiceSettingsCard";
 
-export type UpstreamSettingsSection =
+type UpstreamSettingsSection =
   | "profile"
   | "notifications"
   | "voice"
