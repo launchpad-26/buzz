@@ -65,11 +65,12 @@ evidence:
     entry_class: FACT
     evidence:
       - "crates/buzz-conformance/LIMITS.md:39-72"
-  - statement: "`LIMITS.md` names three test surfaces that must stay green on every PR -- 9 unit tests (`cargo test -p buzz-conformance --lib`), 5 replay-fixture tests (`cargo test -p buzz-conformance --test replay_fixtures`, replaying committed JSONL traces including a known-bad `bad_host_channel_mismatch.jsonl` expected to return `IllegalTransition` and `bad_coverage_breach.jsonl` expected to return `CoverageBreach`), and 2 `EmitGuard` coverage-breach self-tests (`cargo test -p buzz-relay --lib conformance::`) -- 16 tests total, none carrying `#[ignore]` in this repository at the recorded revision."
+  - statement: "`LIMITS.md` names three test surfaces that must stay green on every PR -- 9 unit tests (`cargo test -p buzz-conformance --lib`), 6 replay-fixture tests (`cargo test -p buzz-conformance --test replay_fixtures`, replaying committed JSONL traces including a known-bad `bad_host_channel_mismatch.jsonl` expected to return `IllegalTransition` and `bad_coverage_breach.jsonl` expected to return `CoverageBreach`), and 2 `EmitGuard` coverage-breach self-tests (`cargo test -p buzz-relay --lib conformance::`) -- 17 tests total, none carrying `#[ignore]` in this repository at the recorded revision. `LIMITS.md`'s own CI-command listing still says \"5\" and totals \"16\" (`crates/buzz-conformance/LIMITS.md:96,116`) -- stale against the file it describes: `replay_fixtures.rs` carries six `#[test]` functions, not five, per the direct count below."
     entry_class: FACT
     evidence:
       - "crates/buzz-conformance/LIMITS.md:85-120"
       - "grep_repo(pattern='#\\[ignore\\]|#\\[test\\]', path='crates/buzz-conformance/tests/proptest_checker.rs;crates/buzz-conformance/tests/replay_fixtures.rs') -> only #[test] attributes present, zero #[ignore] matches, verified 2026-08-28 against commit 338b4d0cf2dd76cc43964bb717ce9f0a94a9c7a5"
+      - "grep_repo(pattern='#\\[test\\]', path='crates/buzz-conformance/tests/replay_fixtures.rs') -> six matches (good_trace_passes_check, bad_host_channel_mismatch_is_illegal_transition, coverage_breach_is_caught, foreign_row_leak_is_non_interference, empty_trace_is_coverage_breach, missing_required_action_is_coverage_breach), verified 2026-08-29 against commit 338b4d0cf2dd76cc43964bb717ce9f0a94a9c7a5"
   - statement: "`LIMITS.md`'s own words name the gap this node's *Enforcement today* section reports honestly: 'The integration replay (live relay -> JsonlTracer -> check_trace) lands with the read-seam patch onto Max's req.rs work,' described as 'the next ratchet' rather than something already landed."
     entry_class: FACT
     evidence:
@@ -174,18 +175,28 @@ merely silent about a violation. Layered on top of that:
 - **Present but not guard-wrapped, for the read path.** `req.rs` calls
   `record_req_authcheck`, `record_read_message_rows`, and
   `record_read_by_id_rows` directly at specific call sites — these are
-  present today (contradicting an out-of-date comment elsewhere in the
-  conformance module suggesting the read seam was "held back"), but this
+  present today. This contradicts two separate pieces of prose that both
+  describe the read seam as not yet landed: a comment in the conformance
+  module suggesting it was "held back," and `LIMITS.md`'s own text, which
+  still says "the read-seam half of the gate is **not yet armed**"
+  (`crates/buzz-conformance/LIMITS.md:47-48`). This node treats the call
+  sites it directly verified in `req.rs` as authoritative over both pieces
+  of stale prose — the calls exist in the code at the recorded revision,
+  regardless of what either comment or `LIMITS.md` still says — but this
   node did not verify whether every exit from `req.rs`'s read paths is
-  itself `EmitGuard`-wrapped the way `ingest_event` is.
-- **Test-enforced, for the checker and guard machinery itself.** Sixteen
-  tests (9 unit + 5 replay-fixture + 2 `EmitGuard` self-tests), none
-  `#[ignore]`d, assert that `check_trace` correctly rejects known-bad
+  itself `EmitGuard`-wrapped the way `ingest_event` is, which is the
+  narrower thing "not yet armed" may still be correct about.
+- **Test-enforced, for the checker and guard machinery itself.**
+  Seventeen tests (9 unit + 6 replay-fixture + 2 `EmitGuard` self-tests),
+  none `#[ignore]`d, assert that `check_trace` correctly rejects known-bad
   synthetic traces (`bad_host_channel_mismatch.jsonl` →
   `IllegalTransition`, `bad_coverage_breach.jsonl` → `CoverageBreach`) and
-  that `EmitGuard`'s `Drop` fires on a missing emit. This proves the
-  *checking logic* works against fixtures — it does not prove any real
-  relay request has ever been checked by it.
+  that `EmitGuard`'s `Drop` fires on a missing emit. `LIMITS.md`'s own CI
+  listing undercounts this surface by one — it says "5" replay-fixture
+  tests and "16" total, but `replay_fixtures.rs` has six `#[test]`
+  functions today, not five. This proves the *checking logic* works
+  against fixtures — it does not prove any real relay request has ever
+  been checked by it.
 - **Not yet built, for the part that would actually catch a live
   violation.** No call site in `crates/buzz-relay` or
   `crates/buzz-test-client` invokes `check_trace` against a captured live
@@ -313,11 +324,14 @@ not yet reach production traffic at all.
   node verified the calls exist, not an exhaustive audit of every return
   path in `req.rs`.
 - **Whether the module doc comment in `crates/buzz-relay/src/conformance/
-  mod.rs` describing the read seam as "held back... for Eva to apply" is
-  simply stale** (the calls it describes as pending already exist in
-  `req.rs`) or reflects a narrower, still-pending sub-patch this node did
-  not identify. Reported as an open discrepancy rather than resolved either
-  way.
+  mod.rs` describing the read seam as "held back... for Eva to apply,"
+  and `LIMITS.md`'s own "the read-seam half of the gate is not yet
+  armed" (`crates/buzz-conformance/LIMITS.md:47-48`), are simply stale**
+  (the calls both describe as pending already exist in `req.rs`) or
+  reflect a narrower, still-pending sub-patch — e.g. `EmitGuard`-wrapping
+  the read path the way `ingest_event` is wrapped — this node did not
+  identify. Reported as an open discrepancy against both sources rather
+  than resolved either way.
 - **Whether any deployment configuration other than the default enables a
   non-`NoopTracer` in production** — this node verified the *default*
   construction path in `state.rs`, not every configuration surface that
