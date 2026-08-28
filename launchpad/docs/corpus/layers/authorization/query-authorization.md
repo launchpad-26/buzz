@@ -77,11 +77,11 @@ evidence:
     evidence:
       - "crates/buzz-relay/src/api/bridge.rs:887-949"
       - "crates/buzz-relay/src/api/bridge.rs:1375-1434"
-  - statement: "`count_events`'s underlying `count_events_authed` helper runs the identical p-gate, engram-gate, and author-only-gate checks as the WebSocket COUNT path, with the bridge.rs source comment explicitly stating 'same as WS REQ handler' and 'same as WS REQ and /query' at the corresponding call sites."
+  - statement: "`query_events`'s underlying `query_events_authed` helper (starting line 954) and `count_events`'s underlying `count_events_authed` helper (starting line 1439) each run the identical p-gate and author-only-gate checks as the WebSocket REQ/COUNT path, with the bridge.rs source comments at each site explicitly stating 'same as WS REQ handler' (in `query_events_authed`) and 'same as WS REQ and /query' (in `count_events_authed`)."
     entry_class: FACT
     evidence:
-      - "crates/buzz-relay/src/api/bridge.rs:987-1005"
-      - "crates/buzz-relay/src/api/bridge.rs:1465-1482"
+      - "crates/buzz-relay/src/api/bridge.rs:954-1005"
+      - "crates/buzz-relay/src/api/bridge.rs:1439-1482"
   - statement: "`buzz-auth`'s `ChannelAccessChecker` trait and its `check_read_access`/`check_write_access` functions (`crates/buzz-auth/src/access.rs`, re-exported from `crates/buzz-auth/src/lib.rs`) have no call sites anywhere in the workspace outside their own unit tests in `access.rs` itself, confirmed by a direct `grep -rn check_read_access crates/` across every crate in the repository."
     entry_class: FACT
     evidence:
@@ -97,7 +97,7 @@ evidence:
     confidence: 0.85
   - statement: "Buzz's CLAUDE.md states as a project-wide gotcha that 'Relay queries must specify kinds — omitting kinds triggers the p-gate (403)', which is the same behavior this node traces to `p_gated_filters_authorized`'s `is_none_or` default rather than a separately implemented top-level kinds requirement."
     entry_class: TEAM_KNOWLEDGE
-    provided_by: "/home/serina/Launchpad/buzz/CLAUDE.md, Common Gotchas #2"
+    provided_by: "CLAUDE.md (repo root), Common Gotchas #2"
   - statement: "Issue #1039's own Definition of Done requires exactly one hand-authored canonical document, schema-valid front matter with typed relationships where appropriate, one independently maintainable idea, traceable FACT/INFERENCE/TEAM_KNOWLEDGE claims, links to related concepts/implementation/verification without duplicating them, a check against the recorded provenance revision, a clean validator run, a one-sentence definition before deeper explanation, stated boundaries/non-goals, and examples that clarify rather than introduce a second concept."
     entry_class: TEAM_KNOWLEDGE
     provided_by: "launchpad-26/buzz#1039 definition of done"
@@ -240,12 +240,12 @@ not part of that enforcement today.
   intended to serve were ever the same code path historically (e.g. before
   a refactor) was not investigated — this node reports the current state
   only, via `git blame`/history was not run.
-- `P_GATED_KINDS`'s numeric values are verified directly against
-  `crates/buzz-core/src/kind.rs` in the evidence ledger above.
-  `AUTHOR_ONLY_KINDS`'s three members (event reminder, push lease, private
-  managed agent) are named descriptively without restating their numeric
-  values, since that list's own doc comment already warns it may grow past
-  a small linear set — a reader who needs the current integers should read
+- `AUTHOR_ONLY_KINDS`'s three members (event reminder, push lease, private
+  managed agent) are named descriptively above without restating their
+  numeric kind values (`P_GATED_KINDS`'s values are verified and cited
+  directly in the evidence ledger; `AUTHOR_ONLY_KINDS`'s are not), since
+  that list's own doc comment warns it may grow past a small linear set — a
+  reader who needs the current integers should read
   `crates/buzz-core/src/kind.rs` directly rather than trust a copy here,
   which would drift silently if the list changes.
 - No relationship to #1033 or #1035 is declared because neither is merged
