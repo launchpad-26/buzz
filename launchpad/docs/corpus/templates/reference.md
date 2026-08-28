@@ -80,9 +80,8 @@ evidence:
     entry_class: TEAM_KNOWLEDGE
     provided_by: "launchpad-26/buzz#605"
   - statement: "Issue #1346's own Definition of Done is byte-identical to the standards-track boilerplate ('States scope and authority/source of the policy. Separates MUST requirements from SHOULD guidance. Defines enforcement/checks and exception/escalation process. Links decisions or higher-order policy instead of duplicating them.'), the same text independently found copied across #1326-#1351 by the batch dispatch brief for this task set."
-    entry_class: FACT
-    evidence:
-      - "https://github.com/launchpad-26/buzz/issues/1346"
+    entry_class: TEAM_KNOWLEDGE
+    provided_by: "launchpad-26/buzz#1346 definition of done"
 ---
 
 # Template: reference

@@ -46,9 +46,8 @@ evidence:
       - "docs/nips/NIP-DV.md"
       - "docs/nips/NIP-PL.md"
   - statement: "Parent Feature #605's acceptance criteria require that 'every template states its purpose, required sections, evidence expectations and the industry model/standard it adapts', and this is the acceptance bar this node is built against rather than issue #1344's own copied-over standards-track Definition of Done."
-    entry_class: FACT
-    evidence:
-      - "https://github.com/launchpad-26/buzz/issues/605"
+    entry_class: TEAM_KNOWLEDGE
+    provided_by: "launchpad-26/buzz#605 acceptance criteria"
   - statement: "Issue #1313 (documentation-standard), read at its own branch head, states in its own scope-and-omissions table that 'The required shape of a per-node-type template, which is a different document kind with its own required-content list' is owned by '#1326-#1351', i.e. explicitly not by #1313 itself; and separately states that its own four required-content clauses (scope/authority, MUST/SHOULD split, enforcement/exceptions, link-not-duplicate) are shared 'across the batch's policy-kind tasks rather than a contract specific to standards', naming #1344 by number among five sampled template issues that carry the same clauses."
     entry_class: FACT
     evidence:

@@ -407,7 +407,7 @@ overlap is where duplicated, silently-drifting claims come from.
 |---|---|
 | **Above:** architecture-context (#1328) | Shows the system as one box plus its external actors. This template does not repeat that box's contents — it names the context node and moves straight to what is inside the boundary. |
 | **Below:** architecture-component (#1326) | Shows what is inside one container. This template stops at "what is this container, in what technology, talking to what" — it does not describe a container's internal modules or request handlers (C4's Component level), nor the classes inside them (C4's Code level, one layer deeper still). |
-| **Sideways:** deployment (#1336, not yet written) | Shows where containers run — clustering, replicas, environments, infrastructure. Checked directly against the C4 primary source while drafting this node: `c4model.com`'s own Deployment diagram page independently states this is a separate diagram type answering "where do these run," not a section of the Container diagram. The boundary is not ambiguous at the primary-source level; #1336, when written, owns it. |
+| **Sideways:** deployment (`corpus-template-deployment`, #1336) | Shows where containers run — clustering, replicas, environments, infrastructure. Checked directly against the C4 primary source while drafting this node: `c4model.com`'s own Deployment diagram page independently states this is a separate diagram type answering "where do these run," not a section of the Container diagram. The boundary is not ambiguous at the primary-source level; `corpus-template-deployment` owns it. |
 
 ## Scope and omissions
 
@@ -421,7 +421,7 @@ Container diagram, arc42 section 5) it adapts.
 |---|---|
 | The system's external boundary and actors | #1328 (architecture-context template) |
 | One container's internal building blocks | #1326 (architecture-component template) |
-| Where containers physically or virtually run | #1336 (deployment template, not yet written) |
+| Where containers physically or virtually run | `corpus-template-deployment` (#1336) |
 | The evidence-class contract itself (FACT/INFERENCE/TEAM_KNOWLEDGE, citation shapes) | `launchpad/docs/corpus/AGENTS.md` |
 | The `confidence` field's meaning and requirements | `launchpad/docs/corpus/standards/confidence.md` |
 | Citing an accepted decision as evidence | `launchpad/docs/corpus/standards/decision-references.md` |

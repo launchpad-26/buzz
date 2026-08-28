@@ -23,7 +23,7 @@ evidence:
       - "launchpad/docs/corpus/README.md"
       - "launchpad/docs/corpus/standards/confidence.md"
       - "launchpad/docs/corpus/standards/decision-references.md"
-  - statement: "relationships.schema.json defines five relationship types -- depends-on, supersedes, implements, references, part-of -- and states references' directionality as 'source cites target as supporting context; no ownership or currency dependency implied', with an inverse named referenced-by classed authored -- the only one of the five relationship types whose inverse is authored rather than generated."
+  - statement: "relationships.schema.json defines five relationship types -- depends-on, supersedes, implements, references, part-of -- and states references' directionality as 'source cites target as supporting context; no ownership or currency dependency implied', with an inverse named referenced-by that is authored, not generated -- the only one of the five relationship types whose inverse is authored rather than generated."
     entry_class: FACT
     evidence:
       - "launchpad/docs/corpus/schema/relationships.schema.json"
@@ -86,9 +86,8 @@ evidence:
     entry_class: TEAM_KNOWLEDGE
     provided_by: "launchpad-26/buzz#605 acceptance criteria"
   - statement: "Issue #1345's own Definition of Done is byte-identical to the standards-track boilerplate ('States scope and authority/source of the policy. Separates MUST requirements from SHOULD guidance. Defines enforcement/checks and exception/escalation process. Links decisions or higher-order policy instead of duplicating them.'), the same text independently found copied across #1326-#1351 by the batch dispatch brief for this task set."
-    entry_class: FACT
-    evidence:
-      - "https://github.com/launchpad-26/buzz/issues/1345"
+    entry_class: TEAM_KNOWLEDGE
+    provided_by: "launchpad-26/buzz#1345 definition of done"
   - statement: "No open or closed launchpad-26/buzz issue matches a search for a corpus template task covering Diátaxis's Tutorial form, as distinct from the How-to form this node covers; Diátaxis itself treats the two as 'wholly distinct' despite both being action-oriented, so a corpus node built from this how-to/procedure template would be the wrong shape for tutorial (acquisition-of-skill) content -- at the time of the search; #1538 was then filed to own it."
     entry_class: FACT
     evidence:
