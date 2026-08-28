@@ -160,7 +160,8 @@ node under its own task, not a section added here.
 
 **Not a general operations guide.** A runbook is scoped to *one* alert or failure
 condition. A node that tries to cover "how to operate service X" in general is
-either an `operations`-type reference node or several runbooks, not one.
+either a procedure node (`corpus-template-procedure`) or several runbooks, not
+one.
 
 **Not a substitute for the alert itself.** A runbook explains what to do once an
 alert has fired; it does not define the alert's trigger condition (that lives in
