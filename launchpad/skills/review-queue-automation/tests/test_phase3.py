@@ -36,11 +36,12 @@ def test_twelve_strategies_registered() -> None:
 
 def test_each_strategy_has_required_fields() -> None:
     for s in STRATEGIES:
-        assert s.roles and s.min_participants >= 1
+        assert s.roles
         assert s.aggregation in {"single", "consensus", "majority", "unanimous",
                                  "panel_adjudicated", "sequenced", "checklist_score",
                                  "hypothesis_register", "calibrated"}
-        assert 0.0 <= s.assurance_contribution <= 1.0
+        assert s.output_schema and s.disagreement_handling and s.model_route
+        assert s.budget_tokens > 0
         assert s.timeout_seconds > 0
 
 

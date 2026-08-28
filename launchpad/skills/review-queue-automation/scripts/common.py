@@ -331,6 +331,28 @@ class State:
               snapshot_hash TEXT,
               policy_version TEXT
             );
+            CREATE TABLE IF NOT EXISTS cost_ledger (
+              id INTEGER PRIMARY KEY AUTOINCREMENT,
+              recorded_at TEXT NOT NULL,
+              job_id TEXT NOT NULL,
+              repo TEXT NOT NULL,
+              number INTEGER NOT NULL,
+              model TEXT NOT NULL DEFAULT '',
+              provider_family TEXT NOT NULL DEFAULT '',
+              kind TEXT NOT NULL,
+              tokens INTEGER NOT NULL DEFAULT 0,
+              latency_ms INTEGER NOT NULL DEFAULT 0
+            );
+            CREATE INDEX IF NOT EXISTS cost_by_job ON cost_ledger(job_id, id);
+            CREATE INDEX IF NOT EXISTS cost_by_repo ON cost_ledger(repo, recorded_at);
+            CREATE TABLE IF NOT EXISTS circuit_breakers (
+              scope TEXT PRIMARY KEY,
+              failures INTEGER NOT NULL DEFAULT 0,
+              status TEXT NOT NULL DEFAULT 'closed',
+              open_until TEXT,
+              last_error TEXT,
+              updated_at TEXT NOT NULL
+            );
             CREATE INDEX IF NOT EXISTS ledger_by_job ON ledger_entries(job_id, id);
             CREATE INDEX IF NOT EXISTS ledger_by_pr ON ledger_entries(repo, number, head_sha);
             """
