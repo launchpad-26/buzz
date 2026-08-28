@@ -42,10 +42,11 @@ def main(argv: list[str] | None = None) -> int:
 
     args = parser.parse_args(argv)
 
-    resolved = resolve_or_onboarding(args.repo_root)
-    if resolved is None:
+    # `resolve_or_onboarding` always returns a 2-tuple; unpack, then test the
+    # config (testing the tuple for None never fires).
+    config, _ = resolve_or_onboarding(args.repo_root)
+    if config is None:
         return 1
-    config, _ = resolved
     repo = args.repo or (config.get("repository") or {}).get("slug", "")
 
     state = make_state(config)

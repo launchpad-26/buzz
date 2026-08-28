@@ -23,7 +23,12 @@ SLOT_FILES = tuple(re.findall(r'"review-[A-Z]\.txt"', PANEL_SRC))
 SLOT_FILES = {ln[1:-1] for ln in SLOT_FILES}  # strip surrounding quotes
 SKILL = (DOCS / "SKILL.md").read_text(encoding="utf-8")
 CONTRACTS = (DOCS / "references" / "contracts.md").read_text(encoding="utf-8")
-ALL_DOCS = SKILL + "\n" + CONTRACTS + "\n" + (DOCS / "references" / "classification.md").read_text(encoding="utf-8")
+OPERATORS = (DOCS / "OPERATORS.md").read_text(encoding="utf-8")
+ALL_DOCS = (
+    SKILL + "\n" + CONTRACTS + "\n"
+    + (DOCS / "references" / "classification.md").read_text(encoding="utf-8")
+    + "\n" + OPERATORS
+)
 SHADOW_SRC = (DOCS / "scripts" / "shadow.py").read_text(encoding="utf-8")
 
 
@@ -66,6 +71,74 @@ def test_approval_modes_match_evaluate() -> None:
     from approval_evaluate import VALID_DISPOSITIONS
     for mode in VALID_DISPOSITIONS:  # disabled, shadow, human_escalation, live
         assert mode in SKILL, f"SKILL.md must document approval mode {mode}"
+
+
+def test_every_executable_script_is_documented() -> None:
+    """The REVERSE direction of `test_documented_scripts_exist`.
+
+    That test only catches docs naming a script that does not exist. It passes
+    silently when a script has no documentation at all, which is how `history.py`
+    — the only producer of the shadow backtest's `--samples` file — went
+    undocumented while SKILL.md passed `history.json` as if it materialised.
+
+    Every module with a `__main__` block is reachable from a shell, so every one
+    must be named in SKILL.md or OPERATORS.md, even if only to say "internal, do
+    not run by hand".
+    """
+    named = set(re.findall(r"scripts/([a-z0-9_]+)\.py", SKILL + "\n" + OPERATORS))
+    undocumented = []
+    for path in sorted(SCRIPTS.glob("*.py")):
+        source = path.read_text(encoding="utf-8", errors="replace")
+        if '__name__ == "__main__"' not in source:
+            continue
+        if path.stem not in named:
+            undocumented.append(path.name)
+    assert not undocumented, (
+        "executable script(s) named in neither SKILL.md nor OPERATORS.md: "
+        + ", ".join(undocumented)
+    )
+
+
+def test_operator_guide_covers_the_operator_surface() -> None:
+    for heading in ("Onboarding", "Config reference", "Policy and authority",
+                    "Model routes", "Running the pipeline", "The human queue",
+                    "Canaries", "Historical ingest and shadow calibration",
+                    "Recovery", "Retention", "Shutdown"):
+        assert heading in OPERATORS, f"OPERATORS.md must cover {heading}"
+    # the "why did this PR get this outcome?" procedure and its tool
+    assert "why did this pr get this outcome" in OPERATORS.lower()
+    assert "scripts/explain.py" in OPERATORS
+    # the ingest step SKILL.md used to skip
+    assert "scripts/history.py" in OPERATORS
+    assert "--with-checks" in OPERATORS
+    assert "fail" in OPERATORS.lower()
+
+
+def test_ingest_step_is_documented_before_the_backtest() -> None:
+    """SKILL.md must not present a `--samples` file as if it materialised."""
+    assert "scripts/history.py" in SKILL
+    assert SKILL.index("scripts/history.py") < SKILL.index("--samples"), (
+        "SKILL.md must document the history.py ingest step before the "
+        "shadow.py invocation that consumes its output"
+    )
+
+
+def test_test_runner_is_documented() -> None:
+    assert "tests/run_all.py" in SKILL or "tests/run_all.py" in OPERATORS
+    assert (DOCS / "tests" / "run_all.py").is_file()
+
+
+def test_shadow_docs_do_not_claim_gates_are_never_hardcoded_true() -> None:
+    """`compute_gates` DOES default five gates open when called without evidence.
+    The docs may only claim shadow does not take that path — not that the
+    branch does not exist."""
+    for gate in ("bounded_change", "audit_writable", "assurance_met",
+                 "revalidation_ok", "rate_limit_ok"):
+        assert gate in SKILL, f"SKILL.md must name the {gate} evidence gate"
+    assert "ApprovalEvidence" in SHADOW_SRC
+    assert "evidence=evidence" in SHADOW_SRC, (
+        "shadow.py must pass explicit evidence into approval_evaluate.evaluate"
+    )
 
 
 def test_documented_scripts_exist() -> None:

@@ -85,8 +85,11 @@ GitHub operation.
 
 ## Must
 
-- `$CONFIG` defaults to `~/.config/review-queue-automation/config.json`. Copy
-  `config.example.json` there and fill paths, login, model pools.
+- The authoritative config is **repo-local**:
+  `<repo>/.review-queue-automation/config.json`, created by
+  `scripts/onboarding.py init` (see "Approval modes & authority" below and
+  [OPERATORS.md](OPERATORS.md) §1). `config.example.json` is the tracked
+  template; it is never itself a populated config.
 - Job state and leases are SQLite under `$STATE dir`. A non-blocking OS lock
   serializes every dispatcher command per state directory; progress artifacts are
   immutable files under `jobs/<job-id>/`.
@@ -97,7 +100,30 @@ GitHub operation.
   cost-to-quality value.
 
 The rest of the engineering policy is in `references/contracts.md`; the script/AI
-split is in `references/classification.md`.
+split is in `references/classification.md`. Full operator procedures —
+onboarding, config fields, routes, canaries, human queue, recovery, retention,
+shutdown — are in [OPERATORS.md](OPERATORS.md).
+
+## Why did this PR get this outcome?
+
+```bash
+python3 scripts/explain.py --repo-root <path> pr <number>
+python3 scripts/explain.py --repo-root <path> pr <number> --all-revisions --json
+python3 scripts/explain.py --repo-root <path> job <job-id>
+```
+
+Read-only reconstruction from the local ledger: no GitHub call, no model call, no
+change to the job. See [OPERATORS.md](OPERATORS.md) for the full triage
+procedure.
+
+## Tests
+
+The suite has no pytest dependency and is not covered by `just ci`:
+
+```bash
+python3 launchpad/skills/review-queue-automation/tests/run_all.py \
+        launchpad/skills/review-queue-automation
+```
 
 ## Approval modes & authority
 
@@ -142,16 +168,42 @@ Pure read-only, plus a deterministic time-based train/calibration split. Every
 historical sample must carry a independently sourced outcome
 (`clean|adverse|contested|unknown`), an evidence source, and a cutoff timestamp.
 Only evidence timestamped at or before the cutoff is reconstructed — no future
-data, and checks/adjudication/evidence are never hardcoded true. Each sample's
-head and the current policy hash are pinned in the report. Labels are never
-derived from the evaluator or from the fact the PR merged; a merged PR without an
-independent outcome is `unknown`. The report includes machine-readable rates
-(coverage, escalation, unknown) and a real threshold-sensitivity sweep.
+data. Each sample's head and the current policy hash are pinned in the report.
+Labels are never derived from the evaluator or from the fact the PR merged; a
+merged PR without an independent outcome is `unknown`. The report includes
+machine-readable rates (coverage, escalation, unknown), per-gate blocking counts,
+a threshold fitted on the train half and scored on the held-out half, and a real
+threshold-sensitivity sweep.
+
+**No gate is hardcoded true, and none is defaulted open.** The backtest grades
+against the *same* gate set as the live path: it builds an explicit
+`ApprovalEvidence` from what the historical record can prove and fails closed on
+the rest. `checks_ok` / `adjudication_complete` / `evidence_fresh` come from
+timestamps at-or-before the cutoff. Of the five external-evidence gates,
+`bounded_change` comes from the recorded diff size, `audit_writable` from a real
+write probe, `revalidation_ok` from the frozen head of a closed PR,
+`rate_limit_ok` from a replayed daily cap (a configured
+`poll.rest_remaining_floor` is *not* reconstructible and fails closed), and
+`assurance_met` must be supplied per sample in `--assessments`. A first run
+straight off `history.py` therefore reports 0% would-approve; that is an absence
+of evidence, and the report names the blocking gate rather than letting it read
+as a safety result.
+
+`scripts/history.py` is the **only** producer of the `--samples` file — ingest
+first, then backtest:
 
 ```bash
+python3 scripts/history.py --repo-root <path> --limit 100 \
+    --with-files --with-checks --out history.json
+
 python3 scripts/shadow.py --repo-root <path> --samples history.json \
     --verdicts v.json --assessments a.json --out report.json
 ```
+
+Without `--with-checks` no check evidence is ingested and `checks_complete_ok`
+stays fail-closed for every sample. `--verdicts` and `--assessments` are JSON
+objects keyed by PR number; string keys are accepted and coerced, and a
+non-integer key is rejected rather than dropped.
 
 Current-head shadow (no mutation, no decision record):
 
