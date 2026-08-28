@@ -145,8 +145,12 @@ class BuildDocumentShapeTests(unittest.TestCase):
         )
         self.assertEqual(
             set(doc.keys()),
-            {"pr", "merge_base_sha", "head_sha", "reports", "containment", "nonce"},
+            {"pr", "merge_base_sha", "head_sha", "reviewer", "reports", "containment", "nonce"},
         )
+        # `reviewer` records WHICH reviewer produced the document, so publish.py
+        # can tell a real clean pass from the stub's unconditional one. See
+        # reviewer_identity; an injected callable is never recorded as the stub.
+        self.assertEqual(doc["reviewer"]["kind"], run_dimensions.REVIEWER_INJECTED)
         self.assertEqual(doc["pr"], PR)
         self.assertEqual(doc["merge_base_sha"], MERGE_BASE_SHA)
         self.assertEqual(doc["head_sha"], HEAD_SHA)

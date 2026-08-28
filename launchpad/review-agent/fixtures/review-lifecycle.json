@@ -1,0 +1,158 @@
+{
+  "_comment": "#119 STEP 1 -- raw review-lifecycle API responses, captured live against throwaway PR #1421 (branch throwaway/119-review-lifecycle-probe) under a HUMAN gh auth token (serina-mcfall), not the workflow credential. Proves nothing about pull-requests write / contents read scopes -- that is STEP 9's job, under the real Actions token.",
+  "post": {
+    "command": "gh api repos/launchpad-26/buzz/pulls/1421/reviews -X POST -f body=\"STEP 1 probe: initial COMMENT review.\" -f event=\"COMMENT\"",
+    "status": 200,
+    "body": {
+      "id": 5014996076,
+      "node_id": "PRR_kwDOTv8O788AAAABKurEbA",
+      "user": {
+        "login": "serina-mcfall",
+        "id": 240091489,
+        "node_id": "U_kgDODk-BYQ",
+        "avatar_url": "https://avatars.githubusercontent.com/u/240091489?u=88323f14a5709f7a5b99bb20d21bd279d1cdb326&v=4",
+        "gravatar_id": "",
+        "url": "https://api.github.com/users/serina-mcfall",
+        "html_url": "https://github.com/serina-mcfall",
+        "followers_url": "https://api.github.com/users/serina-mcfall/followers",
+        "following_url": "https://api.github.com/users/serina-mcfall/following{/other_user}",
+        "gists_url": "https://api.github.com/users/serina-mcfall/gists{/gist_id}",
+        "starred_url": "https://api.github.com/users/serina-mcfall/starred{/owner}{/repo}",
+        "subscriptions_url": "https://api.github.com/users/serina-mcfall/subscriptions",
+        "organizations_url": "https://api.github.com/users/serina-mcfall/orgs",
+        "repos_url": "https://api.github.com/users/serina-mcfall/repos",
+        "events_url": "https://api.github.com/users/serina-mcfall/events{/privacy}",
+        "received_events_url": "https://api.github.com/users/serina-mcfall/received_events",
+        "type": "User",
+        "user_view_type": "public",
+        "site_admin": false
+      },
+      "body": "STEP 1 probe: initial COMMENT review.",
+      "state": "COMMENTED",
+      "html_url": "https://github.com/launchpad-26/buzz/pull/1421#pullrequestreview-5014996076",
+      "pull_request_url": "https://api.github.com/repos/launchpad-26/buzz/pulls/1421",
+      "author_association": "MEMBER",
+      "_links": {
+        "html": {
+          "href": "https://github.com/launchpad-26/buzz/pull/1421#pullrequestreview-5014996076"
+        },
+        "pull_request": {
+          "href": "https://api.github.com/repos/launchpad-26/buzz/pulls/1421"
+        }
+      },
+      "submitted_at": "2026-08-25T04:39:04Z",
+      "commit_id": "f31f57bc3cd6e567be505b2b7d7e8b8f08f0f980"
+    }
+  },
+  "put": {
+    "command": "gh api repos/launchpad-26/buzz/pulls/1421/reviews/5014996076 -X PUT -f body=\"STEP 1 probe: updated body, second commit.\"",
+    "status": 200,
+    "body": {
+      "id": 5014996076,
+      "node_id": "PRR_kwDOTv8O788AAAABKurEbA",
+      "user": {
+        "login": "serina-mcfall",
+        "id": 240091489,
+        "node_id": "U_kgDODk-BYQ",
+        "avatar_url": "https://avatars.githubusercontent.com/u/240091489?u=88323f14a5709f7a5b99bb20d21bd279d1cdb326&v=4",
+        "gravatar_id": "",
+        "url": "https://api.github.com/users/serina-mcfall",
+        "html_url": "https://github.com/serina-mcfall",
+        "followers_url": "https://api.github.com/users/serina-mcfall/followers",
+        "following_url": "https://api.github.com/users/serina-mcfall/following{/other_user}",
+        "gists_url": "https://api.github.com/users/serina-mcfall/gists{/gist_id}",
+        "starred_url": "https://api.github.com/users/serina-mcfall/starred{/owner}{/repo}",
+        "subscriptions_url": "https://api.github.com/users/serina-mcfall/subscriptions",
+        "organizations_url": "https://api.github.com/users/serina-mcfall/orgs",
+        "repos_url": "https://api.github.com/users/serina-mcfall/repos",
+        "events_url": "https://api.github.com/users/serina-mcfall/events{/privacy}",
+        "received_events_url": "https://api.github.com/users/serina-mcfall/received_events",
+        "type": "User",
+        "user_view_type": "public",
+        "site_admin": false
+      },
+      "body": "STEP 1 probe: updated body, second commit.",
+      "state": "COMMENTED",
+      "html_url": "https://github.com/launchpad-26/buzz/pull/1421#pullrequestreview-5014996076",
+      "pull_request_url": "https://api.github.com/repos/launchpad-26/buzz/pulls/1421",
+      "author_association": "MEMBER",
+      "_links": {
+        "html": {
+          "href": "https://github.com/launchpad-26/buzz/pull/1421#pullrequestreview-5014996076"
+        },
+        "pull_request": {
+          "href": "https://api.github.com/repos/launchpad-26/buzz/pulls/1421"
+        }
+      },
+      "submitted_at": "2026-08-25T04:39:04Z",
+      "commit_id": "f31f57bc3cd6e567be505b2b7d7e8b8f08f0f980"
+    },
+    "note": "id, submitted_at and commit_id are UNCHANGED from the POST response despite the body changing -- commit_id is frozen at submission, exactly as this plan's ALREADY TRUE already stated. This is the measurement the whole single-review strategy depends on, and it holds."
+  },
+  "delete": {
+    "command": "gh api repos/launchpad-26/buzz/pulls/1421/reviews/5014996076 -X DELETE",
+    "status": 422,
+    "body": {
+      "message": "Can not delete a non-pending pull request review",
+      "documentation_url": "https://docs.github.com/rest/pulls/reviews#delete-a-pending-review-for-a-pull-request",
+      "status": "422"
+    },
+    "note": "Can not delete a non-pending pull request review -- a submitted COMMENT review cannot be deleted, confirmed live."
+  },
+  "cross_author_put": {
+    "status": null,
+    "body": null,
+    "note": "NOT TESTED THIS SESSION. Requires a review already on the target pull request under a DIFFERENT login than the token in use, and this session has exactly one authenticated GitHub identity (serina-mcfall) with no safely-disposable foreign review to target -- the fresh throwaway PR carries only this session's own review, and attempting this against an existing real PR risks overwriting another cohort member's actual review body if GitHub unexpectedly allows it. STEP 2's find_existing/post_or_update code fails closed on this scenario (raises rather than PUTs) regardless of which way GitHub's answer falls, so the code's correctness does not depend on this measurement -- but the measurement itself remains genuinely untaken, not merely unrecorded. Left as an open item for whoever next has a second identity or a disposable foreign review available."
+  },
+  "post_user_login": "serina-mcfall",
+  "get_user": {
+    "command": "gh api user",
+    "status": 200,
+    "body": {
+      "login": "serina-mcfall",
+      "id": 240091489,
+      "node_id": "U_kgDODk-BYQ",
+      "avatar_url": "https://avatars.githubusercontent.com/u/240091489?v=4",
+      "gravatar_id": "",
+      "url": "https://api.github.com/users/serina-mcfall",
+      "html_url": "https://github.com/serina-mcfall",
+      "followers_url": "https://api.github.com/users/serina-mcfall/followers",
+      "following_url": "https://api.github.com/users/serina-mcfall/following{/other_user}",
+      "gists_url": "https://api.github.com/users/serina-mcfall/gists{/gist_id}",
+      "starred_url": "https://api.github.com/users/serina-mcfall/starred{/owner}{/repo}",
+      "subscriptions_url": "https://api.github.com/users/serina-mcfall/subscriptions",
+      "organizations_url": "https://api.github.com/users/serina-mcfall/orgs",
+      "repos_url": "https://api.github.com/users/serina-mcfall/repos",
+      "events_url": "https://api.github.com/users/serina-mcfall/events{/privacy}",
+      "received_events_url": "https://api.github.com/users/serina-mcfall/received_events",
+      "type": "User",
+      "user_view_type": "public",
+      "site_admin": false,
+      "name": "Serina McFall",
+      "company": null,
+      "blog": "https://vixenz.dev",
+      "location": "Auckland NZ",
+      "email": "serina.mcfall@gmail.com",
+      "hireable": null,
+      "bio": "Software Developer. AuDHD mum, career pivot at 45. Accessibility is the brief, not the polish. If a build makes one's life easier, it has earned its place.",
+      "twitter_username": null,
+      "notification_email": "serina.mcfall@gmail.com",
+      "public_repos": 18,
+      "public_gists": 0,
+      "followers": 0,
+      "following": 1,
+      "created_at": "2025-10-24T23:51:06Z",
+      "updated_at": "2026-08-18T22:36:59Z"
+    },
+    "note": "Succeeds under this HUMAN token (login: serina-mcfall). Says nothing about the Actions/installation credential -- GitHub's own REST docs for 'Get the authenticated user' list OAuth app tokens and PATs as supported, not installation access tokens, and no installation token exists outside a real Actions run, so that answer cannot be obtained from this checkout. STEP 2 does not use this call as its identity mechanism for exactly this reason; see PUBLISHING.md and STEP 9's live control for the Actions-side measurement."
+  },
+  "timeline_after_put": {
+    "command": "gh api repos/launchpad-26/buzz/issues/1421/timeline",
+    "events": [
+      "committed",
+      "reviewed"
+    ],
+    "note": "Exactly ONE 'reviewed' event despite two writes (POST then PUT) against the same review id -- the PUT produced no separate timeline entry. An edit to an existing review is therefore SILENT to a reader watching the timeline: the only way to see the update is to re-read the review body itself. This is the observation #121 needs to judge whether re-review-on-push is acceptable to human reviewers as currently designed."
+  },
+  "strategy_supported": "POST once, then PUT the body on every later push, with the head SHA named inside the body -- the header's chosen strategy is directly supported by this fixture: PUT returns 200 and DELETE is refused."
+}
