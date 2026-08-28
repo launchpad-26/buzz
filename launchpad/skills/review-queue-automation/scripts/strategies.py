@@ -8,6 +8,21 @@ recorded.
 
 Strategies never count failed/timed-out/invalid participants as agreement; the
 aggregator drops any participant whose output is missing or invalid.
+
+EVERY field declared on `Strategy` has a runtime consumer, and
+`tests/test_strategy_metadata.py` fails if one loses it. Declared-but-unread
+metadata reads as authoritative while changing nothing, which is worse than no
+metadata at all; six such fields had already accumulated here. The current
+consumers are:
+
+    name                   selection + attempt log + `fallback.recipe_for`
+    roles                  `panel._mode_participants` slot role labels
+    aggregation            `modes.mode_for` -> execution mode
+    disagreement_handling  `panel.run_panel` when counted signals diverge
+    output_schema          `panel.run_panel` schema guard (fail-closed)
+    budget_tokens          `budget.reserve` pre-spend reservation
+    timeout_seconds        `panel.run_panel` per-strategy runtime ceiling
+    model_route            `fallback.recipe_for` -> candidate ordering
 """
 
 from __future__ import annotations
@@ -27,45 +42,49 @@ VALID_AGGREGATIONS = frozenset(
 class Strategy:
     name: str
     roles: tuple[str, ...]  # participant roles, e.g. ("reviewer", "challenger")
-    parallel: bool  # True => participants run concurrently
-    min_participants: int
-    required_inputs: tuple[str, ...]
     output_schema: str  # e.g. "reviewer-verdict"
     aggregation: str
     disagreement_handling: str
-    degraded_form: str
-    assurance_contribution: float  # 0..1 towards achieved assurance
-    budget_tokens: int  # soft token budget
-    timeout_seconds: int
+    budget_tokens: int  # reservation ceiling, enforced pre-spend by budget.py
+    timeout_seconds: int  # per-strategy runtime ceiling; the panel takes the min
     model_route: str  # e.g. "preferred", "fallback", "diverse", "economical"
+
+
+#: Every declared field must have a runtime consumer (see the module docstring).
+#: `tests/test_strategy_metadata.py` asserts this against the real modules, so a
+#: newly-added dead field fails CI instead of shipping.
+DECLARED_FIELDS: tuple[str, ...] = (
+    "name", "roles", "output_schema", "aggregation", "disagreement_handling",
+    "budget_tokens", "timeout_seconds", "model_route",
+)
 
 
 # The full registry of the 12 named strategies from the spec.
 STRATEGIES: tuple[Strategy, ...] = (
-    Strategy("direct_analysis", ("reviewer",), False, 1, ("evidence.txt",), "reviewer-verdict",
-             "single", "single_verdict", "single_verdict", 0.35, 200000, 1800, "preferred"),
-    Strategy("decomposition", ("reviewer", "focus"), False, 2, ("evidence.txt", "files"), "reviewer-verdict",
-             "consensus", "adjudicate_split", "single_partial", 0.5, 300000, 2400, "preferred"),
-    Strategy("checklist", ("reviewer",), False, 1, ("evidence.txt", "rubric"), "reviewer-verdict",
-             "checklist_score", "flag_unknown", "single_verdict", 0.45, 200000, 1800, "preferred"),
-    Strategy("hypothesis_testing", ("reviewer",), False, 1, ("evidence.txt", "files", "tests"), "reviewer-verdict",
-             "hypothesis_register", "escalate", "single_uncertain", 0.4, 250000, 2400, "preferred"),
-    Strategy("adversarial", ("reviewer", "adversary"), False, 2, ("evidence.txt",), "reviewer-verdict",
-             "majority", "adjudicate_split", "single_verdict", 0.55, 300000, 2400, "diverse"),
-    Strategy("debate", ("proponent", "opponent"), True, 2, ("evidence.txt",), "reviewer-verdict",
-             "panel_adjudicated", "adjudicate_split", "single_proponent", 0.6, 350000, 3000, "fallback"),
-    Strategy("independent_parallel", ("reviewer_a", "reviewer_b"), True, 2, ("evidence.txt",), "reviewer-verdict",
-             "unanimous", "adjudicate_split", "single_reviewer", 0.7, 400000, 3000, "diverse"),
-    Strategy("specialist_panel", ("reviewer", "security", "integration"), True, 2, ("evidence.txt", "files", "checks"), "reviewer-verdict",
-             "panel_adjudicated", "adjudicate_split", "security_only", 0.8, 500000, 3600, "preferred"),
-    Strategy("sequential_refinement", ("reviewer", "refiner"), False, 2, ("evidence.txt",), "reviewer-verdict",
-             "sequenced", "hold_pending", "single_verdict", 0.65, 350000, 3000, "preferred"),
-    Strategy("critique_revision", ("author_review", "critic"), False, 2, ("evidence.txt",), "reviewer-verdict",
-             "sequenced", "adjudicate_split", "single_verdict", 0.6, 350000, 3000, "preferred"),
-    Strategy("evidence_synthesis", ("reviewer", "synthesizer"), False, 2, ("evidence.txt", "linked_issue"), "reviewer-verdict",
-             "consensus", "flag_unknown", "single_verdict", 0.6, 300000, 2400, "preferred"),
-    Strategy("uncertainty_calibration", ("reviewer",), False, 1, ("evidence.txt",), "reviewer-verdict",
-             "calibrated", "flag_unknown", "single_uncertain", 0.4, 200000, 1800, "economical"),
+    Strategy("direct_analysis", ("reviewer",), "reviewer-verdict",
+             "single", "single_verdict", 200000, 1800, "preferred"),
+    Strategy("decomposition", ("reviewer", "focus"), "reviewer-verdict",
+             "consensus", "adjudicate_split", 300000, 2400, "preferred"),
+    Strategy("checklist", ("reviewer",), "reviewer-verdict",
+             "checklist_score", "flag_unknown", 200000, 1800, "preferred"),
+    Strategy("hypothesis_testing", ("reviewer",), "reviewer-verdict",
+             "hypothesis_register", "escalate", 250000, 2400, "preferred"),
+    Strategy("adversarial", ("reviewer", "adversary"), "reviewer-verdict",
+             "majority", "adjudicate_split", 300000, 2400, "diverse"),
+    Strategy("debate", ("proponent", "opponent"), "reviewer-verdict",
+             "panel_adjudicated", "adjudicate_split", 350000, 3000, "fallback"),
+    Strategy("independent_parallel", ("reviewer_a", "reviewer_b"), "reviewer-verdict",
+             "unanimous", "adjudicate_split", 400000, 3000, "diverse"),
+    Strategy("specialist_panel", ("reviewer", "security", "integration"), "reviewer-verdict",
+             "panel_adjudicated", "adjudicate_split", 500000, 3600, "preferred"),
+    Strategy("sequential_refinement", ("reviewer", "refiner"), "reviewer-verdict",
+             "sequenced", "hold_pending", 350000, 3000, "preferred"),
+    Strategy("critique_revision", ("author_review", "critic"), "reviewer-verdict",
+             "sequenced", "adjudicate_split", 350000, 3000, "preferred"),
+    Strategy("evidence_synthesis", ("reviewer", "synthesizer"), "reviewer-verdict",
+             "consensus", "flag_unknown", 300000, 2400, "preferred"),
+    Strategy("uncertainty_calibration", ("reviewer",), "reviewer-verdict",
+             "calibrated", "flag_unknown", 200000, 1800, "economical"),
 )
 
 STRATEGY_BY_NAME: dict[str, Strategy] = {s.name: s for s in STRATEGIES}
@@ -85,6 +104,34 @@ class StrategyError(ValueError):
 
 def available_strategies() -> list[str]:
     return [s.name for s in STRATEGIES]
+
+
+def signals_for_profile(
+    profile: Any,
+    *,
+    complexity: int = 0,
+    prior_disagreement: bool = False,
+    specialist_need: bool = False,
+) -> dict[str, Any]:
+    """Build the selection signals for an assurance profile.
+
+    Shared so the orchestrator (which must reserve the strategy's token budget
+    BEFORE any spend) and the panel (which executes it) can never select two
+    different strategies for the same job.
+    """
+    as_dict = profile.as_dict() if hasattr(profile, "as_dict") else dict(profile or {})
+    return {
+        "risk": as_dict.get("level", "low"),
+        "complexity": int(complexity),
+        "required_independence": as_dict.get("independence", "single"),
+        "prior_disagreement": bool(prior_disagreement),
+        "specialist_need": bool(specialist_need),
+    }
+
+
+def strategy_for_profile(profile: Any, **kwargs: Any) -> tuple[Strategy, str]:
+    """Deterministic strategy for an assurance profile. Never raises."""
+    return select_strategy(signals_for_profile(profile, **kwargs))
 
 
 def select_strategy(signals: dict[str, Any], candidates: list[str] | None = None) -> tuple[Strategy, str]:

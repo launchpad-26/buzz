@@ -221,3 +221,80 @@ def test_get_unknown_hash_returns_none() -> None:
     store = SnapshotStore(tempfile.mkdtemp())
     assert store.get("") is None
     assert store.get("f" * 64) is None
+
+
+# -- B4: the shipped config must actually ENGAGE pinning --------------------
+# T2's pinning guarantee and T25's atomic policy reload were both implemented,
+# tested and inert: the shipped config carried no `policy` section, so
+# `build_snapshot` raised, `resolve_snapshot` degraded to `pinned: False`, and
+# every job ran unpinned with a blank `policy_version` in the ledger. These
+# tests fail if the derived policy is removed or stops validating.
+def test_the_shipped_default_config_produces_a_pinned_snapshot() -> None:
+    from config import onboarding_defaults
+
+    state_dir = tempfile.mkdtemp()
+    state = State({"state_dir": state_dir})
+    try:
+        cfg = onboarding_defaults(tempfile.mkdtemp())
+        cfg["state_dir"] = state_dir
+        cfg["repository"]["slug"] = "o/r"
+        cfg["login"] = "tucktuck101"
+        assert "policy" in cfg, "the shipped config must carry an inline policy"
+
+        jid = _seed(state, 310)
+        _effective, meta = dispatcher.resolve_snapshot(cfg, state, jid)
+        assert meta["pinned"] is True, meta
+        assert meta["policy_version"], "policy_version must not be blank"
+        assert meta["policy_version"] != "unversioned"
+    finally:
+        state.close()
+
+
+def test_the_derived_policy_mirrors_the_config_and_widens_nothing() -> None:
+    """A seeded policy must be a copy of the config, not a new decision surface."""
+    from config import onboarding_defaults, policy_defaults
+
+    cfg = onboarding_defaults(tempfile.mkdtemp())
+    policy = cfg["policy"]
+    assert policy == policy_defaults(cfg), "the policy must be derived, not hand-written"
+    assert policy["authority"] == cfg["authority"]
+    assert all(mode == "disabled" for mode in policy["authority"].values())
+    assert policy["approval"]["mode"] == cfg["approval"]["mode"]
+    for key in ("effective_risk_max", "complexity_max", "file_limit", "line_limit"):
+        assert policy["approval"][key] == cfg["approval"][key]
+    assert policy["risk"]["bands"] == cfg["risk"]["bands"]
+    assert policy["risk"]["protected_triggers"] == cfg["risk"]["protected_triggers"]
+    assert policy["human_queue"] == cfg["human_queue"]
+
+
+def test_a_derived_policy_is_always_structurally_valid() -> None:
+    """A config missing an approval key must not yield an INVALID policy.
+
+    That is the silent-failure mode: the policy is present, fails validation, and
+    the job runs unpinned anyway with only a `reason` string to show for it.
+    """
+    from config import policy_defaults
+    from policy import validate_policy
+
+    sparse = {
+        "authority": {"approve": "disabled"},
+        "approval": {"mode": "disabled"},  # every threshold omitted
+        "risk": {"bands": {"low": 24, "medium": 99, "high": 100}},
+        "human_queue": {"expiry_minutes": 1440},
+    }
+    assert validate_policy(policy_defaults(sparse)) == []
+
+
+def test_a_policyless_config_is_reported_unpinned_never_silently_pinned() -> None:
+    state_dir = tempfile.mkdtemp()
+    state = State({"state_dir": state_dir})
+    try:
+        cfg = _config("live")
+        cfg["state_dir"] = state_dir
+        cfg.pop("policy", None)
+        _effective, meta = dispatcher.resolve_snapshot(cfg, state, _seed(state, 311))
+        assert meta["pinned"] is False
+        assert meta["reason"], "an unpinned job must say why"
+        assert "policy_version" not in meta or not meta.get("policy_version")
+    finally:
+        state.close()

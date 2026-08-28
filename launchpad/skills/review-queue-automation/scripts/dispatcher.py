@@ -27,6 +27,7 @@ import datetime as dt
 import json
 import pathlib
 import sys
+import time
 from typing import Any
 
 from assurance import Profile, drive
@@ -35,7 +36,7 @@ from common import State, expand_path
 from config import load_repo_config
 from errors import EvidenceIncompleteError, JobBlockingError
 from evidence import collect as collect_evidence
-from logging_otel import JobLogger
+from logging_otel import JOB_EVENTS, JobLogger, metric_attributes
 from approval_evaluate import PRFacts, evaluate as eval_approval
 from approval import enqueue as enqueue_human, supersede_for_head, supersede_for_policy
 from verdict import parse_verdict_or_none, validate_verdict
@@ -132,13 +133,45 @@ def _transition_guarded(
     return target
 
 
-def _log(logger, level: str, *, body: str, phase: str, outcome: str = "", attributes: dict[str, Any] | None = None) -> None:
+def _log(
+    logger,
+    level: str,
+    *,
+    body: str,
+    phase: str,
+    outcome: str = "",
+    attributes: dict[str, Any] | None = None,
+    event: str = "",
+) -> None:
+    """Emit one orchestrator event. A logging failure safe-stops the job.
+
+    `event` is one of `logging_otel.JOB_EVENTS`; it is what a trace consumer keys
+    off, so it is validated here rather than being a free-form string that can
+    silently drift out of the registry.
+    """
     if logger is None:
         return
+    if event and event not in JOB_EVENTS:
+        raise SafeStopSignal(f"unknown job event name: {event!r}")
     try:
-        getattr(logger, level)(body=body, phase=phase, outcome=outcome, attributes=attributes)
+        kwargs: dict[str, Any] = {
+            "body": body, "phase": phase, "outcome": outcome, "attributes": attributes
+        }
+        if event:
+            kwargs["event_name"] = event
+        getattr(logger, level)(**kwargs)
+    except SafeStopSignal:
+        raise
     except Exception as exc:
         raise SafeStopSignal(f"audit logging failure: {exc}") from exc
+
+
+def _now_ms() -> int:
+    return int(time.monotonic() * 1000)
+
+
+def _elapsed_ms(started_ms: int) -> int:
+    return max(0, _now_ms() - started_ms)
 
 
 def _arrive_safe_stop(state: State, job: dict[str, Any], logger, reason: str) -> dict[str, Any]:
@@ -146,6 +179,15 @@ def _arrive_safe_stop(state: State, job: dict[str, Any], logger, reason: str) ->
     job_id = job["job_id"]
     try:
         state.transition(job_id, "safe_stop", logger=logger, phase="dispatch", reason=reason)
+    except Exception:
+        pass
+    # The safe-stop event is best-effort by construction: the job is already
+    # stopping because something failed, so a second failure here must not
+    # replace the outcome with an exception.
+    try:
+        _log(logger, "error", body="job stopped safely", phase="dispatch",
+             outcome="safe_stop", event="safe_stop",
+             attributes={"job.reason": reason[:200]})
     except Exception:
         pass
     return {
@@ -309,6 +351,12 @@ def _evidence_missing(
         reason = f"evidence missing and no bounded gather available: {gather_exc}"
         _transition_guarded(state, job_id, "human_required", logger=logger,
                             phase="assurance", reason=reason)
+        _log(logger, "warning", body="evidence gather unavailable", phase="evidence",
+             outcome="human_required", event="evidence",
+             attributes={"evidence.gathered": False, "evidence.reason": reason[:200]})
+        _log(logger, "warning", body="escalated for missing evidence", phase="evidence",
+             outcome="human_required", event="decision",
+             attributes={"decision.disposition": "EVIDENCE_INCOMPLETE"})
         return {"job": job_id, "repo": job.get("repo"), "number": job.get("number"),
                 "status": "human_required", "decision": "EVIDENCE_INCOMPLETE", "reason": reason}
     reason = (
@@ -317,6 +365,11 @@ def _evidence_missing(
     )
     _transition_guarded(state, job_id, "degraded_draft", logger=logger,
                         phase="assurance", reason=reason)
+    _log(logger, "info", body="one bounded evidence gather completed", phase="evidence",
+         outcome="gathered", event="evidence", attributes={"evidence.gathered": True})
+    _log(logger, "warning", body="degraded draft after evidence gather", phase="evidence",
+         outcome="degraded_draft", event="decision",
+         attributes={"decision.disposition": "EVIDENCE_INCOMPLETE"})
     return {"job": job_id, "repo": job.get("repo"), "number": job.get("number"),
             "status": "degraded_draft", "decision": "EVIDENCE_INCOMPLETE", "reason": reason}
 
@@ -578,6 +631,12 @@ def _execute_live_approval(
         login=local_cfg.get("login", ""),
         config=local_cfg,
     )
+    # `approve` performs the mandatory live REST revalidation itself, so its
+    # outcome IS the verification result for the reviewed head.
+    _emit_verify_event(logger, subject=f"{repo}#{number} head before approve",
+                       ok=bool(ok and outcome == APPROVED), detail=f"{outcome}: {message}")
+    _emit_mutation_event(logger, operation="approve_review", outcome=outcome,
+                         verified=bool(ok and outcome == APPROVED), detail=message)
     _log(logger, "info" if ok else "warning",
          body=f"approval mutation -> {outcome}", phase="approval", outcome=outcome,
          attributes={"approval.decision_id": decision.decision_id,
@@ -612,6 +671,8 @@ def _execute_live_approval(
             rationale=f"{outcome}: {message}"[:800],
             action="approve", expiry_minutes=expiry,
         )
+        _emit_human_queue_event(logger, request, action="approve",
+                                reason=f"{outcome}: {message}")
         notification = _deliver_notification(local_cfg, request, logger)
         _transition_guarded(state, job_id, "human_approval_pending", logger=logger,
                             phase="approval", reason=f"{outcome}: {message}"[:200])
@@ -765,6 +826,10 @@ def _post_advisory_review(
         pr_node_id=_cached_pr_node_id(state, repo, number), body=body,
         login=local_cfg.get("login", ""), head_sha=head_sha,
     )
+    _emit_mutation_event(logger, operation="add_comment_review",
+                         outcome="posted" if record.get("posted") else "withheld",
+                         verified=bool(record.get("posted")),
+                         detail=str(record.get("reason", "")))
     _log(logger, "info" if record.get("posted") else "warning",
          body=("advisory review posted" if record.get("posted")
                else f"advisory review not posted: {record.get('reason', '')}"),
@@ -859,6 +924,10 @@ def _execute_request_changes(
                   "no independent corroboration or reproducing check failure")
         _transition_guarded(state, job_id, "human_required", logger=logger,
                             phase="adjudication", reason=reason[:200])
+        _log(logger, "warning", body="uncorroborated findings escalated",
+             phase="adjudication", outcome="human_required", event="decision",
+             attributes={"decision.disposition": "uncorroborated",
+                         "decision.reason": reason[:200]})
         return _result("uncorroborated", {"reason": reason, "findings": summary})
 
     mode = mode_for(local_cfg, repo, "request_changes")
@@ -866,6 +935,10 @@ def _execute_request_changes(
         reason = f"request_changes authority is {mode}; verified defects need a human"
         _transition_guarded(state, job_id, "human_required", logger=logger,
                             phase="adjudication", reason=reason[:200])
+        _log(logger, "warning", body=reason, phase="adjudication",
+             outcome="human_required", event="decision",
+             attributes={"decision.disposition": "authority_not_live",
+                         "authority.request_changes": mode})
         return _result("authority_not_live", {"reason": reason, "findings": summary})
 
     _transition_guarded(state, job_id, "approval_evaluation", logger=logger,
@@ -890,6 +963,8 @@ def _execute_request_changes(
         assurance=assurance,
         revalidate=revalidate_factory(head_sha),
     )
+    _emit_verify_event(logger, subject=f"{repo}#{number} head before request-changes",
+                       ok=bool(gate.allowed), detail=gate.reason)
     if not gate.allowed:
         expiry = int((local_cfg.get("human_queue") or {}).get("expiry_minutes", 1440))
         request = enqueue_human(
@@ -905,6 +980,8 @@ def _execute_request_changes(
             rationale=gate.reason[:800], action="request_changes",
             expiry_minutes=expiry,
         )
+        _emit_human_queue_event(logger, request, action="request_changes",
+                                reason=gate.reason)
         notification = _deliver_notification(local_cfg, request, logger)
         _transition_guarded(state, job_id, "human_approval_pending", logger=logger,
                             phase="decision", reason=gate.reason[:200])
@@ -928,12 +1005,17 @@ def _execute_request_changes(
         )
     except Exception as exc:
         reason = f"request-changes mutation failed: {exc}"
+        _emit_mutation_event(logger, operation="request_changes_review",
+                             outcome="failed", verified=False, detail=str(exc))
         _log(logger, "error", body="request-changes halted", phase="decision",
              outcome="safe_stop")
         _transition_guarded(state, job_id, "safe_stop", logger=logger,
                             phase="decision", reason=reason[:200])
         return _result("mutation_failed", {"reason": str(exc), "findings": summary})
 
+    _emit_mutation_event(logger, operation="request_changes_review",
+                         outcome="changes_requested", verified=True,
+                         detail=f"{summary['verified_count']} corroborated finding(s)")
     _ledger_record(state, job, head_sha, "action", {
         "operation": "request_changes_review",
         "outcome": "changes_requested",
@@ -973,6 +1055,229 @@ def _render_request_changes_body(
     return "\n".join(lines)
 
 
+def _emit_evidence_event(state: State, job: dict[str, Any], local_cfg, logger) -> dict[str, Any]:
+    """Report the evidence bundle this job will actually reason over.
+
+    Only bounded facts are logged — counts, freshness and the collection
+    timestamp — never the evidence content itself, which is nonce-enveloped PR
+    material and must not reach the log.
+    """
+    evidence = _evidence_meta(state, job["job_id"])
+    checks = evidence.get("checks") or []
+    fresh = _evidence_fresh(local_cfg, evidence.get("collected_at", ""))
+    _log(logger, "info" if evidence else "warning",
+         body="evidence bundle loaded" if evidence else "no evidence bundle on disk",
+         phase="evidence", outcome="fresh" if fresh else "stale", event="evidence",
+         attributes={
+             "evidence.present": bool(evidence),
+             "evidence.fresh": fresh,
+             "evidence.collected_at": evidence.get("collected_at", ""),
+             "evidence.checks": len(checks) if isinstance(checks, list) else 0,
+             "evidence.has_context": bool(evidence.get("context")),
+         })
+    return evidence
+
+
+def _emit_rereview_event(state: State, job: dict[str, Any], head_sha: str, logger) -> bool:
+    """Emit `rereview` when this head supersedes a previously reviewed revision."""
+    row = state.db.execute(
+        "SELECT COUNT(*) AS c FROM jobs WHERE repo=? AND number=? AND head_sha<>?",
+        (job["repo"], job["number"], head_sha),
+    ).fetchone()
+    prior = int(row["c"]) if row else 0
+    if not prior:
+        return False
+    _log(logger, "info", body=f"re-review: {prior} prior revision(s) of this PR",
+         phase="evidence", outcome="rereview", event="rereview",
+         attributes={"review.prior_revisions": prior, "github.head.sha": head_sha})
+    return True
+
+
+def _budget_scope(job: dict[str, Any]) -> str:
+    return str(job.get("repo") or "default")
+
+
+def _reserve_budget(
+    local_cfg: dict[str, Any], state: State, job: dict[str, Any], logger, profile
+) -> Any:
+    """Reserve this job's model spend BEFORE the panel runs.
+
+    The reservation is the strategy's declared `budget_tokens`, so the cost of the
+    work is bounded by a number the strategy itself publishes rather than
+    discovered after the fact. A refusal is returned, never raised: the caller
+    downgrades to a draft or a human, which is the whole point of checking here.
+    """
+    import budget
+    from strategies import strategy_for_profile
+
+    strategy, reason = strategy_for_profile(profile)
+    decision = budget.reserve(
+        state, local_cfg,
+        job_id=job["job_id"], repo=job["repo"], number=job["number"],
+        tokens=int(strategy.budget_tokens), scope=_budget_scope(job),
+        rest_remaining=_rest_remaining(state),
+    )
+    _log(logger, "info" if decision.allowed else "warning",
+         body=("budget reserved before spend" if decision.allowed
+               else f"budget refused before spend: {decision.reason}"),
+         phase="assurance", outcome="reserved" if decision.allowed else "refused",
+         event="budget",
+         attributes={
+             "budget.limit": decision.limit,
+             "budget.downgrade": decision.downgrade,
+             "budget.breaker": decision.breaker,
+             "budget.reason": decision.reason,
+             "reasoning.strategy": strategy.name,
+             "reasoning.strategy_reason": reason,
+             # `_is_sensitive_key` matches "token" anywhere in a key, so the
+             # `_tokens` suffix is dropped: these are headroom COUNTS and must
+             # not be redacted out of the trace.
+             **{f"budget.headroom.{k.removesuffix('_tokens')}": v
+                for k, v in decision.headroom.items()},
+             **metric_attributes(
+                 tokens_reserved=decision.reserved_tokens,
+                 attempts=budget.attempts_for_job(state, job["job_id"]),
+             ),
+         })
+    return strategy, decision
+
+
+def _emit_panel_trace(
+    state: State, job: dict[str, Any], logger, panel_result: dict[str, Any],
+    *, latency_ms: int, tokens: int
+) -> None:
+    """Emit `strategy`, `planner` and `route_selection` for the panel that ran.
+
+    Planner and route facts are read back from the LEDGER rather than re-derived,
+    so the trace describes what was actually recorded for this job instead of what
+    the orchestrator would have expected.
+    """
+    from ledger import entries
+
+    _log(logger, "info",
+         body=f"strategy {panel_result.get('strategy', '')} -> {panel_result.get('outcome', '')}",
+         phase="assurance", outcome=str(panel_result.get("outcome", "")),
+         event="strategy",
+         attributes={
+             "reasoning.strategy": panel_result.get("strategy", ""),
+             "reasoning.recipe": panel_result.get("recipe", ""),
+             "reasoning.roles": panel_result.get("roles", []),
+             "reasoning.disagreement": bool(panel_result.get("disagreement", False)),
+             "reasoning.disagreement_handling": panel_result.get("disagreement_handling", ""),
+             "review.required": panel_result.get("required_reviewers", 0),
+             "review.completed": len(panel_result.get("completed_reviewers", []) or []),
+             **metric_attributes(latency_ms=latency_ms, tokens=tokens),
+         })
+
+    try:
+        recorded = entries(state, job["job_id"])
+    except Exception:
+        recorded = []
+
+    for item in recorded:
+        if item["kind"] == "strategy" and item.get("entry_key") == "review_plan":
+            payload = item["payload"] or {}
+            _log(logger, "info", body="deterministic review plan resolved",
+                 phase="assurance", outcome="planned", event="planner",
+                 attributes={
+                     "planner.activities": payload.get("activities", []),
+                     "planner.focus": payload.get("focus", []),
+                     "planner.rereview": payload.get("is_rereview", False),
+                 })
+            break
+    else:
+        _log(logger, "warning", body="no review plan was recorded for this job",
+             phase="assurance", outcome="unplanned", event="planner")
+
+    routes = [item for item in recorded if item["kind"] == "route"]
+    for item in routes[:_MAX_LOGGED_ROUTES]:
+        payload = item["payload"] or {}
+        qualified = payload.get("qualified_route") or {}
+        _log(logger, "info", body=f"route executed: {item.get('entry_key', '')}",
+             phase="assurance", outcome="executed", event="route_selection",
+             attributes={
+                 "route.key": item.get("entry_key", ""),
+                 "route.slot": payload.get("slot", ""),
+                 "route.provider_family": payload.get("provider_family", ""),
+                 "route.capability": payload.get("capability", ""),
+                 "route.effort_enforced": payload.get("effort_enforced",
+                                                      qualified.get("effort_enforced")),
+                 "route.qualified": bool(qualified),
+             })
+    if not routes:
+        _log(logger, "warning", body="no model route was recorded for this job",
+             phase="assurance", outcome="unrouted", event="route_selection")
+
+
+def _emit_human_queue_event(logger, request: dict[str, Any], *, action: str, reason: str) -> None:
+    _log(logger, "info", body=f"human request enqueued for {action}",
+         phase="approval", outcome="queued", event="human_queue",
+         attributes={"human.request_id": request.get("request_id", ""),
+                     "human.action": action,
+                     "human.policy_hash": request.get("policy_hash", ""),
+                     "human.reason": reason[:200]})
+
+
+def _emit_verify_event(logger, *, subject: str, ok: bool, detail: str = "") -> None:
+    _log(logger, "info" if ok else "warning",
+         body=f"revalidation of {subject}: {'ok' if ok else 'failed'}",
+         phase="approval", outcome="verified" if ok else "unverified", event="verify",
+         attributes={"verify.subject": subject, "verify.ok": bool(ok),
+                     "verify.detail": detail[:200]})
+
+
+def _emit_mutation_event(logger, *, operation: str, outcome: str, verified: bool,
+                         detail: str = "") -> None:
+    _log(logger, "info" if verified else "warning",
+         body=f"external action {operation} -> {outcome}",
+         phase="mutation", outcome=outcome, event="mutation",
+         attributes={"mutation.operation": operation, "mutation.outcome": outcome,
+                     "mutation.verified": bool(verified),
+                     "mutation.detail": detail[:200]})
+
+
+#: Route events are one per executed slot; the cap keeps a pathological fallback
+#: chain from flooding the trace.
+_MAX_LOGGED_ROUTES = 4
+
+
+def _budget_refused(
+    state: State, job: dict[str, Any], head_sha: str, logger, reservation,
+    *, snapshot_meta: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    """Apply the downgrade a refused reservation demands, BEFORE any spend.
+
+    `draft` keeps the job producing a non-authoritative artefact; `human` hands it
+    to a person. Neither can spend a model call, which is the guarantee: a budget
+    is reached and then respected, never exceeded and then noticed.
+    """
+    from budget import HUMAN
+
+    job_id = job["job_id"]
+    target = "human_required" if reservation.downgrade == HUMAN else "degraded_draft"
+    reason = f"budget refused ({reservation.limit}): {reservation.reason}"
+    _transition_guarded(state, job_id, target, logger=logger,
+                        phase="assurance", reason=reason[:200])
+    _log(logger, "warning", body="downgraded before spend", phase="assurance",
+         outcome=target, event="decision",
+         attributes={"decision.disposition": "BUDGET_REFUSED",
+                     "decision.downgrade": reservation.downgrade,
+                     "budget.limit": reservation.limit,
+                     "decision.reason": reservation.reason[:200]})
+    _ledger_record(state, job, head_sha, "decision", {
+        "disposition": "budget_refused",
+        "downgrade": reservation.downgrade,
+        "limit": reservation.limit,
+        "reason": reservation.reason,
+        "status": target,
+    }, entry_key="budget_refused", snapshot_meta=snapshot_meta)
+    return {
+        "job": job_id, "repo": job["repo"], "number": job["number"],
+        "status": target, "decision": "BUDGET_REFUSED",
+        "reason": reason, "budget": reservation.as_dict(),
+    }
+
+
 def _run_job_inner(
     local_cfg: dict[str, Any],
     job: dict[str, Any],
@@ -981,14 +1286,48 @@ def _run_job_inner(
     state: State,
     snapshot_meta: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
+    import budget
+
     repo = job["repo"]
     number = job["number"]
     lane = job["lane"]
     job_id = job["job_id"]
     _ensure_panel()
 
+    _emit_evidence_event(state, job, local_cfg, logger)
+    _emit_rereview_event(state, job, head_sha, logger)
+
+    #: The last panel result seen, so the trace can describe what actually ran
+    #: even when `drive` escalated out of the loop.
+    panel_trace: dict[str, Any] = {"result": None, "latency_ms": 0, "tokens": 0}
+    reserved_tokens = 0
+
     def assess(profile: Profile) -> list[str]:
-        result = run_panel(local_cfg, state, repo, number, lane, job_id, profile, logger=logger)
+        started = _now_ms()
+        try:
+            result = run_panel(local_cfg, state, repo, number, lane, job_id, profile, logger=logger)
+        except Exception:
+            # A panel that could not run at all is a failure against the breaker:
+            # a provider outage must eventually stop costing full timeouts.
+            budget.record_failure(state, local_cfg, _budget_scope(job), "panel raised")
+            raise
+        latency = _elapsed_ms(started)
+        # Spend is recorded with the reservation as an upper bound (runners do not
+        # report token counts), so the NEXT reservation is stricter, never looser.
+        spend = int(result.get("budget_tokens") or reserved_tokens or 0)
+        budget.record_spend(
+            state, job_id=job_id, repo=repo, number=number, tokens=spend,
+            model=",".join(str(m) for m in (result.get("completed_reviewers") or []))[:120],
+            latency_ms=latency,
+        )
+        if result.get("complete"):
+            budget.record_success(state, _budget_scope(job))
+        else:
+            budget.record_failure(
+                state, local_cfg, _budget_scope(job),
+                f"panel {result.get('outcome', 'incomplete')}",
+            )
+        panel_trace.update({"result": result, "latency_ms": latency, "tokens": spend})
         if not result["complete"]:
             raise PartialPanel(result)
         # A complete panel that calls for more evidence must NOT re-run the identical
@@ -997,15 +1336,37 @@ def _run_job_inner(
             raise EvidenceIncompleteError("panel verdict missing evidence; bounded gather, no re-run")
         return result["signals"]
 
+    def _trace_panel() -> None:
+        if panel_trace["result"] is not None:
+            _emit_panel_trace(state, job, logger, panel_trace["result"],
+                              latency_ms=int(panel_trace["latency_ms"]),
+                              tokens=int(panel_trace["tokens"]))
+
     try:
         _transition_guarded(state, job_id, "assurance", logger=logger,
                             phase="dispatch", reason="panel start")
         minimum = decide_assurance(local_cfg, state, repo, number, lane)
+
+        # The pre-spend gate. Nothing above this line costs a model call, so a
+        # refusal here downgrades BEFORE any budget can be exceeded rather than
+        # discovering the overspend afterwards.
+        _strategy, reservation = _reserve_budget(local_cfg, state, job, logger, minimum)
+        reserved_tokens = reservation.reserved_tokens
+        if not reservation.allowed:
+            return _budget_refused(state, job, head_sha, logger, reservation,
+                                   snapshot_meta=snapshot_meta)
+
         final_profile, decision, steps = drive(minimum, assess, max_steps=6)
+        _trace_panel()
     except PartialPanel as exc:
+        _trace_panel()
         reason = f"partial panel: {exc.result['completed_reviewers']}/{exc.result['required_reviewers']}; no mutation"
         _transition_guarded(state, job_id, "degraded_draft", logger=logger,
                             phase="assurance", reason=reason)
+        _log(logger, "warning", body="partial panel; degraded draft", phase="assurance",
+             outcome="degraded_draft", event="decision",
+             attributes={"decision.disposition": "PARTIAL_PANEL",
+                         "decision.reason": reason[:200]})
         return {
             "job": job_id, "repo": repo, "number": number,
             "decision": "PARTIAL_PANEL", "status": "degraded_draft", "reason": reason,
@@ -1014,11 +1375,17 @@ def _run_job_inner(
             "final_profile": exc.result["profile"], "steps": [],
         }
     except JobBlockingError as exc:
+        _trace_panel()
         _transition_guarded(state, job_id, "human_required", logger=logger,
                             phase="assurance", reason=str(exc))
+        _log(logger, "error", body="job blocked", phase="assurance",
+             outcome="human_required", event="decision",
+             attributes={"decision.disposition": "JOB_BLOCKING",
+                         "decision.reason": str(exc)[:200]})
         return {"job": job_id, "status": "human_required", "reason": str(exc),
                 "decision": "JOB_BLOCKING"}
     except EvidenceIncompleteError as exc:
+        _trace_panel()
         return _evidence_missing(state, local_cfg, job, logger, message=str(exc))
 
     if decision == "REQUEST_CHANGES":
@@ -1033,6 +1400,9 @@ def _run_job_inner(
     if decision != "SUCCESS":
         _transition_guarded(state, job_id, "human_required", logger=logger,
                             phase="assurance", reason=decision)
+        _log(logger, "warning", body=f"panel decision {decision}", phase="assurance",
+             outcome="human_required", event="decision",
+             attributes={"decision.disposition": decision})
         return {"job": job_id, "repo": repo, "number": number,
                 "decision": decision, "status": "human_required",
                 "final_profile": final_profile.as_dict(),
@@ -1055,9 +1425,21 @@ def _run_job_inner(
         ),
     )
     _log(logger, "info", body=f"approval evaluation -> {res.disposition}", phase="approval",
-         outcome=res.disposition,
+         outcome=res.disposition, event="decision",
          attributes={"risk.score": res.risk_score, "risk.band": res.risk_band_name,
-                     "approval.failed_gates": res.failed_gates})
+                     "decision.disposition": res.disposition,
+                     "decision.reason": (res.reason or "")[:200],
+                     "approval.failed_gates": res.failed_gates,
+                     **metric_attributes(
+                         tokens=int(panel_trace["tokens"]),
+                         latency_ms=int(panel_trace["latency_ms"]),
+                     )})
+    # The head the panel reviewed is compared with the head currently observed.
+    # `_load_pr_facts` deliberately keeps the observed head separate so this is a
+    # real comparison rather than a value checked against itself.
+    _emit_verify_event(logger, subject="reviewed head",
+                       ok=bool(pr_facts.head_sha) and pr_facts.head_sha == head_sha,
+                       detail=f"observed={pr_facts.head_sha or '<unknown>'} reviewed={head_sha}")
     _ledger_record(state, job, head_sha, "decision", {
         "disposition": res.disposition,
         "failed_gates": res.failed_gates,
@@ -1104,6 +1486,8 @@ def _run_job_inner(
             rationale=res.reason or "human escalation", action="approve",
             expiry_minutes=expiry,
         )
+        _emit_human_queue_event(logger, request, action="approve",
+                                reason=res.reason or "human escalation")
         # Notification failure must NOT drop the request from the pending queue.
         notification = _deliver_notification(local_cfg, request, logger)
         _transition_guarded(state, job_id, "human_approval_pending", logger=logger,
@@ -1273,19 +1657,15 @@ def run_job(
             capability_note = f"authority clamped to proven capability: {capability_mode}"
 
     logger = _make_logger(local_cfg, job_id, repo, number, lane)
-    if snapshot_meta.get("pinned"):
-        _log(logger, "info", body="running under pinned runtime snapshot",
-             phase="dispatch", outcome="pinned",
-             attributes={"snapshot.hash": snapshot_meta.get("snapshot_hash"),
-                         "config.version": snapshot_meta.get("config_version"),
-                         "policy.version": snapshot_meta.get("policy_version"),
-                         "snapshot.resumed": snapshot_meta.get("resumed")})
-    if capability_note:
-        _log(logger, "warning", body=capability_note, phase="dispatch",
-             outcome="capability_clamped",
-             attributes={"github.capability_mode": capability_mode})
+    started_ms = _now_ms()
 
     if not canary_allowed(local_cfg, state, lane):
+        try:
+            _log(logger, "warning", body=f"{lane} canary not approved",
+                 phase="dispatch", outcome="gated", event="preflight",
+                 attributes={"preflight.canary_approved": False})
+        except SafeStopSignal as exc:
+            return _arrive_safe_stop(state, job, None, reason=str(exc))
         return {"job": job_id, "status": "gated", "reason": f"{lane} canary not approved",
                 "snapshot": snapshot_meta}
 
@@ -1302,6 +1682,11 @@ def run_job(
     login = local_cfg.get("login", "")
     lease_held = False
     try:
+        _emit_preflight(local_cfg, state, job, head_sha, logger,
+                        snapshot_meta=snapshot_meta,
+                        capability_mode=capability_mode,
+                        capability_note=capability_note,
+                        started_ms=started_ms)
         if claim_lease and login:
             held_by = _local_lease_holder(state, repo, number)
             if held_by and held_by != job_id:
@@ -1326,7 +1711,9 @@ def run_job(
                         "reason": "the PR is claimed by another reviewer",
                         "snapshot": snapshot_meta}
             _log(logger, "info", body="review lease claimed", phase="dispatch",
-                 outcome="lease_claimed", attributes={"lease.login": login})
+                 outcome="lease_claimed", event="lease_acquired",
+                 attributes={"lease.login": login,
+                             **metric_attributes(latency_ms=_elapsed_ms(started_ms))})
 
         result = _run_job_inner(local_cfg, job, head_sha, logger, state, snapshot_meta)
     except SafeStopSignal as exc:
@@ -1348,15 +1735,55 @@ def run_job(
                 if release_error:
                     _log(logger, "error",
                          body=f"lease release failed: {release_error}",
-                         phase="dispatch", outcome="lease_release_failed")
+                         phase="dispatch", outcome="lease_release_failed",
+                         event="lease_released")
                 else:
                     _log(logger, "info", body="review lease released",
-                         phase="dispatch", outcome="lease_released")
+                         phase="dispatch", outcome="lease_released",
+                         event="lease_released",
+                         attributes=metric_attributes(latency_ms=_elapsed_ms(started_ms)))
             except Exception:
                 pass
 
     result["snapshot"] = snapshot_meta
     return result
+
+
+def _emit_preflight(
+    local_cfg: dict[str, Any], state: State, job: dict[str, Any], head_sha: str, logger,
+    *, snapshot_meta: dict[str, Any], capability_mode: str | None,
+    capability_note: str, started_ms: int,
+) -> None:
+    """Emit `queueing` and `preflight` for a job that passed its entry checks.
+
+    Called from inside `run_job`'s guarded block so that an audit-logging failure
+    safe-stops this job like any other rather than escaping `run_job`.
+    """
+    _log(logger, "info", body=f"job queued for dispatch: {job['repo']}#{job['number']}",
+         phase="dispatch", outcome="queued", event="queueing",
+         attributes={"job.lane": job["lane"], "github.head.sha": head_sha,
+                     "job.status": state.current_status(job["job_id"]) or ""})
+    if snapshot_meta.get("pinned"):
+        _log(logger, "info", body="running under pinned runtime snapshot",
+             phase="dispatch", outcome="pinned",
+             attributes={"snapshot.hash": snapshot_meta.get("snapshot_hash"),
+                         "config.version": snapshot_meta.get("config_version"),
+                         "policy.version": snapshot_meta.get("policy_version"),
+                         "snapshot.resumed": snapshot_meta.get("resumed")})
+    if capability_note:
+        _log(logger, "warning", body=capability_note, phase="dispatch",
+             outcome="capability_clamped",
+             attributes={"github.capability_mode": capability_mode})
+    _log(logger, "info", body="preflight checks passed", phase="dispatch",
+         outcome="ready", event="preflight",
+         attributes={
+             "preflight.canary_approved": True,
+             "preflight.snapshot_pinned": bool(snapshot_meta.get("pinned")),
+             "preflight.snapshot_reason": snapshot_meta.get("reason", ""),
+             "policy.version": snapshot_meta.get("policy_version", ""),
+             "github.capability_mode": capability_mode or "unprobed",
+             **metric_attributes(latency_ms=_elapsed_ms(started_ms)),
+         })
 
 
 def canary_allowed(local_cfg: dict[str, Any], state: State, lane: str) -> bool:
@@ -1406,7 +1833,285 @@ def recover_interrupted(
                 reason="interrupted worker recovered; review lease released",
             )
         recovered.append({**item, "released": True, "status": state.current_status(row["job_id"])})
+
+    # A worker can be killed after it transitioned a job but before (or without)
+    # claiming a lease — the mid-panel window, and every dispatch that runs with
+    # `claim_lease=False`. Such a job has no lease row, so the loop above never
+    # sees it, and it would sit in a non-terminal state forever waiting for a
+    # process that is gone. `recover` holds the state directory's exclusive
+    # runtime lock, so nothing is in flight and safe-stopping these is sound:
+    # that is what makes recovery possible with no manual DB surgery.
+    leased = {row["job_id"] for row in rows}
+    placeholders = ",".join("?" for _ in ACTIVE_WORKER_STATUSES)
+    stranded = state.db.execute(
+        f"SELECT id, status FROM jobs WHERE status IN ({placeholders}) ORDER BY updated_at, id",
+        ACTIVE_WORKER_STATUSES,
+    ).fetchall()
+    for row in stranded:
+        if row["id"] in leased or not can_transition(row["status"], "safe_stop"):
+            continue
+        state.transition(row["id"], "safe_stop",
+                         reason="interrupted worker recovered; no lease was held")
+        recovered.append({"job": row["id"], "released": False,
+                          "reason": "no lease was held", "status": "safe_stop"})
     return recovered
+
+
+#: Statuses that can only be occupied while a worker is ACTIVELY driving the job.
+#: `recover` safe-stops these when no process holds the state directory. States
+#: that are legitimately waiting on somebody else — `detected` (queued),
+#: `human_approval_pending`, `human_required`, `degraded_draft`, `held`,
+#: `retryable` — are deliberately NOT here: they are not stranded, and stopping
+#: them would silently discard pending human work.
+ACTIVE_WORKER_STATUSES = (
+    "preflight", "evidence", "assurance", "adjudication",
+    "approval_evaluation", "approval_revalidation", "approval_action",
+    "advisory_action",
+)
+
+#: Statuses from which no further work is possible. Only these are eligible for
+#: artifact retention: a job that could still be resumed keeps its artifacts.
+TERMINAL_STATUSES = (
+    "completed_auto_approved", "completed_human_declined", "completed_advisory",
+    "completed", "superseded", "safe_stop", "closed", "merged",
+)
+
+#: Default retention window. Artifacts are model output and evidence copies; the
+#: audit trail that explains a decision lives in SQLite and is never purged.
+DEFAULT_RETENTION_DAYS = 30
+
+
+def _retention_days(local_cfg: dict[str, Any]) -> int:
+    section = (local_cfg.get("retention") or {})
+    try:
+        days = int(section.get("artifact_days", DEFAULT_RETENTION_DAYS))
+    except (TypeError, ValueError):
+        days = DEFAULT_RETENTION_DAYS
+    return max(0, days)
+
+
+def _artifact_manifest(directory: pathlib.Path) -> list[dict[str, Any]]:
+    """Describe every file under `directory` by name, size and content hash.
+
+    This is what makes a purge auditable: after the bytes are gone the ledger
+    still states exactly which artifacts existed and what they hashed to, so a
+    later reader can tell whether the artifact they are missing was deleted by
+    retention or never written.
+    """
+    import hashlib
+
+    manifest: list[dict[str, Any]] = []
+    if not directory.is_dir():
+        return manifest
+    for path in sorted(directory.rglob("*")):
+        if not path.is_file():
+            continue
+        try:
+            data = path.read_bytes()
+        except OSError as exc:
+            manifest.append({"path": path.name, "error": str(exc)[:120]})
+            continue
+        manifest.append({
+            "path": path.relative_to(directory).as_posix(),
+            "bytes": len(data),
+            "sha256": hashlib.sha256(data).hexdigest(),
+        })
+    return manifest
+
+
+def _purge_tree(directory: pathlib.Path) -> int:
+    """Delete every file under `directory`, then the directory. Returns file count."""
+    import shutil
+
+    if not directory.is_dir():
+        return 0
+    count = sum(1 for path in directory.rglob("*") if path.is_file())
+    shutil.rmtree(directory, ignore_errors=True)
+    return count
+
+
+def retention_sweep(
+    local_cfg: dict[str, Any], state: State, *, days: int | None = None,
+    apply: bool = False,
+) -> dict[str, Any]:
+    """Purge artifacts for terminal jobs older than the retention window.
+
+    Dry-run by default: `apply=False` reports exactly what WOULD be deleted and
+    touches nothing, because a retention command that deletes on first invocation
+    is a command operators run once by accident.
+
+    What survives a purge, always:
+      - the `jobs` row (identity, head, lane, final status, timestamps)
+      - every `ledger_entries` row (the decision trail)
+      - `mutations`, `approval_decisions`, `human_requests` (what was done, and
+        on whose authority)
+      - a `retention_manifest` ledger entry naming and hashing every artifact
+        that was removed
+
+    Only the artifact BYTES go: model output, evidence copies, JSONL logs.
+    """
+    window = _retention_days(local_cfg) if days is None else max(0, int(days))
+    cutoff = (
+        dt.datetime.now(dt.timezone.utc) - dt.timedelta(days=window)
+    ).isoformat().replace("+00:00", "Z")
+    placeholders = ",".join("?" for _ in TERMINAL_STATUSES)
+    rows = state.db.execute(
+        f"SELECT id, repo, number, head_sha, status, updated_at FROM jobs "
+        f"WHERE status IN ({placeholders}) AND updated_at < ? ORDER BY updated_at, id",
+        (*TERMINAL_STATUSES, cutoff),
+    ).fetchall()
+
+    log_root = pathlib.Path((local_cfg.get("logging") or {}).get("directory") or "")
+    purged: list[dict[str, Any]] = []
+    for row in rows:
+        job_id = row["id"]
+        artifact_dir = state.root / "jobs" / job_id
+        log_dir = (log_root / "jobs" / job_id) if str(log_root) else pathlib.Path("")
+        manifest = _artifact_manifest(artifact_dir)
+        log_manifest = _artifact_manifest(log_dir) if str(log_root) else []
+        entry = {
+            "job": job_id, "repo": row["repo"], "number": row["number"],
+            "status": row["status"], "updated_at": row["updated_at"],
+            "artifact_files": len(manifest), "log_files": len(log_manifest),
+            "applied": bool(apply),
+        }
+        if apply:
+            # Record the manifest BEFORE deleting. A crash between the two leaves
+            # a manifest for artifacts that still exist (harmless); the reverse
+            # would leave deleted artifacts with no audit record at all.
+            _ledger_record(
+                state,
+                {"job_id": job_id, "repo": row["repo"], "number": row["number"]},
+                row["head_sha"], "evidence",
+                {"operation": "retention_purge", "retention_days": window,
+                 "artifacts": manifest, "logs": log_manifest},
+                entry_key="retention_manifest",
+            )
+            entry["artifact_files"] = _purge_tree(artifact_dir)
+            if str(log_root):
+                entry["log_files"] = _purge_tree(log_dir)
+        purged.append(entry)
+
+    return {
+        "retention_days": window,
+        "cutoff": cutoff,
+        "applied": bool(apply),
+        "eligible_jobs": len(purged),
+        "jobs": purged,
+    }
+
+
+def reset_cooldowns(state: State, *, scope: str = "") -> dict[str, Any]:
+    """Clear provider cooldowns and circuit breakers so work can resume.
+
+    An operator command, never automatic: a cooldown exists because something
+    failed, and clearing it on a timer would just re-spend against the same
+    broken provider.
+    """
+    from budget import reset_breakers
+
+    if scope:
+        cursor = state.execute("DELETE FROM providers WHERE key=?", (scope,))
+    else:
+        cursor = state.execute("DELETE FROM providers", ())
+    providers = int(cursor.rowcount or 0)
+    state.db.commit()
+    breakers = reset_breakers(state, scope)
+    return {"scope": scope or "*", "providers_cleared": providers,
+            "breakers_cleared": breakers}
+
+
+def backup_state(state: State, destination: str | None = None) -> dict[str, Any]:
+    """Take a consistent backup of the state database and its snapshot archive.
+
+    `sqlite3.Connection.backup` is used rather than a file copy, so the backup is
+    consistent even while WAL writes are in flight.
+    """
+    import shutil
+    import sqlite3
+
+    stamp = dt.datetime.now(dt.timezone.utc).strftime("%Y%m%dT%H%M%SZ")
+    target = pathlib.Path(destination) if destination else (state.root / "backups" / stamp)
+    target.mkdir(parents=True, exist_ok=True)
+    db_path = target / "state.sqlite3"
+    with sqlite3.connect(db_path) as handle:
+        state.db.backup(handle)
+    snapshots = state.root / "snapshots"
+    copied = 0
+    if snapshots.is_dir():
+        shutil.copytree(snapshots, target / "snapshots", dirs_exist_ok=True)
+        copied = sum(1 for path in (target / "snapshots").rglob("*") if path.is_file())
+    return {"destination": str(target), "database": str(db_path),
+            "snapshot_files": copied, "created_at": stamp}
+
+
+def runtime_health(local_cfg: dict[str, Any], state: State) -> dict[str, Any]:
+    """Local, side-effect-free health. No network, no mutation, no model calls.
+
+    Reports the things that actually stop this harness: a corrupt database, an
+    unwritable state or log directory, an open circuit breaker, a stranded lease,
+    and how much of the cost budget the last day consumed.
+    """
+    import budget
+
+    checks: dict[str, Any] = {}
+    try:
+        row = state.db.execute("PRAGMA integrity_check").fetchone()
+        checks["database"] = str(row[0]) if row else "unknown"
+    except Exception as exc:
+        checks["database"] = f"error: {exc}"[:200]
+
+    def _writable(path: pathlib.Path) -> bool:
+        try:
+            probe = path / ".health-probe"
+            probe.write_text("ok", encoding="utf-8")
+            probe.unlink()
+            return True
+        except OSError:
+            return False
+
+    checks["state_dir_writable"] = _writable(state.root)
+    log_dir = (local_cfg.get("logging") or {}).get("directory") or ""
+    checks["log_dir_writable"] = _writable(pathlib.Path(log_dir)) if log_dir else False
+
+    breakers = [
+        budget.breaker_state(state, row["scope"])
+        for row in state.db.execute("SELECT scope FROM circuit_breakers ORDER BY scope")
+    ]
+    open_breakers = [b for b in breakers if b["status"] != budget.CLOSED]
+
+    cooldowns = state.db.execute(
+        "SELECT COUNT(*) AS c FROM providers WHERE unavailable_until IS NOT NULL"
+    ).fetchone()
+    oldest = state.db.execute(
+        "SELECT id, status, updated_at FROM jobs WHERE status NOT IN "
+        f"({','.join('?' for _ in TERMINAL_STATUSES)}) ORDER BY updated_at LIMIT 1",
+        TERMINAL_STATUSES,
+    ).fetchone()
+
+    slug = str((local_cfg.get("repository") or {}).get("slug") or "")
+    healthy = (
+        checks["database"] == "ok"
+        and checks["state_dir_writable"]
+        and not open_breakers
+    )
+    return {
+        "status": "healthy" if healthy else "degraded",
+        "checks": checks,
+        "runtime": runtime_status(state),
+        "breakers": breakers,
+        "open_breakers": [b["scope"] for b in open_breakers],
+        "provider_cooldowns": int(cooldowns["c"]) if cooldowns else 0,
+        "oldest_unfinished_job": (
+            {"job": oldest["id"], "status": oldest["status"], "updated_at": oldest["updated_at"]}
+            if oldest else None
+        ),
+        "budget": {
+            "limits": budget.limits(local_cfg),
+            "repo_tokens_24h": budget.spent_for_repo(state, slug) if slug else 0,
+        },
+        "retention_days": _retention_days(local_cfg),
+    }
 
 
 def runtime_status(state: State) -> dict[str, Any]:
@@ -1447,6 +2152,26 @@ def main(argv: list[str] | None = None) -> int:
     )
 
     sub.add_parser("status", help="show local state-dir health without network activity")
+    sub.add_parser("health", help="local health check: database, disks, breakers, budget")
+
+    ret = sub.add_parser(
+        "retention",
+        help="purge artifacts for terminal jobs past the retention window "
+             "(dry-run unless --apply); the audit trail is never purged",
+    )
+    ret.add_argument("--days", type=int, default=None,
+                     help="override retention.artifact_days for this run")
+    ret.add_argument("--apply", action="store_true",
+                     help="actually delete; without it nothing is removed")
+
+    cooldown = sub.add_parser(
+        "cooldown-reset", help="clear provider cooldowns and circuit breakers")
+    cooldown.add_argument("--scope", default="",
+                          help="a single provider key or breaker scope; default all")
+
+    backup = sub.add_parser("backup", help="consistent backup of state.sqlite3 + snapshots")
+    backup.add_argument("--dest", default=None, help="destination directory")
+
     args = parser.parse_args(argv)
 
     cfg, cfg_path, issues = load_repo_config(args.repo_root)
@@ -1476,11 +2201,21 @@ def main(argv: list[str] | None = None) -> int:
         return 0
 
 
-    if args.command == "status":
+    # Local, side-effect-free commands: no capability probe, no network.
+    _LOCAL_COMMANDS = {
+        "status": lambda: runtime_status(state),
+        "health": lambda: runtime_health(cfg, state),
+        "retention": lambda: retention_sweep(
+            cfg, state, days=getattr(args, "days", None), apply=getattr(args, "apply", False)),
+        "cooldown-reset": lambda: reset_cooldowns(state, scope=getattr(args, "scope", "")),
+        "backup": lambda: backup_state(state, getattr(args, "dest", None)),
+    }
+    if args.command in _LOCAL_COMMANDS:
         try:
-            json.dump(runtime_status(state), sys.stdout, indent=2, sort_keys=True)
+            json.dump(_LOCAL_COMMANDS[args.command](), sys.stdout, indent=2, sort_keys=True)
             sys.stdout.write("\n")
         finally:
+            runtime_lock.release()
             state.close()
         return 0
     try:

@@ -45,10 +45,87 @@ MAX_STDERR_BYTES = 8192
 FORMAT = "otel-jsonl"
 LOG_SCHEMA_VERSION = 1
 
+#: The canonical event names the ORCHESTRATOR must emit for one job. They are
+#: named here, not in the dispatcher, so a trace consumer (and
+#: `tests/test_dispatch_observability.py`) has one authority for what a complete
+#: job trace looks like. `JobLogger` was previously constructed by the dispatcher
+#: and never called on: a job left no orchestrator-emitted trace at all, only
+#: whatever `common.State.transition` happened to log.
+JOB_EVENTS: tuple[str, ...] = (
+    "queueing",         # the job was selected for dispatch
+    "preflight",        # config/snapshot/capability/canary checks concluded
+    "lease_acquired",   # the review lease was claimed, before any model spend
+    "lease_released",   # the review lease was released, on every exit path
+    "evidence",         # the evidence bundle backing this job
+    "budget",           # the pre-spend cost reservation and its headroom
+    "planner",          # the deterministic review plan
+    "strategy",         # which reasoning strategy and fallback recipe ran
+    "route_selection",  # which model route actually executed
+    "rereview",         # this head supersedes a previously reviewed one
+    "decision",         # the disposition the job reached, and why
+    "human_queue",      # a durable human request was enqueued
+    "mutation",         # an external (GitHub) action was attempted
+    "verify",           # a revalidation of the reviewed head
+    "safe_stop",        # the job stopped safely without completing
+)
+
+#: Events that MUST appear in any job that reaches a terminal decision. A job may
+#: legitimately skip `mutation`/`human_queue`/`safe_stop`/`rereview` depending on
+#: the branch it takes; everything else is unconditional.
+REQUIRED_JOB_EVENTS: frozenset[str] = frozenset(
+    {"queueing", "preflight", "evidence", "budget", "planner", "strategy",
+     "route_selection", "decision", "verify"}
+)
+
+#: Attribute magnitude cap. Cost/token/latency numbers are diagnostic, so an
+#: absurd value is clamped rather than logged verbatim or dropped.
+MAX_METRIC_VALUE = 1_000_000_000
+
+#: Metric attribute names containing the substring "token". `_is_sensitive_key`
+#: matches "token" anywhere in a key, so a legitimate TOKEN COUNT was being
+#: written to the log as "<redacted>" — an observability control silently eaten
+#: by a security control. These exact names are allowed through, and only these:
+#: the allowlist is closed, and `metric_attributes` is their only producer.
+METRIC_TOKENS = "cost.tokens"
+METRIC_TOKENS_RESERVED = "cost.tokens_reserved"
+SAFE_METRIC_KEYS: frozenset[str] = frozenset({METRIC_TOKENS, METRIC_TOKENS_RESERVED})
+
 SENSITIVE_KEY_MARKERS = (
     "token", "api_key", "apikey", "password", "secret", "authorization",
     "bearer", "credential",
 )
+
+
+def metric_attributes(
+    *,
+    tokens: int | None = None,
+    tokens_reserved: int | None = None,
+    latency_ms: int | None = None,
+    attempts: int | None = None,
+) -> dict[str, Any]:
+    """Bounded cost/token/latency attributes for an event.
+
+    Every value is coerced to a non-negative integer and clamped, so a runaway
+    counter or a negative clock delta cannot land in the log as-is. Absent values
+    are omitted rather than logged as zero, because "not measured" and "zero" are
+    different facts.
+    """
+    pairs = (
+        (METRIC_TOKENS, tokens),
+        (METRIC_TOKENS_RESERVED, tokens_reserved),
+        ("latency.ms", latency_ms),
+        ("review.attempts", attempts),
+    )
+    out: dict[str, Any] = {}
+    for key, value in pairs:
+        if value is None:
+            continue
+        try:
+            number = int(value)
+        except (TypeError, ValueError):
+            continue
+        out[key] = max(0, min(MAX_METRIC_VALUE, number))
+    return out
 
 
 def _is_sensitive_key(key: str) -> bool:
@@ -180,7 +257,7 @@ class JobLogger:
         if attributes:
             for key, value in attributes.items():
                 skey = str(key)
-                if _is_sensitive_key(skey):
+                if _is_sensitive_key(skey) and skey not in SAFE_METRIC_KEYS:
                     event["attributes"][skey] = "<redacted>"
                 else:
                     event["attributes"][skey] = sanitize_value(value)
@@ -252,7 +329,7 @@ class JobLogger:
             payload["service.version"] = self.service_version
         for key, value in attempt.items():
             skey = str(key)
-            if _is_sensitive_key(skey):
+            if _is_sensitive_key(skey) and skey not in SAFE_METRIC_KEYS:
                 payload[skey] = "<redacted>"
             else:
                 payload[skey] = sanitize_value(value)

@@ -63,6 +63,7 @@ from runners import (
     UnknownRunnerError,
     build_invocation,
 )
+from strategies import STRATEGY_BY_NAME
 from verdict import signal_from_verdict, validate_verdict
 
 SENSITIVE = re.compile(
@@ -78,6 +79,10 @@ SIGNAL_TOKENS = (
     "HUMAN_RESERVED",
 )
 SLOT_FILES = ("review-A.txt", "review-B.txt")
+
+#: The one verdict schema this panel validates against (schemas/<name>.json).
+#: A strategy declaring a different `output_schema` is refused, fail-closed.
+VERDICT_SCHEMA = "reviewer-verdict"
 
 # OMP invocation flags, verified against `omp --help` on this machine (v18.0.4):
 #   --cwd=<value>     Directory to start in (overrides the launch cwd)
@@ -191,7 +196,24 @@ def _parse_signals(artifact_dir: pathlib.Path, expected: int) -> list[str]:
     return signals
 
 
-def _mode_participants(artifact_dir: pathlib.Path, expected: int) -> list[Participant]:
+def _slot_role(roles: tuple[str, ...], idx: int, expected: int) -> str:
+    """The role this slot plays, taken from the STRATEGY's declared roles.
+
+    The strategy is the record of how participants compose, so the role labels
+    come from it rather than being re-invented here. A strategy that declares
+    fewer roles than the panel fills falls back to the generic reviewer labels,
+    so a short `roles` tuple degrades the label, never the panel.
+    """
+    if idx < len(roles) and roles[idx]:
+        return str(roles[idx])
+    if expected <= 1:
+        return "reviewer"
+    return f"reviewer_{'ab'[idx] if idx < 2 else idx}"
+
+
+def _mode_participants(
+    artifact_dir: pathlib.Path, expected: int, roles: tuple[str, ...] = ()
+) -> list[Participant]:
     """Build mode participants for the filled slots.
 
     `provider_family` is read from the trusted sidecar the machinery wrote, never
@@ -202,7 +224,7 @@ def _mode_participants(artifact_dir: pathlib.Path, expected: int) -> list[Partic
     participants: list[Participant] = []
     for idx in range(min(expected, len(SLOT_FILES))):
         slot_file = artifact_dir / SLOT_FILES[idx]
-        role = "reviewer" if expected <= 1 else f"reviewer_{'ab'[idx] if idx < 2 else idx}"
+        role = _slot_role(roles, idx, expected)
         if not slot_file.is_file():
             participants.append(Participant(role=role, model=f"<{SLOT_FILES[idx]}>", valid=False))
             continue
@@ -408,16 +430,12 @@ def _selection_context(config, repo, number, lane, profile):
     strategy_name = "direct_analysis"
     routed_log: dict = {}
     try:
-        from strategies import select_strategy
         from routing import resolve_route
+        from strategies import strategy_for_profile
 
-        signals = {
-            "risk": profile.as_dict().get("level", "low") if hasattr(profile, "as_dict") else "low",
-            "complexity": 0,
-            "required_independence": profile.as_dict().get("independence", "single") if hasattr(profile, "as_dict") else "single",
-            "prior_disagreement": False,
-        }
-        strategy, reason = select_strategy(signals)
+        # The SHARED selector, so the orchestrator's pre-spend budget reservation
+        # and the panel's execution can never pick two different strategies.
+        strategy, reason = strategy_for_profile(profile)
         strategy_name = strategy.name
         routed_log["strategy"] = strategy.name
         routed_log["strategy_reason"] = reason
@@ -544,6 +562,17 @@ def run_panel(
     # reused for the attempt log below, so it is computed exactly once.
     strategy_name, route_log = _selection_context(config, repo, number, lane, profile)
     recipe = recipe_for(strategy_name)
+    strategy = STRATEGY_BY_NAME.get(strategy_name)
+
+    # The strategy declares the schema its participants must satisfy. This panel
+    # validates against exactly one schema, so a strategy asking for a different
+    # one is a configuration error that must stop the run rather than be silently
+    # validated against the wrong contract.
+    if strategy is not None and strategy.output_schema != VERDICT_SCHEMA:
+        raise JobBlockingError(
+            f"strategy {strategy_name!r} declares output_schema "
+            f"{strategy.output_schema!r} but the panel validates {VERDICT_SCHEMA!r}"
+        )
 
     lanes = [
         order_candidates([c for c in lane_entries if _qualifying(c)], recipe)
@@ -587,7 +616,12 @@ def run_panel(
         "Do not call GitHub or modify files."
     )
 
+    # The runtime ceiling is the TIGHTER of the operator's transport timeout and
+    # the strategy's declared budget. A strategy can only ever shorten a run, so
+    # this cannot lengthen an operator-configured timeout.
     timeout = int(config["models"].get("timeout_seconds", 1800))
+    if strategy is not None and strategy.timeout_seconds > 0:
+        timeout = min(timeout, int(strategy.timeout_seconds))
     cooldown = int(config["models"].get("cooldown_seconds", 1800))
 
     # A fresh attempt clears every prior slot file so a stale (lower-profile) verdict
@@ -697,7 +731,19 @@ def run_panel(
     # both, so completeness reflects participants that actually count. It can
     # only ever be stricter than the slot count, never looser.
     mode_spec = mode_for_profile(profile.independence, required)
-    mode_result = aggregate(mode_spec, _mode_participants(artifact_dir, required))
+    strategy_roles = strategy.roles if strategy is not None else ()
+    mode_result = aggregate(
+        mode_spec, _mode_participants(artifact_dir, required, strategy_roles)
+    )
+    # A split among the participants that DID count is handled the way the
+    # strategy declares. It is reported rather than resolved here: `assurance`
+    # owns what a disagreement means, this only records which handling applies.
+    counted_signals = {s for s in mode_result.signals if s}
+    disagreement = len(counted_signals) > 1
+    disagreement_handling = (
+        (strategy.disagreement_handling if strategy is not None else "escalate")
+        if disagreement else ""
+    )
     complete = (
         len(signals) >= required
         and filled >= required
@@ -722,6 +768,11 @@ def run_panel(
         "required": required,
         "completed": len(completed),
         "outcome": outcome,
+        "timeout_seconds": timeout,
+        "budget_tokens": int(strategy.budget_tokens) if strategy is not None else 0,
+        "roles": [_slot_role(strategy_roles, i, required) for i in range(required)],
+        "disagreement": disagreement,
+        "disagreement_handling": disagreement_handling,
     }
     if logger is not None:
         try:
@@ -761,6 +812,11 @@ def run_panel(
         "failed_families": sorted(failed_families),
         "strategy": strategy_name,
         "recipe": recipe.name,
+        "budget_tokens": int(strategy.budget_tokens) if strategy is not None else 0,
+        "timeout_seconds": timeout,
+        "roles": [_slot_role(strategy_roles, i, required) for i in range(required)],
+        "disagreement": disagreement,
+        "disagreement_handling": disagreement_handling,
     }
 
 

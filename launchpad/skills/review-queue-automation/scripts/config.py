@@ -218,6 +218,24 @@ def validate_config(config: dict[str, Any], repo_root: pathlib.Path) -> list[str
         issues_p = validate_policy(dict(config["policy"]))
         issues.extend("policy." + i for i in issues_p)
 
+    # ---- Cost / rate-limit controls (optional; fail-closed when malformed)
+    # Absent means the built-in defaults apply, which are finite. A PRESENT but
+    # malformed section is an error rather than a silent fallback, so a typo can
+    # never quietly remove a spend ceiling.
+    from budget import validate_budget
+
+    issues.extend(validate_budget(config))
+
+    # ---- Retention (optional) --------------------------------------------
+    if "retention" in config:
+        retention = config.get("retention")
+        if not isinstance(retention, dict):
+            issues.append("retention must be an object")
+        else:
+            days = retention.get("artifact_days", 0)
+            if isinstance(days, bool) or not isinstance(days, int) or days < 0:
+                issues.append("retention.artifact_days must be a non-negative integer")
+
     # ---- Approval: modes / thresholds / canary / rates -------------------
     # Defaults disabled, so live is never enabled by omission.
     approval = config.get("approval", {}) or {}
@@ -324,6 +342,69 @@ def validate_config(config: dict[str, Any], repo_root: pathlib.Path) -> list[str
 
 SECRET_KEY_HINTS = ("token", "api_key", "apikey", "password", "secret", "private_key", "client_secret")
 
+#: Exact config paths whose NAME trips `SECRET_KEY_HINTS` but whose VALUE is a
+#: count, never a credential. The hint list matches "token" as a substring, so
+#: token-BUDGET keys were rejected as secrets and a config carrying a budget
+#: section could not load at all. The allowlist is exact-path and closed; a key
+#: is only added here when its value is provably a number.
+SECRET_KEY_ALLOWLIST = frozenset({
+    "budget.per_pr_tokens",
+    "budget.per_repo_daily_tokens",
+    "budget.per_model_daily_tokens",
+})
+
+
+def _budget_defaults() -> dict[str, Any]:
+    """The budget ceilings, taken from `budget.DEFAULTS` so the two cannot drift."""
+    from budget import DEFAULTS
+
+    resolved = {k: v for k, v in DEFAULTS.items() if k != "circuit_breaker"}
+    resolved["circuit_breaker"] = dict(DEFAULTS["circuit_breaker"])
+    return resolved
+
+
+def policy_defaults(config: dict[str, Any]) -> dict[str, Any]:
+    """Derive the inline `policy` section from a config, mirroring it verbatim.
+
+    The policy is the immutable decision surface a job is pinned to. It is
+    DERIVED, never invented: every value here is copied from the config it is
+    built from, so seeding a policy cannot widen authority or move a threshold.
+
+    It exists because `snapshot.build_snapshot` is fail-closed on a missing
+    policy: without this section every job runs UNPINNED and `policy_version`
+    stays blank in the ledger, which silently disables the pinning guarantee.
+    """
+    approval = dict(config.get("approval") or {})
+    risk = dict(config.get("risk") or {})
+    # Every key `policy.validate_policy` requires is present, falling back to the
+    # SAME defaults `onboarding_defaults` uses. A derived policy that fails
+    # validation would leave the job unpinned and `policy_version` blank, which is
+    # the exact silent failure this section exists to prevent, so the fallbacks
+    # are structural, not new thresholds.
+    required_approval = {
+        "mode": "disabled",
+        "live_canary_approved": False,
+        "effective_risk_max": 24,
+        "complexity_max": 2,
+        "file_limit": 50,
+        "line_limit": 1000,
+        "approval_rate_max": 0.5,
+    }
+    return {
+        "version": "v1",
+        "authority": dict(config.get("authority") or {}),
+        "approval": {
+            key: approval.get(key, fallback)
+            for key, fallback in required_approval.items()
+        },
+        "risk": {
+            "bands": dict(risk.get("bands") or {}),
+            "protected_triggers": list(risk.get("protected_triggers") or []),
+        },
+        "human_queue": dict(config.get("human_queue") or {}),
+        "assurance": dict(config.get("assurance") or {}),
+    }
+
 
 def find_secret_keys(config: dict[str, Any], prefix: str = "") -> list[str]:
     """Recursively find keys that look secret-like (e.g. api_key, secret, token)."""
@@ -331,7 +412,7 @@ def find_secret_keys(config: dict[str, Any], prefix: str = "") -> list[str]:
     for key, value in (config or {}).items():
         k = str(key).lower()
         path = f"{prefix}.{key}" if prefix else str(key)
-        if any(h in k for h in SECRET_KEY_HINTS):
+        if any(h in k for h in SECRET_KEY_HINTS) and path not in SECRET_KEY_ALLOWLIST:
             hits.append(path)
         if isinstance(value, dict):
             hits.extend(find_secret_keys(value, path))
@@ -391,7 +472,7 @@ def onboarding_defaults(repo_root) -> dict[str, Any]:
     """A valid starter config for onboarding. Never written until validated."""
     root = pathlib.Path(repo_root).resolve()
     log_dir = root / DEFAULT_LOG_DIR_NAME
-    return {
+    defaults: dict[str, Any] = {
         "version": 1,
         "login": "",
         "state_dir": "~/.config/review-queue-automation",
@@ -439,4 +520,11 @@ def onboarding_defaults(repo_root) -> dict[str, Any]:
         "human_queue": {"expiry_minutes": 1440},
         "shadow": {"history_window_months": 12, "evaluated_sha_only": True},
         "github": {"api_version": "2022-11-28", "timeout_seconds": 30, "read_only": True},
+        # Written out explicitly rather than left implicit: an operator can see
+        # and change the ceilings, and `budget.limits` would apply these same
+        # values anyway if the section were absent.
+        "budget": _budget_defaults(),
+        "retention": {"artifact_days": 30},
     }
+    defaults["policy"] = policy_defaults(defaults)
+    return defaults

@@ -75,11 +75,17 @@ def test_onboarding_creates_ignored_config_and_log_dir() -> None:
     # config loads valid
     cfg, _, issues = cfgmod.load_repo_config(root)
     assert issues == []
-    # no secrets: no field named token/key
+    # No secrets. This asserts against the SAME scanner the loader enforces
+    # rather than a raw substring sweep: `budget.per_pr_tokens` is a token COUNT,
+    # and a blanket ban on the substring "token" would reject a legitimate spend
+    # ceiling while still missing a credential stored under an innocuous key.
+    assert cfgmod.find_secret_keys(cfg) == []
     blob = cfg_path.read_text(encoding="utf-8")
     assert "api_key" not in blob.lower()
-    assert "token" not in blob.lower()
     assert "secret" not in blob.lower()
+    # and no credential-SHAPED values, whatever the key is called
+    for marker in ("ghp_", "gho_", "Bearer ", "eyJ"):
+        assert marker not in blob, f"credential-shaped value in config: {marker}"
 
 
 def test_onboarding_refuses_tracked_config() -> None:
