@@ -80,9 +80,11 @@ evidence:
     entry_class: FACT
     evidence:
       - "crates/buzz-dev-mcp/src/shell.rs"
-  - statement: "docs/remote-agents.md's Known Defects section (at pinned commit 28ae6cd21, cited within that document) states that once secrets can arrive via a launch.env block, desktop redaction MUST collect candidate values from launch.env (and launch.policy_env) as well as legacy agent.env_vars, but at that commit env_secrets_from_request (backend.rs) reads only agent.env_vars, leaving a definition/persona-layer secret outside the literal-value scrub — an already-documented secret-redaction gap in the desktop-to-remote-agent deployment path."
+  - statement: "docs/remote-agents.md's Known Defects section (at pinned commit 28ae6cd21, cited within that document) once stated that env_secrets_from_request (backend.rs) read only agent.env_vars, leaving definition/persona-layer secrets carried in launch.env or launch.policy_env outside the literal-value scrub; commit 6530b58a61d4602d0a371100fedf80c5998b1e34 (landed in the same PR that introduced the launch.env/launch.policy_env fields) fixed this — env_secrets_from_request now collects string values from agent.env_vars, agent.launch.env, and agent.launch.policy_env alike before they are fed to redact_secrets_with, so all three tiers are scrubbed from provider stderr and JSON-error text."
     entry_class: FACT
     evidence:
+      - "desktop/src-tauri/src/managed_agents/backend.rs"
+      - "commit 6530b58a61d4602d0a371100fedf80c5998b1e34"
       - "docs/remote-agents.md"
   - statement: "launchpad/docs/corpus/architecture/context/buzz-platform.md's context diagram identifies the platform's actors and external systems (human clients, AI agents via buzz-cli or an ACP subprocess, an operator via buzz-admin, a git client, Postgres, Redis, an S3-compatible media store, and the spawned agent subprocess) and states the community is the tenant-visible workspace selected by the request host — this node's own system model reuses that same set of elements and that same host-derived trust boundary rather than re-deriving them."
     entry_class: FACT
@@ -183,7 +185,7 @@ graph TD
 | WebSocket admission / event submission | D | An authenticated principal floods the relay with connections or events faster than the fixed-window limiter's own documented 2x-burst tolerance permits. | `crates/buzz-auth/src/rate_limit.rs`, `crates/buzz-relay/src/admission.rs` |
 | Pre-authentication connection surface | D | An unauthenticated caller opens many connections or sends oversized payloads; no IP-level or connection-count throttle was found in this codebase. | `crates/buzz-auth/src/rate_limit.rs` (scoped to authenticated principals only — see evidence ledger) |
 | `buzz-dev-mcp` shell tool | E | An AI agent (or an instruction that reaches it, e.g. via prompt injection in message content) runs an arbitrary shell command with the full OS privileges of the `buzz-dev-mcp` host process — no seccomp/namespace/chroot/container confinement exists in the tool itself. | `crates/buzz-dev-mcp/src/shell.rs` |
-| Desktop → remote agent `launch.env` | I | A secret carried in a definition/persona-layer `launch.env` block reaches a remote agent without passing through desktop redaction, which today scrubs only `agent.env_vars`. | `docs/remote-agents.md` (Known Defect 3) |
+| Desktop → remote agent `launch.env`/`launch.policy_env` | I | A secret carried in a definition/persona-layer `launch.env` or `launch.policy_env` block reaches a remote agent and could appear unredacted in provider stderr/JSON-error diagnostics if desktop redaction did not scrub those maps. | `desktop/src-tauri/src/managed_agents/backend.rs` |
 
 ## Mitigations
 
@@ -202,12 +204,12 @@ graph TD
 | Authenticated-principal flooding | Fixed-window rate limiter per `(tenant, pubkey, LimitType)`, applied at WS admission, media upload, invites | Needs Investigation | buzz-auth | `crates/buzz-auth/src/rate_limit.rs` — the module's own doc comment concedes fixed windows allow up to 2x burst at boundaries |
 | Pre-authentication / anonymous flooding | None found in this codebase's own rate-limit call sites (all keyed by authenticated principal) | Not Started | Unassigned | `crates/buzz-auth/src/rate_limit.rs`, `crates/buzz-relay/src/admission.rs` — absence within this repo's code only; a deployment-level reverse proxy/load balancer was not in scope of this review (see *Scope and omissions*) |
 | Shell tool privilege scope | Timeout, byte/line output caps, and process-group kill bound duration and blast size, but do not confine what a running command can do | Needs Investigation | buzz-dev-mcp | `crates/buzz-dev-mcp/src/shell.rs` — no OS-level sandbox primitive found in this crate |
-| `launch.env` secret redaction gap | Documented, not yet fixed at the cited commit | Needs Investigation | Desktop (`backend.rs`) | `docs/remote-agents.md` (Known Defect 3) |
+| `launch.env`/`launch.policy_env` secret redaction | `env_secrets_from_request` collects string values from `agent.env_vars`, `agent.launch.env`, and `agent.launch.policy_env` alike, feeding all three into `redact_secrets_with` before provider stderr/JSON-error text is surfaced | Mitigated | Desktop (`backend.rs`) | `desktop/src-tauri/src/managed_agents/backend.rs` — fixed by commit 6530b58a61d4602d0a371100fedf80c5998b1e34, superseding the gap `docs/remote-agents.md`'s Known Defects section describes at the earlier pinned commit `28ae6cd21` |
 
 ## Review and validation
 
 - Reviewed by: this authoring pass (self-review only — no `review-code`/cross-model pass invoked), on the date of the recorded revision.
-- Re-review triggers: any change to `crates/buzz-core/src/tenant.rs`'s host-resolution invariant or `TenantContext` construction; any change to `crates/buzz-relay/src/handlers/req.rs`'s p-gated-kind list or `p_gated_filters_authorized`; any change to `crates/buzz-auth/src/nip98.rs` or `crates/buzz-core/src/verification.rs`'s signature/id checks; any change that adds sandboxing (or further removes confinement) to `crates/buzz-dev-mcp/src/shell.rs`; landing of the `launch.env` redaction fix `docs/remote-agents.md` names as outstanding; and any structural change to `architecture-context-buzz-platform`'s own system boundary, since this node's DFD is derived from it.
+- Re-review triggers: any change to `crates/buzz-core/src/tenant.rs`'s host-resolution invariant or `TenantContext` construction; any change to `crates/buzz-relay/src/handlers/req.rs`'s p-gated-kind list or `p_gated_filters_authorized`; any change to `crates/buzz-auth/src/nip98.rs` or `crates/buzz-core/src/verification.rs`'s signature/id checks; any change that adds sandboxing (or further removes confinement) to `crates/buzz-dev-mcp/src/shell.rs`; any change to `env_secrets_from_request`'s set of collected env maps in `backend.rs`; and any structural change to `architecture-context-buzz-platform`'s own system boundary, since this node's DFD is derived from it.
 
 ## Boundary
 
