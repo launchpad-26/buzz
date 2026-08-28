@@ -32,7 +32,7 @@ Blank issues are turned off. You pick a type, and the form asks for what that ty
 | Type | Use it when | Example |
 |---|---|---|
 | **PRD** | The work needs child issues to finish | "Reproducible hardened deployment from bare Ubuntu" |
-| **Task** | One person or agent, one branch, one PR | "Add an Ansible role that installs Redis" |
+| **Task** | Bounded work with no children of its own | "Add an Ansible role that installs Redis" |
 | **Enhancement** | It exists, works, but should work better | "Deployment playbook takes 12 min; cache the apt step" |
 | **Bug** | It exists and behaves incorrectly | "`/health` returns 502 after relay restart" |
 | **ADR** | A decision to make and record | "Ansible vs. cloud-init for host config" |
@@ -62,9 +62,12 @@ You're building the VPS deployment (PRD #2) and notice Redis isn't installed any
 
 - Not a Bug — nothing exists to behave incorrectly.
 - Not an Enhancement — there's nothing to improve yet.
-- Doesn't need children — one playbook role, one PR.
+- Doesn't need children — so it's a Task, not a Feature.
 
-→ **Task**, parent `#2`, labels `type:task` + `area:deploy`.
+→ **Task**, parent `#2`, labels `type:task` + `area:deploy`. Parented straight to a PRD
+rather than under a Feature, so it gets its own single-issue PR and writes
+`N/A - single-issue PR` in the PR body's `### Feature` section. A Task that *is* a
+Feature's child lands in that Feature's batch PR instead.
 
 ---
 
@@ -97,7 +100,12 @@ PR check into its stricter mode.
 
 ## Opening a PR
 
-**One issue, one PR.** Use a closing keyword (`Closes #12`) so the board updates on merge.
+**A Feature is the PR-worthy unit.** Its child Tasks land together in one batch PR
+against the Feature, not one PR each — use a closing keyword (`Closes #12`, one per
+child, one per line) so the board updates every one of them on merge. A standalone
+Task with no Feature parent still closes on its own single-issue PR. A blocker found
+while preparing or reviewing a batch doesn't hold the merge: file it as an issue under
+the PR's Feature, label it `deferred-blocker`, name it in the PR body, and merge.
 
 There are two templates, split by **who wrote the code** — not by issue type:
 

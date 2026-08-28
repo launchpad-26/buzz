@@ -31,6 +31,11 @@ body:
            the real milestone to the issue - this field makes the intent checkable,
            it does not set metadata.
         8. A Feature always has a parent PRD. Link it by number.
+        9. A Feature — not a Task — is the PR-worthy unit (ADR-0052). Its children do not
+           get their own pull requests: they land together in one batch pull request
+           against this Feature, capped at 1,500 added lines or 10 changed files,
+           whichever binds first. A batch that would exceed the cap splits into
+           sequential batch pull requests instead of one oversized one.
         -->
 
         One demonstrable capability inside a milestone. Decomposes into Tasks; rolls up
@@ -78,7 +83,7 @@ body:
     id: children
     attributes:
       label: Child issues
-      description: 'Task-list of the issues that implement this, one per line: "- [ ] #123". Write "N/A - not yet decomposed" if filing ahead of breakdown; fill in before work starts.'
+      description: 'Task-list of the issues that implement this, one per line: "- [ ] #123". This is normative, not advisory: the batch PR may close only issues that are real GitHub sub-issues of this Feature (created with `gh issue create --parent`, which is what the PR body check reads). Keep this list and the sub-issue links in step: an issue listed here but not parented cannot be closed by the batch PR. Write "N/A - not yet decomposed" if filing ahead of breakdown; fill in before work starts.'
       value: |
         - [ ] #
     validations:

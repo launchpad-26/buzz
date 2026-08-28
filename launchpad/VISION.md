@@ -118,7 +118,7 @@ Every row below is sourced, and every status was checked against the live issue 
 | The cohort operates Buzz and does not develop it; product bugs go upstream | `IMPLEMENTED` | [`launchpad/AGENTS.md` §1](AGENTS.md) |
 | Upstream files are never moved or renamed; cohort files live under `launchpad/` | `IMPLEMENTED` | [`launchpad/AGENTS.md` §3](AGENTS.md) |
 | Stable knowledge is a document; active work is an issue | `IMPLEMENTED` | [`launchpad/AGENTS.md` §2](AGENTS.md) |
-| Agents draft everything and approve nothing | `IMPLEMENTED` | [`launchpad/AGENTS.md` §5 rule 1](AGENTS.md) |
+| Agents draft on their own authority and decide only on a human's, quoted and linked | `IMPLEMENTED` | [`launchpad/AGENTS.md` §5 rule 1](AGENTS.md), [ADR-0052](decisions/ADR-0052-delegated-authority-and-feature-batching.md) |
 | One VPS of cohort scale; whether the stack fits the proposed sizing is unmeasured | `OPEN` | [#18](https://github.com/launchpad-26/buzz/issues/18), [#21](https://github.com/launchpad-26/buzz/issues/21) |
 | Routine deployment without distributing root credentials to cohort members | `OPEN` | [#5](https://github.com/launchpad-26/buzz/issues/5), [#25](https://github.com/launchpad-26/buzz/issues/25) |
 

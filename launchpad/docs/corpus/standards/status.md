@@ -278,9 +278,11 @@ team knowledge, a source of a different claim type), that is not a same-claim-ty
 conflict and ADR-0029's ordinary contextual ranking already resolves it without
 `flagged`.
 
-**Draft everything, approve nothing applies here as everywhere else in this
-repository.** An agent may record a `flagged` conflict, write the escalation issue,
-and draft the eventual decision record. An agent may not decide which side of a
+**Draft on your own authority, decide only on a human's, applies here as everywhere
+else in this repository.** An agent may record a `flagged` conflict, write the escalation
+issue, and draft the eventual decision record. Under ADR-0052 it may also write the
+decision outcome once a human has settled it, quoting the instruction verbatim and
+linking where it was given. An agent may not decide which side of a
 `flagged` conflict is correct and may not clear the status itself on that basis.
 
 **Anything this document does not answer is escalated, not invented.** In particular,

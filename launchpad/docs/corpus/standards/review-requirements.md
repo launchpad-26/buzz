@@ -11,19 +11,22 @@ evidence:
     entry_class: FACT
     evidence:
       - "commit 919886b4192df6251de50c547548ecae5d85afce"
-  - statement: "The launchpad branch is protected: a pull request there requires at least one approving review from a reviewer with write access, and an author cannot approve their own pull request. `launchpad/AGENTS.md`'s own text still states two approving reviews are required; `ADR-0019` corrects that figure, verified live with repository admin on 2026-08-21 -- the setting was already 1 before any change that day -- and under `decision-references.md`'s rule that configuration outranks documentation for a behaviour claim, the ADR's figure governs."
+  - statement: "The launchpad branch is protected: a pull request there requires at least one approving review from a reviewer with write access, and an author cannot approve their own pull request. `launchpad/AGENTS.md`'s own text still states two approving reviews are required; `ADR-0019` corrected that figure, verified live with repository admin on 2026-08-21 -- the setting was already 1 before any change that day -- and under `decision-references.md`'s rule that configuration outranks documentation for a behaviour claim, the ADR's figure governs. ADR-0019 is superseded by ADR-0052, which restates the figure unchanged; AGENTS.md's own text was corrected on 2026-08-28."
     entry_class: FACT
     evidence:
       - "launchpad/AGENTS.md"
       - "launchpad/decisions/ADR-0019-review-checks-gate-only-when-deterministic.md"
-  - statement: "Zero required status checks are configured on the launchpad branch, and there are zero repository rulesets; enforcement is classic branch protection only. The corpus-validate workflow that runs validate.py reports on every pull request touching the corpus root but is not a required check, so it does not by itself block a merge. ADR-0019 records this as a known, deliberate gap, deferred until buzz-infrastructure #105's CI/CD pipeline lands."
+      - "launchpad/decisions/ADR-0052-delegated-authority-and-feature-batching.md"
+  - statement: "Zero required status checks are configured on the launchpad branch, and there are zero repository rulesets; enforcement is classic branch protection only. The corpus-validate workflow that runs validate.py reports on every pull request touching the corpus root but is not a required check, so it does not by itself block a merge. ADR-0019 recorded this as a known, deliberate gap, deferred until buzz-infrastructure #105's CI/CD pipeline lands; ADR-0052 supersedes ADR-0019 and carries that deferral, and its 2026-09-05 review date, forward unchanged."
     entry_class: FACT
     evidence:
       - "launchpad/decisions/ADR-0019-review-checks-gate-only-when-deterministic.md"
-  - statement: "Agents may draft any issue, pull request or ADR in full, but may not decide an ADR outcome, approve a pull request, or close another agent's escalation; they raise concerns and never clear them."
+      - "launchpad/decisions/ADR-0052-delegated-authority-and-feature-batching.md"
+  - statement: "Agents may draft any issue, pull request or ADR in full. They may not decide an ADR outcome, approve a pull request, merge one, or close another agent's escalation on their own judgement; the first three may be exercised on a human's behalf under ADR-0052's five conditions, and closing another agent's escalation is never delegable."
     entry_class: FACT
     evidence:
       - "launchpad/AGENTS.md"
+      - "launchpad/decisions/ADR-0052-delegated-authority-and-feature-batching.md"
   - statement: "This repository's CODEOWNERS file assigns the entire repository to one team through a single wildcard rule; it contains no entry scoping launchpad/docs/corpus to a distinct set of reviewers."
     entry_class: FACT
     evidence:

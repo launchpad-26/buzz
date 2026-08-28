@@ -15,8 +15,12 @@ HARD RULES
      A reviewer must be able to read the output, not your summary of it.
   D. "Not verified" must never be empty and must never be "nothing".
      There is always something you did not check. Name it.
-  E. You may draft everything here. You may not approve anything.
-     Anything you were unsure about goes in Escalations, not into a decision.
+  E. You may draft everything here. You may approve or merge ONLY under the delegated
+     authority in launchpad/AGENTS.md §5 — an instruction given this session, quoted
+     verbatim under "Authority" naming who gave it. Without that,
+     anything you were unsure about goes in Escalations, not into a decision.
+     NEVER bypass the platform: no `gh pr merge --admin`, no merging past failing or
+     pending checks, no dismissing reviews, no touching branch protection.
   F. Every checkbox must be either [x] with evidence above it, or [ ] left unticked.
      Do not tick a box you cannot point at evidence for.
 -->
@@ -24,12 +28,19 @@ HARD RULES
 ## Summary
 <!-- 3 sentences maximum. What changed and why. No preamble, no restating the issue title. -->
 
+### Feature
+<!-- The Feature issue this batch implements, as a single "#1234".
+     Every issue this PR closes must be a child of it, or be it.
+     Write "N/A - single-issue PR" for a PR that closes exactly one issue. -->
+
 ### Related issue
-<!-- Closing keyword is required so the board updates on merge. -->
+<!-- One closing keyword per issue this PR completes, one per line, as plain text —
+     NOT inside backticks or a fence, or GitHub creates no link and closes nothing.
+     Use "Refs #<n>" for an issue this PR touches but does not complete. -->
 Closes #
 
 ### Issue type
-<!-- One of: PRD | Task | Enhancement | Bug | ADR — must match the linked issue's type: label. -->
+<!-- One of: PRD | Feature | Task | Enhancement | Bug | ADR — must match the linked issue's type: label. -->
 
 ---
 
@@ -73,6 +84,21 @@ Raw output:
 ### Not verified
 <!-- REQUIRED. What you could not check, and why. Examples: could not test against a
      live relay; no VPS access; did not run the desktop E2E suite. Be specific. -->
+
+### Authority
+<!-- Required when an agent approved or merged this PR under delegated authority
+     (ADR-0052 part A). Quote the human's instruction verbatim and name who gave it (the
+     Initiating human row above). A link is optional, not required.
+     Write "N/A - approved by a human directly" when no delegated authority was used. -->
+
+### Deferred blockers
+<!-- Defects found while preparing or reviewing this PR that are being merged with,
+     not fixed here. One per line as "#1234 - one-line description".
+     Each MUST be an open issue parented to the Feature above and labelled
+     "deferred-blocker". Write "none" if there are none.
+     Never deferrable, and this list is closed: a credential/secret/password hash in the
+     diff; a disclosure-boundary violation; a failing deterministic check; anything that
+     leaves the trunk broken for other agents. -->
 
 ### Security implications
 <!-- What this changes about exposure, trust, or blast radius.

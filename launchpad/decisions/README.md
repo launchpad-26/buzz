@@ -9,7 +9,9 @@ Per [`../AGENTS.md`](../AGENTS.md):
 
 1. An open question becomes a **`type:adr` issue**, parented to the PRD that raised it.
 2. The issue is where the decision is argued. Its *Decision outcome* stays blank until a
-   human settles it — agents draft, they do not decide.
+   human settles it. An agent may **write** the outcome once a human has settled it, but
+   only under `../AGENTS.md` §5's delegated authority — quoting the deciding human
+   verbatim and linking the comment where they said it. On its own judgement, never.
 3. When it is settled, the decision is written here **in the same pull request that closes
    the issue**. Closing without the document is not done: a decision recorded only in a
    closed issue is lost to the noise.
