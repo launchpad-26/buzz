@@ -68,9 +68,12 @@ evidence:
     evidence:
       - "crates/buzz-relay/src/api/operator.rs"
     confidence: 0.75
-  - statement: "Issue #1182 ('task: document layers/security/trust-model.md', parent Feature #607) frames this node's subject as WHO/WHAT is trusted at each level -- relay operator, community admin, community member, agent, external provider -- and states this is distinct from sibling issue #1181's trust-boundaries node, which maps the process boundaries themselves rather than the actors and their granted authority."
-    entry_class: TEAM_KNOWLEDGE
-    provided_by: "launchpad-26/buzz#1182 objective and definition of done, relayed via the corpus-doc batch dispatch brief for tasks under parent Feature #607"
+  - statement: "This node's WHO/WHAT-is-trusted framing, and its treatment of that framing as distinct from sibling issue #1181's trust-boundaries node, is an inference from the two issues' target filenames and generic threat-modeling convention, not an explicit split stated in either issue: #1182 and #1181 share byte-identical objective/definition-of-done boilerplate -- each names only its own target file ('trust-model.md' for #1182, 'trust-boundaries.md' for #1181) and neither issue's text mentions the other or states a WHO/WHAT-versus-process-boundary distinction anywhere in its body."
+    entry_class: INFERENCE
+    evidence:
+      - "https://github.com/launchpad-26/buzz/issues/1182"
+      - "https://github.com/launchpad-26/buzz/issues/1181"
+    confidence: 0.6
   - statement: "What each trust level protects is a synthesis reasoned from the same authorization source read for the rest of this node, not a separately documented 'asset' concept in the codebase: the relay operator's asset (the deployment's community registry) follows from operator.rs's provision/archive/transfer surface; the community owner/admin/member asset (one community's content and membership) follows from moderation_authz.rs's tenant-scoped role grants; and the agent asset (the owner/agent ban-cascade distinction) follows from handle_auth's cascade logic -- each already cited above as FACT, with this entry covering only the framing that groups them as 'what is protected.'"
     entry_class: INFERENCE
     evidence:
