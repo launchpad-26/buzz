@@ -3,7 +3,8 @@
 Normative, and a sibling to `CONTAINMENT.md` and to `FINDINGS.md` in the same voice.
 This is the document [#119](https://github.com/launchpad-26/buzz/issues/119) reads to
 know what arrives once [#118](https://github.com/launchpad-26/buzz/issues/118)
-(adjudication) has run.
+(adjudication) has run — see `PUBLISHING.md` for how the six added finding fields, the
+nine-key `adjudication` block, and the `stages` entry are actually consumed there.
 
 ## The verdict
 
