@@ -196,9 +196,75 @@ the sibling worktrees — not against notes)
   OPEN leaves the schema version undecided. So #119 cannot depend on that record
   today; the stage manifest in STEP 5 is what stands in for it.
 
-  #118 is not started. Adjudication is the stage that would normally sit between
-  #117 and #119. Its absence is why STEP 7 takes report envelopes on stdin and is
-  agnostic about which stage produced them.
+  **CORRECTED 2026-08-25 — #118 is now merged, not "not started".** Everything in
+  this paragraph as first written is false; kept struck through in spirit rather
+  than deleted, per this plan's own citation-rot discipline. PR #1406 merged to
+  `launchpad` at `b904a5a`, closing #118. STEP 7's "agnostic about which stage
+  produced them" property is UNCHANGED by this — #118 still produces exactly the
+  shape #117 documents plus its own additions below, so nothing here had to be
+  rebuilt to accommodate a real adjudication stage rather than a hypothetical one
+  — but every place this plan said "if #118 lands" or planned around its absence
+  is now planning around its presence, and the fields below are REAL, not
+  speculative.
+  #118's contract, verified against the merged code
+  (`launchpad/review-agent/verdicts.py`, `ADJUDICATION.md`), not recalled:
+    SIX FIELDS ADDED to every finding record, on top of #117's ten: `verdict`
+      (CONFIRMED | REFUTED | UNPROVEN), `verdict_evidence` (string, the
+      adjudicator's own reasoning), `reported_severity` (the DIMENSION's
+      original value, preserved verbatim), `severity` (THE SAME FIELD NAME
+      #117 used, now RE-RATED — this is why STEP 4's existing sort-by-severity
+      code needs NO change to pick up the adjudicated value; see OPEN, which
+      this discharges), `severity_reason` (present whenever `severity` differs
+      from `reported_severity`), `duplicate_of` (a finding_id, or null).
+    A NINE-KEY `adjudication` BLOCK, a sibling of `reports` and `containment` —
+      an EIGHTH key on the merged document alongside this plan's existing seven
+      (`pr`, `head_sha`, `merge_base_sha`, `stages`, `reports`, `containment`,
+      `nonce`): `schema_version` (int, 1), `verdict_counts` ({CONFIRMED,
+      REFUTED, UNPROVEN} → int), `findings_in`, `findings_out` (ints, always
+      equal), `duplicate_groups` (list of {survivor, duplicates: [finding_id]}),
+      `downgrades` (list of {finding_id, from, to, reason}), `total_refutation`
+      (bool), `notes` (list, always empty today — deferred, see below),
+      `completion_marker` (str, `BUZZ-ADJUDICATION-COMPLETE:{nonce}`, the LAST
+      key).
+    A REFUTED finding is STILL PUBLISHED, with its verdict beside it —
+      ADJUDICATION.md's own words, and STEP 4 below now builds to it. Nothing
+      in `reports[].findings` is ever removed by adjudication; `duplicate_of`
+      marks a duplicate, it does not delete one.
+    `adjudication.notes` IS DEFERRED AND CARRIES NOTHING TODAY. #118's judge
+      protocol has no channel that reaches it — `run_adjudication.py`
+      hardcodes it to `[]` — so #119 has nothing to render from this key and
+      building against it would be building against a channel proven empty.
+    THE `stages` MANIFEST NOW CARRIES AN `adjudication` ENTRY TOO, added by
+      #118 alongside whatever #116/#117 entries arrived on input. Its status is
+      `"complete"` ONLY when every finding received a verdict, the nonce was
+      established, AND the run was not a total refutation. **This is why
+      STEP 5's condition (1) — "a stage in the manifest has status other than
+      complete" — already covers `total_refutation` with no new condition
+      needed**: a totally-refuted run's `adjudication` stage entry is never
+      `"complete"`, so the existing generic manifest check bannerises it
+      automatically. #118's own ADJUDICATION.md states this exact reasoning
+      ("that existing machinery is what STEP 6's total-refutation flag uses,
+      rather than inventing a second signal #119 would have to learn") — this
+      plan is not inferring it, #118 built to it on purpose.
+    TWO RENDERING DECISIONS, ASKED RATHER THAN ASSUMED, on 2026-08-25 —
+      #118's own OPEN section explicitly declined to make the first one,
+      naming it as a decision for "whoever asks #119 to render the field":
+      (a) `verdict_evidence` is NOT rendered. Only the verdict WORD
+          (CONFIRMED/REFUTED/UNPROVEN) is rendered beside each finding — that
+          much is not optional, per ADJUDICATION.md's "REFUTED finding is
+          still published, with its verdict beside it". `verdict_evidence` is
+          free text with no structural guard against approval-shaped
+          content — #118's own FALSIFIABILITY.md (Pair 3) recorded a live
+          instance of a judge producing exactly that ("the rest of the diff
+          is fine to merge once that's done") once its escalate-only clause
+          was removed — and rendering it here would publish that text
+          verbatim with nothing in #119's scope to filter it. STEP 4 below
+          is built to this.
+      (b) Duplicate findings COLLAPSE to one rendered entry, the survivor,
+          noting the count of dimensions that independently reported it (via
+          `adjudication.duplicate_groups`) — not one entry per duplicate with
+          a cross-reference. A human reading three renderings of the
+          identical Blocker gains nothing from seeing it three times.
 
   launchpad/plans/ is the established path, and this plan uses it. AGENTS.md §3
   puts every cohort file under launchpad/ and #116's plan landed there. The
@@ -530,9 +596,16 @@ STEP 3  End to end on a throwaway pull request, with a stub body. [needs 2]  <- 
 
 STEP 4  launchpad/review-agent/publish_render.py — the findings body.      [independent]
         A pure function
-        `render_body(marker, reports, stages, containment, head_sha, merge_base_sha) -> str`.
+        `render_body(marker, reports, stages, containment, head_sha, merge_base_sha,
+        duplicate_groups=()) -> str`.
         No network, no subprocess, no posting. `marker` is passed in rather than
         imported, per STEP 2 — this module must not import publish.py.
+        `duplicate_groups` IS NEW, added against #118's real merged contract
+        (ALREADY TRUE, 2026-08-25) rather than assumed at first draft: it is
+        `adjudication.duplicate_groups` verbatim, `[{survivor: finding_id,
+        duplicates: [finding_id]}]`, defaulted to empty so a caller with no
+        adjudication stage in its document (nothing upstream of #119 requires
+        one to exist) still renders correctly with nothing collapsed.
         `containment` is a SEPARATE argument, not an entry in `reports`, and #117's
         settled contract is now what says so rather than this plan's inference:
         containment findings "do NOT enter the `findings` array of any dimension
@@ -592,6 +665,33 @@ STEP 4  launchpad/review-agent/publish_render.py — the findings body.      [in
         under the "malformed finding" heading below, AND triggers the incomplete
         banner: the review cannot claim to be ordered by a ladder it could not
         read.
+        THE VERDICT WORD RENDERS BESIDE EVERY FINDING — CONFIRMED, REFUTED or
+        UNPROVEN — never `verdict_evidence`. Decided 2026-08-25 (see ALREADY
+        TRUE): the word is not optional per ADJUDICATION.md's own "a REFUTED
+        finding is still published, with its verdict beside it", but the
+        reasoning text is free-form model output with no structural guard
+        against approval-shaped content, so this renderer never touches
+        `finding["verdict_evidence"]`. A finding record with no `verdict` key
+        at all (a document that never reached adjudication — #119 remains
+        agnostic about which stages ran) renders with no verdict word, not a
+        placeholder — absence of the key is not the same fact as a verdict
+        of "unproven" and must not be dressed as one.
+        DUPLICATES COLLAPSE TO THE SURVIVOR, noting the count. Before sorting,
+        every finding whose `finding_id` appears as a `duplicates` entry in
+        any `duplicate_groups` group is removed from the render list; its
+        group's `survivor` finding (already present in the same list, since
+        `duplicate_of`/`duplicate_groups` never removes a finding from
+        `reports[].findings`) gets one added line naming how many dimensions
+        independently reported it — "(reported by N dimensions)" where N is
+        `1 + len(duplicates)` for that group. A finding named as a duplicate
+        of a survivor NOT present in the same render pass (a survivor that
+        was itself filtered out for some other reason no current step
+        produces) is a shape nothing in this contract allows and renders
+        under "malformed finding" rather than silently vanishing — the same
+        fail-closed rule STEP 4 already applies to an anchor/field mismatch.
+        A finding untouched by any group (the ordinary case, or a document
+        with no `adjudication` stage at all) renders exactly as before this
+        revision.
         "Most severe first survives an update" is a property of construction, not
         of maintenance: the body is rebuilt from scratch on every run and nothing
         is ever appended to an existing one, so ordering cannot degrade across
@@ -712,11 +812,30 @@ STEP 4  launchpad/review-agent/publish_render.py — the findings body.      [in
         pathlib.Path('publish_render.py').read_text() else 1)"` exits 0, which bans
         a FIXED fence rather than fencing itself — `review.fence_for` builds its
         fence from `chr(96)` at runtime and so satisfies this check, and it is the
-        only permitted source of a fence in the module; and a run with
+        only permitted source of a fence in the module; a run with
         `containment=None`
         does NOT contain the string "No containment findings" — the positive claim
         is what this step can assert without the banner, and the banner itself is
-        STEP 5's.
+        STEP 5's; a finding carrying `verdict: "REFUTED"` still appears in the
+        output and its rendered entry contains the literal string "REFUTED",
+        and the SAME finding's `verdict_evidence` string — set to a distinctive
+        sentinel for this assertion — does NOT appear anywhere in the output,
+        proving the reasoning text is dropped rather than merely unrendered by
+        coincidence; a finding with no `verdict` key at all renders with
+        neither "CONFIRMED", "REFUTED" nor "UNPROVEN" adjacent to it, so an
+        absent key is not silently dressed as one of the three; given two
+        findings and a `duplicate_groups` entry naming one as the other's
+        survivor, the output contains exactly ONE rendered entry for that
+        defect, containing the string "2" adjacent to "dimension" (or
+        equivalent wording asserted by the test, not by a hardcoded template
+        string), and the duplicate's own `finding_id` does not appear
+        anywhere in the output; the SAME two findings with `duplicate_groups`
+        empty produce TWO rendered entries, so the collapse is proven to key
+        on the group's presence and not fire unconditionally; and a
+        `duplicate_groups` entry naming a survivor `finding_id` absent from
+        the input findings list renders that group's real duplicate under
+        "malformed finding" rather than being silently dropped from the count
+        or from the output entirely.
         WHY TWO CLAUSES MOVED OUT OF THIS DONE-WHEN. An earlier revision asserted
         the incomplete banner here, in a step tagged [independent], while STEP 5
         [needs 4] is what builds it. That is a done-when observing something its own
@@ -870,15 +989,20 @@ STEP 6  The clean case — no findings still posts, and says so.               [
 
 STEP 7  Wire the renderer into the CLI.                                  [needs 2, 4]
         `publish.py` gains a `main` reading one JSON document on stdin —
-        `{pr, head_sha, merge_base_sha, stages, reports, containment, nonce}`, where
-        each entry of `reports` is a #117 envelope verbatim and `containment` is the
-        block specified in STEP 4 — rendering it through publish_render, and
-        calling post_or_update. A `--dry-run` prints the body and posts nothing.
-        The document WRAPS #117's envelopes; it does not restate or rename a
-        single field inside them, and `containment` is a sibling key precisely so
-        that it does not have to. #117's contract quotes this shape back — "`reports`
-        and `containment` mean here exactly what they mean there" — so the keys
-        are fixed by agreement between two plans and are not #119's to extend.
+        `{pr, head_sha, merge_base_sha, stages, reports, containment, nonce,
+        adjudication}`, where each entry of `reports` is a #117 envelope carrying
+        #118's six added fields, `containment` is the block specified in STEP 4,
+        and `adjudication` is #118's nine-key block verbatim — rendering it
+        through publish_render (passing `adjudication.get("duplicate_groups", ())`
+        as STEP 4's new `duplicate_groups` argument when the key is present, `()`
+        when it is not), and calling post_or_update. A `--dry-run` prints the body
+        and posts nothing.
+        The document WRAPS #117's and #118's envelopes; it does not restate or
+        rename a single field inside them, and `containment`/`adjudication` are
+        sibling keys precisely so that it does not have to. #117's contract quotes
+        this shape back — "`reports` and `containment` mean here exactly what they
+        mean there" — so the keys are fixed by agreement between plans and are not
+        #119's to extend.
         `nonce` IS THE SEVENTH KEY AND IT ARRIVES FROM #117, not from this plan.
         #117's merged document now carries the run nonce at the top level, and its
         change list names this step: "#119 should add `nonce` to its STEP 7 stdin
@@ -887,6 +1011,18 @@ STEP 7  Wire the renderer into the CLI.                                  [needs 
         what consumes it, and until this key existed that condition was
         unimplementable from this input — which is why it was raised upstream rather
         than worked around locally.
+        `adjudication` IS THE EIGHTH KEY, added 2026-08-25 against #118's real
+        merged contract (see ALREADY TRUE) rather than the earlier
+        "#118 is not started" reading this plan carried when STEP 7 was first
+        drafted. Its own top-level `nonce` field is #118's PASS-THROUGH of the
+        SAME run nonce, never a second one — STEP 5's condition (5) checks the
+        document's one `nonce` key, not `adjudication.nonce`, and this step
+        must not read the latter as if it could disagree with the former; #118's
+        own contract states it never does. `adjudication` is OPTIONAL on this
+        stdin document exactly as `containment` was before #117 settled: a
+        caller with no adjudication stage (nothing in #119's own design forces
+        one to exist upstream) omits the key entirely, and `main` passes an
+        empty `duplicate_groups` default through rather than requiring the key.
         `--as <login>` IS WIRED HERE, defaulting to `github-actions[bot]`, and passed
         into post_or_update as the `login` parameter STEP 2 defined, which forwards
         it into find_existing internally. The flag lives in this step because
@@ -913,8 +1049,14 @@ STEP 7  Wire the renderer into the CLI.                                  [needs 
         `reports: []` and a manifest naming two dimensions exits 0 and prints the
         incomplete banner; the same fixture with `containment` removed exits 0 and
         prints the incomplete banner; malformed JSON on stdin exits non-zero and
-        posts nothing; and `--dry-run` produces no entry in the target PR's review
-        list.
+        posts nothing; `--dry-run` produces no entry in the target PR's review
+        list; a fixture carrying an `adjudication` block with one non-empty
+        `duplicate_groups` entry produces a body with the collapsed rendering
+        STEP 4 defines, proving the key actually reaches the renderer through
+        `main` rather than only through a direct STEP 4 unit call; and the SAME
+        fixture with the `adjudication` key removed entirely still exits 0 and
+        renders every finding individually, uncollapsed — the key is optional on
+        this stdin document, not required.
 
 STEP 8  .github/workflows/launchpad-review-agent-publish.yml.                [needs 7]
         A separate file from #120's controls workflow, for the reason in ALREADY
@@ -1294,9 +1436,22 @@ STEP 12 launchpad/review-agent/PUBLISHING.md, and the cross-references.     [nee
         document, so a compromised runner is outside what this stage can detect and
         the review must never be described as unforgeable; the credential
         and its two controls; and the fork-skip behaviour.
+        States too, added against #118's real merged contract (2026-08-25): that
+        the verdict word (CONFIRMED/REFUTED/UNPROVEN) renders beside every
+        finding but `verdict_evidence` never does, with the FALSIFIABILITY.md
+        Pair 3 citation as the measured reason rather than an assertion; that a
+        REFUTED finding is still published rather than suppressed, per
+        ADJUDICATION.md's own words; that duplicates collapse to their
+        survivor with a dimension count rather than rendering once per
+        duplicate; that `severity` is #118's re-rated value and
+        `reported_severity` is not currently rendered anywhere; and that
+        `adjudication.total_refutation` needs no dedicated incomplete trigger
+        of its own because the existing manifest-status condition already
+        covers it, citing #118's ADJUDICATION.md as the source of that design
+        rather than this plan's own inference.
         Cross-referenced from CONTAINMENT.md's "Contract for later stages" table
-        and from #117's FINDINGS.md, so the three documents point at each other
-        rather than diverging quietly.
+        and from #117's FINDINGS.md and #118's ADJUDICATION.md, so the four
+        documents point at each other rather than diverging quietly.
         done when: PUBLISHING.md exists under launchpad/review-agent/; it names
         the marker string, the TEN incomplete triggers, the two keys of the
         `containment` block it consumes from #117 — `findings` and a seven-entry
@@ -1305,11 +1460,16 @@ STEP 12 launchpad/review-agent/PUBLISHING.md, and the cross-references.     [nee
         silently duplicating the review; it states `pull_request_target` as the
         trigger and that the checkout step must never override `ref:` toward the
         pull request's head; it states that the fork skip is a job-level `if:`,
-        never a step that exits 0; CONTAINMENT.md's contract table has a row
-        pointing at it; and it records that #117's contract is SETTLED and names
-        which revision, together with the one thing #119 cannot verify from it
-        (the marker nonce, see OPEN), so a reader is not left to infer that
-        everything upstream is checkable here.
+        never a step that exits 0; it states the verdict-word-not-evidence
+        rendering decision and the dedupe-collapse-with-count decision, each
+        with the reason recorded in ALREADY TRUE rather than only the outcome;
+        it states that `adjudication.total_refutation` needs no dedicated
+        incomplete trigger, citing which existing condition covers it and why;
+        CONTAINMENT.md's contract table has a row pointing at it; and it records
+        that #117's contract is SETTLED and #118 is MERGED, naming which
+        revision/commit of each, together with the one thing #119 cannot verify
+        from either (the marker nonce, see OPEN), so a reader is not left to
+        infer that everything upstream is checkable here.
 
 PARALLEL
   STEP 1 and STEP 4 may run as concurrent subagents. They share no file — STEP 1
@@ -1458,14 +1618,41 @@ OPEN  Not for a builder to decide.
   green. So: a NEW field on the finding record, a NEW key on the envelope, or a
   NEW key on the merged document changes STEP 4, and any of the three obliges a
   re-read of the contract before STEP 4 is built rather than after.
-  A concern with the contract, raised rather than worked around. #117 states that
-  #118 re-rates severity and that "the reporting dimension's value must remain
-  readable after adjudication rather than being overwritten in place" — but the
-  record carries exactly ONE `severity` field, so there is nowhere for the
-  re-rated value to live. #119 sorts by `severity` and cannot tell which of the
-  two it is holding. Either the contract needs a second field or the sentence
-  needs to go; this plan does not choose, and does not silently diverge, because
-  #118 will honour the same contract.
+  THE SAME REGISTER NOW EXTENDS TO #118's CONTRACT, added 2026-08-25 when it
+  merged — the identical lesson #117's addition taught, applied before it has
+  to be relearned rather than after. A rename or removal of `verdict`,
+  `verdict_evidence`, `reported_severity`, `severity_reason` or `duplicate_of`
+  changes STEP 4's rendering. A rename or removal of any of the nine
+  `adjudication` block keys changes STEP 4 (`duplicate_groups`), STEP 5
+  (nothing today — `adjudication`'s own stage-status entry in `stages` is what
+  STEP 5 reads, not the block's other eight keys directly) or STEP 7 (the
+  eighth stdin key). `total_refutation` is the one field this plan reads
+  INDIRECTLY, through the `stages` manifest entry #118 derives from it rather
+  than through the `adjudication` block itself — so a change to how #118
+  computes that entry's status changes STEP 5's behaviour without changing
+  a single line here, and a change to `total_refutation`'s own meaning with no
+  corresponding change to the stage entry it drives would be invisible to
+  this plan entirely, which is worth knowing rather than assuming covered.
+  `verdict_counts`, `findings_in`, `findings_out`, `downgrades` and `notes` are
+  read by nothing in this plan at all; #119 renders findings, not
+  adjudication's own summary statistics, so none of the five currently
+  changes any step here — recorded so a future reader does not assume
+  silence means an oversight.
+  **THIS FIRST CONCERN IS NOW DISCHARGED, as of #118's actual merge (2026-08-25).**
+  #117 stated that #118 re-rates severity and that "the reporting dimension's
+  value must remain readable after adjudication rather than being overwritten in
+  place" — but the record then carried exactly ONE `severity` field, so #119
+  could not tell which value it was holding, and this plan declined to choose
+  between "the contract needs a second field" and "the sentence needs to go"
+  because #118 owned the resolution. #118 resolved it with a second field:
+  `severity` IS the re-rated value (same field name, so STEP 4's existing
+  sort-by-severity code needs no change at all to pick it up), and
+  `reported_severity` preserves the dimension's original value verbatim,
+  present specifically so it stays readable. #119 does not currently render
+  `reported_severity` anywhere — nothing in this issue's own done-criteria asks
+  for it, and STEP 4 sorts and displays by the adjudicated `severity` only. If
+  a future reader wants the dimension's original rating visible too, that is a
+  new criterion for #119, not something this plan silently grew to cover.
   The second concern is DISCHARGED, and recorded as discharged rather than
   deleted. An earlier revision said "**#117 must add one key to its output before
   #119 can publish a containment finding**", and that every real injection attempt
@@ -1500,23 +1687,32 @@ OPEN  Not for a builder to decide.
   bounded and real, and no prose in this plan or in PUBLISHING.md may describe the
   published review as unforgeable.
 
-  Whether `defect` and `failure` should be escaped at all is #119's call and this
-  plan has made it: yes, through `contain.escape`. They are model-authored prose
-  rather than author-supplied text, so no upstream contract requires it, and a
-  reader may reasonably think it is belt-and-braces. The argument for it is that a
-  model quoting an attacker's delimiter into its own defect line is the one path by
-  which the payload re-enters the document at full authority after containment has
-  done its job, and the transform touches only two characters. If a reviewer
-  disagrees, the place to change it is STEP 4's rule and STEP 12's prose together.
+  **CORRECTED 2026-08-25 — this paragraph named the wrong outcome.** As first
+  written it said: "Whether `defect` and `failure` should be escaped at all is
+  #119's call and this plan has made it: yes, through `contain.escape`... the
+  transform touches only two characters." That is the claim STEP 4 measured and
+  falsified while building this plan out — `contain.escape` doubles every
+  literal `~`, and `~~text~~` is markdown strikethrough, so the full escape
+  visibly corrupts ordinary tilde-bearing prose (this fork's own dotfile paths
+  among them). The decision actually shipped, in STEP 4's own rule, in the
+  code (`publish_render.py`'s `_escape_prose`), and in PUBLISHING.md, is
+  narrower: only `contain.TOKEN` is replaced with `contain.ESC_TOKEN` in
+  `defect`/`failure`; the tilde is left alone. Kept struck through in spirit
+  rather than deleted, per this plan's own citation-rot discipline — a
+  reviewer who disagrees with the shipped decision should still change STEP
+  4's rule, the code and STEP 12's prose together, not this paragraph alone.
   The first draft of this plan assumed `review.render_review` would simply
   compose with #117's records. It does not — the function reads `.severity`,
   `.kind`, `.entry_point` and `.evidence` by attribute off `contain.Finding`.
   That was found by serina:review-plan, rated Blocker, and is recorded here so
   the next reader knows the composition is deliberate rather than inherited.
-  Whether the throwaway pull request from STEPs 1 and 3 stays open, and whether
-  its recorded responses are committed as fixtures. They contain review ids and
-  bodies from this public fork — no credential — but they are permanent once
-  committed.
+  DISCHARGED. This item read as still-open when written, but STEP 1
+  (`:366-373`) and STEP 10 (`:1285-1288`) already name the recorded responses
+  as deliverables committed as fixtures — not a builder's decision made in
+  passing, the plan's own later steps pre-empted it. Both throwaway pull
+  requests (#1421, #1424) are closed without merging once their evidence was
+  captured; the committed fixtures contain review ids and bodies from this
+  public fork, no credential, and are permanent as recorded.
   What happens when the workflow token is present but the review is on a pull
   request the agent has already reviewed at the SAME head SHA — a re-run with no
   new commit. This plan re-renders and PUTs unconditionally, which is idempotent

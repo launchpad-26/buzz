@@ -89,10 +89,11 @@ on that relay, and the agent work executes on contributors' own machines.
 ## Business environment
 
 Where these requirements have to hold is owned by
-[ENVIRONMENTS.md § The environments](ENVIRONMENTS.md#the-environments), and the state of the
-controls that would satisfy the security-shaped ones is owned by
-[SECURITY-POSTURE.md § What is true today](SECURITY-POSTURE.md#what-is-true-today). Neither
-is restated here.
+[ENVIRONMENTS.md § The environments](ENVIRONMENTS.md#the-environments). Whether the
+controls that would satisfy the security-shaped requirements are currently in force is
+tracked privately, not in this public repository —
+[SECURITY-POSTURE.md § What is true today](SECURITY-POSTURE.md#what-is-true-today) explains
+why and carries policy, not a status reading. Neither is restated here.
 
 Environmental facts that bear directly on how these requirements are written, each recorded
 elsewhere in this set:

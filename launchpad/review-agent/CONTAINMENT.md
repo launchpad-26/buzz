@@ -304,7 +304,7 @@ A stage that builds a prompt must envelope first, without exception.
 | [#116](https://github.com/launchpad-26/buzz/issues/116) pre-flight | `fetch.fetch_all(pr, repo)` — emit one labelled field per entry point | concatenate surfaces into one blob, or build a prompt |
 | [#117](https://github.com/launchpad-26/buzz/issues/117) dimensions | `contain.render(surfaces, nonce)` before any text reaches a model | place any surface above the preamble or after the closing marker |
 | [#118](https://github.com/launchpad-26/buzz/issues/118) adjudication (see `ADJUDICATION.md`) | `contain.findings_for(surfaces, nonce)` — returns `list[Finding]` and nothing else | re-read raw PR text to "check for itself" |
-| [#119](https://github.com/launchpad-26/buzz/issues/119) publish | `review.render_review(findings, states)`, with `states` taken from `render()`'s own return, never re-derived | publish evidence in raw form — quote post-escape or not at all; re-apply `fetch.apply_invocation_cap` to build a second `states` |
+| [#119](https://github.com/launchpad-26/buzz/issues/119) publish (see `PUBLISHING.md`) | `review.render_review(findings, states)`, with `states` taken from `render()`'s own return, never re-derived | publish evidence in raw form — quote post-escape or not at all; re-apply `fetch.apply_invocation_cap` to build a second `states` |
 
 All four route the same seven labels: `pr_title`, `pr_body`, `pr_diff`,
 `pr_issue_comments`, `pr_review_comments`, `pr_review_bodies`, `linked_issue`.

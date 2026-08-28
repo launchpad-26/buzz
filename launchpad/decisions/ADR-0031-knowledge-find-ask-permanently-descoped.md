@@ -15,6 +15,14 @@ seven methods with an unbounded free-text input domain — are permanently out o
 for the shipped knowledge crate. #1400 (the task that would have implemented them)
 closes as won't-do rather than staying open against a design nobody is committing to
 build. `#211`'s existing Python implementation of both methods stays in the tree,
+**Option E.** `knowledge.find(query)` — one of #211's seven methods — and
+`knowledge.ask(text)` — a separate eighth entry point that shares `find`'s routing
+rather than being one of the seven (`CONTRACT.md`: "an eighth public function, not one
+of the seven") — are together the only two surfaces with an unbounded free-text input
+domain, and both are permanently out of scope for the shipped knowledge crate. #1400
+(the task that would have implemented them) closes as won't-do rather than staying
+open against a design nobody is committing to build. `#211`'s existing Python
+implementation of both methods stays in the tree,
 documented and tested on the Python side, but unreachable from the shipped crate.
 
 This rejects Option A (re-implement resolution in Rust at query time) and Option C (an
@@ -91,6 +99,15 @@ written.
 - `find`/`.ask` are the only two of #211's seven methods with an unbounded input
   domain — the other six are keyed on a symbol, an area, or a task name, and all six
   already return correct content from the packaged corpus.
+- `find` (one of #211's seven methods) and `ask` (a separate eighth entry point that
+  shares `find`'s routing, not one of the seven) are the only two surfaces with an
+  unbounded input domain — the other six methods are keyed on a symbol, an area, or a
+  task name, and all six already return correct content in `#211`'s Python prototype,
+  which indexes the live source tree at agent construction rather than reading a packaged
+  corpus — `KnowledgeAgent.build()` indexes the crate once and every method then reads
+  that one index, because re-indexing per question "would make the seven-method surface
+  far more expensive than the components it wraps". No knowledge crate exists yet
+  (`#551`).
 - The Python suites that validate `SemanticIndex.search`'s ranking and provenance
   behavior run in no CI job at all (#270). Any option that ships this logic — in Rust
   (A) or as a called sidecar (C) — inherits that gap; Option B would too, since it
@@ -99,6 +116,10 @@ written.
   seven methods already ship real, working capability; the concrete cases an agent
   actually asks (explain a symbol, its dependencies, impact, setup, conventions,
   history) are already covered.
+  seven methods already work end-to-end in `#211`'s Python prototype — real, tested
+  capability, not yet packaged into the shipped crate (`#551`/`#552`); the concrete
+  cases an agent actually asks (explain a symbol, its dependencies, impact, setup,
+  conventions, history) are already covered there.
 - `#211` is already merged with `find`/`.ask` implemented and tested on the Python
   side. Choosing E makes that implementation permanently unreachable from the shipped
   crate rather than temporarily so — a cost ADR-0027 already named as possible
@@ -136,6 +157,10 @@ written.
 **Good.** #1400 stops carrying an undecided architecture question inside a Task's
 Definition of done. The project board reflects reality: six methods ship, one is
 permanently out of scope, instead of an open task against a design nobody is building.
+Definition of done. The project board reflects reality: six of #211's seven methods are
+implemented and validated in the Python prototype awaiting crate packaging, while `find`
+— the seventh — and the separate `ask` entry point are both permanently out of scope,
+instead of an open task against a design nobody is building.
 
 **Good.** Neither Ruling 11 nor Ruling 12 is touched, reinterpreted, or amended. This
 decision closes the gap ADR-0027 already named without adding any new architectural
