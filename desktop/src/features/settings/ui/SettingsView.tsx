@@ -201,7 +201,7 @@ export function SettingsView({
       }))
       .filter((group) => group.sections.length > 0);
 
-    // The registration seam (ADR-0051) only widens `settingsSections` — it
+    // The registration seam (#1502, PR #1503) only widens `settingsSections` — it
     // doesn't add cohort values to this file's hardcoded nav groups, so a
     // registered-but-ungrouped section would render (reachable by direct
     // navigation) but never appear in the sidebar. This synthesizes one

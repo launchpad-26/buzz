@@ -102,7 +102,8 @@ export type UpstreamSettingsSection =
   | "updates";
 
 /**
- * The registration seam ADR-0051 grants (launchpad/decisions/ADR-0051): cohort
+ * The registration seam #1502 grants (decision pending merge in PR #1503,
+ * "ADR-0051 — cohort Settings sections register via a seam"): cohort
  * Settings sections widen this union from `cohortSettingsSections`
  * (`@/launchpad/settings/registry`) rather than by editing this file's four
  * registration sites per panel.

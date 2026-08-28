@@ -21,9 +21,9 @@ committed corpus (a human Settings surface and a keyed `knowledge.*` agent
 surface) and resolves neither live. `knowledge.find`'s free-text search (and
 `knowledge.ask`, which routes to it) has no finite answer set a pipeline could
 pre-render against arbitrary text — ADR-0027 first deferred both out of v1,
-and **ADR-0031** (#1418, closed 2026-08-25) later made that permanent: both
-methods are out of scope for the shipped crate, full stop, not a pending gap
-to revisit here.
+and **ADR-0031** (#1418, closed 2026-08-26) later made that permanent for the
+shipped crate — Option D (a curated, bounded natural-language question set) is
+named as the one upgrade worth reconsidering later, but is not adopted now.
 
 ## What is not here yet
 

@@ -2,12 +2,14 @@ import type { LucideIcon } from "lucide-react";
 import { knowledgeSettingsSection } from "./knowledge/KnowledgeSettingsPanel";
 
 /**
- * The registration seam ADR-0051 grants: a cohort Settings section is added
- * here, under `launchpad/`-owned code, never by editing
- * `SettingsPanels.tsx`'s four upstream registration sites directly.
+ * The registration seam #1502 grants (decision pending merge in PR #1503,
+ * "ADR-0051 — cohort Settings sections register via a seam"): a cohort
+ * Settings section is added here, under `launchpad/`-owned code, never by
+ * editing `SettingsPanels.tsx`'s four upstream registration sites directly.
  *
  * Adding a new cohort section: widen this union, add its descriptor's import
- * and array entry below. Both edits stay in this file.
+ * and a matching key to `cohortSettingsSectionRegistry` below. Both edits
+ * stay in this file.
  */
 export type CohortSettingsSectionId = "knowledge";
 
