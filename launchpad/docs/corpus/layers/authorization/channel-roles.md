@@ -53,7 +53,7 @@ evidence:
   - statement: "For kind:9002 (EDIT_METADATA), the `name`, `about`, `archived`, `visibility`, and `ttl` tags require the actor to hold `\"owner\"` or `\"admin\"` (or be the owning human of an active owner-role agent in the channel); the `topic` and `purpose` tags require only active channel membership, with an explicit inline comment noting this diverges intentionally from kind:9001's stricter check."
     entry_class: FACT
     evidence:
-      - "crates/buzz-relay/src/handlers/side_effects.rs:592-632"
+      - "crates/buzz-relay/src/handlers/side_effects.rs:592-636"
   - statement: "`buzz-core`'s git-permission module states its own model in its module doc comment: 'The permission model: channel role = repo role; `buzz-protect` tags on kind:30617 add constraints that apply to everyone (including the owner).'"
     entry_class: FACT
     evidence:
@@ -62,10 +62,15 @@ evidence:
     entry_class: FACT
     evidence:
       - "crates/buzz-core/src/git_perms.rs:427-452"
-  - statement: "Parsing a `push:<role>` protection-rule token explicitly rejects Bot and Guest as a configurable minimum role — `if matches!(role, MemberRole::Bot | MemberRole::Guest) { return Err(...) }` — so a channel operator cannot lower git push access below Member through this mechanism."
+  - statement: "Parsing a `push:<role>` protection-rule token explicitly rejects Bot and Guest as a configurable minimum role, with inline comments giving each its own reason: 'Bot is promoted to Member at the policy layer; push:bot is meaningless' and 'Guest cannot push regardless; push:guest would be confusing.'"
     entry_class: FACT
     evidence:
       - "crates/buzz-core/src/git_perms.rs:343-352"
+  - statement: "The relay's git pre-receive hook callback (`crates/buzz-relay/src/api/git/policy.rs`) explicitly promotes `MemberRole::Bot` to `MemberRole::Member` before evaluating push permissions — `let git_role = match role { MemberRole::Bot => MemberRole::Member, other => other };` — and its own module doc comment states this promotion is 'scoped to this module; the core `MemberRole::Bot` hierarchy is unchanged,' and that 'Bot is a designation (what it is), not a permission tier (what it can do).'"
+    entry_class: FACT
+    evidence:
+      - "crates/buzz-relay/src/api/git/policy.rs:1-20"
+      - "crates/buzz-relay/src/api/git/policy.rs:403-409"
   - statement: "A separate table, `relay_members`, stores a differently-scoped role — `role TEXT NOT NULL CHECK (role IN ('owner', 'admin', 'member'))`, community-scoped rather than channel-scoped, documented in its own migration comment as 'Conformance: membership gate, community-scoped' for NIP-43. It has only three values (no guest, no bot) and is a distinct concept from channel-level `MemberRole`, not an alternate serialization of it."
     entry_class: FACT
     evidence:
@@ -183,9 +188,14 @@ require only active membership at any role.
 **Git push (`default_min_role`).** The same `MemberRole` ordering reappears outside the
 relay's NIP-29 handlers entirely: creating or fast-forwarding a branch requires
 `Member`; a non-fast-forward push, a delete, or any tag create/move requires `Admin`. A
-channel operator can raise the bar further with a `push:<role>` protection tag, but
-cannot lower it below `Member` — the parser explicitly rejects `Bot` and `Guest` as a
-configured minimum push role.
+channel operator can raise the bar further with a `push:<role>` protection tag; the
+parser rejects `Guest` outright ("cannot push regardless") and rejects `Bot` for a
+different reason — the relay's git pre-receive hook already promotes `Bot` to `Member`
+before evaluating push policy, scoped to that one module only, so `push:bot` would be
+meaningless rather than dangerous. This is the one place a role is substituted before
+the hierarchy comparison runs: the core `has_at_least`/`permission_level` logic never
+changes, and the promotion is a policy-layer decision local to git push, not a
+revision of Bot's status everywhere else in this document.
 
 ## Comparison
 
@@ -223,11 +233,14 @@ permissions) that currently gate actions on it.
 
 **Expected but not verified when this node was written:**
 
-- **Only the relay's role-gating logic was read in depth.** `MemberRole` and
-  `permission_level`/`has_at_least` also appear in `crates/buzz-relay/src/audio/handler.rs`,
-  `crates/buzz-relay/src/workflow_sink.rs`, and `crates/buzz-relay/src/api/git/policy.rs` /
-  `transport.rs`; whether those call sites apply the same rules described here, or add
-  their own additional gating, was not checked claim-by-claim for this node.
+- **Not every role-gating call site was read in depth.** `validate_admin_event`
+  (`side_effects.rs`), `default_min_role`/`push:<role>` parsing (`git_perms.rs`), and
+  the Bot-promotion step in the git pre-receive hook (`api/git/policy.rs`) were all
+  opened and are cited above. `MemberRole`/`permission_level`/`has_at_least` also
+  appear in `crates/buzz-relay/src/audio/handler.rs`, `crates/buzz-relay/src/workflow_sink.rs`,
+  and `crates/buzz-relay/src/api/git/transport.rs`; whether those call sites apply the
+  same rules described here, or add their own additional gating, was not checked
+  claim-by-claim for this node.
 - **No relationships to other corpus nodes are declared.** Checked against
   `origin/launchpad`'s corpus tree at authoring time: no existing node's subject is
   channel-scoped role authorization. The two architecture-principle nodes named above
