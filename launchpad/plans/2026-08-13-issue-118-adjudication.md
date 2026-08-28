@@ -147,10 +147,21 @@ ALREADY TRUE  (verified against git, the working trees and the GitHub API, not n
   review.py:32, and it is IMPORTED here, never re-declared.
   #119's stdin document is `{pr, head_sha, merge_base_sha, stages, reports,
   containment}` and #119 is "agnostic about which stage produced them". #117 emits
-  every key of that except `stages`. So `stages` is this stage's to produce —
+  every key of that except `stages`. ~~So `stages` is this stage's to produce —
   #119's STEP 5 says the manifest covers "stages that emit no envelope of their own
-  — #116's pre-flight and #118's adjudication", and its ALREADY TRUE records "#118
-  is not started" as the reason its input is shaped that way. Cited by section and
+  — #116's pre-flight and #118's adjudication"~~, and its ALREADY TRUE records "#118
+  is not started" as the reason its input is shaped that way.
+  CORRECTED 2026-08-27 (launchpad-26/buzz#565). Both halves of the struck clause are
+  now false. #119's STEP 5 was rewritten on 2026-08-14 to define the manifest as
+  naming EVERY stage the review depended on, #117's dimensions among them by slug;
+  and #117 does now emit `stages`, populated by `run_dimensions.build_stages` from
+  the set it dispatched. `stages` is NOT this stage's to produce — #118 appends
+  exactly one `adjudication` entry and passes every arrived entry through unchanged.
+  Left standing, this paragraph invites the one wrong fix #565's "Why this belongs
+  to #117" section exists to prevent: re-deriving the dimension entries from
+  `reports[].dimension` inside `adjudicate()`, which names only the dimensions that
+  DID report, so #119's condition (7) still could never fire. A report cannot
+  testify to its own absence. Cited by section and
   quoted text, not by line: #119's plan is an unmerged file under active revision
   and its line numbers moved twice while this plan was being written.
   #119's REQUEST FOR A NONCE IS ALREADY ANSWERED, UPSTREAM. #119's review finding 3
@@ -538,8 +549,11 @@ STEP 4  The nonce check and the `stages` manifest.                           [ne
         stage that can tell is the one holding the nonce `contain.make_nonce`
         actually returned. Named here rather than left to look covered.
         THE `stages` MANIFEST. #119 reads `{name, status, reason}` entries for
-        stages that emit no envelope. This stage emits the array containing every
-        entry present on input — #116's pre-flight entry when it exists — plus
+        ~~stages that emit no envelope~~ every stage the review depended on,
+        #117's dimensions among them by slug (CORRECTED 2026-08-27, #565 — #117
+        now populates the dimension entries from what it dispatched). This stage
+        emits the array containing every entry present on input — #116's
+        pre-flight entry when it exists, and #117's dimension entries — plus
         exactly one entry named `adjudication`. It never overwrites an existing
         `adjudication` entry silently: a second one on input is a re-run against an
         already-adjudicated document and exits non-zero.

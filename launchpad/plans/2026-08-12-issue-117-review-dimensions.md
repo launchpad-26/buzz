@@ -374,10 +374,22 @@ STEP 1  launchpad/review-agent/FINDINGS.md — the output contract,        [inde
         This is deliberately the document #119 already reads, plus the nonce it
         needs and minus the one key it adds itself. #119's STEP 7 takes
         `{pr, head_sha, merge_base_sha, stages, reports, containment}` on stdin,
-        where `stages` is its own manifest covering stages that emit no envelope. So
+        where `stages` is ~~its own manifest covering stages that emit no
+        envelope~~ a manifest naming EVERY stage the review depended on, including
+        each of this issue's dimensions by slug. So
         `reports` and `containment` mean here exactly what they mean there, #119
         wraps rather than restates, and `nonce` is a sixth key it should add to that
         document and check.
+        CORRECTED 2026-08-27 (launchpad-26/buzz#565). The struck wording is the
+        superseded reading #119's plan STEP 5 replaced on 2026-08-14, and leaving it
+        standing had a consequence rather than being a wording nit: built to it, the
+        manifest held only stages with no envelope of their own, so no dimension was
+        ever named, and #119's condition (7) — "a dimension named by the manifest
+        produced no report at all" — could never fire. A three-dimension run that
+        produced two reports rendered as COMPLETE. The dimension entries are sourced
+        from `list_dimensions()`, what this stage DISPATCHED, never from
+        `reports[].dimension`: a report cannot testify to its own absence. See
+        `FINDINGS.md` § The merged document > The stages manifest.
         `outcome: clean` is how "a dimension that finds nothing says so
         explicitly" is distinguished from `status: failed`. Both are legitimate
         outputs; neither is an empty findings array standing alone, which is

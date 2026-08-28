@@ -65,6 +65,18 @@ def indexed_reviewer(behaviors):
     return reviewer
 
 
+def make_report(dimension: str, status: str = "complete", reason: str | None = None) -> dict:
+    """A minimal report dict -- only the fields ``build_stages()`` reads
+    (``dimension``, ``status``, and ``error.reason`` when failed). A stand-in for
+    ``_run_dimensions_concurrently``'s return value; ``build_document`` does not
+    otherwise inspect a mocked report's shape.
+    """
+    report: dict = {"dimension": dimension, "status": status}
+    if status == "failed":
+        report["error"] = {"reason": reason}
+    return report
+
+
 def make_finding(**overrides) -> dict:
     """A well-formed ten-field finding dict, mirroring test_findings.py's helper."""
     base = dict(
@@ -145,7 +157,10 @@ class BuildDocumentShapeTests(unittest.TestCase):
         )
         self.assertEqual(
             set(doc.keys()),
-            {"pr", "merge_base_sha", "head_sha", "reviewer", "reports", "containment", "nonce"},
+            {
+                "pr", "merge_base_sha", "head_sha", "stages", "reviewer",
+                "reports", "containment", "nonce",
+            },
         )
         # `reviewer` records WHICH reviewer produced the document, so publish.py
         # can tell a real clean pass from the stub's unconditional one. See
@@ -193,6 +208,200 @@ class BuildDocumentShapeTests(unittest.TestCase):
         )
         self.assertEqual(doc["containment"]["states"]["pr_diff"], "oversized")
         self.assertEqual(findings.validate(doc), [])
+
+
+class StagesManifestSourceTests(unittest.TestCase):
+    """Pins the ``stages`` manifest's SOURCE -- the DISPATCHED ``dimensions`` list,
+    never ``reports[].dimension`` -- launchpad-26/buzz#565.
+
+    Every test here goes through ``build_document``, not ``build_stages`` alone:
+    a helper-only test would still pass a ``build_document`` that itself derived
+    its dispatched-name list from ``reports``, which is precisely the wrong
+    implementation this issue exists to make impossible.
+    """
+
+    def setUp(self):
+        self.surfaces = load_fixture_surfaces()
+        self.nonce = contain.make_nonce(seed="stages-manifest-tests")
+
+    def _build(self, dimensions, reports):
+        with mock.patch.object(
+            run_dimensions, "_run_dimensions_concurrently", return_value=reports
+        ):
+            return run_dimensions.build_document(
+                PR, MERGE_BASE_SHA, HEAD_SHA, self.surfaces, dimensions, self.nonce,
+                timeout=5.0,
+            )
+
+    def test_dispatched_dimension_with_dropped_report_is_still_named(self):
+        # Deliberately UNSORTED: every real caller reaches build_document via
+        # list_dimensions(), which is sorted -- a sorted fixture could not tell a
+        # correct implementation (iterates `dimensions` as given) apart from one
+        # that silently re-sorts its own output. Do not alphabetise this list.
+        dimensions = ["dim-gamma", "dim-alpha", "dim-beta"]
+        # The two surviving reports are deliberately OUT of dispatch order, and
+        # carry DIFFERENT statuses. Both halves are load-bearing. Handed back in
+        # dispatch order, `reports[i]` and `dimensions[i]` coincide, so an
+        # implementation that maps by POSITION rather than by name produces
+        # byte-identical output and passes -- verified: such a mutant passed all
+        # 59 tests before this fixture was reordered. Giving the two reports the
+        # same status would hide the swap even out of order, because the wrong
+        # attribution would still read the same.
+        reports = [
+            make_report("dim-alpha", status="failed", reason="alpha's own reason"),
+            make_report("dim-gamma"),
+        ]
+        doc = self._build(dimensions, reports)
+        names = [s["name"] for s in doc["stages"]]
+        self.assertEqual(names, ["dim-gamma", "dim-alpha", "dim-beta"])
+        by_name = {s["name"]: s for s in doc["stages"]}
+        # Attribution is by name: alpha's failure belongs to alpha, not to
+        # whichever dimension happened to sit at the same index.
+        self.assertEqual(by_name["dim-alpha"]["status"], "failed")
+        self.assertEqual(by_name["dim-alpha"]["reason"], "alpha's own reason")
+        self.assertEqual(by_name["dim-gamma"]["status"], "complete")
+        self.assertIsNone(by_name["dim-gamma"]["reason"])
+        # dim-beta was dispatched and nothing came back for it at all. Asserted as
+        # the DIFFERENCE between the two sets, not as "dim-beta is absent from
+        # reports" -- the latter only restates the fixture this test just built and
+        # cannot fail on any build_stages change. The difference can: it goes empty
+        # the moment the manifest stops naming what did not report, which is the
+        # whole property.
+        named = {s["name"] for s in doc["stages"]}
+        reported = {r["dimension"] for r in doc["reports"]}
+        self.assertEqual(named - reported, {"dim-beta"})
+        self.assertEqual(by_name["dim-beta"]["status"], "no_report")
+
+    def test_report_for_undispatched_dimension_is_not_named(self):
+        dimensions = ["dim-alpha", "dim-beta"]
+        reports = [
+            make_report("dim-alpha"),
+            make_report("dim-beta"),
+            make_report("dim-gamma"),
+        ]
+        doc = self._build(dimensions, reports)
+        self.assertEqual([s["name"] for s in doc["stages"]], ["dim-alpha", "dim-beta"])
+
+    def test_failed_report_reason_carried_verbatim(self):
+        dimensions = ["dim-alpha"]
+        reports = [
+            make_report(
+                "dim-alpha", status="failed", reason="reviewer timed out after 5.0s"
+            )
+        ]
+        doc = self._build(dimensions, reports)
+        self.assertEqual(len(doc["stages"]), 1)
+        stage = doc["stages"][0]
+        self.assertEqual(stage["status"], "failed")
+        self.assertEqual(stage["reason"], "reviewer timed out after 5.0s")
+
+    def test_duplicate_reports_cannot_mask_a_failure_with_a_complete(self):
+        # Both reviewers flagged the dict-comprehension's silent last-wins. If a
+        # "complete" duplicate could displace a failed one, a dimension that
+        # partly failed would publish as clean while doc["reports"] still carried
+        # the failure -- a stages/reports split-brain, and the same fail-open
+        # shape the status handling exists to refuse. Asserted in BOTH orders so
+        # the test cannot pass merely because first-wins happens to be right here.
+        for order in (["failed", "complete"], ["complete", "failed"]):
+            with self.subTest(order=order):
+                reports = [
+                    make_report(
+                        "dim-alpha",
+                        status=s,
+                        reason="alpha failed" if s == "failed" else None,
+                    )
+                    for s in order
+                ]
+                doc = self._build(["dim-alpha"], reports)
+                self.assertEqual(len(doc["stages"]), 1)
+                self.assertEqual(doc["stages"][0]["status"], "failed")
+
+    def test_first_non_complete_wins_among_several_duplicates(self):
+        # Three reports, two of them non-complete. The rule is first-non-complete-
+        # wins, so WHICH non-complete surfaces depends on arrival order -- pinned
+        # here because it is real, order-dependent behaviour that the docstring
+        # would otherwise leave to be rediscovered. It is not a masking direction:
+        # both orders yield a non-complete status, so every downstream condition
+        # that tests `status != "complete"` fires either way, and only the reason
+        # string differs.
+        first = make_report("dim-alpha", status="failed", reason="A")
+        second = make_report("dim-alpha", status="truncated")
+        complete = make_report("dim-alpha")
+        forward = self._build(["dim-alpha"], [first, second, complete])["stages"][0]
+        self.assertEqual((forward["status"], forward["reason"]), ("failed", "A"))
+        reverse = self._build(["dim-alpha"], [second, first, complete])["stages"][0]
+        self.assertEqual(reverse["status"], "truncated")
+        # The invariant that does NOT depend on order: a complete never wins.
+        for stage in (forward, reverse):
+            self.assertNotEqual(stage["status"], "complete")
+
+    def test_non_string_dimension_is_named_in_a_shape_118_accepts(self):
+        # run_adjudication._input_stages raises StagesShapeError on a non-string
+        # `name`, so emitting the raw value would have #117 produce a document
+        # #118 refuses wholesale -- one stage tolerating what the next rejects.
+        # The dimension is still named, which is the property that matters.
+        doc = self._build([42], [])
+        self.assertEqual(doc["stages"], [
+            {
+                "name": "42",
+                "status": "no_report",
+                "reason": "dimension was dispatched but produced no report",
+            }
+        ])
+        # And #118 accepts it rather than raising.
+        import run_adjudication
+
+        self.assertEqual(
+            [s["name"] for s in run_adjudication._input_stages(doc)], ["42"]
+        )
+
+    def test_no_dimensions_dispatched_yields_an_empty_manifest(self):
+        # The literal boundary of the property this class pins: nothing
+        # dispatched, so nothing named. Distinct from the total-outage case
+        # below, where three WERE dispatched and none reported.
+        doc = self._build([], [])
+        self.assertEqual(doc["stages"], [])
+
+    def test_malformed_reports_never_raise_and_never_read_as_complete(self):
+        # findings.py and verdicts.py both state a never-raises contract for this
+        # directory; build_stages sits on the path every run takes, so a crash
+        # here loses the whole review. A report too malformed to name its own
+        # dimension cannot be matched to a dispatched slug, so the dimension it
+        # was for is still named -- as no_report, from `dimensions`.
+        doc = self._build(
+            ["dim-alpha", "dim-beta"],
+            [None, "not-a-dict", {"no": "dimension"}, {"dimension": ["unhashable"]},
+             {"dimension": "dim-beta", "status": 7}],
+        )
+        by_name = {s["name"]: s for s in doc["stages"]}
+        self.assertEqual(by_name["dim-alpha"]["status"], "no_report")
+        self.assertEqual(by_name["dim-beta"]["status"], "malformed_report")
+        self.assertFalse(any(s["status"] == "complete" for s in doc["stages"]))
+
+    def test_unknown_status_is_carried_through_and_never_becomes_complete(self):
+        # build_stages treats ONLY "complete" as complete, and passes every other
+        # status through. Written the other way round -- an elif for "failed" and
+        # an else producing "complete" -- a status the function had never heard of
+        # would render as a clean stage, which is the partial-review-reading-as-
+        # complete failure #565 exists to prevent. #117's own done-when already
+        # reserves a third case ("a report without a completion marker is treated
+        # as truncated rather than clean"), so the unknown status is a matter of
+        # time, not a hypothetical.
+        doc = self._build(["dim-alpha"], [make_report("dim-alpha", status="truncated")])
+        stage = doc["stages"][0]
+        self.assertEqual(stage["status"], "truncated")
+
+    def test_total_outage_every_dispatched_dimension_still_named(self):
+        # Guards against `if not reports: return []` short-circuits: they source
+        # from `dimensions` and never union in extras, so they pass every other
+        # test in this class while being wrong on precisely this input -- the run
+        # in which every dimension died is exactly the run that must not publish
+        # as COMPLETE.
+        dimensions = ["dim-alpha", "dim-beta", "dim-gamma"]
+        doc = self._build(dimensions, [])
+        self.assertEqual([s["name"] for s in doc["stages"]], dimensions)
+        self.assertTrue(all(s["status"] == "no_report" for s in doc["stages"]))
+        self.assertEqual(doc["reports"], [])
 
 
 class ReviewerFailureTests(unittest.TestCase):
@@ -349,6 +558,24 @@ class PayloadModeNetworkFreeTests(unittest.TestCase):
         buf = io.StringIO()
         with self.assertRaises(SystemExit), contextlib.redirect_stderr(buf):
             run_dimensions.main([])
+
+    def test_stage_names_match_list_dimensions_sorted_order(self):
+        # Pins the list_dimensions() -> build_document() -> stages wiring through
+        # the real production path (main()), not just build_document called
+        # directly -- list_dimensions() sorts, so this is dim-one, dim-three,
+        # dim-two.
+        with self._with_fake_dimensions_dir():
+            buf = io.StringIO()
+            with contextlib.redirect_stdout(buf):
+                exit_code = run_dimensions.main(
+                    ["--payload", PAYLOAD_PATH, "--seed", "cli-stages-test"]
+                )
+        self.assertEqual(exit_code, run_dimensions.EXIT_OK)
+        doc = json.loads(buf.getvalue())
+        self.assertEqual(
+            [s["name"] for s in doc["stages"]],
+            ["dim-one", "dim-three", "dim-two"],
+        )
 
 
 class ListModeTests(unittest.TestCase):
