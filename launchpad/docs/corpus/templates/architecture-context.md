@@ -23,7 +23,7 @@ evidence:
       - "launchpad/docs/corpus/standards/confidence.md"
       - "launchpad/docs/corpus/standards/decision-references.md"
       - "launchpad/docs/corpus/AGENTS.md"
-  - statement: "schema/COMPATIBILITY.md's rule governs adding a field, enum value or narrowed type to node.schema.json or relationships.schema.json, and records no prior addition or precedent of a template or policy type value."
+  - statement: "schema/COMPATIBILITY.md's rule governs removing a field or enum value, or narrowing a type, on node.schema.json or relationships.schema.json as breaking, and explicitly exempts additive changes (a new optional field, a new enum value, a new relationship type) as not breaking; it records no prior addition or precedent of a template or policy type value."
     entry_class: FACT
     evidence:
       - "launchpad/docs/corpus/schema/COMPATIBILITY.md"
@@ -120,8 +120,8 @@ A node built from this template answers one question: **who and what, outside th
 system, talks to it — and how?** It is the corpus's system-context layer: the outermost
 of the architecture triad this batch defines (`architecture-context`, this document;
 `architecture-container`, issue #1327; `architecture-component`, issue #1326), mapped
-one-to-one onto the outer two levels of the C4 model's own four-level hierarchy —
-system context and container — with component and code going deeper still.
+one-to-one onto the outer three levels of the C4 model's own four-level hierarchy —
+system context, container and component — with code going deeper still.
 
 A node using this template documents **one system's** boundary. If a second, genuinely
 separate system's context needs documenting, that is a second node, not a second
@@ -213,9 +213,9 @@ this document's structure* above for why this document does not carry one of tho
 2. **A System Context diagram**, as a fenced Mermaid `C4Context` block in the node's own
    body (see *Where the corpus's own constraints bite* above for why this is the only
    canonical form available today). The diagram MUST show the system as a single
-   `System_Boundary` (or the top-level system element if no internal boundary is drawn),
-   every external `Person` and `System_Ext` the system exchanges anything with, and a
-   `Rel` for each interaction.
+   `System` element (optionally wrapped in a `System_Boundary` when the diagram also
+   needs to group internal structure), every external `Person` and `System_Ext` the
+   system exchanges anything with, and a `Rel` for each interaction.
 
 3. **A notation legend.** Because C4 is explicitly notation-independent, a diagram alone
    does not tell a reader what a box, an arrow or a boundary means in *this* document. A
@@ -324,16 +324,16 @@ One paragraph: what <system> is, and that this node covers only its external bou
 \`\`\`mermaid
 C4Context
     Person(user, "End user")
-    System_Boundary(sys, "<System>") {
-    }
+    System(sys, "<System>")
     System_Ext(ext, "<External system>")
     Rel(user, sys, "Uses")
     Rel(sys, ext, "Calls", "HTTPS/JSON")
 \`\`\`
 
-**Legend:** `Person` = a human actor. `System_Boundary` = the system this node
+**Legend:** `Person` = a human actor. `System` = the system this node
 documents. `System_Ext` = an external system. `Rel` = an interaction, labelled with its
-nature and (where relevant) its transport.
+nature and (where relevant) its transport. Wrap `System` in a `System_Boundary` only if
+the diagram also needs to group internal structure.
 
 ## Business context
 
