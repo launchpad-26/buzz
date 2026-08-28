@@ -20,6 +20,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import math
 import re
 import subprocess
 import sys
@@ -800,6 +801,38 @@ def find_citation_problems(
     return errors, unverified
 
 
+def find_non_finite_confidence(nodes: list[LoadedNode]) -> list[str]:
+    """Reject a NaN or Infinity `confidence`, which node.schema.json cannot.
+
+    JSON Schema's `minimum`/`maximum` keywords compare numerically, and every
+    comparison against NaN is false, so the range assertion never fires -- NaN
+    satisfies `"minimum": 0.0, "maximum": 1.0` and passes schema validation clean.
+    `launchpad/project-intelligence/memory.py`'s `__post_init__` rejects the
+    identical value via `not (0.0 <= confidence <= 1.0)`, which is also
+    False-for-every-comparison-safe against NaN, but this validator never imports
+    memory.py, so nothing reconciled the two paths before this (#1463).
+
+    Runs only over nodes that already passed schema validation (`node.error` is
+    None) -- a schema-invalid node's `confidence` isn't safe to assume numeric.
+    """
+    errors: list[str] = []
+    for node in nodes:
+        if node.error:
+            continue
+        label = _label(node.id, node.path)
+        for entry_index, entry in enumerate(node.data.get("evidence") or [], start=1):
+            if not isinstance(entry, dict):
+                continue
+            confidence = entry.get("confidence")
+            if isinstance(confidence, (int, float)) and not math.isfinite(confidence):
+                errors.append(
+                    f"{label}: evidence entry {entry_index}: confidence must be a "
+                    "finite number within [0.0, 1.0] -- NaN and Infinity pass "
+                    "node.schema.json's minimum/maximum check but are rejected here"
+                )
+    return errors
+
+
 def find_ownership_violations(corpus_root: Path) -> list[str]:
     """Enforce ADR-0028's canonical-vs-generated boundary.
 
@@ -853,6 +886,7 @@ def validate_corpus(corpus_root: Path) -> ValidationReport:
     report = ValidationReport(errors=[n.error for n in nodes if n.error])
     report.errors.extend(find_duplicate_ids(nodes))
     report.errors.extend(find_unresolved_relationship_targets(nodes))
+    report.errors.extend(find_non_finite_confidence(nodes))
 
     citation_errors, citation_unverified = find_citation_problems(nodes, root)
     report.errors.extend(citation_errors)

@@ -163,6 +163,35 @@ class ProhibitedCitationTest(unittest.TestCase):
         self.assertTrue(validate._is_prohibited_citation(".env"))
 
 
+class NonFiniteConfidenceTest(unittest.TestCase):
+    def test_nan_confidence_rejected_and_named(self) -> None:
+        # node.schema.json's minimum/maximum keywords cannot catch this -- every
+        # JSON Schema numeric comparison against NaN is false, so the range
+        # assertion never fires and NaN passes schema validation clean (#1463).
+        report = validate.validate_corpus(INVALID_DIR / "nan-confidence")
+        self.assertEqual(len(report.errors), 1)
+        self.assertIn("validator-fixture-nan-confidence", report.errors[0])
+        self.assertIn("confidence", report.errors[0])
+
+    def test_ordinary_confidence_is_not_rejected(self) -> None:
+        node = validate.LoadedNode(
+            path=Path("x.md"),
+            id="ordinary",
+            data={"evidence": [{"entry_class": "INFERENCE", "confidence": 0.8}]},
+        )
+        self.assertEqual(validate.find_non_finite_confidence([node]), [])
+
+    def test_infinite_confidence_rejected(self) -> None:
+        # minimum/maximum DO reject +/-inf correctly on their own -- this asserts
+        # the explicit check doesn't regress that, only adds what min/max missed.
+        node = validate.LoadedNode(
+            path=Path("x.md"),
+            id="infinite",
+            data={"evidence": [{"entry_class": "INFERENCE", "confidence": float("inf")}]},
+        )
+        self.assertEqual(len(validate.find_non_finite_confidence([node])), 1)
+
+
 class NonMappingFrontmatterTest(unittest.TestCase):
     """Frontmatter that is valid YAML but not a mapping (a bare list, string,
     number, or bool) must be reported as a parse error naming the file, never
