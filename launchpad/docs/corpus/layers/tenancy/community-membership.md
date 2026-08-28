@@ -80,9 +80,13 @@ evidence:
       - "crates/buzz-relay/src/handlers/moderation_authz.rs"
       - "crates/buzz-core/src/git_perms.rs"
     confidence: 0.85
-  - statement: "Issue #1184 requires this node to draw a clear boundary against sibling task #1034 (`layers/authorization/community-membership.md`), so that the two documents — one on tenancy admission, one on authorization — do not collide in meaning."
-    entry_class: TEAM_KNOWLEDGE
-    provided_by: "launchpad-26/buzz#1184 task body"
+  - statement: "This node draws a clear boundary against sibling task #1034 (`layers/authorization/community-membership.md`) so that the two documents — one on tenancy admission, one on authorization — do not collide in meaning; issue #1184's own body does not state this #1034-boundary framing, but it follows from `launchpad/docs/corpus/AGENTS.md`'s one-node-one-concept rule applied against the sibling task's existing, non-overlapping subject."
+    entry_class: INFERENCE
+    evidence:
+      - "launchpad/docs/corpus/AGENTS.md"
+      - "https://github.com/launchpad-26/buzz/issues/1184"
+      - "https://github.com/launchpad-26/buzz/issues/1034"
+    confidence: 0.75
 ---
 
 # Community membership tenancy
@@ -194,6 +198,13 @@ Every admission or removal that succeeds through the invite, admin-command,
 or leave-request paths publishes a NIP-43 announcement: kind:8000
 (member-added) or kind:8001 (member-removed) as a relay-signed delta, and a
 refreshed kind:13534 membership-list snapshot.
+
+**Verification.** `crates/buzz-db/src/relay_members.rs`'s
+`membership_is_confined_to_its_community` and
+`owner_bootstrap_is_confined_to_its_community` unit tests are the checked
+evidence for the tenant-confinement claim running through every route
+above: admitting or bootstrapping a pubkey in one community's
+`relay_members` never admits or bootstraps it in another.
 
 ## Comparison
 
