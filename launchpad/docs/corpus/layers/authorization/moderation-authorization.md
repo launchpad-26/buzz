@@ -43,7 +43,7 @@ evidence:
     entry_class: FACT
     evidence:
       - "migrations/0001_initial_schema.sql"
-  - statement: "Every moderation authorization decision in the relay routes through authorize_moderation_action from exactly two call sites: four invocations in moderation_commands.rs guarding the kind 9040-9044 ban/unban/timeout/untimeout/resolve-report commands, and one invocation in bridge.rs guarding the HTTP moderation-queue read with ModerationAction::ViewQueue."
+  - statement: "Every moderation authorization decision in the relay routes through authorize_moderation_action from exactly two source files: five invocations in moderation_commands.rs, one each guarding the kind 9040 (ban), 9041 (unban), 9042 (timeout), 9043 (untimeout), and 9044 (resolve-report) commands, and one invocation in bridge.rs guarding the HTTP moderation-queue read with ModerationAction::ViewQueue."
     entry_class: FACT
     evidence:
       - "crates/buzz-relay/src/handlers/moderation_commands.rs"
@@ -143,11 +143,14 @@ Every moderation authorization check in the relay goes through
 `authorize_moderation_action` from exactly two source files:
 
 - [`crates/buzz-relay/src/handlers/moderation_commands.rs`](../../../../../crates/buzz-relay/src/handlers/moderation_commands.rs)
-  — four call sites, one each guarding the kind 9040 (ban), 9041 (unban), 9042
-  (timeout)/9043 (untimeout), and 9044 (resolve report) command handlers.
+  — five call sites, one each guarding the kind 9040 ban
+  (`moderation_commands.rs:156`), 9041 unban (`moderation_commands.rs:235`),
+  9042 timeout (`moderation_commands.rs:274`), 9043 untimeout
+  (`moderation_commands.rs:338`), and 9044 resolve report
+  (`moderation_commands.rs:399`) command handlers.
 - [`crates/buzz-relay/src/api/bridge.rs`](../../../../../crates/buzz-relay/src/api/bridge.rs)
-  — one call site, gating the HTTP moderation-queue read with
-  `ModerationAction::ViewQueue`.
+  — one call site (`bridge.rs:2171`), gating the HTTP moderation-queue read
+  with `ModerationAction::ViewQueue`.
 
 No other code path performs an inline role check for a moderation action; the
 module doc comment states this is deliberate, so that adding a Moderator role tier
