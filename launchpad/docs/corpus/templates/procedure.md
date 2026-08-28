@@ -397,11 +397,10 @@ A node built from this template:
 - **may** declare `part-of` toward a broader capability or operations node this
   procedure is a subsection of, when the how-to is one part of a larger surface
   rather than independently standing.
-- **may** declare `references` toward this template node itself (target:
-  `corpus-template-procedure`) once this node is merged, if the author wants the
-  generated `referenced-by` edge; this is optional, since a node's shape (numbered
-  task sequence, Before you start, See also) already shows which template it
-  followed.
+- **should** declare `implements` targeting `corpus-template-procedure` (this
+  node's id) once this node is merged. `relationships.schema.json` names *"a
+  template instance of a standard"* as `implements`' own worked example -- this
+  is exactly that case, not the weaker `references` edge.
 - **must**, per `AGENTS.md`'s own rule, resolve every declared target against
   `origin/launchpad` (or whatever the merge-target branch is at the time), never
   against the author's own worktree.
