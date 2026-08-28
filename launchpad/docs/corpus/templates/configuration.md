@@ -29,7 +29,7 @@ evidence:
     evidence:
       - "git_show(ref='origin/task/1335-corpus-template-decision-reference', path='launchpad/docs/corpus/templates/decision-reference.md') -> front matter type: governance"
       - "git_show(ref='origin/task/1346-corpus-template-reference', path='launchpad/docs/corpus/templates/reference.md') -> front matter type: governance"
-  - statement: "relationships.schema.json defines five relationship types -- depends-on, supersedes, implements, references, part-of -- with references' directionality stated as 'source cites target as supporting context; no ownership or currency dependency implied', generated inverse referenced-by."
+  - statement: "relationships.schema.json defines five relationship types -- depends-on, supersedes, implements, references, part-of -- with references' directionality stated as 'source cites target as supporting context; no ownership or currency dependency implied', and an inverse named referenced-by that is authored, not generated -- the only one of the five relationship types whose inverse is authored rather than generated."
     entry_class: FACT
     evidence:
       - "launchpad/docs/corpus/schema/relationships.schema.json"
@@ -89,18 +89,14 @@ evidence:
     evidence:
       - "launchpad/AGENT_PR_TEMPLATE.md"
   - statement: "Parent Feature #605's acceptance criteria require that 'every template states its purpose, required sections, evidence expectations and the industry model/standard it adapts', and this is the acceptance bar this node is built against rather than issue #1332's own copied-over standards-track Definition of Done."
-    entry_class: FACT
-    evidence:
-      - "https://github.com/launchpad-26/buzz/issues/605"
+    entry_class: TEAM_KNOWLEDGE
+    provided_by: "launchpad-26/buzz#605 acceptance criteria"
   - statement: "Issue #1332's own Definition of Done is byte-identical to the standards-track boilerplate ('States scope and authority/source of the policy. Separates MUST requirements from SHOULD guidance. Defines enforcement/checks and exception/escalation process. Links decisions or higher-order policy instead of duplicating them.'), the same text independently found copied across #1326-#1351."
-    entry_class: FACT
-    evidence:
-      - "https://github.com/launchpad-26/buzz/issues/1332"
+    entry_class: TEAM_KNOWLEDGE
+    provided_by: "launchpad-26/buzz#1332 definition of done"
   - statement: "Issue #1332's Objective reads 'Create launchpad/docs/corpus/templates/configuration.md as the single canonical policy node for configuration', and issue #1326's Objective reads 'Create launchpad/docs/corpus/templates/architecture-component.md as the single canonical policy node for architecture component' -- the identical phrase 'policy node' applied to a different template task, confirming the word is boilerplate carried by the planning apparatus rather than a considered classification specific to #1332."
-    entry_class: FACT
-    evidence:
-      - "https://github.com/launchpad-26/buzz/issues/1332"
-      - "https://github.com/launchpad-26/buzz/issues/1326"
+    entry_class: TEAM_KNOWLEDGE
+    provided_by: "launchpad-26/buzz#1332 Objective, compared against launchpad-26/buzz#1326 Objective"
   - statement: "An unmerged research note cataloguing industry-standard project documentation templates does not mention configuration, config files, environment variables or the Twelve-Factor App anywhere in its text."
     entry_class: TEAM_KNOWLEDGE
     provided_by: "launchpad-26/buzz#1466 (unmerged research note, launchpad/Research/project-documentation-templates.md on branch docs/research-project-doc-templates)"
@@ -158,7 +154,7 @@ review-enforced half.
 | Relationship types and their directionality | `launchpad/docs/corpus/schema/relationships.schema.json` |
 | Creating, updating and retiring a node | `launchpad/docs/corpus/AGENTS.md` |
 | Citing an accepted decision as evidence | `launchpad/docs/corpus/standards/decision-references.md` |
-| The generic reference template this one specializes | `launchpad/docs/corpus/templates/reference.md` (`#1346`, once merged) |
+| The generic reference template this one specializes | `launchpad/docs/corpus/templates/reference.md` (`corpus-template-reference`, #1346) |
 | The industry models this template adapts | *Industry model* below, and the primary sources it cites |
 
 If this node and any of those disagree, **they win** -- this one has drifted and
@@ -427,12 +423,13 @@ A node built from this template:
 - **may** declare `part-of` toward a broader capability, deployment, or operations
   node this configuration surface is a subsection of, when the settings are one
   part of a larger documented surface rather than independently standing.
-- **may** declare `references` toward the generic reference template (`#1346`,
-  once merged) or toward this template node itself (target:
-  `corpus-template-configuration`), if the author wants the generated
-  `referenced-by` edge; this is optional, since a node's shape (Configuration
-  description / Settings / Litmus test / Secrets discipline / Boundary) already
-  shows which template it followed.
+- **may** declare `references` toward the generic reference template
+  (`corpus-template-reference`, #1346) when the author defers completeness to it.
+- **should** declare `implements` targeting `corpus-template-configuration` (this
+  node's id) once this node is merged. `relationships.schema.json` names *"a
+  template instance of a standard"* as `implements`' own worked example -- not
+  the weaker `references` edge, and not a `referenced-by` edge, since no
+  generator produces one for this relationship type.
 - **must**, per `AGENTS.md`'s own rule, resolve every declared target against
   `origin/launchpad` (or whatever the merge-target branch is at the time), never
   against the author's own worktree.

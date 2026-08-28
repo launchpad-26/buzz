@@ -63,6 +63,10 @@ evidence:
     entry_class: FACT
     evidence:
       - "https://www.thegooddocsproject.dev/template/glossary"
+  - statement: "The companion Glossary template guide states a definition should be 'no more than one to three sentences,' which is the hard limit this template's Required section 2 makes binding on every glossary-term instance's Definition section."
+    entry_class: FACT
+    evidence:
+      - "https://www.thegooddocsproject.dev/template/glossary"
   - statement: "The same guide distinguishes a base glossary ('a term, definition, and abbreviation (if there is one)') from a richer document type it names a terminology system, which 'can include additional information, including localization notes, related terms, term provenance, and more' -- a terminology system is a named, more complex sibling document type, not a larger glossary."
     entry_class: FACT
     evidence:
@@ -261,6 +265,19 @@ and no source corroborates it yet. This maps directly onto the primary
 source's own guidance to prefer an existing authoritative definition and
 write one only when none exists.
 
+A fourth case fits none of those three: two authoritative sources of the
+*same* claim type -- for example two accepted decisions, or two ratified
+specs -- define the term differently. Per ADR-0029, that is a material
+conflict of the kind the corpus author does not resolve by picking a side,
+averaging the two, or downgrading the disputed one to `INFERENCE`. Record
+both definitions in the body, cite both sources in the Definition's
+`evidence` entry, set the node's `status` to `flagged` --
+`node.schema.json`'s value for exactly this, ADR-0029's
+"unestablished/flagged" state -- and cite
+`launchpad/decisions/ADR-0029-corpus-evidence-precedence.md` itself as the
+authority for stopping rather than choosing. The node stays flagged until a
+human resolves the contradiction.
+
 ## What this template deliberately excludes
 
 Everything below is something the primary source's own richer sibling
@@ -278,7 +295,15 @@ signal that the document being written is not actually a glossary term:
   glossary-term node with its own `id`, connected by `references`, not a
   second name folded into one node -- per `AGENTS.md`'s one-node-one-idea
   rule, a term and its synonym are still two independently maintainable
-  lookup entries even when their definitions are nearly identical.
+  *lookup entries*. That does not license two independently maintained
+  *definitions* of the same concept: the synonym node's Definition states
+  that the term is an alternative name for the canonical term and defers to
+  that term's node via `references` for the actual meaning, rather than
+  restating a near-duplicate definition nothing keeps in sync -- the
+  validator only confirms a cited path resolves, never that two
+  definitions of the same concept still agree, and per `AGENTS.md` and
+  issue #1340's own definition of done a node links to a neighboring
+  node's canonical content instead of duplicating it.
 - **No "term provenance" or "localization notes" fields.** These are named,
   specific features of a terminology system the primary source describes as a
   distinct, more complex document type. A glossary-term node's provenance is
@@ -341,8 +366,8 @@ term that is never named.
 
 | This template (glossary term) | Its neighbors |
 |---|---|
-| **Up:** concept (#1331, not yet written) | Covers understanding-oriented, discursive explanation of a subject. This template stops at a one-to-three-sentence definition; if a term needs reflection or "why this matters" reasoning, that content belongs in a concept node, linked via `references`, not folded into the term's definition. |
-| **Sideways:** reference (#1346, not yet written) | Covers technical descriptions of machinery and how to operate it -- information-oriented, like this template, but scoped to a system's operable surface rather than to one word's meaning. A glossary term that starts describing how to *use* something, not just what it *means*, has drifted into reference territory. |
+| **Up:** concept (`corpus-template-concept`, #1331) | Covers understanding-oriented, discursive explanation of a subject. This template stops at a one-to-three-sentence definition; if a term needs reflection or "why this matters" reasoning, that content belongs in a concept node, linked via `references`, not folded into the term's definition. |
+| **Sideways:** reference (`corpus-template-reference`, #1346) | Covers technical descriptions of machinery and how to operate it -- information-oriented, like this template, but scoped to a system's operable surface rather than to one word's meaning. A glossary term that starts describing how to *use* something, not just what it *means*, has drifted into reference territory. |
 | **Sideways, within the same primary source:** terminology system (Good Docs Project misc pack, not assigned to any issue in this batch) | Adds alternative terms, related terms, provenance and localization notes on top of a base glossary entry. This template deliberately stops short of that richer shape -- see *What this template deliberately excludes* above. |
 
 ## Scope and omissions
@@ -355,8 +380,8 @@ Project's Glossary template, misc pack) it adapts.
 
 | Not covered here | Owned by |
 |---|---|
-| Discursive explanation of a term's surrounding concept | #1331 (concept template, not yet written) |
-| Technical description of machinery or how to operate something | #1346 (reference template, not yet written) |
+| Discursive explanation of a term's surrounding concept | `corpus-template-concept` (#1331) |
+| Technical description of machinery or how to operate something | `corpus-template-reference` (#1346) |
 | Alternative terms, related-term webs, provenance and localization notes as a document's primary subject | Good Docs Project's terminology system template (no corpus issue currently assigned) |
 | The evidence-class contract itself (FACT/INFERENCE/TEAM_KNOWLEDGE, citation shapes) | `launchpad/docs/corpus/AGENTS.md` |
 | The `confidence` field's meaning and requirements | `launchpad/docs/corpus/standards/confidence.md` |

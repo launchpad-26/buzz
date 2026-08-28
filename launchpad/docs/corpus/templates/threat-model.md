@@ -55,7 +55,7 @@ evidence:
     entry_class: FACT
     evidence:
       - "https://github.com/OWASP/CheatSheetSeries/blob/ad32f17e5d68701bc4c73505b90739bf66bd775b/cheatsheets/Threat_Modeling_Cheat_Sheet.md"
-  - statement: "The Threat Modeling Manifesto (threatmodelingmanifesto.org, licensed CC BY 4.0) states the same four questions as its process definition, was authored by a named group of fifteen security professionals including Adam Shostack, and states as its second principle that 'threat modeling must align with an organization's development practices and follow design changes in iterations.'"
+  - statement: "The Threat Modeling Manifesto (threatmodelingmanifesto.org, licensed CC BY 4.0) states the same four questions as its process definition, was authored by a named group of fifteen security professionals including Adam Shostack, and states as its second principle that 'threat modeling must align with an organization's development practices and follow design changes in iterations that are each scoped to manageable portions of the system.'"
     entry_class: FACT
     evidence:
       - "https://www.threatmodelingmanifesto.org/"
@@ -87,6 +87,11 @@ evidence:
     entry_class: INFERENCE
     evidence:
       - "launchpad/docs/corpus/schema/relationships.schema.json"
+    confidence: 0.65
+  - statement: "architecture is the closer fit of node.schema.json's two plausible type-enum candidates for a threat-model instance node's own front-matter type, because a threat-model node documents the same system an architecture node describes, just from an adversarial angle -- the same reasoning this node's depends-on relationship guidance above rests on -- and no enum value is dedicated to threat modeling or security analysis specifically; verification is a documented override an author may choose instead, but is not equally weighted, since nothing in the enum's own names or in the sources reviewed for this template ties threat modeling to verification more closely than to architecture."
+    entry_class: INFERENCE
+    evidence:
+      - "launchpad/docs/corpus/schema/node.schema.json"
     confidence: 0.65
   - statement: "Parent Feature #605's acceptance criteria require that 'every template states its purpose, required sections, evidence expectations and the industry model/standard it adapts,' and this is the acceptance bar this node is built against rather than the MUST/SHOULD/enforcement/escalation checklist that issue #1351's own Definition of Done carries, which the batch dispatch brief for tasks #1307-#1351 identified as boilerplate copied from the standards-track issues."
     entry_class: TEAM_KNOWLEDGE
@@ -245,13 +250,32 @@ existing or plausible corpus subjects sound like this one without being it:
 A node built from this template that drifts into any of the four above has picked
 the wrong template, not merely written a long document.
 
+## Front-matter type
+
+A node built from this template carries `type: architecture` in its front
+matter by default. `node.schema.json`'s thirteen-member enum (see evidence
+ledger) has no value dedicated to threat modeling or security analysis, and a
+threat-model node documents the same system an architecture node describes,
+just from an adversarial angle -- the same reasoning *Relationships* below uses
+to require a `depends-on` edge toward that architecture node. `architecture` is
+therefore the closer fit of the enum's two plausible candidates; see the
+`INFERENCE` entry in this node's evidence ledger for the confidence rating on
+that reasoning.
+
+**`verification` is a documented override, not an equally weighted default.**
+An author may choose `type: verification` instead when the node's primary
+purpose in their corpus is a security-verification activity rather than a
+system description, but the choice must be stated and justified explicitly in
+the instance node's own body (for example, in its *Scope and omissions*
+section) rather than picked silently -- deviating from the default is a
+decision worth its own citation, not a coin flip the template leaves open.
+
 ## Required sections
 
-A corpus node using this template (see *Scope and omissions*' "Expected but not
-verified" list below for the open question of which `type` enum value an
-instance should carry -- this template does not resolve it) must carry the
-following in its body, in addition to whatever schema-required front matter
-`node.schema.json` demands of every node:
+A corpus node using this template (its front-matter `type` should be
+`architecture` by default, or `verification` as a documented override -- see
+*Front-matter type* above) must carry the following in its body, in addition to
+whatever schema-required front matter `node.schema.json` demands of every node:
 
 1. **Purpose and scope statement.** One paragraph naming the system, container, or
    data flow being modeled (by its own corpus node id, once the corresponding
@@ -283,9 +307,16 @@ following in its body, in addition to whatever schema-required front matter
 6. **Review and validation.** Per the Manifesto's "Did we do a good enough job?":
    who reviewed the model, when, and what would trigger re-review -- the Manifesto
    states threat modeling "must align with an organization's development
-   practices and follow design changes in iterations," so this section should
-   name the specific design changes (to the architecture node this model
-   `depends-on`) that would invalidate the current analysis.
+   practices and follow design changes in iterations that are each scoped to
+   manageable portions of the system," so this section should name the specific
+   design changes (to the architecture node this model `depends-on`) that would
+   invalidate the current analysis. That same clause is also the Manifesto's own
+   guidance on how large a single threat-model node should be: keep one node's
+   scope to a manageable portion of the system being modeled, rather than one
+   node attempting to threat-model an entire architecture at once -- if the
+   system being modeled already decomposes into multiple architecture nodes
+   (context, container, component), prefer one threat-model node per
+   `depends-on` target over a single node spanning several of them.
 7. **Boundary statement.** An explicit paragraph naming what this node does not
    cover, using the four exclusions in *Boundary: what this template is not* as
    the checklist, plus any node-specific exclusion the author found.
@@ -461,8 +492,9 @@ threat-model analysis of one system, container, or data flow: the required body
 sections, the evidence expectations for a threat or mitigation claim, the
 industry model (STRIDE + OWASP's four-phase process, grounded in the Threat
 Modeling Manifesto) the shape adapts, the explicit boundary against
-disclosure-policy/control-catalog/pen-test-report/architecture documents, and the
-relationship type a node built from this template should use.
+disclosure-policy/control-catalog/pen-test-report/architecture documents, the
+relationship type a node built from this template should use, and the
+front-matter `type` such a node should carry.
 
 **It does not cover, and these are gaps rather than silence:**
 
@@ -481,18 +513,6 @@ exist on `origin/launchpad` at the recorded revision are a fit.
 
 **Expected but not verified when this node was written:**
 
-- **Which `type` enum value a threat-model instance node itself should carry is
-  an open question this template does not resolve.** `node.schema.json`'s
-  thirteen-member enum (see evidence ledger) has no dedicated security or
-  analysis surface. `architecture` is a plausible fit, since a threat model
-  documents the same system an architecture node describes, just from an
-  adversarial angle; `verification` is also plausible, since threat modeling is
-  a security-analysis activity. Neither reading is grounded in anything beyond
-  the enum's own names and a hunch about intent -- forcing a confidence number
-  onto that guess would manufacture precision this template does not have. This
-  is left for the first instance author and their reviewer to decide, and is
-  named here explicitly as a gap rather than answered with an unsupported
-  `INFERENCE`.
 - **No node has yet been authored from this template.** Every claim above about
   what a threat-model node needs is grounded in the STRIDE/OWASP/Manifesto
   primary sources, not in a worked instance. The first real threat-model node --

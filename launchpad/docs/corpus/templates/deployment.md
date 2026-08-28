@@ -90,6 +90,11 @@ evidence:
     entry_class: FACT
     evidence:
       - "docker-compose.yml"
+  - statement: "launchpad/ENVIRONMENTS.md is the cohort document that owns the list of environments this repository actually operates, and its table carries four rows -- Local development (status IMPLEMENTED), Local VM harness (status OPEN, tracked by issues #17 and #19), Cohort VPS (status OPEN, tracked by issues #21 and #22), and Contributors' machines (status OPEN, tracked by issue #43) -- none of which is named \"Quickstart\" or \"Production\"; those two names belong to deploy/charts/buzz's own Helm values profiles instead, per deploy/charts/buzz/README.md."
+    entry_class: FACT
+    evidence:
+      - "launchpad/ENVIRONMENTS.md"
+      - "deploy/charts/buzz/README.md"
   - statement: "CLAUDE.md's Getting Started section instructs `just relay` to \"start relay at ws://localhost:3000\" as a separate step from `just setup`, consistent with the relay running as a locally built process against docker-compose's containerized Postgres and Redis rather than as a fourth container inside docker-compose.yml itself."
     entry_class: FACT
     evidence:
@@ -216,6 +221,7 @@ the ledger rather than being re-argued here in prose a second time.
 | The boundary this node draws against, primary source | `launchpad-26/buzz#1529` (architecture-container template) |
 | arc42, primary source | `https://arc42.org/overview`, `https://docs.arc42.org/section-7/` |
 | C4 model, primary source | `https://c4model.com/`, `https://c4model.com/diagrams/deployment`, `https://c4model.com/abstractions/container` |
+| This repository's own operated environments — the real list, owned separately from any chart's values profiles | `launchpad/ENVIRONMENTS.md` |
 
 If this file and any of those disagree, **they win** — this one has drifted and
 should be fixed.
@@ -427,14 +433,28 @@ topology, which is future work for whoever writes that instance node, not this
 template). The container used below (`buzz-relay`) is the same container issue
 #1327's template established by the same test it uses (a `[[bin]]` target and
 `src/main.rs`); this node reuses that identity rather than re-arguing it, and
-maps how its deployment topology genuinely differs across three environments this
-repository actually defines:
+maps its deployment topology across a table whose rows are of two different
+kinds: one row is an environment this repository's own `launchpad/ENVIRONMENTS.md`
+actually defines, and two rows are not additional cohort-operated environments at
+all, but the `deploy/charts/buzz` Helm chart's own two values profiles — `deploy/charts/buzz/README.md`
+labels them "Quickstart (eval)" and "Production (GitOps)", and they belong to
+upstream Block's chart, not to this fork's own environment list:
 
-| Environment | Source | How `buzz-relay` is deployed |
+| Environment / chart profile | Source | How `buzz-relay` is deployed |
 |---|---|---|
-| **Local development** | `docker-compose.yml` | `buzz-relay` itself is **not** a service in this file — it runs as a locally built process (`just relay`, per `CLAUDE.md`) against containerized `postgres`, `redis`, `keycloak`, `minio` and `prometheus`, all on one Docker bridge network (`buzz-net`), one instance each, no load balancer, each labeled `com.buzz.env: "dev"`. |
-| **Quickstart / eval** | `deploy/charts/buzz`, `quickstart=true` | `buzz-relay` runs as a Kubernetes `Deployment` (from `templates/deployment.yaml`) alongside **bundled, in-cluster** Postgres, Redis and MinIO subcharts; the chart autogenerates relay and service secrets via Helm's `lookup` function; single replica; installed directly with `helm install`, not GitOps. |
-| **Production** | `deploy/charts/buzz`, default profile | The same `Deployment` template, but pointed at **external, managed** Postgres/Redis/S3 (`externalPostgresql.url`, `externalRedis.url`, `s3.endpoint`) with `secrets.existingSecret` required rather than chart-generated (chart-side secret generation is unsafe once ArgoCD/Flux render the chart with `helm template`, per the chart's own README); `replicaCount >= 2` for HA; a `RollingUpdate` strategy with `maxUnavailable: 0`; deployed via ArgoCD or Flux GitOps (`examples/argocd-app.yaml`, `examples/flux-helmrelease.yaml`). |
+| **Local development** (cohort environment, `launchpad/ENVIRONMENTS.md`, `IMPLEMENTED`) | `docker-compose.yml` | `buzz-relay` itself is **not** a service in this file — it runs as a locally built process (`just relay`, per `CLAUDE.md`) against containerized `postgres`, `redis`, `keycloak`, `minio` and `prometheus`, all on one Docker bridge network (`buzz-net`), one instance each, no load balancer, each labeled `com.buzz.env: "dev"`. |
+| **"Quickstart (eval)" chart profile** (`deploy/charts/buzz`'s own profile, not a cohort environment) | `deploy/charts/buzz`, `quickstart=true` | `buzz-relay` runs as a Kubernetes `Deployment` (from `templates/deployment.yaml`) alongside **bundled, in-cluster** Postgres, Redis and MinIO subcharts; the chart autogenerates relay and service secrets via Helm's `lookup` function; single replica; installed directly with `helm install`, not GitOps. |
+| **"Production (GitOps)" chart profile** (`deploy/charts/buzz`'s own profile, not a cohort environment) | `deploy/charts/buzz`, default profile | The same `Deployment` template, but pointed at **external, managed** Postgres/Redis/S3 (`externalPostgresql.url`, `externalRedis.url`, `s3.endpoint`) with `secrets.existingSecret` required rather than chart-generated (chart-side secret generation is unsafe once ArgoCD/Flux render the chart with `helm template`, per the chart's own README); `replicaCount >= 2` for HA; a `RollingUpdate` strategy with `maxUnavailable: 0`; deployed via ArgoCD or Flux GitOps (`examples/argocd-app.yaml`, `examples/flux-helmrelease.yaml`). |
+
+This repository's own operated environments — the cohort's real, tracked list —
+are `launchpad/ENVIRONMENTS.md`'s four rows (Local development, Local VM harness,
+Cohort VPS, Contributors' machines), only one of which (Local development) is
+`IMPLEMENTED` today; the other three are `OPEN`. The chart's "Quickstart" and
+"Production" profiles are not additional rows on that list — they are two ways
+the same upstream Helm chart can be configured, and a real deployment instance
+node should map `buzz-relay` against `ENVIRONMENTS.md`'s own rows, citing the
+chart profile each one would use, rather than treating the chart's profile names
+as environment names in their own right.
 
 **One real discrepancy surfaced and deliberately left unresolved.** The `buzz`
 chart's own default `image.repository` is `ghcr.io/block/buzz` — the upstream
