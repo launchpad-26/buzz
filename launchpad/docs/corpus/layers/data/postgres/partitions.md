@@ -56,11 +56,12 @@ evidence:
     evidence:
       - "crates/buzz-db/src/partition.rs:15-56"
       - "crates/buzz-db/src/partition.rs:74-150"
-  - statement: "crates/buzz-relay/src/main.rs calls db.ensure_future_partitions(3) once at relay startup (unconditionally, not gated on BUZZ_AUTO_MIGRATE), and the module's own doc comment states it is additionally intended to run monthly via cron, though no cron invocation was found in this repository at the recorded revision."
+  - statement: "crates/buzz-relay/src/main.rs calls db.ensure_future_partitions(3) once at relay startup (unconditionally, not gated on BUZZ_AUTO_MIGRATE), and the module's own doc comment states it is additionally intended to run monthly via cron, but no call site invokes ensure_future_partitions anywhere outside that one startup call; buzz-workflow's own \"cron loop\" (crates/buzz-workflow/src/lib.rs) is a separate, user-authored-workflow scheduling feature unrelated to partition management, and no workflow, script, or infrastructure config in this repository wires it (or anything else) to ensure_future_partitions."
     entry_class: FACT
     evidence:
       - "crates/buzz-relay/src/main.rs:200-202"
       - "crates/buzz-db/src/partition.rs:3"
+      - "grep(pattern='ensure_future_partitions', paths=['**/*.rs']) -> crates/buzz-db/src/partition.rs (definition), crates/buzz-db/src/lib.rs (wrapper), crates/buzz-relay/src/main.rs:200 (sole call site)"
   - statement: "A repository-wide search for partition retention or removal logic (grep for \"detach partition\", \"drop.*partition\", \"retention\" across .rs and .sql files) found no code path that ever drops, detaches, or archives an old partition; ensure_future_partitions only ever creates partitions for future months, never removes past ones."
     entry_class: FACT
     evidence:
@@ -221,9 +222,11 @@ New monthly partitions are created by `crates/buzz-db/src/partition.rs`'s
 
 `crates/buzz-relay/src/main.rs` calls `db.ensure_future_partitions(3)` once, at every
 relay startup, unconditionally (not gated on `BUZZ_AUTO_MIGRATE`). The module's own
-doc comment additionally states it is meant to run monthly via cron; no cron
-invocation was found anywhere in this repository at the recorded revision --
-named here as a gap rather than assumed to exist.
+doc comment additionally states it is meant to run monthly via cron, but no call site
+invokes it anywhere outside that one startup call. This repository does have an
+unrelated "cron loop" (`crates/buzz-workflow`, for user-authored workflow triggers),
+but nothing wires that feature -- or any other scheduler -- to `ensure_future_partitions`.
+Named here as a gap rather than assumed to exist elsewhere.
 
 ## Lifecycle and retention
 
