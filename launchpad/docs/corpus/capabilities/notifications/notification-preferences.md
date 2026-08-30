@@ -76,6 +76,15 @@ evidence:
     entry_class: FACT
     evidence:
       - "grep_recursive('30078|channel-mutes|mute', paths='crates/buzz-relay/src/push_runtime.rs,crates/buzz-relay/src/handlers/push_lease.rs') -> no matches, run 2026-08-31 at commit 338b4d0cf2dd76cc43964bb717ce9f0a94a9c7a5"
+  - statement: "shouldNotify.test.mjs directly exercises shouldNotifyForEvent's and hasMentionForEvent's precedence rules (top-level messages, unrelated p-tags, broadcast replies, muted channels/threads, participated/followed/authored roots), and shouldNotifyChannelMutes.test.mjs adds channel-mute-specific cases against the same function; channelMutesStorage.test.mjs covers parseMutePayload validation and mergeStores' newer-updatedAt-wins per-channel semantics, including tie-breaking and eviction-capacity edge cases; channelMutesSync.test.mjs and useChannelMutes.test.mjs cover the publish/subscribe/bootstrap cycle against a fake relay; desktop/tests/e2e/channel-mute.spec.ts is a Playwright end-to-end spec seeding and asserting mute state through the real UI."
+    entry_class: FACT
+    evidence:
+      - "desktop/src/features/notifications/lib/shouldNotify.test.mjs"
+      - "desktop/src/features/notifications/lib/shouldNotifyChannelMutes.test.mjs"
+      - "desktop/src/features/sidebar/lib/channelMutesStorage.test.mjs"
+      - "desktop/src/features/sidebar/lib/channelMutesSync.test.mjs"
+      - "desktop/src/features/sidebar/lib/useChannelMutes.test.mjs"
+      - "desktop/tests/e2e/channel-mute.spec.ts"
 relationships:
   - type: references
     target: architecture-flows-push-notification
@@ -144,6 +153,18 @@ This node does not describe:
   capability.** It is mentioned only to distinguish a system-imposed
   suppression from the user-controlled preferences that are this node's
   actual subject.
+
+## Verification
+
+`shouldNotify.test.mjs` and `shouldNotifyChannelMutes.test.mjs` directly
+exercise `shouldNotifyForEvent`'s precedence order (mention, broadcast reply,
+muted channel, muted thread, participated/followed/authored root).
+`channelMutesStorage.test.mjs` covers `mergeStores`' newer-`updatedAt`-wins
+per-channel merge, including tie-breaking and the capacity-eviction edge
+cases. `channelMutesSync.test.mjs` and `useChannelMutes.test.mjs` cover the
+publish/subscribe/bootstrap cycle against a fake relay, and
+`desktop/tests/e2e/channel-mute.spec.ts` is a Playwright spec that seeds and
+asserts mute state through the real UI end to end.
 
 ## Relationships
 
