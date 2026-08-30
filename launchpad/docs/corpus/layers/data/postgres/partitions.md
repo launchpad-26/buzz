@@ -130,6 +130,14 @@ evidence:
       - "migrations/0001_initial_schema.sql:329-341"
       - "crates/buzz-db/src/lib.rs:8-9"
     confidence: 0.8
+  - statement: "migrations/0001_initial_schema.sql's own comment on idx_events_community_id states that events's primary key (community_id, created_at, id) cannot serve a direct WHERE id=$1 lookup because created_at, the partition key, sits between community_id and id in the key, and that this index -- (community_id, id, created_at DESC) -- exists specifically to keep the scoped form WHERE community_id=$ AND id=$ index-served instead of falling back to a full scan."
+    entry_class: FACT
+    evidence:
+      - "migrations/0001_initial_schema.sql:254-257"
+  - statement: "delivery_log's only secondary index, idx_delivery_log_community_sub, is declared on (community_id, subscription_id) and does not include delivered_at, the table's partition key."
+    entry_class: FACT
+    evidence:
+      - "migrations/0001_initial_schema.sql:356"
   - statement: "crates/buzz-db/src/partition.rs's own unit test module asserts validate_partition_suffix and validate_date_str reject SQL-injection-shaped inputs (e.g. \"2026_03; DROP TABLE events--\", \"2026-03-01; DROP TABLE events--\") and that PARTITIONED_TABLES contains events and delivery_log but not api_tokens or users."
     entry_class: FACT
     evidence:
@@ -227,6 +235,30 @@ invokes it anywhere outside that one startup call. This repository does have an
 unrelated "cron loop" (`crates/buzz-workflow`, for user-authored workflow triggers),
 but nothing wires that feature -- or any other scheduler -- to `ensure_future_partitions`.
 Named here as a gap rather than assumed to exist elsewhere.
+
+## Access patterns
+
+Partitioning is transparent to callers -- `buzz-db`'s typed data-access methods query
+`events` and `delivery_log` as ordinary tables, and Postgres routes each query to the
+relevant partition(s) internally. Two access-pattern facts are specific to the
+partition key placement, not to partitioning in general:
+
+- **`events`'s primary key is `(community_id, created_at, id)`** -- `created_at`, the
+  partition key, sits between `community_id` and `id`. A direct id lookup
+  (`WHERE community_id=$ AND id=$`, with no `created_at` predicate) cannot be served
+  by the primary key alone; migration 0001's own comment on `idx_events_community_id`
+  states this explicitly and names the dedicated index
+  (`(community_id, id, created_at DESC)`) added to keep that lookup shape
+  index-served rather than falling back to a full scan.
+- **`delivery_log`'s only non-PK index, `idx_delivery_log_community_sub`, is
+  `(community_id, subscription_id)`** -- it does not include `delivered_at`, the
+  partition key, so a lookup by subscription (the delivery-audit read path) is not
+  partition-key-scoped by that index.
+
+`crates/buzz-db`, `crates/buzz-search`, and (per `architecture-containers-postgres`)
+`buzz-relay`'s own handlers are this repository's data-access components for these
+tables; this node does not restate their full call-site inventory, which belongs to
+the container-level document.
 
 ## Lifecycle and retention
 
