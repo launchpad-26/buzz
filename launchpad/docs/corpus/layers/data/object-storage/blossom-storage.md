@@ -17,10 +17,10 @@ evidence:
     evidence:
       - "crates/buzz-media/Cargo.toml"
       - "launchpad/docs/corpus/architecture/containers/object-storage.md"
-  - statement: "No SQL file under migrations/ references media storage (grep -rl media migrations/*.sql returns no matches at the recorded revision), and the media key namespace has no relational schema of its own; the S3-compatible bucket is the sole durable location of blob bytes and their sidecar metadata, and no other datastore in this repository (Postgres via buzz-db, Redis via buzz-pubsub) holds a copy — this is an authoritative store, not a cache, derived projection, or transport layer."
+  - statement: "No SQL file under migrations/ references media storage, and the media key namespace has no relational schema of its own; the S3-compatible bucket is the sole durable location of blob bytes and their sidecar metadata, and no other datastore in this repository (Postgres via buzz-db, Redis via buzz-pubsub) holds a copy — this is an authoritative store, not a cache, derived projection, or transport layer."
     entry_class: INFERENCE
     evidence:
-      - "migrations/0001_initial_schema.sql"
+      - "grep(pattern='media', glob='migrations/*.sql') -> no matches, at repository revision 338b4d0cf2dd76cc43964bb717ce9f0a94a9c7a5"
       - "crates/buzz-media/src/storage.rs"
     confidence: 0.85
   - statement: "MediaStorage::put and MediaStorage::put_file write blob bytes via rust-s3's put_object_with_content_type / put_object_stream_with_content_type with no conditional-write precondition header, unlike the git-on-object-storage path (crates/buzz-relay/src/api/git/store.rs), which the object-storage container node documents as using If-None-Match: * for its content-addressed writes."
