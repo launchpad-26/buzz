@@ -55,6 +55,10 @@ evidence:
     entry_class: FACT
     evidence:
       - "launchpad/docs/corpus/architecture/flows/workflow-execution.md"
+  - statement: "crates/buzz-core/src/channel.rs's own #[cfg(test)] module contains exactly one test, covering canonical_channel_name; no test anywhere in the crate, and no test found by the repository-wide ChannelType::Workflow search above, exercises the Workflow variant's Display/FromStr round trip or any behavior distinguishing a workflow-typed channel from any other type -- this capability has no dedicated automated verification today."
+    entry_class: FACT
+    evidence:
+      - "crates/buzz-core/src/channel.rs"
 relationships:
   - type: references
     target: architecture-flows-workflow-execution
@@ -120,6 +124,22 @@ This node does not describe:
   workspace.** No git history, PR, or issue was traced for this — see *Scope and
   omissions*.
 
+## Verification
+
+**No automated verification exists for this capability today.** `channel.rs`'s own
+`#[cfg(test)]` module contains exactly one test (`canonical_channel_name`'s
+whitespace/hash-trimming rules), and it does not touch `ChannelType` at all. The
+repository-wide search for `ChannelType::Workflow` construction sites (see
+*Maturity*) found no test — unit or integration — anywhere in the workspace that
+round-trips the `Workflow` variant's `Display`/`FromStr` implementation, or that
+exercises any behavior distinguishing a workflow-typed channel from a stream or
+forum channel. The closest thing to verification is the implementation itself: the
+ingest handler's generic `ChannelType::from_str` parse (which accepts `"workflow"`
+identically to any other registered value) and `main.rs`'s metrics allowlist
+(which names it explicitly). Neither is a test asserting workflow-channel
+behavior; both are the production code this node already cites as evidence, read
+directly rather than exercised by a passing check.
+
 ## Relationships
 
 - references: `architecture-flows-workflow-execution` — the flow that executes once
@@ -133,9 +153,9 @@ This node does not describe:
 **This node covers** what the `workflow` value of `channel_type` is, where it is
 defined and recognized in the schema and backend code, which surfaces do and do not
 expose it as a creatable option, that no code path currently constructs a channel
-with it, that the workflow engine's own channel binding does not depend on it, and
-one concrete inconsistency between two backend code paths that enumerate
-`channel_type`'s values.
+with it, that the workflow engine's own channel binding does not depend on it, one
+concrete inconsistency between two backend code paths that enumerate
+`channel_type`'s values, and that no automated test verifies any of it.
 
 **It does not cover, and these are gaps rather than silence:**
 
