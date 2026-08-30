@@ -159,6 +159,23 @@ touches -- the client -- has not been built.
   without a similarly registered profile. Neither exists in the gateway's
   code today.
 
+## Verification
+
+The two guarantees this capability rests on -- that a wake carries no relay
+content, and that a lease can only ever be matched against a narrow,
+authenticated slice of the stream -- are each backed by tests, not just
+spec text: `push_lease.rs`'s validation tests cover lease tag, plaintext,
+generation, and quota checks, and `push_runtime.rs`'s
+`gift_wrap_match_requires_self_p_filter_and_recipient` and
+`gateway_retries_send_the_same_request_id_over_http` cover the gift-wrap
+narrowing and delivery-retry idempotency this capability depends on. The
+fixed-payload and lease-acceptance invariants are additionally checked
+independently of the Rust suite by standalone formal models under
+`docs/formal/nip-pl/`. The step-by-step ordering these tests exercise is
+catalogued in `architecture-flows-push-notification`; this node names them
+only to show the capability's own guarantees are demonstrated, not to
+re-narrate the flow.
+
 ## Boundary
 
 This node does not describe:
