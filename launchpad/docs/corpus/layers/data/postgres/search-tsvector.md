@@ -109,6 +109,14 @@ evidence:
     entry_class: FACT
     evidence:
       - "crates/buzz-search/src/query.rs:218-219"
+  - statement: "crates/buzz-relay/src/handlers/req.rs's handle_search_req calls `state.search.search(&search_query).await`, and on `Err(e)` logs `warn!(sub_id = %sub_id, \"NIP-50 search failed: {e}\")` and `break`s out of the per-filter pagination loop, rather than closing the subscription or surfacing an error message to the client — a search_tsv-backed query failure silently stops returning further results for that filter instead of tearing down the connection."
+    entry_class: FACT
+    evidence:
+      - "crates/buzz-relay/src/handlers/req.rs:689-695"
+  - statement: "scripts/maintenance/nip_rs_search_allowlist.sql sets `SET LOCAL lock_timeout = '5s'` before its ALTER TABLE/DROP+ADD COLUMN sequence, so if the required ACCESS EXCLUSIVE lock cannot be acquired within 5 seconds (for example, a long-running query or transaction still holding the events table), the maintenance transaction aborts with a lock-timeout error rather than blocking indefinitely against live traffic."
+    entry_class: FACT
+    evidence:
+      - "scripts/maintenance/nip_rs_search_allowlist.sql:9"
   - statement: "launchpad/docs/corpus/architecture/flows/search-query.md, id architecture-flows-search-query, merged and validated on origin/launchpad, already documents the end-to-end request flow that reaches this column (the WebSocket REQ and HTTP POST /query entry points, tenant/auth resolution, the sensitive-kind gate ordering ahead of the search branch, and the same search_tsv @@ query mechanics cited above) at the flow level; this node does not restate that flow and instead declares a references relationship to it."
     entry_class: FACT
     evidence:
@@ -303,6 +311,26 @@ access boundary — it cannot widen visibility." The `search` function itself
 carries a `#[datastore_span(name = "search", system = "postgresql")]`
 tracing attribute, the same privacy-preserving instrumentation policy this
 repository applies to its other Postgres call sites.
+
+## Failure behavior
+
+**Query-time failure fails soft, not closed.** On the WebSocket path,
+`handle_search_req` calls `state.search.search(...)` per filter; if that call
+returns an `Err` (any underlying `sqlx`/Postgres error, wrapped by
+`SearchError::Db`), the handler logs a `warn!` and `break`s out of that
+filter's pagination loop. The client's subscription is not closed and no
+error is sent back — a `search_tsv`-backed query failure simply stops
+producing further results for the affected filter rather than tearing down
+the connection or surfacing a protocol-level error.
+
+**Schema-change failure fails closed, not silently.** The out-of-band
+maintenance script that moves a brownfield database onto the allowlist
+expression sets `SET LOCAL lock_timeout = '5s'` before attempting its
+`ALTER TABLE`. If the required `ACCESS EXCLUSIVE` lock cannot be acquired
+within five seconds — for example, a long-running query still holding the
+`events` table — the transaction aborts with a lock-timeout error rather than
+blocking indefinitely against live traffic; the column is left exactly as it
+was, and an operator must retry once contention clears.
 
 ## Lifecycle and retention
 
