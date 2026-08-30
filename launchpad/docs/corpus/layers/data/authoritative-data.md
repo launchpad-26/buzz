@@ -28,10 +28,10 @@ evidence:
       - "migrations/0001_initial_schema.sql:512-528"
       - "migrations/0001_initial_schema.sql:539-549"
       - "migrations/0001_initial_schema.sql:286-294"
-  - statement: "events.search_tsv is a generated, STORED tsvector column populated from the content column at write time (per its migration comment, so full-text search stays coherent with the row without a separate indexer), and privacy-sensitive kinds are excluded from it by yielding NULL rather than by omitting the row -- so the column itself carries no fact absent from content and kind."
+  - statement: "events.search_tsv is a generated, STORED tsvector column (`TSVECTOR GENERATED ALWAYS AS (...) STORED`) populated from the content column at write time -- its migration comment states this makes it 'a single source of truth -- no sidecar indexer to keep coherent' -- and privacy-sensitive kinds are excluded from it by a CASE expression yielding NULL rather than by omitting the row, so the column itself carries no fact absent from content and kind."
     entry_class: FACT
     evidence:
-      - "migrations/0001_initial_schema.sql:198-211"
+      - "migrations/0001_initial_schema.sql:198-226"
   - statement: "ARCHITECTURE.md describes buzz-db as the Postgres event store crate owning insert_event, query_events and get_event_by_id, and states of buzz-pubsub (the Redis pub/sub crate) explicitly: 'Does NOT: implement the rate limiter. Does NOT store events.'"
     entry_class: FACT
     evidence:
