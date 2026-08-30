@@ -46,7 +46,7 @@ evidence:
     entry_class: FACT
     evidence:
       - "crates/buzz-relay/src/handlers/side_effects.rs:452-495"
-      - "crates/buzz-relay/src/handlers/side_effects.rs:634-673"
+      - "crates/buzz-relay/src/handlers/side_effects.rs:634-719"
       - "crates/buzz-relay/src/handlers/moderation_authz.rs:1-8"
   - statement: "A kind:9044 resolution carrying action=delete, kick, or ban only authorizes and records the moderator's ResolveReport decision; moderation_commands.rs's own module doc and an inline comment state that the actual enforcement event (the 9005/9001/9040 write) is composed and authorized separately by the client, rather than executed automatically by the resolve handler."
     entry_class: FACT
