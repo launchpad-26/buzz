@@ -86,6 +86,10 @@ evidence:
     evidence:
       - "crates/buzz-relay/src/handlers/event.rs"
     confidence: 0.75
+  - statement: "crates/buzz-db/src/deletion.rs's EXPECTED_SCOPED_TABLES constant (the exact set of community-scoped tables the whole-community deletion inventory checks before approving a deletion) and its PURGE_SCOPED_TABLES constant (the foreign-key-safe child-before-parent purge order) both include audit_log; the module's own doc comment describes the module as owning the 'durable whole-community deletion lifecycle,' and DeletionStage's fixed, forward-only stage order names PostgresPurged as the stage in which all EXPECTED_SCOPED_TABLES rows, audit_log included, are physically deleted. Audit rows are therefore not retained independently of the community that produced them — a permanently deleted community's audit_log rows are purged along with its other tenant-scoped data, not kept as a standing record outside the community's own lifecycle."
+    entry_class: FACT
+    evidence:
+      - "crates/buzz-db/src/deletion.rs"
   - statement: "migrations/0006_moderation.sql defines a separate moderation_actions table (community_id, id, actor_pubkey, action, target_pubkey, target_event_id, channel_id, reason_code, public_reason, private_reason, matched_principal, created_at; PRIMARY KEY (community_id, id)) under its own '── Moderation audit ──' section comment, distinct from audit_log's hash-chain schema and primary key shape; issue #1084 ('task: document layers/data/postgres/moderation-tables.md') is the separate task naming that table as its own subject, confirmed by reading both the issue title and the migration's DDL directly rather than assumed."
     entry_class: TEAM_KNOWLEDGE
     provided_by: "launchpad-26/buzz#1084, read directly via gh issue list; migrations/0006_moderation.sql read directly"
@@ -209,6 +213,24 @@ server-scoped DB row — never a value parsed from client input."
   across relay processes; different communities' locks are independent, so
   writes to separate chains proceed in parallel.
 
+## Lifecycle
+
+`audit_log` rows are append-only for the life of the community they belong
+to — nothing in `crates/buzz-audit` or in the schema updates or deletes an
+existing row (the only mutation path this task found is the test suite's
+own deliberate tampering, used to prove `verify_chain` detects it). That
+lifespan is bounded by the **community's** own lifecycle, not treated as
+permanent independently of it: `crates/buzz-db/src/deletion.rs`'s
+whole-community deletion module lists `audit_log` in both
+`EXPECTED_SCOPED_TABLES` (the community-scoped tables its pre-deletion
+inventory checks) and `PURGE_SCOPED_TABLES` (the child-before-parent
+physical-purge order), and its `DeletionStage` enum's fixed, forward-only
+stage sequence reaches `PostgresPurged` — the stage at which those tables'
+rows, `audit_log` included, are physically deleted. A permanently deleted
+community's audit history is deleted with it; the hash chain guarantees
+tamper-evidence for a chain that exists, not indefinite retention of that
+chain once its community is gone.
+
 ## Relationships
 
 - **Foreign key.** `community_id` carries `REFERENCES communities(id)` in
@@ -261,7 +283,8 @@ this node names the table `audit_log` lives in and links out, per
 
 **This document covers** `audit_log`'s identity and key, its column shape
 and field meanings, the invariants its hash-chain and write-fence
-mechanisms enforce, its relationships to `communities` and to the
+mechanisms enforce, its append-only-until-community-deletion lifecycle,
+its relationships to `communities` and to the
 `architecture-containers-postgres` container node, its provenance as a
 server-derived (not event-sourced) table, and where it is physically
 stored.
