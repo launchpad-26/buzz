@@ -53,6 +53,22 @@ evidence:
     entry_class: FACT
     evidence:
       - "launchpad/docs/corpus/architecture/containers/relay.md"
+  - statement: "A session (room) admits at most MAX_PEERS_PER_ROOM = 25 participants as a defense-in-depth soft cap (the code comment reasons that N peers generate N x (N-1) frame copies per 20ms tick, and 25 peers = 600 copies/tick), separate from and stricter than the 255-slot peer-index space, which is the hard limit on distinct peer_index values a room can hand out."
+    entry_class: FACT
+    evidence:
+      - "crates/buzz-relay/src/audio/room.rs:45-49"
+      - "crates/buzz-relay/src/audio/room.rs:146-149"
+  - statement: "The first peer successfully admitted to a room pins that room's huddle-audio protocol version; every later admission attempt in the same session must present the same version or is rejected with AdmissionError::VersionMismatch, and the three admission checks (room ended, peer-count cap, version pin) are deliberately ordered Ended > Full > VersionMismatch so that a client who could not have joined anyway (room ended or full) never learns the room's pinned protocol version."
+    entry_class: FACT
+    evidence:
+      - "crates/buzz-relay/src/audio/room.rs:211-217"
+      - "crates/buzz-relay/src/audio/room.rs:220-224"
+      - "crates/buzz-relay/src/audio/room.rs:236-245"
+  - statement: "Inbound binary WebSocket frames during a live session are treated as Opus audio and are capped at MAX_AUDIO_FRAME_BYTES = 4096 bytes; the handler enforces this cap when reading frames from a connected participant."
+    entry_class: FACT
+    evidence:
+      - "crates/buzz-relay/src/audio/handler.rs:44"
+      - "crates/buzz-relay/src/audio/handler.rs:977"
   - statement: "As of the recorded revision, no corpus node exists yet for a huddle-audio-facing interface (a CLI command group or HTTP route-group boundary contract distinct from the flow itself), and no corpus node exists yet for huddle creation/start or for the huddle text-channel/guidelines surface (kind:48106) — this capability node references only the two corpus nodes named above."
     entry_class: INFERENCE
     evidence:
@@ -85,6 +101,30 @@ the corresponding points in the join/leave flow (see
 
 **Recording and per-track publishing are planned, not shipped.** VISION.md
 names this as the one gap in an otherwise-wired capability.
+
+## Behavioral rules and constraints
+
+- **Session capacity is capped twice.** A soft cap of 25 participants per
+  session is enforced as defense-in-depth (25 peers already means 600
+  pairwise frame copies every 20ms tick), well inside the hard 255-slot
+  peer-index space a session can ever hand out. Reaching either cap rejects
+  the join; it does not degrade audio quality for those already in the
+  session.
+- **A session's audio protocol version is fixed by whoever joins first.**
+  Every later participant in that same session must request the same
+  version or is rejected — a session cannot silently mix two protocol
+  versions among its participants. Admission checks are deliberately ordered
+  so that a rejection for "session ended" or "session full" is always
+  reported before a version mismatch would be, so a caller who could not
+  have joined anyway never learns what protocol version the session is
+  pinned to.
+- **Audio is Opus only, frame-size capped.** A participant's audio is
+  relayed as binary WebSocket frames, capped at 4096 bytes each; this is a
+  per-frame limit, not a bandwidth or session-duration limit.
+- **Humans and agents share one participant model.** There is no
+  agent-specific join path or elevated capacity — an agent participates as
+  an ordinary session participant and supplies its own speech-to-text/
+  text-to-speech.
 
 ## Boundary
 
@@ -122,8 +162,10 @@ This node does not describe:
 voice within one huddle, admission via Nostr identity, Opus relay between
 participants, lifecycle expressed as Nostr events), who its primary actors are
 (human and agent participants, joining and leaving one session), its current
-shipped/planned maturity, and its boundary against the neighboring
-architecture, flow, and interface documentation.
+shipped/planned maturity, its behavioral rules and constraints (capacity
+caps, protocol-version pinning, frame-size limits, the shared human/agent
+participant model), and its boundary against the neighboring architecture,
+flow, and interface documentation.
 
 **It does not cover, and these are gaps rather than silence:**
 
