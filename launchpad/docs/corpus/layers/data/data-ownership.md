@@ -48,6 +48,10 @@ evidence:
     entry_class: FACT
     evidence:
       - "crates/buzz-db/src/deletion.rs"
+  - statement: "crates/buzz-test-client/tests/e2e_human_edit_agent_content.rs carries E2E coverage of this exact author-match/agent-owner boundary at the kind:5 NIP-09 path: test_owner_can_delete_agent_message_kind5 asserts a registered owner's kind:5 deletion of their agent's message is accepted, and the adjacent test_third_party_cannot_delete_agent_message_kind5 asserts the same deletion attempted from an unrelated third party's key is rejected. Both are marked #[tokio::test] #[ignore] and require a live relay, so their assertions were read directly but neither was executed this session."
+    entry_class: FACT
+    evidence:
+      - "crates/buzz-test-client/tests/e2e_human_edit_agent_content.rs"
   - statement: "Issue #1063's definition of done requires this node to define data ownership in one sentence before deeper explanation, state boundaries/non-goals distinguishing it from what it must not be confused with, link related implementation/verification/corpus nodes without duplicating their content, and use examples only to clarify the concept rather than introduce a second canonical one."
     entry_class: TEAM_KNOWLEDGE
     provided_by: "launchpad-26/buzz#1063 definition of done"
@@ -125,6 +129,16 @@ for that boundary's own enforcement, which this node does not re-derive.
   undocumented-here concept). Conflating them misreads either a per-message
   authorization bug or a community-administration change as the other.
 
+## Verification
+
+`crates/buzz-test-client/tests/e2e_human_edit_agent_content.rs` exercises this exact
+boundary end to end at the kind:5 NIP-09 path: `test_owner_can_delete_agent_message_kind5`
+asserts a registered owner's kind:5 deletion of their agent's message is accepted, and
+`test_third_party_cannot_delete_agent_message_kind5` asserts the same deletion attempted
+by an unrelated third party's key is rejected. Both tests carry `#[ignore]` and require a
+live relay; their assertions were read directly for this node but neither was run this
+session — see *Expected but not verified* below.
+
 ## Scope and omissions
 
 **This document covers** the binding between a stored event and the pubkey that owns
@@ -153,9 +167,11 @@ claims draw on directly.
 
 **Expected but not verified when this node was written:**
 
-- **No live database was exercised.** `is_agent_owner`'s SQL and `set_agent_owner`'s
-  "first mint wins" behavior were verified by reading the query text and the function's
-  own comment, not by running either against a live Postgres instance.
+- **No live database or relay was exercised.** `is_agent_owner`'s SQL and
+  `set_agent_owner`'s "first mint wins" behavior were verified by reading the query text
+  and the function's own comment, not by running either against a live Postgres
+  instance, and the two `#[ignore]`-gated E2E tests named in *Verification* were read,
+  not run, for the same reason (no live relay was stood up this session).
 - **NIP-33 (addressable/replaceable event) semantics beyond the `a`-tag deletion
   authorization branch** — whether ownership plays any further role in *replacement*
   (as opposed to deletion) of an addressable event — was not checked beyond what
