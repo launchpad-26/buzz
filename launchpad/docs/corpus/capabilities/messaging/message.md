@@ -65,6 +65,11 @@ evidence:
     evidence:
       - "launchpad/docs/corpus/architecture/flows/live-fanout.md"
       - "launchpad/docs/corpus/architecture/flows/event-ingestion.md"
+  - statement: "The h-tag channel scoping, NIP-10 e-tag threading (direct and nested reply), p-tag mention deduplication, the broadcast tag, and the 64 KiB content cap are each exercised by passing unit tests in crates/buzz-sdk/src/builders.rs (message_happy_path, message_direct_reply, message_nested_reply, message_broadcast_flag, message_mentions_deduped, message_too_many_mentions, message_content_too_large, message_max_content_ok); the reply/descendant counter increment and decrement described above are each exercised end-to-end by a passing integration test (test_reply_ingest_pushes_live_thread_summary in crates/buzz-test-client/tests/e2e_relay.rs, which asserts reply_count goes from 0 to 1 on reply and back to 0 on deletion)."
+    entry_class: FACT
+    evidence:
+      - "crates/buzz-sdk/src/builders.rs:2381-2577"
+      - "crates/buzz-test-client/tests/e2e_relay.rs:2579-2660"
 relationships:
   - type: references
     target: architecture-flows-event-ingestion
@@ -112,6 +117,17 @@ Sending a reply is not just tagging: it also updates materialized counters.
 parent, and `descendant_count` is incremented on the thread's root message, in the
 same write path that inserts the reply -- a pattern the root repository guide
 calls out explicitly so it is not silently dropped by new reply-handling code.
+
+## Verification
+
+The mechanics above are not merely described in code -- they are exercised by
+passing tests. `crates/buzz-sdk/src/builders.rs` has unit tests for the happy path,
+direct and nested reply tagging, mention deduplication and the too-many-mentions
+rejection, the broadcast flag, and both the content-too-large rejection and the
+max-content-ok boundary. `crates/buzz-test-client/tests/e2e_relay.rs`'s
+`test_reply_ingest_pushes_live_thread_summary` exercises the reply-counter behavior
+end to end against a real relay: `reply_count` goes from 0 to 1 when a reply is
+ingested and back to 0 when it is retracted.
 
 ## Maturity
 
