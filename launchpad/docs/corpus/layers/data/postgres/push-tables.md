@@ -85,6 +85,10 @@ evidence:
       - "crates/buzz-relay/src/push_runtime.rs"
       - "crates/buzz-relay/src/handlers/push_lease.rs"
     confidence: 0.6
+  - statement: "crates/buzz-db/src/push.rs's own #[cfg(test)] module contains 16 #[tokio::test] cases, each #[ignore = \"requires Postgres\"], directly exercising the invariants named above by name: acceptance_constraint_failure_rolls_back_source_event, source_event_collision_is_protocol_outcome_without_event_insert and replacement_and_revoke_are_community_scoped_and_dual_ordered (addressable-event ordering and generation monotonicity), concurrent_enqueue_is_atomic_and_community_scoped and setwise_enqueue_maps_outcomes_per_request (endpoint/event dedup), send_revalidation_suppresses_rotated_claim_and_retry_preserves_id (the send-time revalidation gate), endpoint_invalidation_is_scoped_to_community_and_generation (endpoint_enabled scoping), matcher_trigger_is_allowlisted_and_deleted_events_are_discarded, matcher_claim_is_exclusive_across_workers and batch_claim_is_single_community_and_setwise_ops_honor_the_fence (write fencing and per-community claim isolation), exhausted_match_job_is_reaped_and_cannot_pin_retention and exhausted_match_reaper_skips_quiescing_tenant_and_reaps_active_bystanders (poison-job termination), and gate_orders_lease_activation_after_in_flight_event_and_backfills_it (the T1b lost-wake race closure)."
+    entry_class: FACT
+    evidence:
+      - "crates/buzz-db/src/push.rs"
 relationships:
   - type: references
     target: architecture-containers-postgres
@@ -195,6 +199,13 @@ authoritative shape is the `CREATE TABLE` statements in migrations 0012, 0013 an
   `community_write_allowed(community_id)` (migration 0029), so a community mid-deletion
   cannot accept new push writes even between the moment its lifecycle changes and the
   moment its rows are physically purged.
+
+**Verification.** All ten invariants above are directly exercised, by name, in
+`crates/buzz-db/src/push.rs`'s own `#[cfg(test)]` module — 16 `#[tokio::test]` cases,
+each `#[ignore = "requires Postgres"]` (see the evidence ledger entry above for the
+per-invariant test-name mapping). No integration/E2E test exercising these tables
+through the live WebSocket protocol was located while drafting this node; that gap is
+not resolved here.
 
 ## Relationships and lifecycle
 
