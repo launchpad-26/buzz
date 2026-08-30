@@ -66,6 +66,15 @@ evidence:
     entry_class: FACT
     evidence:
       - "launchpad/AGENT_PR_TEMPLATE.md"
+  - statement: "crates/buzz-relay/src/config.rs's Config::from_env is called once at relay process startup, with no code path in that file that re-reads the environment afterward, so a changed relay environment variable only takes effect on the next relay restart."
+    entry_class: FACT
+    evidence:
+      - "crates/buzz-relay/src/config.rs"
+  - statement: "desktop/src-tauri/src/managed_agents/readiness.rs's resolve_effective_agent_env_with_def is called fresh by spawn_agent_child every time a specific managed agent is spawned, so a changed env layer (baked default, persona env, or per-agent env) takes effect on that agent's next spawn without requiring a desktop app restart, but does require stopping and restarting that individual agent subprocess; neither surface watches its already-running process for live environment changes."
+    entry_class: FACT
+    evidence:
+      - "desktop/src-tauri/src/managed_agents/readiness.rs"
+      - "desktop/src-tauri/src/managed_agents/runtime.rs"
   - statement: "The six-layer desktop managed-agent env precedence configures the environment of a spawned agent subprocess, which is itself environment-variable-based configuration of a Buzz-launched process (distinct from the relay's own process env), so it belongs in this node's scope rather than being out of scope as a purely desktop-UI concern."
     entry_class: INFERENCE
     evidence:
@@ -150,6 +159,22 @@ this node's evidence ledger) — never a value. This follows
 `AGENT_PR_TEMPLATE.md`'s own Verification checklist, which a corpus node is
 bound by like any other tracked file.
 
+## Restart and reload behavior
+
+**Relay rows are restart-required, not dynamically reloadable.** `Config::from_env`
+is called once, at relay process startup; nothing in `crates/buzz-relay/src/config.rs`
+re-reads the environment after that point, so changing any relay row above (e.g.
+`BUZZ_REDIS_POOL_SIZE`, `BUZZ_BIND_ADDR`) requires restarting the relay process for
+the new value to take effect.
+
+**Desktop-managed-agent rows are restart-required per agent, not process-wide.**
+`resolve_effective_agent_env_with_def` recomputes the full six-layer env fresh on
+every call, and `spawn_agent_child` calls it at spawn time — so a change to any
+layer (baked default, persona env, agent env) takes effect the next time that
+specific agent is spawned, without restarting the desktop app itself, but does
+require stopping and restarting the individual agent subprocess. Neither surface
+watches the environment for live changes to an already-running process.
+
 ## Boundary
 
 This node does not describe:
@@ -200,7 +225,8 @@ rule to resolve against the merge-target branch, not the author's worktree.
 `buzz-relay` process and for a desktop-managed agent subprocess: which
 values qualify as configuration under the Twelve-Factor litmus test, a
 representative settings table for both surfaces with type/default/
-required/secret/effect, the desktop's six-layer env-assembly precedence
+required/secret/effect, whether each surface is restart-required or
+dynamically reloadable, the desktop's six-layer env-assembly precedence
 and where it writes relative to Buzz's own identity/security-gate
 variables, and the secrets-discipline this node itself holds to.
 
