@@ -114,6 +114,21 @@ already shipping Forum among its surfaces (`VISION.md:223`); the Flutter
 mobile client's forum support is separately marked "in active development,"
 i.e. not yet shipped there (`VISION.md:232`).
 
+## Verification
+
+The relay's own unit test suite verifies the channel-scoping constraint this
+capability depends on: `channel_scoped_content_kinds_require_h_tags` asserts
+that `KIND_FORUM_POST`, `KIND_FORUM_VOTE` and `KIND_FORUM_COMMENT` all require
+an `h` (channel-scope) tag, in the same list as `KIND_STREAM_MESSAGE` and
+`KIND_CANVAS` (`crates/buzz-relay/src/handlers/event.rs:1172-1234`). The
+vote-target rule -- a vote may only target a forum post or comment -- is
+enforced by `validate_forum_vote_target` on the live ingest path, not merely
+asserted in a test (`crates/buzz-relay/src/handlers/ingest.rs:1000-1036`).
+Desktop's `focusRefetchPolicy.test.mjs` covers the forum list/thread refetch
+policy referenced in *Maturity* above
+(`desktop/src/features/forum/focusRefetchPolicy.test.mjs`); this node cites
+its existence as evidence the policy is tested, not its assertions in detail.
+
 ## Boundary
 
 This node does not describe:
