@@ -73,7 +73,7 @@ evidence:
   - statement: "KIND_FORUM_POST (45001) is documented as 'a forum post (thread root)' and KIND_FORUM_COMMENT (45003) as 'a comment reply on a forum post', a second, structurally distinct thread-root/thread-reply pairing from the stream-message (kind 9) case, using the same NIP-10 e-tag markers via thread_tags."
     entry_class: FACT
     evidence:
-      - "crates/buzz-core/src/kind.rs:549-552"
+      - "crates/buzz-core/src/kind.rs:549-554"
   - statement: "VISION_PROJECTS.md's own Status table marks 'Channels, forums, DMs, canvases' as shipping today; forum posts and comments (kind 45001/45003) and stream-message replies (kind 9) are both threaded via the same NIP-10 mechanism this node documents, so this capability's maturity is Shipped rather than in-progress or designed."
     entry_class: FACT
     evidence:
@@ -128,7 +128,7 @@ plus explicitly broadcast replies, not every buried reply in every thread.
 **Shipped.** VISION_PROJECTS.md's own Status table marks "Channels, forums,
 DMs, canvases" as shipping today, and this capability underlies both: stream
 messages (kind 9) reply-thread via the same NIP-10 `e`-tag mechanism as forum
-posts and comments (kind 45001/45003) (`crates/buzz-core/src/kind.rs:549-552`).
+posts and comments (kind 45001/45003) (`crates/buzz-core/src/kind.rs:549-554`).
 The capability is implemented end to end -- SDK tag construction
 (`crates/buzz-sdk/src/builders.rs:177-190`), relay-side resolution and
 persistence (`crates/buzz-relay/src/handlers/ingest.rs:720-806`,
