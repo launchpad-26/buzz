@@ -71,6 +71,11 @@ evidence:
     entry_class: FACT
     evidence:
       - "CLAUDE.md:219"
+  - statement: "buzz-db's own test suite verifies both directions of the write-path claims above: nip_rs_replacement_hard_deletes_payload_and_watermark_rejects_replay asserts that replaying an already-superseded event is rejected (replace_parameterized_event's second call returns false) after a newer event has already replaced it, and coordinate_delete_spares_head_newer_than_the_deletion asserts that a NIP-09 tombstone timestamped between two versions deletes the older version but leaves the newer live head's content untouched."
+    entry_class: FACT
+    evidence:
+      - "crates/buzz-db/src/lib.rs:5566-5641"
+      - "crates/buzz-db/src/lib.rs:5712-5760"
   - statement: "At the checked revision, git ls-tree -r --name-only origin/launchpad -- launchpad/docs/corpus lists no file under launchpad/docs/corpus/layers/ at all (this is the first layers-typed node), and among the merged architecture/principles nodes, relay-is-source-of-truth and fail-closed-boundaries are the two whose own claims this node's write-authority and read-freshness sections directly build on; no other merged node was found making a substantive claim about write ordering, replica freshness, or derived-aggregate consistency."
     entry_class: FACT
     evidence:
@@ -222,7 +227,10 @@ See the `relationships` in this node's front matter for the two directly
 connected corpus nodes (write authority; fail-closed discipline). The
 primary source files behind every claim above are cited inline in the
 evidence ledger rather than restated here, per this corpus's linking
-standard.
+standard. Verification for the write-path claims specifically is
+`buzz-db`'s own `nip_rs_replacement_hard_deletes_payload_and_watermark_rejects_replay`
+and `coordinate_delete_spares_head_newer_than_the_deletion` tests, cited in
+the evidence ledger rather than reproduced here.
 
 ## Boundary and non-goals
 
