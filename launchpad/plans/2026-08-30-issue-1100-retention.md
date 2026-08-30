@@ -60,11 +60,9 @@ to the batch owner's later review — not run here. `check-plan.sh` was attempte
 BUDGET: small — one document, no code changes; evidence gathering scoped to ~15 source/migration files
 already read this session plus two sibling unmerged corpus documents read for scope-boundary purposes only.
 
-OPEN: `check-plan.sh` was searched for at `/home/serina/.claude/skills/plan-issue/check-plan.sh` and via
-`find ~/.claude/skills ~/.claude/plugins -iname check-plan.sh` — not found anywhere on this machine, so it
-could not be run at all (not merely a format mismatch). Proceeding by hand, per the task brief's own
-instruction that a mechanical checker/format mismatch (or, here, absence) should not distort a lightweight
-corpus-doc plan's actual content. — Whether `type: layers` versus `templates/datastore.md`'s own
+OPEN: `check-plan.sh` was found at `/home/serina/.claude/skills/plan-issue/check-plan.sh` and run against
+this plan — see the CHECKER NOTE at the end of this document for the result and why its two failures do not
+distort this plan's content. — Whether `type: layers` versus `templates/datastore.md`'s own
 `type: architecture` suggestion is the durably correct choice for this subtree remains unsettled corpus-wide
 (same open question #1072/#1062 already recorded); this plan follows the established local precedent for
 `layers/data/**` rather than re-litigating it.
