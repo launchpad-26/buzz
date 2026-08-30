@@ -83,7 +83,7 @@ evidence:
     entry_class: FACT
     evidence:
       - "crates/buzz-cli/src/lib.rs:803-832"
-      - "crates/buzz-cli/src/commands/dms.rs:47-72"
+      - "crates/buzz-cli/src/commands/dms.rs:50-80"
       - "crates/buzz-sdk/src/builders.rs:1674-1689"
   - statement: "buzz-sdk provides typed event builders build_dm_open(pubkeys) (kind 41010, validates 1-8 hex pubkeys) and build_dm_add_member(channel_id, pubkey) (kind 41011, tags an 'h' channel reference plus the new participant's 'p' tag) as the SDK-level construction path for the two DM mutation kinds a client signs directly."
     entry_class: FACT
