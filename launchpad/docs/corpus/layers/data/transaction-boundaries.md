@@ -12,12 +12,13 @@ evidence:
     entry_class: FACT
     evidence:
       - "commit 338b4d0cf2dd76cc43964bb717ce9f0a94a9c7a5"
-  - statement: "node.schema.json's type enum has thirteen members (architecture, layers, capabilities, platforms, implementation, interfaces-events, verification, operations, development, release, governance, agent, ingestion) and describes them as naming 'the corpus surface this node documents'; standards/taxonomy.md separately confirms neither node.schema.json nor schema/README.md defines what each individual value means beyond that one shared description. This node documents crates/buzz-db's write-transaction machinery -- the data-access layer -- so type: layers is chosen as the closest-fitting surface, overriding the templates/reference.md template's own worked example (type: governance, chosen there because that node documents the corpus's own authoring rules, not because reference-shaped nodes in general use governance)."
-    entry_class: FACT
+  - statement: "node.schema.json's type enum has thirteen members (architecture, layers, capabilities, platforms, implementation, interfaces-events, verification, operations, development, release, governance, agent, ingestion) and describes them as naming 'the corpus surface this node documents'; standards/taxonomy.md separately confirms neither node.schema.json nor schema/README.md defines what each individual value means beyond that one shared description. This node documents crates/buzz-db's write-transaction machinery -- the data-access layer -- so type: layers is chosen as the closest-fitting surface, overriding the templates/reference.md template's own worked example (type: governance, chosen there because that node documents the corpus's own authoring rules, not because reference-shaped nodes in general use governance). Which enum value is 'closest-fitting' is a judgment call the cited schema/taxonomy files do not make for this node themselves -- they establish that the thirteen values exist and are undefined beyond one shared description, not that layers is the right pick for write-transaction machinery specifically."
+    entry_class: INFERENCE
     evidence:
       - "launchpad/docs/corpus/schema/node.schema.json"
       - "launchpad/docs/corpus/standards/taxonomy.md"
       - "launchpad/docs/corpus/templates/reference.md"
+    confidence: 0.7
   - statement: "crates/buzz-db/src/lib.rs's connect_pool registers an after_connect hook that runs SHOW transaction_isolation on every new connection and fails the connection attempt with sqlx::Error::Configuration if the result is not exactly \"read committed\", so every connection the writer pool hands out already carries this session-level guarantee before any transaction on it begins."
     entry_class: FACT
     evidence:
@@ -42,10 +43,15 @@ evidence:
     entry_class: FACT
     evidence:
       - "crates/buzz-db/src/thread.rs"
-  - statement: "crates/buzz-db/src/lib.rs's insert_event_with_serving_write_guard opens one transaction covering a deletion-guard check (guard_transaction_with_serving_lease) and the event insert (event::insert_event_with_thread_metadata_tx), commits it, and only afterward -- outside that transaction, on the plain pool -- calls insert_mentions, logging a warning on failure rather than propagating an error; mention rows are therefore a deliberate best-effort side effect excluded from the transaction boundary, not an oversight."
+  - statement: "crates/buzz-db/src/lib.rs's insert_event_with_serving_write_guard opens one transaction covering a deletion-guard check (guard_transaction_with_serving_lease) and the event insert (event::insert_event_with_thread_metadata_tx), commits it, and only afterward -- outside that transaction, on the plain pool -- calls insert_mentions, logging a warning (tracing::warn!) on failure rather than propagating an error."
     entry_class: FACT
     evidence:
       - "crates/buzz-db/src/lib.rs"
+  - statement: "insert_event_with_serving_write_guard carries no doc comment of its own explaining why mention insertion sits outside the transaction. Reading the shape of the code -- commit first, then a separately-pooled call whose only failure handling is a log line -- mention rows read as a best-effort side effect the author chose not to make transactional, rather than something simply forgotten; but this is an inference from the code's structure, not a stated intent the codebase asserts anywhere."
+    entry_class: INFERENCE
+    evidence:
+      - "crates/buzz-db/src/lib.rs"
+    confidence: 0.6
   - statement: "crates/buzz-db/src/lib.rs's replace_addressable_event and replace_parameterized_event each open one transaction, immediately execute SELECT pg_advisory_xact_lock($1) with a lock key derived from event_replacement_lock_key(community_id, kind, pubkey, discriminator), then read the current newest live row and conditionally replace it, all before commit; their comments state the advisory lock is 'transaction-scoped -- released on commit/rollback' and serializes 'all writers for the same (kind, pubkey, channel_id) tuple' (or, for replace_parameterized_event, the same (kind, pubkey, d_tag) tuple)."
     entry_class: FACT
     evidence:
@@ -175,7 +181,7 @@ write paths chosen to show the range of shapes the boundary takes.
 |---|---|---|---|
 | `event::soft_delete_event_and_update_thread` | Soft-delete one `events` row + decrement `thread_metadata.reply_count`/`descendant_count` on its parent and root | None (statement ordering only) | "a crash between them cannot leave counters permanently inflated" (function doc) |
 | `thread::insert_thread_metadata` | Insert one `thread_metadata` row, a stub row for a not-yet-materialized parent, and the parent/root counter bumps | None; `ON CONFLICT DO NOTHING` + `rows_affected()` guards against double-counting a duplicate insert | Tagged requirement "F9" in the function doc |
-| `Db::insert_event_with_serving_write_guard` | A deletion-guard check (`guard_transaction_with_serving_lease`) + the event insert + its thread metadata | None beyond the guard check itself | Mention-row insertion (`insert_mentions`) runs **after** `tx.commit()`, on the plain pool, best-effort (logged, not propagated) -- deliberately outside this boundary |
+| `Db::insert_event_with_serving_write_guard` | A deletion-guard check (`guard_transaction_with_serving_lease`) + the event insert + its thread metadata | None beyond the guard check itself | Mention-row insertion (`insert_mentions`) runs **after** `tx.commit()`, on the plain pool, best-effort (logged, not propagated) -- outside this boundary; no doc comment states this was deliberate, but the shape (commit first, then a separately-pooled call) reads that way |
 | `Db::replace_addressable_event` | Read the newest live row for `(community, kind, pubkey, channel_id)`, then insert-or-replace it (NIP-16 replaceable kinds, NIP-29 discovery state) | `pg_advisory_xact_lock` on a key derived from the four-part natural key | Advisory lock is the transaction's first statement |
 | `Db::replace_parameterized_event` | Same shape as above, keyed on `(community, kind, pubkey, d_tag)` instead of `channel_id` | Same lock primitive, different key derivation | Serves user-submitted NIP-33 kinds |
 | `Db::publish_nip43_membership_locked` | Read current `relay_members` rows, build, and replace the prior kind:39002 snapshot event | Same `pg_advisory_xact_lock` key derivation as the two `replace_*` functions | Prevents a stale-snapshot race from a concurrent publication |
