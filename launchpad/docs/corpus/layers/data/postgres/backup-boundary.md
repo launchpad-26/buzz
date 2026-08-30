@@ -75,6 +75,16 @@ evidence:
       - "deploy/charts/buzz/README.md"
       - "deploy/charts/buzz/templates/NOTES.txt"
     confidence: 0.7
+  - statement: "crates/buzz-db/src/partition.rs's ensure_future_partitions creates partitions ahead of the current month (its own doc comment: 'Call ensure_future_partitions on startup and monthly via cron') but no function anywhere under crates/buzz-db/src/ drops, archives, or prunes an old partition -- a repository-wide search for drop/prune/retention language scoped to partition.rs and its callers found none. The events table therefore has no data-lifecycle expiry of its own; short of an explicit whole-community deletion (crates/buzz-deletion), a backup must be assumed to need to cover the full, ever-growing history, not a bounded recent window."
+    entry_class: INFERENCE
+    evidence:
+      - "crates/buzz-db/src/partition.rs"
+      - "crates/buzz-db/src/lib.rs"
+    confidence: 0.75
+  - statement: "architecture-containers-postgres.md's own inbound-interfaces table names five callers of the Postgres instance -- buzz-relay's main writer/reader pools via buzz-db, buzz-relay's direct audit pool, buzz-relay's direct search pool, buzz-admin, and buzz-deletion -- each a component within the same buzz-relay binary or a separate operator-invoked CLI, never a client reaching Postgres directly. A Postgres backup therefore captures the combined state of every one of those access paths at once; this node does not restate that table, it points to it."
+    entry_class: FACT
+    evidence:
+      - "launchpad/docs/corpus/architecture/containers/postgres.md"
   - statement: "Issue #1076's definition of done requires this node to state whether the store is authoritative, derived, cache or transport; describe owned data, key access patterns, lifecycle/retention and consistency semantics; name tenancy/security boundaries and failure behavior; and link schema/migrations/code/tests rather than copy DDL."
     entry_class: TEAM_KNOWLEDGE
     provided_by: "launchpad-26/buzz#1076 definition of done"
@@ -113,6 +123,28 @@ there is no separate database per subsystem, and no other datastore in this repo
 Postgres holds. A backup of Postgres is therefore not an optimization or a
 convenience cache-warm; losing it without a backup is losing the event history and
 every relational fact derived from it.
+
+## Owned data, access patterns, and lifecycle
+
+The data a Postgres backup captures is exactly what `architecture-containers-postgres.md`
+already inventories: the durable event log plus the relational tables for
+communities, channels, membership, moderation, workflows, push state, and audit.
+That same node's inbound-interfaces table names every access path into this
+instance -- `buzz-relay`'s main writer/reader pools (via `buzz-db`), `buzz-relay`'s
+own direct audit and search pools, `buzz-admin`, and `buzz-deletion` -- all of them
+components inside the `buzz-relay` binary or an operator-invoked CLI, never a client
+reaching Postgres directly. A backup captures the combined result of every one of
+those writers at once; this node does not restate that table, it points to it.
+
+On lifecycle: `crates/buzz-db/src/partition.rs`'s `ensure_future_partitions` only
+creates partitions ahead of the current month (its own doc comment: "Call
+`ensure_future_partitions` on startup and monthly via cron"). No function under
+`crates/buzz-db/src/` drops, archives, or prunes an old partition. The `events` table
+therefore has no data-lifecycle expiry of its own -- short of an explicit whole-
+community deletion via `crates/buzz-deletion`, a backup must be assumed to need to
+cover the full, ever-growing history, not a bounded recent window. This is a real
+consequence for backup sizing and duration that this repository's code makes true,
+even though it says nothing directly about backup itself.
 
 ## What this repository says must be backed up
 
