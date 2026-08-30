@@ -64,6 +64,11 @@ evidence:
     entry_class: FACT
     evidence:
       - "VISION_PROJECTS.md:249"
+  - statement: "The invariants this node states are exercised by real tests, not merely asserted: buzz-db/src/channel.rs carries unit tests including test_unarchive_expired_ephemeral_channel_renews_ttl_deadline (the TTL/archival behavior), and crates/buzz-test-client/tests/e2e_relay.rs carries end-to-end tests over a real relay connection including test_valid_channel_survives_malformed_or_empty_h_sibling (the h-tag scoping fallback), test_private_channel_admin_can_invite, test_private_channel_any_member_can_invite, test_private_channel_non_member_cannot_invite, and test_private_channel_member_cannot_grant_admin (visibility and role-hierarchy enforcement)."
+    entry_class: FACT
+    evidence:
+      - "crates/buzz-db/src/channel.rs"
+      - "crates/buzz-test-client/tests/e2e_relay.rs"
   - statement: "Both client codebases carry a dedicated channels feature module with real, non-stub source: the desktop app's desktop/src/features/channels/channelSnapshot.ts (channel state projection) and the mobile app's mobile/lib/features/channels/channel.dart (channel model), each accompanied by sibling files for membership, actions, and providers/hooks in the same directory."
     entry_class: FACT
     evidence:
@@ -185,7 +190,12 @@ invite-only).
 "Channels, forums, DMs, canvases" as "Ships today," and the schema, kind
 registry, relay-side replacement logic, and both the desktop and mobile
 client feature modules cited above are real, exercised code at the recorded
-revision — not a design sketched but not yet built.
+revision — not a design sketched but not yet built. That "exercised" claim
+is not just asserted: `buzz-db/src/channel.rs`'s own unit tests cover TTL
+expiry/archival behavior, and `buzz-test-client/tests/e2e_relay.rs`'s
+end-to-end tests exercise `h`-tag scoping fallback and private-channel
+visibility/role enforcement over a real relay connection — see the
+verification evidence entry above for the specific test names.
 
 ## Boundary
 
