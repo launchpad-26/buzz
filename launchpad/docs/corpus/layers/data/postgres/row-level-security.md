@@ -23,7 +23,7 @@ evidence:
       - "launchpad/docs/corpus/templates/datastore.md"
       - "launchpad/docs/corpus/templates/reference.md"
       - "launchpad/docs/corpus/architecture/containers/postgres.md"
-  - statement: "architecture-containers-postgres (launchpad/docs/corpus/architecture/containers/postgres.md) is a merged, draft-status corpus node that already names community_id as 'the security-relevant boundary the container exists to hold' and explicitly defers table-by-table schema contents and the multi-tenant conformance contract to migrations/0001_initial_schema.sql and docs/multi-tenant-conformance.md, without itself detailing the enforcement mechanism — the gap this node fills."
+  - statement: "architecture-containers-postgres (launchpad/docs/corpus/architecture/containers/postgres.md) is a merged, draft-status corpus node that states 'Postgres is Buzz's single system of record' (i.e. authoritative, not derived, cache, or transport), names community_id as 'the security-relevant boundary the container exists to hold,' and explicitly defers table-by-table schema contents and the multi-tenant conformance contract to migrations/0001_initial_schema.sql and docs/multi-tenant-conformance.md, without itself detailing the enforcement mechanism — the gap this node fills."
     entry_class: FACT
     evidence:
       - "launchpad/docs/corpus/architecture/containers/postgres.md"
@@ -87,8 +87,11 @@ This node catalogues how Buzz actually enforces cross-community data isolation
 in Postgres today, and states plainly where that enforcement stops. It is
 linked from, and zooms one level deeper than, `architecture-containers-postgres`
 (`launchpad/docs/corpus/architecture/containers/postgres.md`), which names
-`community_id` as "the security-relevant boundary the container exists to
-hold" without detailing the mechanism. **The honest finding this node exists to
+Postgres as Buzz's **single system of record** (authoritative, not derived,
+cache, or transport) and names `community_id` as "the security-relevant
+boundary the container exists to hold" without detailing the mechanism — this
+node does not repeat that authority classification, only cross-references it.
+**The honest finding this node exists to
 record: Postgres row-level security (`CREATE POLICY` / `ENABLE ROW LEVEL
 SECURITY`) is not implemented anywhere in this repository.** Tenant isolation
 is enforced today by a discriminator column plus server-side, fail-closed
