@@ -37,6 +37,11 @@ evidence:
     entry_class: FACT
     evidence:
       - "crates/buzz-push-gateway/src/model.rs:12-24"
+  - statement: "This capability's server-side half carries dedicated automated verification: push_lease.rs's own tests module (lines 600-763) covers envelope, plaintext-schema, generation and quota validation, and push_runtime.rs's own tests module (lines 611-660+) includes gift_wrap_match_requires_self_p_filter_and_recipient (matcher correctness for gift-wrapped events) and the async gateway_retries_send_the_same_request_id_over_http (delivery-retry idempotency against the gateway)."
+    entry_class: FACT
+    evidence:
+      - "crates/buzz-relay/src/handlers/push_lease.rs:600-763"
+      - "crates/buzz-relay/src/push_runtime.rs:611-660"
   - statement: "As of the recorded revision, no mobile (Flutter) or desktop (Tauri) client code in this repository creates, rotates, or revokes a push lease, performs App Attest enrollment, or references kind:30350 -- confirmed by an independent case-insensitive recursive search of mobile/lib and desktop/src for '30350|push_lease|PushLease|kind_push_lease|NIP-PL|nip-pl', which returned no matches."
     entry_class: FACT
     evidence:
@@ -125,7 +130,10 @@ client.** The relay-side lease acceptance and validation
 (`push_runtime.rs`), and the gateway's App Attest-authenticated enrollment
 routes and NIP-98-authenticated delivery route
 (`buzz-push-gateway/src/http.rs`) all exist and are exercised by their own
-module-level tests, per the FACT evidence above. But as of the recorded
+tests — `push_lease.rs`'s tests module covers envelope/plaintext/generation/
+quota validation, and `push_runtime.rs`'s tests module covers gift-wrap
+match correctness and delivery-retry idempotency, per the FACT evidence
+above. But as of the recorded
 revision, neither the Flutter mobile client nor the Tauri desktop client
 contains any code that creates, rotates, or revokes a push lease, or
 performs App Attest enrollment — confirmed by an independent search of
