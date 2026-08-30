@@ -67,6 +67,11 @@ evidence:
       - "crates/buzz-relay/src/handlers/ingest.rs:2595-2649"
       - "crates/buzz-relay/src/handlers/side_effects.rs:1765-1810"
     confidence: 0.55
+  - statement: "The kind:9007 create-group path carrying a `channel_type` tag, and the kind:41010 DM-open command path, are each exercised end to end against a real running relay by the buzz-test-client e2e suite: e2e_relay.rs's create_test_channel helper signs and submits a kind:9007 event with a `channel_type=stream` tag to POST /events and is reused across that file's channel-scoped tests, and e2e_nostr_interop.rs's create_dm helper signs and submits a kind:41010 event and is reused across its DM-scoped tests (list membership, hiding/unhiding, and history behavior)."
+    entry_class: FACT
+    evidence:
+      - "crates/buzz-test-client/tests/e2e_relay.rs:169-193"
+      - "crates/buzz-test-client/tests/e2e_nostr_interop.rs:108-131"
   - statement: "Sibling corpus tasks #728 (dm-channel.md), #729 (forum-channel.md), #730 (stream-channel.md), and #731 (workflow-channel.md) each name one of these four channel types as their own single-document scope, run in the same batch as this task."
     entry_class: TEAM_KNOWLEDGE
     provided_by: "launchpad-26/buzz#728, #729, #730, #731 issue titles (read via gh issue view; per this task's own dispatch instructions, none of the four sibling documents' ids are confirmed to exist in origin/launchpad yet, so this node declares no relationships toward them)"
@@ -104,6 +109,21 @@ creation to `stream`/`forum`. DM channels have their own dedicated command path
 separately from generic channel creation: DM-scoped commands additionally check that
 the target channel's `channel_type` is actually `dm` before proceeding, rejecting the
 command otherwise.
+
+## Verification
+
+The two creation paths described above are each exercised end to end against a real
+running relay by `crates/buzz-test-client`'s e2e suite: `e2e_relay.rs`'s
+`create_test_channel` helper signs and submits a kind:9007 event carrying a
+`channel_type` tag to `POST /events`, and `e2e_nostr_interop.rs`'s `create_dm` helper
+signs and submits a kind:41010 (`KIND_DM_OPEN`) event the same way. Both helpers are
+reused across many tests in their respective files rather than run once, so the
+create-group and DM-open wire paths this node describes are under live, repeated
+end-to-end coverage -- see `TESTING.md` for how to run that suite. This node did not
+itself run the suite while being authored; it verifies the *presence and shape* of
+that coverage by reading the test source, the same discipline
+`architecture-principles-community-is-security-boundary` uses for its own
+verification section.
 
 ## Maturity
 
