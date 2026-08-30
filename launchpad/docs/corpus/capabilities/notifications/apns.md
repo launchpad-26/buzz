@@ -49,6 +49,11 @@ evidence:
     entry_class: FACT
     evidence:
       - "VISION_PROJECTS.md:247-259"
+relationships:
+  - type: references
+    target: architecture-containers-push-gateway
+  - type: references
+    target: architecture-flows-push-notification
 ---
 
 # APNs push notification delivery: capability
