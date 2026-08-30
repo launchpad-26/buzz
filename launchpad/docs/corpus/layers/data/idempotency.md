@@ -61,6 +61,10 @@ evidence:
     entry_class: FACT
     evidence:
       - "launchpad/docs/corpus/architecture/flows/event-ingestion.md:327-331"
+  - statement: "The media upload idempotency behavior is exercised by an integration test, `test_upload_idempotent`, which uploads identical bytes under two different signing keys and asserts the returned `sha256` and `url` are identical across both uploads."
+    entry_class: FACT
+    evidence:
+      - "crates/buzz-test-client/tests/e2e_media.rs:212-253"
 relationships:
   - type: references
     target: architecture-flows-event-ingestion
@@ -95,7 +99,9 @@ the surface but are deliberately **not** idempotent in this sense.
   `sha256` hash is naturally idempotent: uploading the same bytes twice resolves
   to the same stored blob, and the handler short-circuits the second write while
   still recording the upload *event* so the moderation pipeline is not blinded to
-  who resubmitted it.
+  who resubmitted it. `test_upload_idempotent` verifies this at the integration
+  level: two different signers uploading identical bytes get back the same
+  `sha256` and `url`.
 
 ## Comparison
 
