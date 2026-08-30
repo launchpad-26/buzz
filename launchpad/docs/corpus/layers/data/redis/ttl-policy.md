@@ -57,10 +57,12 @@ evidence:
       - "crates/buzz-relay/src/admission.rs"
       - "crates/buzz-relay/src/connection.rs"
       - "crates/buzz-relay/src/api/bridge.rs"
-  - statement: "A repository-wide grep for check_ip_connection (the IP-keyed rate-limit method on the RateLimiter trait) finds only its trait definition and doc comment in crates/buzz-auth/src/rate_limit.rs; no call site was found in crates/buzz-relay or elsewhere at the recorded revision."
+  - statement: "A repository-wide grep for check_ip_connection (the IP-keyed rate-limit method on the RateLimiter trait) finds it in three files: the trait definition and doc comment in crates/buzz-auth/src/rate_limit.rs; a real production implementation, RedisRateLimiter::check_ip_connection, in crates/buzz-pubsub/src/rate_limiter.rs (which builds the key via ip_rate_limit_key and calls the same run_rate_limit helper the per-principal method uses); and a test-only stub implementation inside a #[cfg(test)] module in crates/buzz-relay/src/admission.rs. None of these three is itself a call site -- a separate grep for the literal invocation `.check_ip_connection(` across the whole workspace finds zero matches, so while a real implementation exists, nothing in the codebase actually calls it at the recorded revision."
     entry_class: FACT
     evidence:
-      - "grep_result('check_ip_connection', scope='crates/') -> crates/buzz-auth/src/rate_limit.rs only, trait definition and doc comment; no call site found in crates/buzz-relay or elsewhere"
+      - "grep_result('check_ip_connection', scope='crates/') -> crates/buzz-auth/src/rate_limit.rs (trait definition), crates/buzz-pubsub/src/rate_limiter.rs (RedisRateLimiter impl), crates/buzz-relay/src/admission.rs (test-only stub impl)"
+      - "grep_result('.check_ip_connection(', scope='crates/') -> no matches"
+      - "crates/buzz-pubsub/src/rate_limiter.rs"
   - statement: "crates/buzz-auth/src/nip98_replay.rs's module doc names this mechanism a '§5 hard gate' requiring 'shared state (Redis), atomic set-if-absent, TTL >= 120s' and 'community-scoped key'; it defines DEFAULT_REPLAY_TTL_SECS = 120 as the floor (matching '2x the ±60s NIP-98 clock-skew tolerance') and MAX_REPLAY_TTL_SECS = 3600 as the ceiling (to stay well inside Redis EX's signed-64-bit argument and avoid pathologically long-lived entries); the Nip98ReplayGuard::try_mark doc states implementations 'MUST clamp' both bounds rather than honoring an out-of-range value as given, and that 'on Err (Redis unreachable, etc.) callers MUST fail closed -- reject the request rather than admitting it.'"
     entry_class: FACT
     evidence:
@@ -93,11 +95,11 @@ evidence:
     entry_class: FACT
     evidence:
       - "crates/buzz-pubsub/src/cache_invalidation.rs"
-  - statement: "crates/buzz-core/src/kind.rs defines KIND_TYPING_INDICATOR = 20002 with the doc comment 'Ephemeral: typing indicator for a channel'; a repository-wide grep for KIND_TYPING_INDICATOR shows it used only to build/publish an ephemeral Nostr event (in crates/buzz-acp/src/relay.rs) and in the kind registry, with no Redis SET/EXPIRE/TTL call site anywhere in the workspace at the recorded revision -- corroborating, from an independent starting point, architecture-containers-redis's own flagged-but-unresolved note that no typing-specific Redis key pattern exists in buzz-pubsub despite the crate's Cargo.toml description mentioning typing indicators."
+  - statement: "crates/buzz-core/src/kind.rs defines KIND_TYPING_INDICATOR = 20002 with the doc comment 'Ephemeral: typing indicator for a channel'; a repository-wide grep for KIND_TYPING_INDICATOR shows it used in exactly three files: the kind registry itself (crates/buzz-core/src/kind.rs), building/publishing an ephemeral Nostr event (crates/buzz-acp/src/relay.rs), and a locally-redefined, non-imported copy of the same constant inside a conformance test (crates/buzz-test-client/tests/conformance_multitenant.rs). No Redis SET/EXPIRE/TTL call site appears in any of the three -- corroborating, from an independent starting point, architecture-containers-redis's own flagged-but-unresolved note that no typing-specific Redis key pattern exists in buzz-pubsub despite the crate's Cargo.toml description mentioning typing indicators."
     entry_class: FACT
     evidence:
       - "crates/buzz-core/src/kind.rs"
-      - "grep_result('KIND_TYPING_INDICATOR', scope='crates/', include='*.rs') -> crates/buzz-core/src/kind.rs, crates/buzz-acp/src/relay.rs, crates/buzz-acp/src/lib.rs, crates/buzz-acp/src/config.rs, crates/buzz-backend-kubernetes/src/wire.rs; no Redis call site among them"
+      - "grep_result('KIND_TYPING_INDICATOR', scope='crates/', include='*.rs') -> crates/buzz-core/src/kind.rs, crates/buzz-acp/src/relay.rs, crates/buzz-test-client/tests/conformance_multitenant.rs; no Redis call site among them"
   - statement: "Every Redis key this node documents backs state that is either reconstructable from a client's next heartbeat/request (presence, rate-limit counters), inherently time-bounded by design (the NIP-98 replay window), or actively fenced by a non-expiring companion counter (the mesh lease's *:generation key) -- none of it is the durable record of any Buzz entity, which architecture-containers-redis's own 'Data implications' section already states plainly ('Redis holds no durable Buzz data'). Classifying every TTL-governed key in this node's inventory as derived/ephemeral state rather than authoritative is this node's own synthesis across the five mechanisms, not a restatement of a single source, and is offered as reasoning rather than as an independently sourced fact."
     entry_class: INFERENCE
     evidence:
@@ -167,10 +169,11 @@ piece of transient state.
 | Mesh session lease | `buzz:{community_id}:tunnel:{session_id}:lease` | `PX 30000` (`DEFAULT_LEASE_TTL = 30s`) | `PEXPIRE`d back to 30s on every 10s renewal tick (`DEFAULT_RENEW_INTERVAL`) | Community-scoped |
 | Mesh session generation (fencing counter) | `buzz:{community_id}:tunnel:{session_id}:generation` | **None — non-expiring** | `INCR`ed only when a lease is newly acquired (no live lease found) | Community-scoped |
 
-The per-IP rate-limit row is a definition, not a confirmed live path: a repository-wide
-grep at the recorded revision found `check_ip_connection` only in its trait definition
-and doc comment in `buzz-auth`, with no call site in `buzz-relay` or elsewhere — see
-*Scope and omissions*.
+The per-IP rate-limit row is an implemented-but-unused path, not a confirmed live one:
+`buzz-pubsub`'s `RedisRateLimiter` implements `check_ip_connection` for real (it builds
+the key and calls the same `run_rate_limit` helper the per-principal method uses), but a
+repository-wide grep for the literal invocation `.check_ip_connection(` at the recorded
+revision finds zero call sites anywhere in the workspace — see *Scope and omissions*.
 
 ## Lifecycle and consistency semantics
 
@@ -309,10 +312,10 @@ mechanism's callers do when Redis itself is unreachable.
 **Expected but not verified when this node was written:**
 
 - **Whether `check_ip_connection` (the per-IP rate limiter) is wired into any live
-  admission path.** A repository-wide grep found only its trait definition and doc
-  comment; no call site was found in `crates/buzz-relay` or elsewhere. The per-IP row
-  in the *Key namespace / TTL inventory* table above documents the mechanism as
-  defined, not as confirmed-live.
+  admission path.** A real implementation exists (`buzz-pubsub`'s `RedisRateLimiter`),
+  but a repository-wide grep for the literal invocation `.check_ip_connection(` found
+  zero call sites anywhere in the workspace. The per-IP row in the *Key namespace / TTL
+  inventory* table above documents the mechanism as implemented, not as confirmed-live.
 - **Whether any environment currently runs a Redis version, `maxmemory-policy`, or
   persistence setting that could evict a not-yet-expired key early (e.g. under memory
   pressure with a non-`noeviction` policy).** Every TTL value and consistency claim in
