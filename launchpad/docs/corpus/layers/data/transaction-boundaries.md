@@ -26,7 +26,7 @@ evidence:
     entry_class: FACT
     evidence:
       - "migrations/0029_community_deletion.sql"
-  - statement: "migrations/0029_community_deletion.sql's enforce_community_write_fence trigger function calls assert_community_write_allowed on the relevant community_id(s) for every INSERT, UPDATE and DELETE, and the same file attaches that trigger via attach_community_write_fence to 28 named tables, including events, channels, channel_members, thread_metadata, relay_members, relay_invites, reactions, users and workflows -- so the READ COMMITTED requirement is enforced by a row-level trigger on essentially every community-scoped table, not merely documented as a convention application code is expected to follow."
+  - statement: "migrations/0029_community_deletion.sql's enforce_community_write_fence trigger function calls assert_community_write_allowed on the relevant community_id(s) for every INSERT, UPDATE and DELETE, and the same file attaches that trigger via attach_community_write_fence to 30 named tables, including events, channels, channel_members, thread_metadata, relay_members, relay_invites, reactions, users and workflows -- so the READ COMMITTED requirement is enforced by a row-level trigger on essentially every community-scoped table, not merely documented as a convention application code is expected to follow."
     entry_class: FACT
     evidence:
       - "migrations/0029_community_deletion.sql"
@@ -133,7 +133,7 @@ re-asserted against the same requirement at write time:
    `community writes require READ COMMITTED isolation` (`ERRCODE =
    invalid_transaction_state`) if `current_setting('transaction_isolation')` is
    anything else, and an `enforce_community_write_fence` trigger calls it on every
-   `INSERT`/`UPDATE`/`DELETE` against 28 attached tables (`events`, `channels`,
+   `INSERT`/`UPDATE`/`DELETE` against 30 attached tables (`events`, `channels`,
    `channel_members`, `thread_metadata`, `relay_members`, `relay_invites`,
    `reactions`, `users`, `workflows`, and more).
 
@@ -256,7 +256,7 @@ write paths showing the range of shapes those boundaries take.
   application-level and trigger-level checks assert** was not checked -- this node
   documents what the application and schema require and enforce, not independent
   confirmation of the underlying Postgres instance's configuration.
-- **Whether every one of the 28 tables `attach_community_write_fence` covers is
+- **Whether every one of the 30 tables `attach_community_write_fence` covers is
   still the complete and current list** was read once, at the recorded revision, by
   grepping `migrations/0029_community_deletion.sql`; a later migration adding or
   removing a table from that list would not be reflected here without a re-check.
