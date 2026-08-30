@@ -74,6 +74,10 @@ evidence:
       - "migrations/0018_push_match_queue.sql"
       - "migrations/0023_push_match_gate.sql"
     confidence: 0.8
+  - statement: "buzz-push-gateway's AppProfile enum (crates/buzz-push-gateway/src/model.rs) has exactly two variants, BuzzIosProduction (\"buzz-ios-production\") and BuzzIosSandbox (\"buzz-ios-sandbox\") -- no FCM or UnifiedPush variant is defined in code, so only the iOS/APNs transport profile is implemented as of the recorded revision."
+    entry_class: FACT
+    evidence:
+      - "crates/buzz-push-gateway/src/model.rs:14-22"
 ---
 
 # Push lease: capability
@@ -92,6 +96,41 @@ ordinary authenticated subscription. A user or agent operating a lease-holding
 installation therefore gets near-real-time notification of new channel
 messages, DMs, and other lease-eligible activity without needing to keep a
 socket open continuously.
+
+## Behavior and constraints
+
+NIP-PL states four design goals that bound how this capability may behave,
+and the implementation is built to hold them:
+
+- **No shadow feed.** The wake payload is a fixed, transport-authored
+  reconnect signal -- never relay-supplied bytes, event ids, event content,
+  URLs, or ciphertext. No message content ever transits Apple's (or any
+  future provider's) infrastructure; the client always re-fetches the real
+  event over an ordinary authenticated `REQ` after waking.
+- **Structurally non-amplifying.** A lease can only match a narrow,
+  authenticated slice of the event stream (the installation's own
+  subscriptions), so a lease cannot be turned into a bulk notification
+  channel for arbitrary content.
+- **Sovereign installations.** Each `(installation, origin)` pair is its own
+  addressable `kind:30350` event, independently created, replaced, and
+  revoked, with no cross-device coupling -- losing or rotating one
+  installation's lease has no effect on another.
+- **Multi-tenant isolation.** A multi-tenant executor (relay) preserves
+  community isolation on the push path the same way it does on the read
+  path; matching and delivery are scoped per community.
+
+**Delivery is lossy and best-effort, by design.** Duplicate and missed wakes
+are both valid outcomes -- the relay's own durable event store, not the wake
+signal, is the single source of truth, and the client is expected to
+reconcile by re-fetching rather than trusting the wake as a delivery
+guarantee.
+
+**Variant: transport profile.** The capability is defined against multiple
+platform push transports (APNs, FCM, optionally UnifiedPush) at the protocol
+level, but only the iOS/APNs profile is implemented today --
+`buzz-push-gateway`'s `AppProfile` enum defines exactly two variants,
+`buzz-ios-production` and `buzz-ios-sandbox`, with no FCM or UnifiedPush
+variant in code.
 
 ## Maturity
 
