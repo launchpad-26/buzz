@@ -95,6 +95,9 @@ evidence:
     entry_class: FACT
     evidence:
       - "crates/buzz-db/src/migration.rs"
+relationships:
+  - type: part-of
+    target: architecture-containers-postgres
 ---
 
 # Postgres schema migrations: reference
