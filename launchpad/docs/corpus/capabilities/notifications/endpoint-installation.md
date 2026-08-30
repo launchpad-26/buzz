@@ -109,6 +109,38 @@ client half but understates the gateway half, which has already shipped.
 Treat this capability as **gateway-implemented, client-unbuilt, and
 handler-level-untested** rather than as a single uniform maturity state.
 
+## Behavior and constraints
+
+Endpoint installation has three variants, all scoped to one
+`installation_handle` once enrollment succeeds:
+
+- **Enroll.** A client proves genuine-app-installation status via an Apple
+  App Attest attestation over a domain-prefixed transcript, and registers
+  its APNs token (`endpoint`) at `endpoint_epoch: 1` for one of the
+  operator-enabled `app_profile` values. The gateway rejects an expiry
+  outside `(now, now + max_installation_lifetime_seconds]` and a profile not
+  in `BUZZ_PUSH_ENABLED_PROFILES`.
+- **Rotate.** When the platform reissues a token, the client re-registers it
+  under the *same* `installation_handle` with `new_endpoint_epoch` required
+  to equal `endpoint_epoch + 1` exactly -- a gap or non-increment is
+  rejected. Authorization is by App Attest *assertion* (not a fresh
+  attestation) against the key established at enrollment.
+- **Revoke.** The same epoch-increment shape invalidates the installation
+  outright; because every other installation-scoped route looks the
+  installation up through a query that filters out `revoked == true`, a
+  revoked installation stops resolving for further rotation, delegation, or
+  re-revocation without a separate cascade step.
+
+**Constraints that hold across all three:** every assertion-authenticated
+call is bound to a single-use, 300-second-lived, server-issued challenge,
+consumed only after cryptographic verification succeeds; the installation's
+App Attest assertion counter must strictly increase call over call, so a
+captured assertion cannot be replayed once a newer one has landed; and the
+raw APNs token is never persisted -- only an AEAD ciphertext (decryptable
+under key rotation) and a one-way fingerprint are stored, so a database
+compromise does not expose live device tokens without the separate token
+keyring's key material.
+
 ## Boundary
 
 This node does not describe:
