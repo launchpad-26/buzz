@@ -68,6 +68,10 @@ evidence:
     entry_class: FACT
     evidence:
       - "git_ls_tree(ref='origin/launchpad', path='launchpad/docs/corpus') -> AGENTS.md, README.md, architecture/{containers,context,deployment,flows,principles}/**, schema/**, standards/**, templates/**, at commit 338b4d0cf2dd76cc43964bb717ce9f0a94a9c7a5"
+  - statement: "buzz-sdk's own unit tests exercise build_forum_comment directly: forum_comment_happy_path asserts a built comment carries kind:45003 and its channel `h` tag, and forum_comment_preserves_self_mention_p_tag asserts a comment's self-mention `p` tag survives event signing -- both passing as of this node's recorded revision."
+    entry_class: FACT
+    evidence:
+      - "crates/buzz-sdk/src/builders.rs"
 ---
 
 # Forum comment: capability
@@ -91,6 +95,12 @@ a threaded reply; and the Flutter mobile app builds kind:45003 reply events
 directly from `forum_provider.dart`. Root `VISION_PROJECTS.md`'s own Status
 table separately marks the forum capability family ("Channels, forums, DMs,
 canvases") "Ships today" (`VISION_PROJECTS.md:249`).
+
+Verification: `buzz-sdk`'s own unit tests exercise the comment builder
+directly -- `forum_comment_happy_path` and
+`forum_comment_preserves_self_mention_p_tag` in
+`crates/buzz-sdk/src/builders.rs` -- and both pass at this node's recorded
+revision (`cargo test -p buzz-sdk forum_comment` -> 2 passed).
 
 ## Boundary
 
