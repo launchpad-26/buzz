@@ -154,7 +154,7 @@ a non-secret setting's value does.
 
 | Variable | Type | Default | Required | Secret | Effect |
 |---|---|---|---|---|---|
-| `DATABASE_URL` | Postgres connection string (embeds password) | `postgres://buzz:buzz_dev@localhost:5432/buzz` (dev-only placeholder, flagged `sadscan:disable` in source) | no (has a dev default) | yes | The relay's write-plane credential for the canonical event store; production deployments must override the default. |
+| `DATABASE_URL` | Postgres connection string (embeds password) | same dev-only placeholder as `.env.example`'s `DATABASE_URL` (see `config.rs`'s fallback literal, flagged `sadscan:disable` in source) | no (has a dev default) | yes | The relay's write-plane credential for the canonical event store; production deployments must override the default. |
 | `BUZZ_RELAY_PRIVATE_KEY` | 32-byte hex Nostr private key | none | conditional — required when `BUZZ_REQUIRE_RELAY_MEMBERSHIP=true` or `BUZZ_REQUIRE_AUTH_TOKEN=true`; otherwise falls back to a hardcoded dev keypair | yes | Stable relay identity for NIP-43 membership signing and addressable-event replacement; absent + `BUZZ_REQUIRE_AUTH_TOKEN=true` panics at startup, absent + `BUZZ_REQUIRE_RELAY_MEMBERSHIP=true` returns a startup error, absent + neither uses a hardcoded, logged dev keypair. |
 | `BUZZ_S3_ACCESS_KEY` | Object-storage access key ID | none | effectively yes wherever media/git-on-object-storage is used | yes | Read access-key half of the S3-compatible credential (`buzz-deletion` requires it via `required_env`, erroring rather than defaulting). |
 | `BUZZ_S3_SECRET_KEY` | Object-storage secret key | none | effectively yes wherever media/git-on-object-storage is used | yes | Secret half of the same S3-compatible credential. |
