@@ -74,6 +74,14 @@ evidence:
     evidence:
       - "find(query='architecture/flows/huddle-audio.md;architecture/containers/relay.md', scope='launchpad/docs/corpus') -> 122 total .md files under launchpad/docs/corpus at the recorded revision, none under a capabilities/ or interfaces/ subtree naming huddles besides this new file"
     confidence: 0.8
+  - statement: "The behavioral rules and constraints this capability enforces (session capacity caps, protocol-version pinning and its error-precedence ordering, and audio-frame size capping) are demonstrated by unit tests in crates/buzz-relay/src/audio/room.rs's own tests module, including admit_rejects_mismatched_version and admit_full_wins_over_version_mismatch; crates/buzz-relay/src/audio/handler.rs and crates/buzz-relay/src/audio/mesh.rs each carry their own tests modules as well, covering connection- and mesh-fencing-level behavior respectively."
+    entry_class: FACT
+    evidence:
+      - "crates/buzz-relay/src/audio/room.rs:558"
+      - "crates/buzz-relay/src/audio/room.rs:633"
+      - "crates/buzz-relay/src/audio/room.rs:772"
+      - "crates/buzz-relay/src/audio/handler.rs:1356"
+      - "crates/buzz-relay/src/audio/mesh.rs:286"
 ---
 
 # Huddle audio session: capability
@@ -125,6 +133,20 @@ names this as the one gap in an otherwise-wired capability.
   agent-specific join path or elevated capacity — an agent participates as
   an ordinary session participant and supplies its own speech-to-text/
   text-to-speech.
+
+## Verification
+
+The capacity caps, protocol-version pinning (and its deliberate error
+precedence), and audio-frame-size capping named above are exercised by unit
+tests colocated with the code: `crates/buzz-relay/src/audio/room.rs`'s own
+`tests` module (for example `admit_rejects_mismatched_version`,
+`admit_full_wins_over_version_mismatch`), plus separate `tests` modules in
+`crates/buzz-relay/src/audio/handler.rs` (connection-level behavior) and
+`crates/buzz-relay/src/audio/mesh.rs` (mesh generation fencing). For the
+end-to-end join/relay/leave sequence this capability supports, and for the
+one known coverage gap (no full-socket integration test), see
+`architecture-flows-huddle-audio`'s own *Representative verification*
+section — this node does not restate it.
 
 ## Boundary
 
