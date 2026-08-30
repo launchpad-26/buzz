@@ -88,14 +88,13 @@ relationships:
 
 # Deletion
 
-Deletion is what happens in Buzz's data layer when an event, channel, or entire
-community is made to stop existing for ordinary reads -- and, separately, when its
-underlying storage is actually reclaimed. The data layer implements two distinct
-deletion mechanisms rather than one: **soft-deletion** of individual events and
-channels, driven by signed Nostr protocol events, and a **durable whole-community
-deletion engine** that physically purges an entire tenant's data across every store.
-Neither is a lesser version of the other -- they answer different questions at
-different scales.
+**Deletion is making data stop being returned by Buzz's data layer, by one of two
+distinct mechanisms depending on scope: soft-deleting a single event or channel, or
+durably purging an entire community.**
+
+Those two mechanisms are documented in full below. Neither is a lesser version of
+the other -- they answer different questions at different scales, and "deletion"
+in Buzz always means one or the other, never a single unified operation.
 
 ## Definition
 
