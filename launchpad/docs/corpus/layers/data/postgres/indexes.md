@@ -23,14 +23,18 @@ evidence:
     entry_class: FACT
     evidence:
       - "launchpad/docs/corpus/architecture/containers/postgres.md"
-  - statement: "The migrations/ directory contains 76 CREATE INDEX or CREATE UNIQUE INDEX statements across 20 of its 31 sequentially numbered SQL files (0001 through 0031), and schema/schema.sql -- described in its own header comment as the 'source of truth for fresh database setup' -- separately contains 58 CREATE INDEX statements."
+  - statement: "The migrations/ directory contains 76 CREATE INDEX or CREATE UNIQUE INDEX statements across 16 of its 31 sequentially numbered SQL files (0001 through 0031), per grep -oE 'CREATE (UNIQUE )?INDEX' migrations/*.sql | wc -l and grep -lE 'CREATE (UNIQUE )?INDEX' migrations/*.sql | wc -l respectively, and schema/schema.sql -- described in its own header comment as the 'source of truth for fresh database setup' -- separately contains 69 CREATE INDEX statements by the same grep."
     entry_class: FACT
     evidence:
       - "migrations/0001_initial_schema.sql"
       - "migrations/0002_git_repo_names.sql"
       - "migrations/0004_events_tags_gin.sql"
+      - "migrations/0005_agent_turn_metric_fts.sql"
       - "migrations/0006_moderation.sql"
+      - "migrations/0007_nip_rs_retention.sql"
+      - "migrations/0008_fresh_install_search_allowlist.sql"
       - "migrations/0012_push_leases.sql"
+      - "migrations/0014_push_lease_fts.sql"
       - "migrations/0015_push_gateway_authority.sql"
       - "migrations/0017_product_feedback.sql"
       - "migrations/0018_push_match_queue.sql"
