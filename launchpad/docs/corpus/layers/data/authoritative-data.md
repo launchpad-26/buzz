@@ -51,6 +51,16 @@ evidence:
     evidence:
       - "launchpad/docs/corpus/architecture/principles/relay-is-source-of-truth.md"
     confidence: 0.75
+  - statement: "crates/buzz-db/src/thread.rs's increment_reply_count runs an UPDATE against thread_metadata.reply_count keyed on the parent event's community_id and event_id -- the projection's count is recomputed by code reacting to an insert into events, not written independently of it."
+    entry_class: FACT
+    evidence:
+      - "crates/buzz-db/src/thread.rs:251-266"
+  - statement: "crates/buzz-test-client/tests/e2e_relay.rs's test_reply_ingest_pushes_live_thread_summary integration test asserts reply_count is 1 after a reply event is ingested and 0 again after that reply is removed, verifying end-to-end that the projection tracks the canonical log rather than carrying independently authored state."
+    entry_class: FACT
+    evidence:
+      - "crates/buzz-test-client/tests/e2e_relay.rs:2579"
+      - "crates/buzz-test-client/tests/e2e_relay.rs:2644"
+      - "crates/buzz-test-client/tests/e2e_relay.rs:2659"
 relationships:
   - type: references
     target: architecture-principles-relay-is-source-of-truth
@@ -108,7 +118,12 @@ treated as a primary record from day one.
 root event disagrees with a direct count of replies in `events`, the bug is in
 the code that updates the counter on insert, never in `events` itself --
 `events` is authoritative by definition, so it is never the side a
-projection-consistency bug is attributed to.
+projection-consistency bug is attributed to. `increment_reply_count`
+(`crates/buzz-db/src/thread.rs:251-266`) is the implementation that keeps the
+projection in step, and `test_reply_ingest_pushes_live_thread_summary`
+(`crates/buzz-test-client/tests/e2e_relay.rs:2579`) is the verification that
+it does: it asserts `reply_count` goes from 0 to 1 when a reply is ingested
+and back to 0 when that reply is removed, end to end.
 
 **Reasoning about failure and restore.** Losing a disposable projection is a
 rebuild job scoped to how long recomputing it takes. Losing a row in the
