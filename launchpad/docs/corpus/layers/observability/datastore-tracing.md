@@ -38,7 +38,7 @@ evidence:
     entry_class: FACT
     evidence:
       - "crates/buzz-datastore-tracing/tests/runtime.rs"
-  - statement: "The macro is used at 258 call sites across five crates at the recorded revision: `buzz-db` (the large majority, one attribute per data-access method across store modules such as user.rs, event.rs, channel.rs, workflow.rs, moderation.rs, and buzz-db's own runtime/replica_fence.rs), `buzz-audit` (crates/buzz-audit/src/service.rs's `AuditService::log`, annotated `name = \"audit_log\"`, `fields(action = %entry.action)`), `buzz-search` (crates/buzz-search/src/query.rs), and one handler in `buzz-relay` (crates/buzz-relay/src/handlers/command_executor.rs). Every one of these 258 call sites sets `system = \"postgresql\"` — no call site names any other system, and the macro's own compile-time check (above) means no other value could compile."
+  - statement: "A repository-wide count of `#[datastore_span` attribute usages at the recorded revision, by crate, is: `buzz-db` 251 (one attribute per data-access method across store modules such as user.rs, event.rs, channel.rs, workflow.rs, moderation.rs, and buzz-db's own runtime/replica_fence.rs), `buzz-audit` 3 (crates/buzz-audit/src/service.rs's `AuditService::log` and two other methods), `buzz-search` 1 (crates/buzz-search/src/query.rs), `buzz-relay` 1 (crates/buzz-relay/src/handlers/command_executor.rs), and `buzz-datastore-tracing` 2 (its own two test fixtures in tests/runtime.rs, exercising the macro rather than instrumenting real production data access) — 258 usages in total, 256 of them production call sites in four consuming crates. Every one of these 258 usages sets `system = \"postgresql\"` — no usage names any other system, and the macro's own compile-time check (above) means no other value could compile."
     entry_class: FACT
     evidence:
       - "crates/buzz-db/src/store/user.rs"
@@ -46,6 +46,7 @@ evidence:
       - "crates/buzz-audit/src/service.rs"
       - "crates/buzz-search/src/query.rs"
       - "crates/buzz-relay/src/handlers/command_executor.rs"
+      - "crates/buzz-datastore-tracing/tests/runtime.rs"
   - statement: "crates/buzz-pubsub (Redis) does not import or use `datastore_span` anywhere in its source, and `launchpad/docs/corpus/templates/datastore.md` (a merged corpus node) independently records this same gap as deliberate and enforced, not merely unexercised: `buzz-datastore-tracing`'s own macro implementation rejects any `system` value other than `\"postgresql\"` at compile time. This node treats that restriction as already established fact rather than re-deriving it, citing the template that first named it."
     entry_class: FACT
     evidence:
@@ -101,9 +102,11 @@ emitted.
 attribute macro applied to an `async fn`. Applying it to a non-`async`
 function, or supplying any `system` value other than the literal
 `"postgresql"`, is a compile error — this is not a naming convention, it is
-enforced by the macro's own generated code before anything runs. Every one
-of the 258 call sites in this repository (`buzz-db`, `buzz-audit`,
-`buzz-search`, and one `buzz-relay` handler) sets `system = "postgresql"`;
+enforced by the macro's own generated code before anything runs. It is used
+258 times in this repository: 256 production call sites across four
+consuming crates (`buzz-db` 251, `buzz-audit` 3, `buzz-search` 1,
+`buzz-relay` 1 handler), plus 2 more inside `buzz-datastore-tracing`'s own
+test fixtures. Every one of these 258 usages sets `system = "postgresql"`;
 no other datastore in the codebase (Redis, the S3-compatible object store)
 is instrumented by this mechanism today, and `buzz-pubsub` — the Redis
 crate — does not import it at all.
@@ -244,8 +247,8 @@ container this instrumentation layer wraps.
   edge) — that document does not exist yet, and this node does not decide
   that document's own front matter.
 - Whether any call site outside the five crates scanned here (`buzz-db`,
-  `buzz-audit`, `buzz-search`, `buzz-relay`) uses `datastore_span` — the
-  258-call-site count and the five-crate list were established by a
-  repository-wide grep at the recorded revision, not by an exhaustive
-  manual review of every call site's individual `fields(...)` list for
-  policy compliance.
+  `buzz-audit`, `buzz-search`, `buzz-relay`, and `buzz-datastore-tracing`'s
+  own test fixtures) uses `datastore_span` — the 258-usage count and the
+  five-crate breakdown were established by a repository-wide grep at the
+  recorded revision, not by an exhaustive manual review of every call
+  site's individual `fields(...)` list for policy compliance.
