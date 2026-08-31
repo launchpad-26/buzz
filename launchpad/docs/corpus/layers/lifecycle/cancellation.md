@@ -102,6 +102,16 @@ evidence:
     evidence:
       - "launchpad/docs/corpus/architecture/containers/relay.md:1-2"
       - "launchpad/docs/corpus/architecture/containers/agent-runtime.md:1-11"
+  - statement: "connection.rs's own test suite exercises cancellation-triggered send-loop behavior directly: send_loop_sends_bare_close_for_ordinary_cancellation asserts that a cancelled token produces a bare WsMessage::Close(None), and send_loop_flushes_queued_control_before_close_on_cancel asserts that a control frame queued before cancellation (e.g. a ban's reason frame) is flushed ahead of the cancel-driven close, not stranded behind it."
+    entry_class: FACT
+    evidence:
+      - "crates/buzz-relay/src/connection.rs:1041-1063"
+      - "crates/buzz-relay/src/connection.rs:1064-1104"
+  - statement: "state.rs's own test suite exercises drain_all()'s per-connection cancellation directly: drain_all_sends_restart_close_and_cancels_every_conn asserts every registered connection (across communities) receives the queued restart-close frame ahead of cancellation, and drain_all_is_immediate asserts the frame is present the instant drain_all() returns (the synchronous, non-jittered path)."
+    entry_class: FACT
+    evidence:
+      - "crates/buzz-relay/src/state.rs:2087-2141"
+      - "crates/buzz-relay/src/state.rs:2228-2263"
 relationships:
   - type: references
     target: architecture-containers-relay
@@ -272,6 +282,27 @@ Both primitives commonly appear side by side, as `shell.rs` shows: a
 `CancellationToken` carries the *signal* that cancellation was requested, while
 `abort()` is reached for when the thing that needs to stop (a task reading from a
 pipe) was never given a token to check in the first place.
+
+## Verification
+
+Two of this node's cited behaviors have direct unit-test coverage in this
+repository, rather than resting on reading the implementation alone:
+
+- `send_loop_sends_bare_close_for_ordinary_cancellation` and
+  `send_loop_flushes_queued_control_before_close_on_cancel`
+  (`connection.rs:1041-1104`) assert what a cancelled connection token
+  actually produces on the wire — a bare close frame, and (when a control
+  frame was queued first, such as a ban's reason) that frame flushed ahead
+  of the close rather than stranded behind it.
+- `drain_all_sends_restart_close_and_cancels_every_conn` and
+  `drain_all_is_immediate` (`state.rs:2087-2141,2228-2263`) assert that
+  `drain_all()` — the shutdown-side caller of the same per-connection token
+  this node documents — reaches every registered connection across
+  communities, and that the synchronous (non-jittered) path's effect is
+  observable the instant the call returns.
+
+No equivalent direct test was found for the `shell.rs` MCP-request-cancellation
+path or the `join.rs` huddle-owner-lease tokens; see *Scope and omissions*.
 
 ## Relationships
 
