@@ -80,8 +80,8 @@ evidence:
   - statement: "buzz-db runs a replica freshness-fence probe (replica_fence::run_probe) on a fixed 500ms PROBE_INTERVAL, independent of any env var, committing a heartbeat token every tick; a probe failure closes the fence (fence.close()) rather than leaving stale routing decisions in place, and the loop uses MissedTickBehavior::Delay rather than the Skip behavior other buzz-relay workers use. It is spawned only after Db::spawn_fence_probe verifies the replica floor-guard end-to-end, itself called from buzz-relay's startup sequence after the migration decision and future-partition/deletion-fence setup, deliberately so a relay running with auto-migrate off can never open the fence over an unenforced floor guard."
     entry_class: FACT
     evidence:
-      - "crates/buzz-db/src/replica_fence.rs:91"
-      - "crates/buzz-db/src/replica_fence.rs:774-789"
+      - "crates/buzz-db/src/runtime/replica_fence.rs:91"
+      - "crates/buzz-db/src/runtime/replica_fence.rs:774-789"
       - "crates/buzz-db/src/lib.rs:852-874"
       - "crates/buzz-relay/src/main.rs:200-228"
   - statement: "buzz-workflow's WorkflowEngine::run is a 60-second, fixed (not env-configurable) tick loop, spawned once from buzz-relay's boot sequence, that evaluates every enabled Schedule-triggered (cron or interval) workflow definition on every relay pod; architecture-flows-workflow-execution already narrates this cron/interval trigger path -- including its deterministic per-pod scheduled_for computation, its durable per-fire claim row, and its documented non-replay of fires missed during downtime -- in full, so this node names it as one instance of the background-worker shape rather than re-describing that behavior."

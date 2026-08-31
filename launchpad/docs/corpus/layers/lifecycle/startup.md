@@ -39,8 +39,8 @@ evidence:
   - statement: "When migrations do run, db.migrate() calls buzz-db's run_migrations, whose static MIGRATOR is sqlx::migrate!(\"../../migrations\") relative to crates/buzz-db -- i.e. the repository-root migrations/ directory this repository's own top-level CLAUDE.md describes as 'auto-applied on relay startup' -- and migration additionally re-verifies the replica-fence floor-guard trigger catalog on every run, failing closed if any partition is missing it."
     entry_class: FACT
     evidence:
-      - "crates/buzz-db/src/migration.rs:14"
-      - "crates/buzz-db/src/migration.rs:27-46"
+      - "crates/buzz-db/src/runtime/migration.rs:15"
+      - "crates/buzz-db/src/runtime/migration.rs:27-34"
       - "CLAUDE.md"
   - statement: "After the migration decision, startup ensures future table partitions exist, validates the deletion-serving-fence catalog (fatal on failure), and only then spawns the replica freshness-fence probe -- deliberately after the migration decision, per the function's own comment, so a relay running with BUZZ_AUTO_MIGRATE off can never open the fence over an unenforced floor guard; probe failure is loud but non-fatal, leaving all cursor reads on the writer."
     entry_class: FACT
@@ -189,7 +189,7 @@ fatal early exit on one of several fail-fast checks named in *Outcome* below.
    (`db.migrate()` → `sqlx::migrate!("../../migrations")`, the repository-root
    `migrations/` directory) and re-verify the replica-fence floor-guard
    trigger catalog; otherwise skip migrations and log that they were skipped
-   (`crates/buzz-relay/src/main.rs:188-198`, `crates/buzz-db/src/migration.rs:14,27-46`).
+   (`crates/buzz-relay/src/main.rs:188-198`, `crates/buzz-db/src/runtime/migration.rs:15,27-34`).
 7. Ensure future table partitions exist, validate the deletion-serving-fence
    catalog (fatal on failure), then spawn the replica freshness-fence probe
    — deliberately after the migration decision, so an un-migrated relay can
