@@ -62,7 +62,7 @@ evidence:
   - statement: "Once a relay is chosen (by either the join or the create path), the same CommunityOnboardingTransaction advances through 'claiming' or 'connecting' stages -- rendered as 'Joining {communityName}' / 'Accepting your invite...' / 'Connecting securely...' -- before moving on to profile setup; selecting a community and finishing the connection to it are one continuous transaction, not two separate mechanisms."
     entry_class: FACT
     evidence:
-      - "desktop/src/features/onboarding/ui/CommunityOnboardingFlow.tsx:17-28"
+      - "desktop/src/features/onboarding/communityOnboarding.tsx:17-28"
       - "desktop/src/features/onboarding/ui/CommunityOnboardingFlow.tsx:525-552"
   - statement: "communityOnboarding.test.mjs unit-tests the underlying transaction primitives this capability depends on (startCommunityOnboarding's relay-canonicalization and dedup behavior, shouldSkipCommunityOnboarding, resolveProfileCheckAction's timeout/skip logic), but no test file targets WelcomeSetup.tsx's own choice screen directly."
     entry_class: FACT
