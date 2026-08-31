@@ -56,6 +56,14 @@ evidence:
     evidence:
       - "find(path='launchpad/docs/corpus/capabilities', ref='cad6c375fdcc590158c1456c9fc7875f0f84a844') -> no such directory"
       - "launchpad/docs/corpus/architecture/flows/git-push.md"
+  - statement: "Running `./bin/cargo test -p git-sign-nostr --lib` at the recorded revision produces 55 passing tests and 1 failing test (`test_parse_envelope_rejects_invalid_oa_pubkey`); the passing set includes `test_sign_verify_round_trip` and `test_signing_hash_matches_spec`/`test_signing_hash_with_oa_matches_spec`, which assert the implementation reproduces NIP-GS's own published test-vector hash and signature exactly."
+    entry_class: FACT
+    evidence:
+      - "cargo_test(crate='git-sign-nostr', ref='cad6c375fdcc590158c1456c9fc7875f0f84a844') -> 55 passed, 1 failed (test_parse_envelope_rejects_invalid_oa_pubkey)"
+      - "crates/git-sign-nostr/src/lib.rs:1792-2138"
+  - statement: "The one failing test is not new: it is a pre-existing, already-reported defect in envelope-parsing validation, tracked as launchpad-26/buzz#199 and closed 2026-08-24 as descoped (deprioritized) rather than fixed -- unrelated to this documentation task and not something this node's authoring touched or altered."
+    entry_class: TEAM_KNOWLEDGE
+    provided_by: "launchpad-26/buzz#199 (read directly via gh issue view; issue content is mutable GitHub state, not committed code, so it stays TEAM_KNOWLEDGE rather than FACT per AGENTS.md's rule for issue-only sources)"
 relationships:
   - type: references
     target: architecture-flows-git-push
@@ -84,6 +92,16 @@ capability status table tracks "Git hosting" (the smart-HTTP push/clone
 transport) as a separate shipped row and does not carry its own line for
 object signing — this maturity claim is grounded in the shipped code and its
 merge history, not a VISION status marker.
+
+**Representative verification.** `crates/git-sign-nostr`'s own unit test
+suite (55 passing / 1 failing at the recorded revision) covers sign/verify
+round-tripping and reproduces NIP-GS's own published test vectors exactly
+(`test_sign_verify_round_trip`, `test_signing_hash_matches_spec`,
+`test_signing_hash_with_oa_matches_spec`). The one failure,
+`test_parse_envelope_rejects_invalid_oa_pubkey`, is a pre-existing defect
+already tracked and closed-as-descoped in `launchpad-26/buzz#199` — it is
+named here rather than silently omitted, and this node makes no claim that
+it is fixed.
 
 ## Boundary
 
