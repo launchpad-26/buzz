@@ -1,0 +1,69 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!--
+  Timer for review-queue-automation on macOS. Copy, replace every <REPLACE:...>,
+  then:
+
+    cp launchd.plist.example ~/Library/LaunchAgents/<your-label>.plist
+    launchctl load ~/Library/LaunchAgents/<your-label>.plist
+    launchctl start <your-label>          # optional: fire once now
+
+  To stop it:  launchctl unload ~/Library/LaunchAgents/<your-label>.plist
+
+  StartInterval is the SHORTEST interval the cadence can choose (poll.active_seconds,
+  300s by default), NOT the sweep frequency. `tick` reads its own persisted schedule
+  and reports `not_due` on most firings; adaptive backoff lives in the `cadence`
+  table, not here, because launchd cannot vary an interval. Setting this longer than
+  poll.active_seconds silently caps how quickly work is picked up.
+
+  RunAtLoad is deliberately false: loading an agent should not immediately spend
+  model tokens. Use `launchctl start` when you want that.
+
+  This runs the reviewer panel, which spends money. Configure `budget` in the
+  repo-local config before loading this, and keep `authority.*` at `disabled`
+  until each canary is approved.
+
+  Multiple repositories: pass several roots as additional <string> arguments.
+  Each needs its own onboarded .review-queue-automation/config.json with its own
+  state_dir.
+-->
+<plist version="1.0">
+<dict>
+  <key>Label</key>
+  <string>REPLACE:com.example.review-queue-automation</string>
+
+  <key>ProgramArguments</key>
+  <array>
+    <string>REPLACE:/absolute/path/to/launchpad/skills/review-queue-automation/scripts/scheduled-tick.sh</string>
+    <string>REPLACE:/absolute/path/to/first/repo</string>
+    <!-- <string>/absolute/path/to/second/repo</string> -->
+  </array>
+
+  <key>EnvironmentVariables</key>
+  <dict>
+    <!-- Add author_triage only after its canary is approved. -->
+    <key>RQA_LANES</key>
+    <string>incoming_review</string>
+    <key>RQA_LIMIT</key>
+    <string>2</string>
+    <!-- launchd starts agents with a minimal PATH; `gh`, `git` and the model
+         runners must all be reachable from it. -->
+    <key>PATH</key>
+    <string>REPLACE:/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin</string>
+  </dict>
+
+  <key>StartInterval</key>
+  <integer>300</integer>
+
+  <key>RunAtLoad</key>
+  <false/>
+
+  <key>ProcessType</key>
+  <string>Background</string>
+
+  <key>StandardOutPath</key>
+  <string>REPLACE:/Users/you/Library/Logs/review-queue-automation.stdout.log</string>
+  <key>StandardErrorPath</key>
+  <string>REPLACE:/Users/you/Library/Logs/review-queue-automation.stderr.log</string>
+</dict>
+</plist>

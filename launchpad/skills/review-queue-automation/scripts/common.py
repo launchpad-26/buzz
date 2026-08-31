@@ -353,6 +353,18 @@ class State:
               last_error TEXT,
               updated_at TEXT NOT NULL
             );
+            -- Scheduler cadence, one row per swept scope. Persisted rather than
+            -- held in a long-lived process so the trigger can be a short-lived
+            -- timer job: nothing holds the state-directory lock between runs, and
+            -- a crash loses at most one interval.
+            CREATE TABLE IF NOT EXISTS cadence (
+              scope TEXT PRIMARY KEY,
+              idle_streak INTEGER NOT NULL DEFAULT 0,
+              next_run_at TEXT,
+              last_run_at TEXT,
+              last_reason TEXT,
+              updated_at TEXT NOT NULL
+            );
             CREATE INDEX IF NOT EXISTS ledger_by_job ON ledger_entries(job_id, id);
             CREATE INDEX IF NOT EXISTS ledger_by_pr ON ledger_entries(repo, number, head_sha);
             """
