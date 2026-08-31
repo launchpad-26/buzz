@@ -51,7 +51,9 @@ test("Help settings entry is Tab-reachable, activates via keyboard, and does not
   // fire a click) and confirm the panel renders.
   await page.keyboard.press("Enter");
   await expect(page.getByTestId("settings-knowledge")).toBeVisible();
-  await expect(page.getByText("Help", { exact: true }).first()).toBeVisible();
+  await expect(
+    page.getByTestId("settings-knowledge").getByText("Help", { exact: true }),
+  ).toBeVisible();
 
   // Focus parity with the existing section: activating the new panel keeps
   // focus on its own nav button, matching `updates`'s behavior above — no

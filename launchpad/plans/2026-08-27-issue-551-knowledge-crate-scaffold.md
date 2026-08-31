@@ -28,8 +28,8 @@ STEP 2  [independent] Scaffold `launchpad/crates/knowledge/`: minimal `Cargo.tom
         (package name `knowledge`, no runtime deps beyond what a stub needs), `src/lib.rs`
         with a single public no-op item (e.g. a doc comment and an empty placeholder
         function or const — no seeded content, no `knowledge.*` interface — that is
-        F22/#552's scope, explicitly out of scope here). Add `"crates/knowledge"` to root
-        `Cargo.toml` `members`.
+        F22/#552's scope, explicitly out of scope here). Add `"launchpad/crates/knowledge"` to
+        root `Cargo.toml` `members`.
         done when: `cargo build -p knowledge` succeeds from repo root.
 
 STEP 3  [needs 2] Add `launchpad/crates/knowledge/AGENTS.md` following the
@@ -37,7 +37,7 @@ STEP 3  [needs 2] Add `launchpad/crates/knowledge/AGENTS.md` following the
         path, and the one rule that will govern it once #552/#553 land (e.g. "this crate
         reads a static, committed corpus artefact — it must not run the Python corpus
         pipeline, re-parse source, or re-derive embeddings" — Ruling 11's language, cited
-        so a future contributor knows the constraint exists even before #578 is decided).
+        so a future contributor knows the constraint holds — ratified by ADR-0027/#578).
         done when: file exists at that path with a `Scope:` line matching the crate dir.
 
 STEP 4  [needs 1] ← RUNS HERE Add the registration seam to `SettingsPanels.tsx`: widen
@@ -113,17 +113,17 @@ BUDGET    Step 4 (the registration seam) is most likely to eat the budget. ADR-0
           discriminated wrapper type, or a type predicate narrowing `SettingsSection` to
           `UpstreamSettingsSection` before the switch).
 
-OPEN      Issue #578 (open, undecided) says PRD #4 currently asserts a contradiction between
-          Ruling 11 (crate re-derives nothing), Ruling 12 (desktop build never runs the
-          corpus pipeline), and `knowledge.find`'s free-text query needing live resolution —
-          and explicitly warns "If either is rejected, #551's scaffolding assumptions
-          change." This plan treats #551 as a genuinely empty scaffold (no query surface,
-          no seeded content) specifically so it does not need #578 resolved first — but if
-          #578 lands on an answer that changes what "the knowledge crate" fundamentally is
-          (e.g. it becomes a thin FFI shim rather than a data-holding crate), step 2's
-          `Cargo.toml`/`lib.rs` shape may need revisiting. Flagged, not resolved, per this
-          skill's ambiguity rule.
-          Exact naming/location of the cohort-owned frontend registry module
+RESOLVED  Issue #578 (was: open, undecided) raised a contradiction between Ruling 11 (crate
+          re-derives nothing), Ruling 12 (desktop build never runs the corpus pipeline), and
+          `knowledge.find`'s free-text query needing live resolution — and warned "if either
+          is rejected, #551's scaffolding assumptions change." #578 is now closed:
+          ADR-0027 ratifies Rulings 11 and 12 as-is and splits the crate's surface by
+          audience (human pages, agent records), and ADR-0031 permanently descopes
+          `knowledge.find`/`knowledge.ask`'s free-text resolution to #1400. This plan's
+          "genuinely empty scaffold, no query surface" assumption for step 2 was therefore
+          the right call and does not need revisiting.
+
+OPEN      Exact naming/location of the cohort-owned frontend registry module
           (`desktop/src/launchpad/settings/`) is this plan's proposal, not dictated by any
           ADR — ADR-0051 says cohort code "lives under `launchpad/`" but there is no existing
           precedent for fork-owned frontend code's location, since this is the first one.

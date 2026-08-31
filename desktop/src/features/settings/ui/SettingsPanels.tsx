@@ -102,11 +102,13 @@ type UpstreamSettingsSection =
   | "updates";
 
 /**
- * Registration seam granted by ADR-0051 and amended by ADR-0053: cohort
+ * The registration seam ADR-0051 grants (accepted; see
+ * `launchpad/decisions/ADR-0051-cohort-settings-registration-seam.md`), amended
+ * by ADR-0053 to also own sidebar nav-group membership (see
+ * `launchpad/decisions/ADR-0053-settings-seam-owns-nav-groups.md`): cohort
  * Settings sections widen this union from `cohortSettingsSections`
- * (`@/launchpad/settings/registry`). This file also owns sidebar nav-group
- * membership (`settingsNavGroups`). Adding a panel must not touch any other
- * upstream file.
+ * (`@/launchpad/settings/registry`) rather than by editing this file's four
+ * registration sites per panel.
  */
 export type SettingsSection = UpstreamSettingsSection | CohortSettingsSectionId;
 
@@ -284,7 +286,7 @@ export type SettingsNavGroup = {
   sections: SettingsSection[];
 };
 
-const upstreamNavGroups: SettingsNavGroup[] = [
+const upstreamSettingsNavGroups: SettingsNavGroup[] = [
   {
     label: "Personal",
     sections: [
@@ -308,7 +310,13 @@ const upstreamNavGroups: SettingsNavGroup[] = [
   },
 ];
 
-function cohortNavGroups(): SettingsNavGroup[] {
+/**
+ * Groups cohort sections by each descriptor's own `navGroup` (review-final
+ * finding on #551: an earlier version hardcoded the group label to the first
+ * registrant's own name, so a second registrant would have landed under a
+ * group named after the first panel).
+ */
+function buildCohortSettingsNavGroups(): SettingsNavGroup[] {
   const groups: SettingsNavGroup[] = [];
   const indexByLabel = new Map<string, number>();
   for (const entry of cohortSettingsSections) {
@@ -318,16 +326,15 @@ function cohortNavGroups(): SettingsNavGroup[] {
       indexByLabel.set(entry.navGroup, index);
       groups.push({ label: entry.navGroup, sections: [] });
     }
-    const group = groups[index];
-    if (group === undefined) continue;
-    group.sections.push(entry.value);
+    groups[index].sections.push(entry.value);
   }
   return groups;
 }
 
+// Owned here rather than in `SettingsView.tsx` per ADR-0053.
 export const settingsNavGroups: SettingsNavGroup[] = [
-  ...upstreamNavGroups,
-  ...cohortNavGroups(),
+  ...upstreamSettingsNavGroups,
+  ...buildCohortSettingsNavGroups(),
 ];
 
 function formatThemeLabel(name: string): string {
