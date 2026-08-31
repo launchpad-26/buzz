@@ -151,7 +151,7 @@ loaded channels, an active community -- is available.
 | `ChannelDetailPage({initialMessageId, initialThreadRootId, initialThreadRouteBehavior})` | widget constructor contract | The landing contract every navigation path into a channel uses: which message/thread to reveal, and whether an auto-opened thread route replaces or sits atop the channel route. | `mobile/lib/features/channels/channel_detail_page.dart:243-265` |
 | `openChannelLink({context, ref, channelId, currentChannelId})` | top-level function | Manual (non-deep-link) channel navigation: resolves a channel ID against `channelsProvider` and pushes `ChannelDetailPage`, or shows a snackbar if the channel is not found. | `mobile/lib/features/channels/channel_link_navigation.dart:8-38` |
 | `immediatePageRoute<T>({builder})` | top-level function | Zero-duration `PageRouteBuilder` for destinations (e.g. the settings profile-photo editor) that animate their own transition instead of using the platform's default route transition. | `mobile/lib/shared/widgets/immediate_page_route.dart` |
-| `pendingPushNotificationLink` | `ValueNotifier<MessageDeepLink?>` | The join point between the native push bridge and the deep-link pipeline: set by a warm `notificationOpened` method-channel call or a cold-start `takePendingNotificationResponse` fetch, and consumed by `PendingDeepLinkNotifier`. | `mobile/lib/shared/push/push_bridge.dart:102,104-137,296-326` |
+| `pendingPushNotificationLink` | `ValueNotifier<MessageDeepLink?>` | The join point between the native push bridge and the deep-link pipeline: set by a warm `notificationOpened` method-channel call or a cold-start `takePendingNotificationResponse` fetch, and consumed by `PendingDeepLinkNotifier`. | `mobile/lib/shared/push/push_bridge.dart:104-137` |
 
 ## Dependencies
 
@@ -170,7 +170,7 @@ loaded channels, an active community -- is available.
 
 | Component | Why | Evidence |
 |---|---|---|
-| `App` (`mobile/lib/app.dart`) | The composition root: wraps the authenticated `HomePage` in `DeepLinkDispatcher` and, pre-authentication, wraps `PairingPage` in the same dispatcher with `dispatchMessageLinks: false`, and starts `pendingDeepLinkProvider` watching immediately so a cold-start link survives until the authenticated UI can dispatch it. | `mobile/lib/app.dart:340,379-393` |
+| `App` (`mobile/lib/app.dart`) | The composition root: wraps the authenticated `HomePage` in `DeepLinkDispatcher` and, pre-authentication, wraps `PairingPage` in the same dispatcher with `dispatchMessageLinks: false`, and starts `pendingDeepLinkProvider` watching immediately so a cold-start link survives until the authenticated UI can dispatch it. | `mobile/lib/app.dart:379-393` |
 | `ChannelDetailPage`'s message list (`mobile/lib/features/channels/channel_detail_page/message_list.dart`) | Consumes `ChannelDetailPage`'s `initialThreadRootId`/`initialThreadRouteBehavior` contract to auto-open the target `ThreadDetailPage` once its messages are loaded. | `mobile/lib/features/channels/channel_detail_page/message_list.dart:577-610` |
 | `channels_page.dart`, `channel_link_navigation.dart` | Both push `ChannelDetailPage` directly for manual (non-deep-link) navigation, using the same `Navigator.push(MaterialPageRoute(...))` shape the dispatcher uses. | `mobile/lib/features/channels/channels_page.dart:260-262`, `mobile/lib/features/channels/channel_link_navigation.dart:33-37` |
 
