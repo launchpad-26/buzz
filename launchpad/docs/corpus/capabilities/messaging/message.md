@@ -19,7 +19,7 @@ evidence:
   - statement: "Kind 9 and kind 40002 are treated as the same 'message' concept by consuming code, not as a superseded/superseding pair: buzz-db's feed queries list them side by side in every kind filter that selects timeline messages, and buzz-acp's context-fetching code queries both kinds together in a single filter when assembling thread or DM context for an agent."
     entry_class: FACT
     evidence:
-      - "crates/buzz-db/src/feed.rs:622-735"
+      - "crates/buzz-db/src/store/feed.rs:852-965"
       - "crates/buzz-acp/src/pool.rs:3258-3264"
       - "crates/buzz-acp/src/pool.rs:3382-3387"
   - statement: "The desktop client's own kind registry defines both KIND_STREAM_MESSAGE (9) and KIND_STREAM_MESSAGE_V2 (40002) and groups them together wherever it enumerates timeline-content kinds, confirming the same dual-kind treatment holds on the client side, not only in relay-side Rust code."
@@ -44,9 +44,9 @@ evidence:
   - statement: "A reply increments `reply_count` and `last_reply_at` on its immediate parent event, and increments `descendant_count` on the thread root event; both counters are materialized columns updated as part of the same write path that inserts the reply, and a crash between the insert and the counter update is explicitly called out as a case the code must not leave inconsistent."
     entry_class: FACT
     evidence:
-      - "crates/buzz-db/src/thread.rs:49-113"
-      - "crates/buzz-db/src/thread.rs:209-241"
-      - "crates/buzz-db/src/event.rs:1268-1281"
+      - "crates/buzz-db/src/store/thread.rs:54-118"
+      - "crates/buzz-db/src/store/thread.rs:214-246"
+      - "crates/buzz-db/src/store/event.rs:1296-1309"
   - statement: "VISION_PROJECTS.md's own capability status table lists 'Channels, forums, DMs, canvases' as '✅ Ships today', the maturity marker for messaging as a product capability."
     entry_class: FACT
     evidence:

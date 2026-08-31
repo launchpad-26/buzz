@@ -15,7 +15,7 @@ evidence:
   - statement: "buzz-db's own module doc for DM persistence states: 'DMs are channels with channel_type='dm' and visibility='private'. Participant sets are immutable -- adding a member creates a NEW DM.' A DM is therefore not a separate storage concept from a regular channel; it is a channel row distinguished by its channel_type and visibility columns."
     entry_class: FACT
     evidence:
-      - "crates/buzz-db/src/dm.rs:1-4"
+      - "crates/buzz-db/src/store/dm.rs:1-4"
   - statement: "root VISION_PROJECTS.md's own Capability/Status table lists 'Channels, forums, DMs, canvases' as 'Ships today', its top maturity marker, alongside the workflow engine, MCP/ACP harness, Blossom media and git hosting."
     entry_class: FACT
     evidence:
@@ -42,23 +42,23 @@ evidence:
   - statement: "buzz-db's create_dm additionally enforces, at the database layer, that a DM has 2-9 participants and that every participant pubkey is exactly 32 bytes, independent of and in addition to the relay handler's own 1-8-others check."
     entry_class: FACT
     evidence:
-      - "crates/buzz-db/src/dm.rs:101-124"
+      - "crates/buzz-db/src/store/dm.rs:103-126"
   - statement: "A DM's identity is a stable SHA-256 fingerprint of its sorted, deduplicated participant pubkey set (compute_participant_hash), stored in a nullable channels.participant_hash column guarded by a partial unique index on (community_id, participant_hash) WHERE participant_hash IS NOT NULL -- so at most one DM channel can exist per distinct participant set per community, and opening a DM with the same participants (in any order) is idempotent and returns the existing channel rather than creating a duplicate."
     entry_class: FACT
     evidence:
-      - "crates/buzz-db/src/dm.rs:43-58"
-      - "crates/buzz-db/src/dm.rs:126-155"
+      - "crates/buzz-db/src/store/dm.rs:45-60"
+      - "crates/buzz-db/src/store/dm.rs:128-157"
       - "migrations/0001_initial_schema.sql:94"
       - "migrations/0001_initial_schema.sql:104-105"
   - statement: "Because a DM's participant set is content-addressed by compute_participant_hash and channels.participant_hash is immutable once set, adding a participant cannot mutate an existing DM's row -- handle_dm_add_member instead computes the expanded participant set and calls the same open_dm path, which creates a brand-new DM channel for that larger set (or returns an existing one with that exact expanded set) rather than adding a member to the original conversation in place."
     entry_class: FACT
     evidence:
       - "crates/buzz-relay/src/handlers/command_executor.rs:503-587"
-      - "crates/buzz-db/src/dm.rs:1-4"
+      - "crates/buzz-db/src/store/dm.rs:1-4"
   - statement: "Hiding a DM is per-member and reversible: hide_dm sets channel_members.hidden_at for the caller only (leaving their membership row otherwise intact), and open_dm automatically clears hidden_at for the caller whenever they re-open a DM with the same participant set, so a hidden DM reappears the next time any participant messages it."
     entry_class: FACT
     evidence:
-      - "crates/buzz-db/src/dm.rs:356-449"
+      - "crates/buzz-db/src/store/dm.rs:358-451"
       - "migrations/0001_initial_schema.sql:132-145"
   - statement: "On first creation (was_created = true), handle_dm_open publishes a channel system message of type 'dm_created' naming the actor and participants, emits NIP-29-style group discovery events, and sends a membership-added notification to every participant; on re-open of an already-existing DM (was_created = false) it instead republishes only the caller's own NIP-DV visibility snapshot, so a returning participant's sidebar updates without re-notifying everyone else."
     entry_class: FACT
@@ -112,7 +112,7 @@ evidence:
   - statement: "The only automated test coverage found for this capability's own logic is buzz-db's pure compute_participant_hash unit tests (order-independence, deduplication, differing-sets, output-length); no integration or end-to-end test exercising handle_dm_open, handle_dm_add_member, handle_dm_hide, or buzz-db's create_dm/open_dm/hide_dm against a real Postgres instance was found under crates/buzz-relay, crates/buzz-db or crates/buzz-test-client at this recorded revision."
     entry_class: FACT
     evidence:
-      - "crates/buzz-db/src/dm.rs:519-557"
+      - "crates/buzz-db/src/store/dm.rs:604-642"
       - "grep_recursive('open_dm|create_dm|hide_dm|handle_dm', path='crates/buzz-test-client/tests/') -> zero matches, run against this node's recorded revision"
 ---
 

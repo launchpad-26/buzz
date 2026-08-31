@@ -26,24 +26,24 @@ evidence:
   - statement: "buzz-db's thread_metadata table is populated through ThreadMetadataParams (event_id, channel_id, parent_event_id, root_event_id, depth, broadcast) and insert_thread_metadata, called inside the same Postgres transaction as the event insert, which -- only when the event row was newly inserted (never on a duplicate) -- also creates root/parent stub rows if missing and increments the parent's reply_count and the root's descendant_count."
     entry_class: FACT
     evidence:
-      - "crates/buzz-db/src/event.rs:1109-1130"
-      - "crates/buzz-db/src/thread.rs:107-239"
+      - "crates/buzz-db/src/store/event.rs:1137-1158"
+      - "crates/buzz-db/src/store/thread.rs:112-244"
   - statement: "get_thread_replies paginates a thread's replies by a composite (event_created_at, event_id) keyset specifically because replies routinely share a created_at second and a timestamp-only cursor silently drops tied replies past the first page; get_thread_replies_pages_same_second_ties_without_loss pins this behavior."
     entry_class: FACT
     evidence:
-      - "crates/buzz-db/src/thread.rs:331-344"
-      - "crates/buzz-db/src/thread.rs:1106-1218"
+      - "crates/buzz-db/src/store/thread.rs:336-349"
+      - "crates/buzz-db/src/store/thread.rs:1401-1513"
   - statement: "get_thread_summary returns aggregated reply_count, descendant_count, last_reply_at and up to 10 distinct participant pubkeys (most-recent-first) for one event; get_channel_window batches the identical thread-summary shape across a whole page of channel rows in one query rather than one per root."
     entry_class: FACT
     evidence:
-      - "crates/buzz-db/src/thread.rs:45-56"
-      - "crates/buzz-db/src/thread.rs:512-575"
-      - "crates/buzz-db/src/thread.rs:736-791"
+      - "crates/buzz-db/src/store/thread.rs:50-61"
+      - "crates/buzz-db/src/store/thread.rs:517-580"
+      - "crates/buzz-db/src/store/thread.rs:741-796"
   - statement: "get_channel_window's top-level predicate excludes ordinary thread replies from a channel's main timeline: only depth-0 events, events with no thread_metadata row at all, and depth-1 replies explicitly marked broadcast are returned as channel rows; channel_window_top_level_predicate pins that a non-broadcast depth-1 reply is never a channel row."
     entry_class: FACT
     evidence:
-      - "crates/buzz-db/src/thread.rs:577-651"
-      - "crates/buzz-db/src/thread.rs:1546-1607"
+      - "crates/buzz-db/src/store/thread.rs:582-656"
+      - "crates/buzz-db/src/store/thread.rs:1841-1902"
   - statement: "On ingest, the relay's resolve_nip10_thread_meta parses an event's e-tags for root/reply markers, looks up the parent's own thread_metadata row to determine the effective root and the new depth (parent depth + 1), and rejects the event outright if the client-supplied root tag does not match the parent's actual ancestry or if depth would exceed 100."
     entry_class: FACT
     evidence:

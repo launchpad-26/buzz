@@ -58,13 +58,13 @@ evidence:
     evidence:
       - "crates/buzz-relay/src/handlers/ingest.rs:2766-2776"
       - "crates/buzz-relay/src/handlers/ingest.rs:2835-2848"
-      - "crates/buzz-db/src/thread.rs:513-571"
+      - "crates/buzz-db/src/store/thread.rs:517-580"
     confidence: 0.85
   - statement: "buzz-db/src/thread.rs maintains reply_count and descendant_count per thread root, with a doc comment stating a crash between the two updates cannot leave them inconsistent, and dedicated increment_reply_count/decrement_reply_count functions that update both fields (floored at 0 on decrement) in one transaction; KIND_THREAD_SUMMARY (kind:39005), the relay-signed overlay carrying {reply_count, descendant_count, last_reply_at, participants}, is documented directly in its own doc comment in kind.rs."
     entry_class: FACT
     evidence:
-      - "crates/buzz-db/src/thread.rs:113"
-      - "crates/buzz-db/src/thread.rs:241-330"
+      - "crates/buzz-db/src/store/thread.rs:118"
+      - "crates/buzz-db/src/store/thread.rs:256-332"
       - "crates/buzz-core/src/kind.rs:433-435"
   - statement: "KIND_FORUM_VOTE events are rejected unless their e-tag target resolves to an existing event of kind KIND_FORUM_POST or KIND_FORUM_COMMENT in the same channel, enforced by validate_forum_vote_target, which ingest calls only when the submitted event's kind is KIND_FORUM_VOTE."
     entry_class: FACT

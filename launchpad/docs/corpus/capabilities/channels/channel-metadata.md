@@ -23,7 +23,7 @@ evidence:
   - statement: "`buzz_db::channel::create_channel` rejects a `created_by` pubkey that is not exactly 32 bytes, canonicalizes the supplied name through `canonical_channel_name` (stripping leading `#`/whitespace and trailing whitespace), and rejects an empty-after-canonicalization name with `DbError::InvalidData`, before inserting the channel row and bootstrapping the creator as the sole `owner` member in the same transaction."
     entry_class: FACT
     evidence:
-      - "crates/buzz-db/src/channel.rs"
+      - "crates/buzz-db/src/store/channel.rs"
   - statement: "`buzz_core::channel::canonical_channel_name` strips leading `#` characters and surrounding whitespace so the stored name is prefix-free (clients render the leading `#` themselves), and its own unit tests show a name made entirely of hashes/whitespace canonicalizes to an empty string."
     entry_class: FACT
     evidence:
@@ -31,11 +31,11 @@ evidence:
   - statement: "`buzz_db::channel::update_channel` takes a `ChannelUpdate{name, description, visibility, ttl_seconds}` struct where every field is optional, rejects a call with all four fields absent (`DbError::InvalidData`, \"at least one field must be provided for update\"), re-canonicalizes and rejects an empty `name` the same way `create_channel` does, and builds a dynamic `UPDATE channels SET ...` statement that only touches the columns actually provided."
     entry_class: FACT
     evidence:
-      - "crates/buzz-db/src/channel.rs"
+      - "crates/buzz-db/src/store/channel.rs"
   - statement: "A TTL change in `update_channel` resets `ttl_deadline` to `NOW() + ttl_seconds` (or clears both `ttl_seconds` and `ttl_deadline` when the caller passes `Some(None)`), and takes a per-channel Postgres advisory transaction lock (`pg_advisory_xact_lock(hashtextextended('buzz_channel_ttl:<community>:<channel>', 0))`) before the UPDATE, documented in-line as a repair for a race with migration 0024's per-channel advisory-locked TTL fast path in the event-insert trigger."
     entry_class: FACT
     evidence:
-      - "crates/buzz-db/src/channel.rs"
+      - "crates/buzz-db/src/store/channel.rs"
       - "migrations/0024_event_ttl_refresh_shared_lock.sql"
   - statement: "`buzz-relay`'s admin-kind dispatcher routes kind:9002 (`KIND_NIP29_EDIT_METADATA`, value 9002) to `handle_edit_metadata`, which reads the `h`-tagged channel id and, per tag present on the event, calls `update_channel` for a `name` tag, `update_channel` for an `about` tag, `set_topic` for a `topic` tag, `set_purpose` for a `purpose` tag, `update_channel` for a `visibility` tag, `update_channel` for a `ttl` tag, and `archive_channel`/`unarchive_channel` for an `archived` tag of `\"true\"`/`\"false\"`."
     entry_class: FACT
@@ -95,7 +95,7 @@ evidence:
     entry_class: INFERENCE
     evidence:
       - "crates/buzz-relay/src/handlers/side_effects.rs"
-      - "crates/buzz-db/src/channel.rs"
+      - "crates/buzz-db/src/store/channel.rs"
     confidence: 0.75
 relationships:
   - type: references

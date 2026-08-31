@@ -67,24 +67,24 @@ evidence:
     entry_class: FACT
     evidence:
       - "migrations/0006_moderation.sql:1-8"
-      - "crates/buzz-db/src/moderation.rs"
+      - "crates/buzz-db/src/store/moderation.rs"
   - statement: "A resolve-report command's audit row records the decision (prefixed resolve:, e.g. resolve:ban, resolve:delete) separately from the paired enforcement row the client's own 9040-9043 command writes for the actual enforcement action, so the audit trail never claims an enforcement happened that the corresponding command row does not itself record; dismiss audits as dismiss_report and escalate as escalate, both left unprefixed so escalate stays queryable for the platform-safety lane."
     entry_class: FACT
     evidence:
       - "crates/buzz-relay/src/handlers/moderation_commands.rs:35-52"
-      - "crates/buzz-db/src/moderation.rs"
+      - "crates/buzz-db/src/store/moderation.rs"
   - statement: "Resolving a report as escalate sets the report's status to escalated and writes an audit row, but no code in buzz-relay or buzz-db constructs, queues, or forwards that escalation to any separate platform-operator inbox or notification pipeline; the only cross-community read surface found is buzz-db/src/admin_moderation.rs, an explicitly deployment-global (non-tenant-scoped) set of read queries over reports/actions for a private admin plane, which is a data surface for a future consumer rather than an escalation pipeline itself. This matches VISION_MODERATION.md's own statement that escalation is a hook today, not a pipeline: the substrate (a durable, queryable record) exists, but the platform-side inbox that consumes it is a separate, not-yet-built surface."
     entry_class: FACT
     evidence:
-      - "crates/buzz-db/src/moderation.rs:69"
-      - "crates/buzz-db/src/moderation.rs:112"
-      - "crates/buzz-db/src/moderation.rs:125"
-      - "crates/buzz-db/src/moderation.rs:285"
+      - "crates/buzz-db/src/store/moderation.rs:70"
+      - "crates/buzz-db/src/store/moderation.rs:113"
+      - "crates/buzz-db/src/store/moderation.rs:126"
+      - "crates/buzz-db/src/store/moderation.rs:306"
       - "crates/buzz-relay/src/handlers/moderation_commands.rs:35-52"
       - "crates/buzz-relay/src/handlers/moderation_commands.rs:387-390"
       - "crates/buzz-relay/src/handlers/moderation_commands.rs:445"
       - "crates/buzz-relay/src/handlers/moderation_commands.rs:505"
-      - "crates/buzz-db/src/admin_moderation.rs:1-6"
+      - "crates/buzz-db/src/store/admin_moderation.rs:1-6"
       - "VISION_MODERATION.md:55"
   - statement: "Moderation resolution and restriction notices are delivered as real, relay-signed direct messages (not synthetic client-only banners): the relay creates or reuses a two-party DM channel between a per-community moderation identity and the affected user, and the same primitive carries reporter-resolution notices, actioned-author notices, and timeout/ban notices; a notice to an actioned author never names the reporter(s) or quotes report notes, and a notice to a reporter never reveals other reporters."
     entry_class: FACT

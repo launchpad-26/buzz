@@ -36,7 +36,7 @@ evidence:
   - statement: "The per-owner limit defaults to 5 (`MAX_COMMUNITIES_PER_OWNER`) and can be raised deployment-wide via `BUZZ_MAX_COMMUNITIES_PER_OWNER` (a missing, unparsable, or non-positive value falls back to the default); `create_community_with_owner` enforces it inside the same transaction as the owner insert, so two concurrent creates for the same owner cannot both pass the count check."
     entry_class: FACT
     evidence:
-      - "crates/buzz-db/src/relay_members.rs:403-423"
+      - "crates/buzz-db/src/store/relay_members.rs:406-426"
   - statement: "`create_community_with_owner` distinguishes three non-error outcomes: `Created` (a new host row and owner, or an identical retried create that found the same host+owner pairing already present), `HostExists` (the host row already belongs to a different owner, or belongs to no still-active owner match — the transaction is rolled back and no owner row is touched), and `LimitReached` (the host row's own insert would-be-committed community is discarded by rollback because the intended owner is already at the cap)."
     entry_class: FACT
     evidence:
@@ -47,7 +47,7 @@ evidence:
     evidence:
       - "crates/buzz-relay/src/handlers/community_provisioning.rs:318-334"
       - "crates/buzz-db/src/lib.rs:1449-1482"
-      - "crates/buzz-db/src/relay_members.rs:340-378"
+      - "crates/buzz-db/src/store/relay_members.rs:343-381"
   - statement: "The same `ensure_configured_community` function seeds the relay's own deployment community at process startup, before any relay-membership backfill or owner bootstrap runs, from a host derived by normalizing `BUZZ_RELAY_URL`'s authority (`relay_url_authority` then `normalize_host` — the same normalization request-time host resolution uses); an empty derived host is a fatal misconfiguration only when `BUZZ_REQUIRE_RELAY_MEMBERSHIP=true`, otherwise it is logged and membership backfill/bootstrap is skipped non-fatally."
     entry_class: FACT
     evidence:

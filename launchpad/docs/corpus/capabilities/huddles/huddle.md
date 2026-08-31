@@ -52,7 +52,7 @@ evidence:
   - statement: "buzz-db's channel model backs ephemeral channels with nullable ttl_seconds/ttl_deadline columns (None meaning permanent), and buzz-core's ChannelType enum has exactly three variants -- stream, forum, dm -- with no dedicated huddle variant; a huddle's backing channel is an ordinary private stream channel distinguished only by its TTL and its kind:48100 linkage to a parent channel, not by a separate channel type."
     entry_class: FACT
     evidence:
-      - "crates/buzz-db/src/channel.rs"
+      - "crates/buzz-db/src/store/channel.rs"
       - "crates/buzz-core/src/channel.rs"
   - statement: "Desktop's getDmHuddleMemberPubkeys computes which agent pubkeys to offer as huddle invitees only when the parent channel's channelType is 'dm', confirming a huddle can be started from a direct-message channel and not only from a stream or forum channel."
     entry_class: FACT

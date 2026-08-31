@@ -79,8 +79,8 @@ evidence:
   - statement: "buzz-db's feed module includes KIND_FORUM_POST and KIND_FORUM_COMMENT in the set of kinds considered for the home feed's mentions and activity queries, with unit tests asserting 'forum post kind must be in mentions' and 'forum comment kind must be in mentions'; forum content therefore surfaces in the cross-channel Home feed alongside stream messages, not only inside its own channel."
     entry_class: FACT
     evidence:
-      - "crates/buzz-db/src/feed.rs:622-645"
-      - "crates/buzz-db/src/feed.rs:667-697"
+      - "crates/buzz-db/src/store/feed.rs:852-875"
+      - "crates/buzz-db/src/store/feed.rs:897-927"
   - statement: "VISION.md's Surfaces table lists 'Forum' as one of seven desktop-app surfaces ('Async long-form threads. Culture. Zero default notifications') and describes it in prose as 'Discourse-like, slow. Post → flat replies.'; its own Status table separately marks 'Desktop client (Tauri) — Stream, Home, Forum, DMs, Agents, Workflows, Search, Settings, Profiles, Presence' as shipped (✅)."
     entry_class: FACT
     evidence:

@@ -50,19 +50,19 @@ evidence:
   - statement: "`get_channel_window_on` -- the query backing a stream channel's main timeline -- filters to rows where `thread_metadata` is absent, `depth = 0`, or `depth = 1 AND broadcast = true`; a depth-1 reply with no broadcast tag, and every depth-2-or-deeper reply, is excluded from the main channel window regardless of its `depth`/`broadcast` combination and is reachable only through the separate thread-reply query."
     entry_class: FACT
     evidence:
-      - "crates/buzz-db/src/thread.rs:614-688"
+      - "crates/buzz-db/src/store/thread.rs:619-693"
   - statement: "`build_mentions_query` (the `@`-mention feed) and `build_activity_query` (the personal activity feed) both include `KIND_STREAM_MESSAGE` (alongside `KIND_STREAM_MESSAGE_V2`, `KIND_FORUM_POST`, and other content kinds) in their `kind IN (...)` filters, so a stream message the requesting user is mentioned in, or that lands in their accessible channels, surfaces in both feed surfaces the same way a forum post does."
     entry_class: FACT
     evidence:
-      - "crates/buzz-db/src/feed.rs:85-110"
-      - "crates/buzz-db/src/feed.rs:252-266"
+      - "crates/buzz-db/src/store/feed.rs:86-111"
+      - "crates/buzz-db/src/store/feed.rs:253-267"
   - statement: "In every code path checked for this node -- `required_scope_for_kind`'s scope match, `requires_h_channel_scope`'s channel-scoping match, and both feed queries' `kind IN (...)` filters -- `KIND_STREAM_MESSAGE` (9) and `KIND_STREAM_MESSAGE_V2` (40002) are always listed together and handled identically; no branch inspected treats one differently from the other."
     entry_class: FACT
     evidence:
       - "crates/buzz-relay/src/handlers/ingest.rs:378-392"
       - "crates/buzz-relay/src/handlers/ingest.rs:611-627"
-      - "crates/buzz-db/src/feed.rs:85-110"
-      - "crates/buzz-db/src/feed.rs:252-266"
+      - "crates/buzz-db/src/store/feed.rs:86-111"
+      - "crates/buzz-db/src/store/feed.rs:253-267"
   - statement: "`test_reply_ingest_pushes_live_thread_summary` builds a `Kind::Custom(9)` event (a stream message) tagged with an `h` channel tag as a thread root, sends it through a live relay connection, asserts it is accepted, and then asserts a live-delivered `kind:39005` thread-summary event follows over a subscription scoped to that channel -- an end-to-end demonstration that a stream message is accepted, stored, and drives derived live thread state."
     entry_class: FACT
     evidence:

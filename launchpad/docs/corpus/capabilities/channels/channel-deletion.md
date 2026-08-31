@@ -60,14 +60,14 @@ evidence:
   - statement: "soft_delete_channel executes 'UPDATE channels SET deleted_at = NOW() WHERE community_id = $1 AND id = $2 AND deleted_at IS NULL' and returns whether a row was updated -- deletion is a soft delete guarded to be idempotent, not a hard delete of the row."
     entry_class: FACT
     evidence:
-      - "crates/buzz-db/src/channel.rs:1404-1414"
+      - "crates/buzz-db/src/store/channel.rs:695-709"
   - statement: "Every channel-read query in buzz-db's channel module filters on 'deleted_at IS NULL' (get_channel, list/search variants, membership joins), so once a channel is soft-deleted it stops appearing in any subsequent read through those queries without the row itself being removed."
     entry_class: FACT
     evidence:
-      - "crates/buzz-db/src/channel.rs:285"
-      - "crates/buzz-db/src/channel.rs:768"
-      - "crates/buzz-db/src/channel.rs:801"
-      - "crates/buzz-db/src/channel.rs:974"
+      - "crates/buzz-db/src/store/channel.rs:281"
+      - "crates/buzz-db/src/store/channel_members.rs:765"
+      - "crates/buzz-db/src/store/channel.rs:348"
+      - "crates/buzz-db/src/store/channel_members.rs:990"
   - statement: "The channels table's deleted_at TIMESTAMPTZ column is defined in the repository's initial schema migration, confirming the soft-delete column is part of the base schema rather than a later, separately-tracked addition."
     entry_class: FACT
     evidence:
@@ -97,11 +97,11 @@ evidence:
     evidence:
       - "crates/buzz-relay/src/handlers/ingest.rs:414-419"
       - "crates/buzz-cli/src/lib.rs:655-665"
-      - "crates/buzz-db/src/channel.rs:1329-1394"
+      - "crates/buzz-db/src/store/channel.rs:609-689"
   - statement: "At the data level, deletion is reversible in principle (deleted_at is a nullable timestamp column set, not a row removal, and no code path clears it back to NULL was found), but the desktop UI's own confirmation dialog tells the end user the action 'cannot be undone', and no CLI or desktop affordance to reverse a kind:9008 deletion exists in the surfaces inspected for this node -- so the capability is undo-able at the storage layer only in a sense no exposed interface currently acts on."
     entry_class: INFERENCE
     evidence:
-      - "crates/buzz-db/src/channel.rs:1404-1414"
+      - "crates/buzz-db/src/store/channel.rs:695-709"
       - "desktop/src/features/channels/ui/ChannelManagementModerationActions.tsx:111-117"
     confidence: 0.75
 relationships:

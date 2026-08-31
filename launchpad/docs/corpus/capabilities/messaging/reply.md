@@ -75,7 +75,7 @@ evidence:
     entry_class: FACT
     evidence:
       - "launchpad/docs/corpus/architecture/flows/event-ingestion.md"
-      - "crates/buzz-db/src/event.rs"
+      - "crates/buzz-db/src/store/event.rs"
   - statement: "Reply is shipped, not merely designed: it has production builder functions with unit tests (`buzz-sdk`), a CLI code path with its own tests and a required-field validation rule (`buzz-cli`), a wired desktop UI entry point and compose-time quoted preview (`desktop`), and a mobile quick action (`mobile`) -- all inspected directly for this node, none inferred from a status marker alone."
     entry_class: FACT
     evidence:

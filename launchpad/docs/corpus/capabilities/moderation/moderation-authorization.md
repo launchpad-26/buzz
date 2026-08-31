@@ -27,8 +27,8 @@ evidence:
   - statement: "authorize_moderation_action resolves actor and target community roles from relay_members, whose primary key is (community_id, pubkey) and whose every read is bound to a single community_id, so community-wide moderation authority cannot cross a tenant boundary."
     entry_class: FACT
     evidence:
-      - "crates/buzz-db/src/relay_members.rs:1-7"
-      - "crates/buzz-db/src/relay_members.rs:68-90"
+      - "crates/buzz-db/src/store/relay_members.rs:1-7"
+      - "crates/buzz-db/src/store/relay_members.rs:71-93"
   - statement: "The kind:9040-9044 community moderation commands (Ban, Unban, Timeout, Untimeout, ResolveReport) each call authorize_moderation_action before executing their side effect, per moderation_commands.rs's own module-doc table and its five call sites."
     entry_class: FACT
     evidence:

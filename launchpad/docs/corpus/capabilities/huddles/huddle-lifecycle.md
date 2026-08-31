@@ -23,7 +23,7 @@ evidence:
     entry_class: FACT
     evidence:
       - "crates/buzz-core/src/channel.rs"
-      - "crates/buzz-db/src/channel.rs:85-117"
+      - "crates/buzz-db/src/store/channel.rs:81-113"
   - statement: "A kind:48100 (HUDDLE_STARTED) event is ingested through the same generic pipeline as any other channel-scoped write: it requires Scope::ChannelsWrite and an 'h' tag resolving to a channel the author can write to, exactly like KIND_HUDDLE_PARTICIPANT_JOINED/LEFT/ENDED and KIND_HUDDLE_GUIDELINES; nothing at ingest time parses or validates the event's own content."
     entry_class: FACT
     evidence:
@@ -32,11 +32,11 @@ evidence:
   - statement: "huddle_started_content_links parses a kind:48100 event's content as JSON and requires an 'ephemeral_channel_id' field whose value exactly matches the target ephemeral channel's UUID; malformed JSON or a mismatched/missing field makes the event count as non-linking."
     entry_class: FACT
     evidence:
-      - "crates/buzz-db/src/event.rs:214-224"
+      - "crates/buzz-db/src/store/event.rs:212-222"
   - statement: "huddle_started_link_exists additionally requires the candidate kind:48100 event to live in the claimed parent channel and to be signed by the ephemeral channel's own creator (channel.created_by) — a member of the parent channel who is not that creator can publish their own kind:48100 event there, but it will never satisfy this check."
     entry_class: FACT
     evidence:
-      - "crates/buzz-db/src/event.rs:226-268"
+      - "crates/buzz-db/src/store/event.rs:224-266"
   - statement: "ensure_membership resolves a lifecycle_parent_id via huddle_started_link_exists for every TTL-bearing (ephemeral) channel, regardless of its visibility, before any peer — including the channel's own creator — is admitted to the audio room; an unlinked ephemeral channel returns 'ephemeral channel is not linked to claimed parent' and the join is rejected. An archived channel is rejected even earlier, before this linkage check runs."
     entry_class: FACT
     evidence:
@@ -49,7 +49,7 @@ evidence:
   - statement: "reap_expired_ephemeral_channels archives (sets archived_at = NOW()) any channel whose ttl_deadline has passed, guarded by archived_at IS NULL for idempotency and by community_write_allowed; the query carries no huddle-specific condition, so it treats a huddle's ephemeral channel identically to any other TTL-bearing channel."
     entry_class: FACT
     evidence:
-      - "crates/buzz-db/src/channel.rs:1498-1531"
+      - "crates/buzz-db/src/store/channel.rs:711-744"
   - statement: "buzz-relay runs the ephemeral-channel reaper as a background loop (default interval 60s, overridable via BUZZ_REAPER_INTERVAL_SECS) that, for each channel it archives, emits a generic 'channel_auto_archived' system message, re-emits the channel's NIP-29 discovery events, and evicts live channel-subscription connections — it never emits kind:48103 and never touches the audio Room/mesh-lease state a huddle may be using."
     entry_class: FACT
     evidence:
@@ -79,16 +79,16 @@ evidence:
   - statement: "reap_expired_ephemeral_channels's archival behavior (that it archives an expired channel, returns its community/host/channel-id provenance, and that unarchiving renews the TTL deadline so the same channel is not immediately re-reaped) is covered by two Postgres-backed unit tests in channel.rs's own tests module."
     entry_class: FACT
     evidence:
-      - "crates/buzz-db/src/channel.rs:1858-1899"
-      - "crates/buzz-db/src/channel.rs:1797-1849"
+      - "crates/buzz-db/src/store/channel.rs:1126-1167"
+      - "crates/buzz-db/src/store/channel.rs:1065-1117"
   - statement: "huddle_started_content_links's JSON/field-matching behavior (a matching ephemeral_channel_id passes, a wrong field or non-JSON content does not) is covered by a unit test in event.rs's own tests module."
     entry_class: FACT
     evidence:
-      - "crates/buzz-db/src/event.rs:2677-2690"
+      - "crates/buzz-db/src/store/event.rs:2425-2438"
   - statement: "No test found in this repository exercises the interaction between an in-progress audio session and either the TTL reaper or an explicit admin archive of its channel — neither channel.rs's, handler.rs's, nor side_effects.rs's own unit-test modules construct that scenario, and architecture-flows-huddle-audio.md already recorded that crates/buzz-test-client/tests/e2e_relay.rs has no end-to-end test for the audio route at all."
     entry_class: FACT
     evidence:
-      - "crates/buzz-db/src/channel.rs"
+      - "crates/buzz-db/src/store/channel.rs"
       - "crates/buzz-relay/src/audio/handler.rs"
       - "crates/buzz-relay/src/handlers/side_effects.rs"
       - "crates/buzz-test-client/tests/e2e_relay.rs"

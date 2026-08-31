@@ -56,7 +56,7 @@ evidence:
     entry_class: FACT
     evidence:
       - "crates/buzz-relay/src/handlers/moderation_commands.rs"
-      - "crates/buzz-db/src/moderation.rs"
+      - "crates/buzz-db/src/store/moderation.rs"
   - statement: "Resolving a report (kind 9044) re-validates the tag vocabulary the SDK already validated at build time -- `status` must be `resolved` or `dismissed`, `action` must be one of `delete`/`kick`/`ban`/`timeout`/`dismiss`/`escalate`, and `dismiss` may only pair with `dismissed` -- because, per the handler's own comment, 'the relay must not trust the client.'"
     entry_class: FACT
     evidence:
@@ -65,7 +65,7 @@ evidence:
     entry_class: FACT
     evidence:
       - "crates/buzz-relay/src/handlers/moderation_commands.rs"
-      - "crates/buzz-db/src/moderation.rs"
+      - "crates/buzz-db/src/store/moderation.rs"
       - "migrations/0006_moderation.sql"
   - statement: "`buzz-core::kind::KIND_NIP29_REMOVE_USER` (9001, kick) and `buzz-core::kind::KIND_NIP29_DELETE_EVENT` (9005, delete message) are the existing NIP-29 kinds a `delete`/`kick` report resolution fans out through, per `moderation_commands.rs`'s own module doc comment -- confirming the resolve-report action vocabulary is not a second implementation of message deletion or channel removal."
     entry_class: FACT
@@ -76,7 +76,7 @@ evidence:
     entry_class: FACT
     evidence:
       - "crates/buzz-relay/src/handlers/moderation_commands.rs"
-      - "crates/buzz-db/src/moderation.rs"
+      - "crates/buzz-db/src/store/moderation.rs"
       - "migrations/0006_moderation.sql"
   - statement: "Notice delivery -- the DM telling a banned/timed-out member the terms of their restriction, and the DM telling a reporter their report was resolved -- is best-effort and does not block or unwind the enforcement already committed: both `handle_ban` and `handle_resolve` log a delivery failure via `send_moderation_notice` and continue, rather than returning an error, matching VISION_MODERATION.md's own 'Notices are best-effort ... a ban lands even if the notice fails' statement."
     entry_class: FACT

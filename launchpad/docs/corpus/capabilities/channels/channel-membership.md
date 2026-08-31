@@ -39,15 +39,15 @@ evidence:
   - statement: "buzz-db's channel.rs add_member() enforces: a private channel requires invited_by naming an existing active member (with a bootstrap exception letting the channel's own creator add themselves as the first member), an open channel lets anyone self-join but restricts granting an elevated (owner/admin) role to an existing owner/admin inviter, and changing an *active* member's role in either direction (including demotion) additionally requires the acting inviter to currently hold an elevated role -- keyed on the target's live (non-removed) role so a soft-removed owner cannot resurrect their own authority by rejoining. The write is wrapped in a Postgres advisory transaction lock (acquire_channel_membership_lock) and the INSERT uses ON CONFLICT ... DO UPDATE, making re-adding an already-active member at the same role idempotent."
     entry_class: FACT
     evidence:
-      - "crates/buzz-db/src/channel.rs"
+      - "crates/buzz-db/src/store/channel_members.rs"
   - statement: "buzz-db's channel.rs add_member() and remove_member() both refuse a role change or removal that would leave a channel with zero active owners, counting rows with role = 'owner' AND removed_at IS NULL under the same advisory lock used for the rest of the write, and remove_member() additionally allows a member's own agent-owner (not only a channel owner/admin) to remove that member via crate::user::is_agent_owner."
     entry_class: FACT
     evidence:
-      - "crates/buzz-db/src/channel.rs"
+      - "crates/buzz-db/src/store/channel_members.rs"
   - statement: "buzz-db's channel.rs is_member(), get_members(), get_members_bulk() and get_member_count() all filter on cm.removed_at IS NULL joined against a non-deleted channel row, so a soft-removed membership row is excluded from every read path even though it remains on disk."
     entry_class: FACT
     evidence:
-      - "crates/buzz-db/src/channel.rs"
+      - "crates/buzz-db/src/store/channel_members.rs"
   - statement: "crates/buzz-relay/src/handlers/side_effects.rs validates kind:9000 (PUT_USER) before storage: an absent role tag preserves an existing member's current role rather than defaulting to Member (to avoid a bare PUT_USER silently demoting an owner/admin), a private channel requires the actor to already be an active member, granting or changing to an elevated role requires the actor to already be elevated, demoting the last owner is rejected, self-add is always allowed, and a third-party add targeting an agent pubkey is additionally gated by that agent's stored channel_add_policy ('owner_only' restricts the add to the agent's own owner, 'nobody' refuses every third-party add, 'anyone' or an unrecognized value allows it)."
     entry_class: FACT
     evidence:
@@ -92,7 +92,7 @@ evidence:
   - statement: "crates/buzz-db/src/channel.rs's own test module includes regression tests naming the exact authorization failures this node describes -- kicked_owner_rejoins_as_member_not_owner (a removed owner self-rejoining via join-request semantics lands as Member, not a resurrected Owner), repro_unprivileged_member_can_demote_owner, repro_private_channel_member_can_demote_owner and unprivileged_member_cannot_demote_a_co_owner (an unprivileged actor must not be able to demote an owner), and membership_writes_serialize_on_the_shared_channel_lock plus remove_member_rejects_an_actor_demoted_while_it_waited (concurrent membership writes on one channel serialize behind the advisory lock, and a demotion that lands mid-wait is honored rather than raced)."
     entry_class: FACT
     evidence:
-      - "crates/buzz-db/src/channel.rs"
+      - "crates/buzz-db/src/store/channel_members.rs"
   - statement: "crates/buzz-test-client/tests/e2e_relay.rs contains end-to-end coverage of the notification side effect described above -- test_membership_notification_emitted_on_add and test_membership_notification_emitted_on_remove connect a real WebSocket client, subscribe to kind:44100/44101 filtered by the agent's own `p` tag, trigger a kind:9000 add over HTTP, and assert the notification arrives -- plus filter-shape tests (test_membership_notification_requires_p_filter, test_membership_notification_requires_own_p_filter, test_membership_notification_wildcard_filter_rejected, test_membership_notification_multi_p_rejected, test_membership_notification_mixed_filter_rejected) and test_client_submitted_nip43_membership_snapshots_are_rejected, which is about the separate relay-wide membership system named in the Boundary section below, not this node's channel-membership snapshots."
     entry_class: FACT
     evidence:
@@ -100,7 +100,7 @@ evidence:
   - statement: "crates/buzz-db/src/relay_members.rs implements a second, separate membership system -- relay/community-wide membership (is_relay_member, add_relay_member, remove_relay_member, list_relay_members, claim_relay_membership, has_join_policy_acceptance) -- keyed on NIP-43 kinds RELAY_ADMIN_ADD_MEMBER/REMOVE_MEMBER/CHANGE_ROLE (9030-9032), KIND_NIP43_MEMBERSHIP_LIST (13534) and KIND_NIP43_LEAVE_REQUEST (28936), all defined in buzz-core's kind.rs distinctly from the per-channel kinds this node documents."
     entry_class: FACT
     evidence:
-      - "crates/buzz-db/src/relay_members.rs"
+      - "crates/buzz-db/src/store/relay_members.rs"
       - "crates/buzz-core/src/kind.rs"
 relationships:
   - type: references

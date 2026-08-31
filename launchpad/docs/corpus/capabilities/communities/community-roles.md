@@ -24,19 +24,19 @@ evidence:
   - statement: "`buzz-db::relay_members` implements the full community-role lifecycle: `add_relay_member`, `get_relay_member`, `list_relay_members`, `update_relay_member_role`, `remove_relay_member`, `remove_relay_member_if_role`, `bootstrap_owner`, and `transfer_ownership`, each taking a `CommunityId` and scoping its query to that community so a role never leaks across communities."
     entry_class: FACT
     evidence:
-      - "crates/buzz-db/src/relay_members.rs"
+      - "crates/buzz-db/src/store/relay_members.rs"
   - statement: "The owner role is structurally protected at the data layer: `remove_relay_member` deletes with `WHERE role <> 'owner'` in one atomic statement (no separate read-then-delete race), and `update_relay_member_role` likewise updates only `WHERE role <> 'owner'` — an owner cannot be deleted or have their role changed through these two functions at all, only through `transfer_ownership`."
     entry_class: FACT
     evidence:
-      - "crates/buzz-db/src/relay_members.rs"
+      - "crates/buzz-db/src/store/relay_members.rs"
   - statement: "`bootstrap_owner` runs at every relay startup: it upserts the configured `RELAY_OWNER_PUBKEY` as `owner` in a given community and demotes any other `owner` row in that same community to `admin`, so an owner-pubkey rotation in configuration is enforced idempotently on the next boot rather than requiring a manual role change."
     entry_class: FACT
     evidence:
-      - "crates/buzz-db/src/relay_members.rs"
+      - "crates/buzz-db/src/store/relay_members.rs"
   - statement: "`transfer_ownership` atomically upserts a new owner and demotes every other existing owner in that community to `member` — explicitly **not** `admin` — per a documented product decision that a former owner retains no management capability after a transfer; it also enforces a per-owner community cap (`MAX_COMMUNITIES_PER_OWNER`, default 5, overridable via `BUZZ_MAX_COMMUNITIES_PER_OWNER`) inside the same transaction as the transfer, guards against a stale-owner race with a `FOR UPDATE` lock and an `expected_owner_pubkey` check, and is a no-op (`AlreadyOwner`) when the transferee is already the sole owner."
     entry_class: FACT
     evidence:
-      - "crates/buzz-db/src/relay_members.rs"
+      - "crates/buzz-db/src/store/relay_members.rs"
   - statement: "Community roles can be administered over the wire via four NIP-43 relay-admin event kinds handled directly (not stored as ordinary events): kind:9030 add member (sender must be `admin` or `owner`), kind:9031 remove member (sender must be `admin` or `owner`), kind:9032 change an existing member's role (sender must be `owner` only), and kind:9033 set the community's workspace profile/icon (sender must be `admin` or `owner`, with a documented exception on a rosterless open relay)."
     entry_class: FACT
     evidence:

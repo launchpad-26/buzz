@@ -36,8 +36,8 @@ evidence:
   - statement: "get_accessible_channels's own doc comment and its SQL ORDER BY clause order a user's accessible channels stream -> forum -> dm before sorting by name, so channel type is also a first-class sort key in the channel-listing read path, not only a stored attribute."
     entry_class: FACT
     evidence:
-      - "crates/buzz-db/src/channel.rs:938-941"
-      - "crates/buzz-db/src/channel.rs:981-983"
+      - "crates/buzz-db/src/store/channel_members.rs:954-957"
+      - "crates/buzz-db/src/store/channel_members.rs:997-999"
   - statement: "The desktop app's ChatHeader icon-selection logic special-cases channelType === 'dm' (CircleDot) and channelType === 'forum' (FileText) but falls through to the generic Hash icon for every other case, including Stream; there is no Stream-specific branch."
     entry_class: FACT
     evidence:

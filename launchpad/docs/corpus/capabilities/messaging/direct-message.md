@@ -33,9 +33,9 @@ evidence:
   - statement: "buzz-db's insert_event_with_thread_metadata and thread.rs's insert_thread_metadata / increment_reply_count -- the functions that materialize a message's reply_count and descendant_count -- take a channel_id and thread metadata but never a channel_type, and operate inside one transaction with the event insert regardless of what kind of channel that channel_id belongs to; a DM message's thread counters are produced by the identical code path a stream message's are."
     entry_class: FACT
     evidence:
-      - "crates/buzz-db/src/event.rs:1308-1321"
-      - "crates/buzz-db/src/thread.rs:116-141"
-      - "crates/buzz-db/src/thread.rs:251-287"
+      - "crates/buzz-db/src/store/event.rs:1337-1350"
+      - "crates/buzz-db/src/store/thread.rs:121-146"
+      - "crates/buzz-db/src/store/thread.rs:256-292"
   - statement: "A case-insensitive, recursive grep of crates/buzz-db/src/dm.rs and crates/buzz-relay/src/handlers/command_executor.rs (the DM channel's own persistence and command-dispatch modules) for KIND_GIFT_WRAP found zero matches at this recorded revision, while KIND_GIFT_WRAP (kind 1059, NIP-17's encrypted-DM envelope) is defined and used elsewhere in the relay -- the message capability documented here is the plaintext, channel-scoped conversation model, not NIP-17 gift-wrapped ciphertext."
     entry_class: FACT
     evidence:

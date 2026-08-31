@@ -30,7 +30,7 @@ evidence:
     entry_class: FACT
     evidence:
       - "crates/buzz-relay/src/handlers/ingest.rs:2080-2091"
-      - "crates/buzz-db/src/moderation.rs:172-209"
+      - "crates/buzz-db/src/store/moderation.rs:186-230"
   - statement: "Submitting a report (kind:1984) requires only the ordinary `MessagesWrite` transport scope, the same scope required for a text note -- it is not gated by the community's moderation-authorization seam (`authorize_moderation_action`), which instead governs the moderator-side actions (delete, kick, ban, unban, timeout, resolve)."
     entry_class: FACT
     evidence:
@@ -48,8 +48,8 @@ evidence:
   - statement: "`list_reports` filters by an optional `status` column (open/resolved/dismissed/escalated, per the CLI's own `--status` help text) and orders results newest-first; `resolve_report` only updates a report row whose current status is `'open'`, making resolution a single-transition guard rather than an unconditional update."
     entry_class: FACT
     evidence:
-      - "crates/buzz-db/src/moderation.rs:213-237"
-      - "crates/buzz-db/src/moderation.rs:287-311"
+      - "crates/buzz-db/src/store/moderation.rs:234-258"
+      - "crates/buzz-db/src/store/moderation.rs:308-332"
       - "crates/buzz-cli/src/lib.rs:1896-1903"
   - statement: "Resolving a report (kind:9044, `resolveReport` in the desktop client) pairs the `dismiss` action with a `dismissed` status and every other action (delete/kick/ban/timeout/escalate) with a `resolved` status, carries an optional moderator-authored `reason` that is described as landing in the public tombstone and the reporter-notice DM, and is gated by the same community owner/admin authorization seam as ban/timeout/kick."
     entry_class: FACT

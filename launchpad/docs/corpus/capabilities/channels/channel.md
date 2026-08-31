@@ -56,10 +56,11 @@ evidence:
     entry_class: FACT
     evidence:
       - "crates/buzz-core/src/filter.rs:68-100"
-  - statement: "buzz-db's replace_addressable_event keys its replacement key on channel_id specifically because it serves 'relay-signed NIP-29 group metadata (kind 39000-39002) where the relay is the author and channel_id distinguishes groups', in explicit contrast to replace_parameterized_event, which keys ordinary user-submitted NIP-33 replaceable events on (pubkey, d_tag) globally with no channel_id in the replacement key -- the code comment states this pair of functions exists precisely because channel-describing events and ordinary addressable events replace under different keys."
+  - statement: "buzz-db's replace_addressable_event keys its replacement on (kind, pubkey, channel_id) -- its doc comment describes it as replacing NIP-16 kinds and NIP-29 discovery state (kind 39000-39002) by keeping only the highest-created_at event per that key -- in explicit contrast to replace_parameterized_event, whose doc comment states it keys NIP-33 parameterized-replaceable events on (kind, pubkey, d_tag) 'across channels', with no channel_id in its replacement key."
     entry_class: FACT
     evidence:
-      - "crates/buzz-db/src/lib.rs:5145-5162"
+      - "crates/buzz-db/src/store/replaceable.rs:366-374"
+      - "crates/buzz-db/src/store/replaceable.rs:547-556"
   - statement: "VISION_PROJECTS.md's own Capability | Status table marks the row 'Channels, forums, DMs, canvases' as 'Ships today'."
     entry_class: FACT
     evidence:
@@ -67,7 +68,7 @@ evidence:
   - statement: "The invariants this node states are exercised by real tests, not merely asserted: buzz-db/src/channel.rs carries unit tests including test_unarchive_expired_ephemeral_channel_renews_ttl_deadline (the TTL/archival behavior), and crates/buzz-test-client/tests/e2e_relay.rs carries end-to-end tests over a real relay connection including test_valid_channel_survives_malformed_or_empty_h_sibling (the h-tag scoping fallback), test_private_channel_admin_can_invite, test_private_channel_any_member_can_invite, test_private_channel_non_member_cannot_invite, and test_private_channel_member_cannot_grant_admin (visibility and role-hierarchy enforcement)."
     entry_class: FACT
     evidence:
-      - "crates/buzz-db/src/channel.rs"
+      - "crates/buzz-db/src/store/channel.rs"
       - "crates/buzz-test-client/tests/e2e_relay.rs"
   - statement: "Both client codebases carry a dedicated channels feature module with real, non-stub source: the desktop app's desktop/src/features/channels/channelSnapshot.ts (channel state projection) and the mobile app's mobile/lib/features/channels/channel.dart (channel model), each accompanied by sibling files for membership, actions, and providers/hooks in the same directory."
     entry_class: FACT

@@ -35,7 +35,7 @@ evidence:
   - statement: "On a successful insert of a threaded event (including a kind:45003 comment), the same database transaction increments the parent event's `reply_count` (direct children only) and, when a distinct root exists, the thread root's `descendant_count`; a live kind:39005 thread-summary event is then pushed to subscribers so clients can update badge counts without refetching the head window."
     entry_class: FACT
     evidence:
-      - "crates/buzz-db/src/event.rs"
+      - "crates/buzz-db/src/store/event.rs"
       - "crates/buzz-relay/src/handlers/ingest.rs"
   - statement: "A forum vote (kind:45002) may target either a forum post (kind:45001) or a forum comment (kind:45003); `validate_forum_vote_target` rejects any other target kind, and separately rejects a vote whose target event belongs to a different channel than the vote itself."
     entry_class: FACT

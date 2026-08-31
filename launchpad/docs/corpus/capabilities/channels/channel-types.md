@@ -50,8 +50,8 @@ evidence:
       - "crates/buzz-core/src/kind.rs:507"
       - "crates/buzz-relay/src/handlers/command_executor.rs:66"
       - "crates/buzz-relay/src/handlers/command_executor.rs:370-427"
-      - "crates/buzz-db/src/dm.rs:1-4"
-      - "crates/buzz-db/src/dm.rs:40-56"
+      - "crates/buzz-db/src/store/dm.rs:1-4"
+      - "crates/buzz-db/src/store/dm.rs:42-58"
   - statement: "command_executor.rs's DM-scoped command handlers (handle_dm_open's sibling participant-expansion handler and the hide/unhide handlers) each explicitly load the target channel and reject the command with an error unless the loaded channel's channel_type equals \"dm\", so a DM-specific command run against a non-DM channel id fails rather than silently operating on the wrong channel."
     entry_class: FACT
     evidence:

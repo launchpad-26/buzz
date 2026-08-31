@@ -41,11 +41,11 @@ evidence:
   - statement: "get_accessible_channels's own doc comment and its ORDER BY clause state the accessible-channel listing is ordered stream -> forum -> dm via array_position against ARRAY['stream','forum','dm']::text[]; that array omits 'workflow' entirely, while the same query's WHERE clause special-cases only 'dm' (excluding memberships the user has hidden) and does not exclude channel_type='workflow' rows from the result set."
     entry_class: FACT
     evidence:
-      - "crates/buzz-db/src/channel.rs"
+      - "crates/buzz-db/src/store/channel_members.rs"
   - statement: "Because Postgres's default ascending ORDER BY places NULL last, a workflow-typed channel visible to a querying user -- whose array_position lookup against ['stream','forum','dm'] evaluates to NULL because 'workflow' is absent from that array -- would sort after every dm channel in get_accessible_channels's result rather than being excluded from it or erroring."
     entry_class: INFERENCE
     evidence:
-      - "crates/buzz-db/src/channel.rs"
+      - "crates/buzz-db/src/store/channel_members.rs"
     confidence: 0.75
   - statement: "The relay's fleet-wide usage metric usage_channel_counts defines its own recognized-channel-type allowlist as CHANNEL_TYPES: &[&str] = &['stream', 'forum', 'dm', 'workflow'], zero-filling and reporting 'workflow' as a first-class type alongside the other three -- unlike get_accessible_channels's ordering array, this list does include it, so the two code paths disagree on whether 'workflow' is one of the channel_type's enumerated cases."
     entry_class: FACT

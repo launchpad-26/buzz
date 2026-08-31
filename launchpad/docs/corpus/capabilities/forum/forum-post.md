@@ -62,8 +62,8 @@ evidence:
   - statement: "Forum posts (kind 45001) and forum comments (kind 45003) are included, alongside stream messages, kind:1 text notes and several git event kinds, in the mentions-feed query (build_mentions_query); forum posts alone (kind 45001, without the comment kind) are included in the activity-feed query (build_activity_query), both scoped to the community and the caller's accessible channels."
     entry_class: FACT
     evidence:
-      - "crates/buzz-db/src/feed.rs:90-111"
-      - "crates/buzz-db/src/feed.rs:252-272"
+      - "crates/buzz-db/src/store/feed.rs:91-112"
+      - "crates/buzz-db/src/store/feed.rs:253-273"
   - statement: "The desktop app implements a dedicated forum feature module (desktop/src/features/forum) with ForumView, ForumPostCard, ForumThreadPanel, ForumComposer and related UI components, plus a hooks.ts data layer -- forum posting and reading is a built, not merely planned, desktop surface."
     entry_class: FACT
     evidence:

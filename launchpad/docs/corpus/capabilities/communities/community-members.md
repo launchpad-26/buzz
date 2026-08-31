@@ -17,7 +17,7 @@ evidence:
     entry_class: FACT
     evidence:
       - "migrations/0001_initial_schema.sql"
-      - "crates/buzz-db/src/relay_members.rs"
+      - "crates/buzz-db/src/store/relay_members.rs"
   - statement: "This roster is distinct from NIP-29 per-channel membership: `channel_members` is a separate table keyed by `(community_id, channel_id, pubkey)`, carrying its own `member_role` enum and its own join/removal timestamps, populated from kind:39002 channel-membership events rather than from the relay-admin commands below."
     entry_class: FACT
     evidence:
@@ -31,7 +31,7 @@ evidence:
     entry_class: FACT
     evidence:
       - "crates/buzz-relay/src/handlers/relay_admin.rs"
-      - "crates/buzz-db/src/relay_members.rs"
+      - "crates/buzz-db/src/store/relay_members.rs"
   - statement: "Membership changes are announced relay-side through two further NIP-43 event kinds: kind:13534, an addressable, NIP-70-protected snapshot listing every current member (replaces any previous snapshot, published inside the same lock that serializes the read-build-write cycle), and kind:8000/kind:8001, one-shot 'member added'/'member removed' delta announcements, both relay-signed."
     entry_class: FACT
     evidence:
@@ -55,7 +55,7 @@ evidence:
     entry_class: FACT
     evidence:
       - "migrations/0025_relay_invites.sql"
-      - "crates/buzz-db/src/relay_invite.rs"
+      - "crates/buzz-db/src/store/relay_invite.rs"
   - statement: "The invite HTTP surface is NIP-98-signed rather than a Nostr admin event: `POST /api/invites` mints a code and requires the caller to hold `owner`/`admin` in the tenant community (mirroring kind:9030's authorization), while `POST /api/invites/claim` is deliberately exempt from the relay-membership gate, since its entire purpose is admitting a pubkey that is not yet a member — NIP-98 proves control of the joining key, and the invite's hash proves an admin authorized the join."
     entry_class: FACT
     evidence:
@@ -64,19 +64,19 @@ evidence:
     entry_class: FACT
     evidence:
       - "migrations/0020_join_policy_acceptances.sql"
-      - "crates/buzz-db/src/relay_members.rs"
+      - "crates/buzz-db/src/store/relay_members.rs"
   - statement: "Exactly one `owner` role exists per community at a time. `bootstrap_owner` upserts the configured `RELAY_OWNER_PUBKEY` as owner and demotes any other existing owner rows to `admin`; `transfer_ownership` atomically upserts a new owner and demotes every other owner in that community to `member` (not `admin`, per an explicit product decision recorded in the function's own doc comment), inside a transaction that locks the current owner row `FOR UPDATE` and rejects a stale `expected_owner_pubkey` as `OwnerConflict`."
     entry_class: FACT
     evidence:
-      - "crates/buzz-db/src/relay_members.rs"
+      - "crates/buzz-db/src/store/relay_members.rs"
   - statement: "A single pubkey's ownership is capped across communities: `transfer_ownership` counts communities the transferee already owns inside the same transaction that holds a per-transferee advisory lock, and refuses the transfer as `TransferResult::LimitReached` at or above `max_communities_per_owner()` (default `MAX_COMMUNITIES_PER_OWNER = 5`, overridable via `BUZZ_MAX_COMMUNITIES_PER_OWNER`); the function's own doc comment states this is the authoritative enforcement point, not merely an advisory preflight count performed elsewhere."
     entry_class: FACT
     evidence:
-      - "crates/buzz-db/src/relay_members.rs"
+      - "crates/buzz-db/src/store/relay_members.rs"
   - statement: "`relay_members.rs` carries an `#[ignore]`-gated (requires a live Postgres) unit test, `membership_is_confined_to_its_community`, whose own comment names it as guarding against exactly the mutation of a `WHERE pubkey = $1` membership check with no community predicate — it asserts that a pubkey admitted to community A is absent from `is_relay_member`, `get_relay_member`, and `list_relay_members` for community B."
     entry_class: FACT
     evidence:
-      - "crates/buzz-db/src/relay_members.rs"
+      - "crates/buzz-db/src/store/relay_members.rs"
   - statement: "The desktop app ships a Settings > Community Members surface: `CommunityMembersCard` lists members sorted owner-first, lets an owner or admin add a member (with a role) or remove one, and lets an owner promote a member to admin or demote an admin to member; `desktop/src/shared/api/relayMembers.ts` implements this entirely by signing and publishing the kind:9030/9031/9032 Nostr events described above and by reading the kind:13534 snapshot — there is no separate REST call for these mutations."
     entry_class: FACT
     evidence:

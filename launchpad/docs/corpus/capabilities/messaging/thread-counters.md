@@ -19,11 +19,11 @@ evidence:
   - statement: "insert_event_with_thread_metadata_tx inserts the event and, only when the event row was newly inserted (ON CONFLICT DO NOTHING on the events table) and thread metadata was supplied, inserts the thread_metadata row (also ON CONFLICT DO NOTHING) and -- only if that metadata row was itself newly inserted -- increments the parent's reply_count and, when a root is present, the root's descendant_count, creating stub thread_metadata rows for a parent or root that has none yet; all of this runs inside the one transaction insert_event_with_thread_metadata wraps, so a duplicate event can never double-increment a counter and a crash between the event insert and the counter update cannot happen."
     entry_class: FACT
     evidence:
-      - "crates/buzz-db/src/event.rs"
+      - "crates/buzz-db/src/store/event.rs"
   - statement: "soft_delete_event_and_update_thread performs the symmetric decrement: it soft-deletes the event (UPDATE events SET deleted_at = NOW() ... WHERE deleted_at IS NULL) and, only when that update actually changed a row and a parent_event_id was supplied, decrements the parent's reply_count and the root's descendant_count with GREATEST(count - 1, 0) floors, all inside one transaction with the delete."
     entry_class: FACT
     evidence:
-      - "crates/buzz-db/src/event.rs"
+      - "crates/buzz-db/src/store/event.rs"
   - statement: "Both of the relay's NIP-09 deletion paths -- the direct e-tag deletion handler and the standard multi-target deletion loop -- look up the target's parent/root via get_thread_metadata_by_event and then call soft_delete_event_and_update_thread with those ids before treating the delete as applied, and on success both push a fresh live-thread-summary overlay for the affected root."
     entry_class: FACT
     evidence:
@@ -32,19 +32,19 @@ evidence:
     entry_class: FACT
     evidence:
       - "grep(pattern='\\.decrement_reply_count\\(', scope='crates/**/*.rs') -> only the definition sites in buzz-db/src/thread.rs and buzz-db/src/lib.rs, no call site, run against this node's recorded revision"
-      - "crates/buzz-db/src/thread.rs"
+      - "crates/buzz-db/src/store/thread.rs"
   - statement: "get_thread_summary reads reply_count, descendant_count and last_reply_at for one event_id from thread_metadata, plus up to 10 distinct participant pubkeys for that root ordered by most recent activity, in a second query."
     entry_class: FACT
     evidence:
-      - "crates/buzz-db/src/thread.rs"
+      - "crates/buzz-db/src/store/thread.rs"
   - statement: "get_channel_window LEFT JOINs thread_metadata onto each top-level row of a channel page, so reply_count/descendant_count/last_reply_at come back with the page itself rather than one query per root, and batches the same 10-participant-per-root lookup for every row in the page with thread activity in a single additional query rather than one per root."
     entry_class: FACT
     evidence:
-      - "crates/buzz-db/src/thread.rs"
+      - "crates/buzz-db/src/store/thread.rs"
   - statement: "get_thread_replies -- the paginated per-reply subtree read used to render an open thread -- returns ThreadReply rows with no embedded ThreadSummary at all; reply_count and descendant_count are only attached to the top-level channel-window read (get_channel_window) and the single-event summary read (get_thread_summary), not to the subtree-of-replies read."
     entry_class: FACT
     evidence:
-      - "crates/buzz-db/src/thread.rs"
+      - "crates/buzz-db/src/store/thread.rs"
   - statement: "KIND_THREAD_SUMMARY is 39005, a parameterized-replaceable (NIP-33) kind; emit_live_thread_summary re-reads the current reply_count, descendant_count, last_reply_at and participants fresh from thread_metadata (not incremented client-side or in memory) after a thread mutation and publishes a relay-signed kind:39005 event carrying them as JSON content, tagged with the root's e/d id and the channel's h tag; this overlay is fan-out only and is never persisted, so a client that was not subscribed at the moment it was published never sees it and must refetch the channel window instead."
     entry_class: FACT
     evidence:
@@ -80,7 +80,7 @@ evidence:
     evidence:
       - "VISION_PROJECTS.md"
       - "migrations/0001_initial_schema.sql"
-      - "crates/buzz-db/src/event.rs"
+      - "crates/buzz-db/src/store/event.rs"
       - "crates/buzz-test-client/tests/e2e_relay.rs"
     confidence: 0.9
   - statement: "Issue #780's definition of done, under parent PRD #612, requires this node to state the capability and primary actors/outcomes, define behavioral rules/constraints/variants, link major flows/interfaces/data/platform implementation, and link verification demonstrating the capability -- the capability-template shape rather than the flow-template shape."
