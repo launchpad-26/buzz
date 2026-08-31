@@ -234,6 +234,15 @@ def test_approval_execute_requires_eligible() -> None:
 
 # ---------------- lease node-id (#19) --------------------------------
 def test_lease_uses_user_node_id_not_pr() -> None:
+    """`claim` must assign the USER node id, never the PR node id.
+
+    The previous version of this test called `lease._user_node_id(...)` behind
+    `if False else None` and then asserted `None is None or ...`, so it passed
+    without executing anything — and named a function that does not exist
+    anywhere in this tree (the real one is `user_node_id_from_rest`). It is
+    rewritten to drive `lease.claim` and assert the two node ids land in the
+    right GraphQL variables, which is the property the name claims.
+    """
     import lease
 
     state = fresh_state()
@@ -246,24 +255,55 @@ def test_lease_uses_user_node_id_not_pr() -> None:
         "INSERT INTO etags(url,etag,body,updated_at) VALUES(?,?,?,?)",
         ("https://api.github.com/users/tucktuck101", "e", json.dumps({"node_id": "USER_NODE_1"}), "2026-01-01T00:00:00Z"),
     )
+    # `leases.job_id` is a foreign key onto `jobs(id)`, so the job must exist
+    # before a lease can reference it.
+    state.db.execute(
+        "INSERT INTO jobs(id,repo,number,head_sha,lane,status,artifact_dir,created_at,updated_at) "
+        "VALUES(?,?,?,?,?,?,?,?,?)",
+        ("job-1", "o/r", 1, "h", "incoming_review", "detected", "/tmp/j",
+         "2026-01-01T00:00:00Z", "2026-01-01T00:00:00Z"),
+    )
     state.db.commit()
 
-    captured = {}
+    captured: dict = {}
 
     def fake_post(state, op, variables, job, **kw):
         captured["op"] = op
+        captured["assignableId"] = variables.get("assignableId")
         captured["assigneeIds"] = variables.get("assigneeIds")
         return {"ok": True}
 
+    # Unassigned when claimed, ours when re-read: `claim` REST-verifies the
+    # assignment before recording local lease state, so this returns twice.
+    logins = [[], ["tucktuck101"]]
+
+    def fake_current_logins(config, st, repo, number):
+        return logins.pop(0) if logins else ["tucktuck101"]
+
     import github_mutate
-    orig = github_mutate.post
+
+    orig_post = github_mutate.post
+    orig_logins = lease.current_logins
     github_mutate.post = fake_post
+    lease.current_logins = fake_current_logins
     try:
-        u = lease._user_node_id(state, "tucktuck101", 0) if False else None
-        # Directly test that user node id resolves, not the PR node id
-        assert u is None or u == "USER_NODE_1"
+        claimed = lease.claim(
+            {"login": "tucktuck101"}, state, "o/r", 1, "job-1", "tucktuck101"
+        )
+        assert claimed is True
+        assert captured["op"] == "add_assignee"
+        # The USER node id goes in assigneeIds. Passing the PR node id here is the
+        # defect this test exists to catch.
+        assert captured["assigneeIds"] == ["USER_NODE_1"], captured
+        assert captured["assignableId"] == "PR_NODE_1", captured
+        # The lease was recorded only after the REST re-read confirmed it.
+        row = state.db.execute(
+            "SELECT job_id FROM leases WHERE repo='o/r' AND number=1"
+        ).fetchone()
+        assert row["job_id"] == "job-1"
     finally:
-        github_mutate.post = orig
+        github_mutate.post = orig_post
+        lease.current_logins = orig_logins
         state.close()
 
 

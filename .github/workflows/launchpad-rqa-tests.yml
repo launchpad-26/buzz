@@ -1,0 +1,143 @@
+name: launchpad — review-queue-automation tests
+
+# WHAT THIS JOB DOES, PLAINLY. When a pull request changes a file inside
+# launchpad/skills/review-queue-automation/, GitHub runs that skill's unit tests
+# and marks the pull request red if any of them fail. That is all it does.
+#
+# WHAT IT DOES NOT DO. It does not review a pull request, read a diff, call a
+# model, post a comment, create an issue, or approve anything. It never runs on a
+# pull request that leaves this skill alone. The skill's actual job — reviewing
+# pull requests — cannot run here at all, because its reviewer panel uses local
+# Claude and Codex subscription credentials that GitHub Actions cannot hold; that
+# runs on the operator's machine on a timer. This job guards the reviewer's own
+# source code. It is not the reviewer.
+#
+# WHY IT EXISTS. Until now no CI job ran anything under launchpad/skills/. The
+# skill shipped hundreds of passing tests that no pipeline had ever executed.
+#
+# WHAT IT HONESTLY CANNOT DO, stated so nobody trusts it further than it deserves:
+# it would not have caught launchpad-26/buzz#1962 or #1963. Both were green in
+# this very suite — #1962 because a test fake defined the missing method itself,
+# #1963 because no test feeds REST-shaped check data. Those were found by running
+# the program against a live repository, which remains the only thing that proves
+# this skill works. This job protects the guard tests added under #1962 from a
+# future edit that quietly removes them. That is a ratchet, not a safety net.
+#
+# `pull_request`, deliberately NOT `pull_request_target` — the suite under test
+# lives in the repository, so a pull request can modify the very code this job
+# runs. On `pull_request` that code executes with the fork's own permissions and
+# no access to repository secrets. Mirrors launchpad-agents-tests.yml and
+# launchpad-review-agent-controls.yml.
+
+on:
+  pull_request:
+    paths:
+      - "launchpad/skills/review-queue-automation/**"
+      - ".github/workflows/launchpad-rqa-tests.yml"
+  push:
+    branches: [launchpad]
+    paths:
+      - "launchpad/skills/review-queue-automation/**"
+
+# Read-only. The suite reaches no network, no relay and no GitHub API, so it needs
+# no token scope. The final step proves that property rather than asserting it.
+permissions:
+  contents: read
+
+defaults:
+  run:
+    working-directory: launchpad/skills/review-queue-automation
+
+jobs:
+  tests:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      # The skill imports nothing outside the standard library, so pytest is
+      # installed as a runner, not as a dependency of the code under test. If a
+      # script ever grows a third-party import, collection below fails on the
+      # import rather than a reader discovering it months later.
+      - name: Install the test runner
+        run: pip install "pytest==8.3.4"
+
+      # Fails when the suite contains too few test CASES, rather than reporting
+      # success for a run that executed almost nothing. An empty or shrunken suite
+      # is indistinguishable from a pass in the CI summary — the exact shape of the
+      # gap this workflow exists to close.
+      #
+      # COUNTS CASES, NOT FILES. launchpad-agents-tests.yml learned this the hard
+      # way: a guard that counts files is satisfied by renaming every `test_*`
+      # function to `check_*`, leaving one file and zero cases. A guard that can be
+      # satisfied by a filename is not a guard.
+      #
+      # The floor is a real number, not `> 0`. Deleting nine tenths of the suite
+      # would otherwise still pass, and this skill's specific history is of tests
+      # that pass without exercising anything. Raise it as the suite grows; never
+      # lower it to turn a red run green.
+      - name: Confirm test cases were discovered
+        run: |
+          python3 - <<'PY'
+          import re
+          import subprocess
+          import sys
+
+          FLOOR = 600
+
+          result = subprocess.run(
+              [sys.executable, "-m", "pytest", "tests", "-q", "--collect-only"],
+              capture_output=True,
+              text=True,
+          )
+          sys.stdout.write(result.stdout[-2000:])
+          sys.stderr.write(result.stderr[-2000:])
+          if result.returncode != 0:
+              print("::error::collection failed — a test module does not import")
+              sys.exit(1)
+
+          matches = re.findall(r"(\d+) tests? collected", result.stdout)
+          if not matches:
+              print("::error::pytest reported no collection summary at all")
+              sys.exit(1)
+          count = int(matches[-1])
+          print(f"discovered {count} test case(s)")
+          if count < FLOOR:
+              print(
+                  f"::error::only {count} test case(s) discovered, floor is {FLOOR} — "
+                  "this job would have passed on a suite that stopped covering the skill."
+              )
+              sys.exit(1)
+          PY
+
+      - name: Run review-queue-automation unit tests
+        run: python3 -m pytest tests -q
+
+      # Every GitHub transport in this skill is injectable precisely so its tests
+      # can prove they never call out. A test that quietly starts making real calls
+      # would be slow, flaky, and a credential-shaped risk on a shared runner.
+      # Replacing `socket.socket` before collection makes an accidental live call
+      # fail loudly here instead of passing on a runner that happens to have
+      # egress. Verified locally: the suite passes unchanged with sockets blocked.
+      - name: Prove the suite reaches no network
+        run: |
+          cat > tests/conftest.py <<'PY'
+          import socket
+
+
+          class _Blocked(socket.socket):
+              def __init__(self, *args, **kwargs):
+                  raise RuntimeError(
+                      "the review-queue-automation suite attempted a network "
+                      "connection; every GitHub transport here is injectable and "
+                      "its tests must inject one"
+                  )
+
+
+          socket.socket = _Blocked
+          PY
+          python3 -m pytest tests -q
+          rm tests/conftest.py
