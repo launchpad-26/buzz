@@ -83,6 +83,10 @@ evidence:
     entry_class: FACT
     evidence:
       - "git_show(ref='task/1241-desktop-frontend-backend-bridge', path='launchpad/docs/corpus/platforms/desktop/frontend-backend-bridge.md') -> full document read at commit cd312b9e52cbccc073397d925e673cbac3535064"
+  - statement: "A search for `#[test]`/`#[cfg(test)]` markers in `ptt_shortcut.rs`, `initial_window.rs`, `app_menu.rs`, and `huddle/window.rs` finds only `ptt_shortcut.rs`'s `#[cfg(test)]`-gated no-op stub of `install`/`sync_registration` (kept to avoid linking the global-shortcut plugin into the lib-test binary on Windows), and no `#[test]` function or `mod tests` block asserting behavior of any window-management, plugin-registration, or menu-customization code this node documents."
+    entry_class: FACT
+    evidence:
+      - "grep_repo(pattern='#\\[test\\]|#\\[cfg\\(test\\)\\]', scope='desktop/src-tauri/src/ptt_shortcut.rs;desktop/src-tauri/src/initial_window.rs;desktop/src-tauri/src/app_menu.rs;desktop/src-tauri/src/huddle/window.rs') -> one match, ptt_shortcut.rs:18, at commit 131b02f989684117d9ab1dd426f1673fa638e523"
   - statement: "PRD #602's own acceptance criteria enumerate 'platforms' as an in-scope corpus surface distinct from 'architecture', among thirteen total surfaces."
     entry_class: TEAM_KNOWLEDGE
     provided_by: "launchpad-26/buzz#602 (PRD acceptance criteria)"
@@ -230,3 +234,11 @@ received URL is handed off to application state.
   investigated** — whether that is because the deep-link plugin exposes no
   invokable command surface to the webview, or an intentional omission for
   another reason, was not confirmed against Tauri's own plugin documentation.
+- **No dedicated automated test was found for any of this node's building
+  blocks.** A repository-wide search for `#[test]`/`#[cfg(test)]` in
+  `ptt_shortcut.rs`, `initial_window.rs`, `app_menu.rs`, and
+  `huddle/window.rs` turned up only `ptt_shortcut.rs`'s `#[cfg(test)]`
+  no-op stub of `install`/`sync_registration` (used to keep the
+  global-shortcut plugin out of the lib-test binary), not an assertion
+  about shell behavior. That absence is stated here rather than papered
+  over with an invented citation.
