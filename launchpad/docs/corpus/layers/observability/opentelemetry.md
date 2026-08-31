@@ -27,11 +27,11 @@ evidence:
   - statement: "buzz-relay's `main()` builds one shared `Resource` via `telemetry::service_resource()`, calls `telemetry::try_init_tracer(resource.clone())`, derives `otel_enabled` as `matches!(&tracer_init, telemetry::TracerInit::Enabled(_))`, and — only when enabled — constructs `tracing_opentelemetry::layer().with_tracer(provider.tracer(\"buzz-relay\"))` to attach as the OTEL layer; it then installs a `tracing_subscriber::registry()` carrying three layers: the always-on JSON `fmt::layer()` (filtered by a `RUST_LOG`-driven `EnvFilter` via the file-local `log_env_filter` function), the optional OTEL layer (filtered by `telemetry::otel_env_filter(BUZZ_OTEL_FILTER)`), and a `TraceContextLookup` layer forced to `LevelFilter::OFF` (used only to resolve span IDs to OTEL contexts for the JSON formatter, never to emit its own events)."
     entry_class: FACT
     evidence:
-      - "crates/buzz-relay/src/main.rs:96-141"
+      - "crates/buzz-relay/src/main.rs:96-143"
   - statement: "A `TracerInit::ExporterBuildFailed` outcome is logged via `tracing::warn!(error = %e, ...)` only after `tracing_subscriber::registry()...init()` has run in `main()`, because `try_init_tracer` is deliberately documented as never calling `tracing::warn!` internally — the subscriber may not be installed yet at the point the exporter is built, which would silently drop the event."
     entry_class: FACT
     evidence:
-      - "crates/buzz-relay/src/main.rs:142-144"
+      - "crates/buzz-relay/src/main.rs:145-148"
       - "crates/buzz-relay/src/telemetry.rs:232-237"
   - statement: "`telemetry::otel_env_filter` builds an `EnvFilter` from the `BUZZ_OTEL_FILTER` environment variable, falling back to `\"buzz_relay=info,buzz_datastore=info\"` when unset; this filter governs only spans/events exported through the OTEL layer and is deliberately independent from the `RUST_LOG`-driven filter on the stdout JSON layer, specifically so that changing stdout log verbosity cannot remove parent spans from an exported trace."
     entry_class: FACT
@@ -63,6 +63,11 @@ evidence:
     confidence: 0.6
     evidence:
       - "https://docs.rs/opentelemetry_sdk/0.32.1/src/opentelemetry_sdk/trace/provider.rs.html"
+  - statement: "telemetry.rs's own `#[cfg(test)] mod tests` block carries unit tests for the claims above: `test_service_resource_default_when_env_unset`, `test_service_resource_honors_otel_service_name` and `test_service_resource_empty_string_falls_back_to_default` pin `service_resource`'s three-tier priority order, and `test_try_init_tracer_disabled_when_endpoint_unset` plus `test_classify_exporter_result_maps_err_to_exporter_build_failed` pin the `TracerInit::Disabled` and `TracerInit::ExporterBuildFailed` outcomes deterministically, without depending on live OTLP network behavior."
+    entry_class: FACT
+    evidence:
+      - "crates/buzz-relay/src/telemetry.rs:496-540"
+      - "crates/buzz-relay/src/telemetry.rs:542-579"
   - statement: "Issue #1141's parent PRD is #611, and the batch-run brief that dispatched this task names #1145 (tracing), #1136 (datastore-tracing), #1140 (metrics) and #1142 (prometheus) as sibling tasks whose trace-span, datastore-policy, and metrics content this node must not duplicate."
     entry_class: TEAM_KNOWLEDGE
     provided_by: "launchpad-26/buzz#1141 task dispatch brief (corpus-batch-author, Feature #611 batch run)"
@@ -100,7 +105,8 @@ subscriber. `try_init_tracer` is gated entirely on one environment variable,
   connection is attempted, and the OTEL layer is simply absent from the subscriber that
   gets installed next.
 - **Set** → builds an `opentelemetry_otlp::SpanExporter` via `.with_tonic().build()`
-  (a gRPC exporter, per the crate's pinned features — see *Dependencies* below) and
+  (a gRPC exporter, per the crate's pinned features — see *What exporter is
+  configured* below) and
   passes the result through `classify_exporter_result`:
   - `Ok(exporter)` → constructs an `SdkTracerProvider` with
     `.with_resource(resource).with_batch_exporter(exporter)`, registers it globally via
@@ -147,6 +153,19 @@ The only exporter this mechanism builds is `opentelemetry_otlp::SpanExporter` vi
 own architecture comment — and nothing in `deploy/` or the repository's
 `docker-compose*.yml` files configures such a collector; standing one up is an
 operator/deployment concern outside this repository's own config.
+
+## Verification
+
+`telemetry.rs` carries its own `#[cfg(test)] mod tests` covering the claims above
+deterministically, without depending on a live OTLP network connection:
+`test_service_resource_default_when_env_unset`,
+`test_service_resource_honors_otel_service_name` and
+`test_service_resource_empty_string_falls_back_to_default` pin the three-tier
+service-name priority order from *Resource and service name*; and
+`test_try_init_tracer_disabled_when_endpoint_unset` plus
+`test_classify_exporter_result_maps_err_to_exporter_build_failed` pin the
+`TracerInit::Disabled` and `TracerInit::ExporterBuildFailed` outcomes described in
+*How it is initialized*.
 
 ## Resource and service name
 
