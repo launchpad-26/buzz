@@ -1,5 +1,5 @@
 ---
-status: Proposed
+status: Accepted
 date: 2026-08-25
 issue: launchpad-26/buzz#301
 decided_in: launchpad-26/buzz#301
@@ -10,16 +10,7 @@ supersedes: none
 
 ## Decision
 
-**Not yet settled by a human, and the option below is not one #301 offered.** This
-record is `Proposed`, not `Accepted`. #301's considered options are A (deterministic
-check in `launchpad-pr-check.yml`), B (generated register with no check), C (convention
-only) and D (content/prose validation). `CODEOWNERS` appears in none of them, so the
-pairing below is a fifth option composed while drafting. It has been added to #301 as
-Option E so a human can weigh it against the original four; `launchpad/AGENTS.md` §5.1
-reserves that choice for a human. When a human states the outcome in #301, this
-record's `status` becomes `Accepted`.
-
-The proposed option: the upstream boundary receives two complementary assurances.
+Option E: the upstream boundary receives two complementary assurances.
 
 1. `CODEOWNERS` requests human review when an ordinary pull request touches the
    upstream-owned boundary.
@@ -89,6 +80,9 @@ none
 
 ## Provenance
 
-Drafted by an agent from #301's options plus a fifth option composed while drafting;
-the decision itself is pending a human, as stated at the top of *Decision*. Full
-options are in #301 and the measured enforcement evidence is in #369.
+Drafted by an agent from #301's options plus a fifth option composed while drafting
+(added to #301 as Option E). Jeffrey (@tucktuck101) made the decision on 2026-08-31
+after reviewing options A–E with their positive and negative consequences — including
+the advisory-until-#154 caveat — and the agent's recommendation of Option E; he accepted
+it by replying verbatim: **"agreed"**. Full options are in #301 and the measured
+enforcement evidence is in #369.
