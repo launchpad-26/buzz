@@ -189,6 +189,57 @@ unresolved panel, an unknown thread state, or an unsupported mutation — the
 evidence is written to the job directory and the run stops. Do not improvise a
 GitHub operation to get past it.
 
+### 5.1 Running it on a timer
+
+`sweep` discovers work only when you run it. `tick` is the same sweep with a
+schedule attached, and it is what a timer should call:
+
+```bash
+python3 scripts/dispatcher.py --repo-root <repo> tick --lane incoming_review --limit 2
+python3 scripts/dispatcher.py --repo-root <repo> tick --dry-run   # decision only
+python3 scripts/dispatcher.py --repo-root <repo> tick --force     # ignore the schedule
+```
+
+`tick` reads its own schedule from the `cadence` table and reports `not_due`
+without touching the network on most firings. When it is due it sweeps, then
+picks the next interval from `poll`:
+
+| Situation | Next interval | `reason` |
+|---|---|---|
+| REST budget below `poll.rest_remaining_floor`, or unreadable | longest `poll.idle_seconds` | `rate_limit_floor` |
+| Work pending | `poll.active_seconds` | `work_pending` |
+| Nothing pending | one step further along `poll.idle_seconds` | `idle_backoff` |
+
+A rate-limited sweep does **not** reset the idle streak: it learned nothing
+about whether work is waiting. An unreadable REST budget counts as below the
+floor, because the alternative is sweeping on the assumption that budget you
+could not read is budget you have.
+
+Cadence is stored per `<repo>:<lane>` scope, so two repositories — or the two
+lanes of one repository — back off independently.
+
+**The timer.** `scripts/scheduled-tick.sh <repo-root> [<repo-root> ...]` ticks
+each repository in turn and exits with the worst status. It holds no
+repository-specific knowledge; add a repository by onboarding it and passing its
+root. `RQA_LANES` (default `incoming_review`) and `RQA_LIMIT` (default 2) tune
+it. On macOS, copy `scripts/launchd.plist.example`, replace every
+`<REPLACE:...>`, and load it with `launchctl`.
+
+Set `StartInterval` to the **shortest** interval the cadence can choose
+(`poll.active_seconds`), not to how often you want a sweep — launchd cannot vary
+an interval, so backoff lives in the `cadence` table and most firings do
+nothing. A longer `StartInterval` silently caps how quickly work is picked up.
+
+A timer job rather than a sleeping daemon: the runtime lock is held only while
+work happens, so the one-worker-per-state-directory invariant holds, and a
+crash, reboot or closed lid costs one interval instead of ending the automation
+silently.
+
+**This spends money when it dispatches.** Configure `budget` before loading a
+timer, keep `authority.*` at `disabled` until each canary is approved (§7), and
+note that `RunAtLoad` is `false` in the template on purpose — loading an agent
+should not immediately spend tokens.
+
 ---
 
 ## 6. The human queue
@@ -491,6 +542,9 @@ state-directory ownership boundary that `dispatcher.py` enforces, and
 | Script | What it is |
 |---|---|
 | `scripts/queue.py` | Queue reconciliation for one repo. |
+| `scripts/scheduled-tick.sh` | The trigger a timer calls: one `tick` per repo per lane. Holds no repo-specific knowledge. |
+| `scripts/launchd.plist.example` | macOS timer template. Copy, replace every `<REPLACE:...>`, `launchctl load`. |
+| `scripts/cadence.py` | The sweep-interval decision and its persisted schedule. Not run by hand. |
 | `scripts/lease.py` | Lease claim / release / verify. |
 | `scripts/evidence.py` | Evidence-bundle assembly for one PR. |
 | `scripts/panel.py` | The reviewer panel for one PR. Spends model tokens. |
