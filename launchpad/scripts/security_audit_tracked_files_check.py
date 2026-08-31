@@ -28,6 +28,7 @@ from pathlib import Path
 from typing import List, Optional
 
 from security_audit_core import CheckResult, Status
+from security_audit_classifier import divergence, fetch_upstream_blobs
 from security_audit_ignore_coverage_check import REQUIRED_COVERAGE
 
 NAME = "tracked-sensitive-files"
@@ -149,6 +150,46 @@ def _check_newly_hidden_tracked_files(repo_root: Path, tracked: List[str]) -> Li
     return findings
 
 
+def _partition_by_ownership(
+    repo_root: Path, hits: List[str]
+) -> tuple[List[str], List[str], List[str]]:
+    """Split sensitive-shaped hits into (cohort, upstream_identical, unknown).
+
+    WHY OWNERSHIP MATTERS HERE. This is a fork that operates the upstream
+    product rather than developing it. Upstream ships APNs test fixtures that
+    are genuinely private-key-shaped and genuinely private keys
+    (`crates/buzz-push-gateway/tests/fixtures/apns-test-*.pem`, from
+    `c432a111c`, an ancestor of `block/buzz@main`, byte-for-byte identical
+    here). This check flagged all six on every branch cut after 2026-08-28, so
+    `audit` was red on trunk and on every pull request regardless of content
+    (launchpad-26/buzz#1965). A deterministic check that fails for everyone
+    stops being read.
+
+    The cohort cannot fix those files — it does not own them, and it does not
+    move or rename upstream paths. What it can do is be precise about what it is
+    accountable for. So this narrows by OWNERSHIP, not by adding an exemption
+    list: an allowlist would be a standing hole, and this check deliberately has
+    none (see `_matches_sensitive_shape`, where a suffix exemption was removed
+    after one let a tracked `seed/authorized_keys.example` through).
+
+    Identity, not origin. A file present upstream but MODIFIED here still fails:
+    an inherited filename is exactly where cohort-added key material could hide.
+    """
+    upstream_blobs = fetch_upstream_blobs(repo_root)
+    cohort: List[str] = []
+    upstream_identical: List[str] = []
+    unknown: List[str] = []
+    for path in hits:
+        verdict = divergence(path, repo_root, upstream_blobs)
+        if verdict == "inherited-identical":
+            upstream_identical.append(path)
+        elif verdict == "indeterminate":
+            unknown.append(path)
+        else:  # fork-added or inherited-modified — the cohort is accountable
+            cohort.append(path)
+    return cohort, upstream_identical, unknown
+
+
 def run(repo_root: Path) -> CheckResult:
     tracked = _tracked_paths(repo_root)
     if tracked is None:
@@ -157,13 +198,31 @@ def run(repo_root: Path) -> CheckResult:
     sensitive_hits = sorted(p for p in tracked if _matches_sensitive_shape(p))
     newly_hidden = _check_newly_hidden_tracked_files(repo_root, tracked)
 
+    cohort_hits: List[str] = []
+    upstream_hits: List[str] = []
+    unknown_hits: List[str] = []
     if sensitive_hits:
+        cohort_hits, upstream_hits, unknown_hits = _partition_by_ownership(
+            repo_root, sensitive_hits
+        )
+
+    if cohort_hits:
         return CheckResult(
             NAME,
             Status.FAIL,
-            f"{len(sensitive_hits)} tracked file(s) match a sensitive shape: "
-            + "; ".join(sensitive_hits[:10])
-            + (f", and {len(sensitive_hits) - 10} more" if len(sensitive_hits) > 10 else ""),
+            f"{len(cohort_hits)} cohort-owned tracked file(s) match a sensitive shape: "
+            + "; ".join(cohort_hits[:10])
+            + (f", and {len(cohort_hits) - 10} more" if len(cohort_hits) > 10 else ""),
+        )
+    if unknown_hits:
+        # Upstream unreachable: ownership is unknown, so neither failing nor
+        # passing is honest. INDETERMINATE is visibly not-green and cannot be
+        # mistaken for a clean result.
+        return CheckResult(
+            NAME,
+            Status.INDETERMINATE,
+            f"could not establish upstream ownership for {len(unknown_hits)} "
+            f"sensitive-shaped tracked file(s): " + "; ".join(unknown_hits[:10]),
         )
     if newly_hidden:
         return CheckResult(
@@ -172,8 +231,18 @@ def run(repo_root: Path) -> CheckResult:
             f"{len(newly_hidden)} newly-added ignore pattern(s) cover already-tracked content: "
             + "; ".join(newly_hidden),
         )
+    # The upstream-identical hits are named, not silently dropped. A skip nobody
+    # can see is indistinguishable from a check that stopped looking.
+    suffix = ""
+    if upstream_hits:
+        suffix = (
+            f"; {len(upstream_hits)} sensitive-shaped file(s) are byte-for-byte "
+            f"upstream's and not cohort-owned: " + "; ".join(upstream_hits[:10])
+            + (f", and {len(upstream_hits) - 10} more" if len(upstream_hits) > 10 else "")
+        )
     return CheckResult(
         NAME,
         Status.PASS,
-        f"no tracked file matches a sensitive shape ({len(tracked)} tracked files checked)",
+        f"no cohort-owned tracked file matches a sensitive shape "
+        f"({len(tracked)} tracked files checked){suffix}",
     )
