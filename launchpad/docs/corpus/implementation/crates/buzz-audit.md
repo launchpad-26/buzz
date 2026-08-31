@@ -70,6 +70,7 @@ evidence:
     entry_class: FACT
     evidence:
       - "crates/buzz-relay/src/main.rs"
+      - "launchpad/docs/corpus/architecture/containers/postgres.md"
   - statement: "crates/buzz-relay/src/config.rs's audit_enabled field doc comment states \"Whether tamper-evident event/media audit logging is enabled. Defaults to true. This does not control the separate moderation_actions audit trail\", and parses BUZZ_AUDIT_ENABLED via parse_bool(\"BUZZ_AUDIT_ENABLED\", true); TESTING.md's environment-variable reference table gives the same default (true) and the same distinction (\"Does not disable the separate moderation audit trail\")."
     entry_class: FACT
     evidence:
@@ -235,6 +236,7 @@ an `implements` edge to an id that would resolve to nothing.
 ## Relationships
 
 - part-of: architecture-containers-relay
+- references: architecture-containers-postgres
 
 ## Scope and omissions
 
@@ -255,7 +257,8 @@ actually verified today.
 | The `audit_log` table's schema and its community-fence trigger (`attach_community_write_fence`) | `migrations/0001_initial_schema.sql`, `migrations/0029_community_deletion.sql` — DDL this crate deliberately does not ship |
 | The multi-tenant conformance model as a whole, beyond the one audit row this node checks the crate against | `docs/multi-tenant-conformance.md` |
 | The formal non-interference proof `auditHeads[c]` is part of | `docs/spec/MultiTenantRelay.tla` — this node cites the model's existence and shape, not a re-derivation of its proof |
-| `buzz-relay`'s own responsibility, technology and boundary as a container | `architecture-containers-relay` (this node's one declared relationship) |
+| `buzz-relay`'s own responsibility, technology and boundary as a container | `architecture-containers-relay` (`part-of`) |
+| Postgres's own responsibility, connection-pooling ownership and topology as a container, including the audit pool's sizing from Postgres's side | `architecture-containers-postgres` (`references`) |
 | Whether the unused `buzz-audit` dependency in `buzz-admin/Cargo.toml` should be removed or the `conformance_multitenant.rs` prose corrected | Recorded as a divergence above; not filed as a separate issue by this task |
 
 **No `implements` relationship is declared.** Both targets this node
