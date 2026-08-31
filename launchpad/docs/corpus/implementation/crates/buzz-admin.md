@@ -8,6 +8,11 @@ audiences:
   - developer
   - operator
   - reviewer
+relationships:
+  - type: references
+    target: architecture-context-buzz-platform
+  - type: references
+    target: architecture-context-relay-operator
 evidence:
   - statement: "This node was authored and checked against repository revision 1ed55e980b0043f92d9c652e6a39a8e49345389c on the launchpad branch."
     entry_class: FACT
