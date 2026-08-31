@@ -84,6 +84,12 @@ evidence:
       - "crates/buzz-core/src/private_managed_agent.rs:1-5"
       - "docs/nips/NIP-OA.md:9-24"
     confidence: 0.55
+  - statement: "The NIP-OA sign/verify round trip and self-attestation rejection are unit-tested (`test_sign_then_verify_round_trip`, `test_reject_self_attestation`); `agent_owner_pubkey`'s owner_only-with-no-owner behavior is covered by a Postgres-gated test (`test_owner_only_with_no_owner`) marked `#[ignore = \"requires Postgres\"]`, so it runs under `just test` but not under `just test-unit`."
+    entry_class: FACT
+    evidence:
+      - "crates/buzz-sdk/src/nip_oa.rs:335-349"
+      - "crates/buzz-sdk/src/nip_oa.rs:367-385"
+      - "crates/buzz-db/src/store/user.rs:762-782"
 ---
 
 # Agent owner: capability
@@ -103,8 +109,11 @@ because someone owns it.
 **Shipped.** The cryptographic attestation (NIP-OA `auth` tag, `crates/buzz-sdk/src/
 nip_oa.rs`), the persisted relationship (`agent_owner_pubkey` on the `users` table,
 `migrations/0001_initial_schema.sql:168-173`), and its enforcement points (channel-add
-policy, message-edit-by-owner, git push authority) are all implemented and covered by
-unit tests in the cited source files. The owner-reviewed draft flow (`buzz agents
+policy, message-edit-by-owner, git push authority) are all implemented, and the
+sign/verify round trip, self-attestation rejection, and owner_only-with-no-owner
+behavior are each unit-tested (`crates/buzz-sdk/src/nip_oa.rs:335-349,367-385`,
+`crates/buzz-db/src/store/user.rs:762-782` -- the last is Postgres-gated and does not
+run under `just test-unit`). The owner-reviewed draft flow (`buzz agents
 draft-create`/`draft-update`) is also implemented end to end in `buzz-cli`. This
 node makes no claim about the corresponding Buzz Desktop review/approval UI beyond
 what the CLI-side response message states it does (`"Draft sent to Buzz Desktop for
