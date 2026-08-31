@@ -46,17 +46,17 @@ evidence:
   - statement: "execute_run and execute_from_step each acquire a permit from engine.run_semaphore before doing anything else (WorkflowError::CapacityExceeded if none is free, no queuing), and only after acquiring the permit do they call update_workflow_run to move the row to Running -- and, distinctively, this particular update_workflow_run call is propagated with '?': if the DB write to Running fails, the function returns Err immediately and no step ever executes for that run."
     entry_class: FACT
     evidence:
-      - "crates/buzz-workflow/src/executor.rs:1051-1084"
-      - "crates/buzz-workflow/src/executor.rs:1099-1138"
+      - "crates/buzz-workflow/src/executor.rs:1051-1085"
+      - "crates/buzz-workflow/src/executor.rs:1099-1155"
   - statement: "Within execute_steps (the shared per-step loop for both execute_run and execute_from_step), no call to update_workflow_run exists -- current_step and execution_trace accumulate only in the in-memory ExecutionResult/PartialProgress structs as steps run, and are not written back to the workflow_runs row incrementally; the row is not touched again until finalize_run persists the final outcome in one write."
     entry_class: FACT
     evidence:
-      - "crates/buzz-workflow/src/executor.rs:1164"
+      - "crates/buzz-workflow/src/executor.rs:1164-1298"
   - statement: "A consequence of the above: a reader who fetches a workflow_runs row while it is Running sees current_step at whatever value it held the moment the row was last written (0 for a fresh run, the resume start index for an approval-resumed one) and the execution_trace from that same moment, never a value reflecting steps that have completed since -- the row's mid-run snapshot is stale by construction, not because of a bug or a race."
     entry_class: INFERENCE
     evidence:
-      - "crates/buzz-workflow/src/executor.rs:1051-1084"
-      - "crates/buzz-workflow/src/executor.rs:1164"
+      - "crates/buzz-workflow/src/executor.rs:1051-1085"
+      - "crates/buzz-workflow/src/executor.rs:1164-1298"
       - "crates/buzz-workflow/src/lib.rs:213-305"
     confidence: 0.85
   - statement: "finalize_run is the single place, called by every execution path, that maps an executor result to the run's terminal persisted state: Completed on a clean pass, or Failed (with a stable error code and the accumulated trace) on any error including the not-yet-implemented approval-suspend case, which is deliberately mapped to Failed with error_code 'approval_not_supported' rather than left as WaitingApproval."
@@ -70,7 +70,7 @@ evidence:
   - statement: "This produces an asymmetry in the run record's own write reliability: the Pending-to-Running transition is fail-closed (a write failure aborts the run before any step executes, per the propagated '?'), while the transition to a terminal state is fail-open from the record's perspective (the run's side effects have already happened; only the row's own status write can silently fail to reflect that)."
     entry_class: INFERENCE
     evidence:
-      - "crates/buzz-workflow/src/executor.rs:1051-1084"
+      - "crates/buzz-workflow/src/executor.rs:1051-1085"
       - "crates/buzz-workflow/src/lib.rs:237-304"
     confidence: 0.8
   - statement: "Of RunStatus's six values, only Pending, Running, Completed and Failed are ever written by code in this engine; WaitingApproval is defined in the enum and the database type but no code path sets it (the one place that could -- an approval suspend -- is explicitly mapped to Failed instead), and Cancelled is likewise defined but not set by any code path in buzz-workflow."
