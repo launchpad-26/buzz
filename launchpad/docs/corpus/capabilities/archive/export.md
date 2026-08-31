@@ -60,6 +60,11 @@ evidence:
     evidence:
       - "desktop/src-tauri/src/commands/personas/snapshot/import.rs:1-7"
       - "desktop/src-tauri/src/commands/personas/snapshot.rs:25-28"
+  - statement: "Desktop Playwright E2E specs exist that exercise the agent- and team-snapshot recipient/import UI against the exported file formats this node documents: `desktop/tests/e2e/agent-snapshot-recipient.spec.ts` (its header states it exercises the `AgentSnapshotCard` rendered from an `.agent.json`/`.agent.png` attachment and the add-agent preview/confirm flow) and `desktop/tests/e2e/team-snapshot.spec.ts`. Only their header/purpose comments were read for this node, not their full bodies, so the extent to which they exercise the export side specifically (versus only the import side their names emphasize) was not confirmed."
+    entry_class: FACT
+    evidence:
+      - "desktop/tests/e2e/agent-snapshot-recipient.spec.ts:1-6"
+      - "desktop/tests/e2e/team-snapshot.spec.ts"
 ---
 
 # Agent and team snapshot export: capability
@@ -81,7 +86,11 @@ sender-native send plus recipient card/import) landed in PR #1753. Team-level
 snapshot export (`.team.json`/`.team.png`, bundling every member plus one
 `TeamRecord`) landed afterward in PR #1784 and was extended for PNG memory
 parity in PR #1846. Both command sets are registered in the running app's
-`generate_handler!` list today, not merely present as unused code.
+`generate_handler!` list today, not merely present as unused code. Desktop E2E
+specs exercising the recipient/import side of both file formats exist
+(`agent-snapshot-recipient.spec.ts`, `team-snapshot.spec.ts`); see *Scope and
+omissions* for what was and was not confirmed about their coverage of export
+specifically.
 
 ## Boundary
 
