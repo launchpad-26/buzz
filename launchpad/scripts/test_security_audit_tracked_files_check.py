@@ -31,6 +31,12 @@ def _init_repo_with_files(root: Path, files: dict[str, str]) -> None:
     subprocess.run(["git", "commit", "-q", "-m", "test fixture"], cwd=root, check=True)
 
 
+# FIXTURE CONTENT IS DELIBERATELY NOT KEY-SHAPED. The check under test matches on
+# path shape, never on content, so a fixture never needs a real PEM header — and
+# an earlier revision of this file that used one made `gitleaks-secret-scan` fail
+# on two of these very lines. A control for a secret-detection suite must not
+# itself be the thing it detects.
+
 def _oid(root: Path, rel_path: str) -> str:
     """The committed blob OID of `rel_path`, for building a fake upstream tree."""
     result = subprocess.run(
@@ -146,7 +152,7 @@ class UpstreamOwnershipTest(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
             _init_repo_with_files(
-                root, {"crates/gw/tests/fixtures/apns-test-identity.pem": "-----BEGIN PRIVATE KEY-----\n"}
+                root, {"crates/gw/tests/fixtures/apns-test-identity.pem": "fixture bytes, deliberately not key-shaped\n"}
             )
             upstream = {"crates/gw/tests/fixtures/apns-test-identity.pem":
                         _oid(root, "crates/gw/tests/fixtures/apns-test-identity.pem")}
@@ -169,8 +175,8 @@ class UpstreamOwnershipTest(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
             _init_repo_with_files(root, {
-                "crates/gw/tests/fixtures/apns-test-identity.pem": "-----BEGIN PRIVATE KEY-----\n",
-                "launchpad/deploy/relay.pem": "-----BEGIN PRIVATE KEY-----\n",
+                "crates/gw/tests/fixtures/apns-test-identity.pem": "fixture bytes, deliberately not key-shaped\n",
+                "launchpad/deploy/relay.pem": "fixture bytes, deliberately not key-shaped\n",
             })
             upstream = {"crates/gw/tests/fixtures/apns-test-identity.pem":
                         _oid(root, "crates/gw/tests/fixtures/apns-test-identity.pem")}
@@ -193,7 +199,7 @@ class UpstreamOwnershipTest(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
             _init_repo_with_files(
-                root, {"crates/gw/tests/fixtures/apns-test-identity.pem": "-----BEGIN PRIVATE KEY-----\nours\n"}
+                root, {"crates/gw/tests/fixtures/apns-test-identity.pem": "fixture bytes, deliberately not key-shaped (ours)\n"}
             )
             upstream = {"crates/gw/tests/fixtures/apns-test-identity.pem": "0" * 40}
             with mock.patch(
@@ -208,7 +214,7 @@ class UpstreamOwnershipTest(unittest.TestCase):
         """Ownership unknown is neither clean nor damning, and must not read as clean."""
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
-            _init_repo_with_files(root, {"deploy/host.pem": "-----BEGIN PRIVATE KEY-----\n"})
+            _init_repo_with_files(root, {"deploy/host.pem": "fixture bytes, deliberately not key-shaped\n"})
             with mock.patch(
                 "security_audit_tracked_files_check.fetch_upstream_blobs",
                 return_value=None,
