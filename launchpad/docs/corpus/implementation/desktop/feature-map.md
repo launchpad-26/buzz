@@ -28,25 +28,30 @@ evidence:
   - statement: "desktop/src/ also contains app/ (shell, routing, cross-cutting hooks), shared/ (cross-feature code) and testing/ alongside features/, so the feature-module convention is one of four top-level organizing directories, not the whole of desktop/src/."
     entry_class: FACT
     evidence:
-      - "desktop/src/main.tsx"
+      - "ls(path='desktop/src') -> app, features, features-manifest.d.ts, jdenticon.d.ts, main.tsx, shared, testing, types, upng-js.d.ts, vite-env.d.ts"
   - statement: "desktop/src/app/routes.ts defines the TanStack Router virtual route tree with exactly twelve routes: the index route, /agents, /pulse, /reminders, /settings, /workflows, /workflows/$workflowId, /projects, /projects/$projectId, /messages/new, /channels/$channelId, and /channels/$channelId/posts/$postId, each mapped to a named file under desktop/src/app/routes/."
     entry_class: FACT
     evidence:
       - "desktop/src/app/routes.ts"
-  - statement: "Eight feature directories are wired to a dedicated top-level route in routes.ts: agents (agents.tsx), pulse (pulse.tsx), reminders (reminders.tsx), settings (settings.tsx), workflows (workflows.tsx, workflows.$workflowId.tsx), projects (projects.tsx, projects.$projectId.tsx), messages (messages.new.tsx), and channels (channels.$channelId.tsx, channels.$channelId.posts.$postId.tsx) -- confirmed by grepping each route file for a features/<name> import."
+  - statement: "Seven feature directories are wired to a dedicated, live top-level route in routes.ts, confirmed by opening each named route file individually and finding a features/<name> import in it: agents (agents.tsx, lazy-imports features/agents/ui/AgentsScreen), pulse (pulse.tsx, lazy-imports features/pulse/ui/PulseScreen), settings (settings.tsx, imports features/settings/ui/SettingsPanels), workflows (workflows.tsx and workflows.$workflowId.tsx, import features/workflows/ui/workflowEditorPane), projects (projects.tsx and projects.$projectId.tsx, lazy-import features/projects/ui/ProjectsScreen and ProjectDetailScreen), messages (messages.new.tsx, imports features/messages/ui/NewMessageScreen), and channels (channels.$channelId.tsx lazy-loads ./ChannelRouteScreen.tsx, which is the file that actually imports features/channels/hooks and features/channels/ui/ChannelScreen -- the channels feature is not imported by channels.$channelId.tsx itself)."
     entry_class: FACT
     evidence:
       - "desktop/src/app/routes/agents.tsx"
-      - "desktop/src/app/routes/channels.$channelId.tsx"
+      - "desktop/src/app/routes/ChannelRouteScreen.tsx"
+  - statement: "desktop/src/app/routes/reminders.tsx, despite appearing as a live routes.ts entry, imports no feature at all: its Route definition's beforeLoad unconditionally throws a redirect to '/', with a comment stating 'Reminders is now a filter option inside the inbox dropdown, selected via local state rather than the URL' -- the /reminders route is a dead redirect kept only for old bookmarks/history entries, and the reminders/ feature directory is actually reached through app/AppShell.tsx, app/useLiveHomeFeedActions.ts and app/AppHuddleShell.tsx instead, per the entry above."
+    entry_class: FACT
+    evidence:
+      - "desktop/src/app/routes/reminders.tsx"
   - statement: "desktop/src/app/routes/index.tsx (the root index route, matched at '/') imports from features/home and features/onboarding, so the home feed and onboarding flow are wired at the app's root path even though neither owns a named path segment of its own in routes.ts."
     entry_class: FACT
     evidence:
       - "desktop/src/app/routes/index.tsx"
-  - statement: "Fourteen further feature directories are imported directly by a named file under desktop/src/app/ (shell chrome, not a route file) with no dedicated entry in routes.ts: channel-templates (AppShell.tsx), communities (App.tsx, AppShell.tsx, useCommunityNavigationTransitions.ts), community-members (useAppShellDesktopNotifications.ts), custom-emoji (AppShell.tsx), huddle (App.tsx, AppHuddleBar.tsx, AppHuddleShell.tsx), local-archive (AppShell.tsx), notifications (AppShell.helpers.ts, AppShell.tsx, useAppShellDesktopNotifications.ts), presence (AppShell.tsx), profile (App.tsx, AppShell.tsx, routes/ChannelRouteScreen.tsx), sidebar (AppShell.tsx, AppShellOverlays.tsx, RelayConnectionOverlay.tsx), terminal (AppShellOverlays.tsx), and user-status (AppShell.tsx) -- confirmed by grepping desktop/src/app/**/*.{ts,tsx} for each feature's import path."
+  - statement: "Thirteen further feature directories (beyond the seven routed features and home/onboarding's shared index route) are imported directly by a named file under desktop/src/app/ (shell chrome, not a route file) with no live dedicated route of their own: channel-templates (AppShell.tsx), communities (App.tsx, AppShell.tsx, useCommunityNavigationTransitions.ts), community-members (useAppShellDesktopNotifications.ts), custom-emoji (AppShell.tsx), huddle (App.tsx, AppHuddleBar.tsx, AppHuddleShell.tsx), local-archive (AppShell.tsx), notifications (AppShell.helpers.ts, AppShell.tsx, useAppShellDesktopNotifications.ts), presence (AppShell.tsx), profile (App.tsx, AppShell.tsx, routes/ChannelRouteScreen.tsx), reminders (AppShell.tsx: useDueReminderBadgeCount, useReminderNotifications; useLiveHomeFeedActions.ts: remindersQueryKey; AppHuddleShell.tsx: RemindMeLaterProvider), sidebar (AppShell.tsx, AppShellOverlays.tsx, RelayConnectionOverlay.tsx), terminal (AppShellOverlays.tsx), and user-status (AppShell.tsx) -- confirmed by grepping desktop/src/app/**/*.{ts,tsx} for each feature's import path."
     entry_class: FACT
     evidence:
       - "desktop/src/app/AppShell.tsx"
       - "desktop/src/app/useAppShellDesktopNotifications.ts"
+      - "desktop/src/app/useLiveHomeFeedActions.ts"
   - statement: "Eight feature directories have no import from any file under desktop/src/app/ at all, and are reached only by being imported from inside a sibling feature's own UI: chat (imported by features/channels/ui/ChannelScreenHeader.tsx), forum (imported by features/channels/ui/ChannelScreenLazyViews.ts, features/projects/ui/*, features/pulse/ui/PulseView.tsx), gifs (imported by features/messages/ui/ComposerEmojiPicker.tsx), search (imported by features/messages/ui/*, features/projects/ui/DiscussionChannels.tsx, features/sidebar/ui/AppSidebarPinnedHeader.tsx, features/workflows/ui/WorkflowMessagePicker.tsx), moderation (imported by features/agents/ui/*, features/channels/ui/*, features/forum/hooks.ts, features/home/ui/HomeView.tsx, features/huddle/hooks/*, features/messages/hooks.ts), agent-memory (imported by features/profile/ui/*, features/projects/ui/*), identity-archive (imported by features/agents/ui/*, features/channels/*, features/messages/lib/useMentions.ts, features/community-members/ui/AddMemberDialog.tsx), and mesh-compute (imported by features/settings/ui/SettingsPanels.tsx)."
     entry_class: FACT
     evidence:
@@ -105,12 +110,11 @@ deliberately not attempted here.
 |---|---|---|
 | `agents/` | Dedicated route: `/agents` (`app/routes/agents.tsx`) | Managed-agent creation, snapshot import/export, ACP runtime status; largest feature by file count observed. |
 | `pulse/` | Dedicated route: `/pulse` (`app/routes/pulse.tsx`) | Activity feed view (`ui/PulseView.tsx`, `ui/NoteCard.tsx`); composes `forum/`. |
-| `reminders/` | Dedicated route: `/reminders` (`app/routes/reminders.tsx`) | Reminder notifications and hooks. |
 | `settings/` | Dedicated route: `/settings` (`app/routes/settings.tsx`) | App settings panels; composes `mesh-compute/` and `community-members/`. |
 | `workflows/` | Dedicated route: `/workflows`, `/workflows/$workflowId` | Workflow editor/list screens; composes `search/`. |
 | `projects/` | Dedicated route: `/projects`, `/projects/$projectId` | Largest directory by file count (repo/PR/issue integration); composes `forum/`, `search/`, `agent-memory/`. |
 | `messages/` | Dedicated route: `/messages/new` (also used throughout `channels/`) | Message composition, threading; composes `gifs/`, `search/`. |
-| `channels/` | Dedicated route: `/channels/$channelId`, `.../posts/$postId` | Channel pane, unread/roster state; composes `chat/`, `forum/`, `moderation/`, `identity-archive/`. |
+| `channels/` | Dedicated route: `/channels/$channelId`, `.../posts/$postId`, via a lazy `./ChannelRouteScreen.tsx` (not the route file itself) | Channel pane, unread/roster state; composes `chat/`, `forum/`, `moderation/`, `identity-archive/`. |
 | `home/` | App-root wiring: index route (`app/routes/index.tsx`) and `app/AppShell.tsx`, `app/AppShellContext.tsx` | Personal inbox / home feed view. |
 | `onboarding/` | App-root wiring: index route (`app/routes/index.tsx`), `app/App.tsx` | First-run and community-join onboarding flows. |
 | `channel-templates/` | App-shell import, no route (`app/AppShell.tsx`) | Applies channel templates. |
@@ -121,7 +125,8 @@ deliberately not attempted here.
 | `local-archive/` | App-shell import, no route (`app/AppShell.tsx`) | Local sync of archived agent-metric/observer data. |
 | `notifications/` | App-shell import, no route (`app/AppShell.helpers.ts`, `app/AppShell.tsx`, `app/useAppShellDesktopNotifications.ts`) | Desktop notification dispatch. |
 | `presence/` | App-shell import, no route (`app/AppShell.tsx`) | Online/presence indicator state. |
-| `profile/` | App-shell import, no route (`app/App.tsx`, `app/AppShell.tsx`, `app/routes/ChannelRouteScreen.tsx`) | User profile panels/popovers; composes `agent-memory/`, `identity-archive/`. |
+| `reminders/` | App-shell import (`app/AppShell.tsx`, `app/useLiveHomeFeedActions.ts`, `app/AppHuddleShell.tsx`); its `/reminders` routes.ts entry is a dead redirect to `/` (see *Divergences*) | Reminder badge count and notifications, now surfaced as an inbox filter rather than a standalone screen. |
+| `profile/` | App-shell import, no route (`app/App.tsx`, `app/AppShell.tsx`, `app/routes/ChannelRouteScreen.tsx`) | User profile panels/popovers; composes `agent-memory/`. |
 | `sidebar/` | App-shell import, no route (`app/AppShell.tsx`, `app/AppShellOverlays.tsx`, `app/RelayConnectionOverlay.tsx`) | Community/channel sidebar; composes `search/`. |
 | `terminal/` | App-shell import, no route (`app/AppShellOverlays.tsx`) | Embedded PTY terminal bootstrap/rendering (frontend half of the container node's `terminal_runtime.rs`). |
 | `user-status/` | App-shell import, no route (`app/AppShell.tsx`) | User status indicator. |
@@ -136,6 +141,15 @@ deliberately not attempted here.
 
 ## Divergences
 
+- **`routes.ts` overclaims one route as live.** `/reminders` appears in
+  `routes.ts` beside eleven genuinely live routes, but `app/routes/reminders.tsx`
+  unconditionally redirects to `/` -- the reminders feature moved into the
+  inbox as a filter option and the route was left in place only for old
+  bookmarks. A reader (or agent) trusting `routes.ts` alone as "the list of
+  live feature entry points" would misclassify `reminders/` as route-wired
+  when it is actually app-shell-wired like twelve other directories in the
+  same category. This was caught only by opening `reminders.tsx` itself, not
+  by reading `routes.ts`.
 - **The stated convention is a simplification of the actual top-level layout.**
   `CLAUDE.md:480-481` says only "Features are organized under
   `desktop/src/features/`," but `desktop/src/` also holds `app/` (routing and
