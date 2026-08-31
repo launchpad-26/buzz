@@ -40,7 +40,7 @@ evidence:
   - statement: "Server-side, `authorize_git_read` gates every git read behind the repo's `buzz-channel` binding and the caller's resolved channel-membership role, fails closed on a missing/deleted announcement, an invalid owner, a missing or malformed binding, a non-member, or any database error, and deliberately grants the repo's own announcing owner no bypass — an owner removed from the bound channel loses read access exactly like anyone else."
     entry_class: FACT
     evidence:
-      - "crates/buzz-relay/src/api/git/transport.rs:450-474"
+      - "crates/buzz-relay/src/api/git/transport.rs:445-474"
   - statement: "Every denial from the read gate returns the same generic 404 (\"repository not found\") as a nonexistent repo, with one narrow carve-out: a never-bound repo's own announcing author gets a 404 whose body explains how to bind it, since only that author can rebind a `d`-tag-keyed kind:30617 announcement; a broken (ambiguous) binding stays generic even for the author."
     entry_class: FACT
     evidence:
@@ -76,7 +76,7 @@ evidence:
     entry_class: FACT
     evidence:
       - "web/src/features/repos/mock-repos.ts"
-      - "web/src/features/repos/ui/RepoDetailPage.tsx:188-191"
+      - "web/src/features/repos/ui/RepoDetailPage.tsx:183-188"
   - statement: "The only automated test coverage of this capability's UI is `web/tests/e2e/smoke.spec.ts`, which asserts the home page shows the text \"Repositories\"; no Playwright or unit test exercises the tree, blob viewer, commit list, or README rendering paths."
     entry_class: FACT
     evidence:
