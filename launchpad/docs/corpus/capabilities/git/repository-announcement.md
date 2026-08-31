@@ -24,10 +24,11 @@ evidence:
     entry_class: FACT
     evidence:
       - "crates/buzz-sdk/src/builders.rs"
-  - statement: "The name registry is a Postgres table (`git_repo_names`, accessed via `buzz-db`'s `reserve_repo_name`/`repo_name_owner`/`count_repos_for_owner`/`release_repo_name`) keyed `(community_id, repo_id)`, using `INSERT ... ON CONFLICT DO NOTHING` so concurrent announcements for the same name can't both win, and its own module doc states this replaced a prior v1 local-disk `.names/` index, removing the last persistent local-disk state so relay replicas no longer need a shared volume to agree on name ownership."
+  - statement: "The name registry is a Postgres table (`git_repo_names`, accessed via `buzz-db`'s `reserve_repo_name`/`repo_name_owner`/`count_repos_for_owner`/`release_repo_name`) keyed `(community_id, repo_id)`, using `INSERT ... ON CONFLICT DO NOTHING` so concurrent announcements for the same name can't both win; `git_repo.rs`'s own module doc states this makes the relay stateless (no local per-repo filesystem state, no shared ReadWriteMany volume needed), and the kind:30617 handler's comments state this specifically replaced a prior v1 local-disk `.names/` index."
     entry_class: FACT
     evidence:
       - "crates/buzz-db/src/store/git_repo.rs"
+      - "crates/buzz-relay/src/handlers/side_effects.rs"
   - statement: "A fresh (non-re-announce) claim seeds an empty-manifest pointer in object storage (`seed_manifest_pointer`, strict create-only) so the repo becomes clone-able, and only a genuinely fresh claim is rolled back (name released) if that seed fails; a same-owner re-announce instead calls the tolerant `ensure_manifest_pointer`, which never overwrites a pointer a prior push already established."
     entry_class: FACT
     evidence:
