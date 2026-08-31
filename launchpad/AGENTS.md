@@ -105,12 +105,18 @@ The deliberate exceptions, all accepted knowingly:
   [`decisions/ADR-0045-cohort-crates-in-launchpad-workspace.md`](decisions/ADR-0045-cohort-crates-in-launchpad-workspace.md).
 - **Desktop Settings registration seam** — `desktop/src/features/settings/ui/SettingsPanels.tsx`
   carries a registration seam so cohort-authored Settings sections can be added from
-  `launchpad/` without further upstream edits. Scoped to that seam in that one file: the
-  section descriptors and their components stay under `launchpad/`, and **adding a cohort
-  panel must not touch any upstream file**. Editing the four per-section registration sites
-  directly is what this exception exists to avoid, not something it permits. Reasoning and
-  the rejected alternatives are in
-  [`decisions/ADR-0051-cohort-settings-registration-seam.md`](decisions/ADR-0051-cohort-settings-registration-seam.md).
+  `launchpad/` without further upstream edits. The seam owns section registration **and**
+  sidebar nav-group membership (`settingsNavGroups` is exported from that file). Scoped to
+  that one file: the section descriptors and their components stay under `launchpad/`, and
+  **adding a cohort panel must not touch any upstream file**. `SettingsView.tsx` consumes
+  the export; it is not a second exception. A one-time rewire to import
+  `settingsNavGroups` is the implementation of this seam, not a standing grant to keep
+  editing that file. Editing the upstream registration sites or the nav-group list
+  directly is what this exception exists to avoid, not something it permits. Reasoning
+  and the rejected alternatives are in
+  [`decisions/ADR-0051-cohort-settings-registration-seam.md`](decisions/ADR-0051-cohort-settings-registration-seam.md)
+  as amended by
+  [`decisions/ADR-0053-settings-seam-owns-nav-groups.md`](decisions/ADR-0053-settings-seam-owns-nav-groups.md).
 
 The list itself is closed; any further exception needs its own ADR.
 
