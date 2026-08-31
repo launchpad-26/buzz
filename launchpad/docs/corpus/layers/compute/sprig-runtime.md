@@ -35,7 +35,8 @@ evidence:
     evidence:
       - "crates/buzz-dev-mcp/src/tree.rs"
       - "crates/buzz-dev-mcp/src/rg.rs"
-      - "crates/buzz-dev-mcp/src/lib.rs:172-174"
+      - "crates/buzz-dev-mcp/src/lib.rs:149-152"
+      - "crates/buzz-dev-mcp/src/lib.rs:169-170"
   - statement: "The dependency direction between sprig and the crates it bundles is one-way: buzz-acp's own Cargo.toml has no dependency on sprig and no reference to it anywhere under crates/buzz-acp/, so sprig is purely a packaging convenience layered on top of buzz-acp, buzz-agent and buzz-dev-mcp, not an architectural component those crates depend on or are aware of."
     entry_class: FACT
     evidence:
