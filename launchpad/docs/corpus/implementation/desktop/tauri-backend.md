@@ -48,12 +48,18 @@ evidence:
     entry_class: FACT
     evidence:
       - "desktop/src-tauri/src/commands/project_git_exec.rs"
-  - statement: "managed_agents/discovery.rs (and its discovery/ submodule -- presets.rs, login_shell.rs, windows_install.rs, bounded_command.rs, auth_status_cache.rs) is the native integration that locates installed AI-agent CLIs on the host (Claude Code, Codex, Goose, buzz-agent, and other presets), resolving each one's command path across platform-specific shells, including a login-shell probe and an nvm-aware PATH search on macOS/Linux and a dedicated Windows install-detection path."
+  - statement: "managed_agents/discovery.rs defines the four first-class KnownAcpRuntime entries -- goose, claude, codex, buzz-agent (their `id` fields, read directly) -- as static catalog data; its discovery/ submodule's presets.rs is a separate, additional catalog (PRESET_HARNESSES) of nine more harness ids -- devin, cursor, omp, grok, opencode, kimi, amp, hermes, openclaw (read directly) -- so the two catalogs are distinct, not one list."
     entry_class: FACT
     evidence:
       - "desktop/src-tauri/src/managed_agents/discovery.rs"
       - "desktop/src-tauri/src/managed_agents/discovery/presets.rs"
+  - statement: "discovery/login_shell.rs implements a login-shell PATH probe (10-second wall-clock bound per candidate, /bin/zsh and /bin/bash on Unix, Git Bash on Windows) and nvm default-bin resolution, extracted from discovery.rs verbatim to keep that file under this repository's file-size ratchet."
+    entry_class: FACT
+    evidence:
       - "desktop/src-tauri/src/managed_agents/discovery/login_shell.rs"
+  - statement: "discovery/windows_install.rs is not install detection -- it is Defender-safe *construction* of the Windows install command line itself: Windows Defender's ML classifier flags the bare `irm <url> | iex` pattern as a trojan-dropper signature and silently, stickily blocks the spawn, so a `windows_install_command!` macro emits a two-step download-then-execute form instead, applied to all three built-in runtimes' Windows install commands, not only the one PR #2892 observed failing."
+    entry_class: FACT
+    evidence:
       - "desktop/src-tauri/src/managed_agents/discovery/windows_install.rs"
   - statement: "managed_agents/runtime.rs (plus its runtime/ submodule -- process.rs, lifecycle.rs, spawn_key.rs, stop.rs, sweep.rs, orphan_sweep.rs, instance_reaper.rs) is the process-lifecycle hub for managed agent subprocesses: building each agent's environment, spawning, tracking, stopping and reaping orphaned processes."
     entry_class: FACT
@@ -147,7 +153,7 @@ rather than an `implements` edge toward a spec that has no id to point at.
 | `src/lib.rs` `invoke_handler!(tauri::generate_handler![...])` | The IPC command surface `architecture-containers-desktop` names as "Local IPC from its own webview only" | ~336-337 registered commands in the default build; 348 raw `#[tauri::command]` attributes across 92 files, the gap explained by mesh-llm feature/stub command pairs. |
 | `src/commands/` (65 files: `agent_*`, `channels`, `messages`, `personas`, `teams`, `project_git_*`, `media_*`, `identity`, `pairing`, `workflows`, `canvas`, `social`, `dms`, `updater`, `window_*`, `workspace`, `notifications`) | The bulk of the frontend-facing command surface | Grouped by domain; see `src/commands/mod.rs` for the authoritative module list. |
 | `src/huddle/` (voice channel: session state, STT/TTS pipeline, audio I/O) | The `buzz-voice` outbound integration `architecture-containers-desktop` gestures at but leaves undetailed | ~37 `#[tauri::command]` attributes; the module's own audio-pipeline internals are out of scope here (see *Scope and omissions*). |
-| `src/managed_agents/discovery.rs` + `discovery/` submodule | Locating installed AI-agent CLIs on the host (Claude Code, Codex, Goose, buzz-agent presets) | Login-shell probing, nvm-aware PATH search, dedicated Windows install detection. |
+| `src/managed_agents/discovery.rs` + `discovery/` submodule | Locating installed AI-agent CLIs on the host: four first-class `KnownAcpRuntime` entries (goose, claude, codex, buzz-agent) plus a separate nine-entry `PRESET_HARNESSES` catalog (devin, cursor, omp, grok, opencode, kimi, amp, hermes, openclaw) | Login-shell probing + nvm-aware PATH search (`login_shell.rs`); Defender-safe Windows install *command construction*, not detection (`windows_install.rs`). |
 | `src/managed_agents/runtime.rs` + `runtime/` submodule | Managed-agent subprocess lifecycle: env build, spawn, track, stop, orphan-sweep | The concrete mechanism behind `architecture-containers-desktop`'s per-agent-`BUZZ_PRIVATE_KEY` claim. |
 | `src/managed_agents/backend.rs` | The subprocess protocol the bundled `buzz-backend-kubernetes` externalBin is driven through | Versioned (`protocol_version: 1`) JSON-over-stdio handshake, capped stdout/stderr. Not a Cargo path dependency -- a separate compiled binary. |
 | `src/commands/project_git_exec.rs` | Local git operations against project repos in the "nest" | Runs system `git` as a subprocess; nsec handed to `git-credential-nostr` via env only, never written to disk or global git config; 60s local / 300s remote timeout. |
