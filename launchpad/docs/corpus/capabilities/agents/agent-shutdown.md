@@ -213,6 +213,46 @@ ordered steps above are individually bounded (wake-task drain at 30s, prompt-tas
 sequence -- it logs a warning and the sequence proceeds to abort/drain whatever remains,
 continuing through to `relay.shutdown()` and the final log line regardless.
 
+## Trust boundaries
+
+- **Owner authorization on the shutdown trigger itself.** `is_owner_control_command`
+  checks only kind, exact content, and agent mention -- it performs no authorization
+  check. The separate, second condition -- the sending pubkey equals the harness's
+  resolved `owner_cache` value -- is what actually gates whether the event is honored as
+  a shutdown command; a `!shutdown` message from any other pubkey is treated as an
+  ordinary chat message, not silently dropped and not honored.
+- **The owner-pubkey cache is resolved once per harness process, at startup**, not
+  re-verified per respawn or per shutdown attempt. This node makes no claim about
+  whether a respawned agent subprocess re-establishes owner trust beyond the ACP
+  protocol handshake -- see *Scope and omissions*.
+- **The agent-subprocess boundary itself** (a locally spawned process communicating over
+  stdio, not a network peer) is not established as a named trust boundary by this node;
+  `architecture-flows-agent-turn` already names this same gap for the per-turn flow, and
+  it applies identically here.
+
+## Failure, abort, and rollback behavior
+
+- **Individual agent crash or panic never aborts the whole-harness shutdown sequence** --
+  the two are independent. A crash mid-shutdown is reaped the same way any other agent is
+  during the prompt-task and idle-slot drain steps; a panic recovered via `JoinSet` during
+  normal (non-shutdown) operation instead runs `recover_panicked_agent` and the
+  circuit-breaker respawn decision described under *Outcome* above.
+- **Every bounded step inside the graceful sequence fails open, not closed.** A timed-out
+  wake-task drain, prompt-task drain, or presence-offline publish each logs a warning and
+  the sequence continues to its next step rather than halting -- there is no rollback of
+  steps already completed, and the sequence always reaches `relay.shutdown()` and the
+  final log line.
+- **Representative verification** (partial -- see *Scope and omissions* for what is not
+  covered by any existing test):
+  - `crates/buzz-acp/src/lib.rs:1650-1691` (`inactivity_tests`) -- the inactivity-bound
+    trigger-decision logic (`inactivity_expired`) in isolation, including that a bound of
+    zero disables expiry and an in-flight turn defers it.
+  - `crates/buzz-acp/src/lib.rs:5217-5265` (`owner_control_command_requires_kind_content_and_agent_mention`)
+    -- `is_owner_control_command`'s kind/content/mention gate, though not the separate
+    owner-pubkey-equality check that actually authorizes the shutdown.
+  - No test was found exercising `AcpClient::shutdown`'s process-group SIGKILL-and-5-second-wait
+    mechanics, nor the whole-harness graceful-shutdown sequence end to end.
+
 ## Boundary
 
 This node does not describe:
