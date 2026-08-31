@@ -1,0 +1,30 @@
+# Issue #920 — implementation/crates/buzz-auth.md
+
+Stated size: one hand-authored corpus document, per the batch-run dispatch brief  ->  cap: 5 steps
+
+ALREADY TRUE: `launchpad/docs/corpus/templates/implementation-reference.md`, `launchpad/docs/corpus/AGENTS.md`, `launchpad/docs/corpus/schema/node.schema.json` and `launchpad/docs/corpus/architecture/flows/websocket-authentication.md` are merged on `origin/launchpad`; `launchpad/docs/corpus/implementation/crates/buzz-auth.md` does not exist yet, and no `implementation/` subtree exists in the corpus at all (this is the first node of that type). `crates/buzz-auth` has no `README.md`.
+
+STEP 1  [independent]  Gather evidence: read `crates/buzz-auth/Cargo.toml`, `src/lib.rs` (crate-level docs, `AuthService`, `AuthContext`, `AuthConfig`, `AuthMethod`) and every module (`access.rs`, `error.rs`, `nip42.rs`, `nip98.rs`, `nip98_replay.rs`, `nip_fi/*`, `rate_limit.rs`, `scope.rs`). Grep the workspace for `buzz_auth`/`buzz-auth` to confirm dependents (`buzz-relay`, `buzz-pubsub`, `buzz-admin` via `Cargo.toml`; only `buzz-relay` and `buzz-pubsub` show live call sites) and trait implementers (`RedisRateLimiter`, `RedisNip98ReplayGuard` in `buzz-pubsub`). Confirm `ChannelAccessChecker`/`check_read_access`/`check_write_access`/`require_scope` and the whole `nip_fi` module have no caller outside `buzz-auth` itself (both real, verified gaps, not assumptions). Record `git rev-parse HEAD`. ← RUNS HERE
+        done when: every file listed above has been opened and its public surface noted, and the grep-confirmed caller/implementer list and the two "no caller found" gaps are written down for STEP 3 to cite.
+
+STEP 2  [needs 1]  Write front matter — `id: implementation-crates-buzz-auth`, `type: implementation`, `status: draft`, `origin: launchpad`, `audiences: [agent, developer, reviewer]`, one `evidence` entry per substantive claim (FACT for everything opened directly, INFERENCE only where reasoning is required and confidence-rated, no TEAM_KNOWLEDGE expected) including the commit-citation provenance entry — plus `relationships: [{type: references, target: architecture-flows-websocket-authentication}]`, verified: that node's own evidence ledger cites `crates/buzz-auth/src/{nip42.rs,error.rs,lib.rs}` directly, so `references` (no ownership/currency dependency implied, per `relationships.schema.json`) is accurate; no `implements` edge, since the spec-level targets (NIP-42/NIP-98/NIP-FI docs under `docs/nips/`) are not corpus nodes yet, and no `part-of` target exists (no broader implementation node merged).
+        done when: front matter is written and every `evidence` entry names a file this task actually opened in STEP 1.
+
+STEP 3  [needs 2]  Write the body using the template's seven required sections (Realization statement, Target, Implementation surface, Divergences, Verification, Relationships, Scope and omissions). Implementation surface table covers `AuthService`/`AuthContext`, NIP-42, NIP-98 + replay guard, scope/access, rate limiting, and names `nip_fi` as present but unintegrated rather than detailing its internals (atomicity — a second concept). Divergences section states the two verified real gaps: `access.rs`'s `ChannelAccessChecker` surface is unused in this workspace, and `Scope::ReposRead`/`ReposWrite` are declared but only partially enforced (documented in the scope's own doc comments as a deferred v2 gap, not silent drift). Verification section cites representative unit tests by file path and the e2e coverage already named in `websocket-authentication.md` without re-deriving it.
+        done when: all seven required sections are present and every DoD bullet from issue #920's body is addressed somewhere in the document.
+
+STEP 4  [needs 3]  Run `python3 launchpad/project-intelligence/corpus/validate.py`; fix and re-run until exit 0.
+        done when: the command exits 0.
+
+STEP 5  [needs 4]  Run the corpus unittest suite (`python3 -m unittest discover -s launchpad/project-intelligence/corpus/tests -p "test_*.py"`) as the sole command in its own call to earn the verification stamp, then in a separate call `git add` the two files and `git commit -s`. Do not push and do not open a PR — this document is one of 37 integrated into a single batch PR later.
+        done when: the unittest run reports `OK` and `git rev-parse HEAD` shows a new commit on `task/920-buzz-auth` containing both files.
+
+PARALLEL: none — single file, single task, no code changes.
+
+GATES: `python3 launchpad/project-intelligence/corpus/validate.py` must exit 0. `review-adjudicate` and cross-model final review are deferred to the batch owner's later integration pass, not run here.
+
+BUDGET: small — one document, evidence gathering scoped to the ~13 files in `crates/buzz-auth/src/`, a handful of grep-confirmed call sites in `buzz-relay`/`buzz-pubsub`, and the one existing flow node it cites as supporting context.
+
+OPEN: `crates/buzz-auth` ships no `README.md` (unlike `buzz-acp`, `buzz-agent`, `buzz-cli`, `buzz-pairing-cli`, `git-credential-nostr`, `git-sign-nostr`), so this node is the first place any of this crate's boundary is written down at all, not a restatement of an existing doc. `buzz-admin`'s `Cargo.toml` declares `buzz-auth` as a dependency but no `buzz_auth::` usage was found in `buzz-admin/src` by grep — reported as a declared-but-unconfirmed-live dependency rather than an active caller, to avoid overclaiming.
+
+LEFT OUT: No deep documentation of `nip_fi`'s internal contracts (`AssertionPolicyId`, `FederatedAssertionVerifier`, denial classes, config/verifier modules) — it is a large, currently-unwired subsystem and per the atomicity rule is a second concept, better served by its own future node once it is integrated. No `implements` edge to NIP-42/NIP-98/NIP-FI specification documents — none has a corpus node id yet. No restatement of the WebSocket auth flow's step-by-step mechanics — `architecture-flows-websocket-authentication` already owns that; this node is cited via `references` rather than duplicated.
