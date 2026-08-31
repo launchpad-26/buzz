@@ -46,6 +46,7 @@ import sys
 from typing import Any
 
 from assurance import Profile, minimum_profile
+from checks import is_failing as _check_is_failing
 from common import State, atomic_write, load_config, utcnow
 from errors import (
     AuditLoggingError,
@@ -478,11 +479,9 @@ def _plan_for_job(config, state, repo, number, job):
         if evidence_path.is_file():
             evidence = _json.loads(evidence_path.read_text(encoding="utf-8"))
             checks = (evidence or {}).get("checks") or []
-        checks_failing = any(
-            isinstance(c, dict)
-            and (c.get("conclusion") or "").upper() not in ("SUCCESS", "NEUTRAL", "SKIPPED", "")
-            for c in checks
-        )
+        # `is_failing` is the same predicate this expression spelled inline: not
+        # green and not pending. Vocabulary lives in `checks.py`.
+        checks_failing = any(_check_is_failing(c) for c in checks)
 
         head_row = state.db.execute(
             "SELECT head_sha FROM jobs WHERE id=?", (job,)

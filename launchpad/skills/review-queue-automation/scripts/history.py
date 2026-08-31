@@ -27,6 +27,8 @@ import re
 import sys
 from typing import Any
 
+from checks import is_passing as _check_is_passing
+
 CONTESTED = "contested"
 ADVERSE = "adverse"
 CLEAN = "clean"
@@ -182,11 +184,11 @@ def checks_ok_timestamp(checks: list[dict[str, Any]]) -> str | None:
         if not isinstance(check, dict):
             return None
         status = (check.get("status") or "").lower()
-        conclusion = (check.get("conclusion") or "").upper()
         # A still-running check means we cannot assert the suite was green.
         if status and status != "completed":
             return None
-        if conclusion not in ("SUCCESS", "NEUTRAL", "SKIPPED"):
+        # Same PASSING vocabulary as every other consumer, from `checks.py`.
+        if not _check_is_passing(check):
             return None
         completed = check.get("completed_at") or ""
         if not completed:

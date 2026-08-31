@@ -23,12 +23,16 @@ import re
 from dataclasses import dataclass, field
 from typing import Any
 
+from checks import FAILING as _FAILING, failing_names as _failing_names
+
 #: Severities that may support a formal change request. Deliberately narrow;
 #: `high` and below are advisory unless an operator widens this in policy.
 DEFAULT_BLOCKING_SEVERITIES = ("blocker",)
 
 #: Check conclusions that count as a real failure for corroboration (b).
-FAILING_CONCLUSIONS = frozenset({"FAILURE", "TIMED_OUT", "CANCELLED", "ACTION_REQUIRED", "STALE"})
+#: Defined once in `checks.py`; re-exported here because this module's callers
+#: have always read it from `findings`.
+FAILING_CONCLUSIONS = _FAILING
 
 TWO_FAMILIES = "two_provider_families"
 CHECK_BACKED = "check_failure_corroborated"
@@ -118,17 +122,12 @@ def extract_findings(verdicts: list[dict[str, Any]]) -> list[Finding]:
 
 
 def failing_check_names(checks: list[dict[str, Any]] | None) -> list[str]:
-    """Names of checks whose conclusion is a genuine failure."""
-    names: list[str] = []
-    for check in checks or []:
-        if not isinstance(check, dict):
-            continue
-        conclusion = _clean(check.get("conclusion")).upper()
-        if conclusion in FAILING_CONCLUSIONS:
-            name = _clean(check.get("name")) or _clean(check.get("id"))
-            if name:
-                names.append(name)
-    return names
+    """Names of checks whose conclusion is a genuine failure.
+
+    Delegates to `checks.failing_names` so the conclusion vocabulary has one
+    implementation rather than one per consumer.
+    """
+    return _failing_names(checks)
 
 
 def _cited_failing_check(finding: Finding, failing: list[str]) -> str:
