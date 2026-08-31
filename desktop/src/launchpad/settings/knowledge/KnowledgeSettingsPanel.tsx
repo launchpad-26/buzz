@@ -55,6 +55,13 @@ function KnowledgeSettingsPanel() {
               <h3 className="text-sm font-medium text-foreground">
                 {deriveTitle(representative)}
               </h3>
+              <p
+                className="text-2xs text-muted-foreground/70"
+                data-settings-subcopy
+                data-testid={`settings-knowledge-node-${representative.id}-provenance`}
+              >
+                id: {representative.id} · origin: {representative.origin}
+              </p>
               <p className="whitespace-pre-wrap text-sm text-muted-foreground">
                 {deriveExcerpt(representative.body)}
               </p>
