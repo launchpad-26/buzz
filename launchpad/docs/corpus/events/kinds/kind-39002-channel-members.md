@@ -123,6 +123,11 @@ evidence:
     entry_class: FACT
     evidence:
       - "shell(test -e launchpad/docs/corpus/events) -> DOES NOT EXIST, run against origin/launchpad HEAD before this file was written"
+  - statement: "test_nip29_standard_client_flow subscribes to kind:39002 after creating a channel and asserts that an event carrying a `d` tag equal to the channel id is found among the results ('should find kind:39002 for our channel'); test_nip29_owner_demotion_recovery_paths reads back the authoritative post-put-user roles by subscribing to kind:39002 filtered by `#d` on the channel id and taking the latest event by `created_at`, asserting on the resulting owner/member role tags after a sequence of put-user calls -- both are real, currently-passing e2e conformance coverage of this kind, not merely a mention of it."
+    entry_class: FACT
+    evidence:
+      - "crates/buzz-test-client/tests/e2e_relay.rs:1517-1604"
+      - "crates/buzz-test-client/tests/e2e_relay.rs:2861-2936"
   - statement: "Issue #876's definition of done requires this node to state the event kind number/name and its persistent/replaceable/ephemeral classification, define required/optional tags/content and validation rules, name producers/consumers/authorization/persistence/fanout/search/audit treatment, and link the governing NIP/spec, handler/registry and conformance/tests."
     entry_class: TEAM_KNOWLEDGE
     provided_by: "launchpad-26/buzz#876 definition of done"
@@ -299,16 +304,27 @@ first event-kind instance node authored here.
 - **Audit**: enqueued through the same generic `enqueue_event_created_audit` path as any
   other persisted event; no kind-specific audit behavior exists.
 
+## Conformance / tests
+
+`crates/buzz-test-client/tests/e2e_relay.rs`:
+
+- `test_nip29_standard_client_flow` (lines 1517-1604) creates a channel, subscribes to
+  `kind:39002`, and asserts a matching event carrying the channel's `d` tag is emitted —
+  end-to-end coverage of §6's "producer" claim.
+- `test_nip29_owner_demotion_recovery_paths` (lines 2861-2936, using the `member_role`
+  helper at line 2774) issues a sequence of `put-user` role changes and reads back the
+  authoritative resulting roles from `kind:39002` (subscribing with a `#d` filter and
+  taking the latest event by `created_at`) — end-to-end coverage that the relay's
+  supersede-then-insert replacement (§6) reflects the true current role even when writes
+  race or are contested.
+
 ## Not verified
 
-- **No automated test naming kind 39002 or `replace_member_event` was located and
-  opened.** `crates/buzz-db/src/store/channel_members.rs` contains unit tests exercising
-  `get_members` past a 1,000-row roster and the roster-reconciliation query, but this
-  node did not open or name a test that asserts `replace_member_event`'s
-  supersede-then-insert behavior directly, or an end-to-end test that publishes a
-  channel and reads back its `kind:39002` roster. This is a gap in *conformance/tests*
-  linkage the issue's own DoD asks for, named honestly rather than papered over with an
-  invented citation.
+- **`replace_member_event`'s supersede-then-insert behavior has no dedicated unit test
+  found in `crates/buzz-db/src/store/channel_members.rs`.** That file's own unit tests
+  exercise `get_members` past a 1,000-row roster and the roster-reconciliation query, but
+  this node did not locate a unit test isolating `replace_member_event` itself; the
+  behavior is instead exercised indirectly, end-to-end, by the two tests named above.
 - **Whether kind 39002 (or the 39000-39003 range generally) was ever assigned a
   different number before its current one** was not established from any source opened
   while writing this node — §8 states "not applicable" on the absence of contrary
