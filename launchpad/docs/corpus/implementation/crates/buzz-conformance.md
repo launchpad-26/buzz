@@ -40,7 +40,7 @@ evidence:
     entry_class: FACT
     evidence:
       - "crates/buzz-conformance/src/checker.rs:60-132"
-  - statement: "checker.rs carries 8 in-crate unit tests covering: empty-trace coverage breach, a full write+read pass case, a cross-community row biting NonInterference, an AuthCheck Allow with a foreign claim biting IllegalTransition (M2), the symmetric Deny-with-foreign-claim case passing, a mid-trace resolved_community/host change biting StateMismatch, an ImplBug step biting CoverageBreach, and a scenario-required action that never appeared biting CoverageBreach by name."
+  - statement: "checker.rs carries 9 in-crate unit tests (counted directly: 13 fn items minus 4 non-#[test] helper functions), covering: empty-trace coverage breach, a full write+read pass case, a cross-community row biting NonInterference, an AuthCheck Allow with a foreign claim biting IllegalTransition (M2), the symmetric Deny-with-foreign-claim case passing, a mid-trace resolved_community/host change biting StateMismatch, an ImplBug step biting CoverageBreach, a scenario-required action that never appeared biting CoverageBreach by name, and all three SanitizedReason variants passing alone as well-formed."
     entry_class: FACT
     evidence:
       - "crates/buzz-conformance/src/checker.rs:134-337"
@@ -90,10 +90,16 @@ evidence:
     entry_class: FACT
     evidence:
       - "crates/buzz-conformance/LIMITS.md:39-68"
-  - statement: "LIMITS.md's CI command section requires three test surfaces to stay green on every PR: `cargo test -p buzz-conformance --lib` (9 schema/checker unit tests), `cargo test -p buzz-conformance --test replay_fixtures` (5 replay-fixture tests), and `cargo test -p buzz-relay --lib conformance::` (2 EmitGuard coverage-breach self-tests in crates/buzz-relay/src/conformance/mod.rs) -- 16 tests total -- and states the integration replay (live relay -> JsonlTracer -> check_trace) is the next ratchet, not yet landed."
+  - statement: "LIMITS.md's CI command section requires three test surfaces to stay green on every PR: `cargo test -p buzz-conformance --lib` (LIMITS.md's own comment says 9 schema/checker unit tests), `cargo test -p buzz-conformance --test replay_fixtures` (LIMITS.md's own comment says 5 replay-fixture tests), and `cargo test -p buzz-relay --lib conformance::` (LIMITS.md's own comment says 2 EmitGuard coverage-breach self-tests) -- LIMITS.md sums these as 16 tests total -- and states the integration replay (live relay -> JsonlTracer -> check_trace) is the next ratchet, not yet landed."
     entry_class: FACT
     evidence:
       - "crates/buzz-conformance/LIMITS.md:85-126"
+  - statement: "Counted directly against the current source rather than trusting LIMITS.md's own comment: `crates/buzz-conformance/src/checker.rs`'s `#[cfg(test)] mod tests` carries exactly 9 `#[test]` functions (matching LIMITS.md); `crates/buzz-conformance/tests/replay_fixtures.rs` carries 6 `#[test]` functions, not 5 -- `foreign_row_leak_is_non_interference` and `missing_required_action_is_coverage_breach` both exist in the file today; and `crates/buzz-relay/src/conformance/mod.rs`'s `#[cfg(test)] mod tests` (matched in full by the `conformance::` substring filter in LIMITS.md's own CI command) carries 10 `#[test]` functions, not 2 -- LIMITS.md's '2' names only the two EmitGuard-Drop-specific self-tests (`emit_guard_drop_is_silent_when_an_emit_reached_the_tracer`, `emit_guard_drop_records_exactly_one_impl_bug_when_no_emit`) and does not account for the other 8 tests in the same module (`counting_tracer_delegates_enabled_to_inner`, two `record_req_authcheck_*` tests, three `project_row_communities_*` tests, and two `record_read_*_rows_*` tests) that the literal command it prescribes also runs. The actual count for the three commands as written is 9 + 6 + 10 = 25, not the 16 LIMITS.md sums."
+    entry_class: FACT
+    evidence:
+      - "crates/buzz-conformance/src/checker.rs:164-337"
+      - "crates/buzz-conformance/tests/replay_fixtures.rs:237-324"
+      - "crates/buzz-relay/src/conformance/mod.rs:441-780"
   - statement: "The Justfile's unit-test job runs `cargo nextest run -p buzz-conformance` (all targets, not just --lib) with an inline comment stating this is the multi-tenant conformance gate, that it needs no infra because it is pure in-process trace replay, and that it belongs in the unit job."
     entry_class: FACT
     evidence:
@@ -211,26 +217,45 @@ These are named directly by the crate's own `LIMITS.md`, not inferred:
 - **Type-level fences are enforced by the compiler, not this gate.** If `CommunityId` ever grew a
   `From<Uuid>` impl, breaking the no-parse-from-client fence, this gate would not detect it.
 
-No drift beyond what `LIMITS.md` itself already names was found while writing this node — the
-crate's own documentation is unusually explicit about its own boundary, and the checked-in fixture
-suite (`good.jsonl`, `bad_host_channel_mismatch.jsonl`, `bad_coverage_breach.jsonl`,
-`bad_foreign_row_leak.jsonl`) demonstrates each stated failure mode actually fires.
+**One drift was found beyond what `LIMITS.md` names as a scope limit: `LIMITS.md`'s own test-count
+comment has drifted from the code it describes.** It states 9 + 5 + 2 = 16 tests across the three
+CI commands; counting `#[test]` functions directly against current source gives 9 + 6 + 10 = 25.
+The `--lib` count (9) still matches. The `replay_fixtures` count is stale by one test
+(`missing_required_action_is_coverage_breach`, or possibly `foreign_row_leak_is_non_interference`,
+was added after the comment was last updated — which one was not determined). The `buzz-relay`
+count is stale by 8: `LIMITS.md`'s comment describes only the two `EmitGuard`-Drop self-tests it
+was written to justify, but the `conformance::` substring filter it prescribes as the literal CI
+command also runs `CountingTracer`'s `enabled()`-delegation test and 7 tests of
+`record_req_authcheck`/row-projection helpers that share the same test module. This is a
+documentation-lags-code drift in the crate's own file, not a gate that is failing — the tests
+themselves are real and passing (see *Verification*); nobody has gone back to update the comment's
+count as the module grew. Beyond this, the checked-in fixture suite (`good.jsonl`,
+`bad_host_channel_mismatch.jsonl`, `bad_coverage_breach.jsonl`, `bad_foreign_row_leak.jsonl`)
+demonstrates each of `LIMITS.md`'s stated failure modes actually fires, and no other drift was
+found while writing this node.
 
 ## Verification
 
 Per `LIMITS.md`'s own CI command section, three test surfaces are required to stay green on every
-PR (16 tests total):
+PR. **`LIMITS.md`'s own inline comment undercounts them** (see *Divergences*) — the counts below
+were recounted directly against current source, not copied from that comment:
 
 1. `cargo test -p buzz-conformance --lib` — 9 schema/checker unit tests in `checker.rs`, covering
    every `TraceAction` variant plus at least one mutation-class bite (M2 claim-vs-resolved,
    coverage breach, state mismatch, non-interference).
-2. `cargo test -p buzz-conformance --test replay_fixtures` — 5 tests replaying the 4 committed
-   JSONL fixtures (good, bad-host-channel-mismatch, bad-coverage-breach, bad-foreign-row-leak) plus
-   the standalone empty-trace case; each fixture is round-tripped byte-exact against a typed Rust
+2. `cargo test -p buzz-conformance --test replay_fixtures` — 6 tests (not the 5 `LIMITS.md`'s own
+   comment names): the 3 committed-JSONL round-trips against `good.jsonl` /
+   `bad_host_channel_mismatch.jsonl` / `bad_coverage_breach.jsonl`, a 4th round-trip against
+   `bad_foreign_row_leak.jsonl`, plus a standalone empty-trace case and a scenario-required-action
+   case that use no fixture file. Each fixture is round-tripped byte-exact against a typed Rust
    builder before being replayed, so a schema change forces a deliberate fixture refresh
    (`BUZZ_CONFORMANCE_UPDATE=1`) rather than a silent drift.
-3. `cargo test -p buzz-relay --lib conformance::` — 2 `EmitGuard` self-tests proving the coverage
-   guard fires `ImplBug` on Drop when nothing was emitted, and stays silent when an emit did occur.
+3. `cargo test -p buzz-relay --lib conformance::` — this filter matches all 10 tests in that
+   module's `#[cfg(test)] mod tests`, not only the 2 `EmitGuard`-Drop-specific self-tests
+   `LIMITS.md`'s comment names (which do prove the coverage guard fires `ImplBug` on Drop when
+   nothing was emitted, and stays silent when an emit did occur). The other 8 cover
+   `CountingTracer`'s `enabled()` delegation and the `record_req_authcheck`/row-projection helpers
+   this node's Implementation surface table also names.
 
 The Justfile's unit-test job runs the equivalent `cargo nextest run -p buzz-conformance` (all
 targets) unconditionally, with an inline comment stating this is deliberately infra-free so it
