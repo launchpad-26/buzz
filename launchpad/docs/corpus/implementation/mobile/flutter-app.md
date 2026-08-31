@@ -47,7 +47,7 @@ evidence:
     entry_class: FACT
     evidence:
       - "mobile/lib/shared/theme/color_scheme.dart"
-  - statement: "Beyond the Catppuccin default pair, mobile/lib/shared/theme/theme_catalog.dart defines a themeCatalog of 60 Shiki-derived ThemeColors entries (bg/fg/comment plus optional added/deleted), consumed by an adaptive theme engine to derive a full Material ColorScheme per community-selected theme; CLAUDE.md's theme description names only the Catppuccin Latte/Macchiato pair and does not mention this per-community catalog."
+  - statement: "Beyond the Catppuccin default pair, mobile/lib/shared/theme/theme_catalog.dart defines a themeCatalog literal containing 62 Shiki-derived ThemeColors entries (bg/fg/comment plus optional added/deleted), consumed by an adaptive theme engine to derive a full Material ColorScheme per community-selected theme; CLAUDE.md's theme description names only the Catppuccin Latte/Macchiato pair and does not mention this per-community catalog. The file's own header comment claims 'all 60 Shiki syntax theme color definitions', which is itself stale against a direct count of the ThemeColors( entries in the literal (62, counted directly rather than trusted from the comment)."
     entry_class: FACT
     evidence:
       - "mobile/lib/shared/theme/theme_catalog.dart"
@@ -55,7 +55,7 @@ evidence:
     entry_class: FACT
     evidence:
       - "mobile/lib/app.dart"
-  - statement: "CLAUDE.md's Mobile App section states a hard 1000-line-per-file ceiling enforced by mobile/scripts/check-file-sizes.mjs via just mobile-check (runs in just check + pre-push, mirroring desktop/web), and that the guard must never be bumped or overridden -- files must be split instead."
+  - statement: "CLAUDE.md's Mobile App section states a hard 1000-line-per-file ceiling, enforced across Desktop, Web, and Mobile by the repository-level `just file-size-check` gate (`just check`, CI, and every pre-push), and that the guard must never be bumped or overridden -- files must be split instead."
     entry_class: FACT
     evidence:
       - "CLAUDE.md"
@@ -63,7 +63,7 @@ evidence:
     entry_class: FACT
     evidence:
       - "mobile/scripts/check-file-sizes.mjs"
-  - statement: "In the repository root Justfile, mobile-check (line 750) runs only `dart format --output=none --set-exit-if-changed .` and `flutter analyze`; the file-size guard is invoked by a separate recipe, file-size-check (line 106), which runs `node mobile/scripts/check-file-sizes.mjs` (and the desktop/web equivalents) directly. The top-level check recipe (line 96) depends on mobile-check and file-size-check as two independent, sibling prerequisites, not one calling the other -- so CLAUDE.md's phrasing that the file-size ceiling is enforced 'via just mobile-check' names the wrong recipe for the direct invocation, even though both do run under just check."
+  - statement: "In the repository root Justfile, mobile-check (line 750) runs only `dart format --output=none --set-exit-if-changed .` and `flutter analyze`; the file-size guard is invoked by a separate recipe, file-size-check (line 106), which runs `node mobile/scripts/check-file-sizes.mjs` (and the desktop/web equivalents) directly. The top-level check recipe (line 96) depends on mobile-check and file-size-check as two independent, sibling prerequisites, not one calling the other -- confirming, rather than contradicting, CLAUDE.md's own (correct) attribution of the guard to `just file-size-check`."
     entry_class: FACT
     evidence:
       - "Justfile"
@@ -146,32 +146,21 @@ repository root to read the target prose this node traces.
 | `mobile/lib/features/*` (ten feature directories), `mobile/lib/shared/*` (sixteen shared modules) | "Feature code under `lib/features/`... shared code under `lib/shared/`" | Directory layout matches the stated convention as of this revision. |
 | `mobile/lib/shared/theme/theme_extensions.dart` (`AppThemeExtension.colors`, `.textTheme`) | "Prefer `context.colors` and `context.textTheme`... over raw `Theme.of(context)`" | Extension exists and is the mechanism the rule names. |
 | `mobile/lib/shared/theme/color_scheme.dart` (`lightColorScheme`, `darkColorScheme`) | "Theme: Catppuccin Latte (light) / Macchiato (dark) -- matches desktop" | True as the shipped *default* pair; see Divergences for the fuller picture. |
-| `mobile/scripts/check-file-sizes.mjs` (`MAX_LINES = 1000`) | "Hard ceiling: 1000 lines/file" | Delegates to the shared `scripts/check-file-sizes-core.mjs` also used by desktop/web. |
+| `mobile/scripts/check-file-sizes.mjs` (`MAX_LINES = 1000`), invoked by the `Justfile`'s `file-size-check` recipe (not `mobile-check` -- both are independent siblings under `check`) | "Hard ceiling: 1000 lines/file, enforced ... by the repository-level `just file-size-check` gate" | Delegates to the shared `scripts/check-file-sizes-core.mjs` also used by desktop/web; `CLAUDE.md`'s own recipe attribution matches the `Justfile` exactly. |
 | `scripts/mobile-worktree-overrides.sh`, `Justfile` `mobile-dev` / `mobile-build-android` recipes | "worktree-specific debug identity... via `scripts/mobile-worktree-overrides.sh`, applied through `just mobile-dev`" | Script and both invoking recipes verified directly. |
 | `mobile/lib/shared/relay/nostr_models.dart:7` (`EventKind`, "Keep in sync with `desktop/src/shared/constants/kinds.ts`") | "event kinds must stay in sync with `desktop/src/shared/constants/kinds.ts`" | The sync obligation is stated in-code as a doc comment, not only in `CLAUDE.md`. |
 | `mobile/test/helpers/widget_helpers.dart` (`WidgetHelpers.testable`), fake-notifier test files under `mobile/test/features/*` | "Use the `WidgetHelpers.testable()` wrapper... Fake notifiers should extend the real notifier class and override `build()`" | Both stated testing-convention shapes exist in real test code. |
 
 ## Divergences
 
-Two divergences were found by checking `CLAUDE.md`'s claims against the code
+One divergence was found by checking `CLAUDE.md`'s claims against the code
 directly, rather than assuming agreement:
 
-1. **Which recipe enforces the file-size ceiling.** `CLAUDE.md` states the
-   1000-line guard is "enforced by `mobile/scripts/check-file-sizes.mjs` via
-   `just mobile-check`". In the repository's `Justfile`, `mobile-check`
-   (`dart format --set-exit-if-changed . && flutter analyze`) never invokes
-   `check-file-sizes.mjs`; the guard is invoked by a separate recipe,
-   `file-size-check`, which the top-level `check` recipe depends on
-   independently of `mobile-check` (both are listed as sibling prerequisites
-   on the same line). The end state `CLAUDE.md` promises -- the ceiling is
-   enforced under `just check` -- holds; the specific recipe name it credits
-   does not. This is a naming imprecision worth correcting at the source, not
-   filed here as a defect against this node's own subject.
-2. **The theme system is broader than the stated Catppuccin pair.** `CLAUDE.md`
+1. **The theme system is broader than the stated Catppuccin pair.** `CLAUDE.md`
    describes the app's theme as "Catppuccin Latte (light) / Macchiato (dark)
    -- matches desktop", which is accurate for `lightColorScheme` /
    `darkColorScheme`, the compiled-in default pair. It does not mention
-   `theme_catalog.dart`'s 60-entry Shiki-derived theme catalog, which
+   `theme_catalog.dart`'s 62-entry Shiki-derived theme catalog, which
    `communityThemeProvider` and `App`'s own `build()` resolve against so each
    community can select a different theme pair -- Catppuccin is the shipped
    default a fresh community starts on, not the only theme the app renders.
@@ -181,9 +170,22 @@ directly, rather than assuming agreement:
    rule that a divergence needs the same evidentiary weight as a compliance
    claim.
 
-No other divergence was found among the claims checked in *Implementation
-surface* above -- each row's code was opened directly and matches the rule
-it realizes.
+**A claim initially suspected as a second divergence turned out not to be
+one, and is recorded here rather than silently dropped, per this template's
+own rule that a divergence claim needs the same evidentiary weight as a
+compliance claim.** A first pass over the *Quality Checks*/*Rules*
+subsections misread `CLAUDE.md` as crediting the 1000-line ceiling to
+`just mobile-check`. Re-opening `CLAUDE.md` directly at the recorded
+revision shows it already says the guard is "enforced across Desktop, Web,
+and Mobile by the repository-level `just file-size-check` gate" -- which
+matches the `Justfile` exactly (`file-size-check`, not `mobile-check`, is
+the recipe that invokes `check-file-sizes.mjs`). `CLAUDE.md` and the code
+agree; the earlier draft of this node did not check the source carefully
+enough before claiming otherwise.
+
+No other divergence was found among the remaining claims checked in
+*Implementation surface* above -- each row's code was opened directly and
+matches the rule it realizes.
 
 ## Verification
 
@@ -194,8 +196,8 @@ it realizes.
   provider/widget tests using the `WidgetHelpers.testable()` /
   fake-notifier pattern described above.
 - `node mobile/scripts/check-file-sizes.mjs` (`just file-size-check`, a
-  dependency of `just check`, not of `just mobile-check` -- see
-  Divergences) gates the 1000-line ceiling.
+  dependency of `just check` independent of `just mobile-check`, exactly as
+  `CLAUDE.md` states) gates the 1000-line ceiling.
 - `just mobile-dev` / `just mobile-build-android` exercise
   `scripts/mobile-worktree-overrides.sh` as a side effect of running or
   building, rather than through a dedicated test of the script itself; no
@@ -220,9 +222,9 @@ architecture as traced against `CLAUDE.md`'s Mobile App (Flutter)
 conventions: state management (Riverpod + `flutter_hooks`, no
 `StatefulWidget`), the `features/` versus `shared/` code layout, theming
 (the `context.colors`/`context.textTheme` extension mechanism and the
-Catppuccin-default-plus-catalog reality), the file-size ceiling and which
-recipe actually enforces it, worktree-scoped debug build identity, the
-Nostr event-kind sync obligation with desktop, and the stated widget-testing
+Catppuccin-default-plus-catalog reality), the file-size ceiling and the
+recipe that enforces it, worktree-scoped debug build identity, the Nostr
+event-kind sync obligation with desktop, and the stated widget-testing
 conventions -- each checked against real code, not merely restated from
 `CLAUDE.md`.
 
@@ -233,7 +235,7 @@ conventions -- each checked against real code, not merely restated from
 | Per-feature architecture inside `lib/features/*` (activity, channels, forum, home, invites, pairing, profile, pulse, search, settings) | `#949`'s sibling node, `implementation/mobile/feature-map.md`, unmerged at this node's authoring time |
 | The mobile container's responsibility, inbound/outbound interfaces, deployment pipeline and security posture at architecture grain | `architecture-containers-mobile` (this node's `part-of` target) |
 | The relay-side event kinds mirrored into `EventKind`, or any server-side behavior | `buzz-core`/`buzz-relay`, out of this container's ownership per `architecture-containers-mobile` |
-| Whether the `CLAUDE.md` file-size-recipe imprecision or the theme-catalog omission should be corrected in `CLAUDE.md` itself | unresolved by this node; recorded as a divergence, not fixed, per this task's out-of-scope list forbidding edits to a second document |
+| Whether the `CLAUDE.md` theme-catalog omission should be corrected in `CLAUDE.md` itself, and whether `theme_catalog.dart`'s own stale '60' header comment should be corrected to 62 | unresolved by this node; recorded as a divergence/discrepancy, not fixed, per this task's out-of-scope list forbidding edits to a second document |
 | Full inventory of `mobile/test/`'s coverage across every feature and shared module | not attempted; only the theme layer and the testing-helper pattern this node's own claims depend on were checked |
 
 **Expected but not verified when this node was written:**
