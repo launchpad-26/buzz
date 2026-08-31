@@ -2,14 +2,13 @@ import type { LucideIcon } from "lucide-react";
 import { knowledgeSettingsSection } from "./knowledge/KnowledgeSettingsPanel";
 
 /**
- * The registration seam #1502 grants (decision pending merge in PR #1503,
- * "ADR-0051 — cohort Settings sections register via a seam"): a cohort
- * Settings section is added here, under `launchpad/`-owned code, never by
- * editing `SettingsPanels.tsx`'s four upstream registration sites directly.
+ * Cohort Settings registry for the seam in `SettingsPanels.tsx` (ADR-0051 as
+ * amended by ADR-0053). A section is added here, under `launchpad/`-owned
+ * code, never by editing upstream registration sites or `SettingsView.tsx`.
  *
  * Adding a new cohort section: widen this union, add its descriptor's import
  * and a matching key to `cohortSettingsSectionRegistry` below. Both edits
- * stay in this file.
+ * stay in this file. `navGroup` is how the seam synthesizes sidebar groups.
  */
 export type CohortSettingsSectionId = "knowledge";
 
@@ -19,10 +18,9 @@ export type CohortSettingsSectionDescriptor = {
   icon: LucideIcon;
   render: () => React.ReactNode;
   /**
-   * Sidebar nav group this section is synthesized into (review-final finding
-   * on #551: this used to be hardcoded to one panel's own label in
-   * `SettingsView.tsx`, so a second registrant would have landed under a
-   * group named after the first panel).
+   * Sidebar nav group synthesized in `SettingsPanels.tsx` (`settingsNavGroups`).
+   * A second registrant with the same label joins this group; a new label
+   * becomes its own group. Do not hardcode the group name in `SettingsView.tsx`.
    */
   navGroup: string;
 };

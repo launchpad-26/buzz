@@ -102,11 +102,11 @@ type UpstreamSettingsSection =
   | "updates";
 
 /**
- * The registration seam #1502 grants (decision pending merge in PR #1503,
- * "ADR-0051 — cohort Settings sections register via a seam"): cohort
+ * Registration seam granted by ADR-0051 and amended by ADR-0053: cohort
  * Settings sections widen this union from `cohortSettingsSections`
- * (`@/launchpad/settings/registry`) rather than by editing this file's four
- * registration sites per panel.
+ * (`@/launchpad/settings/registry`). This file also owns sidebar nav-group
+ * membership (`settingsNavGroups`). Adding a panel must not touch any other
+ * upstream file.
  */
 export type SettingsSection = UpstreamSettingsSection | CohortSettingsSectionId;
 
@@ -277,6 +277,57 @@ const upstreamSettingsSections: SettingsSectionDescriptor[] = [
 export const settingsSections: SettingsSectionDescriptor[] = [
   ...upstreamSettingsSections,
   ...cohortSettingsSections,
+];
+
+export type SettingsNavGroup = {
+  label: string;
+  sections: SettingsSection[];
+};
+
+const upstreamNavGroups: SettingsNavGroup[] = [
+  {
+    label: "Personal",
+    sections: [
+      "profile",
+      "appearance",
+      "notifications",
+      "voice",
+      "shortcuts",
+      "custom-emoji",
+      "local-archive",
+      "channel-templates",
+    ],
+  },
+  {
+    label: "Communities",
+    sections: ["hosted-communities", "community-members"],
+  },
+  {
+    label: "App",
+    sections: ["agents", "compute", "experimental", "mobile", "updates"],
+  },
+];
+
+function cohortNavGroups(): SettingsNavGroup[] {
+  const groups: SettingsNavGroup[] = [];
+  const indexByLabel = new Map<string, number>();
+  for (const entry of cohortSettingsSections) {
+    let index = indexByLabel.get(entry.navGroup);
+    if (index === undefined) {
+      index = groups.length;
+      indexByLabel.set(entry.navGroup, index);
+      groups.push({ label: entry.navGroup, sections: [] });
+    }
+    const group = groups[index];
+    if (group === undefined) continue;
+    group.sections.push(entry.value);
+  }
+  return groups;
+}
+
+export const settingsNavGroups: SettingsNavGroup[] = [
+  ...upstreamNavGroups,
+  ...cohortNavGroups(),
 ];
 
 function formatThemeLabel(name: string): string {

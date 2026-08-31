@@ -31,12 +31,12 @@ import {
 import { SidebarMenuLabel } from "@/shared/ui/sidebar-menu-label";
 import {
   renderSettingsSection,
+  settingsNavGroups,
   settingsSections,
   type SettingsPanelProps,
   type SettingsSection,
   type SettingsSectionDescriptor,
 } from "./SettingsPanels";
-import { cohortSettingsSections } from "@/launchpad/settings/registry";
 
 export {
   DEFAULT_SETTINGS_SECTION,
@@ -48,33 +48,6 @@ type SettingsViewProps = SettingsPanelProps & {
   onSectionChange: (section: SettingsSection) => void;
   section: SettingsSection;
 };
-
-const settingsNavGroups: Array<{
-  label: string;
-  sections: SettingsSection[];
-}> = [
-  {
-    label: "Personal",
-    sections: [
-      "profile",
-      "appearance",
-      "notifications",
-      "voice",
-      "shortcuts",
-      "custom-emoji",
-      "local-archive",
-      "channel-templates",
-    ],
-  },
-  {
-    label: "Communities",
-    sections: ["hosted-communities", "community-members"],
-  },
-  {
-    label: "App",
-    sections: ["agents", "compute", "experimental", "mobile", "updates"],
-  },
-];
 
 function SettingsSectionButton({
   active,
@@ -191,42 +164,20 @@ export function SettingsView({
     () => new Map(visibleSections.map((entry) => [entry.value, entry])),
     [visibleSections],
   );
-  const visibleNavGroups = React.useMemo(() => {
-    const upstreamGroups = settingsNavGroups
-      .map((group) => ({
-        ...group,
-        sections: group.sections
-          .map((value) => visibleSectionByValue.get(value))
-          .filter((entry): entry is SettingsSectionDescriptor => entry != null),
-      }))
-      .filter((group) => group.sections.length > 0);
-
-    // The registration seam (#1502, PR #1503) only widens `settingsSections` — it
-    // doesn't add cohort values to this file's hardcoded nav groups, so a
-    // registered-but-ungrouped section would render (reachable by direct
-    // navigation) but never appear in the sidebar. This synthesizes groups
-    // from each descriptor's own `navGroup` (review-final finding on #551:
-    // an earlier version hardcoded the group label to the first registrant's
-    // own name, so a second registrant would have landed under a group
-    // named after the first panel).
-    const cohortGroups: Array<{
-      label: string;
-      sections: SettingsSectionDescriptor[];
-    }> = [];
-    const cohortGroupIndexByLabel = new Map<string, number>();
-    for (const entry of cohortSettingsSections) {
-      if (!visibleSectionByValue.has(entry.value)) continue;
-      let index = cohortGroupIndexByLabel.get(entry.navGroup);
-      if (index === undefined) {
-        index = cohortGroups.length;
-        cohortGroupIndexByLabel.set(entry.navGroup, index);
-        cohortGroups.push({ label: entry.navGroup, sections: [] });
-      }
-      cohortGroups[index].sections.push(entry);
-    }
-
-    return [...upstreamGroups, ...cohortGroups];
-  }, [visibleSectionByValue]);
+  const visibleNavGroups = React.useMemo(
+    () =>
+      settingsNavGroups
+        .map((group) => ({
+          ...group,
+          sections: group.sections
+            .map((value) => visibleSectionByValue.get(value))
+            .filter(
+              (entry): entry is SettingsSectionDescriptor => entry != null,
+            ),
+        }))
+        .filter((group) => group.sections.length > 0),
+    [visibleSectionByValue],
+  );
 
   return (
     <>
