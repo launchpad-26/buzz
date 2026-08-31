@@ -4371,6 +4371,10 @@ dependencies = [
 ]
 
 [[package]]
+name = "knowledge"
+version = "0.1.0"
+
+[[package]]
 name = "konst"
 version = "0.4.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"

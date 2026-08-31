@@ -71,6 +71,10 @@ import { NotificationSettingsCard } from "./NotificationSettingsCard";
 import { AgentsSettingsPanel } from "./AgentsSettingsPanel";
 import { HostedCommunitiesSettingsCard } from "./HostedCommunitiesSettingsCard";
 import {
+  cohortSettingsSections,
+  type CohortSettingsSectionId,
+} from "@/launchpad/settings/registry";
+import {
   SettingsOptionGroup,
   SettingsOptionGroupList,
   SettingsOptionRow,
@@ -81,7 +85,7 @@ import { UpdateChecker } from "../UpdateChecker";
 import { SettingsSectionHeader } from "./SettingsSectionHeader";
 import { VoiceSettingsCard } from "./VoiceSettingsCard";
 
-export type SettingsSection =
+type UpstreamSettingsSection =
   | "profile"
   | "notifications"
   | "voice"
@@ -99,9 +103,20 @@ export type SettingsSection =
   | "mobile"
   | "updates";
 
+/**
+ * The registration seam ADR-0051 grants (accepted; see
+ * `launchpad/decisions/ADR-0051-cohort-settings-registration-seam.md`), amended
+ * by ADR-0053 to also own sidebar nav-group membership (see
+ * `launchpad/decisions/ADR-0053-settings-seam-owns-nav-groups.md`): cohort
+ * Settings sections widen this union from `cohortSettingsSections`
+ * (`@/launchpad/settings/registry`) rather than by editing this file's four
+ * registration sites per panel.
+ */
+export type SettingsSection = UpstreamSettingsSection | CohortSettingsSectionId;
+
 export const DEFAULT_SETTINGS_SECTION: SettingsSection = "profile";
 
-const SETTINGS_SECTION_VALUES: readonly SettingsSection[] = [
+const UPSTREAM_SETTINGS_SECTION_VALUES: readonly UpstreamSettingsSection[] = [
   "profile",
   "notifications",
   "voice",
@@ -118,6 +133,33 @@ const SETTINGS_SECTION_VALUES: readonly SettingsSection[] = [
   "local-archive",
   "mobile",
   "updates",
+];
+
+function isUpstreamSettingsSection(
+  section: SettingsSection,
+): section is UpstreamSettingsSection {
+  return (UPSTREAM_SETTINGS_SECTION_VALUES as readonly string[]).includes(
+    section,
+  );
+}
+
+const cohortSectionCollidingWithUpstream = cohortSettingsSections.find(
+  (section) =>
+    (UPSTREAM_SETTINGS_SECTION_VALUES as readonly string[]).includes(
+      section.value,
+    ),
+);
+if (cohortSectionCollidingWithUpstream) {
+  // A colliding id would silently shadow the real upstream panel of that
+  // name, since the cohort lookup in renderSettingsSection runs first.
+  throw new Error(
+    `Cohort Settings section "${cohortSectionCollidingWithUpstream.value}" collides with an existing upstream section id.`,
+  );
+}
+
+const SETTINGS_SECTION_VALUES: readonly SettingsSection[] = [
+  ...UPSTREAM_SETTINGS_SECTION_VALUES,
+  ...cohortSettingsSections.map((section) => section.value),
 ];
 
 export function isSettingsSection(value: unknown): value is SettingsSection {
@@ -150,7 +192,7 @@ export type SettingsPanelProps = {
   onSetSoundForSlot: (slot: SoundSlot, name: SoundName) => void;
 };
 
-export const settingsSections: SettingsSectionDescriptor[] = [
+const upstreamSettingsSections: SettingsSectionDescriptor[] = [
   {
     value: "appearance",
     label: "Appearance",
@@ -234,6 +276,67 @@ export const settingsSections: SettingsSectionDescriptor[] = [
     label: "Updates",
     icon: Download,
   },
+];
+
+export const settingsSections: SettingsSectionDescriptor[] = [
+  ...upstreamSettingsSections,
+  ...cohortSettingsSections,
+];
+
+export type SettingsNavGroup = {
+  label: string;
+  sections: SettingsSection[];
+};
+
+const upstreamSettingsNavGroups: SettingsNavGroup[] = [
+  {
+    label: "Personal",
+    sections: [
+      "profile",
+      "appearance",
+      "notifications",
+      "voice",
+      "shortcuts",
+      "custom-emoji",
+      "local-archive",
+      "channel-templates",
+    ],
+  },
+  {
+    label: "Communities",
+    sections: ["hosted-communities", "community-members"],
+  },
+  {
+    label: "App",
+    sections: ["agents", "compute", "experimental", "mobile", "updates"],
+  },
+];
+
+/**
+ * Groups cohort sections by each descriptor's own `navGroup` (review-final
+ * finding on #551: an earlier version hardcoded the group label to the first
+ * registrant's own name, so a second registrant would have landed under a
+ * group named after the first panel).
+ */
+function buildCohortSettingsNavGroups(): SettingsNavGroup[] {
+  const groups: SettingsNavGroup[] = [];
+  const indexByLabel = new Map<string, number>();
+  for (const entry of cohortSettingsSections) {
+    let index = indexByLabel.get(entry.navGroup);
+    if (index === undefined) {
+      index = groups.length;
+      indexByLabel.set(entry.navGroup, index);
+      groups.push({ label: entry.navGroup, sections: [] });
+    }
+    groups[index].sections.push(entry.value);
+  }
+  return groups;
+}
+
+// Owned here rather than in `SettingsView.tsx` per ADR-0053.
+export const settingsNavGroups: SettingsNavGroup[] = [
+  ...upstreamSettingsNavGroups,
+  ...buildCohortSettingsNavGroups(),
 ];
 
 function formatThemeLabel(name: string): string {
@@ -803,6 +906,19 @@ export function renderSettingsSection(
   section: SettingsSection,
   props: SettingsPanelProps,
 ): React.ReactNode {
+  const cohortSection = cohortSettingsSections.find(
+    (candidate) => candidate.value === section,
+  );
+  if (cohortSection) {
+    return cohortSection.render();
+  }
+
+  if (!isUpstreamSettingsSection(section)) {
+    // Unreachable: every non-upstream `SettingsSection` value is a
+    // registered cohort id, and the branch above already returned for it.
+    return null;
+  }
+
   switch (section) {
     case "profile":
       return (
