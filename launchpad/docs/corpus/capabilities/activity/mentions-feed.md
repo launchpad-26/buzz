@@ -114,6 +114,37 @@ source. See *Scope and omissions* for the fact that these two paths are
 separately implemented and were not checked against each other for behavioral
 parity by this node.
 
+## Behavioral rules and constraints
+
+- **Scoped kind allowlist, not every `p`-tagged event.** A mention only
+  surfaces in the feed if it is also one of a fixed set of kinds — stream
+  messages, text notes, forum posts/comments, and git pull request/issue/
+  status kinds on the CLI/relay-bridge path; a similarly fixed (but not
+  identical) list on the desktop path. Naming someone in an event of a kind
+  outside that list does not put it in their mentions feed.
+- **Community- and channel-scoped, never global.** A mention only surfaces
+  if the event is either channel-less (community-global) or in a channel the
+  requesting user can currently access; results never cross community
+  boundaries, and channel access is re-checked at read time rather than
+  relying on who could once see the event.
+- **Hard row caps, independent of caller request.** The relay bridge caps
+  at 100 rows per request (`BRIDGE_FEED_MAX_LIMIT`) and the db-level query
+  caps independently at 100 (`FEED_MAX_LIMIT`), regardless of the limit the
+  caller asked for; the desktop Tauri command caps its own request at 100 as
+  well. A caller cannot request more.
+- **Most-recent-first, with an optional `since` cursor.** Results are
+  ordered by event creation time descending; a caller may pass `since` to
+  page forward without re-fetching everything already seen.
+- **Four feed-type variants, with one alias.** `mentions`, `needs_action`,
+  `activity`, and `agent_activity` are the only accepted values on the
+  CLI/relay-bridge path; `agent_activity` is treated as a canonical alias
+  for `activity` server-side, not a fifth independent category.
+- **Defense-in-depth re-authorization.** The relay bridge re-checks each
+  candidate mention event against `reader_authorized_for_event` before
+  returning it, even though the feed query's own kind allowlists already
+  exclude result-gated kinds — a deliberate second check, not redundant
+  dead code.
+
 ## Boundary
 
 This node does not describe:
