@@ -175,7 +175,7 @@ def _supersede_old(state: State, repo: str, number: int, current_head: str) -> i
 
 
 def main(argv: list[str] | None = None) -> int:
-    parser = argparse.ArgumentParser(description="REST queue reconciler")
+    parser = argparse.ArgumentParser(description="Deterministic queue reconciler")
     parser.add_argument("--config", default=None)
     parser.add_argument("repo")
     args = parser.parse_args(argv)
