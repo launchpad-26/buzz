@@ -133,6 +133,33 @@ or a raw NIP-50 `search` filter sent over WebSocket REQ or the `POST /query` HTT
 bridge -- all four paths converge on the same community-scoped Postgres
 full-text-search query underneath.
 
+## Behavioral rules, constraints and variants
+
+At the level this overview stays at (each rule's own mechanism is a named
+sibling's depth, per *Boundary* below):
+
+- **Community-scoped, always.** Every search query is bound to the caller's
+  community before anything else; a search can never return another
+  community's events, by construction rather than by a later filter.
+- **Storage-level privacy filtering.** Only a positive allowlist of event kinds
+  (today: kind 0 profiles, kind 9/40002/45001/45003 message/thread/reaction
+  shapes) is indexed at all -- any other kind's row is unsearchable at the
+  storage level, not merely excluded from results after the fact.
+- **Two matching variants.** `FullText` (ordinary multi-word relevance search,
+  the NIP-50-style default) and `Prefix` (trailing-token prefix match, for
+  bounded typeahead surfaces) are the two ways a query's text is turned into a
+  Postgres tsquery; both share every other rule on this list.
+- **Search is never the access boundary.** A hit returned by the search layer
+  is a candidate, not a result -- the relay always refetches the canonical
+  event and re-authorizes it (channel membership, `#p` targeting, owner gates)
+  before it reaches a caller, regardless of which entry point issued the
+  query.
+- **Four reachable entry points, one underlying query.** WebSocket NIP-50
+  `search` filters, the HTTP `POST /query` bridge, `buzz-cli`'s `messages
+  search` subcommand, and the desktop app's Cmd+K surface all resolve to the
+  same community-scoped query described above -- none of the four has its own
+  separate search semantics.
+
 ## Maturity
 
 **Shipped.** VISION.md's own Status table marks "Core relay, auth, pub/sub, search,
