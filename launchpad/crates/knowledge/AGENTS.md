@@ -25,6 +25,18 @@ and **ADR-0031** (#1418, closed 2026-08-26) later made that permanent for the
 shipped crate — Option D (a curated, bounded natural-language question set) is
 named as the one upgrade worth reconsidering later, but is not adopted now.
 
+**This boundary is enforced, not just stated (`#552`).**
+`desktop/scripts/check-no-corpus-pipeline.mjs` (wired into `pnpm check`,
+which runs in every pre-push `desktop-check` lane and CI) fails if
+`desktop/package.json`, `desktop/vite.config.ts`, or
+`desktop/src-tauri/tauri.conf.json` ever reference
+`project-intelligence/corpus` — the pipeline's own directory. A legitimate
+build never needs to name it: the packaged artifact the Settings panel reads
+is a relative import of a committed file
+(`desktop/src/launchpad/settings/knowledge/generated/corpus.json`), produced
+out-of-band by `launchpad/project-intelligence/corpus/package.py` and never
+invoked from these build files.
+
 ## What is not here yet
 
 No seeded content (`#552`) and no `knowledge.*` query interface (`#553`,
