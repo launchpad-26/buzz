@@ -1,0 +1,346 @@
+#!/usr/bin/env python3
+"""Merge multiple timestamped sources into one ordered table, normalised to
+a single timezone, each row tagged with its source.
+
+This turns several log files plus a change record into one readable
+sequence (parent issue #16 §5). --bucket collapses to a resolution when the
+merged stream is still too long.
+"""
+import argparse
+import json
+import os
+import re
+import sys
+from datetime import datetime, timedelta, timezone
+
+try:
+    from zoneinfo import ZoneInfo
+except ImportError:  # pragma: no cover - stdlib on 3.9+, defensive only
+    ZoneInfo = None
+
+_ISO_RE = re.compile(
+    r'^(\d{4}-\d{2}-\d{2}[T ]\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:Z|[+-]\d{2}:?\d{2})?)'
+)
+_SYSLOG_RE = re.compile(r'^([A-Z][a-z]{2}\s+\d{1,2}\s+\d{2}:\d{2}:\d{2})')
+_APACHE_RE = re.compile(
+    r'\[(\d{2}/[A-Za-z]{3}/\d{4}:\d{2}:\d{2}:\d{2}\s[+-]\d{4})\]'
+)
+_EPOCH_RE = re.compile(r'^(\d{13}|\d{10})(?:\.\d+)?\b')
+
+_MONTHS = {m: i for i, m in enumerate(
+    ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul',
+     'Aug', 'Sep', 'Oct', 'Nov', 'Dec'], start=1)}
+
+
+def _parse_iso(raw):
+    s = raw
+    if 'T' not in s:
+        s = s.replace(' ', 'T', 1)
+    if s.endswith('Z'):
+        s = s[:-1] + '+00:00'
+    try:
+        dt = datetime.fromisoformat(s)
+    except ValueError:
+        return None
+    if dt.tzinfo is None:
+        dt = dt.replace(tzinfo=timezone.utc)
+    return dt.astimezone(timezone.utc)
+
+
+def _parse_apache(raw):
+    m = re.match(
+        r'(\d{2})/([A-Za-z]{3})/(\d{4}):(\d{2}):(\d{2}):(\d{2})\s'
+        r'([+-])(\d{2})(\d{2})',
+        raw,
+    )
+    if not m:
+        return None
+    day, mon, year, hh, mm, ss, sign, tzh, tzm = m.groups()
+    month = _MONTHS.get(mon)
+    if not month:
+        return None
+    delta = timedelta(hours=int(tzh), minutes=int(tzm))
+    if sign == '-':
+        delta = -delta
+    dt = datetime(int(year), month, int(day), int(hh), int(mm), int(ss),
+                   tzinfo=timezone(delta))
+    return dt.astimezone(timezone.utc)
+
+
+def _parse_epoch(raw):
+    try:
+        value = float(raw)
+    except ValueError:
+        return None
+    whole = raw.split('.')[0]
+    if len(whole) >= 13:
+        value /= 1000.0
+    try:
+        return datetime.fromtimestamp(value, tz=timezone.utc)
+    except (OverflowError, OSError, ValueError):
+        return None
+
+
+class SyslogYearTracker:
+    """See window's copy of this class for the rationale: an arbitrary but
+    deterministic anchor year, advanced on a Dec->Jan wrap."""
+
+    def __init__(self, anchor_year):
+        self.year = anchor_year
+        self._last_month = None
+
+    def resolve(self, month, day, hh, mm, ss):
+        if self._last_month is not None and month < self._last_month:
+            self.year += 1
+        self._last_month = month
+        try:
+            return datetime(self.year, month, day, hh, mm, ss,
+                             tzinfo=timezone.utc)
+        except ValueError:
+            return None
+
+
+def parse_timestamp(line, syslog_tracker):
+    m = _ISO_RE.match(line)
+    if m:
+        dt = _parse_iso(m.group(1))
+        if dt:
+            return dt, m.group(1)
+    m = _SYSLOG_RE.match(line)
+    if m:
+        parts = re.match(
+            r'([A-Z][a-z]{2})\s+(\d{1,2})\s+(\d{2}):(\d{2}):(\d{2})',
+            m.group(1),
+        )
+        mon, day, hh, mm, ss = parts.groups()
+        month = _MONTHS.get(mon)
+        if month:
+            dt = syslog_tracker.resolve(month, int(day), int(hh), int(mm),
+                                         int(ss))
+            if dt:
+                return dt, m.group(1)
+    m = _EPOCH_RE.match(line)
+    if m:
+        dt = _parse_epoch(m.group(1))
+        if dt:
+            return dt, m.group(1)
+    m = _APACHE_RE.search(line)
+    if m:
+        dt = _parse_apache(m.group(1))
+        if dt:
+            return dt, m.group(1)
+    return None
+
+
+def emit_receipt(total, kept):
+    if total:
+        pct = (total - kept) / total * 100
+    else:
+        pct = 0.0
+    print(
+        f"read {total:,} lines -> {kept:,} rows ({pct:.2f}% reduction)",
+        file=sys.stderr,
+    )
+
+
+_BUCKET_RE = re.compile(r'^(\d+)(s|sec|m|min|h|hr|d)$')
+_BUCKET_UNITS = {
+    's': 1, 'sec': 1,
+    'm': 60, 'min': 60,
+    'h': 3600, 'hr': 3600,
+    'd': 86400,
+}
+
+
+def parse_bucket(raw):
+    m = _BUCKET_RE.match(raw)
+    if not m:
+        return None
+    count, unit = m.groups()
+    seconds = int(count) * _BUCKET_UNITS[unit]
+    if seconds <= 0:
+        return None
+    return timedelta(seconds=seconds)
+
+
+def parse_tz(raw):
+    if raw is None or raw.upper() == 'UTC':
+        return timezone.utc
+    m = re.match(r'^([+-])(\d{2}):?(\d{2})$', raw)
+    if m:
+        sign, hh, mm = m.groups()
+        delta = timedelta(hours=int(hh), minutes=int(mm))
+        if sign == '-':
+            delta = -delta
+        return timezone(delta)
+    if ZoneInfo is not None:
+        try:
+            return ZoneInfo(raw)
+        except Exception:
+            return None
+    return None
+
+
+def build_parser():
+    p = argparse.ArgumentParser(
+        prog='timeline',
+        description='Merge timestamped sources into one ordered table.',
+    )
+    p.add_argument('sources', nargs='*',
+                    help='label=path or path; omit to read stdin')
+    p.add_argument('--json', action='store_true',
+                    help='emit JSON instead of a table')
+    p.add_argument('-o', dest='output',
+                    help='write result to this file instead of stdout')
+    p.add_argument('--bucket',
+                    help='collapse rows to a resolution, e.g. 5m, 1h, 30s')
+    p.add_argument('--tz', default='UTC',
+                    help='display timezone: UTC, +HH:MM, or an IANA name '
+                         '(default: UTC)')
+    p.add_argument('--year', type=int, default=1970,
+                    help='anchor year for year-less syslog timestamps '
+                         '(default: 1970)')
+    return p
+
+
+def _records_from_lines(fileobj, label, tracker):
+    current = None
+    for raw_line in fileobj:
+        line = raw_line.rstrip('\n')
+        result = parse_timestamp(line, tracker)
+        if result:
+            if current is not None:
+                yield current
+            dt, _matched = result
+            current = {'timestamp': dt, 'source': label, 'lines': [line]}
+        else:
+            if current is not None:
+                current['lines'].append(line)
+    if current is not None:
+        yield current
+
+
+def resolve_sources(raw_sources):
+    resolved = []
+    for spec in raw_sources:
+        if '=' in spec:
+            label, path = spec.split('=', 1)
+        else:
+            label, path = os.path.basename(spec), spec
+        resolved.append((label, path))
+    return resolved
+
+
+def main(argv=None):
+    args = build_parser().parse_args(argv)
+
+    bucket = None
+    if args.bucket:
+        bucket = parse_bucket(args.bucket)
+        if bucket is None:
+            print(f"timeline: could not parse --bucket value "
+                  f"'{args.bucket}'", file=sys.stderr)
+            return 2
+
+    tz = parse_tz(args.tz)
+    if tz is None:
+        print(f"timeline: unknown --tz value '{args.tz}'", file=sys.stderr)
+        return 2
+
+    tracker = SyslogYearTracker(args.year)
+    total_lines = 0
+    rows = []
+
+    try:
+        if not args.sources:
+            for rec in _records_from_lines(sys.stdin, 'stdin', tracker):
+                total_lines += len(rec['lines'])
+                if rec['timestamp'] is not None:
+                    rows.append(rec)
+        else:
+            for label, path in resolve_sources(args.sources):
+                with open(path, 'r', errors='replace') as f:
+                    for rec in _records_from_lines(f, label, tracker):
+                        total_lines += len(rec['lines'])
+                        if rec['timestamp'] is not None:
+                            rows.append(rec)
+    except OSError as e:
+        print(f"timeline: {e}", file=sys.stderr)
+        return 2
+
+    rows.sort(key=lambda r: r['timestamp'])
+
+    if bucket:
+        buckets = {}
+        order = []
+        epoch = datetime(1970, 1, 1, tzinfo=timezone.utc)
+        for r in rows:
+            offset = (r['timestamp'] - epoch) // bucket
+            bucket_start = epoch + offset * bucket
+            key = (bucket_start, r['source'])
+            if key not in buckets:
+                buckets[key] = {
+                    'bucket_start': bucket_start,
+                    'source': r['source'],
+                    'count': 0,
+                    'sample': '\n'.join(r['lines']),
+                }
+                order.append(key)
+            buckets[key]['count'] += 1
+        out_rows = [buckets[k] for k in order]
+        out_rows.sort(key=lambda b: (b['bucket_start'], b['source']))
+        kept = len(out_rows)
+
+        if args.json:
+            payload = [
+                {
+                    'bucket_start': b['bucket_start'].astimezone(
+                        tz).isoformat(),
+                    'source': b['source'],
+                    'count': b['count'],
+                    'sample': b['sample'],
+                }
+                for b in out_rows
+            ]
+            text = json.dumps(payload, indent=2) + '\n'
+        else:
+            lines = []
+            for b in out_rows:
+                ts = b['bucket_start'].astimezone(tz).isoformat()
+                lines.append(f"{ts}\t{b['source']}\t{b['count']}\t"
+                              f"{b['sample'].splitlines()[0] if b['sample'] else ''}")
+            text = '\n'.join(lines) + ('\n' if lines else '')
+    else:
+        kept = len(rows)
+        if args.json:
+            payload = [
+                {
+                    'timestamp': r['timestamp'].astimezone(tz).isoformat(),
+                    'source': r['source'],
+                    'text': '\n'.join(r['lines']),
+                }
+                for r in rows
+            ]
+            text = json.dumps(payload, indent=2) + '\n'
+        else:
+            lines = []
+            for r in rows:
+                ts = r['timestamp'].astimezone(tz).isoformat()
+                first, *rest = r['lines']
+                lines.append(f"{ts}\t{r['source']}\t{first}")
+                for cont in rest:
+                    lines.append(f"\t\t{cont}")
+            text = '\n'.join(lines) + ('\n' if lines else '')
+
+    if args.output:
+        with open(args.output, 'w') as f:
+            f.write(text)
+    else:
+        sys.stdout.write(text)
+
+    emit_receipt(total_lines, kept)
+    return 0 if rows else 1
+
+
+if __name__ == '__main__':
+    sys.exit(main())

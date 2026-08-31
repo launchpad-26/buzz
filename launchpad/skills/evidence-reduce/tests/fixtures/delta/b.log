@@ -1,0 +1,10 @@
+2026-08-18T10:00:01Z host1 app[1234]: ERROR db connection failed request_id=f6a7b8c9d0e1 client=10.0.0.10:5437
+2026-08-18T10:01:00Z host3 app[9999]: INFO request completed client=192.168.1.13:8083 duration_us=456789
+2026-08-18T10:01:02Z host3 app[9999]: INFO request completed client=192.168.1.14:8084 duration_us=567890
+2026-08-18T10:01:04Z host3 app[9999]: INFO request completed client=192.168.1.15:8085 duration_us=678901
+2026-08-18T10:02:00Z host4 app[4321]: ERROR disk full mount=/var/lib client=172.16.0.2:2049
+2026-08-18T10:02:05Z host4 app[4321]: ERROR disk full mount=/var/lib client=172.16.0.3:2049
+2026-08-18T10:02:10Z host4 app[4321]: ERROR disk full mount=/var/lib client=172.16.0.4:2049
+2026-08-18T10:02:15Z host4 app[4321]: ERROR disk full mount=/var/lib client=172.16.0.5:2049
+2026-08-18T10:02:20Z host4 app[4321]: ERROR disk full mount=/var/lib client=172.16.0.6:2049
+2026-08-18T10:02:25Z host4 app[4321]: ERROR disk full mount=/var/lib client=172.16.0.7:2049

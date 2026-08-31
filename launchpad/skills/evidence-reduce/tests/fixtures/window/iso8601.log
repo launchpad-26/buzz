@@ -1,0 +1,9 @@
+2026-08-18T10:00:00Z app started
+2026-08-18T10:05:00Z healthcheck ok
+2026-08-18T10:10:00Z request failed
+Traceback (most recent call last):
+  File "app.py", line 12, in handler
+    raise ValueError("boom")
+ValueError: boom
+2026-08-18T10:15:00Z retry succeeded
+2026-08-18T10:20:00Z shutdown

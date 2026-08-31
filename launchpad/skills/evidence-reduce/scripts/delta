@@ -1,0 +1,197 @@
+#!/usr/bin/env python3
+"""Diff two inputs by normalized signature, not by raw line.
+
+Powers both change analysis and the IS / IS NOT grid, where the question is
+always what is different between a working case and a broken one. Lines are
+normalized the same way as `frequency` so that noise (timestamps, UUIDs, IPs,
+ports, hex/numeric IDs) does not swamp the comparison.
+
+Usage:
+  delta A B [--top N] [--threshold PCT] [--json] [-o OUT]
+
+A and B are file paths; '-' means stdin (only one side may use it). Reports
+signatures that appear only in A, only in B, and signatures present in both
+whose share of their input changed by at least PCT percent (default 50).
+Never mutates input. Exit 0 on success, 1 if no differences were found, 2 on
+bad usage.
+"""
+import argparse
+import json
+import re
+import sys
+
+_TS_PATTERNS = [
+    re.compile(r'\d{4}-\d{2}-\d{2}[T ]\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:Z|[+-]\d{2}:?\d{2})?'),
+    re.compile(r'\[\d{2}/[A-Za-z]{3}/\d{4}:\d{2}:\d{2}:\d{2}\s[+-]\d{4}\]'),
+    re.compile(r'\b[A-Z][a-z]{2}\s+\d{1,2}\s+\d{2}:\d{2}:\d{2}\b'),
+]
+
+NORMALIZERS = (
+    [(p, '<TS>') for p in _TS_PATTERNS]
+    + [
+        (re.compile(r'\b[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}\b'), '<UUID>'),
+        (re.compile(r'\b(?:\d{1,3}\.){3}\d{1,3}\b'), '<IP>'),
+        (re.compile(r'0x[0-9a-fA-F]+\b'), '<HEX>'),
+        # A short letter prefix joined by '-'/'_' to an alphanumeric suffix
+        # that contains at least one digit is a request/trace/correlation ID
+        # in disguise (req-abc123, trace_9f8e), whatever its length. The
+        # digit-in-suffix requirement keeps ordinary hyphenated words
+        # (multi-tenant, well-known) untouched.
+        (re.compile(r'\b[A-Za-z]{2,12}[-_](?=[0-9A-Za-z]*\d)[0-9A-Za-z]{4,}\b'), '<ID>'),
+        (re.compile(r':(\d{2,5})\b'), ':<PORT>'),
+        (re.compile(r'\b(?=[0-9a-fA-F]*[a-fA-F])[0-9a-fA-F]{8,}\b'), '<HEX>'),
+        (re.compile(r'\b\d{5,}\b'), '<NUM>'),
+    ]
+)
+
+
+def normalize(line):
+    for pattern, repl in NORMALIZERS:
+        line = pattern.sub(repl, line)
+    return line
+
+
+def iter_lines(path):
+    if path == '-':
+        for line in sys.stdin:
+            yield line.rstrip('\n')
+        return
+    with open(path, 'r', errors='replace') as f:
+        for line in f:
+            yield line.rstrip('\n')
+
+
+def counts_for(path):
+    """Stream one input; keep only the per-signature count and one example."""
+    signatures = {}
+    total = 0
+    for line in iter_lines(path):
+        if line == '':
+            continue
+        total += 1
+        sig = normalize(line)
+        entry = signatures.get(sig)
+        if entry is None:
+            signatures[sig] = [1, line]
+        else:
+            entry[0] += 1
+    return total, signatures
+
+
+def compute_delta(total_a, sigs_a, total_b, sigs_b, threshold_pct):
+    only_a = []
+    only_b = []
+    changed = []
+
+    for sig, (count, example) in sigs_a.items():
+        if sig not in sigs_b:
+            only_a.append((sig, count, example))
+
+    for sig, (count, example) in sigs_b.items():
+        if sig not in sigs_a:
+            only_b.append((sig, count, example))
+
+    threshold = threshold_pct / 100.0
+    for sig in sigs_a.keys() & sigs_b.keys():
+        count_a, example_a = sigs_a[sig]
+        count_b, example_b = sigs_b[sig]
+        rate_a = (count_a / total_a) if total_a else 0.0
+        rate_b = (count_b / total_b) if total_b else 0.0
+        if rate_a == 0.0:
+            continue
+        rel_change = (rate_b - rate_a) / rate_a
+        if abs(rel_change) >= threshold:
+            changed.append((sig, count_a, count_b, rel_change * 100.0, example_a))
+
+    only_a.sort(key=lambda t: t[1], reverse=True)
+    only_b.sort(key=lambda t: t[1], reverse=True)
+    changed.sort(key=lambda t: abs(t[3]), reverse=True)
+    return only_a, only_b, changed
+
+
+def render_receipt(total_a, total_b, diff_count):
+    total = total_a + total_b
+    reduction = (1 - (diff_count / total)) * 100 if total else 0.0
+    return (
+        f"read {total:,} lines -> {diff_count:,} differences "
+        f"({reduction:.3f}% reduction)"
+    )
+
+
+def render_table(only_a, only_b, changed):
+    lines = [f"{'STATUS':<9}{'COUNT_A':>10}{'COUNT_B':>10}  SIGNATURE"]
+    for sig, count, example in only_a:
+        lines.append(f"{'ONLY_A':<9}{count:>10}{0:>10}  {sig}")
+        lines.append(f"{'':>29}example: {example}")
+    for sig, count, example in only_b:
+        lines.append(f"{'ONLY_B':<9}{0:>10}{count:>10}  {sig}")
+        lines.append(f"{'':>29}example: {example}")
+    for sig, count_a, count_b, pct, example in changed:
+        lines.append(f"{'CHANGED':<9}{count_a:>10}{count_b:>10}  {sig}  ({pct:+.1f}% rate change)")
+        lines.append(f"{'':>29}example: {example}")
+    return "\n".join(lines)
+
+
+def render_json(only_a, only_b, changed):
+    payload = {
+        "only_in_a": [{"signature": s, "count": c, "example": e} for s, c, e in only_a],
+        "only_in_b": [{"signature": s, "count": c, "example": e} for s, c, e in only_b],
+        "changed": [
+            {"signature": s, "count_a": ca, "count_b": cb, "rate_change_pct": pct, "example": e}
+            for s, ca, cb, pct, e in changed
+        ],
+    }
+    return json.dumps(payload, indent=2)
+
+
+def main(argv):
+    parser = argparse.ArgumentParser(prog='delta', description=__doc__)
+    parser.add_argument('a')
+    parser.add_argument('b')
+    parser.add_argument('--top', type=int, default=None)
+    parser.add_argument('--threshold', type=float, default=50.0)
+    parser.add_argument('--json', action='store_true')
+    parser.add_argument('-o', dest='output')
+    try:
+        args = parser.parse_args(argv)
+    except SystemExit:
+        return 2
+
+    if args.a == '-' and args.b == '-':
+        print("delta: only one of A, B may be stdin", file=sys.stderr)
+        return 2
+
+    try:
+        total_a, sigs_a = counts_for(args.a)
+        total_b, sigs_b = counts_for(args.b)
+    except OSError as e:
+        print(f"delta: {e}", file=sys.stderr)
+        return 2
+
+    only_a, only_b, changed = compute_delta(total_a, sigs_a, total_b, sigs_b, args.threshold)
+
+    if args.top is not None:
+        only_a = only_a[: args.top]
+        only_b = only_b[: args.top]
+        changed = changed[: args.top]
+
+    diff_count = len(only_a) + len(only_b) + len(changed)
+    print(render_receipt(total_a, total_b, diff_count), file=sys.stderr)
+
+    if diff_count == 0:
+        print("delta: no differences found", file=sys.stderr)
+        return 1
+
+    out = render_json(only_a, only_b, changed) if args.json else render_table(only_a, only_b, changed)
+
+    if args.output:
+        with open(args.output, 'w') as f:
+            f.write(out + "\n")
+    else:
+        print(out)
+
+    return 0
+
+
+if __name__ == '__main__':
+    sys.exit(main(sys.argv[1:]))

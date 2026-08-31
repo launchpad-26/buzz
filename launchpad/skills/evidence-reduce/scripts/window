@@ -1,0 +1,274 @@
+#!/usr/bin/env python3
+"""Slice one or more timestamped sources to a time range.
+
+Multi-line records (e.g. stack traces) stay attached to the timestamped line
+that introduces them rather than being orphaned. See parent issue #16 §5.
+"""
+import argparse
+import json
+import re
+import sys
+from datetime import datetime, timedelta, timezone
+
+_ISO_RE = re.compile(
+    r'^(\d{4}-\d{2}-\d{2}[T ]\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:Z|[+-]\d{2}:?\d{2})?)'
+)
+_SYSLOG_RE = re.compile(r'^([A-Z][a-z]{2}\s+\d{1,2}\s+\d{2}:\d{2}:\d{2})')
+_APACHE_RE = re.compile(
+    r'\[(\d{2}/[A-Za-z]{3}/\d{4}:\d{2}:\d{2}:\d{2}\s[+-]\d{4})\]'
+)
+_EPOCH_RE = re.compile(r'^(\d{13}|\d{10})(?:\.\d+)?\b')
+
+_MONTHS = {m: i for i, m in enumerate(
+    ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul',
+     'Aug', 'Sep', 'Oct', 'Nov', 'Dec'], start=1)}
+
+
+def _parse_iso(raw):
+    s = raw
+    if 'T' not in s:
+        s = s.replace(' ', 'T', 1)
+    if s.endswith('Z'):
+        s = s[:-1] + '+00:00'
+    try:
+        dt = datetime.fromisoformat(s)
+    except ValueError:
+        return None
+    if dt.tzinfo is None:
+        dt = dt.replace(tzinfo=timezone.utc)
+    return dt.astimezone(timezone.utc)
+
+
+def _parse_apache(raw):
+    m = re.match(
+        r'(\d{2})/([A-Za-z]{3})/(\d{4}):(\d{2}):(\d{2}):(\d{2})\s'
+        r'([+-])(\d{2})(\d{2})',
+        raw,
+    )
+    if not m:
+        return None
+    day, mon, year, hh, mm, ss, sign, tzh, tzm = m.groups()
+    month = _MONTHS.get(mon)
+    if not month:
+        return None
+    delta = timedelta(hours=int(tzh), minutes=int(tzm))
+    if sign == '-':
+        delta = -delta
+    dt = datetime(int(year), month, int(day), int(hh), int(mm), int(ss),
+                   tzinfo=timezone(delta))
+    return dt.astimezone(timezone.utc)
+
+
+def _parse_epoch(raw):
+    try:
+        value = float(raw)
+    except ValueError:
+        return None
+    whole = raw.split('.')[0]
+    if len(whole) >= 13:
+        value /= 1000.0
+    try:
+        return datetime.fromtimestamp(value, tz=timezone.utc)
+    except (OverflowError, OSError, ValueError):
+        return None
+
+
+class SyslogYearTracker:
+    """Resolves syslog's year-less timestamps to a single deterministic span.
+
+    Syslog carries no year, so there is nothing in the input to make a real
+    calendar year a pure function of it. An arbitrary anchor year keeps the
+    result deterministic; a Dec->Jan wrap within the file advances the anchor
+    so relative order across a year boundary still comes out correct.
+    """
+
+    def __init__(self, anchor_year):
+        self.year = anchor_year
+        self._last_month = None
+
+    def resolve(self, month, day, hh, mm, ss):
+        if self._last_month is not None and month < self._last_month:
+            self.year += 1
+        self._last_month = month
+        try:
+            return datetime(self.year, month, day, hh, mm, ss,
+                             tzinfo=timezone.utc)
+        except ValueError:
+            return None
+
+
+def parse_timestamp(line, syslog_tracker):
+    """Return (datetime_utc, matched_text) for the first recognised
+    timestamp format in line, or None."""
+    m = _ISO_RE.match(line)
+    if m:
+        dt = _parse_iso(m.group(1))
+        if dt:
+            return dt, m.group(1)
+    m = _SYSLOG_RE.match(line)
+    if m:
+        parts = re.match(
+            r'([A-Z][a-z]{2})\s+(\d{1,2})\s+(\d{2}):(\d{2}):(\d{2})',
+            m.group(1),
+        )
+        mon, day, hh, mm, ss = parts.groups()
+        month = _MONTHS.get(mon)
+        if month:
+            dt = syslog_tracker.resolve(month, int(day), int(hh), int(mm),
+                                         int(ss))
+            if dt:
+                return dt, m.group(1)
+    m = _EPOCH_RE.match(line)
+    if m:
+        dt = _parse_epoch(m.group(1))
+        if dt:
+            return dt, m.group(1)
+    m = _APACHE_RE.search(line)
+    if m:
+        dt = _parse_apache(m.group(1))
+        if dt:
+            return dt, m.group(1)
+    return None
+
+
+def parse_bound(raw):
+    if raw is None:
+        return None
+    dt = _parse_iso(raw)
+    if dt:
+        return dt
+    dt = _parse_epoch(raw)
+    if dt:
+        return dt
+    return None
+
+
+def emit_receipt(total, kept):
+    if total:
+        pct = (total - kept) / total * 100
+    else:
+        pct = 0.0
+    print(
+        f"read {total:,} lines -> {kept:,} lines ({pct:.2f}% reduction)",
+        file=sys.stderr,
+    )
+
+
+def build_parser():
+    p = argparse.ArgumentParser(
+        prog='window',
+        description='Slice a timestamped source to a time range.',
+    )
+    p.add_argument('paths', nargs='*',
+                    help='input files; omit to read stdin')
+    p.add_argument('--from', dest='from_ts',
+                    help='start of window, inclusive (ISO 8601 or epoch)')
+    p.add_argument('--to', dest='to_ts',
+                    help='end of window, inclusive (ISO 8601 or epoch)')
+    p.add_argument('--json', action='store_true',
+                    help='emit JSON instead of a table')
+    p.add_argument('-o', dest='output',
+                    help='write result to this file instead of stdout')
+    p.add_argument('--year', type=int, default=1970,
+                    help='anchor year for year-less syslog timestamps '
+                         '(default: 1970)')
+    return p
+
+
+def _records_from_lines(fileobj, source, tracker):
+    current = None
+    for raw_line in fileobj:
+        line = raw_line.rstrip('\n')
+        result = parse_timestamp(line, tracker)
+        if result:
+            if current is not None:
+                yield current
+            dt, _matched = result
+            current = {'timestamp': dt, 'source': source, 'lines': [line]}
+        else:
+            if current is None:
+                current = {'timestamp': None, 'source': source,
+                            'lines': [line]}
+            else:
+                current['lines'].append(line)
+    if current is not None:
+        yield current
+
+
+def iter_records(paths, year):
+    tracker = SyslogYearTracker(year)
+    if not paths:
+        yield from _records_from_lines(sys.stdin, 'stdin', tracker)
+        return
+    for path in paths:
+        with open(path, 'r', errors='replace') as f:
+            yield from _records_from_lines(f, path, tracker)
+
+
+def format_table(records):
+    lines = []
+    for rec in records:
+        lines.extend(rec['lines'])
+    return '\n'.join(lines) + ('\n' if lines else '')
+
+
+def format_json(records):
+    payload = [
+        {
+            'timestamp': rec['timestamp'].isoformat(),
+            'source': rec['source'],
+            'text': '\n'.join(rec['lines']),
+        }
+        for rec in records
+    ]
+    return json.dumps(payload, indent=2) + '\n'
+
+
+def write_output(text, output_path):
+    if output_path:
+        with open(output_path, 'w') as f:
+            f.write(text)
+    else:
+        sys.stdout.write(text)
+
+
+def main(argv=None):
+    args = build_parser().parse_args(argv)
+
+    from_dt = parse_bound(args.from_ts)
+    if args.from_ts and from_dt is None:
+        print('window: could not parse --from value', file=sys.stderr)
+        return 2
+    to_dt = parse_bound(args.to_ts)
+    if args.to_ts and to_dt is None:
+        print('window: could not parse --to value', file=sys.stderr)
+        return 2
+
+    total_lines = 0
+    kept_lines = 0
+    kept_records = []
+    try:
+        for record in iter_records(args.paths, args.year):
+            total_lines += len(record['lines'])
+            ts = record['timestamp']
+            if ts is None:
+                continue
+            if from_dt and ts < from_dt:
+                continue
+            if to_dt and ts > to_dt:
+                continue
+            kept_lines += len(record['lines'])
+            kept_records.append(record)
+    except OSError as e:
+        print(f"window: {e}", file=sys.stderr)
+        return 2
+
+    text = format_json(kept_records) if args.json else format_table(
+        kept_records)
+    write_output(text, args.output)
+    emit_receipt(total_lines, kept_lines)
+    return 0 if kept_records else 1
+
+
+if __name__ == '__main__':
+    sys.exit(main())
