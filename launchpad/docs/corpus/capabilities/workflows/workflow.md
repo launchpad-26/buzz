@@ -72,6 +72,10 @@ evidence:
   - statement: "The scope and correctness of each individual action's or trigger's implementation (approval, reaction, send-dm, set-channel-topic, send-message, delay, webhook call, schedule, message trigger, reaction trigger, webhook trigger) is owned by that action's or trigger's own sibling corpus node under capabilities/workflows/, per the batch of ~15 sibling document tasks under parent Feature #613, none of which is merged as of this node's recorded revision."
     entry_class: TEAM_KNOWLEDGE
     provided_by: "launchpad-26/buzz#613 (parent Feature) and its child task issues #822-#823, #829-#843"
+  - statement: "test_workflow_reply_in_thread_pushes_live_thread_summary is an end-to-end integration test in buzz-test-client that defines a real message_posted-triggered, send_message-action workflow against a running relay, posts a triggering message, and asserts the workflow's reply is both persisted and pushed live -- representative verification that the trigger-conditions-actions capability actually runs end to end, not only that its pieces parse or unit-test in isolation. It is marked #[ignore], so it requires an explicit opt-in run against a live relay rather than running in the default unit-test suite."
+    entry_class: FACT
+    evidence:
+      - "crates/buzz-test-client/tests/e2e_relay.rs:2668-2670"
 relationships:
   - type: references
     target: architecture-flows-workflow-execution
@@ -103,6 +107,14 @@ execution trace (`crates/buzz-workflow/src/executor.rs`). A `buzz-cli` `Workflow
 subcommand group gives both humans and agents a command-line surface onto the same
 capability (`crates/buzz-cli/src/lib.rs:201-203`,
 `crates/buzz-cli/src/commands/workflows.rs`).
+
+**Representative verification.** `test_workflow_reply_in_thread_pushes_live_thread_summary`
+(`crates/buzz-test-client/tests/e2e_relay.rs:2668-2670`) is an end-to-end integration
+test that defines a `message_posted`-triggered, `send_message`-action workflow against
+a running relay and asserts the resulting reply is both persisted and pushed live —
+demonstrating the trigger → conditions → actions path working end to end, not merely
+parsing or unit-testing in isolation. It is `#[ignore]`d, so it requires an explicit
+opt-in run against a live relay rather than running in the default unit-test suite.
 
 **Not shipped, or broken: several individual actions.** The same executor that
 correctly dispatches, for example, `SendMessage` and `CallWebhook` (see the referenced
