@@ -39,7 +39,7 @@ evidence:
     entry_class: FACT
     evidence:
       - ".env.example:122-131"
-  - statement: "buzz-push-gateway's main() and buzz-test-client's main() each call tracing_subscriber::fmt() (an EnvFilter-driven human-readable/plain formatter, not fmt().json()) rather than buzz-relay's JSON-plus-OTEL registry pattern, so at least two other binaries in the workspace initialize a differently-shaped tracing subscriber from buzz-relay's."
+  - statement: "buzz-push-gateway's main() calls tracing_subscriber::fmt().json() filtered by EnvFilter::from_default_env() — JSON output like buzz-relay's, but without buzz-relay's registry()/OTEL-layer/trace-correlation machinery — while buzz-test-client's main() calls plain tracing_subscriber::fmt() (human-readable, not JSON); so both are differently-shaped tracing subscribers from buzz-relay's pattern, and from each other."
     entry_class: FACT
     evidence:
       - "crates/buzz-push-gateway/src/main.rs:19-24"
@@ -119,10 +119,12 @@ JSON log event and the trace it belongs to can be correlated in the same log lin
 is done because Datadog recognizes those exact OpenTelemetry-standard field names for
 that purpose.
 
-**Other Rust binaries (`buzz-push-gateway`, `buzz-test-client`).** Both call
-`tracing_subscriber::fmt()` — a plain, human-readable `EnvFilter`-driven formatter, not
-`fmt().json()`. This is a second, simpler subscriber shape than the relay's, present in
-the same workspace.
+**Other Rust binaries (`buzz-push-gateway`, `buzz-test-client`).** `buzz-push-gateway`
+calls `tracing_subscriber::fmt().json()` filtered by `EnvFilter::from_default_env()` —
+JSON output like the relay's, but without the relay's `registry()`/OTEL-layer/
+trace-correlation machinery. `buzz-test-client` calls plain `tracing_subscriber::fmt()`
+— human-readable, not JSON. Both are simpler subscriber shapes than the relay's, and
+differ from each other, all present in the same workspace.
 
 **`buzz-admin` and the desktop app's Rust backend (`desktop/src-tauri`, specifically the
 `managed_agents` module).** Both call `tracing::warn!`/`tracing::info!` directly, but
