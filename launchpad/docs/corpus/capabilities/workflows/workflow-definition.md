@@ -62,6 +62,10 @@ evidence:
     entry_class: FACT
     evidence:
       - "VISION_PROJECTS.md:250"
+  - statement: "schema.rs carries an in-file #[cfg(test)] unit-test module (over 60 individual #[test] functions) exercising every TriggerDef variant, every ActionDef variant, every validate() invariant (empty name, empty steps, duplicate/invalid step ids, reply_in_thread cross-trigger rules, cron/interval mutual exclusion and minimum-interval enforcement, 5/6/7-field cron normalization), and full YAML-to-JSON round-tripping -- the verification this capability's shipped maturity claim rests on in addition to the VISION_PROJECTS.md status marker."
+    entry_class: FACT
+    evidence:
+      - "crates/buzz-workflow/src/schema.rs:319-1001"
   - statement: "An #[ignore]'d integration-test module in buzz-test-client's own code comments claims that submitting a kind:30620 event omits the `d` tag entirely and that the server generates the workflow id and returns it in the OK-message response, directly contradicting handle_workflow_def's current, unconditional requirement of a client-supplied `d` tag; because the test carrying that claim is marked #[ignore] and is not exercised by CI, it is not 'passing test' evidence under this corpus's own evidence-precedence rule (ADR-0029, restated in AGENTS.md), so this node treats the current code path as the FACT and names the ignored test's contradictory comment as unresolved drift rather than silently picking a side."
     entry_class: FACT
     evidence:
