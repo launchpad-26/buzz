@@ -1,5 +1,5 @@
 ---
-status: Accepted
+status: Superseded by ADR-0056
 date: 2026-08-25
 issue: launchpad-26/buzz#299
 decided_in: launchpad-26/buzz#299
