@@ -21,11 +21,11 @@ evidence:
     evidence:
       - "crates/buzz-agent/src/main.rs"
       - "crates/buzz-agent/src/lib.rs:1-18"
-  - statement: "lib.rs's pub fn run (the process entry point) and its JSON-RPC method-dispatch match arm route exactly five inbound methods to handlers: \"initialize\", \"session/new\", \"session/prompt\" (spawned onto its own task via spawn_prompt), \"session/set_model\", and \"session/cancel\"; any other method name falls through to a METHOD_NOT_FOUND wire response."
+  - statement: "lib.rs's pub fn run (the process entry point) and its handle_request JSON-RPC method-dispatch match arm route six inbound methods to handlers: the five standard ACP methods \"initialize\", \"session/new\", \"session/prompt\" (spawned onto its own task via spawn_prompt), \"session/set_model\", and \"session/cancel\", plus one goose-compatible non-standard extension, \"_goose/unstable/session/steer\" (documented in-line as mirroring goose's own steer wire contract); any other method name falls through to a METHOD_NOT_FOUND wire response."
     entry_class: FACT
     evidence:
       - "crates/buzz-agent/src/lib.rs:149"
-      - "crates/buzz-agent/src/lib.rs:294-330"
+      - "crates/buzz-agent/src/lib.rs:286-324"
   - statement: "crates/sprig/Cargo.toml depends on buzz-agent as a path dependency (path = \"../buzz-agent\"), and crates/sprig/src/main.rs's argv0 dispatch calls buzz_agent::run() when invoked as \"buzz-agent\"."
     entry_class: FACT
     evidence:
@@ -127,7 +127,7 @@ id, so this node declares no `implements` edge toward either, per
 |---|---|---|
 | `src/main.rs` | README "Quick Start" — the binary entry point | 6 lines: calls `buzz_agent::run()`, exits 1 on error |
 | `src/lib.rs`, `pub fn run` | README "ACP Transcript" — process startup, stdio framing loop | `#![forbid(unsafe_code)]` at the crate root |
-| `src/lib.rs`, JSON-RPC dispatch (`"initialize"`, `"session/new"`, `"session/prompt"`, `"session/set_model"`, `"session/cancel"`) | README's stated "Three request methods ... one inbound notification" | `session/prompt` is spawned onto its own task (`spawn_prompt`) so one session's prompt cannot block another |
+| `src/lib.rs`, `handle_request` dispatch (`"initialize"`, `"session/new"`, `"session/prompt"`, `"session/set_model"`, `"session/cancel"`, plus the non-standard `"_goose/unstable/session/steer"`) | README's stated "Three request methods ... one inbound notification" (the five ACP-standard methods; the sixth is a documented goose-compatibility extension, not part of ACP proper) | `session/prompt` is spawned onto its own task (`spawn_prompt`) so one session's prompt cannot block another |
 | `src/agent.rs` (`RunCtx`, the tool-call loop) | README's "The agent loops: call the LLM → get tool calls → run them via MCP → feed results back → repeat" | Also enforces `MAX_PROMPT_BYTES`, `MAX_TOOL_CALLS_PER_TURN`, `MAX_TOOL_RESULT_BYTES` |
 | `src/llm.rs` (`Llm::complete`, one `Provider` enum, one `match`) | README's Providers table (Anthropic, OpenAI-compatible, OpenRouter, Databricks, Databricks v2) | README states explicitly: "There is no trait, no `Box<dyn>`, no async-trait" |
 | `src/auth.rs` (`TokenSource`, `StaticTokenSource`, `PkceOAuthTokenSource`) | README's Databricks OAuth 2.0 PKCE flow description | On-disk token cache keyed by `sha256(discovery_url\|client_id\|scopes)` |
