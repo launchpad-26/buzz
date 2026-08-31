@@ -73,9 +73,9 @@ EMPTY_NOT_VERIFIED = frozenset({"nothing", "none", "n/a", ""})
 # A section whose whole text is one of these is unfilled, not answered.
 PLACEHOLDER = frozenset({"", "none", "n/a", "nothing", "tbd", "todo"})
 
-# ADR-0052 parts C and E, as numbers rather than judgements.
-CAP_ADDITIONS = 1500
-CAP_FILES = 10
+# ADR-0052 part E, as a number rather than a judgement. Part C's 1,500-line / 10-file cap
+# was withdrawn by ADR-0054 (#1956): a Feature's whole batch lands in one PR whatever its
+# size, so there is no size number left to enforce.
 DEFERRED_CEILING = 5
 
 
@@ -366,43 +366,27 @@ def looks_agent_authored(visible: str) -> bool:
     return False
 
 
-def check_cap(
+def report_size(
     closing_refs: list[int] | None, additions: int | None, changed_files: int | None
-) -> tuple[list[str], list[str]]:
-    """ADR-0052 part C: a batch is capped at 1,500 added lines or 10 changed files.
+) -> list[str]:
+    """ADR-0054: report a batch's size, never reject it.
 
-    The cap exists because ADR-0052 rejected unbatched review on the grounds that a giant
-    PR makes the human gate a rubber stamp. Left in prose it reproduced the thing it was
-    meant to prevent, so it is enforced here from the numbers GitHub already reports.
+    ADR-0052 part C capped a batch at 1,500 added lines or 10 changed files. ADR-0054
+    withdrew that cap: Features here carry 15-41 children, so every real batch exceeded it
+    and part C's own "split into sequential batch PRs" escape cancelled its
+    one-Feature-one-PR rule in every case — which is the micro-PR volume batching existed
+    to remove.
 
-    Scope: this applies to BATCHES — a PR closing more than one issue. A single-issue PR
-    is not what part C bounds, and capping it would block ordinary large-but-focused work
-    (a corpus node, a ported script) that the decision says nothing about.
+    The number still gets printed. Removing the gate should not remove a reviewer's warning
+    about how much work they are being handed, and the cap's only measured effect was on
+    per-batch PRs anyway: it exempted single-issue PRs, so it never fired on PR #1944 at
+    +16,113 lines across 70 files.
     """
-    errors: list[str] = []
-    notes: list[str] = []
-
     if closing_refs is None or len(closing_refs) <= 1:
-        return errors, notes
+        return []
     if additions is None or changed_files is None:
-        notes.append(
-            "cap: batch size was not supplied, so the 1,500-line / 10-file cap is "
-            "NOT verified"
-        )
-        return errors, notes
-
-    if additions > CAP_ADDITIONS or changed_files > CAP_FILES:
-        errors.append(
-            f"Batch exceeds the cap: +{additions} lines across {changed_files} files "
-            f"(cap {CAP_ADDITIONS} lines or {CAP_FILES} files, whichever binds first). "
-            "Split the Feature into sequential batch PRs — ADR-0052 part C."
-        )
-    else:
-        notes.append(
-            f"cap: batch is +{additions} lines across {changed_files} files, within "
-            f"{CAP_ADDITIONS}/{CAP_FILES}"
-        )
-    return errors, notes
+        return ["size: batch size was not supplied, so it is NOT reported"]
+    return [f"size: batch is +{additions} lines across {changed_files} files (uncapped)"]
 
 
 def check_delegated(
@@ -538,9 +522,7 @@ def check(
     errors.extend(batch_errors)
     notes.extend(batch_notes)
 
-    cap_errors, cap_notes = check_cap(closing_refs, additions, changed_files)
-    errors.extend(cap_errors)
-    notes.extend(cap_notes)
+    notes.extend(report_size(closing_refs, additions, changed_files))
 
     itype = section(visible, "Issue type")
     if not itype:
