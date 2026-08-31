@@ -89,6 +89,37 @@ class RestReader:
             f"/repos/{owner}/{name}/pulls/{number}/requested_reviewers", "requested_reviewers"
         ).get("users", [])
 
+    def changed_files(self, repo: str, number: int) -> list[dict[str, Any]]:
+        """The pull request's changed files, paginated.
+
+        THIS METHOD WAS MISSING while three callers used it, and each one failed
+        with `AttributeError` the moment it ran against a real repository:
+
+          - `evidence.py:47`  — evidence-bundle assembly, on the critical path of
+                                EVERY review job, so no job could ever complete
+          - `history.py:240`  — `--with-files` ingest, so every sample lost its
+                                protected-trigger and file-limit evidence
+          - `queue.py:105`    — the reconciler, fixed separately in #1962 by
+                                moving bulk inventory to GraphQL
+
+        #1962 treated "add this method" and "use the GraphQL inventory" as
+        alternatives. They are not: the inventory is for bulk queue discovery,
+        one query per page of open pull requests, while per-PR evidence and the
+        historical ingest need exactly this read. Both were needed.
+
+        Paginated because a large pull request exceeds one page, and a truncated
+        file list understates the change — the same failure `queue.py` refuses by
+        comparing against `changedFiles`. Each entry carries `filename`,
+        `additions`, `deletions` and `status`, matching what the callers read.
+        """
+        owner, name = repo.split("/", 1)
+        return self.rest.get(
+            f"/repos/{owner}/{name}/pulls/{number}/files",
+            "changed_files",
+            {"per_page": 100},
+            paginate=True,
+        )
+
     def checks(self, repo: str, number: int) -> list[dict[str, Any]]:
         owner, name = repo.split("/", 1)
         return self.rest.get(
@@ -105,6 +136,7 @@ OPERATIONS = {
     "review_comments": lambda reader, args: reader.review_comments(args.repo, args.number),
     "issue_comments": lambda reader, args: reader.issue_comments(args.repo, args.number),
     "requested_reviewers": lambda reader, args: reader.requested_reviewers(args.repo, args.number),
+    "changed_files": lambda reader, args: reader.changed_files(args.repo, args.number),
     "checks": lambda reader, args: reader.checks(args.repo, args.number),
 }
 
