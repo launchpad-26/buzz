@@ -40,7 +40,12 @@ on:
       - "launchpad/skills/review-queue-automation/**"
 
 # Read-only. The suite reaches no network, no relay and no GitHub API, so it needs
-# no token scope. The final step proves that property rather than asserting it.
+# no token scope. That is enforced in the repository, not here: tests/conftest.py
+# replaces `socket.socket` and sets a sentinel credential for the whole suite, so
+# the same guarantee holds on a developer machine. Deliberately NOT a real
+# GITHUB_TOKEN in this job's env — nine tests used to pass only because the
+# machine had a working `gh auth token`, and handing CI a credential would have
+# hidden that instead of fixing it.
 permissions:
   contents: read
 
@@ -113,31 +118,9 @@ jobs:
               sys.exit(1)
           PY
 
+      # `conftest.py` is what makes this run mean the same thing everywhere: it
+      # sets a sentinel credential and blocks sockets, so a test cannot pass here
+      # by reading a real token or reaching the network.
       - name: Run review-queue-automation unit tests
         run: python3 -m pytest tests -q
 
-      # Every GitHub transport in this skill is injectable precisely so its tests
-      # can prove they never call out. A test that quietly starts making real calls
-      # would be slow, flaky, and a credential-shaped risk on a shared runner.
-      # Replacing `socket.socket` before collection makes an accidental live call
-      # fail loudly here instead of passing on a runner that happens to have
-      # egress. Verified locally: the suite passes unchanged with sockets blocked.
-      - name: Prove the suite reaches no network
-        run: |
-          cat > tests/conftest.py <<'PY'
-          import socket
-
-
-          class _Blocked(socket.socket):
-              def __init__(self, *args, **kwargs):
-                  raise RuntimeError(
-                      "the review-queue-automation suite attempted a network "
-                      "connection; every GitHub transport here is injectable and "
-                      "its tests must inject one"
-                  )
-
-
-          socket.socket = _Blocked
-          PY
-          python3 -m pytest tests -q
-          rm tests/conftest.py
