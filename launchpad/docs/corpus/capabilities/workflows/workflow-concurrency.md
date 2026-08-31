@@ -159,6 +159,9 @@ as demonstrated by a passing test.
   (`execute_run`, `execute_from_step`), `crates/buzz-workflow/src/error.rs`
   (`WorkflowError::CapacityExceeded`).
 - Construction site (production): `crates/buzz-relay/src/main.rs`.
+- Verification (partial only — see Maturity gap above): `crates/buzz-workflow/src/lib.rs`
+  (`workflow_config_defaults` and the neighboring custom-value test), which cover the
+  `max_concurrent` field's default and pass-through but not semaphore enforcement.
 
 ## Scope and omissions
 
