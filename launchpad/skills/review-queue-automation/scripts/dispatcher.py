@@ -31,6 +31,7 @@ import time
 from typing import Any
 
 from assurance import Profile, drive
+from checks import all_passing as all_checks_passing
 from authority import mode_for
 from common import State, expand_path
 from config import load_repo_config
@@ -283,10 +284,16 @@ def _load_pr_facts(state: State, job: dict[str, Any], head_sha: str, local_cfg: 
     if not draft and "draft" in context:
         draft = bool(context.get("draft"))
 
+    # One shared vocabulary, in `checks.py`. This line previously compared
+    # `conclusion` to the literal `"SUCCESS"`, which is the GraphQL enum spelling,
+    # against evidence gathered over REST, which is lower-case — so `checks_ok`
+    # was never true and the `checks_complete_ok` gate could never pass. It also
+    # required `SUCCESS` from every check, which no pull request in this
+    # repository satisfies: the changed-paths fan-out skips whole job families,
+    # and `SKIPPED` is a green outcome. Still fails closed on an empty list and
+    # on any pending check.
     checks = evidence.get("checks") or []
-    checks_ok = bool(checks) and all(
-        isinstance(c, dict) and c.get("conclusion") == "SUCCESS" for c in checks
-    )
+    checks_ok = all_checks_passing(checks)
 
     # PRFacts.head_sha must be the OBSERVED current head, so the `head_matches`
     # gate can actually compare it against the head that was reviewed. Falling
