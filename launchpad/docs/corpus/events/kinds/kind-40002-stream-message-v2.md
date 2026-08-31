@@ -117,6 +117,10 @@ evidence:
     evidence:
       - "shell(grep -rn '40002' crates/ desktop/src desktop/src-tauri mobile/lib) -> zero non-test construction sites, universal read-side inclusion"
     confidence: 0.55
+  - statement: "crates/buzz-relay/src/handlers/event.rs's fan_out_pubsub_event receives a channel_event from Redis pub/sub (topic Channel(id) for a channel-scoped event, Global for a channel-less one), converts it to a StoredEvent, and dispatches it toward matching live subscriptions; its sibling filter_fanout_by_access enforces the receiver's community label and — for gated kinds — author/p-tag/shared-tag visibility before delivery. Because kind 40002 belongs to none of kind.rs's gated-kind sets (per the FACT above), a live kind-40002 event fans out to any connection subscribed to its channel with no kind-specific narrowing beyond ordinary channel membership, the same generic path any other regular channel-scoped event uses."
+    entry_class: FACT
+    evidence:
+      - "crates/buzz-relay/src/handlers/event.rs"
   - statement: "This repository's root AGENTS.md states: 'All event kind integers are defined in buzz-core/src/kind.rs. New features get new kind integers -- add them here first, then implement handling in the relay,' and separately: 'Channels use h tags (NIP-29 group tag), not e tags.'"
     entry_class: FACT
     evidence:
@@ -256,6 +260,13 @@ documented as mirroring the database trigger's own allowlist.
 **Mention-detection-eligible.** `feed.rs`'s mentions-feed query includes kind 40002
 in its `kind IN (...)` filter, so a `p`-tag mention inside a kind-40002 event would
 surface in a mentioned user's feed exactly as a kind-9 mention does.
+
+**Fan-out: ordinary, no kind-specific narrowing.** `event.rs`'s `fan_out_pubsub_event`
+delivers a stored event to matching live subscriptions via `filter_fanout_by_access`,
+which enforces per-kind gating only for kinds in the gated sets above. Since kind
+40002 is in none of them, a live kind-40002 event reaches any connection subscribed
+to its channel through the same generic path any other regular channel-scoped event
+uses — no additional narrowing beyond ordinary channel membership.
 
 **No audit-log-specific handling was found or searched for** beyond the ordinary
 persistent-event dispatch path; named as a gap, not a confirmed absence.
