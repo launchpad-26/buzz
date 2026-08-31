@@ -100,6 +100,10 @@ evidence:
     evidence:
       - "launchpad/docs/corpus/templates/component.md"
     confidence: 0.6
+  - statement: "`secret_store.rs`'s own `#[cfg(test)] mod tests` contains two unit tests that run in every environment (cache-hit probe/load, exercised against a pre-seeded fake cache rather than a real keychain), a lockfile-path/lock-acquire smoke test and an availability-error-discriminator test that also run everywhere, and several `#[ignore]`d tests -- cross-process race, blob CRUD, legacy migration, full-wipe verification -- whose own comments state they are skipped in CI because unsigned builds lack keychain entitlements and are meant to be run locally with `cargo test -p buzz-desktop -- --ignored`."
+    entry_class: FACT
+    evidence:
+      - "desktop/src-tauri/src/secret_store.rs:924-1306"
   - statement: "Issue #1248's Definition of Done requires that this node state responsibility and a well-defined interface/boundary, name dependencies and collaborators, link source implementation and tests, and explain only component-level behavior rather than the entire desktop platform."
     entry_class: TEAM_KNOWLEDGE
     provided_by: "launchpad-26/buzz#1248 definition of done"
@@ -214,6 +218,17 @@ fresh install and cause a silent identity rotation.
 | `managed_agents::storage` | Stores and migrates every managed agent's own nsec through the same `SecretStore::shared` instance, namespaced `agent:<pubkey>`. | `managed_agents/storage.rs:1-33`, `managed_agents/storage.rs:133-204` |
 | `reset` (sign-out / boot-time wipe) | Wipes and verifies the keychain via the `ResetKeychain` trait bound to `SecretStore`. | `reset.rs:59-79` |
 | `commands::identity` (Tauri commands) | The frontend-facing surface: `get_identity`, `import_identity`, `persist_current_identity`, `sign_out`. | `commands/identity.rs:27-51`, `commands/identity.rs:336-522` |
+
+## Tests
+
+`secret_store.rs`'s own test module (`secret_store.rs:924-1306`) carries two
+kinds of coverage: cache-only unit tests (probe/load against a pre-seeded
+fake cache, the lockfile-path shape, the availability-error discriminator)
+that run in every environment including CI, and several `#[ignore]`d tests
+that exercise the real OS keychain -- cross-process race safety, blob CRUD,
+legacy-format migration, and full-wipe verification -- explicitly skipped in
+CI because unsigned builds lack keychain entitlements, run locally with
+`cargo test -p buzz-desktop -- --ignored`.
 
 ## Boundary
 
