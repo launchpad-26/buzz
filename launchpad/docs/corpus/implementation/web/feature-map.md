@@ -196,7 +196,7 @@ files under `web/src/` implement each piece of that surface.
 | `web/src/shared/lib/relative-time.ts` | Shared — relative timestamp formatting | Used by `RepoListItem.tsx`, `RepoDetailPage.tsx`, `RepoCommitsSection.tsx`. |
 | `web/src/shared/lib/buzz-download.ts` | Shared — platform-specific download URL resolution | Used by `InvitePage.tsx`; caches the GitHub releases lookup for one hour. |
 | `web/src/shared/lib/cn.ts` | Shared — className merge helper | `clsx` + `tailwind-merge`; used throughout `ui/`. |
-| `web/src/shared/ui/*.tsx` (badge, button, card, input, sonner, tooltip) | Shared — UI primitives | Used across both `features/repos/ui/` and `features/invite/ui/`. |
+| `web/src/shared/ui/*.tsx` (badge, button, card, input, sonner, tooltip) | Shared — UI primitives | `button.tsx` is the only one imported by both feature areas; `badge`/`input`/`tooltip` are used only within `features/repos/ui/`; `sonner.tsx`'s `Toaster` is mounted once from `main.tsx`, not per-feature; `card.tsx` has no importer found under `web/src`. |
 | `web/src/shared/theme/ThemeProvider.tsx`, `ThemeToggle.tsx` | Shared — light/dark theme | Wraps the whole app from `main.tsx`. |
 
 ## Divergences
