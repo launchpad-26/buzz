@@ -43,7 +43,7 @@ evidence:
   - statement: "The frontend's `NostrKeyImportForm` component is explicitly shared between the first-run welcome flow (no community yet) and the later profile-onboarding flow, and its `OnboardingFlow` host renders a distinct `key-import` page — reached automatically when `identityLost` is true, or manually via a 'use a different key' action from the profile page — separately from the default `profile` landing page."
     entry_class: FACT
     evidence:
-      - "desktop/src/features/onboarding/ui/NostrKeyImportForm.tsx:50-56"
+      - "desktop/src/features/onboarding/ui/NostrKeyImportForm.tsx:46-56"
       - "desktop/src/features/onboarding/ui/OnboardingFlow.tsx:166-170"
       - "desktop/src/features/onboarding/ui/types.ts:7-11"
   - statement: "`app_state_tests.rs` exercises `resolve_identity_with_store` and `generate_and_persist` against a fake keyring across every combination this node describes (fresh install, corrupt keyring with and without a migration marker, corrupt legacy file, reachable-but-empty keyring, unreachable keyring) — for example `corrupt_keyring_generates_fresh_only_when_no_file`, `reachable_but_empty_corrupt_file_generates_fresh`, and `unreachable_corrupt_file_generates_fresh` — confirming the generate-on-first-launch behavior is implemented and tested, not merely commented."
