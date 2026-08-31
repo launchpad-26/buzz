@@ -1100,3 +1100,13 @@ benchmark-down:
 # results, external URLs) print as UNVERIFIED without failing the run.
 corpus-validate:
     python3 launchpad/project-intelligence/corpus/validate.py
+
+# Regenerate the packaged corpus artifact the `knowledge` crate embeds
+# (#552). Reads launchpad/docs/corpus via package.py and rewrites
+# launchpad/crates/knowledge/generated/corpus.json -- never hand-edited. Run
+# this after any corpus change, then commit the regenerated file. The
+# `DriftGuardTest` in launchpad/project-intelligence/corpus/tests/test_package.py
+# (part of `just corpus-validate`'s CI job) fails if the committed file has
+# drifted from what regeneration would produce.
+knowledge-package:
+    python3 launchpad/project-intelligence/corpus/package.py
