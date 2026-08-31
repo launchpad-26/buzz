@@ -18,7 +18,7 @@ evidence:
     evidence:
       - "crates/buzz-relay/src/connection.rs:12"
       - "crates/buzz-relay/src/audio/join.rs:49"
-      - "crates/buzz-relay/src/audio/handler.rs:12"
+      - "crates/buzz-relay/src/audio/handler.rs:29"
       - "crates/buzz-dev-mcp/src/shell.rs:14"
   - statement: "docs.rs's own reference documentation for tokio_util::sync::CancellationToken states of cancel(): 'Cancel the CancellationToken and all child tokens which had been derived from it. This will wake up all tasks which are waiting for cancellation,' and of cancelled(): 'Returns a Future that gets fulfilled when cancellation is requested... will complete immediately if the token is already cancelled when this method is called' -- the cooperative pattern every call site cited in this node follows: hold a clone or child of a shared token, and race cancelled() against the work in a select!."
     entry_class: FACT
@@ -106,12 +106,12 @@ evidence:
     entry_class: FACT
     evidence:
       - "crates/buzz-relay/src/connection.rs:1041-1063"
-      - "crates/buzz-relay/src/connection.rs:1064-1104"
+      - "crates/buzz-relay/src/connection.rs:1064-1110"
   - statement: "state.rs's own test suite exercises drain_all()'s per-connection cancellation directly: drain_all_sends_restart_close_and_cancels_every_conn asserts every registered connection (across communities) receives the queued restart-close frame ahead of cancellation, and drain_all_is_immediate asserts the frame is present the instant drain_all() returns (the synchronous, non-jittered path)."
     entry_class: FACT
     evidence:
-      - "crates/buzz-relay/src/state.rs:2087-2141"
-      - "crates/buzz-relay/src/state.rs:2228-2263"
+      - "crates/buzz-relay/src/state.rs:2087-2140"
+      - "crates/buzz-relay/src/state.rs:2228-2262"
 relationships:
   - type: references
     target: architecture-containers-relay
@@ -290,12 +290,12 @@ repository, rather than resting on reading the implementation alone:
 
 - `send_loop_sends_bare_close_for_ordinary_cancellation` and
   `send_loop_flushes_queued_control_before_close_on_cancel`
-  (`connection.rs:1041-1104`) assert what a cancelled connection token
+  (`connection.rs:1041-1110`) assert what a cancelled connection token
   actually produces on the wire — a bare close frame, and (when a control
   frame was queued first, such as a ban's reason) that frame flushed ahead
   of the close rather than stranded behind it.
 - `drain_all_sends_restart_close_and_cancels_every_conn` and
-  `drain_all_is_immediate` (`state.rs:2087-2141,2228-2263`) assert that
+  `drain_all_is_immediate` (`state.rs:2087-2140,2228-2262`) assert that
   `drain_all()` — the shutdown-side caller of the same per-connection token
   this node documents — reaches every registered connection across
   communities, and that the synchronous (non-jittered) path's effect is
