@@ -67,6 +67,12 @@ evidence:
   - statement: "This node's scope is deliberately narrower than sibling issue #738's `capabilities/custom-emoji/custom-emoji.md`: #738 covers the upload/management capability (publishing, editing and removing a member's own kind:30030 set), while this node covers only the resolution algorithm — how an already-known or already-tagged `:shortcode:` becomes a rendered image across the community and global scopes — per the batch dispatch instruction for issue #739."
     entry_class: TEAM_KNOWLEDGE
     provided_by: "launchpad-26/buzz#739 task description (batch dispatch note distinguishing #739 from sibling #738)"
+  - statement: "The resolution algorithm's core client-side behaviors are covered by unit tests: a known shortcode becoming an emoji node with the correct `src`/`alt` and an unknown shortcode staying plain text (`remarkCustomEmoji.test.mjs`), and a message's `customEmoji`/`emojiOnly` derivation from its own event tags (`useMessageEmoji.test.mjs`). The relay's normalization and reaction-length enforcement are covered by ingest handler unit tests, including one asserting a mixed-case long shortcode is rejected and one asserting a case-mismatched `emoji` tag is rejected."
+    entry_class: FACT
+    evidence:
+      - "desktop/src/shared/lib/remarkCustomEmoji.test.mjs"
+      - "desktop/src/features/messages/lib/useMessageEmoji.test.mjs"
+      - "crates/buzz-relay/src/handlers/ingest.rs"
 ---
 
 # Emoji resolution: capability
@@ -139,6 +145,19 @@ text, never turned into a custom-emoji tag.
   union/tie-break, and per-event render-time resolution rules; mobile's implementation
   explicitly documents itself as mirroring desktop's.
 
+## Verification
+
+This algorithm is exercised by unit tests rather than only described here:
+- `desktop/src/shared/lib/remarkCustomEmoji.test.mjs` — known shortcode → emoji node with
+  correct `src`/`alt`; unknown shortcode stays plain text.
+- `desktop/src/features/messages/lib/useMessageEmoji.test.mjs` — a message's `customEmoji`/
+  `emojiOnly` derivation from its own event tags.
+- `crates/buzz-relay/src/handlers/ingest.rs` (`reaction_validation_accepts_wrapped_max_shortcode`,
+  `reaction_validation_rejects_mixed_case_max_shortcode`,
+  `reaction_validation_rejects_case_mismatched_tag`,
+  `emoji_set_validation_enforces_shortcode_boundary`) — relay-side normalization and
+  reaction-length enforcement.
+
 ## Boundary
 
 This node does not describe:
@@ -168,8 +187,9 @@ nodes merge.
 **This node covers** the resolution algorithm for a NIP-30 custom-emoji `:shortcode:` and for a
 standard/global unicode emoji: the two independent scopes, the resolve-at-send-time /
 read-from-event-at-render-time split for the community scope, the normalization contract shared
-by client and relay, the reaction-length constraint, and the matching rules (case-insensitivity,
-longest-first, word-boundary guard, unknown-shortcode fallback).
+by client and relay, the reaction-length constraint, the matching rules (case-insensitivity,
+longest-first, word-boundary guard, unknown-shortcode fallback), and the unit tests that
+demonstrate these behaviors.
 
 **It does not cover, and these are gaps rather than silence:**
 
