@@ -1,5 +1,5 @@
 ---
-status: Proposed
+status: Accepted
 date: 2026-08-25
 issue: launchpad-26/buzz#299
 decided_in: launchpad-26/buzz#299
@@ -10,16 +10,10 @@ supersedes: none
 
 ## Decision
 
-**Not yet settled by a human.** This record is `Proposed`, not `Accepted`.
-`launchpad/AGENTS.md` §5.1 reserves the choice for a human — *"You may not decide an ADR
-outcome"* — and #299's *Decision outcome* is still blank. When a human states the
-outcome in #299, this record's `status` becomes `Accepted`. Everything below is a
-drafted proposal, not a settled rule.
-
-The proposed option: Option A. The vendor-drop pull request is authored by a GitHub App
-installation token: PRs opened with an app token trigger `pull_request` workflows, so CI
-runs with no change to `ci.yml`. The identity is the app's, not a person's, which is
-what makes the audit trail true.
+Option A. The vendor-drop pull request is authored by a GitHub App installation token:
+PRs opened with an app token trigger `pull_request` workflows, so CI runs with no change
+to `ci.yml`. The identity is the app's, not a person's, which is what makes the audit
+trail true.
 
 **Authorship only — an app token cannot approve.** This is the load-bearing limit and it
 is worth stating rather than leaving to inference.
@@ -122,9 +116,11 @@ none
 
 ## Provenance
 
-Drafted by an agent from #299's options; the decision itself is pending a human, as
-stated at the top of *Decision*. Full alternatives, the measured `ci.yml` triggers, and
-the 2026-08-22 premise correction that raised the fifth option remain in #299.
+Drafted by an agent from #299's options. Jeffrey (@tucktuck101) made the decision on
+2026-08-31 after reviewing options A–F with their positive and negative consequences and
+the agent's recommendation of Option A; he replied verbatim: **"a"**. Full alternatives,
+the measured `ci.yml` triggers, and the 2026-08-22 premise correction that raised the
+fifth option remain in #299.
 
 Verified while drafting: ADR-0015 does not contain the token properties #299 attributes
 to it; ADR-0008 pre-specifies the scoped-GitHub-App pattern quoted above; ADR-0019

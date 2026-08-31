@@ -1,5 +1,5 @@
 ---
-status: Proposed
+status: Accepted
 date: 2026-08-25
 issue: launchpad-26/buzz#302
 decided_in: launchpad-26/buzz#302
@@ -10,15 +10,7 @@ supersedes: none
 
 ## Decision
 
-**Not yet settled by a human.** This record is `Proposed`, not `Accepted`.
-`launchpad/AGENTS.md` §5.1 reserves the choice for a human and #302's *Decision outcome*
-is still blank. #302 also asks whether this warrants a separate record at all — *"whoever
-triages this should consider folding it into the drop-trigger issue rather than deciding it
-separately"* and *"This may not merit an ADR at all."* That question is answered in
-*Context* below, but a human should confirm the answer along with the outcome. When they
-state it in #302, this record's `status` becomes `Accepted`.
-
-The proposed option: only one vendor-drop pull request may be open at a time. A scheduled
+Only one vendor-drop pull request may be open at a time. A scheduled
 daily invocation that finds an existing open drop does not open a second overlapping pull
 request, replace the first, force-push it, or silently add a newer upstream point to its
 reviewed content.
@@ -107,7 +99,11 @@ none
 
 ## Provenance
 
-Drafted by an agent from #302's narrowed options; the decision itself, and whether this
-should be folded into ADR-0035, are pending a human, as stated at the top of *Decision*.
-The original alternatives remain in #302; ADR-0035 and the later daily delivery authority in
-#520, #525, and #541 establish the cadence this record serialises.
+Drafted by an agent from #302's narrowed options. Jeffrey (@tucktuck101) made the
+decision on 2026-08-31 after reviewing the options (serialize with recorded blocked
+attempts; concurrent drops; automatic supersession; update-in-place) with their positive
+and negative consequences, the bounded security exception, and the fold-vs-separate
+question; he accepted the agent's recommendation — Option A, kept as a separate record —
+by replying verbatim: **"agreed"**. The original alternatives remain in #302; ADR-0035
+and the later daily delivery authority in #520, #525, and #541 establish the cadence
+this record serialises.
