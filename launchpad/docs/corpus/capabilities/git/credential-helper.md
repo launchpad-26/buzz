@@ -25,7 +25,7 @@ evidence:
     entry_class: FACT
     evidence:
       - "crates/git-credential-nostr/src/lib.rs"
-  - statement: "The private key is resolved from `$NOSTR_PRIVATE_KEY` (checked first, for CI/CD use without touching the filesystem) or else from the path in `git config nostr.keyfile`; a configured keyfile is rejected if it is not a regular file, exceeds a 256-byte size cap, or (on Unix) is readable by group or other (anything beyond the low 9 bits' owner-write/read bits, i.e. not effectively 0600)."
+  - statement: "The private key is resolved from `$NOSTR_PRIVATE_KEY` (checked first, for CI/CD use without touching the filesystem) or else from the path in `git config nostr.keyfile`; a configured keyfile is rejected if it is not a regular file, exceeds a 256-byte size cap, or (on Unix) has any permission bit set beyond owner-read and owner-write -- checked as `mode & 0o177 != 0`, which flags owner-execute, and every group/other bit, as insecure, i.e. not effectively 0600 or stricter."
     entry_class: FACT
     evidence:
       - "crates/git-credential-nostr/src/lib.rs"
