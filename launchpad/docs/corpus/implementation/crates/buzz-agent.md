@@ -174,9 +174,14 @@ exactly. The rest of the Configuration and Bounded Everything tables were not
 individually re-verified against `config.rs` line by line beyond these two — see
 *Scope and omissions* below.
 
-No divergence was found between the README's stated ACP method surface (five
-methods) and `lib.rs`'s actual dispatch match arm (five arms, same method names), nor
-between the README's "not networked MCP" claim and `mcp.rs`'s exclusive use of
+No contradiction was found between the README's stated ACP method surface (the five
+standard methods in its "ACP Transcript" section) and `lib.rs`'s actual dispatch: all
+five are present, with matching names. `lib.rs`'s dispatch does carry one additional,
+non-standard sixth arm (`_goose/unstable/session/steer`, see *Implementation
+surface* above) that the README's ACP Transcript section does not mention — this is
+an omission in an ACP-focused section documenting a non-ACP extension, not a
+contradiction of anything the README claims. No divergence was found between the
+README's "not networked MCP" claim and `mcp.rs`'s exclusive use of
 `rmcp::transport::TokioChildProcess` (stdio only, no HTTP/SSE transport construction
 found in the module).
 
