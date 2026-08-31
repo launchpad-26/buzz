@@ -86,6 +86,8 @@ evidence:
       - "crates/buzz-dev-mcp/src/paths.rs"
       - "crates/buzz-dev-mcp/src/read_file.rs"
 relationships:
+  - type: part-of
+    target: capabilities-agents-agent
   - type: references
     target: architecture-containers-agent-runtime
   - type: references

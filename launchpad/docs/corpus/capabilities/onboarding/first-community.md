@@ -86,6 +86,9 @@ evidence:
   - statement: "Issue #797's task description frames this node as 'the desktop/mobile onboarding step for joining or creating the first community/relay connection,' scoped separately from sibling tasks #796 (first-channel), #798 (first-identity), and #799 (the overall onboarding capability)."
     entry_class: TEAM_KNOWLEDGE
     provided_by: "launchpad-26/buzz#797 task description"
+relationships:
+  - type: part-of
+    target: capabilities-onboarding-onboarding
 ---
 
 # First community: capability

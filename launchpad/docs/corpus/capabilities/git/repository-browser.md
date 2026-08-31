@@ -91,6 +91,9 @@ evidence:
     entry_class: FACT
     evidence:
       - "VISION_PROJECTS.md:256"
+relationships:
+  - type: part-of
+    target: capabilities-git-git-hosting
 ---
 
 # Repository browser: capability

@@ -69,6 +69,8 @@ evidence:
     entry_class: TEAM_KNOWLEDGE
     provided_by: "launchpad-26/buzz#613 child issue list (read via gh issue view)"
 relationships:
+  - type: part-of
+    target: capabilities-onboarding-onboarding
   - type: references
     target: architecture-containers-desktop
 ---

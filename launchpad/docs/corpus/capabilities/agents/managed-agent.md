@@ -53,6 +53,8 @@ evidence:
     evidence:
       - "crates/buzz-acp/src/acp.rs:3103-3126"
 relationships:
+  - type: part-of
+    target: capabilities-agents-agent
   - type: references
     target: architecture-containers-agent-runtime
 ---

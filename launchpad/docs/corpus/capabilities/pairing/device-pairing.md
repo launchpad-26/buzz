@@ -85,9 +85,16 @@ evidence:
     entry_class: FACT
     evidence:
       - "git_ls_tree(ref='origin/launchpad', path='launchpad/docs/corpus') -> no capabilities/ directory; no node whose body names start_pairing, confirm_pairing_sas, cancel_pairing or start_identity_recovery_pairing, at commit cad6c375fdcc590158c1456c9fc7875f0f84a844"
-  - statement: "Sibling tasks #801 (buzz-pairing-cli), #802 (buzz-pair-relay) and #803 (pairing session/state-machine) are separate, not-yet-drafted document tasks under the same parent Feature #613, scoped to document individual pairing components rather than the overall capability this node covers."
+  - statement: "Sibling tasks #801 (buzz-pairing-cli), #802 (buzz-pair-relay) and #803 (pairing session/state-machine) are separate document tasks under the same parent Feature #613, scoped to document individual pairing components rather than the overall capability this node covers; all three merged together with this node as part of Feature #613's batch integration, and each now carries a references edge from this node plus a reciprocal part-of edge back to it."
     entry_class: TEAM_KNOWLEDGE
     provided_by: "launchpad-26/buzz#800 task body (batch dispatch context naming #801/#802/#803 as distinct siblings)"
+relationships:
+  - type: references
+    target: capabilities-pairing-pairing-session
+  - type: references
+    target: capabilities-pairing-pairing-relay
+  - type: references
+    target: capabilities-pairing-pairing-cli
 ---
 
 # Device pairing: capability
@@ -175,6 +182,12 @@ confirmed present in `origin/launchpad`'s corpus tree at the recorded
 revision (see the evidence ledger's `git_ls_tree` entry). No `implements`,
 `depends-on` or `part-of` edge is declared: no broader capability or
 higher-level policy node exists yet for this one to sit under.
+
+- `references`: `capabilities-pairing-pairing-cli`, `capabilities-pairing-pairing-relay`,
+  `capabilities-pairing-pairing-session` (#801, #802, #803) — added once Feature #613's
+  whole batch merged together and all three siblings became valid, checkable
+  relationship targets. Each sibling carries a reciprocal `part-of` edge back to this
+  node.
 
 ## Scope and omissions
 

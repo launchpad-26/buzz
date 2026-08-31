@@ -50,6 +50,8 @@ evidence:
       - "git_log_all_grep(pattern='branch.*channel|channel.*branch|branch.*room|room.*branch', case_insensitive=true, ref='cad6c375fdcc590158c1456c9fc7875f0f84a844') -> matches are either unrelated channel-feature merge commits or 'projects-channel-first-*' development-branch merges, run 2026-08-31"
     confidence: 0.75
 relationships:
+  - type: part-of
+    target: capabilities-projects-project
   - type: references
     target: architecture-flows-git-push
   - type: implements

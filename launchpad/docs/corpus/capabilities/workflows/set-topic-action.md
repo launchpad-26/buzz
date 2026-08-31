@@ -1,6 +1,6 @@
 ---
 id: capabilities-workflows-set-topic-action
-type: capabilities
+type: architecture
 status: draft
 origin: launchpad
 audiences:
@@ -16,12 +16,13 @@ evidence:
     entry_class: FACT
     evidence:
       - "crates/buzz-workflow/src/schema.rs:117-120"
-  - statement: "`node.schema.json`'s `type` enum has thirteen members and no merged corpus node yet exists under a `capabilities/` path on `origin/launchpad` at the recorded revision, so no merged precedent settles whether an individual workflow action/trigger node should carry `type: capabilities` or `type: architecture`; this node follows the shape an unmerged sibling task in the same Feature (#830, `reaction-action.md`, local branch `task/830-reaction-action`) already chose -- `type: capabilities`, id pattern `capabilities-workflows-<action>` -- because that sibling is the closest available precedent for this exact class of node, even though it has not merged and therefore is not binding."
+  - statement: "Corrected during Feature #613's whole-branch review, after all ~70 sibling nodes existed side by side: this node originally followed sibling #830 (reaction-action.md)'s then-unmerged type: capabilities choice as the closest available precedent. Once all siblings were visible together, this node's own body (trigger/preconditions/ordered-interactions/failure-rollback, matching templates/flow.md) and true siblings send-dm-action, send-message-action and needs-action -- all type: architecture for the identical shape -- settle the question the other direction. type: architecture is the consistent answer for this class of single-action node."
     entry_class: INFERENCE
-    confidence: 0.7
+    confidence: 0.8
     evidence:
-      - "launchpad/docs/corpus/schema/node.schema.json"
-      - "git_ls_tree(ref='origin/launchpad', path='launchpad/docs/corpus') -> no capabilities/ path present at commit 131b02f989684117d9ab1dd426f1673fa638e523"
+      - "launchpad/docs/corpus/templates/flow.md"
+      - "launchpad/docs/corpus/capabilities/workflows/send-dm-action.md"
+      - "launchpad/docs/corpus/capabilities/activity/needs-action.md"
   - statement: "The `dispatch_action` match arm for `SetChannelTopic` logs a warning and immediately returns `Err(WorkflowError::NotImplemented(\"SetChannelTopic\".into()))` -- no database write, no Nostr event construction, no HTTP call, and no call into `ActionSink` (the trait through which every other side-effecting action reaches the relay) is made."
     entry_class: FACT
     evidence:
@@ -76,6 +77,8 @@ evidence:
       - "launchpad/docs/corpus/architecture/flows/workflow-execution.md"
       - "launchpad/docs/corpus/templates/capability.md"
 relationships:
+  - type: part-of
+    target: capabilities-workflows-workflow
   - type: references
     target: architecture-flows-workflow-execution
   - type: implements
@@ -220,7 +223,7 @@ equivalent channel-topic update outside the workflow engine.
   coverage is a YAML/JSON parse round-trip; the `NotImplemented` outcome and its
   interaction with `finalize_run` are read from the source, not confirmed by a
   passing test asserting that exact behavior.
-- **Whether `type: capabilities` is the batch's eventual settled convention for
-  this whole `capabilities/workflows/*` family remains open** until a first node
-  of this family actually merges to `origin/launchpad` — see the `INFERENCE`
-  evidence entry above.
+- **This is now resolved, not open:** `type: architecture` is the settled convention
+  for single-action/trigger nodes under `capabilities/workflows/*` — see the corrected
+  `INFERENCE` evidence entry above. Umbrella nodes describing the capability as a whole
+  (`workflow.md`, `workflow-definition.md`) remain `type: capabilities`.

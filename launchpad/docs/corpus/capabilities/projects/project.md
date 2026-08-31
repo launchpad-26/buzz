@@ -71,13 +71,20 @@ evidence:
     entry_class: FACT
     evidence:
       - "docs/nips/NIP-MP.md:175"
-  - statement: "Sibling corpus tasks #809 (branch-as-room), #810 (project-channel) and #811 (project-repository) are open and unmerged at this node's recorded revision, so none resolve as a corpus node id and none may be named in this node's relationships."
+  - statement: "Sibling corpus tasks #809 (branch-as-room), #810 (project-channel) and #811 (project-repository) merged together with this node as part of Feature #613's batch integration; each now carries a references edge from this node plus a reciprocal part-of edge back to it."
     entry_class: TEAM_KNOWLEDGE
     provided_by: "launchpad-26/buzz#812 dispatch instructions, cross-referencing #809/#810/#811 issue state"
   - statement: "At this node's recorded revision, the corpus tree on origin/launchpad contains no capability-, interface- or architecture-shaped node this document could reference without duplicating its content; the tree holds only meta/process nodes (AGENTS.md, README.md, standards/*, architecture/*, templates/*) and no prior capability instance."
     entry_class: FACT
     evidence:
       - "launchpad/docs/corpus/templates/capability.md"
+relationships:
+  - type: references
+    target: capabilities-projects-project-repository
+  - type: references
+    target: capabilities-projects-project-channel
+  - type: references
+    target: capabilities-projects-branch-as-room
 ---
 
 # Project: capability
@@ -151,17 +158,15 @@ This node does not describe:
 
 ## Relationships
 
-**Declared: none.** At this node's recorded revision the corpus tree on
-`origin/launchpad` holds no capability-, interface-, or architecture-shaped
-node this document could `references` without duplicating its own content --
-only meta/process nodes and templates exist. The natural targets for
-`references` edges (an architecture node for the relay/desktop
-implementation, an interface node for the CLI/HTTP surface) do not yet exist
-as merged corpus nodes. Siblings #809 (branch-as-room), #810
-(project-channel) and #811 (project-repository) are open and unmerged, so
-none resolve as a valid `relationships[].target` per `AGENTS.md`'s rule that
-an edge may only name an already-merged node; adding `references` or
-`part-of` edges toward them is the natural next step once any of them merges.
+- `references`: `capabilities-projects-branch-as-room`,
+  `capabilities-projects-project-channel`, `capabilities-projects-project-repository`
+  (#809, #810, #811) -- added once Feature #613's whole batch merged together and all
+  three siblings became valid, checkable relationship targets. Each sibling carries a
+  reciprocal `part-of` edge back to this node.
+
+Still open: `references` edges toward an architecture node for the relay/desktop
+implementation and an interface node for the CLI/HTTP surface -- neither exists as a
+merged corpus node yet.
 
 ## Scope and omissions
 

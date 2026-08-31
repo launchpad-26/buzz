@@ -99,6 +99,8 @@ evidence:
     entry_class: TEAM_KNOWLEDGE
     provided_by: "launchpad-26/buzz#813 definition of done"
 relationships:
+  - type: part-of
+    target: capabilities-reminders-reminder
   - type: references
     target: architecture-containers-relay
   - type: references

@@ -65,6 +65,8 @@ evidence:
     entry_class: TEAM_KNOWLEDGE
     provided_by: "launchpad-26/buzz#199 (read directly via gh issue view; issue content is mutable GitHub state, not committed code, so it stays TEAM_KNOWLEDGE rather than FACT per AGENTS.md's rule for issue-only sources)"
 relationships:
+  - type: part-of
+    target: capabilities-git-git-hosting
   - type: references
     target: architecture-flows-git-push
 ---

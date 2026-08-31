@@ -79,6 +79,8 @@ evidence:
     entry_class: TEAM_KNOWLEDGE
     provided_by: "launchpad-26/buzz#745 and launchpad-26/buzz#753 (read directly via gh issue view; both OPEN with no drafted document at this revision)"
 relationships:
+  - type: part-of
+    target: capabilities-git-git-hosting
   - type: references
     target: architecture-containers-object-storage
   - type: references

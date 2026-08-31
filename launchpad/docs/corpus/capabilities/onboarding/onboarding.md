@@ -59,9 +59,16 @@ evidence:
     evidence:
       - "desktop/src/app/App.tsx:800-820"
     confidence: 0.9
-  - statement: "Sibling tasks #796 (first-channel), #797 (first-community) and #798 (first-identity) are each their own capability-node task under the same parent PRD #613, and as of this node's authoring none of the three had a merged corpus document -- so this node declares no relationship toward any of them and does not restate their per-step behavioral rules."
+  - statement: "Sibling tasks #796 (first-channel), #797 (first-community) and #798 (first-identity) are each their own capability-node task under the same parent PRD #613; all three merged together with this node as part of Feature #613's batch integration, and each now carries a references edge from this node plus a reciprocal part-of edge back to it. This node still does not restate their per-step behavioral rules."
     entry_class: TEAM_KNOWLEDGE
     provided_by: "launchpad-26/buzz#796, #797, #798 issue bodies (read directly via gh issue view); batch-run dispatch instructions for #799"
+relationships:
+  - type: references
+    target: capabilities-onboarding-first-identity
+  - type: references
+    target: capabilities-onboarding-first-community
+  - type: references
+    target: capabilities-onboarding-first-channel
 ---
 
 # Onboarding: capability
@@ -111,11 +118,11 @@ This node does not describe:
 
 ## Relationships
 
-None. #796, #797 and #798 -- the natural `part-of`/`references` targets for
-this node -- had no merged corpus document as of this node's authoring
-revision, and a `relationships[].target` naming an id no node carries is a
-hard validation error. The first of those three siblings to merge is the
-right moment to add the corresponding edge back to this node.
+- `references`: `capabilities-onboarding-first-identity`,
+  `capabilities-onboarding-first-community`, `capabilities-onboarding-first-channel`
+  (#798, #797, #796) — added once Feature #613's whole batch merged together and all
+  three siblings became valid, checkable relationship targets. Each sibling carries a
+  reciprocal `part-of` edge back to this node.
 
 ## Scope and omissions
 

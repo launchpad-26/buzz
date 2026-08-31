@@ -69,6 +69,9 @@ evidence:
       - "git_ls_tree(ref='origin/launchpad', path='launchpad/docs/corpus') -> no capabilities/ subtree present at commit cad6c375fdcc590158c1456c9fc7875f0f84a844"
       - "launchpad/docs/corpus/architecture/containers/desktop.md"
       - "launchpad/docs/corpus/architecture/containers/mobile.md"
+relationships:
+  - type: part-of
+    target: capabilities-onboarding-onboarding
 ---
 
 # First identity: capability

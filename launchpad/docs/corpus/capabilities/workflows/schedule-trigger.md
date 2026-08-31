@@ -123,6 +123,8 @@ evidence:
       - "crates/buzz-db/src/store/workflow.rs:2367-2400"
 relationships:
   - type: part-of
+    target: capabilities-workflows-workflow
+  - type: part-of
     target: architecture-flows-workflow-execution
 ---
 

@@ -1,6 +1,6 @@
 ---
 id: capabilities-workflows-delay-action
-type: capabilities
+type: architecture
 status: draft
 origin: launchpad
 audiences:
@@ -78,17 +78,20 @@ evidence:
     entry_class: FACT
     evidence:
       - "launchpad/docs/corpus/architecture/flows/workflow-execution.md"
-  - statement: "node.schema.json's type enum has no member named for a single workflow action step, and no template in launchpad/docs/corpus/templates/ is scoped to one action's own runtime contract; the closest directory-level precedent is architecture/flows/* nodes carrying type: architecture, matching their own top-level directory segment. This node's path (capabilities/workflows/delay-action.md, assigned by the corpus plan that generated this task, not chosen here) extends that same directory-matches-type convention to type: capabilities, rather than resting on capabilities.md template's own 'product-level noun phrase' framing, which a single action step does not cleanly satisfy."
+  - statement: "Corrected during Feature #613's whole-branch review, after all ~70 sibling nodes existed side by side: this node's own initial reasoning noted that architecture/flows/* nodes carry type: architecture matching their directory, then chose type: capabilities anyway for a different directory -- a directory-matches-type argument that actually points the other way once this node's body (organized as trigger/preconditions/ordered-interactions/failure-rollback, per issue #823's own DoD) is compared against templates/flow.md and true siblings send-dm-action, send-message-action, needs-action and agent-shutdown, all already type: architecture for the identical shape. type: architecture is the consistent answer; capabilities.md's own 'product-level noun phrase' framing was correctly judged not to fit a single action step, which is itself evidence against type: capabilities, not for it."
     entry_class: INFERENCE
     evidence:
       - "launchpad/docs/corpus/schema/node.schema.json"
+      - "launchpad/docs/corpus/templates/flow.md"
       - "launchpad/docs/corpus/architecture/flows/workflow-execution.md"
-      - "launchpad/docs/corpus/templates/capability.md"
-    confidence: 0.65
+      - "launchpad/docs/corpus/capabilities/workflows/send-dm-action.md"
+    confidence: 0.8
   - statement: "Issue #823's Definition of Done requires stating trigger/preconditions/termination, ordered interactions and data/state movement, authentication/authorization/trust-boundary crossings where relevant, and failure/abort/rollback behavior with links to representative verification -- the same checklist shape issue #688 used for architecture-flows-workflow-execution, which is why this node is organized around the same four sections rather than the capability.md template's Capability-statement/Maturity/Boundary shape."
     entry_class: TEAM_KNOWLEDGE
     provided_by: "launchpad-26/buzz#823 Definition of Done (read directly via gh issue view)"
 relationships:
+  - type: part-of
+    target: capabilities-workflows-workflow
   - type: references
     target: architecture-flows-workflow-execution
 ---
@@ -109,13 +112,17 @@ scope, referenced below rather than restated.
 No `node.schema.json` enum member names a single action step, and no merged
 `templates/` document is scoped that narrowly. This node's path
 (`capabilities/workflows/delay-action.md`) was assigned by the corpus plan that
-generated the task, not decided here; `type: capabilities` extends the same
-directory-matches-type convention `architecture/flows/*` already sets for
-`type: architecture`, marked `INFERENCE` (confidence 0.65) in the evidence ledger
-above because a single action step does not cleanly fit `templates/capability.md`'s
-own "product-level noun phrase" framing (e.g. "Git hosting"). The product-level
-capability this action belongs to is "Workflow engine (triggers, traces, conditional
-logic)" as a whole, not `delay` on its own.
+generated the task, not decided here. The body below is organized as trigger,
+preconditions, ordered interactions and failure/rollback — the same shape
+`templates/flow.md` documents and the same shape ten direct siblings under
+`capabilities/workflows/` already carry as `type: architecture`. `type: architecture`
+is therefore this node's front-matter value, corrected during Feature #613's
+whole-branch review (marked `INFERENCE`, confidence 0.8, in the evidence ledger
+above) — a single action step does not cleanly fit `templates/capability.md`'s own
+"product-level noun phrase" framing (e.g. "Git hosting") either, which argues against
+`type: capabilities`, not for it. The product-level capability this action belongs to
+is "Workflow engine (triggers, traces, conditional logic)" as a whole, not `delay` on
+its own; that capability is documented separately by `workflow.md`.
 
 ## Trigger, preconditions, termination
 

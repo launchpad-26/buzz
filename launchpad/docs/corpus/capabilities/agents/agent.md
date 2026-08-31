@@ -60,6 +60,32 @@ evidence:
     provided_by: "launchpad-26/buzz#711 definition of done"
 relationships:
   - type: references
+    target: capabilities-agents-remote-agent
+  - type: references
+    target: capabilities-agents-persona
+  - type: references
+    target: capabilities-agents-mcp
+  - type: references
+    target: capabilities-agents-managed-agent
+  - type: references
+    target: capabilities-agents-backend-provider
+  - type: references
+    target: capabilities-agents-agent-turn
+  - type: references
+    target: capabilities-agents-agent-shutdown
+  - type: references
+    target: capabilities-agents-agent-response
+  - type: references
+    target: capabilities-agents-agent-owner
+  - type: references
+    target: capabilities-agents-agent-mention
+  - type: references
+    target: capabilities-agents-agent-memory
+  - type: references
+    target: capabilities-agents-agent-auth-tag
+  - type: references
+    target: capabilities-agents-acp
+  - type: references
     target: architecture-context-ai-agent
   - type: references
     target: architecture-containers-agent-runtime
@@ -124,9 +150,9 @@ This node does not describe:
   (#710), `agent-memory` (#705), `agent-mention` (#706), `agent-owner` (#707),
   `agent-response` (#708), `agent-shutdown` (#709), `backend-provider` (#712),
   `managed-agent` (#713), `mcp` (#714), `persona` (#715), `remote-agent` (#716), and
-  `acp` (#703). None of the twelve is merged as of this writing (checked against
-  `origin/launchpad` and live issue state, both 2026-08-31), so none is a valid
-  `relationships` target from this node today.
+  `acp` (#703). All twelve merged together with this node as part of Feature #613's
+  batch integration; each now carries a `references` edge from this node and a
+  reciprocal `part-of` edge back to it (see Relationships below).
 - **How the running system is operated** -- deployment, monitoring, incident
   response for the agent runtime. That is the `operations` corpus surface.
 
@@ -173,10 +199,12 @@ This node does not describe:
 - `references`: `architecture-principles-humans-and-agents-are-peers` -- the
   authorization invariant behind "the same kind of account a human uses."
 
-No `relationships` target any `capabilities`-typed node: none of this subject's
-twelve sibling facets (see *Boundary*) is merged on `origin/launchpad` as of this
-writing, so none is a valid target. This is deliberate, not an oversight -- the
-first-merged sibling is the right moment to add the corresponding edge back to it.
+- `references`: each of the twelve sibling facet nodes named in *Boundary* above
+  (`agent-turn`, `agent-memory`, `agent-mention`, `agent-owner`, `agent-response`,
+  `agent-shutdown`, `backend-provider`, `managed-agent`, `mcp`, `persona`,
+  `remote-agent`, `acp`) -- added once Feature #613's whole batch merged together and
+  every sibling became a valid, checkable relationship target. Each sibling carries a
+  reciprocal `part-of` edge back to this node.
 
 ## Scope and omissions
 

@@ -62,6 +62,8 @@ evidence:
     entry_class: TEAM_KNOWLEDGE
     provided_by: "launchpad-26/buzz#703 definition of done"
 relationships:
+  - type: part-of
+    target: capabilities-agents-agent
   - type: references
     target: architecture-containers-agent-runtime
   - type: references

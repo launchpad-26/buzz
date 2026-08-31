@@ -74,6 +74,9 @@ evidence:
     evidence:
       - "CLAUDE.md:40"
       - "CLAUDE.md:47"
+relationships:
+  - type: part-of
+    target: capabilities-agents-agent
 ---
 
 # Backend provider: capability

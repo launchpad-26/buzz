@@ -61,6 +61,9 @@ evidence:
   - statement: "Issue #613 (parent Feature for this batch) assigns issue #801 the exact target path launchpad/docs/corpus/capabilities/pairing/pairing-cli.md, distinct from sibling tasks #800 (device-pairing, overall), #802 (pairing-relay) and #803 (pairing-session)."
     entry_class: TEAM_KNOWLEDGE
     provided_by: "launchpad-26/buzz#801 issue body (read directly via gh issue view)"
+relationships:
+  - type: part-of
+    target: capabilities-pairing-device-pairing
 ---
 
 # NIP-AB pairing interop-testing CLI: capability

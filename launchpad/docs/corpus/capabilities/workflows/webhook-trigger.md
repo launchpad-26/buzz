@@ -109,6 +109,8 @@ evidence:
       - "launchpad/docs/corpus/architecture/flows/workflow-execution.md"
     confidence: 0.65
 relationships:
+  - type: part-of
+    target: capabilities-workflows-workflow
   - type: references
     target: architecture-flows-workflow-execution
 ---

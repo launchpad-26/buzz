@@ -1,6 +1,6 @@
 ---
 id: capabilities-workflows-reaction-action
-type: capabilities
+type: architecture
 status: draft
 origin: launchpad
 audiences:
@@ -93,6 +93,8 @@ evidence:
       - "launchpad/docs/corpus/architecture/flows/workflow-execution.md"
       - "launchpad/docs/corpus/templates/capability.md"
 relationships:
+  - type: part-of
+    target: capabilities-workflows-workflow
   - type: references
     target: architecture-flows-workflow-execution
   - type: implements

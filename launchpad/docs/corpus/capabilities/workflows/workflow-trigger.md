@@ -67,6 +67,8 @@ evidence:
     entry_class: TEAM_KNOWLEDGE
     provided_by: "launchpad-26/buzz#843 definition of done, relayed via this batch's dispatch brief"
 relationships:
+  - type: part-of
+    target: capabilities-workflows-workflow
   - type: references
     target: architecture-flows-workflow-execution
 ---

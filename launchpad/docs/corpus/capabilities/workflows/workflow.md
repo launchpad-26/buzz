@@ -78,6 +78,40 @@ evidence:
       - "crates/buzz-test-client/tests/e2e_relay.rs:2668-2670"
 relationships:
   - type: references
+    target: capabilities-workflows-workflow-trigger
+  - type: references
+    target: capabilities-workflows-workflow-step
+  - type: references
+    target: capabilities-workflows-workflow-run
+  - type: references
+    target: capabilities-workflows-workflow-definition
+  - type: references
+    target: capabilities-workflows-workflow-condition
+  - type: references
+    target: capabilities-workflows-workflow-concurrency
+  - type: references
+    target: capabilities-workflows-webhook-trigger
+  - type: references
+    target: capabilities-workflows-webhook-action
+  - type: references
+    target: capabilities-workflows-set-topic-action
+  - type: references
+    target: capabilities-workflows-send-message-action
+  - type: references
+    target: capabilities-workflows-send-dm-action
+  - type: references
+    target: capabilities-workflows-schedule-trigger
+  - type: references
+    target: capabilities-workflows-reaction-trigger
+  - type: references
+    target: capabilities-workflows-reaction-action
+  - type: references
+    target: capabilities-workflows-message-trigger
+  - type: references
+    target: capabilities-workflows-delay-action
+  - type: references
+    target: capabilities-workflows-approval-action
+  - type: references
     target: architecture-flows-workflow-execution
   - type: references
     target: architecture-containers-relay
@@ -172,14 +206,14 @@ This node does not describe:
 - `references`: `architecture-containers-relay` — the merged container node
   confirming `buzz-relay` is the sole orchestrator of `buzz-workflow`'s
   `WorkflowEngine`.
-
-No `implements`, `part-of`, `depends-on`, or `supersedes` edge is declared: the ~15
-sibling workflow-domain document tasks under Feature #613 are not merged on
-`origin/launchpad` at this node's recorded revision, so none is a valid relationship
-target yet (checked via `git ls-tree -r --name-only origin/launchpad --
-launchpad/docs/corpus`, per `AGENTS.md`'s warning against assuming "nothing to point
-at" without checking). The first sibling node to merge is the natural moment to add a
-`part-of` edge from it back to this one, or a `references` edge from this one to it.
+- `references`: each of the 17 sibling workflow-domain nodes named in the table below
+  (`message-trigger`, `reaction-trigger`, `schedule-trigger`, `webhook-trigger`,
+  `workflow-trigger`, `send-message-action`, `send-dm-action`, `set-topic-action`,
+  `reaction-action`, `delay-action`, `webhook-action`, `approval-action`,
+  `workflow-definition`, `workflow-step`, `workflow-run`, `workflow-condition`,
+  `workflow-concurrency`) — added once Feature #613's whole batch merged together and
+  every sibling became a valid, checkable relationship target. Each of those siblings
+  carries a reciprocal `part-of` edge back to this node.
 
 ## Scope and omissions
 

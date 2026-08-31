@@ -103,6 +103,8 @@ evidence:
     entry_class: TEAM_KNOWLEDGE
     provided_by: "launchpad-26/buzz#803 definition of done, read directly via gh issue view"
 relationships:
+  - type: part-of
+    target: capabilities-pairing-device-pairing
   - type: references
     target: architecture-context-nostr-network
   - type: references

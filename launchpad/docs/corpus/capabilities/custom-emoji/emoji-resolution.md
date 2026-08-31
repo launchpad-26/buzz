@@ -73,6 +73,9 @@ evidence:
       - "desktop/src/shared/lib/remarkCustomEmoji.test.mjs"
       - "desktop/src/features/messages/lib/useMessageEmoji.test.mjs"
       - "crates/buzz-relay/src/handlers/ingest.rs"
+relationships:
+  - type: part-of
+    target: capabilities-custom-emoji-custom-emoji
 ---
 
 # Emoji resolution: capability

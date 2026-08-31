@@ -92,6 +92,9 @@ evidence:
     evidence:
       - "VISION_PROJECTS.md:256"
     confidence: 0.7
+relationships:
+  - type: part-of
+    target: capabilities-git-git-hosting
 ---
 
 # Repository identity, naming and ownership: capability

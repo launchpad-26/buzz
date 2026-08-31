@@ -90,6 +90,9 @@ evidence:
       - "crates/buzz-sdk/src/nip_oa.rs:335-349"
       - "crates/buzz-sdk/src/nip_oa.rs:367-385"
       - "crates/buzz-db/src/store/user.rs:762-782"
+relationships:
+  - type: part-of
+    target: capabilities-agents-agent
 ---
 
 # Agent owner: capability

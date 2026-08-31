@@ -84,6 +84,13 @@ evidence:
     entry_class: FACT
     evidence:
       - "grep_case_insensitive('invite', path='crates/buzz-cli/**/*.rs') -> one hit, crates/buzz-cli/src/client.rs:228, unrelated verb usage; no invite subcommand exists"
+relationships:
+  - type: references
+    target: capabilities-invites-invite-token
+  - type: references
+    target: capabilities-invites-invite-redemption
+  - type: references
+    target: capabilities-invites-invite-expiry
 ---
 
 # Invite: capability
@@ -136,13 +143,12 @@ This node does not describe:
   (trigger, preconditions, outcome) and how a claim is processed
   (ordered interactions, failure/rollback behavior) are the subject of the
   sibling flow tasks for `capabilities/invites/invite-expiry.md` and
-  `capabilities/invites/invite-redemption.md`. Neither sibling node is merged
-  to `origin/launchpad` at this revision, so no `relationships` edge to
-  either is declared below -- see *Relationships*.
+  `capabilities/invites/invite-redemption.md` -- see *Relationships* below for
+  the edges to both.
 - **The invite code as a data entity.** The opaque v2 code's exact encoding,
   hashing and validation contract is `capabilities/invites/invite-token.md`'s
   subject, not restated here beyond what is needed to establish this
-  capability's maturity. That sibling is also unmerged at this revision.
+  capability's maturity.
 - **The unrelated channel-membership "invite" mechanism.** VISION.md's
   channel-visibility table calls private-channel joining "invite-only" and
   guest access "Invited" -- that is `KIND_NIP29_PUT_USER` (kind 9000, add a
@@ -156,18 +162,14 @@ This node does not describe:
 
 ## Relationships
 
-**Declared: none.** `AGENTS.md` requires every declared `relationships[].target`
-to resolve against `origin/launchpad`'s own corpus tree, not the author's
-worktree, and at this revision that tree contains no `capabilities/**` node
-at all -- this is the first one. The natural future edges are `references`
-toward an architecture node for the relay's invite handlers (once one exists),
-`references` toward an interface node for the `/api/invites` route group
-(once `#1342`'s family lands an instance), and `part-of`/sibling cross-links
-to `invite-expiry`, `invite-redemption` and `invite-token` once those three
-sibling documents merge. None of the three exists in `origin/launchpad` at
-this revision, so declaring any of those edges now would be a hard validation
-error the moment this node's own PR runs `validate.py` against a branch that
-does not yet contain them.
+- `references`: `capabilities-invites-invite-expiry`, `capabilities-invites-invite-redemption`,
+  `capabilities-invites-invite-token` -- added once Feature #613's whole batch merged
+  together and all three siblings became valid, checkable relationship targets. Each
+  sibling carries a reciprocal `part-of` edge back to this node.
+
+Still open: `references` toward an architecture node for the relay's invite handlers
+(none exists yet), and toward an interface node for the `/api/invites` route group
+(once `#1342`'s family lands an instance) -- neither target resolves in the corpus yet.
 
 ## Scope and omissions
 

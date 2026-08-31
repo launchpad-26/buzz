@@ -75,6 +75,9 @@ evidence:
     entry_class: FACT
     evidence:
       - "launchpad/docs/corpus/architecture/flows/git-push.md"
+relationships:
+  - type: part-of
+    target: capabilities-git-git-hosting
 ---
 
 # Git smart HTTP transport: capability

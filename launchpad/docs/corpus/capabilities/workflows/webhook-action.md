@@ -1,6 +1,6 @@
 ---
 id: capabilities-workflows-webhook-action
-type: capabilities
+type: architecture
 status: draft
 origin: launchpad
 audiences:
@@ -88,12 +88,13 @@ evidence:
     entry_class: FACT
     evidence:
       - "launchpad/docs/corpus/architecture/flows/workflow-execution.md"
-  - statement: "`node.schema.json`'s `type` enum has no member specific to a single workflow-engine action step; of its thirteen values, the only one with a merged directory-to-value precedent relevant here is `architecture/flows/*` → `type: architecture` (established by `architecture-flows-workflow-execution.md`). No node yet exists under `capabilities/` on `origin/launchpad` to set a `capabilities`-directory precedent, so this node's own `type: capabilities` is chosen by extending the observed directory-mirrors-type convention to the `capabilities/workflows/` directory this task's own corpus-plan assigned, on the reasoning that the plan deliberately placed action/trigger docs in a directory distinct from `architecture/flows/` rather than merging them into it."
+  - statement: "Corrected during Feature #613's whole-branch review, after all ~70 sibling nodes existed side by side: this node's own reasoning had already identified `architecture/flows/*` → `type: architecture` as the only directly relevant merged precedent, then chose `type: capabilities` anyway by extending directory placement rather than content shape. This node's body (trigger/preconditions/ordered-interactions/failure-rollback, per issue #836's own DoD) is that same flow shape, and true siblings send-dm-action, send-message-action and needs-action already carry `type: architecture` for it. `type: architecture` is the consistent answer."
     entry_class: INFERENCE
     evidence:
-      - "launchpad/docs/corpus/schema/node.schema.json"
+      - "launchpad/docs/corpus/templates/flow.md"
       - "launchpad/docs/corpus/architecture/flows/workflow-execution.md"
-    confidence: 0.65
+      - "launchpad/docs/corpus/capabilities/workflows/send-dm-action.md"
+    confidence: 0.8
   - statement: "Issue #836 (this task) requires the document to state trigger/preconditions/termination, list ordered interactions and data/state movement, identify auth/authorization/trust-boundary crossings, and document failure/abort/rollback behavior with links to representative verification."
     entry_class: TEAM_KNOWLEDGE
     provided_by: "launchpad-26/buzz#836 definition of done"
@@ -101,6 +102,8 @@ evidence:
     entry_class: TEAM_KNOWLEDGE
     provided_by: "launchpad-26/buzz#837 title and definition of done, and this task's own dispatch instructions distinguishing #836 from #837"
 relationships:
+  - type: part-of
+    target: capabilities-workflows-workflow
   - type: part-of
     target: architecture-flows-workflow-execution
 ---

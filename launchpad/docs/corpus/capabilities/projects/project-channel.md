@@ -76,6 +76,9 @@ evidence:
       - "crates/buzz-cli/src/validate.rs:23-26"
       - "crates/buzz-sdk/src/builders.rs:2260-2265"
     confidence: 0.75
+relationships:
+  - type: part-of
+    target: capabilities-projects-project
 ---
 
 # Project channel: capability

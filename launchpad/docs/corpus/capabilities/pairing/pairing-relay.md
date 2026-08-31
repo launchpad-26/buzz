@@ -74,6 +74,9 @@ evidence:
     evidence:
       - "launchpad/project-intelligence/corpus/validate.py"
     confidence: 0.9
+relationships:
+  - type: part-of
+    target: capabilities-pairing-device-pairing
 ---
 
 # Pairing relay: capability

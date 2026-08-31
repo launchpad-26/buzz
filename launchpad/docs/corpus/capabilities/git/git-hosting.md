@@ -47,10 +47,28 @@ evidence:
     entry_class: FACT
     evidence:
       - "launchpad/docs/corpus/architecture/flows/git-push.md"
-  - statement: "Sibling corpus-authoring issues #746 (git-object-storage), #747 (git-signing), #748 (nostr-git-authentication), #749 (patch), #750 (repository-announcement), #751 (repository-browser), #752 (repository), and #753 (smart-http) were opened under the same parent Feature #613 to cover slices of git hosting more specific than this capability-level overview node; none were confirmed merged to `origin/launchpad`'s corpus tree at the recorded revision, so this node names them as boundary subjects rather than declaring relationship edges to unmerged ids."
+  - statement: "Sibling corpus-authoring issues #746 (git-object-storage), #747 (git-signing), #748 (nostr-git-authentication), #749 (patch), #750 (repository-announcement), #751 (repository-browser), #752 (repository), #753 (smart-http), and #744 (credential-helper) were opened under the same parent Feature #613 to cover slices of git hosting more specific than this capability-level overview node; all merged together with this node as part of Feature #613's batch integration, and each now carries a references edge from this node plus a reciprocal part-of edge back to it."
     entry_class: TEAM_KNOWLEDGE
     provided_by: "launchpad-26/buzz issue #745 dispatch instructions (batch run for Feature #613), naming sibling issues #746-#753"
 relationships:
+  - type: references
+    target: capabilities-git-smart-http
+  - type: references
+    target: capabilities-git-repository-browser
+  - type: references
+    target: capabilities-git-repository-announcement
+  - type: references
+    target: capabilities-git-repository
+  - type: references
+    target: capabilities-git-patch
+  - type: references
+    target: capabilities-git-nostr-git-authentication
+  - type: references
+    target: capabilities-git-git-signing
+  - type: references
+    target: capabilities-git-git-object-storage
+  - type: references
+    target: capabilities-git-credential-helper
   - type: references
     target: architecture-flows-git-push
   - type: implements
@@ -122,6 +140,12 @@ This node does not describe:
 - implements: corpus-template-capability — this node follows that template's
   required sections (Capability statement, Maturity, Boundary, Relationships,
   Scope and omissions).
+- references: each of the nine sibling git-domain nodes named in *Scope and
+  omissions* below (smart-http, repository-browser, repository-announcement,
+  repository, patch, nostr-git-authentication, git-signing, git-object-storage,
+  credential-helper) — added once Feature #613's whole batch merged together and
+  every sibling became a valid, checkable relationship target. Each sibling carries
+  a reciprocal part-of edge back to this node.
 
 ## Scope and omissions
 

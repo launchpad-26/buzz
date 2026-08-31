@@ -78,6 +78,9 @@ evidence:
     entry_class: FACT
     evidence:
       - "launchpad/docs/corpus/capabilities/custom-emoji/custom-emoji.md"
+relationships:
+  - type: references
+    target: capabilities-custom-emoji-emoji-resolution
 ---
 
 # Custom emoji: capability
@@ -141,16 +144,10 @@ This node does not describe:
 
 ## Relationships
 
-None declared. Checked against `origin/launchpad`'s corpus tree at the
-recorded revision: no `capabilities`, `architecture`, `interfaces-events`, or
-other node type documenting custom emoji, its resolution algorithm, the
-relay/desktop architecture, or a CLI interface exists there yet — this is the
-first capability-shaped node in the corpus. `#739` (emoji-resolution) is this
-node's obvious future `references` target once merged, but it is an unmerged
-sibling authored in parallel with no ordering guarantee, so declaring an edge
-to it now would resolve in this worktree and fail in CI on `origin/launchpad`.
-The first later node (whichever of #739 or a future architecture/interface
-node merges first) is the natural moment to add the edge.
+- `references`: `capabilities-custom-emoji-emoji-resolution` (#739) — added once
+  Feature #613's whole batch merged together and this sibling became a valid,
+  checkable relationship target. It carries a reciprocal `part-of` edge back to this
+  node.
 
 ## Scope and omissions
 

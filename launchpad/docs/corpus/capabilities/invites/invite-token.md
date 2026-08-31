@@ -75,6 +75,8 @@ evidence:
     entry_class: TEAM_KNOWLEDGE
     provided_by: "launchpad-26/buzz#761 definition of done, read directly via gh issue view"
 relationships:
+  - type: part-of
+    target: capabilities-invites-invite
   - type: implements
     target: corpus-template-capability
 ---

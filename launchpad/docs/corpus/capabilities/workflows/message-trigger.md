@@ -1,6 +1,6 @@
 ---
 id: capabilities-workflows-message-trigger
-type: capabilities
+type: architecture
 status: draft
 origin: launchpad
 audiences:
@@ -94,14 +94,17 @@ evidence:
     entry_class: FACT
     evidence:
       - "launchpad/docs/corpus/architecture/flows/workflow-execution.md"
-  - statement: "This node's directory placement (capabilities/workflows/) follows the repository's own observed convention that a corpus node's top-level directory matches its front-matter `type` field -- confirmed by sampling all 21 nodes currently under architecture/ (type: architecture) and standards/ (type: governance) in origin/launchpad's merged corpus tree, with zero exceptions found -- rather than following the already-drafted, unmerged flow.md template's type: architecture recommendation for step-by-step interaction narratives, since this node's own issue explicitly places it under capabilities/, a directory with no type: architecture precedent."
+  - statement: "Corrected during Feature #613's whole-branch review, after all ~70 sibling nodes existed side by side: this node's initial reasoning followed a directory-matches-type convention (capabilities/ implies type: capabilities) over flow.md's own type: architecture recommendation for step-by-step interaction narratives. Once compared against its actual body (trigger/preconditions/ordered-interactions/failure-rollback) and its true siblings -- send-dm-action, send-message-action, reaction-trigger, schedule-trigger, webhook-trigger, workflow-trigger, needs-action, agent-shutdown, reminder-lifecycle, all already type: architecture for the identical shape -- the directory-matches-type convention does not hold across this batch's own capabilities/workflows/ directory, which mixes flow-shaped step nodes with genuine product-level capability nodes (workflow.md, workflow-definition.md). Content shape, not directory, is the deciding signal; type: architecture is the consistent answer."
     entry_class: INFERENCE
     evidence:
-      - "launchpad/docs/corpus/architecture/principles/nostr-first.md"
-      - "launchpad/docs/corpus/standards/confidence.md"
       - "launchpad/docs/corpus/templates/flow.md"
-    confidence: 0.6
+      - "launchpad/docs/corpus/architecture/flows/workflow-execution.md"
+      - "launchpad/docs/corpus/capabilities/workflows/send-dm-action.md"
+      - "launchpad/docs/corpus/capabilities/activity/needs-action.md"
+    confidence: 0.8
 relationships:
+  - type: part-of
+    target: capabilities-workflows-workflow
   - type: references
     target: architecture-flows-workflow-execution
 ---

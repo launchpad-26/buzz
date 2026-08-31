@@ -80,6 +80,9 @@ evidence:
     evidence:
       - "launchpad/docs/corpus/architecture/flows/git-push.md"
     confidence: 0.8
+relationships:
+  - type: part-of
+    target: capabilities-git-git-hosting
 ---
 
 # Patch submission: capability

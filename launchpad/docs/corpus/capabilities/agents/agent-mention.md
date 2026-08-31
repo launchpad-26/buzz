@@ -56,6 +56,8 @@ evidence:
     evidence:
       - "crates/buzz-acp/src/filter.rs:639-666"
 relationships:
+  - type: part-of
+    target: capabilities-agents-agent
   - type: references
     target: architecture-flows-agent-turn
   - type: references

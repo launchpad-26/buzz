@@ -57,6 +57,8 @@ evidence:
       - "crates/buzz-acp/src/pool.rs:6228"
       - "crates/buzz-acp/src/pool.rs:6448"
 relationships:
+  - type: part-of
+    target: capabilities-agents-agent
   - type: references
     target: architecture-flows-agent-turn
   - type: references

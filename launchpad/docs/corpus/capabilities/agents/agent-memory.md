@@ -85,6 +85,9 @@ evidence:
   - statement: "Whether desktop's Tauri-side engram query command (desktop/src-tauri/src/commands/engrams.rs) or any buzz-persona use of engrams beyond what is cited above adds further capability-relevant behavior was not independently verified for this node; those files were located but not read in full."
     entry_class: TEAM_KNOWLEDGE
     provided_by: "author's own note recorded while gathering evidence for launchpad-26/buzz#705, 2026-08-31"
+relationships:
+  - type: part-of
+    target: capabilities-agents-agent
 ---
 
 # Agent memory: capability

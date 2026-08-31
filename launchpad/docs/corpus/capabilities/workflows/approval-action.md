@@ -1,6 +1,6 @@
 ---
 id: capabilities-workflows-approval-action
-type: capabilities
+type: architecture
 status: draft
 origin: launchpad
 audiences:
@@ -19,17 +19,19 @@ evidence:
   - statement: "Issue #822's own Objective line reads 'Create ... as the single canonical flow node for approval action,' and its closed duplicate #827 carries byte-identical wording, even though the target path (capabilities/workflows/approval-action.md) and parent Feature #613's own title ('workflow and supporting capability corpus exists') both point at a capability-shaped node -- the same copy-paste boilerplate drift AGENTS.md, templates/flow.md and templates/capability.md each document elsewhere in this batch."
     entry_class: TEAM_KNOWLEDGE
     provided_by: "launchpad-26/buzz#822 Objective and launchpad-26/buzz#827 Objective (read directly via gh issue view; issue content is mutable GitHub state, so this stays TEAM_KNOWLEDGE rather than FACT)"
-  - statement: "VISION_PROJECTS.md's own 'Capability | Status' table lists 'Approval gates' as one of its eleven rows, marked with the same in-progress marker as no other row in the table quotes verbatim: 'Infrastructure exists; executor wiring in progress' -- naming this exact subject as one of the corpus's own product-level capabilities, which is this node's basis for choosing type: capabilities over the flow-shaped architecture precedent set elsewhere in this batch."
+  - statement: "VISION_PROJECTS.md's own 'Capability | Status' table lists 'Approval gates' as one of its eleven rows, marked with the same in-progress marker as no other row in the table quotes verbatim: 'Infrastructure exists; executor wiring in progress' -- naming this exact subject as one of the corpus's own product-level capabilities, which this node initially treated as outweighing its own flow-shaped body when first drafted."
     entry_class: FACT
     evidence:
       - "VISION_PROJECTS.md:253"
-  - statement: "This node's choice of type: capabilities over the alternative, type: architecture (the precedent architecture-flows-workflow-execution.md set for flow-shaped content, itself marked INFERENCE/confidence 0.6 in templates/flow.md), is a judgment call: the schema names no per-type standard for documenting one internal workflow action step, and this node treats the VISION_PROJECTS.md capability-catalog match and the capabilities/ directory placement as outweighing the flow-shaped prose structure the issue's DoD checklist otherwise calls for."
+  - statement: "Corrected during Feature #613's whole-branch review, after all ~70 sibling nodes existed side by side: this node's body is trigger/precondition/ordered-interaction/failure-rollback content -- the same shape templates/flow.md documents and the same shape 10 of its own direct siblings (send-dm-action, send-message-action, message-trigger, reaction-trigger, schedule-trigger, webhook-trigger, workflow-trigger, needs-action, agent-shutdown, reminder-lifecycle) already carry as type: architecture. type: capabilities was this node's own initial judgment call, made in isolation with no merged precedent to check against; once compared against its actual body shape and its true siblings, type: architecture is the consistent answer, not a directory-placement extension. The capabilities/workflows/ path names a corpus-plan directory grouping, not a type."
     entry_class: INFERENCE
     evidence:
       - "launchpad/docs/corpus/schema/node.schema.json"
-      - "VISION_PROJECTS.md:253"
+      - "launchpad/docs/corpus/templates/flow.md"
       - "launchpad/docs/corpus/architecture/flows/workflow-execution.md"
-    confidence: 0.55
+      - "launchpad/docs/corpus/capabilities/workflows/send-dm-action.md"
+      - "launchpad/docs/corpus/capabilities/activity/needs-action.md"
+    confidence: 0.8
   - statement: "The RequestApproval action is defined in the workflow schema with three fields -- from (user mention or role, e.g. '@release-manager'), message (shown to the approver), and an optional timeout string defaulting to '24h' -- and requesting it does not require elevated (owner/admin) channel authority: WorkflowDef::requires_elevated_authority checks only for a CallWebhook step in the definition, never for RequestApproval."
     entry_class: FACT
     evidence:
@@ -95,6 +97,9 @@ evidence:
     entry_class: FACT
     evidence:
       - "launchpad/docs/corpus/AGENTS.md"
+relationships:
+  - type: part-of
+    target: capabilities-workflows-workflow
 ---
 
 # Approval action: capability

@@ -76,6 +76,8 @@ evidence:
     evidence:
       - "launchpad/docs/corpus/schema/relationships.schema.json"
 relationships:
+  - type: part-of
+    target: capabilities-workflows-workflow
   - type: references
     target: architecture-flows-workflow-execution
 ---

@@ -79,6 +79,8 @@ evidence:
       - "crates/buzz-workflow/src/executor.rs:530-534"
       - "crates/buzz-workflow/src/executor.rs:645"
 relationships:
+  - type: part-of
+    target: capabilities-workflows-workflow
   - type: references
     target: architecture-flows-workflow-execution
 ---

@@ -74,6 +74,9 @@ evidence:
     entry_class: FACT
     evidence:
       - "crates/buzz-workflow/src/lib.rs:683-693"
+relationships:
+  - type: part-of
+    target: capabilities-workflows-workflow
 ---
 
 # Workflow run concurrency limit

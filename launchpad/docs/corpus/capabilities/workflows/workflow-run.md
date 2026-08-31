@@ -1,6 +1,6 @@
 ---
 id: capabilities-workflows-workflow-run
-type: capabilities
+type: architecture
 status: draft
 origin: launchpad
 audiences:
@@ -16,16 +16,17 @@ evidence:
     entry_class: FACT
     evidence:
       - "launchpad/docs/corpus/architecture/flows/workflow-execution.md"
-  - statement: "node.schema.json's type enum has thirteen members and capabilities is its own dedicated value, distinct from architecture; no capabilities-typed node is merged anywhere in the corpus at this revision, so there is no merged precedent to follow for this node's own type, and the choice below is this node's own judgment."
+  - statement: "node.schema.json's type enum has thirteen members and capabilities is its own dedicated value, distinct from architecture; no capabilities-typed node was merged anywhere in the corpus when this node was first drafted, so there was no merged precedent to follow for this node's own type at the time."
     entry_class: FACT
     evidence:
       - "launchpad/docs/corpus/schema/node.schema.json"
-  - statement: "Every merged node under launchpad/docs/corpus/architecture/ carries type: architecture, and this node's target path (launchpad/docs/corpus/capabilities/workflows/workflow-run.md) sits under a capabilities/ directory the corpus-plan tool itself chose for this task, so type: capabilities is chosen by extending that same directory-to-type mapping rather than inventing an independent rule; this is this node's own reasoning, not a restatement of anything node.schema.json or schema/README.md states about the mapping."
+  - statement: "Corrected during Feature #613's whole-branch review, after all ~70 sibling nodes existed side by side: this node's body is organized as trigger/preconditions/ordered-interactions/failure-rollback -- the same flow shape templates/flow.md documents and the same shape true siblings send-dm-action, send-message-action, needs-action and agent-shutdown already carry as type: architecture. The directory-to-type mapping this node's own earlier reasoning extended does not hold across capabilities/workflows/, which mixes flow-shaped step/run nodes with genuine product-level capability nodes (workflow.md). Content shape settles it: type: architecture."
     entry_class: INFERENCE
     evidence:
+      - "launchpad/docs/corpus/templates/flow.md"
       - "launchpad/docs/corpus/architecture/flows/workflow-execution.md"
-      - "launchpad/docs/corpus/schema/node.schema.json"
-    confidence: 0.6
+      - "launchpad/docs/corpus/capabilities/workflows/send-dm-action.md"
+    confidence: 0.8
   - statement: "RunStatus is a six-variant Rust enum (Pending, Running, WaitingApproval, Completed, Failed, Cancelled) serialized snake_case, backed 1:1 by the Postgres enum run_status ('pending','running','waiting_approval','completed','failed','cancelled')."
     entry_class: FACT
     evidence:
@@ -110,6 +111,8 @@ evidence:
     evidence:
       - "crates/buzz-db/src/store/workflow.rs:1722-1751"
 relationships:
+  - type: part-of
+    target: capabilities-workflows-workflow
   - type: references
     target: architecture-flows-workflow-execution
 ---
@@ -275,10 +278,9 @@ CLI's dead run-history command).
   mobile, a REST endpoint) reads `workflow_runs` today was not checked; this node
   only establishes that the one CLI command meant for this purpose queries the wrong
   source.
-- **Whether `type: capabilities` is the corpus's eventual settled answer for a
-  run-record-shaped node under `capabilities/`** is genuinely unresolved — no
-  capabilities-typed node is merged anywhere in the corpus at this revision to serve
-  as precedent, and the *data-entity* template (unmerged at this revision) reasons
-  toward `type: implementation` for a domain-entity instance on different grounds
-  (an entity "as it is actually built," not a capability). This node's own choice is
-  recorded as an `INFERENCE` at confidence 0.6 for exactly that reason.
+- **This is now resolved, not open:** `type: architecture` is the settled convention
+  for this node, corrected during Feature #613's whole-branch review — see the
+  corrected `INFERENCE` evidence entry above. The *data-entity* template's separate
+  `type: implementation` reasoning applies to a domain-entity instance "as it is
+  actually built," a different shape than this node's trigger/ordered-interaction
+  narrative.

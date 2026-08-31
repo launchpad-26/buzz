@@ -80,6 +80,8 @@ evidence:
       - "launchpad/docs/corpus/schema/node.schema.json"
       - "launchpad/docs/corpus/templates/flow.md"
 relationships:
+  - type: part-of
+    target: capabilities-invites-invite
   - type: references
     target: architecture-containers-relay
   - type: references

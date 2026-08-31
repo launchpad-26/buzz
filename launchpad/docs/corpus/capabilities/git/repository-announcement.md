@@ -56,6 +56,8 @@ evidence:
     evidence:
       - "git_ls_tree(ref='origin/launchpad', path='launchpad/docs/corpus') -> AGENTS.md, README.md, architecture/**, schema/**, standards/**, templates/** ; no capabilities/ entry, run against commit cad6c375fdcc590158c1456c9fc7875f0f84a844"
 relationships:
+  - type: part-of
+    target: capabilities-git-git-hosting
   - type: references
     target: architecture-containers-relay
   - type: references

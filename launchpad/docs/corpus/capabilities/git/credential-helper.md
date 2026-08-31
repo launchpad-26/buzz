@@ -73,6 +73,9 @@ evidence:
     entry_class: FACT
     evidence:
       - "launchpad/docs/corpus/architecture/flows/git-push.md"
+relationships:
+  - type: part-of
+    target: capabilities-git-git-hosting
 ---
 
 # Git credential helper: capability
@@ -123,13 +126,9 @@ This node does not describe:
 - references: `architecture-flows-git-push` -- the push-transport flow this
   helper's signing step feeds into; that node documents the server-side
   verification and authorization this node's boundary excludes.
-
-No other sibling capability node in this batch (`git-hosting`,
-`nostr-git-authentication`, `smart-http`, `git-signing`, and others) is
-merged on `origin/launchpad` at the recorded revision, so no further
-`relationships` targets resolve; the natural next edges are a `part-of`
-toward a merged `git-hosting` overview node and a `references` toward a
-`nostr-git-authentication` node, once either exists.
+- part-of: `capabilities-git-git-hosting` -- added once Feature #613's whole batch
+  merged together and the `git-hosting` overview node became a valid, checkable
+  relationship target.
 
 ## Scope and omissions
 

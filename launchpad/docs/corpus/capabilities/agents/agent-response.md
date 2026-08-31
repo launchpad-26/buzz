@@ -75,6 +75,9 @@ evidence:
       - "crates/buzz-cli/src/agent_management.rs:102-142"
       - "crates/buzz-cli/src/commands/agents.rs:14-44"
       - "crates/buzz-cli/src/commands/projects.rs:35-76"
+relationships:
+  - type: part-of
+    target: capabilities-agents-agent
 ---
 
 # Agent response: capability

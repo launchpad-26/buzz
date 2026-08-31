@@ -65,6 +65,8 @@ evidence:
     evidence:
       - "git_ls_tree(ref='origin/launchpad', path='launchpad/docs/corpus') -> AGENTS.md, README.md, architecture/**, schema/**, standards/**, templates/**, no capabilities/layers/platforms subtree present, checked 2026-08-31"
 relationships:
+  - type: part-of
+    target: capabilities-agents-agent
   - type: references
     target: architecture-containers-agent-runtime
 ---

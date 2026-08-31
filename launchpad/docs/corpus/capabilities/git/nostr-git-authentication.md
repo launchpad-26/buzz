@@ -66,6 +66,9 @@ evidence:
     evidence:
       - "crates/buzz-test-client/tests/e2e_git.rs:268-270"
       - "crates/buzz-test-client/tests/e2e_git.rs:411-413"
+relationships:
+  - type: part-of
+    target: capabilities-git-git-hosting
 ---
 
 # Nostr git authentication: capability

@@ -83,6 +83,8 @@ evidence:
       - "crates/buzz-acp/src/lib.rs:1650-1691"
       - "crates/buzz-acp/src/lib.rs:5217-5265"
 relationships:
+  - type: part-of
+    target: capabilities-agents-agent
   - type: references
     target: architecture-containers-agent-runtime
   - type: references

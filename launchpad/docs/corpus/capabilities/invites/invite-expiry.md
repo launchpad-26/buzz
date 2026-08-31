@@ -87,6 +87,9 @@ evidence:
   - statement: "Issue #759's own Definition of Done requires this document to state trigger, preconditions and termination/outcome; list ordered interactions and data/state movement; identify authentication/authorization/trust-boundary crossings where relevant; and document failure/abort/rollback behavior linked to representative verification -- the same category-specific tail already used by the merged architecture-flows-websocket-authentication node for the same issue category."
     entry_class: TEAM_KNOWLEDGE
     provided_by: "launchpad-26/buzz#759 definition of done"
+relationships:
+  - type: part-of
+    target: capabilities-invites-invite
 ---
 
 # Flow: Invite Expiry

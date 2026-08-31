@@ -68,16 +68,19 @@ evidence:
       - "crates/buzz-db/src/store/feed.rs:191-193"
       - "desktop/src/features/home/lib/inbox.ts:146-148"
       - "desktop/src/testing/e2eBridge.ts:7811-7813"
-  - statement: "At the recorded revision, the merged corpus under launchpad/docs/corpus/ carries no capabilities/, architecture, or interface node about reminders, and issue #813 (reminder-lifecycle, a flow node) is not merged, so this node has no relationships target to declare."
+  - statement: "Issue #813 (reminder-lifecycle, a flow node) merged together with this node as part of Feature #613's batch integration, and now carries a references edge from this node plus a reciprocal part-of edge back to it."
     entry_class: FACT
     evidence:
-      - "git_ls_tree(ref='origin/launchpad', path='launchpad/docs/corpus') -> no capabilities/ directory and no node mentioning reminders anywhere in the tree, at commit cad6c375fdcc590158c1456c9fc7875f0f84a844"
+      - "launchpad/docs/corpus/capabilities/reminders/reminder-lifecycle.md"
   - statement: "Issue #814 scopes this document to the overall reminder capability (creating, scheduling, and receiving reminders), distinct from sibling issue #813's reminder-lifecycle flow node, which this document cross-references without duplicating."
     entry_class: TEAM_KNOWLEDGE
     provided_by: "launchpad-26/buzz#814 objective and definition of done; launchpad-26/buzz#813 objective, both read directly via gh issue view"
   - statement: "KIND_STREAM_REMINDER (40007) is a second, distinct concept discovered while drafting this node -- a declared kind with a read path and no write path -- and per this corpus's own atomicity standard (a second concept discovered mid-draft must be filed as its own task, not folded in), it was filed as launchpad-26/buzz#1959 rather than resolved or described further here."
     entry_class: TEAM_KNOWLEDGE
     provided_by: "launchpad-26/buzz#1959, filed while drafting this node"
+relationships:
+  - type: references
+    target: capabilities-reminders-reminder-lifecycle
 ---
 
 # Reminders: capability
@@ -119,8 +122,8 @@ This node does not describe:
 - **The step-by-step lifecycle a single reminder goes through** -- create,
   pending, snooze/complete/cancel, scheduler claim, delivery, and the races and
   failure modes along the way. That is issue #813's own flow node
-  (`reminder-lifecycle`), not duplicated here. No `relationships` edge targets
-  it because it is not merged into the corpus yet.
+  (`reminder-lifecycle`), not duplicated here -- see *Relationships* for the edge
+  to it.
 - **A second, separate, declared-but-unproduced kind.** The relay's kind
   registry also declares `KIND_STREAM_REMINDER` (`40007`), described as "a
   reminder attached to a stream message or time." It has a read path -- the
@@ -140,13 +143,10 @@ This node does not describe:
 
 ## Relationships
 
-Declared: none. At the recorded revision the merged corpus carries no
-`capabilities/`, architecture, or interface node about reminders to
-`references`, and issue #813's `reminder-lifecycle` flow node -- the natural
-`references` or sibling target -- is not merged, so its `id` does not resolve.
-This is a fact about the corpus's current contents, checked directly rather
-than assumed; the first architecture, interface, or flow node for this
-capability to land is the moment to add the corresponding edge.
+- `references`: `capabilities-reminders-reminder-lifecycle` (#813) -- added once
+  Feature #613's whole batch merged together and this sibling became a valid,
+  checkable relationship target. It carries a reciprocal `part-of` edge back to this
+  node.
 
 ## Scope and omissions
 

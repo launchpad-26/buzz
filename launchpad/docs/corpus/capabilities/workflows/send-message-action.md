@@ -85,6 +85,8 @@ evidence:
     provided_by: "launchpad-26/buzz#834 definition of done"
 relationships:
   - type: part-of
+    target: capabilities-workflows-workflow
+  - type: part-of
     target: architecture-flows-workflow-execution
   - type: implements
     target: corpus-template-flow

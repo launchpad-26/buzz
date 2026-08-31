@@ -105,6 +105,9 @@ evidence:
       - "desktop/src-tauri/src/managed_agents/reserved_env_keys.rs:28-76"
       - "crates/buzz-backend-kubernetes/src/env.rs:27"
       - "crates/buzz-acp/src/lib.rs:5099-5108"
+relationships:
+  - type: part-of
+    target: capabilities-agents-agent
 ---
 
 # Agent owner attestation (`BUZZ_AUTH_TAG`): capability

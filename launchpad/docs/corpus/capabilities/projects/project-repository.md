@@ -65,6 +65,9 @@ evidence:
   - statement: "Issue #811's own Definition of Done requires this node to state the capability and primary actors/outcomes, define behavioral rules, constraints and variants, and link major flows, interfaces, data and platform implementation and verification -- the acceptance bar this node is built against."
     entry_class: TEAM_KNOWLEDGE
     provided_by: "launchpad-26/buzz#811 definition of done"
+relationships:
+  - type: part-of
+    target: capabilities-projects-project
 ---
 
 # Project repository: capability
