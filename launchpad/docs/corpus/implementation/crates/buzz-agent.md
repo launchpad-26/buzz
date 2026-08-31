@@ -26,11 +26,17 @@ evidence:
     evidence:
       - "crates/buzz-agent/src/lib.rs:149"
       - "crates/buzz-agent/src/lib.rs:294-330"
-  - statement: "crates/sprig/Cargo.toml depends on buzz-agent as a path dependency (path = \"../buzz-agent\"), and crates/sprig/src/main.rs's argv0 dispatch calls buzz_agent::run() when invoked as \"buzz-agent\" -- sprig is the only in-workspace crate that depends on buzz-agent as a library; no other crate does."
+  - statement: "crates/sprig/Cargo.toml depends on buzz-agent as a path dependency (path = \"../buzz-agent\"), and crates/sprig/src/main.rs's argv0 dispatch calls buzz_agent::run() when invoked as \"buzz-agent\"."
     entry_class: FACT
     evidence:
       - "crates/sprig/Cargo.toml"
       - "crates/sprig/src/main.rs"
+  - statement: "desktop/src-tauri/Cargo.toml also depends on buzz-agent as a path dependency, aliased buzz_agent_pkg -- checked across every crates/*/Cargo.toml plus desktop/src-tauri/Cargo.toml, these two (sprig and the desktop Tauri backend) are the only in-workspace dependents. Desktop uses it for two distinct purposes, neither of which spawns the buzz-agent binary as a subprocess: (1) desktop/src-tauri/src/managed_agents/git_bash.rs reads buzz_agent_pkg::WINDOWS_SHELL_RESOLUTION_ENV to resolve the same Windows Git Bash environment keys buzz-agent's own MCP-child spawner (spawn_one()) forwards, keeping the two allowlists in sync by sharing the constant; (2) desktop/src-tauri/src/commands/agent_models_databricks.rs calls buzz_agent_pkg::discover_databricks_models, ::authenticate_databricks, ::config::Config::for_discovery, ::config::DatabricksModelFilter, ::config::Provider and ::AgentError directly, so Desktop's own model-picker UI can list and authenticate against Databricks model catalogs without spawning a buzz-agent process at all."
+    entry_class: FACT
+    evidence:
+      - "desktop/src-tauri/Cargo.toml:108"
+      - "desktop/src-tauri/src/managed_agents/git_bash.rs:116-136"
+      - "desktop/src-tauri/src/commands/agent_models_databricks.rs:99-226"
   - statement: "The merged corpus node architecture-containers-agent-runtime names buzz-agent as one of three crates composing the agent-runtime container, and its own evidence ledger records that buzz-acp depends on buzz-persona directly while buzz-agent's Cargo.toml carries no such dependency, and that neither buzz-acp, buzz-agent, buzz-dev-mcp nor sprig depends on buzz-db or buzz-search -- i.e. persona-pack resolution, Buzz-CLI-backed tool execution, and durable Postgres/search access are harness- or MCP-server-side responsibilities this crate does not own."
     entry_class: FACT
     evidence:
@@ -134,6 +140,20 @@ id, so this node declares no `implements` edge toward either, per
 | `src/wire.rs` (`WireMsg`, `Inbound`, JSON-RPC error codes) | README's stated wire framing ("Each line is one newline-terminated JSON value") | `PARSE_ERROR`/`INVALID_REQUEST`/`METHOD_NOT_FOUND`/`INVALID_PARAMS` per JSON-RPC 2.0 |
 | `src/model_capabilities.rs` | Not documented in this crate's own README; realizes `scripts/model-capabilities.json`'s six-axis per-model capability manifest, shared with a TypeScript interpreter in `desktop/` | Embedded at compile time via `include_str!`, cached in a `OnceLock` |
 | `src/types.rs` (`ToolResultContent`, `AgentError`, history/turn types) | Shared domain types referenced throughout the table above | `AgentError` is one of three symbols re-exported from `lib.rs`'s public surface |
+
+**Direct library consumers, not just process spawners.** `crates/sprig` links `buzz-agent`
+to dispatch to `buzz_agent::run()` when invoked as `buzz-agent` (the process-spawning
+path README documents). Separately, and not documented in the README at all,
+`desktop/src-tauri/Cargo.toml` also depends on this crate directly (aliased
+`buzz_agent_pkg`) for two purposes that never spawn a `buzz-agent` process: reading
+`WINDOWS_SHELL_RESOLUTION_ENV` to keep Desktop's own Windows Git Bash resolution in
+sync with this crate's MCP-child env allowlist, and calling
+`discover_databricks_models`/`authenticate_databricks`/`Config::for_discovery`/
+`DatabricksModelFilter`/`Provider`/`AgentError` directly so Desktop's model-picker UI
+can list and authenticate Databricks models without spawning the agent at all. `pub
+async fn authenticate_databricks` (declared directly in `lib.rs`, not one of the three
+`pub use` re-exports) is therefore also part of this crate's real public entry-point
+surface, alongside `run()` and the re-exported items.
 
 ## Divergences
 
