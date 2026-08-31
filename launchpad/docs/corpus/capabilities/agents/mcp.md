@@ -70,6 +70,21 @@ evidence:
     entry_class: FACT
     evidence:
       - "git_ls_tree(ref='origin/launchpad', path='launchpad/docs/corpus/capabilities') -> no such path, run against commit 131b02f989684117d9ab1dd426f1673fa638e523"
+  - statement: "build_mcp_servers' empty-command-means-no-tools behavior is pinned by a passing unit test, empty_mcp_command_returns_no_servers, which asserts an empty mcp_command produces zero McpServer entries -- the same edge the deployment runbook's troubleshooting entry names as a silent-failure trap."
+    entry_class: FACT
+    evidence:
+      - "crates/buzz-acp/src/lib.rs:6943-6951"
+  - statement: "Every one of buzz-dev-mcp's tool implementation modules (rg, shell, str_replace, todo, view_image, paths, shim, read_file) carries its own #[test]-annotated unit test module, verifying the capability's individual tool behaviors at the source level rather than only through end-to-end exercise."
+    entry_class: FACT
+    evidence:
+      - "crates/buzz-dev-mcp/src/shell.rs:985-1435"
+      - "crates/buzz-dev-mcp/src/shim.rs:361-695"
+      - "crates/buzz-dev-mcp/src/rg.rs"
+      - "crates/buzz-dev-mcp/src/str_replace.rs"
+      - "crates/buzz-dev-mcp/src/todo.rs"
+      - "crates/buzz-dev-mcp/src/view_image.rs"
+      - "crates/buzz-dev-mcp/src/paths.rs"
+      - "crates/buzz-dev-mcp/src/read_file.rs"
 relationships:
   - type: references
     target: architecture-containers-agent-runtime
@@ -104,6 +119,16 @@ deployment runbook documents the failure mode when it is *not* configured --
 (`launchpad/deploy/runbooks/dev-deployment-SOP.md:2184-2187`). That failure
 mode being a documented, named troubleshooting step is itself evidence the
 capability is deployed and operated today, not merely designed.
+
+## Verification
+
+The specific failure mode above -- an empty MCP command leaving an agent with
+no tools -- is pinned by a passing unit test, `empty_mcp_command_returns_no_servers`
+(`crates/buzz-acp/src/lib.rs:6943-6951`), not left to documentation alone.
+Each individual tool `buzz-dev-mcp` exposes (`shell`, `read_file`, `view_image`,
+`str_replace`, `todo`, plus the `rg`/`tree`/multicall shim behavior) has its
+own source-level unit test module in its own file under
+`crates/buzz-dev-mcp/src/`.
 
 ## Boundary
 
