@@ -48,6 +48,10 @@ evidence:
   - statement: "Sibling task issue #716 (capabilities/agents/remote-agent.md) is open and unmerged at the recorded revision, so capabilities-agents-remote-agent is not a valid relationships target for this node under AGENTS.md's own merge-target-branch rule."
     entry_class: TEAM_KNOWLEDGE
     provided_by: "launchpad-26/buzz#716 (title and open state, read via gh issue view)"
+  - statement: "buzz-acp's own test suite exercises the environment-injection path AcpClient::spawn uses: spawn_applies_runtime_env_defaults_with_extra_env_precedence spawns a real child process and reads back what it observed, asserting that a runtime default env var is applied, that an explicit extra_env entry overrides that default, and that a differently-named agent binary receives no such default at all -- direct verification, not just a reading of the source, of the spawn-time environment-injection mechanism this capability relies on."
+    entry_class: FACT
+    evidence:
+      - "crates/buzz-acp/src/acp.rs:3103-3126"
 relationships:
   - type: references
     target: architecture-containers-agent-runtime
@@ -107,6 +111,15 @@ the current agent-first CLI, not a future plan. Buzz Desktop's
 `managed_agents` module implements `BackendKind::Local` as the default
 backend and spawns `buzz-acp` (`DEFAULT_ACP_COMMAND`) as the sidecar for
 every local managed agent today.
+
+**Verification.** `spawn_applies_runtime_env_defaults_with_extra_env_precedence`
+in `crates/buzz-acp/src/acp.rs` spawns a real child process and reads back
+what it actually observed in its environment, demonstrating -- not merely
+asserting from a reading of the source -- that a spawned agent receives
+runtime-default env vars, that an explicit `extra_env` entry overrides that
+default, and that an unrelated agent binary receives none of it. This is the
+same injection mechanism the auth env vars (`BUZZ_RELAY_URL`,
+`BUZZ_PRIVATE_KEY`, `BUZZ_AUTH_TAG`) ride on.
 
 ## Boundary
 
