@@ -248,5 +248,5 @@ conventions -- each checked against real code, not merely restated from
 - Whether `scripts/mobile-worktree-overrides.sh` itself has any automated
   test (as opposed to being exercised incidentally by `just mobile-dev`) was
   not located during this investigation.
-- Whether the two divergences recorded above are already tracked by an open
-  issue against `CLAUDE.md` was not checked before writing this node.
+- Whether the theme-catalog divergence recorded above is already tracked by
+  an open issue against `CLAUDE.md` was not checked before writing this node.
