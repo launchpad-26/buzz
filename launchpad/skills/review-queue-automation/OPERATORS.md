@@ -471,14 +471,38 @@ What exists today:
   Safe to archive or delete once the corresponding ledger entry is no longer
   needed; deleting them does not corrupt the state database, but it does make
   `explain.py` step 4 impossible for that job.
-* **State database** — `<state_dir>/state.sqlite3`. Back it up by copying the
-  file while no worker is running. Stop the scheduler first; `status` counts
-  jobs and leases but cannot tell you a worker is live.
+* **State database** — `<state_dir>/state.sqlite3`. Use `backup` below rather
+  than copying the file by hand.
 * **Logs** — JSONL under `logging.directory`, rotated by nothing. Prune them
   yourself.
 
-There is **no automated retention, cleanup, cooldown-reset, or backup command
-yet** (backlog item T27). Do not assume one runs.
+Four maintenance commands exist. This section previously said none did — it
+claimed *"no automated retention, cleanup, cooldown-reset, or backup command
+yet (backlog item T27)"* after they had landed, which is worse than saying
+nothing:
+
+```bash
+python3 scripts/dispatcher.py --repo-root <repo> retention          # dry run
+python3 scripts/dispatcher.py --repo-root <repo> retention --apply  # actually delete
+python3 scripts/dispatcher.py --repo-root <repo> retention --days 7 # override the window
+python3 scripts/dispatcher.py --repo-root <repo> health
+python3 scripts/dispatcher.py --repo-root <repo> backup [--dest <dir>]
+python3 scripts/dispatcher.py --repo-root <repo> cooldown-reset [--scope <key>]
+```
+
+* `retention` purges artifacts for **terminal** jobs past `retention.artifact_days`
+  (30 by default). A job that could still be resumed keeps its artifacts. It is a
+  dry run unless `--apply`, and it writes a `retention_manifest` ledger entry
+  naming and hashing everything it removed — **the audit trail is never purged**,
+  only the artifacts it points at.
+* `health` is local-only: database, disks, breakers, budget. It does not report
+  whether a worker is live.
+* `backup` takes a consistent copy of `state.sqlite3` plus the snapshot store.
+* `cooldown-reset` clears provider cooldowns and circuit breakers, all scopes
+  unless `--scope` names one.
+
+All four are local and side-effect-free with respect to GitHub: none of them
+reads or writes a pull request.
 
 ---
 
