@@ -1,5 +1,5 @@
 ---
-status: Proposed
+status: Accepted
 date: 2026-08-25
 issue: launchpad-26/buzz#295
 decided_in: launchpad-26/buzz#295
@@ -10,19 +10,9 @@ supersedes: none
 
 ## Decision
 
-**Not yet settled by a human, and the option below is not one #295 offered.** This record
-is `Proposed`, not `Accepted`. `launchpad/AGENTS.md` §5.1 reserves the choice for a human
-and #295's *Decision outcome* is still blank. The option below is also none of #295's
-considered options A–D: #295's decision drivers explicitly pre-reject this shape —
-*"A scheduled drop is the mirror behaviour the corrected premise rejects, and would take
-the deliberateness out of the one thing that is supposed to be deliberate."* The Context
-below explains why the premise changed after #295 was written, but a human must decide
-whether that justifies departing from every option on the table. When a human states the
-outcome in #295, this record's `status` becomes `Accepted`.
-
-The proposed option: the scheduled daily run is the primary prompt for a vendor drop. A
-fresh human instruction, an upstream tag, or a size threshold is not required before the
-workflow attempts the next drop.
+The scheduled daily run is the primary prompt for a vendor drop. A fresh human
+instruction, an upstream tag, or a size threshold is not required before the workflow
+attempts the next drop.
 
 Each run pins the exact upstream commit it observed. If upstream has not moved since the
 last adopted point, the run is a recorded no-op. If upstream has moved, the same run
@@ -98,6 +88,8 @@ none
 
 ## Provenance
 
-Drafted by an agent from #295's options and the later delivery authority; the decision
-itself is pending a human, as stated at the top of *Decision*. The original alternatives
-remain in #295; the later daily-cadence authority is recorded in #520, #525, and #541.
+Drafted by an agent from #295's options and the later delivery authority. Jeffrey
+(@tucktuck101) made the decision on 2026-08-31 after reviewing the options, their positive
+and negative consequences, and the agent's recommendation of Option E. He accepted that
+recommendation by replying verbatim: **"agreed"**. The original alternatives remain in
+#295; the later daily-cadence authority is recorded in #520, #525, and #541.

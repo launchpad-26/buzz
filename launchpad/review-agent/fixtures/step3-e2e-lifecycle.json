@@ -1,0 +1,55 @@
+{
+  "_comment": "#119 STEP 3 -- end-to-end publish.py lifecycle on real throwaway PR #1424. First run: post_or_update returned (5015209676, \"created\", \"serina-mcfall\"). Pushed an empty commit (294c2c540). Second run: post_or_update returned (5015209676, \"updated\", \"serina-mcfall\") -- same id. after listing below shows exactly one marked review, body naming the second commit, state COMMENTED.",
+  "first_run_result": [
+    5015209676,
+    "created",
+    "serina-mcfall"
+  ],
+  "second_run_result": [
+    5015209676,
+    "updated",
+    "serina-mcfall"
+  ],
+  "after_listing": [
+    {
+      "id": 5015209676,
+      "node_id": "PRR_kwDOTv8O788AAAABKu4GzA",
+      "user": {
+        "login": "serina-mcfall",
+        "id": 240091489,
+        "node_id": "U_kgDODk-BYQ",
+        "avatar_url": "https://avatars.githubusercontent.com/u/240091489?u=88323f14a5709f7a5b99bb20d21bd279d1cdb326&v=4",
+        "gravatar_id": "",
+        "url": "https://api.github.com/users/serina-mcfall",
+        "html_url": "https://github.com/serina-mcfall",
+        "followers_url": "https://api.github.com/users/serina-mcfall/followers",
+        "following_url": "https://api.github.com/users/serina-mcfall/following{/other_user}",
+        "gists_url": "https://api.github.com/users/serina-mcfall/gists{/gist_id}",
+        "starred_url": "https://api.github.com/users/serina-mcfall/starred{/owner}{/repo}",
+        "subscriptions_url": "https://api.github.com/users/serina-mcfall/subscriptions",
+        "organizations_url": "https://api.github.com/users/serina-mcfall/orgs",
+        "repos_url": "https://api.github.com/users/serina-mcfall/repos",
+        "events_url": "https://api.github.com/users/serina-mcfall/events{/privacy}",
+        "received_events_url": "https://api.github.com/users/serina-mcfall/received_events",
+        "type": "User",
+        "user_view_type": "public",
+        "site_admin": false
+      },
+      "body": "<!-- launchpad-review-agent:v1 -->\n\nSTEP 3 e2e probe: second run, head SHA 294c2c540.",
+      "state": "COMMENTED",
+      "html_url": "https://github.com/launchpad-26/buzz/pull/1424#pullrequestreview-5015209676",
+      "pull_request_url": "https://api.github.com/repos/launchpad-26/buzz/pulls/1424",
+      "author_association": "MEMBER",
+      "_links": {
+        "html": {
+          "href": "https://github.com/launchpad-26/buzz/pull/1424#pullrequestreview-5015209676"
+        },
+        "pull_request": {
+          "href": "https://api.github.com/repos/launchpad-26/buzz/pulls/1424"
+        }
+      },
+      "submitted_at": "2026-08-25T05:20:15Z",
+      "commit_id": "ca35b660df44857919fede6ecb6fe7cfda574455"
+    }
+  ]
+}

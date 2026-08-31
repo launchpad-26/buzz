@@ -814,6 +814,40 @@ class StagesManifestTests(unittest.TestCase):
 
         self.assertEqual(input_stages, [{"name": "preflight", "status": "complete", "reason": None}])
 
+    def test_dimension_entries_from_117_pass_through_verbatim_and_in_order(self):
+        """#565: a manifest carrying real #117 dimension entries -- including a
+        `no_report` entry, the case #119's condition (7) depends on -- passes
+        through unchanged and in order, with exactly one `adjudication` entry
+        appended after them.
+        """
+        input_doc = make_document()
+        input_stages = [
+            {"name": "claim-vs-evidence", "status": "complete", "reason": None},
+            {
+                "name": "correctness-and-failure-modes",
+                "status": "no_report",
+                "reason": "dimension was dispatched but produced no report",
+            },
+            {"name": "secrets-and-access", "status": "complete", "reason": None},
+        ]
+        input_doc["stages"] = input_stages
+
+        output_doc = run_adjudication.adjudicate(input_doc, run_adjudication.stub_judge)
+
+        self.assertEqual(
+            output_doc["stages"],
+            [
+                {"name": "claim-vs-evidence", "status": "complete", "reason": None},
+                {
+                    "name": "correctness-and-failure-modes",
+                    "status": "no_report",
+                    "reason": "dimension was dispatched but produced no report",
+                },
+                {"name": "secrets-and-access", "status": "complete", "reason": None},
+                {"name": "adjudication", "status": "complete", "reason": None},
+            ],
+        )
+
 
 class AlreadyAdjudicatedTests(unittest.TestCase):
     """An input already carrying an `adjudication` entry in `stages` is a

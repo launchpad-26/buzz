@@ -32,6 +32,13 @@ CONTROLS = [
     ("check_unit_suites.py", False),
     ("check_adjudication.py", False),
     ("check_adjudication_mutations.py", False),
+    ("check_publish_scope.py", True),
+    ("check_publish_single.py", False),
+    ("check_verdict_blocks.py", False),
+    ("check_verdict_rows.py", False),
+    ("check_pr_comments.py", True),
+    ("check_verdict_resolution.py", True),
+    ("check_resolve_verdict_contract.py", False),
 ]
 
 
@@ -59,6 +66,17 @@ def main() -> int:
         if proc.returncode == 0:
             passed.append(script)
             print(f"PASS  {script}")
+            # A control can exit 0 while one of ITS OWN halves internally
+            # SKIPped (check_publish_scope.py's live/identity halves outside
+            # the publish workflow, correctly) -- that is legitimate, but
+            # discarding stdout on a pass hid it entirely, reading as a full
+            # demonstration in exactly the controls-workflow run where it
+            # was not one. Surfaced here rather than folded into this
+            # runner's own pass/skip counts, which track WHETHER a control
+            # ran, not what it found once it did.
+            internal_skips = [line for line in proc.stdout.splitlines() if line.startswith("SKIP")]
+            for line in internal_skips:
+                print(f"      {line}")
         else:
             failed.append(script)
             print(f"FAIL  {script}")

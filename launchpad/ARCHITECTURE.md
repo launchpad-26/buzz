@@ -122,7 +122,10 @@ escalation."
 The containment mechanism at that boundary is `OPEN` —
 [#43](https://github.com/launchpad-26/buzz/issues/43). That issue lists candidate options
 and deliberately leaves its Decision outcome blank, citing [`AGENTS.md`](AGENTS.md) §5
-rule 1: draft everything, approve nothing.
+rule 1: an agent drafts on its own authority and decides only on a human's. Under
+[ADR-0052](decisions/ADR-0052-delegated-authority-and-feature-batching.md) an agent may
+now write that outcome once a human has settled it, quoting the instruction verbatim and
+linking where it was given — it still may not settle it itself.
 
 This section names the risk and stops. It does not narrow the options, because
 [#42](https://github.com/launchpad-26/buzz/issues/42)'s non-goals reserve the agent
@@ -177,10 +180,11 @@ The last row is here and not in
 it decides what the cohort runs to watch itself — host logs, infrastructure metrics and
 agent traces are three signals with three possible destinations — which is a shape
 question for this architecture. It has a security consequence, stated in
-[#83](https://github.com/launchpad-26/buzz/issues/83), but the posture's own dependency on
-security-event visibility is already carried by
-[#34](https://github.com/launchpad-26/buzz/issues/34) in
-[SECURITY-POSTURE.md § What is true today](SECURITY-POSTURE.md#what-is-true-today), and
+[#83](https://github.com/launchpad-26/buzz/issues/83), but security-event visibility as a
+requirement is [#34](https://github.com/launchpad-26/buzz/issues/34)'s — current status of
+any control is tracked privately, not in
+[SECURITY-POSTURE.md § What is true today](SECURITY-POSTURE.md#what-is-true-today), which
+carries policy rather than a status reading — and
 [#83](https://github.com/launchpad-26/buzz/issues/83) defines no control that the posture
 asserts.
 

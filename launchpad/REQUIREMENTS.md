@@ -89,10 +89,11 @@ on that relay, and the agent work executes on contributors' own machines.
 ## Business environment
 
 Where these requirements have to hold is owned by
-[ENVIRONMENTS.md § The environments](ENVIRONMENTS.md#the-environments), and the state of the
-controls that would satisfy the security-shaped ones is owned by
-[SECURITY-POSTURE.md § What is true today](SECURITY-POSTURE.md#what-is-true-today). Neither
-is restated here.
+[ENVIRONMENTS.md § The environments](ENVIRONMENTS.md#the-environments). Whether the
+controls that would satisfy the security-shaped requirements are currently in force is
+tracked privately, not in this public repository —
+[SECURITY-POSTURE.md § What is true today](SECURITY-POSTURE.md#what-is-true-today) explains
+why and carries policy, not a status reading. Neither is restated here.
 
 Environmental facts that bear directly on how these requirements are written, each recorded
 elsewhere in this set:
@@ -208,8 +209,10 @@ checks." The requirement is for the check, and nothing checks yet.
 NFR-012 states that containment is required and stops there. It does not name a mechanism,
 rank the options or imply a direction, because
 [#43](https://github.com/launchpad-26/buzz/issues/43) owns that decision and deliberately
-left its outcome blank, citing [`AGENTS.md`](AGENTS.md) §5 rule 1: draft everything,
-approve nothing. The exposure it bounds is described in
+left its outcome blank, citing [`AGENTS.md`](AGENTS.md) §5 rule 1: an agent drafts on its
+own authority and decides only on a human's (see
+[ADR-0052](decisions/ADR-0052-delegated-authority-and-feature-batching.md) for what an
+agent may now write once a human has settled it). The exposure it bounds is described in
 [ARCHITECTURE.md § The execution boundary](ARCHITECTURE.md#the-execution-boundary) and is
 not restated here.
 

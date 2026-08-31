@@ -1,5 +1,5 @@
 ---
-status: Proposed
+status: Accepted
 date: 2026-08-25
 issue: launchpad-26/buzz#306
 decided_in: launchpad-26/buzz#306
@@ -10,10 +10,6 @@ supersedes: none
 
 ## Decision
 
-**Not yet settled by a human.** This record is `Proposed`, not `Accepted`.
-`launchpad/AGENTS.md` §5.1 reserves the choice for a human and the half of #306 this record
-addresses has no *Decision outcome* recorded. When a human states the outcome in #306, this
-record's `status` becomes `Accepted`.
 
 **Two records share `#306`, and that is intentional.** #306's only recorded decision names
 [ADR-0022](ADR-0022-curation-scoped-to-the-contested-surface.md), which settled the *scope*
@@ -24,7 +20,7 @@ were left open. **This record settles that remaining half — the report's shape
 ADR-0022 already decided.** Two ADRs therefore carry `issue: #306` and `decided_in: #306`
 legitimately: ADR-0022 for scope, this one for the report. Neither supersedes the other.
 
-The proposed option: Option A. The change agent's artifact for a vendor drop is a
+Option A. The change agent's artifact for a vendor drop is a
 deterministic, contested-surface report: it lists only files where upstream's changes
 intersect the fork's divergence, each with its divergence-ledger row, conflict status, and
 the upstream commits touching it. The uncontested remainder is summarised in one line under
@@ -85,8 +81,12 @@ none
 
 ## Provenance
 
-Drafted by an agent from #306's options; the decision itself is pending a human, as stated
-at the top of *Decision*. Full alternatives remain in #306. The 67 / 796 / 8 figures are
+Drafted by an agent from #306's options. Jeffrey (@tucktuck101) made the decision on
+2026-08-31 after reviewing the options with their positive and negative consequences —
+including the note that #303 has since settled as ADR-0048, so a separately-labeled,
+containment-governed assessment layer may later ride alongside the deterministic spine
+without changing this record — and the agent's recommendation of Option A; he replied
+verbatim: **"A"**. Full alternatives remain in #306. The 67 / 796 / 8 figures are
 ADR-0022's, measured on 2026-08-21 against merge-base `f8692fa9b`, and are reproduced here
 rather than re-measured. The term "ledger" is taken from ADR-0022; #294's and #301's titles
 were read directly to confirm which issue defines the artefact and which asks whether it is

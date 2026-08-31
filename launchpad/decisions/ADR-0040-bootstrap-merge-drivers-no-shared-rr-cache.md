@@ -1,5 +1,5 @@
 ---
-status: Proposed
+status: Accepted
 date: 2026-08-25
 issue: launchpad-26/buzz#300
 decided_in: launchpad-26/buzz#300
@@ -10,10 +10,6 @@ supersedes: none
 
 ## Decision
 
-**Not yet settled by a human.** This record is `Proposed`, not `Accepted`.
-`launchpad/AGENTS.md` §5.1 reserves the choice for a human and #300's *Decision outcome*
-is still blank. When a human states the outcome in #300, this record's `status` becomes
-`Accepted`.
 
 **This record precedes its implementation.** None of the machinery below exists on
 `launchpad` today: `.gitattributes` carries exactly one rule — `* text=auto eol=lf` — with
@@ -22,7 +18,7 @@ driver. This record names no implementing issue; #300 is the decision venue, not
 so the issue that makes these changes still has to be raised. The prose below states what
 would be built, not what is there.
 
-The proposed option: a hybrid of Options A and C — Option A's `just` bootstrap recipe, with
+The decision: a hybrid of Options A and C — Option A's `just` bootstrap recipe, with
 Option C's refusal to share the cache. Custom merge drivers and `rerere` **would be**
 bootstrapped by a `just` recipe wired into the existing `just setup`, so every clone that
 runs setup gets them. **Both halves are required and neither works alone**: the `merge=`
@@ -92,8 +88,12 @@ none
 
 ## Provenance
 
-Drafted by an agent from #300's options; the decision itself is pending a human, as stated
-at the top of *Decision*. Full alternatives remain in #300. The correctness argument against
+Drafted by an agent from #300's options. Jeffrey (@tucktuck101) made the decision on
+2026-08-31 after reviewing all options with their positive and negative consequences —
+including the operational narrowing that a fresh CI clone holds no `rr-cache`, so the
+unattended job's only replay mechanism is human-authored merge drivers — and the agent's
+recommendation of this hybrid; he accepted it by replying verbatim: **"agreed"**. Full
+alternatives remain in #300. The correctness argument against
 a shared cache and the `rerere.autoUpdate` position are quoted from
 `launchpad/Research/367-rerere-portability-and-fragility.md` and
 `launchpad/Research/362-sub-file-decline-durability.md` on `launchpad`; both label those

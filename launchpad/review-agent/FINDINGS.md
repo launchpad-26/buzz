@@ -8,6 +8,10 @@ Normative, and a sibling to `CONTAINMENT.md` in the same voice. This is the cont
 planning first, so it is settled here in enough detail that #118 and #119 implement
 against it without renegotiating.
 
+**Consumed by `PUBLISHING.md`** (#119): the finding record, the report envelope, and
+the merged document's `nonce` key are read verbatim by the renderer that document
+specifies — see its own cross-references section.
+
 **Follow-up owed to `CONTAINMENT.md`, not yet paid.** `CONTAINMENT.md`'s own "Contract
 for later stages" table lives on `feat/review-agent-untrusted-input`
 ([#120](https://github.com/launchpad-26/buzz/issues/120)), which is committed but
@@ -159,9 +163,79 @@ What the concurrent runner prints on stdout — the whole of this contract's out
 | `pr` | number |
 | `merge_base_sha` | the commit pair every report read |
 | `head_sha` | the commit pair every report read |
+| `stages` | array of `{name, status, reason}` entries, one per stage the review depended on — see below |
+| `reviewer` | `{kind, name}` — **which** reviewer produced this document. `kind` is `stub` or `injected`. See below. |
 | `reports` | array of exactly the dimension envelopes above, one per slug the runner lists, and nothing else in it |
 | `containment` | the block specified below — findings plus a seven-key `states` map. Present on every run. |
 | `nonce` | the run nonce, once, at the top level |
+
+### The stages manifest
+
+`stages` names EVERY stage the review depended on, including each of #117's dimensions
+by slug — not only the stages that emit no envelope of their own, which is an earlier,
+superseded reading of this rule (struck through in `ADJUDICATION.md`'s "The `stages`
+entry" section and in `launchpad/plans/2026-08-12-issue-117-review-dimensions.md`, both
+amended 2026-08-24/2026-08-27). This section restates the corrected definition rather
+than inventing a fourth wording; see
+`launchpad/plans/2026-08-12-issue-119-publish-one-review.md` STEP 5 and
+`ADJUDICATION.md`'s "The `stages` entry" section for the fuller reasoning.
+
+The dimension entries are sourced from what `run_dimensions.list_dimensions()` actually
+dispatched — the dispatched list, and only the dispatched list — never from
+`reports[].dimension`, because **a report cannot testify to its own absence**. A
+dimension that was dispatched and produced no report at all is still named here, with
+`status: "no_report"`; sourcing the name list from `reports` instead would mean the one
+case this manifest exists to catch — a dimension crashing so completely that #117 emits
+no envelope for it — could never be named, and #119's condition (7) ("a dimension named
+by the manifest produced no report at all") could never fire.
+
+Status/reason per dimension entry:
+
+| status | reason |
+|---|---|
+| `complete` | `None` — the report arrived with `status: "complete"` |
+| `no_report` | a fixed string naming the absence — the dimension was dispatched and no report arrived for it at all |
+| anything else (`failed` today, and any status #117 adds later) | passed through verbatim; `reason` is that report's own `error["reason"]` when it has one |
+| `malformed_report` | a report arrived whose `status` is not a string at all. Named, and not complete. |
+
+Reports are matched to dimensions **by name, never by position**. The two coincide
+today — the concurrent runner zips its results against the same dispatched list — so a
+positional implementation is indistinguishable from a correct one on every input the
+pipeline currently produces, and would silently attach each status to the wrong
+dimension the moment reports were resolved by completion order instead.
+
+Two further rules keep the manifest fail-closed, and a naive implementation gets both
+wrong in the same direction — towards reporting clean:
+
+- **A `complete` report never displaces a non-complete one.** Where two reports name the
+  same dimension, the non-complete status wins. Silent last-wins would let a dimension
+  that partly failed publish as clean while `reports` still carried the failure — a
+  `stages`/`reports` split-brain.
+- **A malformed report never raises.** `build_stages` sits on the path every run takes,
+  so a crash there loses the whole review; it follows the never-raises idiom `findings.py`
+  and `verdicts.py` state for this directory. A report too malformed to name its own
+  dimension matches no dispatched slug and contributes nothing — and the dimension it was
+  for is still named, as `no_report`, because the names come from the dispatched list.
+
+#118 (`run_adjudication.py`) appends exactly one `{name: "adjudication", status,
+reason}` entry to whatever `stages` array arrived and passes every entry already in it
+through unchanged, in order — it does not derive, reorder, or otherwise alter the
+dimension entries #117 produced.
+### `reviewer`, and why the document has to carry it
+
+`run_dimensions.py` ships a stub reviewer that returns `{"outcome": "clean",
+"findings": []}` for every dimension without reading anything, and `main()` binds it —
+#117 puts choosing a model out of scope, and a real dimension reviewer is
+[#116](https://github.com/launchpad-26/buzz/issues/116). Without this key, a
+stub-produced document and a real review that genuinely found nothing are byte-identical
+downstream, so the publish stage cannot tell them apart and publishes "No confirmed
+findings" either way. An independent review panel found the publish workflow doing
+exactly that.
+
+`kind` is `injected` only when the runner was handed a reviewer other than the stub. A
+consumer must treat **absent** the same as `stub`: a document that will not say what
+reviewed it has not established that anything did. `PUBLISHING.md` names the condition
+this drives.
 
 ### Where containment findings live
 
@@ -264,7 +338,7 @@ accept a caller-supplied nonce.
 
 For #118 and #119 to diff against. #119's plan is committed against revision 3 of this
 contract and names its field list explicitly, so this section exists so its author can
-diff old against new without re-reading a full review. Six changes:
+diff old against new without re-reading a full review. Seven changes:
 
 1. Containment findings are a top-level `containment` sibling key carrying raw
    `contain.Finding` (`severity`, `kind`, `entry_point`, `evidence`) plus a seven-key
@@ -292,6 +366,11 @@ diff old against new without re-reading a full review. Six changes:
    `nonce` instead; and the key is not an authentication token for the document, only
    for a marker echoed out of author text, so it must not be described as making the
    document unforgeable.
+7. The merged document carries a top-level `stages` key — one `{name, status, reason}`
+   entry per stage the review depended on, including each of #117's dimensions by slug,
+   sourced from `run_dimensions.list_dimensions()` (what #117 dispatched), never from
+   `reports[].dimension`. Revision 3 had no such key. See § The merged document > The
+   stages manifest.
 
 The ten finding fields and eleven envelope fields are otherwise unchanged, and no field
 is renamed.

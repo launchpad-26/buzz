@@ -1,5 +1,5 @@
 ---
-status: Proposed
+status: Accepted
 date: 2026-08-15
 issue: launchpad-26/buzz#24
 decided_in: launchpad-26/buzz#24

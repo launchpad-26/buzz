@@ -1,5 +1,5 @@
 name: Task
-description: Bounded work one agent or person finishes in one branch and one PR
+description: Bounded work one agent or person finishes, landing in its parent Feature's batch PR
 title: "task: "
 labels: ["type:task"]
 body:
@@ -21,10 +21,14 @@ body:
         6. Definition of done MUST be markdown checkboxes, each verifiable by someone else.
         7. Impacted components: real paths in this repo, one per line. Never "various".
         8. Link the parent PRD by number. If there is no parent, write: none - standalone
+        9. A Task no longer gets its own pull request (ADR-0052). It lands together with
+           its sibling Tasks in the batch pull request of the Feature it is a child of,
+           tracked via that Feature's own Child issues list, which is what the PR body
+           check validates the batch pull request's closing references against.
         -->
 
-        Bounded, concrete work. One branch, one PR. If it needs child issues, file a
-        **Feature** instead.
+        Bounded, concrete work that lands in its parent Feature's batch PR. If it needs
+        child issues, file a **Feature** instead.
 
   - type: input
     id: parent

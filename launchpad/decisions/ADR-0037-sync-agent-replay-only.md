@@ -1,5 +1,5 @@
 ---
-status: Proposed
+status: Accepted
 date: 2026-08-25
 issue: launchpad-26/buzz#296
 decided_in: launchpad-26/buzz#296
@@ -10,16 +10,10 @@ supersedes: none
 
 ## Decision
 
-**Not yet settled by a human.** This record is `Proposed`, not `Accepted`.
-`launchpad/AGENTS.md` §5.1 reserves the choice for a human — *"You may not decide an ADR
-outcome"* — and #296's *Decision outcome* is still blank. When a human states the outcome in
-#296, this record's `status` becomes `Accepted`. Everything below is a drafted proposal,
-not a settled rule.
-
-The proposed option: Option A (replay only). The change agent may apply `rerere` replays and
-configured merge drivers, and nothing else, when resolving vendor-drop conflicts. Any
-residual conflict — including a three-way merge the agent believes is unambiguous —
-escalates to a human with the context bundle.
+Option A — replay only. The change agent may apply `rerere` replays and configured merge
+drivers, and nothing else, when resolving vendor-drop conflicts. Any residual conflict —
+including a three-way merge the agent believes is unambiguous — escalates to a human with
+the context bundle.
 
 **"Configured merge drivers" is bounded, or the boundary is empty.** A merge driver is
 arbitrary code invoked at conflict time, so an unconstrained driver would re-grant exactly
@@ -111,8 +105,10 @@ none
 
 ## Provenance
 
-Drafted by an agent from #296's options; the decision itself is pending a human, as stated
-at the top of *Decision*. Full alternatives, the four measured conflicts, and the 2026-08-22
+Drafted by an agent from #296's options. Jeffrey (@tucktuck101) made the decision on
+2026-08-31 after reviewing options A–D with their positive and negative consequences and
+the agent's recommendation of Option A; he accepted that recommendation by replying
+verbatim: **"agreed"**. Full alternatives, the four measured conflicts, and the 2026-08-22
 premise correction remain in #296. The ledger's own format and enforcement are #294's, not
 this record's.
 

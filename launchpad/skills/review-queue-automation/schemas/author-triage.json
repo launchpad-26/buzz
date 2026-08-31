@@ -1,0 +1,27 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["signal", "summary", "findings"],
+  "properties": {
+    "signal": {
+      "enum": ["SUPPORTED", "MISSING_EVIDENCE", "INSUFFICIENT_CAPABILITY", "MATERIAL_DISAGREEMENT", "HUMAN_RESERVED"]
+    },
+    "summary": {"type": "string", "minLength": 1},
+    "findings": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["comment_id", "classification", "location", "evidence", "action"],
+        "properties": {
+          "comment_id": {"type": "integer", "minimum": 1},
+          "classification": {"enum": ["VALID", "VALID_BUT_DIFFERENT_FIX", "INVALID", "OUT_OF_SCOPE"]},
+          "location": {"type": "string", "minLength": 1},
+          "evidence": {"type": "string", "minLength": 1},
+          "action": {"type": "string", "minLength": 1}
+        }
+      }
+    }
+  }
+}

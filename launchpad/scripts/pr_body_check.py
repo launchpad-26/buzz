@@ -59,10 +59,24 @@ import sys
 
 CLOSING_RE = re.compile(r"\b(Closes|Fixes|Resolves)\s+#\d+", re.I)
 REFS_RE = re.compile(r"\bRefs\s+#\d+", re.I)
+ISSUE_REF_RE = re.compile(r"#(\d+)")
+URL_RE = re.compile(r"https?://\S+")
 
-ISSUE_TYPES = frozenset({"PRD", "Task", "Enhancement", "Bug", "ADR"})
+# `Feature` was missing here until 2026-08-28, which failed every Feature PR with
+# "Issue type must be one of [...]" while `.github/ISSUE_TEMPLATE/07-feature.yml` and
+# AGENTS.md's own type table both named it. ADR-0052 makes Feature the primary PR type,
+# so the omission went from a papercut to a blocker.
+ISSUE_TYPES = frozenset({"PRD", "Feature", "Task", "Enhancement", "Bug", "ADR"})
 PROVENANCE_FIELDS = ("Harness / provider", "Model", "Initiating human")
 EMPTY_NOT_VERIFIED = frozenset({"nothing", "none", "n/a", ""})
+
+# A section whose whole text is one of these is unfilled, not answered.
+PLACEHOLDER = frozenset({"", "none", "n/a", "nothing", "tbd", "todo"})
+
+# ADR-0052 part E, as a number rather than a judgement. Part C's 1,500-line / 10-file cap
+# was withdrawn by ADR-0054 (#1956): a Feature's whole batch lands in one PR whatever its
+# size, so there is no size number left to enforce.
+DEFERRED_CEILING = 5
 
 
 def strip_comments(body: str) -> str:
@@ -232,11 +246,266 @@ def check_reference(prose: str, closing_refs: list[int] | None) -> tuple[list[st
     ], "reference: none — GitHub reports no closing link and no 'Refs' was found"
 
 
-def check(body: str, labels: list[str], closing_refs: list[int] | None) -> tuple[list[str], list[str]]:
+def check_batch(
+    visible: str, closing_refs: list[int] | None, feature_children: list[int] | None
+) -> tuple[list[str], int | None, list[str]]:
+    """ADR-0052: a batch PR names one Feature, and closes only that Feature's children.
+
+    A single-issue PR is still legal and writes "N/A" in the Feature section, so this
+    only bites once a PR closes more than one issue — which is exactly when getting the
+    parentage wrong stops being obvious to a reader.
+
+    `feature_children` is supplied by the workflow, the same way `closing_refs` is, so
+    this stays a pure function with no network. None means "we were not told" — and for a
+    NAMED Feature that is now an error, not a note. ADR-0052 removes the second human, so
+    a membership check that passes because it could not run is a bypass.
+
+    Returns (errors, feature_number_or_None, notes). The number is returned so the
+    deferred-blocker rules in `check_delegated` can be checked against the same Feature
+    without parsing the section twice.
+    """
+    errors: list[str] = []
+    notes: list[str] = []
+
+    feature = section(visible, "Feature")
+    named = ISSUE_REF_RE.findall(feature or "")
+    multi = closing_refs is not None and len(closing_refs) > 1
+
+    if feature is None:
+        errors.append("Missing '### Feature' section. ADR-0052 makes a Feature the PR unit.")
+        return errors, None, notes
+
+    if feature.strip().lower().startswith("n/a"):
+        if multi:
+            errors.append(
+                f"'Feature' says N/A but this PR closes {len(closing_refs)} issues. "
+                "A batch must name the Feature its children belong to."
+            )
+        elif closing_refs is None:
+            # Degraded: we cannot count what GitHub will close, so we cannot know this
+            # is the single-issue case the N/A answer claims. Say so; do not assert it.
+            notes.append(
+                "batch: 'Feature' says N/A, but GitHub's closing list was unavailable, "
+                "so 'this is a single-issue PR' is NOT verified"
+            )
+        else:
+            notes.append("batch: single-issue PR, no Feature required")
+        return errors, None, notes
+
+    if len(named) != 1:
+        errors.append(
+            f"'Feature' must name exactly one issue as '#<n>'. Found {len(named)}."
+        )
+        return errors, None, notes
+
+    fnum = int(named[0])
+
+    if feature_children is None:
+        # Fail closed, deliberately. Under ADR-0052 an agent may merge with no second
+        # human, so a membership check that passes when it could not run is a bypass
+        # wearing a warning's clothes. A named Feature whose children cannot be read is
+        # an error; re-run once the API answers.
+        errors.append(
+            f"Feature #{fnum} is named but its child list could not be read, so batch "
+            "membership is unverifiable. This fails closed: with no second human in the "
+            "merge path an unverified batch is not an acceptable pass. Re-run the check."
+        )
+        return errors, fnum, notes
+
+    allowed = set(feature_children) | {fnum}
+    strays = sorted(set(closing_refs or []) - allowed)
+    if strays:
+        joined = ", ".join(f"#{n}" for n in strays)
+        errors.append(
+            f"{joined} closed by this PR but not a child of Feature #{fnum}. Either "
+            "re-parent them under that Feature, or split them into their own batch."
+        )
+    elif closing_refs is None:
+        notes.append(
+            f"batch: Feature #{fnum} named and its children read, but GitHub's closing "
+            "list was unavailable, so membership is NOT verified"
+        )
+    else:
+        notes.append(
+            f"batch: all {len(closing_refs)} closed issue(s) are children of "
+            f"Feature #{fnum}"
+        )
+    return errors, fnum, notes
+
+
+def parse_int(raw: str | None) -> int | None:
+    """A count from the workflow, or None when we were not told. Never a guess."""
+    if raw is None or not raw.strip():
+        return None
+    try:
+        return int(raw.strip())
+    except ValueError:
+        return None
+
+
+def looks_agent_authored(visible: str) -> bool:
+    """Does the BODY betray an agent, whatever the labels say?
+
+    The `by:agent` label used to be the only switch into the stricter checks, which made
+    removing one label enough to drop provenance, Not verified, Authority, Deferred
+    blockers and (in infra) Host steps all at once. A label is metadata anyone can edit
+    after the fact; the body is the artifact under review. So the label is now one signal
+    of three, not the gate.
+
+    Fully evading this means also deleting the provenance table and the Authority claim —
+    at which point the pull request visibly carries no agent evidence at all, which is a
+    much louder act than unticking a label and is exactly what a reviewer would notice.
+    """
+    if any(re.search(rf"\|\s*{re.escape(f)}\s*\|", visible) for f in PROVENANCE_FIELDS):
+        return True
+    auth = section(visible, "Authority")
+    if auth is not None:
+        text = auth.strip().lower()
+        if text and text not in PLACEHOLDER and not text.startswith("n/a"):
+            return True
+    return False
+
+
+def report_size(
+    closing_refs: list[int] | None, additions: int | None, changed_files: int | None
+) -> list[str]:
+    """ADR-0054: report a batch's size, never reject it.
+
+    ADR-0052 part C capped a batch at 1,500 added lines or 10 changed files. ADR-0054
+    withdrew that cap: Features here carry 15-41 children, so every real batch exceeded it
+    and part C's own "split into sequential batch PRs" escape cancelled its
+    one-Feature-one-PR rule in every case — which is the micro-PR volume batching existed
+    to remove.
+
+    The number still gets printed. Removing the gate should not remove a reviewer's warning
+    about how much work they are being handed, and the cap's only measured effect was on
+    per-batch PRs anyway: it exempted single-issue PRs, so it never fired on PR #1944 at
+    +16,113 lines across 70 files.
+    """
+    if closing_refs is None or len(closing_refs) <= 1:
+        return []
+    if additions is None or changed_files is None:
+        return ["size: batch size was not supplied, so it is NOT reported"]
+    return [f"size: batch is +{additions} lines across {changed_files} files (uncapped)"]
+
+
+def check_delegated(
+    visible: str,
+    closing_refs: list[int] | None = None,
+    feature_num: int | None = None,
+    feature_children: list[int] | None = None,
+) -> list[str]:
+    """ADR-0052 part A: an agent-exercised approval or merge must show its warrant.
+
+    The quote itself cannot be verified by any script — nothing here proves the text
+    matches what a human said. What this does enforce is that a warrant was offered at
+    all, in a shape a reader can follow to its source.
+    """
+    errors: list[str] = []
+
+    auth = section(visible, "Authority")
+    if auth is None:
+        errors.append(
+            "by:agent PR missing '### Authority' section. State the instruction you "
+            "acted on, or 'N/A - approved by a human directly'."
+        )
+    elif auth.strip().lower() in PLACEHOLDER:
+        errors.append(
+            "'Authority' is empty. Either quote the instruction and link where it was "
+            "given, or write 'N/A - approved by a human directly'."
+        )
+    elif not auth.strip().lower().startswith("n/a"):
+        if not any(line.lstrip().startswith(">") for line in auth.splitlines()):
+            errors.append(
+                "'Authority' claims delegated authority but quotes nothing. Quote the "
+                "human's instruction verbatim as a blockquote."
+            )
+        # A link is welcome but not required. While the agent runs under the human's
+        # token, any comment it could link is authored by the same account as this body,
+        # so demanding one bought ceremony rather than attribution. What is required is
+        # that the instruction is quoted here and the person who gave it is named in the
+        # provenance table, which the agent-mode checks above already enforce.
+
+    deferred = section(visible, "Deferred blockers")
+    if deferred is None:
+        errors.append(
+            "by:agent PR missing '### Deferred blockers' section. List them, or 'none'."
+        )
+        return errors
+
+    if deferred.strip().lower() in PLACEHOLDER - {"none", "n/a"}:
+        # An empty section is not the same answer as "none". Authority already draws
+        # this line; without it here, deleting the content passes.
+        errors.append(
+            "'Deferred blockers' is empty. Write 'none', or list the issues as "
+            "'#<n> - description'."
+        )
+        return errors
+
+    if deferred.strip().lower() in {"none", "n/a"}:
+        return errors
+
+    bad = [
+        ln.strip()
+        for ln in deferred.splitlines()
+        if ln.strip() and not ISSUE_REF_RE.search(ln)
+    ]
+    if bad:
+        errors.append(
+            "Every 'Deferred blockers' line must reference its issue as '#<n>'. "
+            f"Offending line: {bad[0][:60]!r}"
+        )
+
+    listed = sorted({int(n) for n in ISSUE_REF_RE.findall(deferred)})
+
+    # Part E, first half: a Feature may not close while it holds open deferred blockers.
+    # This is the only part of E that is checkable at PR time, and it is the parallel-queue
+    # failure the rule exists to prevent — GitHub closes the Feature the moment this merges.
+    if feature_num is not None and closing_refs and feature_num in closing_refs and listed:
+        joined = ", ".join(f"#{n}" for n in listed)
+        errors.append(
+            f"This PR closes Feature #{feature_num} while deferring {joined}. ADR-0052 "
+            "part E: a Feature may not close while it holds open deferred blockers. "
+            "Either fix them here, or drop the Feature from the closing keywords and "
+            "close it once they are done."
+        )
+
+    # Part E, second half: the ceiling.
+    if len(listed) > DEFERRED_CEILING:
+        errors.append(
+            f"{len(listed)} deferred blockers exceeds the ceiling of {DEFERRED_CEILING} "
+            "(ADR-0052 part E). Clear some before adding more."
+        )
+
+    # Part D: a deferred blocker is filed as a child of this PR's Feature. When the child
+    # list is known, an issue outside it is either mis-parented or invented.
+    if feature_num is not None and feature_children is not None:
+        allowed = set(feature_children)
+        outside = sorted(n for n in listed if n not in allowed)
+        if outside:
+            joined = ", ".join(f"#{n}" for n in outside)
+            errors.append(
+                f"{joined} listed as deferred blockers but not children of Feature "
+                f"#{feature_num}. ADR-0052 part D requires them parented to it, so the "
+                "Feature cannot close while they are open."
+            )
+    return errors
+
+
+def check(
+    body: str,
+    labels: list[str],
+    closing_refs: list[int] | None,
+    feature_children: list[int] | None = None,
+    additions: int | None = None,
+    changed_files: int | None = None,
+) -> tuple[list[str], list[str]]:
     """Return (errors, notes). Empty errors means the body is acceptable."""
     visible = strip_comments(body)
     prose = strip_code(visible)
-    is_agent = "by:agent" in labels
+    labelled_agent = "by:agent" in labels
+    body_says_agent = looks_agent_authored(visible)
+    is_agent = labelled_agent or body_says_agent
     errors: list[str] = []
     notes: list[str] = []
 
@@ -247,11 +516,29 @@ def check(body: str, labels: list[str], closing_refs: list[int] | None) -> tuple
     errors.extend(ref_errors)
     notes.append(ref_note)
 
+    batch_errors, feature_num, batch_notes = check_batch(
+        visible, closing_refs, feature_children
+    )
+    errors.extend(batch_errors)
+    notes.extend(batch_notes)
+
+    notes.extend(report_size(closing_refs, additions, changed_files))
+
     itype = section(visible, "Issue type")
     if not itype:
         errors.append("Missing '### Issue type' section.")
     elif not any(v.lower() in itype.lower() for v in ISSUE_TYPES):
         errors.append(f"Issue type must be one of {sorted(ISSUE_TYPES)}. Found: {itype!r}")
+
+    if body_says_agent and not labelled_agent:
+        # Rule 3 requires the label, and its absence is the shape a stripped label leaves.
+        # The strict checks already ran above regardless; this makes the omission visible
+        # rather than letting the body and the metadata disagree quietly.
+        errors.append(
+            "This body carries agent provenance or an Authority claim but no 'by:agent' "
+            "label. Add it. Removing the label does not remove the requirements — they "
+            "are keyed on the body now, not only on metadata."
+        )
 
     if is_agent:
         for field in PROVENANCE_FIELDS:
@@ -273,6 +560,10 @@ def check(body: str, labels: list[str], closing_refs: list[int] | None) -> tuple
         if "```" not in visible:
             errors.append("by:agent PR must paste raw command output in a fenced code block.")
 
+        errors.extend(
+            check_delegated(visible, closing_refs, feature_num, feature_children)
+        )
+
     return errors, notes
 
 
@@ -283,8 +574,13 @@ def main() -> int:
     except json.JSONDecodeError:
         labels = []
     closing_refs = parse_closing_refs(os.environ.get("CLOSING_REFS"))
+    feature_children = parse_closing_refs(os.environ.get("FEATURE_CHILDREN"))
+    additions = parse_int(os.environ.get("PR_ADDITIONS"))
+    changed_files = parse_int(os.environ.get("PR_CHANGED_FILES"))
 
-    errors, notes = check(body, labels, closing_refs)
+    errors, notes = check(
+        body, labels, closing_refs, feature_children, additions, changed_files
+    )
     for note in notes:
         print(f"  {note}")
 

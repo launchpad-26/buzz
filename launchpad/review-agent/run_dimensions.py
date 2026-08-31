@@ -147,6 +147,33 @@ def default_reviewer(document: str) -> dict:
     return {"outcome": "clean", "findings": []}
 
 
+#: What ``build_document`` records under the document's ``reviewer`` key so a
+#: downstream stage can tell a real review from this stub's unconditional
+#: ``{"outcome": "clean"}``.
+REVIEWER_STUB = "stub"
+REVIEWER_INJECTED = "injected"
+
+
+def reviewer_identity(reviewer: Reviewer) -> dict:
+    """Name the reviewer that produced a document, for the published body's sake.
+
+    Without this the two cases are indistinguishable downstream: a real review
+    that found nothing, and this module's stub, which returns
+    ``{"outcome": "clean", "findings": []}`` for every dimension without reading
+    anything. An independent review panel found the publish workflow doing
+    exactly that -- invoking ``main()``, which binds ``default_reviewer``, and
+    publishing "No confirmed findings" as though a review had happened.
+
+    ``main()`` still exposes no flag for choosing a reviewer -- #117 puts model
+    choice out of scope and that stays true. This records which one ran; it does
+    not select one. Wiring a real dimension reviewer is #116's work, and until it
+    lands, ``publish_render`` turns this marker into a named INCOMPLETE reason
+    rather than letting a stub run render as a clean pass.
+    """
+    kind = REVIEWER_STUB if reviewer is default_reviewer else REVIEWER_INJECTED
+    return {"kind": kind, "name": getattr(reviewer, "__name__", type(reviewer).__name__)}
+
+
 # ---------------------------------------------------------------------------
 # Report assembly
 # ---------------------------------------------------------------------------
@@ -370,6 +397,130 @@ def _run_dimensions_concurrently(
 
 
 # ---------------------------------------------------------------------------
+# The stages manifest -- launchpad-26/buzz#565
+# ---------------------------------------------------------------------------
+
+
+def build_stages(dimensions: list[str], reports: list[dict]) -> list[dict]:
+    """The ``stages`` manifest entries for #117's dimensions, one per DISPATCHED slug.
+
+    Sourced from ``dimensions`` -- the list this run actually dispatched -- and
+    ``dimensions`` alone. ``reports`` is indexed by ``dimension`` and looked up,
+    never enumerated to produce the name list: a report cannot testify to its own
+    absence, so the manifest is built from what was dispatched, not from what came
+    back. A dimension that was dispatched and produced no report is still named
+    here, with ``status: "no_report"`` -- it does not silently vanish from the
+    manifest just because nothing came back for it. A report for a dimension this
+    run did not dispatch contributes no entry (it cannot -- ``dimensions`` is the
+    only source of names).
+
+    Status/reason per dispatched dimension:
+
+    * report arrived with ``status: "complete"`` -> ``{"status": "complete",
+      "reason": None}``.
+    * no report arrived at all -> ``{"status": "no_report", "reason": <fixed
+      reason naming the absence>}``.
+    * any other status -- ``"failed"`` today, and whatever #117 adds later --
+      passes through verbatim, with ``reason`` taken from the report's own
+      ``error["reason"]`` when it has one. A status that is not a string at all
+      becomes ``"malformed_report"``: named, and not complete.
+
+    Reports are matched to dimensions BY NAME, never by position. The two coincide
+    today -- ``_run_dimensions_concurrently`` zips its results against the same
+    ``dimensions`` list -- so a positional implementation would pass every test
+    that supplies reports in dispatch order. It would also silently attach each
+    status to the wrong dimension the moment anything resolves reports by
+    completion order instead (an ``as_completed()`` refactor, a replayed
+    recording), which is why the tests hand it reports deliberately out of order.
+
+    Duplicate reports for one dimension resolve fail-closed: a ``"complete"``
+    report never displaces a non-complete one. Precisely, it is
+    first-non-complete-wins, so where SEVERAL non-complete reports name one
+    dimension, which of them surfaces depends on arrival order. That order
+    dependence is deliberate and harmless: every one of those outcomes is
+    non-complete, so each downstream ``status != "complete"`` test fires either
+    way and only the reason string differs. The direction that would matter --
+    a complete masking a failure -- cannot happen.
+
+    Only ``"complete"`` is treated as complete, and every other status is carried
+    through rather than matched against a list. Written the other way round -- an
+    ``elif`` for ``"failed"`` and an ``else`` producing ``"complete"`` -- a status
+    this function had never heard of would render as a clean stage, which is the
+    partial-review-reading-as-complete failure #119's condition (1) exists to
+    catch and the reason #565 was filed. #117's own definition of done already
+    reserves a third case ("a report without a completion marker is treated as
+    truncated rather than clean"), so the unknown status is a matter of time, not
+    a hypothetical. ``main()``'s own completion check reads the same way --
+    ``all(report["status"] == "complete" for report in document["reports"])`` --
+    and this keeps the two consistent.
+    """
+    by_name: dict[str, dict] = {}
+    for report in reports:
+        # Never raises on a malformed report, matching the idiom findings.py and
+        # verdicts.py state explicitly for this directory: a document build that
+        # dies on a bad report takes the whole review with it, and this function
+        # sits on the path every run takes. A report too malformed to name its own
+        # dimension cannot be matched to a dispatched slug by any means, so it
+        # contributes nothing -- and the dimension it was FOR still gets named
+        # below, as "no_report", because the names come from `dimensions`.
+        if not isinstance(report, dict):
+            continue
+        name = report.get("dimension")
+        if not isinstance(name, str):
+            continue
+        kept = by_name.get(name)
+        # Duplicate reports for one dimension: a "complete" one must never
+        # displace a non-complete one. Last-wins would let a partially-failed
+        # dimension publish as clean while `reports` still carried the failure --
+        # a stages/reports split-brain, and the same fail-open shape this
+        # function's status handling exists to refuse. A dimension is complete
+        # only if every report for it is, which is how main()'s own completion
+        # check reads.
+        if kept is None or (
+            kept.get("status") == "complete" and report.get("status") != "complete"
+        ):
+            by_name[name] = report
+
+    stages = []
+    for dimension in dimensions:
+        # Coerced to str once, and everything below uses the coerced value.
+        # `list_dimensions()` yields `Path.stem`, so this is identity for every
+        # real caller. It matters for any other one: `_input_stages` in
+        # run_adjudication.py raises StagesShapeError on a non-string ``name``,
+        # so writing the raw value through would have #117 emit a document #118
+        # refuses wholesale -- one stage tolerating what the next rejects, with
+        # the error surfacing in the wrong stage. Naming it in a shape #118
+        # accepts keeps the dispatched dimension visible, which is the property
+        # this function exists for; dropping it would not.
+        name = dimension if isinstance(dimension, str) else str(dimension)
+        report = by_name.get(name)
+        if report is None:
+            stages.append(
+                {
+                    "name": name,
+                    "status": "no_report",
+                    "reason": "dimension was dispatched but produced no report",
+                }
+            )
+            continue
+        status = report.get("status")
+        if status == "complete":
+            stages.append({"name": name, "status": "complete", "reason": None})
+            continue
+        error = report.get("error")
+        stages.append(
+            {
+                "name": name,
+                # A report whose status is not even a string is not a report this
+                # function can vouch for. It is named, and it is not complete.
+                "status": status if isinstance(status, str) else "malformed_report",
+                "reason": error.get("reason") if isinstance(error, dict) else None,
+            }
+        )
+    return stages
+
+
+# ---------------------------------------------------------------------------
 # The core, testable entry point
 # ---------------------------------------------------------------------------
 
@@ -400,6 +551,8 @@ def build_document(
         "pr": pr,
         "merge_base_sha": merge_base_sha,
         "head_sha": head_sha,
+        "stages": build_stages(dimensions, reports),
+        "reviewer": reviewer_identity(reviewer),
         "reports": reports,
         "containment": {
             "findings": [f.as_dict() for f in containment_findings],

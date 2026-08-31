@@ -1,5 +1,5 @@
 ---
-status: Proposed
+status: Accepted
 date: 2026-08-25
 issue: launchpad-26/buzz#299
 decided_in: launchpad-26/buzz#299
@@ -10,27 +10,25 @@ supersedes: none
 
 ## Decision
 
-**Not yet settled by a human.** This record is `Proposed`, not `Accepted`.
-`launchpad/AGENTS.md` §5.1 reserves the choice for a human — *"You may not decide an ADR
-outcome"* — and #299's *Decision outcome* is still blank. When a human states the
-outcome in #299, this record's `status` becomes `Accepted`. Everything below is a
-drafted proposal, not a settled rule.
-
-The proposed option: Option A. The vendor-drop pull request is authored by a GitHub App
-installation token: PRs opened with an app token trigger `pull_request` workflows, so CI
-runs with no change to `ci.yml`. The identity is the app's, not a person's, which is
-what makes the audit trail true.
+Option A. The vendor-drop pull request is authored by a GitHub App installation token:
+PRs opened with an app token trigger `pull_request` workflows, so CI runs with no change
+to `ci.yml`. The identity is the app's, not a person's, which is what makes the audit
+trail true.
 
 **Authorship only — an app token cannot approve.** This is the load-bearing limit and it
 is worth stating rather than leaving to inference.
-[ADR-0019](./ADR-0019-review-checks-gate-only-when-deterministic.md) records that
+[ADR-0019](./ADR-0019-review-checks-gate-only-when-deterministic.md) recorded that
 *"GitHub treats required approving reviews and required status checks as two independent
-gates, and a check can never satisfy the review count"*, and rejects *"A GitHub App
-submitting a literal `APPROVE` review"* as a mechanism. Opening a pull request produces
-no approval, so nothing here lets an automated identity clear its own work, and nothing
-here routes around ADR-0038 — that record governs push to `main`; this one governs who
-authors a pull request into `launchpad`. The app's permissions must be scoped to match:
-no approving-review capability, and no push to `main`.
+gates, and a check can never satisfy the review count"*, and rejected *"A GitHub App
+submitting a literal `APPROVE` review"* as a mechanism. ADR-0019 is superseded by
+[ADR-0052](./ADR-0052-delegated-authority-and-feature-batching.md), which permits an
+agent to approve under quoted human instruction — but only where the approval is
+self-identifying, and **never through an unattributed app token**, which is the case this
+record governs. The two-gates finding is unaffected either way. Opening a pull request
+produces no approval, so nothing here lets an automated identity clear its own work, and
+nothing here routes around ADR-0038 — that record governs push to `main`; this one
+governs who authors a pull request into `launchpad`. The app's permissions must be scoped
+to match: no approving-review capability, and no push to `main`.
 
 ## Context
 
@@ -118,9 +116,11 @@ none
 
 ## Provenance
 
-Drafted by an agent from #299's options; the decision itself is pending a human, as
-stated at the top of *Decision*. Full alternatives, the measured `ci.yml` triggers, and
-the 2026-08-22 premise correction that raised the fifth option remain in #299.
+Drafted by an agent from #299's options. Jeffrey (@tucktuck101) made the decision on
+2026-08-31 after reviewing options A–F with their positive and negative consequences and
+the agent's recommendation of Option A; he replied verbatim: **"a"**. Full alternatives,
+the measured `ci.yml` triggers, and the 2026-08-22 premise correction that raised the
+fifth option remain in #299.
 
 Verified while drafting: ADR-0015 does not contain the token properties #299 attributes
 to it; ADR-0008 pre-specifies the scoped-GitHub-App pattern quoted above; ADR-0019
