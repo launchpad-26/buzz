@@ -85,7 +85,7 @@ evidence:
   - statement: "No `README.md` exists for the `buzz-relay` crate; of this repository's 30 crates only 6 carry one (`buzz-agent`, `buzz-pairing-cli`, `buzz-cli`, `buzz-acp`, `git-credential-nostr`, `git-sign-nostr`), and `buzz-relay` is not among them, so this node has no existing crate README to link as supporting evidence per `templates/component.md`'s guidance."
     entry_class: FACT
     evidence:
-      - "crates/buzz-relay"
+      - "crates/buzz-relay/Cargo.toml"
       - "launchpad/docs/corpus/templates/component.md"
   - statement: "No `architecture-component` node yet exists in the corpus decomposing the relay container into its constituent components, so this node declares no `part-of` relationship — there is nothing to point at yet, per `AGENTS.md`'s instruction to enumerate what exists rather than assume the absence is permanent."
     entry_class: FACT
