@@ -98,6 +98,23 @@ evidence:
     entry_class: FACT
     evidence:
       - "launchpad/docs/corpus/templates/component.md"
+  - statement: "desktop/src-tauri/src/native_relay_client_tests.rs contains a unit test named retry_delay_grows_and_stops_at_the_ceiling, alongside sibling tests covering CLOSED-message classification and rate-limit retry hints, exercising the backend background session's reconnect-delay growth and ceiling this node documents."
+    entry_class: FACT
+    evidence:
+      - "desktop/src-tauri/src/native_relay_client_tests.rs"
+  - statement: "desktop/src/shared/api/relayReconnectPolicy.test.mjs contains unit tests named 'baseline scenario schedules a reconnect', 'terminal session refuses to schedule (Max's auth-rejection scenario)', and 'pending reconnect timer suppresses scheduling another', covering the decision logic for when RelayClient schedules a reconnect attempt."
+    entry_class: FACT
+    evidence:
+      - "desktop/src/shared/api/relayReconnectPolicy.test.mjs"
+  - statement: "desktop/src/shared/api/relayReconnectController.test.mjs contains unit tests named 'escalation fires only when fast path fails and hook is configured', 'escalation skipped when hook not configured', and 'backstop fires onBackstop, not onSuccess, and resets state', covering the three-phase fast-path/escalation/backstop sequence this node describes."
+    entry_class: FACT
+    evidence:
+      - "desktop/src/shared/api/relayReconnectController.test.mjs"
+  - statement: "desktop/src/features/communities/relayProbe.test.mjs covers a one-shot raw browser WebSocket reachability probe (relayProbe.ts) used by the add/edit-community form, which is a separate, short-lived socket from the two persistent relay connections (backend background session and frontend main chat session) this node otherwise documents."
+    entry_class: FACT
+    evidence:
+      - "desktop/src/features/communities/relayProbe.test.mjs"
+      - "desktop/src/features/communities/relayProbe.ts"
 relationships:
   - type: part-of
     target: architecture-containers-desktop
@@ -230,6 +247,36 @@ itself: it is both the thing disconnected in step 1 and the thing reconnected
 in step 5, and `useCommunityInit.ts`'s own `resetCommunityState()` names it
 as the canonical example of a community-scoped singleton that must be reset
 on every switch.
+
+## Representative verification
+
+- **Backend reconnect backoff:** `retry_delay_grows_and_stops_at_the_ceiling`
+  and the neighboring CLOSED-retry tests in
+  `desktop/src-tauri/src/native_relay_client_tests.rs` exercise the delay
+  growth and ceiling this node describes for the backend background session.
+- **Frontend reconnect scheduling policy:** `relayReconnectPolicy.test.mjs`
+  (e.g. "baseline scenario schedules a reconnect", "terminal session refuses
+  to schedule", "pending reconnect timer suppresses scheduling another")
+  covers the decision logic around when `RelayClient` schedules a reconnect
+  attempt at all.
+- **Frontend three-phase reconnect controller:**
+  `relayReconnectController.test.mjs` (e.g. "escalation fires only when fast
+  path fails and hook is configured", "escalation skipped when hook not
+  configured", "backstop fires onBackstop, not onSuccess") covers the
+  fast-path/escalation/backstop sequence described in *Reconnection policy*.
+- **Per-subscription CLOSED retry:** `relayClosedRecovery.test.mjs` and
+  `relayClosedPolicy.test.mjs` cover the retry base/ceiling this node compares
+  against the backend's matching constants.
+- **Community-switch relay reachability probe (adjacent, not this node's main
+  path):** `desktop/src/features/communities/relayProbe.test.mjs` covers the
+  one-shot raw-`WebSocket` reachability check used by the add/edit-community
+  form -- a separate, short-lived socket from the two this node documents,
+  named here only because it lives beside the community-switch code path in
+  *Community switching triggers a reconnect*.
+
+These are unit tests exercising the policy/decision logic in isolation
+(no live relay); this node makes no claim about end-to-end coverage of a real
+reconnect against a running relay.
 
 ## Boundary
 
