@@ -55,7 +55,7 @@ evidence:
     evidence:
       - "mobile/ios/Flutter/Debug.xcconfig"
       - "mobile/ios/Flutter/Release.xcconfig"
-  - statement: "mobile/android/app/build.gradle.kts sets defaultConfig.applicationId and android.namespace to xyz.block.buzz.mobile. Only the debug build type reads mobile/android/worktree.properties: it applies applicationIdSuffix (validated against the regex \\.[a-z][a-z0-9_]+, else GradleException) and overrides the app_name string resource with label (validated against [A-Za-z0-9._-]+, else GradleException) when the file is present. Release and profile build types never read this file."
+  - statement: "mobile/android/app/build.gradle.kts sets defaultConfig.applicationId and android.namespace to xyz.block.buzz.mobile. Only the debug build type reads mobile/android/worktree.properties: it applies applicationIdSuffix (validated against the regex \\.[a-z][a-z0-9_]*, else GradleException) and overrides the app_name string resource with label (validated against [A-Za-z0-9._-]+, else GradleException) when the file is present. Release and profile build types never read this file."
     entry_class: FACT
     evidence:
       - "mobile/android/app/build.gradle.kts"
@@ -127,7 +127,7 @@ immutable git tag, which this repository does not contain.
 | iOS `BUNDLE_IDENTIFIER` | xcconfig build setting | `com.buzz.buzzMobile` | No | No | Set identically in `Debug.xcconfig`/`Release.xcconfig`. A developer's gitignored `AppOverrides.xcconfig` overrides it per variable, on both Debug and Release; a generated `WorktreeOverrides.xcconfig` additionally overrides it on Debug only, unless `AppOverrides.xcconfig` also sets it (later include wins). |
 | iOS `APP_DISPLAY_NAME` | xcconfig build setting | `Buzz` | No | No | Same override chain as `BUNDLE_IDENTIFIER` above. |
 | Android `applicationId` / `namespace` | Gradle `defaultConfig` string | `xyz.block.buzz.mobile` | No | No | Base Android application id, set once in `build.gradle.kts`. Not itself overridden by worktree state -- see `applicationIdSuffix` below. |
-| Android `applicationIdSuffix` (worktree) | `worktree.properties` value, must match `\.[a-z][a-z0-9_]+` | none (unset outside a linked worktree) | No | No | Read only by the `debug` build type from `mobile/android/worktree.properties`; appended to the base `applicationId` so multiple worktrees install side by side. Invalid values fail the build (`GradleException`). Release/profile builds never read it. |
+| Android `applicationIdSuffix` (worktree) | `worktree.properties` value, must match `\.[a-z][a-z0-9_]*` | none (unset outside a linked worktree) | No | No | Read only by the `debug` build type from `mobile/android/worktree.properties`; appended to the base `applicationId` so multiple worktrees install side by side. Invalid values fail the build (`GradleException`). Release/profile builds never read it. |
 | Android `app_name` label (worktree) | `worktree.properties` value, must match `[A-Za-z0-9._-]+` | `Buzz` (unset outside a linked worktree) | No | No | Read only by the `debug` build type; overrides the `app_name` string resource to `Buzz ($label)`. Invalid values fail the build (`GradleException`). Release/profile builds always keep the plain `Buzz` label. |
 
 Every dart-define row above is baked into the compiled binary at build time --
