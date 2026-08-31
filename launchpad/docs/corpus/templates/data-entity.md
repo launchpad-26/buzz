@@ -76,11 +76,11 @@ evidence:
     entry_class: FACT
     evidence:
       - "migrations/0001_initial_schema.sql"
-  - statement: "migrations/0001_initial_schema.sql defines a thread_metadata table (community_id, event_id, channel_id, parent_event_id, root_event_id, depth, reply_count, descendant_count, last_reply_at, broadcast, primary key (community_id, event_created_at, event_id)) under a comment reading 'Conformance: thread lookups filter by community before event matching,' and crates/buzz-db/src/thread.rs's own module doc states this table 'Tracks parent/root relationships, depth, and reply counts for infinitely nested threads' and 'is populated when events are ingested and updated as replies arrive or are deleted.'"
+  - statement: "migrations/0001_initial_schema.sql defines a thread_metadata table (community_id, event_id, channel_id, parent_event_id, root_event_id, depth, reply_count, descendant_count, last_reply_at, broadcast, primary key (community_id, event_created_at, event_id)) under a comment reading 'Conformance: thread lookups filter by community before event matching,' and crates/buzz-db/src/store/thread.rs's own module doc states this table 'Tracks parent/root relationships, depth, and reply counts for infinitely nested threads' and 'is populated when events are ingested and updated as replies arrive or are deleted.'"
     entry_class: FACT
     evidence:
       - "migrations/0001_initial_schema.sql"
-      - "crates/buzz-db/src/thread.rs"
+      - "crates/buzz-db/src/store/thread.rs"
   - statement: "Root CLAUDE.md's 'Thread counters' entry states reply_count and descendant_count 'are materialized on thread root events' and that 'any code that inserts replies must update these counters.'"
     entry_class: FACT
     evidence:
@@ -106,7 +106,7 @@ evidence:
     entry_class: INFERENCE
     evidence:
       - "webfetch(https://dl.acm.org/doi/10.1145/320434.320440) -> HTTP 403 Forbidden"
-      - "crates/buzz-db/src/thread.rs"
+      - "crates/buzz-db/src/store/thread.rs"
       - "crates/buzz-core/src/channel.rs"
     confidence: 0.7
   - statement: "Issue #605 (parent PRD) states the real acceptance criterion for every template task in this batch as: every template states its purpose, required sections, evidence expectations and the industry model/standard it adapts -- distinct from the byte-identical MUST/SHOULD/enforcement/policy checklist copied into this node's own issue #1333 from the standards-track issues."

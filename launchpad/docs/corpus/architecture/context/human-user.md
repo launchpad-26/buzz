@@ -16,18 +16,18 @@ evidence:
     entry_class: FACT
     evidence:
       - "migrations/0001_initial_schema.sql"
-      - "crates/buzz-db/src/user.rs"
+      - "crates/buzz-db/src/store/user.rs"
   - statement: "The `users` table carries a nullable `agent_owner_pubkey` column — a self-referencing foreign key, constrained to the same community — naming another row in the same table as the owner of an agent's identity. `set_agent_owner` populates it exactly once per pubkey via an atomic conditional UPDATE (\"first mint wins\"), and `is_agent_owner` reads it back to answer an ownership check."
     entry_class: FACT
     evidence:
       - "migrations/0001_initial_schema.sql"
-      - "crates/buzz-db/src/user.rs"
+      - "crates/buzz-db/src/store/user.rs"
   - statement: "agent_owner_pubkey IS NOT NULL is, in the current codebase, the only mechanically populated signal that a users row represents an agent rather than a human: the table also defines an agent_type column, but nothing in the reviewed crates writes to it — it is read in exactly one place (a channel-membership query) and otherwise sits unpopulated."
     entry_class: INFERENCE
     evidence:
       - "migrations/0001_initial_schema.sql"
-      - "crates/buzz-db/src/user.rs"
-      - "crates/buzz-db/src/channel.rs"
+      - "crates/buzz-db/src/store/user.rs"
+      - "crates/buzz-db/src/store/channel_members.rs"
     confidence: 0.6
   - statement: "NIP-OA ('Owner Attestation') is a Buzz-defined protocol extension under which a human owner's Nostr key authorizes a separate agent Nostr key to publish events under the agent's own authorship, via a signed `auth` tag (`[\"auth\", \"<owner-pubkey-hex>\", \"<conditions>\", \"<sig-hex>\"]`) whose signature is a BIP-340 Schnorr signature computed by the owner over SHA256(\"nostr:agent-auth:\" || agent_pubkey_hex || \":\" || conditions)."
     entry_class: FACT
