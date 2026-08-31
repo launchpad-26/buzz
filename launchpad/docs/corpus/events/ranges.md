@@ -52,7 +52,7 @@ evidence:
     entry_class: FACT
     evidence:
       - "crates/buzz-core/src/kind.rs"
-  - statement: "kind.rs's 'Agent job protocol (43000–43999)' section comment groups KIND_JOB_REQUEST (43001) through KIND_JOB_ERROR (43006), and states explicitly: 'Not using NIP-90 kinds (5000–6999) — Buzz requires auth chains (depth <= 3, breadth <= 10).'"
+  - statement: "kind.rs's 'Agent job protocol (43000–43999)' section comment groups KIND_JOB_REQUEST (43001) through KIND_JOB_ERROR (43006), and states explicitly: 'Not using NIP-90 kinds (5000–6999) — Buzz requires auth chains (depth ≤ 3, breadth ≤ 10).'"
     entry_class: FACT
     evidence:
       - "crates/buzz-core/src/kind.rs"
