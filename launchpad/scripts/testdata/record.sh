@@ -65,6 +65,27 @@ gh api "repos/$REPO/git/trees/$PR86_HEAD?recursive=1" \
   | jq '{sha, url, truncated, tree: [.tree[] | select(.path | endswith(".md"))]}' > pr86-tree.json
 say pr86-tree.json "head tree, projected to *.md entries"
 
+# ------------------------------------------------------------- StatusContext
+# #148: pr86-checks.json's 47 contexts are all CheckRun — no fixture has ever
+# carried a StatusContext, the older commit-status API some third-party
+# integrations still use. Upstream block/buzz#2, its "Initial release" PR,
+# carries one: a Square internal security bot posting via the legacy statuses
+# API rather than the Checks API. Recorded from upstream because this fork's
+# own PRs don't have it.
+gh api graphql -f owner=block -f repo=buzz -F pr=2 -f query='
+query($owner:String!,$repo:String!,$pr:Int!){
+  repository(owner:$owner,name:$repo){
+    pullRequest(number:$pr){
+      commits(last:1){nodes{commit{oid statusCheckRollup{state contexts(first:100){totalCount nodes{
+        __typename
+        ... on CheckRun{name status conclusion detailsUrl isRequired(pullRequestNumber:$pr) checkSuite{workflowRun{workflow{name}}}}
+        ... on StatusContext{context state targetUrl isRequired(pullRequestNumber:$pr)}
+      }}}}}}
+    }
+  }
+}' > upstream2-checks.json
+say upstream2-checks.json "block/buzz#2: a StatusContext beside CheckRuns"
+
 # --------------------------------------------------------------- fixture (ii)
 # A closing keyword in visible body text.
 gh pr view 92 --repo "$REPO" --json title,body,labels > pr92-meta.json
