@@ -32,18 +32,18 @@ evidence:
     entry_class: FACT
     evidence:
       - "crates/buzz-relay/src/api/invites.rs"
-  - statement: "`claim_relay_membership` (`crates/buzz-db/src/relay_members.rs`) inserts the membership row and records the accepted `policy_version` in the same database transaction, so a v1-path membership can never exist without its policy-acceptance evidence persisted atomically alongside it."
+  - statement: "`claim_relay_membership` (`crates/buzz-db/src/store/relay_members.rs`) inserts the membership row and records the accepted `policy_version` in the same database transaction, so a v1-path membership can never exist without its policy-acceptance evidence persisted atomically alongside it."
     entry_class: FACT
     evidence:
-      - "crates/buzz-db/src/relay_members.rs"
+      - "crates/buzz-db/src/store/relay_members.rs"
   - statement: "`crates/buzz-relay/src/handlers/relay_admin.rs` handles kind:9030 (add member), kind:9031 (remove member) and kind:9032 (change role) as admin-driven tenancy commands: the sender must already hold `admin` or `owner` role; only an owner may grant the `admin` role or change any role; an admin's removal is routed through the atomic `remove_relay_member_if_role(..., \"member\")` (refusing to touch admins/owners), while an owner's removal is routed through `remove_relay_member`, which refuses to delete a row with role `owner`; a sender may not remove or role-change themself."
     entry_class: FACT
     evidence:
       - "crates/buzz-relay/src/handlers/relay_admin.rs"
-  - statement: "`remove_relay_member` and `remove_relay_member_if_role` (`crates/buzz-db/src/relay_members.rs`) collapse the owner/role check and the `DELETE` into one conditional SQL statement each, so there is no time-of-check-to-time-of-use race between reading a member's current role and deleting the row."
+  - statement: "`remove_relay_member` and `remove_relay_member_if_role` (`crates/buzz-db/src/store/relay_members.rs`) collapse the owner/role check and the `DELETE` into one conditional SQL statement each, so there is no time-of-check-to-time-of-use race between reading a member's current role and deleting the row."
     entry_class: FACT
     evidence:
-      - "crates/buzz-db/src/relay_members.rs"
+      - "crates/buzz-db/src/store/relay_members.rs"
   - statement: "`crates/buzz-relay/src/handlers/ingest.rs` (around line 2351) handles kind:28936 (`KIND_NIP43_LEAVE_REQUEST`) as a self-service tenancy removal: it is rejected outside a ±120s freshness window and unless it carries a NIP-70 `-` protected-event tag, then calls `state.db.remove_relay_member` for the sender's own pubkey; `RemoveResult::IsOwner` is surfaced back to the caller as 'relay owner cannot leave' and `RemoveResult::NotFound` as 'you are not a relay member.'"
     entry_class: FACT
     evidence:
@@ -52,14 +52,14 @@ evidence:
     entry_class: FACT
     evidence:
       - "crates/buzz-core/src/kind.rs"
-  - statement: "`bootstrap_owner` and `transfer_ownership` (`crates/buzz-db/src/relay_members.rs`) are both scoped to a single `community: CommunityId` argument and operate inside one transaction; `transfer_ownership` enforces a per-owner community cap (`MAX_COMMUNITIES_PER_OWNER`, overridable via `BUZZ_MAX_COMMUNITIES_PER_OWNER`) atomically inside the transfer, while `bootstrap_owner`'s own doc comment states it is a deployment-root-only path that does NOT enforce that cap, because it is not an end-user admission route."
+  - statement: "`bootstrap_owner` and `transfer_ownership` (`crates/buzz-db/src/store/relay_members.rs`) are both scoped to a single `community: CommunityId` argument and operate inside one transaction; `transfer_ownership` enforces a per-owner community cap (`MAX_COMMUNITIES_PER_OWNER`, overridable via `BUZZ_MAX_COMMUNITIES_PER_OWNER`) atomically inside the transfer, while `bootstrap_owner`'s own doc comment states it is a deployment-root-only path that does NOT enforce that cap, because it is not an end-user admission route."
     entry_class: FACT
     evidence:
-      - "crates/buzz-db/src/relay_members.rs"
-  - statement: "Unit tests `membership_is_confined_to_its_community` and `owner_bootstrap_is_confined_to_its_community` (`crates/buzz-db/src/relay_members.rs`, `#[cfg(test)] mod tests`) assert that admitting or bootstrapping a pubkey in one community's `relay_members` never admits or bootstraps that pubkey in a different community, guarding the exact class of cross-tenant admission leak issue #1285 targeted."
+      - "crates/buzz-db/src/store/relay_members.rs"
+  - statement: "Unit tests `membership_is_confined_to_its_community` and `owner_bootstrap_is_confined_to_its_community` (`crates/buzz-db/src/store/relay_members.rs`, `#[cfg(test)] mod tests`) assert that admitting or bootstrapping a pubkey in one community's `relay_members` never admits or bootstraps that pubkey in a different community, guarding the exact class of cross-tenant admission leak issue #1285 targeted."
     entry_class: FACT
     evidence:
-      - "crates/buzz-db/src/relay_members.rs"
+      - "crates/buzz-db/src/store/relay_members.rs"
   - statement: "`launchpad/docs/corpus/AGENTS.md` states that one corpus node is one independently maintainable idea, and that a second concept, contract or procedure discovered while writing is filed as its own task and linked, not folded in."
     entry_class: FACT
     evidence:
@@ -184,7 +184,7 @@ routes in the current codebase:
   a separate backfill path, `materialize_nip_oa_owner`, which records the
   agent→owner mapping via `set_agent_owner`, not a membership grant).
 - **Owner bootstrap and rotation** (`bootstrap_owner`, `transfer_ownership`,
-  `crates/buzz-db/src/relay_members.rs`). Both are community-scoped and
+  `crates/buzz-db/src/store/relay_members.rs`). Both are community-scoped and
   transactional. `bootstrap_owner` runs at every relay startup, ensuring
   `RELAY_OWNER_PUBKEY` holds the `owner` role and demoting any other owner
   in that community to `admin`; it is explicitly exempt from the per-owner
@@ -199,7 +199,7 @@ or leave-request paths publishes a NIP-43 announcement: kind:8000
 (member-added) or kind:8001 (member-removed) as a relay-signed delta, and a
 refreshed kind:13534 membership-list snapshot.
 
-**Verification.** `crates/buzz-db/src/relay_members.rs`'s
+**Verification.** `crates/buzz-db/src/store/relay_members.rs`'s
 `membership_is_confined_to_its_community` and
 `owner_bootstrap_is_confined_to_its_community` unit tests are the checked
 evidence for the tenant-confinement claim running through every route

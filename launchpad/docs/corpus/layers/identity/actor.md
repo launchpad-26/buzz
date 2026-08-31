@@ -24,11 +24,11 @@ evidence:
     entry_class: FACT
     evidence:
       - "crates/buzz-relay/src/conformance/mod.rs"
-  - statement: "Outside the conformance/spec layer, crates/buzz-db/src/user.rs's `is_agent_owner` names its caller-identity parameter `actor_pubkey` (distinct from `target_pubkey`), and crates/buzz-db/src/archived_identities.rs's `ArchivedIdentity.actor` field is documented as \"64-char lowercase hex pubkey of the actor that requested the archive\" -- both are ordinary production data-access code, showing the term is used consistently beyond the formal-verification harness."
+  - statement: "Outside the conformance/spec layer, crates/buzz-db/src/store/user.rs's `is_agent_owner` names its caller-identity parameter `actor_pubkey` (distinct from `target_pubkey`), and crates/buzz-db/src/store/archived_identities.rs's `ArchivedIdentity.actor` field is documented as \"64-char lowercase hex pubkey of the actor that requested the archive\" -- both are ordinary production data-access code, showing the term is used consistently beyond the formal-verification harness."
     entry_class: FACT
     evidence:
-      - "crates/buzz-db/src/user.rs"
-      - "crates/buzz-db/src/archived_identities.rs"
+      - "crates/buzz-db/src/store/user.rs"
+      - "crates/buzz-db/src/store/archived_identities.rs"
   - statement: "crates/buzz-relay/src/handlers/moderation_commands.rs derives its `actor` variable directly from the incoming Nostr event (`let actor = event.pubkey.to_bytes().to_vec();`) and threads that same value through every moderation command dispatched from `handle_moderation_command` (ban, unban, timeout, untimeout, resolve-report) as the identity performing the action, with no branch on whether that pubkey belongs to a human- or agent-owned `users` row."
     entry_class: FACT
     evidence:
@@ -46,8 +46,8 @@ evidence:
     evidence:
       - "crates/buzz-conformance/src/lib.rs"
       - "crates/buzz-relay/src/conformance/mod.rs"
-      - "crates/buzz-db/src/user.rs"
-      - "crates/buzz-db/src/archived_identities.rs"
+      - "crates/buzz-db/src/store/user.rs"
+      - "crates/buzz-db/src/store/archived_identities.rs"
       - "crates/buzz-relay/src/handlers/moderation_commands.rs"
     confidence: 0.85
   - statement: "Issue #1102's definition of done requires this node to define the term in one sentence before deeper explanation, state boundaries/non-goals, link related concepts, implementation and verification without duplicating their content, and use examples only to clarify the concept rather than introduce a second canonical concept."
@@ -139,7 +139,7 @@ A reader reaches for "actor" when they need to:
 | **actor** | The authenticated pubkey performing a request or action, human or agent, undifferentiated | `docs/spec/MultiTenantRelay.tla`'s `Actors`; `AbstractState.actor`; `actor`/`actor_pubkey` parameters across `buzz-db` and `buzz-relay` |
 | **author** | The pubkey that signed a *persisted* Nostr event | `docs/spec/MultiTenantRelay.tla`'s message records (`author: Actors`) — the same underlying domain as `actor`, named differently because the record is a stored message, not a live request |
 | **principal** | Prose synonym for the same idea, used narratively | `architecture-principles-humans-and-agents-are-peers`'s body text (e.g. "Once a principal is authenticated..."); not a field or type name anywhere inspected |
-| **user / `UserProfile`** | The broader identity/profile record (display name, avatar, about, NIP-05 handle) that a `(community_id, pubkey)` row carries | `users` table; `crates/buzz-db/src/user.rs`'s `get_user`/`UserProfile` |
+| **user / `UserProfile`** | The broader identity/profile record (display name, avatar, about, NIP-05 handle) that a `(community_id, pubkey)` row carries | `users` table; `crates/buzz-db/src/store/user.rs`'s `get_user`/`UserProfile` |
 | **`agent_owner_pubkey` / owner** | A *relationship* between two actors — which human- or agent-owned pubkey administratively owns a given agent pubkey — not a synonym for "actor" itself | `users.agent_owner_pubkey`; `set_agent_owner`/`is_agent_owner` |
 
 ## Related resources

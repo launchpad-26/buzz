@@ -36,10 +36,10 @@ evidence:
     entry_class: FACT
     evidence:
       - "crates/buzz-cli/src/commands/messages.rs"
-  - statement: "`crates/buzz-db/src/user.rs` declares `UserProfile.pubkey: Vec<u8>`, documented as \"Raw 32-byte compressed public key,\" alongside presentation fields (`display_name`, `avatar_url`, `about`, `nip05_handle`) that are all optional — the pubkey is the one field a profile cannot exist without, and it is what the rest of the profile is attached to, not itself part of the presentation data."
+  - statement: "`crates/buzz-db/src/store/user.rs` declares `UserProfile.pubkey: Vec<u8>`, documented as \"Raw 32-byte compressed public key,\" alongside presentation fields (`display_name`, `avatar_url`, `about`, `nip05_handle`) that are all optional — the pubkey is the one field a profile cannot exist without, and it is what the rest of the profile is attached to, not itself part of the presentation data."
     entry_class: FACT
     evidence:
-      - "crates/buzz-db/src/user.rs"
+      - "crates/buzz-db/src/store/user.rs"
   - statement: "Unmerged draft PR #1803 (issue #1102, `layers/identity/actor.md`) defines \"actor\" as \"the single authenticated pubkey performing a request or action,\" stating explicitly \"an actor *is* a pubkey\" — i.e. actor is a role/usage label for a pubkey in a given request, not a different identifier or a distinct value from the pubkey this node defines."
     entry_class: TEAM_KNOWLEDGE
     provided_by: "launchpad-26/buzz#1803 (unmerged draft PR body, Definition section, read directly while authoring this node)"

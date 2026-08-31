@@ -47,7 +47,7 @@ evidence:
   - statement: "buzz-db's api_token module (create_api_token, create_api_token_if_under_limit, get_api_token_by_hash_including_revoked, list_tokens_by_owner, revoke_token, revoke_all_tokens) stores API tokens hashed and scoped to (community_id, token_hash), each carrying an owner pubkey, a name, a Scope list, an optional channel_id restriction, and an optional expiry."
     entry_class: FACT
     evidence:
-      - "crates/buzz-db/src/api_token.rs"
+      - "crates/buzz-db/src/store/api_token.rs"
   - statement: "buzz-relay's Blossom media-upload authorization comment states explicitly that the relay-membership (NIP-43) gate is 'the only upload authority', independent of bearer-token / api_tokens storage and of the require_auth_token setting -- i.e. API-token-based auth is documented in that comment as a separate mechanism from the media path, not as something the media path itself consumes."
     entry_class: FACT
     evidence:
@@ -197,7 +197,7 @@ A reader needs this document when:
   as an expected sibling node rather than describing its mechanics here, per this task's
   own instruction not to fold a second mechanism's detail into the category-level
   document.
-- **API tokens** -- not yet a corpus node. `crates/buzz-db/src/api_token.rs` is its
+- **API tokens** -- not yet a corpus node. `crates/buzz-db/src/store/api_token.rs` is its
   storage-layer implementation; see *Background* and *Scope and omissions* for the
   specific consumption-path discrepancy this document found and left open rather than
   resolving.

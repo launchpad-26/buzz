@@ -66,10 +66,10 @@ evidence:
     evidence:
       - "launchpad/docs/corpus/architecture/principles/host-selects-community.md"
       - "launchpad/docs/corpus/architecture/principles/community-is-security-boundary.md"
-  - statement: "crates/buzz-db/src/migration.rs carries executable, migration-SQL-parsing unit tests that verify community_id's schema role directly: all_non_operator_global_tables_have_not_null_community_id asserts every non-operator-global table declares community_id NOT NULL; scoped_primary_key_unique_and_foreign_key_constraints_lead_with_community_id asserts every scoped table's PK/unique/FK constraints lead with community_id; and channels_community_id_is_immutable_after_insert asserts both that no migration statement re-tenants channels.community_id and that a BEFORE UPDATE trigger/function guard rejecting OLD.community_id <> NEW.community_id exists in the migrations. This is a real instance of the static migration-lint checking crates/buzz-core/src/tenant.rs's own doc comment gestures at, run by parsing migration_sql() rather than requiring a live database."
+  - statement: "crates/buzz-db/src/runtime/migration.rs carries executable, migration-SQL-parsing unit tests that verify community_id's schema role directly: all_non_operator_global_tables_have_not_null_community_id asserts every non-operator-global table declares community_id NOT NULL; scoped_primary_key_unique_and_foreign_key_constraints_lead_with_community_id asserts every scoped table's PK/unique/FK constraints lead with community_id; and channels_community_id_is_immutable_after_insert asserts both that no migration statement re-tenants channels.community_id and that a BEFORE UPDATE trigger/function guard rejecting OLD.community_id <> NEW.community_id exists in the migrations. This is a real instance of the static migration-lint checking crates/buzz-core/src/tenant.rs's own doc comment gestures at, run by parsing migration_sql() rather than requiring a live database."
     entry_class: FACT
     evidence:
-      - "crates/buzz-db/src/migration.rs"
+      - "crates/buzz-db/src/runtime/migration.rs"
   - statement: "Sibling issue #1104 (layers/identity/community-identity.md) is scoped, per this task's own batch dispatch brief, to the identity/addressability angle of a community -- host-binding as the outward mechanism a client uses to reach a community, and NIP-11 presentation such as the workspace icon (added in migration 0003_community_icon.sql) -- distinct from this node's tenancy-key angle (the internal communities.id as the row-scoping identifier). At the recorded revision, #1104's PR (#1811) is open and unmerged, so launchpad/docs/corpus/layers/identity/community-identity.md does not exist on origin/launchpad or in this worktree and is not a valid relationships target."
     entry_class: TEAM_KNOWLEDGE
     provided_by: "launchpad-26/buzz#1183 and #1104 (batch dispatch brief); launchpad-26/buzz#1811 (PR), checked via gh pr list --search 1104"
@@ -135,7 +135,7 @@ its absence of a redefining code path establishes that today, not a database
 constraint as explicit as the one `channels.community_id` has.
 
 **Verification.** The community_id-leads-every-scoped-key shape above is not
-only prose convention: `crates/buzz-db/src/migration.rs` carries executable
+only prose convention: `crates/buzz-db/src/runtime/migration.rs` carries executable
 unit tests that parse the migration SQL directly and assert it --
 `all_non_operator_global_tables_have_not_null_community_id`,
 `scoped_primary_key_unique_and_foreign_key_constraints_lead_with_community_id`,

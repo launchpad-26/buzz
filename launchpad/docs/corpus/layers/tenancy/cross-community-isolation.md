@@ -43,15 +43,15 @@ evidence:
       - "migrations/0001_initial_schema.sql:170"
       - "migrations/0001_initial_schema.sql:234"
       - "migrations/0001_initial_schema.sql:293"
-  - statement: "crates/buzz-db/src/event.rs's EventQuery struct cannot be built from its only constructor, for_community, without supplying a CommunityId; the field itself (community_id: pub CommunityId) is nonetheless a public field on the struct, so a struct-literal or struct-update-syntax construction elsewhere in the crate could still set it to an arbitrary CommunityId value without going through for_community."
+  - statement: "crates/buzz-db/src/store/event.rs's EventQuery struct cannot be built from its only constructor, for_community, without supplying a CommunityId; the field itself (community_id: pub CommunityId) is nonetheless a public field on the struct, so a struct-literal or struct-update-syntax construction elsewhere in the crate could still set it to an arbitrary CommunityId value without going through for_community."
     entry_class: FACT
     evidence:
-      - "crates/buzz-db/src/event.rs:29-31"
-      - "crates/buzz-db/src/event.rs:113-136"
-  - statement: "crates/buzz-db/src/channel.rs's get_accessible_channel_ids takes an explicit community_id: CommunityId parameter and scopes both halves of its UNION query with WHERE cm.community_id = $1 and WHERE community_id = $1 respectively; every call site found in the repository (crates/buzz-relay/src/handlers/req.rs:114, handlers/count.rs:85, api/bridge.rs:1011 and :1488, api/workflows.rs:96, via the cached wrapper in crates/buzz-relay/src/state.rs:1232) passes tenant.community() or conn.tenant.community(), the resolved TenantContext's own community, not a value derived from client-supplied data."
+      - "crates/buzz-db/src/store/event.rs:37-39"
+      - "crates/buzz-db/src/store/event.rs:118-148"
+  - statement: "crates/buzz-db/src/store/channel.rs's get_accessible_channel_ids takes an explicit community_id: CommunityId parameter and scopes both halves of its UNION query with WHERE cm.community_id = $1 and WHERE community_id = $1 respectively; every call site found in the repository (crates/buzz-relay/src/handlers/req.rs:114, handlers/count.rs:85, api/bridge.rs:1011 and :1488, api/workflows.rs:96, via the cached wrapper in crates/buzz-relay/src/state.rs:1232) passes tenant.community() or conn.tenant.community(), the resolved TenantContext's own community, not a value derived from client-supplied data."
     entry_class: FACT
     evidence:
-      - "crates/buzz-db/src/channel.rs:754-774"
+      - "crates/buzz-db/src/store/channel.rs:754-774"
       - "crates/buzz-relay/src/handlers/req.rs:114"
       - "crates/buzz-relay/src/handlers/count.rs:85"
       - "crates/buzz-relay/src/api/bridge.rs:1011"
@@ -92,8 +92,8 @@ evidence:
   - statement: "Because every scoped storage function inspected above (EventQuery::for_community, get_accessible_channel_ids, and the composite primary keys in migrations/0001_initial_schema.sql) requires or is keyed by a CommunityId sourced from the resolved TenantContext at every call site found, and because CommunityId cannot be parsed from client-supplied request data anywhere in the codebase, defeating cross-community read confinement today would require either a future call site that skips the community-scoped query path entirely, or a bug/deliberate misuse constructing a wrong-but-valid CommunityId -- the second of which the type system does not prevent, per tenant.rs's own 'lint-and-review, not compiler' admission."
     entry_class: INFERENCE
     evidence:
-      - "crates/buzz-db/src/event.rs:113-136"
-      - "crates/buzz-db/src/channel.rs:754-774"
+      - "crates/buzz-db/src/store/event.rs:118-148"
+      - "crates/buzz-db/src/store/channel.rs:754-774"
       - "migrations/0001_initial_schema.sql:17-19"
       - "crates/buzz-core/src/tenant.rs:1-25"
     confidence: 0.6

@@ -32,10 +32,10 @@ evidence:
     entry_class: FACT
     evidence:
       - "crates/buzz-relay/src/handlers/side_effects.rs"
-  - statement: "crates/buzz-db/src/user.rs's `UserProfile` struct carries exactly five fields: `pubkey: Vec<u8>` (raw 32-byte compressed public key), `display_name: Option<String>`, `avatar_url: Option<String>`, `about: Option<String>`, and `nip05_handle: Option<String>` -- this is the row shape returned by `get_user` and written by `update_user_profile`, and it is the same struct and the same `users` table for both human and agent identities; nothing in this struct or its surrounding functions distinguishes the two."
+  - statement: "crates/buzz-db/src/store/user.rs's `UserProfile` struct carries exactly five fields: `pubkey: Vec<u8>` (raw 32-byte compressed public key), `display_name: Option<String>`, `avatar_url: Option<String>`, `about: Option<String>`, and `nip05_handle: Option<String>` -- this is the row shape returned by `get_user` and written by `update_user_profile`, and it is the same struct and the same `users` table for both human and agent identities; nothing in this struct or its surrounding functions distinguishes the two."
     entry_class: FACT
     evidence:
-      - "crates/buzz-db/src/user.rs"
+      - "crates/buzz-db/src/store/user.rs"
   - statement: "migrations/0001_initial_schema.sql's `users` table has `PRIMARY KEY (community_id, pubkey)` and a nullable, self-referencing `agent_owner_pubkey BYTEA` column with `FOREIGN KEY (community_id, agent_owner_pubkey) REFERENCES users (community_id, pubkey) ON DELETE SET NULL` -- there is no separate table, row type, or schema for a \"human\" identity distinct from an agent identity; a human user is simply a `users` row whose own `agent_owner_pubkey` is null (it is not itself owned by another pubkey)."
     entry_class: FACT
     evidence:
@@ -58,7 +58,7 @@ evidence:
     evidence:
       - "desktop/src-tauri/src/secret_store.rs"
       - "mobile/lib/shared/community/community_storage.dart"
-      - "crates/buzz-db/src/user.rs"
+      - "crates/buzz-db/src/store/user.rs"
       - "crates/buzz-relay/src/handlers/side_effects.rs"
     confidence: 0.85
   - statement: "Issue #1106's definition of done requires this node to define the term in one sentence before deeper explanation, state boundaries/non-goals, link related concepts, implementation and verification without duplicating their content, and use examples only to clarify the concept rather than introduce a second canonical concept."
@@ -173,7 +173,7 @@ A reader reaches for this node when they need to:
 | Concept | What it is | Where it lives |
 |---|---|---|
 | **kind:0 event** | The Nostr wire event a client publishes to declare/update profile metadata | Published by the client, ingested by `buzz-relay`; `KIND_PROFILE = 0` in `crates/buzz-core/src/kind.rs` |
-| **`UserProfile` / `users` row** | The synced, queryable *result* of the latest kind:0 event — not itself a signed event | `crates/buzz-db/src/user.rs`; `migrations/0001_initial_schema.sql`'s `users` table |
+| **`UserProfile` / `users` row** | The synced, queryable *result* of the latest kind:0 event — not itself a signed event | `crates/buzz-db/src/store/user.rs`; `migrations/0001_initial_schema.sql`'s `users` table |
 | **Keypair custody** | The private key material proving control of the pubkey; never synced to the relay | Desktop: `desktop/src-tauri/src/secret_store.rs` (OS keychain); Mobile: `mobile/lib/shared/community/community_storage.dart` (`flutter_secure_storage`) |
 | **Human user (architecture-context actor)** | The person as a system actor: their boundary, their relationship to agents, clients, the relay, and the community | `architecture-context-human-user` (linked below) — not restated here |
 

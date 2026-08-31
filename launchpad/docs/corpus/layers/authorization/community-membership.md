@@ -44,10 +44,10 @@ evidence:
     entry_class: FACT
     evidence:
       - "crates/buzz-relay/src/api/git/policy.rs"
-  - statement: "`get_member_role` and `is_member` in `crates/buzz-db/src/channel.rs` read a pubkey's channel-scoped role (or membership) from `channel_members`, scoped by `community_id`, `channel_id` and `pubkey`, and excluding rows where `removed_at IS NOT NULL` — a channel-local, not community-wide, membership/role read."
+  - statement: "`get_member_role` and `is_member` in `crates/buzz-db/src/store/channel.rs` read a pubkey's channel-scoped role (or membership) from `channel_members`, scoped by `community_id`, `channel_id` and `pubkey`, and excluding rows where `removed_at IS NOT NULL` — a channel-local, not community-wide, membership/role read."
     entry_class: FACT
     evidence:
-      - "crates/buzz-db/src/channel.rs"
+      - "crates/buzz-db/src/store/channel.rs"
   - statement: "`AGENTS.md` states that one corpus node is one independently maintainable idea, and that a second concept, contract or procedure discovered while writing is filed as its own task and linked, not folded in."
     entry_class: FACT
     evidence:
@@ -144,7 +144,7 @@ cases in the current codebase:
   pusher's role meets that floor. An explicit `push:role` protection tag can
   only raise the floor, never lower it below the built-in default.
 - **Channel-scoped reads.** `get_member_role`/`is_member`
-  (`crates/buzz-db/src/channel.rs`) are how a handler learns a pubkey's role
+  (`crates/buzz-db/src/store/channel.rs`) are how a handler learns a pubkey's role
   or presence in one specific channel, as opposed to the community overall.
 
 ## Comparison

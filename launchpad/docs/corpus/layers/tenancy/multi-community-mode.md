@@ -38,17 +38,17 @@ evidence:
   - statement: "Two distinct code paths create a community row, with different limit semantics documented explicitly against each other: create_community_with_owner (the end-user-facing create_only path, reachable only through the already-gated operator endpoint) enforces MAX_COMMUNITIES_PER_OWNER against the requested owner; bootstrap_owner and Db::ensure_configured_community (the startup path and the legacy operator convergence path) are documented as 'deployment-root authority' that 'may exceed it by design' and do NOT enforce that limit at all."
     entry_class: FACT
     evidence:
-      - "crates/buzz-db/src/relay_members.rs"
+      - "crates/buzz-db/src/store/relay_members.rs"
       - "crates/buzz-db/src/lib.rs"
   - statement: "MAX_COMMUNITIES_PER_OWNER defaults to 5 and is overridable per deployment via BUZZ_MAX_COMMUNITIES_PER_OWNER (a missing, unparsable, or non-positive value falls back to the default of 5); create_community_with_owner enforces it atomically inside one transaction, serialized on a per-owner Postgres advisory lock, so concurrent create requests for the same owner cannot both pass the count check."
     entry_class: FACT
     evidence:
-      - "crates/buzz-db/src/relay_members.rs"
+      - "crates/buzz-db/src/store/relay_members.rs"
       - "crates/buzz-db/src/lib.rs"
   - statement: "No relay-wide cap on the total number of communities exists in this codebase; buzz-db's community_count is a Prometheus usage-rollup query (a bare SELECT COUNT(*) FROM communities) consulted by the metrics poller, not by provision_community or create_community_with_owner."
     entry_class: FACT
     evidence:
-      - "crates/buzz-db/src/usage.rs"
+      - "crates/buzz-db/src/store/usage.rs"
       - "crates/buzz-db/src/lib.rs"
   - statement: "Because the only code-level distinctions found are a deployment-level allowlist gating whether any additional community can be created at all (RELAY_OPERATOR_PUBKEYS) and a per-owner cap gating how many one pubkey can create through the end-user path (BUZZ_MAX_COMMUNITIES_PER_OWNER), 'single-community' and 'multi-community' describe configuration states of one otherwise-identical relay process and its request-handling code, not two branches that code switches between."
     entry_class: INFERENCE
@@ -56,7 +56,7 @@ evidence:
       - "crates/buzz-relay/src/tenant.rs"
       - "crates/buzz-relay/src/config.rs"
       - "crates/buzz-relay/src/handlers/community_provisioning.rs"
-      - "crates/buzz-db/src/relay_members.rs"
+      - "crates/buzz-db/src/store/relay_members.rs"
     confidence: 0.75
   - statement: "Issue #1190's Definition of Done requires this node to define the term in one sentence before deeper explanation, state boundaries/non-goals, link related implementation/verification/decision and neighboring corpus nodes without duplicating their canonical content, and use examples only to clarify rather than introduce a second canonical concept."
     entry_class: TEAM_KNOWLEDGE
@@ -90,7 +90,7 @@ switches into.**
 | The fail-closed discipline this node's provisioning gate is one instance of | `architecture-principles-fail-closed-boundaries` |
 | The row-zero host-binding seam itself | `crates/buzz-relay/src/tenant.rs`, `crates/buzz-core/src/tenant.rs` |
 | Deployment-level operator provisioning | `crates/buzz-relay/src/handlers/community_provisioning.rs`, `crates/buzz-relay/src/api/operator.rs` |
-| The per-owner community cap | `crates/buzz-db/src/relay_members.rs` |
+| The per-owner community cap | `crates/buzz-db/src/store/relay_members.rs` |
 
 Where this document and any of those disagree, **they win**.
 

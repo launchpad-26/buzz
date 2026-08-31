@@ -30,10 +30,10 @@ evidence:
     entry_class: FACT
     evidence:
       - "migrations/0001_initial_schema.sql"
-  - statement: "`crates/buzz-db/src/archived_identities.rs`'s module doc states the table \"stores a community-local UI visibility hint for identity pubkeys\" and that \"Archiving is not a ban: it does not affect membership, relay access, or repository permissions\"; its `archive()` function inserts with `ON CONFLICT (community_id, pubkey) DO NOTHING` (idempotent, does not mutate an existing row), and `unarchive()` executes a `DELETE` -- the table holds current archive state per pubkey, not a history of past archive/unarchive events."
+  - statement: "`crates/buzz-db/src/store/archived_identities.rs`'s module doc states the table \"stores a community-local UI visibility hint for identity pubkeys\" and that \"Archiving is not a ban: it does not affect membership, relay access, or repository permissions\"; its `archive()` function inserts with `ON CONFLICT (community_id, pubkey) DO NOTHING` (idempotent, does not mutate an existing row), and `unarchive()` executes a `DELETE` -- the table holds current archive state per pubkey, not a history of past archive/unarchive events."
     entry_class: FACT
     evidence:
-      - "crates/buzz-db/src/archived_identities.rs"
+      - "crates/buzz-db/src/store/archived_identities.rs"
   - statement: "`crates/buzz-relay/src/handlers/identity_archive.rs`'s `determine_consent_path` resolves `ConsentPath::SelfSigned` when the request actor equals the target, `ConsentPath::Admin` when the actor's community-membership role (via `get_relay_member`) is `owner` or `admin`, and otherwise calls `verify_owner_consent`, which requires the request's NIP-OA `auth` tag owner to equal the request signer and cross-checks that owner against the target's *live* `kind:0` profile's own `auth` tag before granting `ConsentPath::Owner` -- a request whose live-profile attestation has since changed is rejected even if the request's own attached credential is still valid. The handler additionally enforces a ±120-second freshness window, exactly one `p` tag and one NIP-70 `-` tag, and rejects `replaced-by` outright on unarchive requests."
     entry_class: FACT
     evidence:
@@ -59,10 +59,10 @@ evidence:
     evidence:
       - "desktop/src/features/channels/lib/useClassifiedMembers.ts"
       - "desktop/tests/e2e/identity-archive.spec.ts"
-  - statement: "`crates/buzz-db/src/deletion.rs`'s `EXPECTED_SCOPED_TABLES` constant lists `\"archived_identities\"` among the community-scoped tables purged when a community is deleted, and `migrations/0029_community_deletion.sql` calls `attach_community_write_fence('archived_identities')` -- archived-identity state is ordinary tenant data with no special-cased retention across community deletion."
+  - statement: "`crates/buzz-db/src/store/deletion.rs`'s `EXPECTED_SCOPED_TABLES` constant lists `\"archived_identities\"` among the community-scoped tables purged when a community is deleted, and `migrations/0029_community_deletion.sql` calls `attach_community_write_fence('archived_identities')` -- archived-identity state is ordinary tenant data with no special-cased retention across community deletion."
     entry_class: FACT
     evidence:
-      - "crates/buzz-db/src/deletion.rs"
+      - "crates/buzz-db/src/store/deletion.rs"
       - "migrations/0029_community_deletion.sql"
   - statement: "NIP-IA's Motivation section distinguishes archival from three existing Nostr primitives on their own terms: NIP-09 deletion requests \"do not help when the old key is lost, and they are too destructive for normal key rotation\"; NIP-51 mute lists \"are personal\" and \"do not give the relay a single authoritative view\"; NIP-43 membership removal \"is access control\" answering \"may this pubkey connect or publish here?\", not \"should this old identity still show up as an active person/bot in UI?\", and the document states directly \"A key can be archived without being banned; a spammer can be both removed via NIP-43 and archived via this NIP.\""
     entry_class: FACT
@@ -76,11 +76,11 @@ evidence:
     entry_class: FACT
     evidence:
       - "crates/buzz-test-client/tests/conformance_multitenant.rs"
-      - "crates/buzz-db/src/archived_identities.rs"
+      - "crates/buzz-db/src/store/archived_identities.rs"
   - statement: "Beyond the one Postgres-gated `buzz-db` unit test and the one non-ignored `buzz-relay` handler test (`owner_archive_rejects_stale_request_after_live_kind0_owner_flip`, which itself returns early rather than asserting anything if it cannot open a database connection), no automated test was found that exercises the full request -> relay-verified consent -> persisted state -> delta -> snapshot pipeline end-to-end against a running relay; the desktop Playwright specs (`identity-archive.spec.ts`, `identity-archive-hide.spec.ts`) verify UI-visible behavior against a mocked bridge, not a live relay round-trip."
     entry_class: INFERENCE
     evidence:
-      - "crates/buzz-db/src/archived_identities.rs"
+      - "crates/buzz-db/src/store/archived_identities.rs"
       - "crates/buzz-relay/src/handlers/identity_archive.rs"
       - "desktop/tests/e2e/identity-archive.spec.ts"
       - "desktop/tests/e2e/identity-archive-hide.spec.ts"

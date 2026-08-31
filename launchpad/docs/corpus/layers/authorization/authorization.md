@@ -39,7 +39,7 @@ evidence:
     entry_class: FACT
     evidence:
       - "migrations/0001_initial_schema.sql:574-584"
-      - "crates/buzz-db/src/relay_members.rs"
+      - "crates/buzz-db/src/store/relay_members.rs"
   - statement: "Channel-level membership and role are a separate row per `(community_id, channel_id, pubkey)` in the `channel_members` table, foreign-keyed to `channels (community_id, id)`, with its own `role` column of Postgres enum type `member_role` defaulting to `'member'` -- a structurally distinct membership record from `relay_members`, keyed to a channel rather than the whole community."
     entry_class: FACT
     evidence:
@@ -78,7 +78,7 @@ evidence:
     entry_class: INFERENCE
     evidence:
       - "crates/buzz-auth/src/access.rs"
-      - "crates/buzz-db/src/relay_members.rs"
+      - "crates/buzz-db/src/store/relay_members.rs"
       - "migrations/0001_initial_schema.sql:132-148"
       - "crates/buzz-relay/src/handlers/moderation_authz.rs"
     confidence: 0.75
@@ -212,7 +212,7 @@ any one document declares.
 | Point | Layer | What it does |
 |---|---|---|
 | `require_scope`, `check_read_access`, `check_write_access` (`crates/buzz-auth/src/access.rs`) | 1, 4 | Rejects a request whose scope set lacks the required scope, or whose caller is not a channel member (composed with the channel's own open/private visibility via `ChannelAccessChecker`). |
-| `relay_members` table + `crates/buzz-db/src/relay_members.rs` | 3 | Community-scoped membership and role (`owner`/`admin`/`member`), keyed `(community_id, pubkey)`. |
+| `relay_members` table + `crates/buzz-db/src/store/relay_members.rs` | 3 | Community-scoped membership and role (`owner`/`admin`/`member`), keyed `(community_id, pubkey)`. |
 | `channel_members` table + `MemberRole` (`crates/buzz-core/src/channel.rs`) | 4 | Channel-scoped membership and role (`Owner`/`Admin`/`Member`/`Guest`/`Bot`), keyed `(community_id, channel_id, pubkey)`. |
 | `check_channel_membership` (`crates/buzz-relay/src/handlers/ingest.rs`) | 4 | The read/write gate: member of the channel, or the channel is `open`. |
 | `authorize_moderation_action` / `decide_authority` (`crates/buzz-relay/src/handlers/moderation_authz.rs`) | 3 + 4 → 5 | Composes community role and channel role into one decision per named `ModerationAction`, including the admin-cannot-action-owner-or-fellow-admin guard rail. |

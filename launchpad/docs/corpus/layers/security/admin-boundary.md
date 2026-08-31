@@ -64,12 +64,11 @@ evidence:
       - "crates/buzz-admin/src/main.rs:452-470"
       - "crates/buzz-relay/src/handlers/community_provisioning.rs:1-26"
     confidence: 0.8
-  - statement: "Issue #1168 (parent PRD #607) asks this node to document layers/security/admin-boundary.md as the canonical invariant node for the admin boundary; the issue body itself does not use the phrase 'the line between admin/operator-level control and everything else' -- that framing originates from this node's own plan doc (launchpad/plans/2026-08-28-issue-1168-security-admin-boundary.md), which independently characterizes the boundary as 'what's on each side, what crossing it means, what's at risk.' This node's scope is distinct from #1038's sibling layers-authorization-operator-authorization node, which will cover the authorization *mechanism* rather than this security-boundary framing, and which does not exist on disk in this worktree as of commit 338b4d0cf2dd76cc43964bb717ce9f0a94a9c7a5."
-    entry_class: INFERENCE
+  - statement: "Issue #1168 (parent PRD #607) asks this node to document layers/security/admin-boundary.md as the canonical invariant node for the admin boundary; the issue body itself does not use the phrase 'the line between admin/operator-level control and everything else' -- that framing originates from this node's own authoring analysis during planning (not shipped as a repo artifact), which characterized the boundary as 'what's on each side, what crossing it means, what's at risk.' This node's scope is distinct from #1038's sibling layers-authorization-operator-authorization node, which will cover the authorization *mechanism* rather than this security-boundary framing, and which does not exist on disk in this worktree as of commit 338b4d0cf2dd76cc43964bb717ce9f0a94a9c7a5."
+    entry_class: TEAM_KNOWLEDGE
     evidence:
       - "https://github.com/launchpad-26/buzz/issues/1168"
-      - "launchpad/plans/2026-08-28-issue-1168-security-admin-boundary.md:1-20"
-    confidence: 0.7
+    provided_by: "corpus-batch-author agent, task #1168 planning pass"
 relationships:
   - type: references
     target: architecture-principles-community-is-security-boundary

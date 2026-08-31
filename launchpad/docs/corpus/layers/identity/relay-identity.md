@@ -58,7 +58,7 @@ evidence:
     evidence:
       - "crates/buzz-relay/src/main.rs:230-242"
       - "crates/buzz-relay/src/main.rs:322-345"
-      - "crates/buzz-db/src/relay_members.rs:347-374"
+      - "crates/buzz-db/src/store/relay_members.rs:350-378"
   - statement: "`git-sign-nostr` signs git commits and tags with a Nostr keypair loaded from `NOSTR_PRIVATE_KEY`, then `BUZZ_PRIVATE_KEY`, then a keyfile -- the acting user's or agent's own key, never the relay's `relay_keypair` -- and Buzz's dev MCP tooling (`buzz-dev-mcp`) depends on it for that purpose; it is a per-actor git-signing mechanism, not a relay-identity mechanism."
     entry_class: FACT
     evidence:

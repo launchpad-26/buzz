@@ -46,10 +46,10 @@ evidence:
     evidence:
       - ".github/workflows/ci.yml"
       - "Justfile"
-  - statement: "A materially narrower version of the same cross-community archive-isolation claim IS verified by a real, executing test: crates/buzz-db/src/archived_identities.rs's archived_identity_state_is_community_scoped (annotated #[ignore = \"requires Postgres\"], so it runs under the Postgres-gated integration suite rather than by default) archives one pubkey in two separately created communities and asserts each community's own archive state is unaffected by the other's archive/unarchive calls -- a database-layer unit test, not the wire-level conformance-suite row the stub above names."
+  - statement: "A materially narrower version of the same cross-community archive-isolation claim IS verified by a real, executing test: crates/buzz-db/src/store/archived_identities.rs's archived_identity_state_is_community_scoped (annotated #[ignore = \"requires Postgres\"], so it runs under the Postgres-gated integration suite rather than by default) archives one pubkey in two separately created communities and asserts each community's own archive state is unaffected by the other's archive/unarchive calls -- a database-layer unit test, not the wire-level conformance-suite row the stub above names."
     entry_class: FACT
     evidence:
-      - "crates/buzz-db/src/archived_identities.rs"
+      - "crates/buzz-db/src/store/archived_identities.rs"
   - statement: "desktop/src-tauri/src/managed_agents/backend_tests.rs's provider-boundary tests (including provider_deploy_refuses_mismatch_before_sending_agent_secret, provider_deploy_uses_staged_bytes_after_same_inode_source_rewrite, and provider_deploy_uses_staged_bytes_after_source_pathname_replacement) each construct their own stub provider as a local shell script rather than invoking a real buzz-backend-* binary; every test function in the file is a plain #[test] or #[tokio::test] against that stub, not against a built provider crate."
     entry_class: FACT
     evidence:
@@ -130,7 +130,7 @@ node) documents as enforced — currently prove nothing about the deployed
 system unless a human runs them by hand.
 
 The cross-community archive-isolation claim specifically **is** exercised,
-narrowly, by a real test: `crates/buzz-db/src/archived_identities.rs`'s
+narrowly, by a real test: `crates/buzz-db/src/store/archived_identities.rs`'s
 `archived_identity_state_is_community_scoped` archives one pubkey in two
 separate communities and asserts each community's state is unaffected by the
 other's. That is a database-layer unit test gated on Postgres availability

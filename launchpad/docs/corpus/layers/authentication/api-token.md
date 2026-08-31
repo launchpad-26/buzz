@@ -16,14 +16,14 @@ evidence:
     entry_class: FACT
     evidence:
       - "migrations/0001_initial_schema.sql"
-  - statement: "`crates/buzz-db/src/api_token.rs` implements the token CRUD surface: `create_api_token`, an atomic `create_api_token_if_under_limit` that enforces a 10-active-token-per-(community, owner) quota via a conditional INSERT (no separate count-then-insert race), `get_api_token_by_hash_including_revoked`, `list_tokens_by_owner`, `revoke_token`, and `revoke_all_tokens` — every function takes `community_id` as an explicit parameter and scopes its query to it."
+  - statement: "`crates/buzz-db/src/store/api_token.rs` implements the token CRUD surface: `create_api_token`, an atomic `create_api_token_if_under_limit` that enforces a 10-active-token-per-(community, owner) quota via a conditional INSERT (no separate count-then-insert race), `get_api_token_by_hash_including_revoked`, `list_tokens_by_owner`, `revoke_token`, and `revoke_all_tokens` — every function takes `community_id` as an explicit parameter and scopes its query to it."
     entry_class: FACT
     evidence:
-      - "crates/buzz-db/src/api_token.rs"
+      - "crates/buzz-db/src/store/api_token.rs"
   - statement: "The token lookup is keyed on `(community_id, token_hash)`, matching the storage-layer UNIQUE index, and two dedicated tests (`lookup_by_hash_is_scoped_to_community`, `active_lookup_by_hash_is_scoped_to_community`) insert the same 32-byte hash into two different communities and assert a community-scoped lookup returns only that community's row — proving a token minted in community A cannot resolve as valid in community B even under an adversarial same-hash collision."
     entry_class: FACT
     evidence:
-      - "crates/buzz-db/src/api_token.rs"
+      - "crates/buzz-db/src/store/api_token.rs"
   - statement: "`crates/buzz-auth/src/scope.rs` defines the `Scope` enum a token's `scopes` array is drawn from — 16 known variants (e.g. `messages:read`, `files:write`, `admin:channels`) plus an `Unknown(String)` catch-all for forward compatibility — and its own test asserts `Scope::all_known().len() == 16` with no duplicates."
     entry_class: FACT
     evidence:
@@ -40,10 +40,10 @@ evidence:
     entry_class: FACT
     evidence:
       - "commit 0701f47f4a31a904ebcd9f360cbd6aadaff9d784"
-  - statement: "At the recorded revision, `get_api_token_by_hash` and `get_api_token_by_hash_including_revoked` have no callers anywhere in the repository outside `crates/buzz-db/src/api_token.rs` itself (their own unit tests) — confirmed by a repo-wide grep for both symbol names."
+  - statement: "At the recorded revision, `get_api_token_by_hash` and `get_api_token_by_hash_including_revoked` have no callers anywhere in the repository outside `crates/buzz-db/src/store/api_token.rs` itself (their own unit tests) — confirmed by a repo-wide grep for both symbol names."
     entry_class: FACT
     evidence:
-      - "grep_repo('get_api_token_by_hash', '*.rs') -> matches only in crates/buzz-db/src/api_token.rs (definitions and its own unit tests) and a stale doc-comment in crates/buzz-test-client/tests/conformance_multitenant.rs; no other .rs file in the repository calls either function"
+      - "grep_repo('get_api_token_by_hash', '*.rs') -> matches only in crates/buzz-db/src/store/api_token.rs (definitions and its own unit tests) and a stale doc-comment in crates/buzz-test-client/tests/conformance_multitenant.rs; no other .rs file in the repository calls either function"
   - statement: "`crates/buzz-test-client/tests/conformance_multitenant.rs`'s `api_tokens_nip98_replay::token_minted_in_a_does_not_authorize_in_b` test is deliberately doc-only, and its module comment states directly that \"the api_token mint surface does not exist on the wire in buzz-relay\" and cites the same router/module-listing facts as this node, while also citing a stale line reference (`media.rs:638`) to the consumer removed by PR #1444 — this node's own citations were re-verified against current `media.rs` rather than trusted from that comment."
     entry_class: FACT
     evidence:
@@ -57,7 +57,7 @@ evidence:
     entry_class: INFERENCE
     evidence:
       - "migrations/0001_initial_schema.sql"
-      - "crates/buzz-db/src/api_token.rs"
+      - "crates/buzz-db/src/store/api_token.rs"
     confidence: 0.55
   - statement: "Issue #1023's Definition of Done requires that the document defines the term in one sentence, states boundaries/non-goals, links to related concepts/implementation/verification, and uses examples only to clarify — not to introduce a second canonical concept."
     entry_class: TEAM_KNOWLEDGE
@@ -102,7 +102,7 @@ unauthenticated `X-Pubkey` dev-mode header instead of a real NIP-98 signature
 looked up — and has no code path connecting it to `api_tokens` lookups.
 
 **Current status: implemented, unconsumed.** The full CRUD surface exists in
-`crates/buzz-db/src/api_token.rs` — create (with an atomic 10-token-per-owner
+`crates/buzz-db/src/store/api_token.rs` — create (with an atomic 10-token-per-owner
 quota), community-scoped hash lookup (including a revoked-inclusive variant),
 list, and revoke (single or all) — and the storage layer's community-scoping
 guarantee is directly tested. But `crates/buzz-relay`'s router registers no
@@ -134,7 +134,7 @@ A reader most needs this concept in two situations:
 - **Reading code that references `api_tokens`, `ApiTokenRecord`, or
   `Scope`** and needing to know whether that code path is live. At the
   recorded revision, the honest answer for any relay request-handling code is
-  *no* — trace back to `crates/buzz-db/src/api_token.rs`'s own unit tests
+  *no* — trace back to `crates/buzz-db/src/store/api_token.rs`'s own unit tests
   before assuming a caller exists elsewhere.
 - **Distinguishing "API token" from Buzz's actual bearer-style auth
   surfaces.** A NIP-98 signed event *is* effectively a short-lived bearer

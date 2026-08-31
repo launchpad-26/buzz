@@ -37,7 +37,7 @@ evidence:
     entry_class: FACT
     evidence:
       - "crates/buzz-relay/src/handlers/ingest.rs:1053-1060"
-      - "crates/buzz-db/src/event.rs:157"
+      - "crates/buzz-db/src/store/event.rs:155"
       - "crates/buzz-relay/src/handlers/ingest.rs:1314-1327"
   - statement: "ingest.rs contains kind-specific structural validators that walk an event's raw tag list and reject it if required tags are missing, duplicated, or shaped wrong -- for example validate_engram_envelope requires exactly one `d` tag and exactly one `p` tag (rejecting zero or multiple of either), and further requires the `d` tag value be exactly 64 characters; validate_diff_event and the project-event validator apply comparable per-tag-name arity and shape rules."
     entry_class: FACT

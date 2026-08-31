@@ -29,12 +29,12 @@ evidence:
     entry_class: FACT
     evidence:
       - "migrations/0001_initial_schema.sql:472-489"
-      - "crates/buzz-db/src/api_token.rs:14-53"
+      - "crates/buzz-db/src/store/api_token.rs:18-60"
   - statement: "The `TEXT[]` comment describes a storage shape this build does not use; JSONB is what the DDL and the insert code actually implement, so a reader should trust the migration and `create_api_token`, not the comment, for the on-disk representation."
     entry_class: INFERENCE
     evidence:
       - "migrations/0001_initial_schema.sql:478"
-      - "crates/buzz-db/src/api_token.rs:14-53"
+      - "crates/buzz-db/src/store/api_token.rs:18-60"
       - "crates/buzz-auth/src/scope.rs:12-14"
     confidence: 0.9
   - statement: "`AuthContext` (the result of a successful authentication, bound to a connection) carries `scopes: Vec<Scope>` and a `has_scope(&self, scope: &Scope) -> bool` method that checks containment."
@@ -64,9 +64,9 @@ evidence:
   - statement: "`buzz-db`'s `api_token` module implements full CRUD for API tokens (`create_api_token`, `create_api_token_if_under_limit`, `get_api_token_by_hash`, `get_api_token_by_hash_including_revoked`, `list_tokens_by_owner`, `revoke_token`, `revoke_all_tokens`) against the `api_tokens` table, and its own two community-scoping unit tests (`lookup_by_hash_is_scoped_to_community`, `active_lookup_by_hash_is_scoped_to_community`) pass against that table today."
     entry_class: FACT
     evidence:
-      - "crates/buzz-db/src/api_token.rs:14-53"
-      - "crates/buzz-db/src/api_token.rs:144-171"
-      - "crates/buzz-db/src/api_token.rs:425"
+      - "crates/buzz-db/src/store/api_token.rs:18-60"
+      - "crates/buzz-db/src/store/api_token.rs:72-129"
+      - "crates/buzz-db/src/store/api_token.rs:706"
   - statement: "Neither `create_api_token` nor `get_api_token_by_hash`/`get_api_token_by_hash_including_revoked` has any call site inside `crates/buzz-relay` at this revision (repo-wide grep for both symbols across `crates/` returns matches only inside `buzz-db` itself and its own doc-comments), and `crates/buzz-relay/src/router.rs`'s full route list — `/`, `/info`, `/.well-known/nostr.json`, `/health`, `/_liveness`, `/_readiness`, `/events`, `/query`, `/count`, `/hooks/{id}`, plus the media/git/git-policy sub-routers — has no `/tokens` route."
     entry_class: FACT
     evidence:

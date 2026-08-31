@@ -51,23 +51,23 @@ evidence:
   - statement: "`EventQuery::for_community` is the only public constructor for an event query, takes a `CommunityId` argument, and its doc comment states '`community_id` has no safe default. This keeps call sites concise while making tenant provenance explicit at construction' — there is no code path that builds an `EventQuery` without one."
     entry_class: FACT
     evidence:
-      - "crates/buzz-db/src/event.rs:107-124"
-  - statement: "Across `crates/buzz-db/src/event.rs`, every read, soft-delete, upsert-conflict check, and TTL lookup binds `community_id` into its `WHERE` clause as the leading predicate (representative call sites: event fetch by id, count, soft delete, NIP-33 replaceable-event dedup check, mention lookups, and channel TTL lookup) — the scoping is repeated per query, not centralized in one seam, so it is a per-call-site convention backed by the schema's `NOT NULL` and composite-key shape rather than something the type system alone forces."
+      - "crates/buzz-db/src/store/event.rs:118-148"
+  - statement: "Across `crates/buzz-db/src/store/event.rs`, every read, soft-delete, upsert-conflict check, and TTL lookup binds `community_id` into its `WHERE` clause as the leading predicate (representative call sites: event fetch by id, count, soft delete, NIP-33 replaceable-event dedup check, mention lookups, and channel TTL lookup) — the scoping is repeated per query, not centralized in one seam, so it is a per-call-site convention backed by the schema's `NOT NULL` and composite-key shape rather than something the type system alone forces."
     entry_class: FACT
     evidence:
-      - "crates/buzz-db/src/event.rs:398"
-      - "crates/buzz-db/src/event.rs:670"
-      - "crates/buzz-db/src/event.rs:799"
-      - "crates/buzz-db/src/event.rs:850"
-      - "crates/buzz-db/src/event.rs:893"
-      - "crates/buzz-db/src/event.rs:988"
-      - "crates/buzz-db/src/event.rs:1016"
-      - "crates/buzz-db/src/event.rs:1343"
-      - "crates/buzz-db/src/event.rs:1626"
-  - statement: "`crates/buzz-db/src/migration.rs` carries two Rust unit tests, `all_non_operator_global_tables_have_not_null_community_id` and `scoped_primary_key_unique_and_foreign_key_constraints_lead_with_community_id`, that parse the real concatenated migration SQL (via `migration_sql()`) and assert respectively that every `CREATE TABLE` not named in the `_operator_global_tables` allowlist declares `community_id NOT NULL`, and that every such table's `PRIMARY KEY`, `UNIQUE`, and `FOREIGN KEY` constraints and unique indexes lead with `community_id`; both tests were run this session (`cargo test -p buzz-db --lib migration::`) and both reported `ok`, alongside a third passing test, `channels_community_id_is_immutable_after_insert`, which asserts no migration statement mutates `channels.community_id` and that the `BEFORE UPDATE` guard trigger exists."
+      - "crates/buzz-db/src/store/event.rs:1016"
+      - "crates/buzz-db/src/store/event.rs:1072"
+      - "crates/buzz-db/src/store/event.rs:698"
+      - "crates/buzz-db/src/store/event.rs:827"
+      - "crates/buzz-db/src/store/event.rs:907"
+      - "crates/buzz-db/src/store/event.rs:878"
+      - "crates/buzz-db/src/store/event.rs:921"
+      - "crates/buzz-db/src/store/event.rs:932"
+      - "crates/buzz-db/src/store/event.rs:1836"
+  - statement: "`crates/buzz-db/src/runtime/migration.rs` carries two Rust unit tests, `all_non_operator_global_tables_have_not_null_community_id` and `scoped_primary_key_unique_and_foreign_key_constraints_lead_with_community_id`, that parse the real concatenated migration SQL (via `migration_sql()`) and assert respectively that every `CREATE TABLE` not named in the `_operator_global_tables` allowlist declares `community_id NOT NULL`, and that every such table's `PRIMARY KEY`, `UNIQUE`, and `FOREIGN KEY` constraints and unique indexes lead with `community_id`; both tests were run this session (`cargo test -p buzz-db --lib migration::`) and both reported `ok`, alongside a third passing test, `channels_community_id_is_immutable_after_insert`, which asserts no migration statement mutates `channels.community_id` and that the `BEFORE UPDATE` guard trigger exists."
     entry_class: FACT
     evidence:
-      - "crates/buzz-db/src/migration.rs:1148-1203"
+      - "crates/buzz-db/src/runtime/migration.rs:1418-1454"
       - "cargo_test(-p, buzz-db, --lib, migration::) -> test result: ok. 10 passed; 0 failed; 5 ignored; migration::tests::all_non_operator_global_tables_have_not_null_community_id ... ok, migration::tests::scoped_primary_key_unique_and_foreign_key_constraints_lead_with_community_id ... ok, migration::tests::channels_community_id_is_immutable_after_insert ... ok (run 2026-08-28 against commit 338b4d0cf2dd76cc43964bb717ce9f0a94a9c7a5)"
   - statement: "A code comment labeled 'BUG-5 regression' on the `reactions_are_scoped_to_community` test states that the `reactions` table is community-scoped with primary key `(community_id, event_created_at, event_id, pubkey, emoji)`, and that before the fix, `add_reaction` omitted `community_id` (causing a `NOT NULL` violation) while every read/remove filtered by `event_id` only, which the comment names a 'latent cross-tenant bleed' — a real historical defect, not a hypothetical one."
     entry_class: FACT
@@ -91,7 +91,7 @@ evidence:
     entry_class: INFERENCE
     evidence:
       - "crates/buzz-core/src/tenant.rs:1-53"
-      - "crates/buzz-db/src/event.rs:107-124"
+      - "crates/buzz-db/src/store/event.rs:118-148"
       - "launchpad/docs/corpus/architecture/principles/community-is-security-boundary.md"
     confidence: 0.75
   - statement: "Issue #1185's own Objective is to create `launchpad/docs/corpus/layers/tenancy/community-scoped-cache.md` 'as the single canonical concept node for community scoped cache' — a distinct target path from this node's, so the in-memory/Redis pub-sub, presence, typing, and cache-invalidation key-scoping surface named in `docs/multi-tenant-conformance.md`'s 'Redis pub/sub, presence, typing, and cache invalidation' row belongs to that sibling node, not this one."
@@ -158,13 +158,13 @@ RLS policy; that half of the documented gate was not found implemented.
   different community, because the FK itself is the composite
   `(community_id, ...)` tuple.
 - **Predicate-enforced.** Every read, update, and delete path this node's
-  evidence opened in `crates/buzz-db/src/event.rs` binds `community_id` as a
+  evidence opened in `crates/buzz-db/src/store/event.rs` binds `community_id` as a
   leading `WHERE` predicate at the call site. `EventQuery::for_community`
   requires a `CommunityId` argument to construct a query at all — there is
   no unscoped query-builder path — but each SQL statement still repeats its
   own predicate; nothing centralizes it into one seam that every future call
   site is structurally forced to go through.
-- **Test-enforced, at the schema-definition level.** `crates/buzz-db/src/migration.rs`'s
+- **Test-enforced, at the schema-definition level.** `crates/buzz-db/src/runtime/migration.rs`'s
   `all_non_operator_global_tables_have_not_null_community_id` and
   `scoped_primary_key_unique_and_foreign_key_constraints_lead_with_community_id`
   parse the real migration SQL and fail if a new table skips
