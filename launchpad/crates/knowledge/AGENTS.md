@@ -37,10 +37,33 @@ is a relative import of a committed file
 out-of-band by `launchpad/project-intelligence/corpus/package.py` and never
 invoked from these build files.
 
+## Seeded content and regeneration (`#552`)
+
+The crate now embeds the packaged canonical documentation corpus:
+`generated/corpus.json`, read via `include_str!` and exposed as `nodes()`. It
+is a **committed, generated artefact** — never hand-edited. The identical
+JSON is also copied to
+`desktop/src/launchpad/settings/knowledge/generated/corpus.json`, which the
+Settings panel renders directly (a static asset import, not Tauri IPC — see
+the open question below).
+
+After any change to `launchpad/docs/corpus/`, regenerate both copies and
+commit the result:
+
+```
+just knowledge-package
+```
+
+This runs `launchpad/project-intelligence/corpus/package.py`, which reads the
+validated corpus via `validate.load_nodes()` and rewrites both output paths
+from `DEFAULT_OUTPUTS`. A CI drift guard fails if a committed copy no longer
+matches what regeneration would produce — see `just corpus-validate` and
+`DriftGuardTest` in `launchpad/project-intelligence/corpus/tests/test_package.py`.
+
 ## What is not here yet
 
-No seeded content (`#552`) and no `knowledge.*` query interface (`#553`,
-`F22`) exist in this crate yet — both are separate, later work.
+No `knowledge.*` query interface (`#553`, `F22`) exists in this crate yet —
+that is separate, later work.
 
 **Not yet wired to the desktop app, and that path is an open question.** This
 crate is a root-workspace member (`Cargo.toml`'s `members` list), but root
