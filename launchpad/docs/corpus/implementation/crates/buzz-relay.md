@@ -17,7 +17,7 @@ evidence:
     entry_class: FACT
     evidence:
       - "crates/buzz-relay/src/lib.rs"
-  - statement: "crates/buzz-relay/src/protocol.rs defines ClientMessage (Event/Req/Close/Count/Auth, the five NIP-01 client message variants) with a single ClientMessage::parse(raw: &str) entry point enforcing NIP-11-advertised limits (MAX_SUB_ID_LENGTH, MAX_FILTERS_PER_REQ), and RelayMessage as a set of associated functions (auth_challenge, event, notice, eose, ok, closed, count) that format the corresponding relay-to-client NIP-01 JSON strings; both are exercised by 8 in-file unit tests covering valid parses, the two length/count limits, and every RelayMessage format."
+  - statement: "crates/buzz-relay/src/protocol.rs defines ClientMessage (Event/Req/Close/Count/Auth, the five NIP-01 client message variants) with a single ClientMessage::parse(raw: &str) entry point enforcing NIP-11-advertised limits (MAX_SUB_ID_LENGTH, MAX_FILTERS_PER_REQ), and RelayMessage as a set of associated functions (auth_challenge, event, notice, eose, ok, closed, count) that format the corresponding relay-to-client NIP-01 JSON strings; both are exercised by 7 in-file unit tests covering valid parses, the two length/count limits, and every RelayMessage format."
     entry_class: FACT
     evidence:
       - "crates/buzz-relay/src/protocol.rs:1-64"
@@ -88,14 +88,15 @@ evidence:
     evidence:
       - "scripts/run-tests.sh"
       - "ls(path='crates/buzz-relay/tests/') -> No such file or directory"
-  - statement: ".github/workflows/ci.yml's unit-tests job (name 'Unit Tests') runs exactly `just test-unit` as its only test step, so it inherits the api::admin-only buzz-relay scope above; the backend-integration job archives buzz-relay's --lib tests (line 380-387: `cargo nextest archive --cargo-profile ci -p buzz-db -p buzz-relay -p buzz-test-client --lib ...`) but every later step that consumes that archive passes `--run-ignored ignored-only` together with a hand-enumerated -E filter naming specific test paths or individual test names (api::invites::tests, handlers::relay_admin::tests, and named api::admin::tests:: functions across four separate steps) -- `--run-ignored ignored-only` restricts execution to #[ignore]d tests matching the filter, so this job never executes buzz-relay's non-ignored tests either."
+  - statement: ".github/workflows/ci.yml's unit-tests job (name 'Unit Tests') runs exactly `just test-unit` as its only test step, so it inherits the api::admin-only buzz-relay scope above; the backend-integration job archives buzz-relay's --lib tests (line 380-387: `cargo nextest archive --cargo-profile ci -p buzz-db -p buzz-relay -p buzz-test-client --lib ...`) and every consuming step except one passes `--run-ignored ignored-only` together with a hand-enumerated -E filter naming specific test paths or individual test names (api::invites::tests, handlers::relay_admin::tests, and named api::admin::tests:: functions across four separate steps), restricting execution to #[ignore]d tests matching the filter. The one exception is the 'Admin API unrostered-signer replay invariant' step (ci.yml:801-816), which selects exactly one named, non-ignored buzz-relay test (`api::admin::tests::nip98_mode_unrostered_signer_does_not_consume_a_replay_slot`) with no `--run-ignored` flag at all; that same test is the second of the two tests the Justfile's test-unit filter explicitly subtracts (Justfile:376-385), confirming the exclusion is deliberate routing to this one Postgres-backed step, not an accidental gap."
     entry_class: FACT
     evidence:
       - ".github/workflows/ci.yml:125-146"
       - ".github/workflows/ci.yml:379-387"
       - ".github/workflows/ci.yml:743-760"
       - ".github/workflows/ci.yml:786-853"
-  - statement: "Given the prior three evidence entries, the majority of buzz-relay's 1087 test functions -- everything outside the ~95 api::admin tests just(test-unit) runs and the handful of individually-named #[ignore]d tests backend-integration selects -- are not executed by any test-running command this repository defines (Justfile, scripts/run-tests.sh, or .github/workflows/ci.yml); this includes every test in protocol.rs, connection.rs, admission.rs, subscription.rs, handlers/event.rs, handlers/req.rs, handlers/ingest.rs, and handlers/close.rs -- the WS protocol/connection/ingestion pipeline this node's Implementation surface documents. Whether developers run them ad hoc with a manual `cargo test -p buzz-relay --lib` during focused work is plausible but not verifiable from the repository alone."
+      - "Justfile"
+  - statement: "Given the prior four evidence entries, the majority of buzz-relay's 1087 test functions -- everything outside the ~93 api::admin tests test-unit runs, the one named non-ignored test the backend-integration job's unrostered-signer step runs, and the handful of individually-named #[ignore]d tests backend-integration otherwise selects -- are not executed by any test-running command this repository defines (Justfile, scripts/run-tests.sh, or .github/workflows/ci.yml); this includes every test in protocol.rs, connection.rs, admission.rs, subscription.rs, handlers/event.rs, handlers/req.rs, handlers/ingest.rs, and handlers/close.rs -- the WS protocol/connection/ingestion pipeline this node's Implementation surface documents. Whether developers run them ad hoc with a manual `cargo test -p buzz-relay --lib` during focused work is plausible but not verifiable from the repository alone."
     entry_class: INFERENCE
     evidence:
       - "Justfile"
@@ -178,7 +179,7 @@ the identical container node.
 
 | Component / file / symbol | Realizes | Note |
 |---|---|---|
-| `crates/buzz-relay/src/protocol.rs` -- `ClientMessage::parse`, `RelayMessage::{auth_challenge,event,notice,eose,ok,closed,count}` | NIP-01 wire parsing/formatting, both directions | Enforces `MAX_SUB_ID_LENGTH`/`MAX_FILTERS_PER_REQ`; 8 in-file unit tests |
+| `crates/buzz-relay/src/protocol.rs` -- `ClientMessage::parse`, `RelayMessage::{auth_challenge,event,notice,eose,ok,closed,count}` | NIP-01 wire parsing/formatting, both directions | Enforces `MAX_SUB_ID_LENGTH`/`MAX_FILTERS_PER_REQ`; 7 in-file unit tests |
 | `crates/buzz-relay/src/connection.rs` -- `ConnectionState`, `AuthState`, `handle_connection` | Per-socket WS lifecycle: "semaphore -> challenge -> recv/send/heartbeat loops -> cleanup" | `send_tx`/`ctrl_tx` are separate channels so control frames (Pong/Close) have priority drain over data; `AUTH_TIMEOUT` = 5s |
 | `crates/buzz-relay/src/admission.rs` -- `check_principal`, `ws_admission_budget`, `AdmissionError` | Per-principal, per-limit-type admission/rate-limit control ahead of handler dispatch | Generic over a `RateLimiter` trait; 4 in-file unit tests with a stub limiter |
 | `crates/buzz-relay/src/handlers/auth.rs` -- `handle_auth`, `extract_auth_tag_json` | NIP-42 AUTH challenge-response and NIP-OA `auth`-tag delegation extraction | Doc comment: "pure crypto verification -- no API tokens, no JWT, no DB token lookups" |
@@ -230,21 +231,25 @@ commands:
   `tests/` directory.
 - **`.github/workflows/ci.yml`**'s `unit-tests` job runs only `just test-unit` (the
   `api::admin`-scoped subset above). Its `backend-integration` job archives
-  `buzz-relay --lib` but every consuming step passes `--run-ignored ignored-only`
-  with a hand-enumerated filter naming specific `#[ignore]`d test paths or individual
-  test names (`api::invites::tests`, `handlers::relay_admin::tests`, and several named
-  `api::admin::tests::` functions) -- never a blanket run of the crate's `#[ignore]`d
-  suite, and never the crate's non-ignored tests outside `api::admin`.
+  `buzz-relay --lib` and every consuming step but one passes `--run-ignored
+  ignored-only` with a hand-enumerated filter naming specific `#[ignore]`d test paths
+  or individual test names (`api::invites::tests`, `handlers::relay_admin::tests`,
+  and several named `api::admin::tests::` functions). The one exception is the
+  "Admin API unrostered-signer replay invariant" step, which selects exactly one
+  named, non-ignored `api::admin` test directly -- the same test the Justfile's
+  `test-unit` filter deliberately excludes, so the routing is intentional, not a
+  gap in either job's coverage.
 
-Net effect: of the crate's 1087 test functions, roughly 95 (`api::admin`) run in CI's
-unit-tests job, a further small hand-enumerated set of `#[ignore]`d tests run in
-CI's backend-integration job, and everything else -- including every test in
-`protocol.rs`, `connection.rs`, `admission.rs`, `subscription.rs`, and the bulk of
-`handlers/event.rs`/`req.rs`/`ingest.rs`/`close.rs` this node documents above -- has
-no verified execution path in this repository's committed tooling. No separate CI job
-or manual-review procedure specific to this crate's WS protocol/connection pipeline
-was found beyond the workspace-wide `just ci` gate (which does not execute these
-tests either, since `just ci` calls `test-unit`, not a broader target).
+Net effect: of the crate's 1087 test functions, roughly 93 (`api::admin`, minus the
+two excluded) run in CI's unit-tests job, one further named non-ignored test and a
+small hand-enumerated set of `#[ignore]`d tests run in CI's backend-integration job,
+and everything else -- including every test in `protocol.rs`, `connection.rs`,
+`admission.rs`, `subscription.rs`, and the bulk of `handlers/event.rs`/`req.rs`/
+`ingest.rs`/`close.rs` this node documents above -- has no verified execution path in
+this repository's committed tooling. No separate CI job or manual-review procedure
+specific to this crate's WS protocol/connection pipeline was found beyond the
+workspace-wide `just ci` gate (which does not execute these tests either, since
+`just ci` calls `test-unit`, not a broader target).
 
 ## Relationships
 
