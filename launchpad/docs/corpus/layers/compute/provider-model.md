@@ -251,7 +251,7 @@ contract fixes and what an individual binding supplies.
 | The Kubernetes binding: pod shape, reconciliation state machine, GC, the create-intent fingerprint, Secret scheme | `kubernetes-provider.md` (#1042, unmerged) |
 | Deploy state-machine mechanics, reconciliation ordering, and the five stated invariants (I1-I5) in depth | `lifecycle.md` (#1043) / `liveness.md` (#1044), both unmerged, and `docs/remote-agents.md` directly |
 | Local agent spawn and its own lifecycle | `local-agent-compute.md` (#1045, unmerged) |
-| Mesh/shared-compute agents, which the spec states are explicitly non-deployable through this model (`RELAY_MESH_PROVIDER` refusal) | `mesh-compute.md` (#1046, unmerged) |
+| Mesh/shared-compute agents, which the spec states are explicitly non-deployable through this model (create-time rejection via `normalize_relay_mesh` in `agents.rs`, and a required deploy-path fail-closed check against the `relay-mesh` provider id) | `mesh-compute.md` (#1046, unmerged) |
 | The remote agent as observed and managed once deployed (presence, stop, delete) | `remote-agent-compute.md` (#1048, unmerged) |
 
 **No `relationships` in this node's front matter.** At the recorded revision,
