@@ -49,7 +49,7 @@ evidence:
     entry_class: FACT
     evidence:
       - "desktop/src-tauri/src/native_relay_client.rs"
-  - statement: "buzz-test-client/src/lib.rs wraps a NostrWsConnection as the `inner` field of its own TestRelayConnection, re-exports parse_relay_message, OkResponse, RelayMessage, and WsClientError from buzz_ws_client, and implements From<WsClientError> for the crate's own TestClientError covering every WsClientError variant -- this is the WebSocket transport the E2E test suite under crates/buzz-test-client/tests/ runs on."
+  - statement: "buzz-test-client/src/lib.rs wraps a NostrWsConnection as the `inner` field of its own BuzzTestClient, re-exports parse_relay_message, OkResponse, RelayMessage, and WsClientError from buzz_ws_client, and implements From<WsClientError> for the crate's own TestClientError covering every WsClientError variant -- this is the WebSocket transport the E2E test suite under crates/buzz-test-client/tests/ runs on."
     entry_class: FACT
     evidence:
       - "crates/buzz-test-client/src/lib.rs"
@@ -61,7 +61,7 @@ evidence:
     entry_class: FACT
     evidence:
       - "desktop/src-tauri/src/native_relay_client_tests.rs"
-  - statement: "crates/buzz-test-client/tests/e2e_relay.rs's test_connect_and_authenticate, test_unauthenticated_rejected, and test_auth_event_kind_rejected exercise buzz-ws-client indirectly through TestRelayConnection against a live relay instance; the same three tests are already cited as representative verification by architecture-flows-websocket-authentication.md and architecture-flows-websocket-connection.md, both merged corpus nodes describing this exact round trip from the relay side."
+  - statement: "crates/buzz-test-client/tests/e2e_relay.rs's test_connect_and_authenticate, test_unauthenticated_rejected, and test_auth_event_kind_rejected exercise buzz-ws-client indirectly through BuzzTestClient against a live relay instance; the same three tests are already cited as representative verification by architecture-flows-websocket-authentication.md and architecture-flows-websocket-connection.md, both merged corpus nodes describing this exact round trip from the relay side."
     entry_class: FACT
     evidence:
       - "crates/buzz-test-client/tests/e2e_relay.rs"
@@ -127,7 +127,7 @@ relay's side by two merged nodes:
 |---|---|---|
 | `buzz-cli` (`crates/buzz-cli/src/client.rs`) | `publish_event`, fully qualified | One-shot ephemeral-event publish, chosen because the relay's HTTP surface rejects ephemeral kinds. |
 | desktop app (`desktop/src-tauri/src/native_relay_client.rs`) | `NostrWsConnection::connect_authenticated`, `RelayMessage`, `WsClientError` | A long-lived, reconnecting connection (`run_session`/`run_connection`) driving live subscriptions, not a one-shot publish. |
-| `buzz-test-client` (`crates/buzz-test-client/src/lib.rs`) | `NostrWsConnection` (wrapped as `TestRelayConnection.inner`), `RelayMessage`, `OkResponse`, `WsClientError` | The E2E test suite's own WebSocket transport. |
+| `buzz-test-client` (`crates/buzz-test-client/src/lib.rs`) | `NostrWsConnection` (wrapped as `BuzzTestClient.inner`), `RelayMessage`, `OkResponse`, `WsClientError` | The E2E test suite's own WebSocket transport. |
 
 No other workspace crate depends on `buzz-ws-client` -- confirmed by
 inspecting `buzz-acp`'s and `buzz-pairing-cli`'s own `Cargo.toml` files,
@@ -172,7 +172,7 @@ The crate has no dedicated integration-test suite of its own. What exists:
 - **Through the test-client consumer, end-to-end:**
   `crates/buzz-test-client/tests/e2e_relay.rs`'s `test_connect_and_authenticate`,
   `test_unauthenticated_rejected`, and `test_auth_event_kind_rejected` drive
-  `TestRelayConnection` (this crate's `NostrWsConnection`, wrapped) against a
+  `BuzzTestClient` (this crate's `NostrWsConnection`, wrapped) against a
   live relay instance. These are `#[ignore]`d by the repository's convention
   for tests requiring Postgres and Redis, run via `just test`; this node
   links them as representative coverage, not as evidence they were executed
