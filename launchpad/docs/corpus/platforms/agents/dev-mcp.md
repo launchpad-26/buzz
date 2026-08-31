@@ -141,6 +141,15 @@ configured name (for example `dev__shell` or `buzz-dev-mcp__shell`, per the
 naming this crate's tool descriptions and `buzz-agent`'s own tests assume) — that
 namespacing is applied by the host/agent side, not by code in this crate.
 
+## Tests
+
+`crates/buzz-dev-mcp` has no dedicated `tests/` integration-test directory.
+Verification instead lives as inline `#[cfg(test)] mod tests` unit-test modules
+next to the code they exercise, present in `src/read_file.rs`, `src/paths.rs`,
+`src/str_replace.rs`, `src/shim.rs`, `src/shell.rs`, `src/todo.rs`, `src/rg.rs`
+and `src/view_image.rs`; `src/lib.rs`, `src/main.rs` and `src/tree.rs` carry no
+unit tests of their own.
+
 ## Dependencies
 
 **Depends on** (this component requires these to build/run):
