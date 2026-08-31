@@ -36,9 +36,8 @@ evidence:
   - statement: "buzz-db has no user-status-specific module or table. Storage is entirely the crate's generic NIP-33 parameterized-replaceable-event handling: event.rs extracts a `d` tag for any kind in the 30000-39999 range (empty string if absent, per NIP-33), and lib.rs's replace_parameterized_replaceable path atomically replaces the row keyed on (kind, pubkey, d_tag) globally -- channel_id is deliberately not part of the key -- rather than any code path naming kind 30315 or user status directly."
     entry_class: FACT
     evidence:
-      - "crates/buzz-db/src/event.rs:171-190"
-      - "crates/buzz-db/src/event.rs:810-816"
-      - "crates/buzz-db/src/lib.rs:5134-5153"
+      - "crates/buzz-db/src/store/event.rs:167-190"
+      - "crates/buzz-db/src/store/replaceable.rs:546-556"
   - statement: "buzz-cli exposes `users set-status --text <text> --emoji <emoji> --clear` (mutually exclusive `--clear` vs. `--text`/`--emoji`, `--text` required unless `--clear`), whose dispatch substitutes empty text and no emoji when `--clear` is set and otherwise passes the given text/emoji through unchanged; cmd_set_status builds the event via buzz_sdk::build_user_status and submits it over the same authenticated HTTP bridge path as an ordinary (non-ephemeral) write, unlike set-presence which publishes over the raw WebSocket connection."
     entry_class: FACT
     evidence:
@@ -254,8 +253,8 @@ This node does not describe:
   - Scope and channel-scoping rules: `buzz-relay`'s ingest handler
     (`crates/buzz-relay/src/handlers/ingest.rs`).
   - Storage: `buzz-db`'s generic NIP-33 parameterized-replaceable-event path
-    (`crates/buzz-db/src/event.rs`, `crates/buzz-db/src/lib.rs`) -- no user-status-
-    specific module exists.
+    (`crates/buzz-db/src/store/event.rs`, `crates/buzz-db/src/store/replaceable.rs`) -- no
+    user-status-specific module exists.
   - Desktop: `desktop/src/features/user-status/` (query/subscription/mutation hooks,
     the set-status dialog, and status-emoji rendering).
   - Mobile: `mobile/lib/features/profile/` (`user_status.dart`,

@@ -24,7 +24,7 @@ evidence:
   - statement: "The set of channels a pubkey may search within one community is computed by `buzz_db::channel::get_accessible_channel_ids` as the union of (a) channels where the pubkey has an active membership row (`removed_at IS NULL`) and (b) every channel in that community whose `visibility` is `open`; a private channel the pubkey is not an active member of is in neither branch and is therefore excluded."
     entry_class: FACT
     evidence:
-      - "crates/buzz-db/src/channel.rs"
+      - "crates/buzz-db/src/store/channel_members.rs:756-782"
   - statement: "Both the WebSocket `REQ` search path and the HTTP `POST /query` bridge resolve this same accessible-channel set once per request through `AppState::get_accessible_channel_ids_cached` (a 10-second cache falling back to `get_accessible_channel_ids` on a miss) before any `ChannelScope` is built, so the two transports share one channel-resolution mechanism rather than two independent ones."
     entry_class: FACT
     evidence:
