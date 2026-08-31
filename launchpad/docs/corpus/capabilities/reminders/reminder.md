@@ -75,6 +75,9 @@ evidence:
   - statement: "Issue #814 scopes this document to the overall reminder capability (creating, scheduling, and receiving reminders), distinct from sibling issue #813's reminder-lifecycle flow node, which this document cross-references without duplicating."
     entry_class: TEAM_KNOWLEDGE
     provided_by: "launchpad-26/buzz#814 objective and definition of done; launchpad-26/buzz#813 objective, both read directly via gh issue view"
+  - statement: "KIND_STREAM_REMINDER (40007) is a second, distinct concept discovered while drafting this node -- a declared kind with a read path and no write path -- and per this corpus's own atomicity standard (a second concept discovered mid-draft must be filed as its own task, not folded in), it was filed as launchpad-26/buzz#1959 rather than resolved or described further here."
+    entry_class: TEAM_KNOWLEDGE
+    provided_by: "launchpad-26/buzz#1959, filed while drafting this node"
 ---
 
 # Reminders: capability
@@ -127,7 +130,10 @@ This node does not describe:
   mock fixture in the desktop end-to-end test bridge. This is a distinct,
   unfinished concept with no write path, so it is named here as a boundary
   rather than folded into the capability statement above, which describes only
-  the shipped `kind:30300` primitive.
+  the shipped `kind:30300` primitive; it was filed as its own task,
+  [launchpad-26/buzz#1959](https://github.com/launchpad-26/buzz/issues/1959),
+  per this corpus's own rule that a second concept discovered mid-draft is
+  filed rather than resolved or elaborated on here.
 - **How the running scheduler is operated in production** -- its interval and
   batch-size tuning, deployment, and scaling. That is the `operations` corpus
   surface, not this one.
@@ -156,7 +162,7 @@ surface.
 | The step-by-step reminder lifecycle (create, snooze, complete, cancel, delivery race handling) | #813 (`reminder-lifecycle`, not yet merged) |
 | How the relay scheduler, desktop client, or mobile client are internally built | No architecture node yet |
 | The interface surface (there is currently none for the CLI) | No interface node yet |
-| `KIND_STREAM_REMINDER` (40007), the declared-but-unproduced channel-visible reminder kind | No issue was found or opened for it while drafting this node |
+| `KIND_STREAM_REMINDER` (40007), the declared-but-unproduced channel-visible reminder kind | [launchpad-26/buzz#1959](https://github.com/launchpad-26/buzz/issues/1959) |
 | Operating the scheduler in production (tuning, deployment, scaling) | The `operations` corpus surface |
 | The front-matter contract itself | `launchpad/docs/corpus/schema/node.schema.json` |
 | Creating, updating, and retiring a node procedurally | `launchpad/docs/corpus/AGENTS.md` |
@@ -170,6 +176,6 @@ surface.
   depends on the same relay scheduler push that desktop relies on --
   `reminder_service.dart`'s read path was not traced against
   `crates/buzz-relay/src/main.rs`'s scheduler in the same depth as desktop's was.
-- Whether any GitHub issue already tracks `KIND_STREAM_REMINDER` (40007) as
-  unfinished work -- the issue tracker was not searched for it while drafting
-  this node.
+- Which of the two outcomes named in [launchpad-26/buzz#1959](https://github.com/launchpad-26/buzz/issues/1959)
+  -- finish `KIND_STREAM_REMINDER`'s write path, or remove it as dead scaffolding
+  -- is correct. That triage was filed, not resolved, while drafting this node.
