@@ -495,7 +495,8 @@ state-directory ownership boundary that `dispatcher.py` enforces, and
 | `scripts/evidence.py` | Evidence-bundle assembly for one PR. |
 | `scripts/panel.py` | The reviewer panel for one PR. Spends model tokens. |
 | `scripts/worktree.py` | Isolated worktree create / commit / push / clean. |
-| `scripts/github_rest.py` | The single allowlisted read transport. |
+| `scripts/github_rest.py` | The allowlisted per-PR read transport (REST GET). |
+| `scripts/github_query.py` | The allowlisted bulk read transport: one read-only GraphQL inventory query per page of open PRs. Read `queue_inventory` by hand to see exactly what the reconciler sees. |
 | `scripts/github_mutate.py` | The single allowlisted mutation transport. **Writes to GitHub.** |
 | `scripts/approval_action.py` | The guarded APPROVE executor. **Writes to GitHub**, and only with a matching eligible decision record. |
 

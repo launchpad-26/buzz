@@ -1,14 +1,17 @@
 #!/usr/bin/env python3
-"""Deterministic REST queue reconciler: persist open PRs, create jobs, and
-supersede older nonterminal jobs when a PR's head changes.
+"""Deterministic queue reconciler: persist open PRs, create jobs, and supersede
+older nonterminal jobs when a PR's head changes.
 
-- PR facts are enriched from full REST detail (pr_meta), changed-files, requested
-  reviewers, and check-runs: complete file list, summed additions/deletions,
-  draft/open state, author, base/head branches, node ID, requested reviewers,
-  head SHA, and checks/evidence timestamps. A changed-files read failure is never
-  folded into empty safe-looking data: it fails closed.
+- PR facts come from ONE GraphQL inventory query per page of open pull requests
+  (`github_query.InventoryReader`), not one list call plus five REST calls per
+  PR. The assembled facts are identical in shape and meaning: complete file
+  list, additions/deletions, draft/open state, author, base/head branches, node
+  ID, assignees, requested reviewers, reviews, head SHA, and checks/evidence
+  timestamps. Incomplete facts are never folded into empty safe-looking data —
+  the inventory reader fails closed on a truncated connection, and a failed
+  inventory read aborts the sweep rather than reconciling a partial queue.
 - Author-triage derives current change-request state from the LATEST substantive
-  REST review PER REVIEWER. A dismissed review (state DISMISSED) and a change
+  review PER REVIEWER. A dismissed review (state DISMISSED) and a change
   request superseded by the reviewer's newer review do not queue.
 - A changed head SHA supersedes every older nonterminal job of the same PR AND
   every related pending human approval request whose head no longer matches.
@@ -23,7 +26,7 @@ from typing import Any
 
 import approval as approval_mod
 from common import State, job_id, load_config, utcnow
-from github_rest import RestReader
+from github_query import InventoryReader
 
 NONTERMINAL = ("detected", "preflight", "evidence", "assurance", "degraded_draft",
                "adjudication", "approval_evaluation", "would_auto_approve",
@@ -77,56 +80,27 @@ def _checks_timestamps(checks: list[dict[str, Any]]) -> str | None:
 
 def reconcile(config: dict[str, Any], state: State, repo: str) -> dict[str, Any]:
     login = config["login"]
-    reader = RestReader(config, state)
+    reader = InventoryReader(config, state)
     now = utcnow()
     transitions: list[dict[str, Any]] = []
     current_keys: set[tuple[int, str]] = set()
     problems: list[str] = []
 
-    for pr in reader.open_prs(repo):
+    # One inventory read per page of open pull requests. The reader either returns
+    # complete facts for every pull request or raises: a truncated connection or a
+    # failed read aborts the sweep rather than reconciling a partial queue, and no
+    # missing fact is ever folded into empty safe-looking data.
+    for pr in reader.queue_inventory(repo):
         number = int(pr["number"])
-
-        # Enrich from the full PR detail (author, branches, draft/open, node_id,
-        # base/head refs) so downstream consumers have authoritative facts, not
-        # just the truncated list-view entry.
-        try:
-            detail = reader.pr_meta(repo, number)
-        except Exception as exc:
-            raise RuntimeError(f"could not enrich PR #{number} meta for {repo}: {exc}") from exc
+        detail = pr["pr_detail"]
         head = (detail.get("head") or {}).get("sha") or (pr.get("head") or {}).get("sha")
         if not head:
             raise RuntimeError(f"PR #{number} in {repo} has no head SHA")
         current_keys.add((number, head))
 
-        # Changed files + summed additions/deletions. A read failure is NOT coerced
-        # into an empty file list: that would make a later assurance decision look
-        # safe when the facts are simply missing. Fail closed instead.
-        try:
-            changed = reader.changed_files(repo, number)
-        except Exception as exc:
-            raise RuntimeError(
-                f"changed-files read failed for {repo}#{number}; refusing to enrich "
-                f"with empty safe-looking facts: {exc}"
-            ) from exc
-        files = [f.get("filename") for f in changed]
-        additions = sum(int(f.get("additions") or 0) for f in changed)
-        deletions = sum(int(f.get("deletions") or 0) for f in changed)
-
-        # Requested reviewers + checks (with timestamps for evidence freshness).
-        try:
-            checks = reader.checks(repo, number)
-            requested_reviewers = reader.requested_reviewers(repo, number)
-        except Exception as exc:
-            raise RuntimeError(f"could not enrich checks/reviewers for {repo}#{number}: {exc}") from exc
-        pr["checks"] = checks
-        pr["checks_updated_at"] = _checks_timestamps(checks)
-        pr["requested_reviewers"] = requested_reviewers
-
-        pr["pr_detail"] = detail
-        pr["files"] = files
-        pr["additions"] = additions
-        pr["deletions"] = deletions
-        pr["reviews_meta"] = reader.pr_reviews(repo, number)
+        # Evidence freshness stays derived here, so this module remains the single
+        # definition of `checks_updated_at` for the persisted payload.
+        pr["checks_updated_at"] = _checks_timestamps(pr.get("checks") or [])
 
         state.execute(
             "INSERT INTO prs(repo,number,head_sha,updated_at,payload,open,last_seen) VALUES(?,?,?,?,?,1,?) "
