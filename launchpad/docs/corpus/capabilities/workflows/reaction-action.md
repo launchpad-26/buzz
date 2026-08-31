@@ -80,7 +80,7 @@ evidence:
   - statement: "VISION_PROJECTS.md's own Status table marks 'Workflow engine (triggers, traces, conditional logic)' as shipped, without naming any individual action type's own functional status."
     entry_class: FACT
     evidence:
-      - "VISION_PROJECTS.md:249"
+      - "VISION_PROJECTS.md:250"
   - statement: "Issue #830's own Definition of Done requires this node to state trigger/preconditions/termination, list ordered interactions and data/state movement, identify authentication/authorization/trust-boundary crossings where relevant, and document failure/abort/rollback behavior with links to representative verification — the reason this node is organized around those sections rather than a general capability narrative."
     entry_class: TEAM_KNOWLEDGE
     provided_by: "launchpad-26/buzz#830 definition of done"
