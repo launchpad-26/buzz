@@ -88,19 +88,22 @@ class DriftGuardTest(unittest.TestCase):
     stale.
     """
 
-    def test_committed_corpus_json_matches_a_fresh_packaging_run(self) -> None:
+    def test_committed_corpus_json_copies_match_a_fresh_packaging_run(self) -> None:
+        # Both committed copies (the knowledge crate's and the desktop
+        # Settings panel's) come from the same generation run and must stay
+        # byte-identical to each other and to a fresh run -- see step 5's
+        # DEFAULT_OUTPUTS.
         repo_root = package.validate.repo_root()
-        committed_path = (
-            repo_root / "launchpad" / "crates" / "knowledge" / "generated" / "corpus.json"
-        )
-        committed = committed_path.read_text()
         fresh = package.generate_corpus_json(repo_root / package.DEFAULT_CORPUS_ROOT)
-        self.assertEqual(
-            committed,
-            fresh,
-            "launchpad/crates/knowledge/generated/corpus.json is out of date "
-            "-- run `just knowledge-package` and commit the result",
-        )
+        for relative_output in package.DEFAULT_OUTPUTS:
+            committed_path = repo_root / relative_output
+            committed = committed_path.read_text()
+            self.assertEqual(
+                committed,
+                fresh,
+                f"{relative_output} is out of date -- run `just knowledge-package` "
+                "and commit the result",
+            )
 
 
 if __name__ == "__main__":

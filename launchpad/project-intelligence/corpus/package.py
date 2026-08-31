@@ -22,10 +22,16 @@ from pathlib import Path
 
 DEFAULT_CORPUS_ROOT = "launchpad/docs/corpus"
 
-# The crate's own committed copy. A second, desktop-facing copy is added by
-# #552's later step (see launchpad/plans/2026-08-28-issue-552-knowledge-crate-corpus.md
-# step 5) once the frontend needs to read the same artifact.
-DEFAULT_OUTPUTS = ("launchpad/crates/knowledge/generated/corpus.json",)
+# Two committed copies from the same generation run: the crate's own copy,
+# and an identical desktop-facing copy the Settings panel imports directly
+# (step 5, launchpad/plans/2026-08-28-issue-552-knowledge-crate-corpus.md) --
+# a static asset rather than new Tauri IPC wiring, since #551's own AGENTS.md
+# leaves the crate unreachable from desktop/src-tauri without editing a file
+# ADR-0045's granted exception does not cover.
+DEFAULT_OUTPUTS = (
+    "launchpad/crates/knowledge/generated/corpus.json",
+    "desktop/src/launchpad/settings/knowledge/generated/corpus.json",
+)
 
 # package.py lives in a directory (project-intelligence/corpus/) that isn't a
 # package (no __init__.py, matching this repo's existing project-intelligence/
