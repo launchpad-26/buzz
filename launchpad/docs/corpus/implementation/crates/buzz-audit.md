@@ -101,6 +101,16 @@ evidence:
       - "crates/buzz-admin/Cargo.toml"
       - "crates/buzz-admin/src/main.rs"
       - "crates/buzz-admin/src/deletions.rs"
+  - statement: "buzz-audit's Cargo.toml declares dependencies on buzz-core, buzz-datastore-tracing, sqlx, tokio, serde, serde_json, uuid, chrono, tracing, metrics, thiserror, sha2, hex and futures-util; a search of the crate's own five src/*.rs files for hex:: found no call sites, so the hex dependency's use in this crate could not be located from source read for this node -- hashes are stored and compared as raw BYTEA/Vec<u8>, not as hex strings, in the code this node inspected."
+    entry_class: FACT
+    evidence:
+      - "crates/buzz-audit/Cargo.toml"
+      - "crates/buzz-audit/src/lib.rs"
+      - "crates/buzz-audit/src/service.rs"
+      - "crates/buzz-audit/src/hash.rs"
+      - "crates/buzz-audit/src/entry.rs"
+      - "crates/buzz-audit/src/error.rs"
+      - "crates/buzz-audit/src/action.rs"
   - statement: "architecture-containers-relay (launchpad/docs/corpus/architecture/containers/relay.md, merged on origin/launchpad) states buzz-relay \"is the only crate in the workspace that imports and orchestrates buzz-db, buzz-auth, buzz-pubsub, buzz-search, buzz-audit and buzz-workflow directly; those crates never call each other, so every cross-subsystem coordination path runs through the relay,\" and separately lists buzz-audit's hash-chain log among AppState's directly-held connections and among the crates \"each is its own container/node once authored; this node names them only as directly connected systems\" -- the basis for this node's part-of edge back to it."
     entry_class: FACT
     evidence:
@@ -140,6 +150,34 @@ an `implements` edge to an id that would resolve to nothing.
   when the new head differs from the current one, threaded through the
   file's stated "two-execution non-interference theorem." No corpus node id
   exists for this specification yet — open it directly at the path above.
+
+## Public interfaces and dependencies
+
+**Public entry points** (`crate::` re-exports from `lib.rs`): `AuditService::
+{new, log, verify_chain, get_entries}` (construction and the three
+operations described in *Implementation surface* below), `AuditAction` (the
+11-variant action enum), `AuditEntry`/`NewAuditEntry` (stored-row and
+write-input types), `AuditError` (the five-variant error type), and
+`compute_hash`/`GENESIS_HASH` (the hashing primitives, exposed so a caller —
+today, only this crate's own tests — can recompute a digest without going
+through `AuditService`).
+
+**Important dependencies**, per `Cargo.toml`, and why each is load-bearing
+rather than incidental: `buzz-core` (for `CommunityId`, the typed,
+server-resolved tenant identifier `NewAuditEntry.community_id` depends on to
+keep client input out of the chain); `buzz-datastore-tracing` (the
+`#[datastore_span]` macro instrumenting `log`/`verify_chain`/`get_entries`);
+`sqlx` (the Postgres driver `AuditService` holds a `PgPool` through — the
+crate ships no DDL of its own, per its own crate doc); `sha2` (`Sha256`, the
+hash primitive `compute_hash` is built on); `hex` (declared but not directly
+called in the five `src/*.rs` files read for this node — hashes are stored
+as raw `BYTEA`/`Vec<u8>`, not hex strings, so this dependency's actual call
+site was not located); `chrono` (`DateTime<Utc>` and `trunc_subsecs`, the
+timestamp-precision mechanism in *Divergences* below depends on); `uuid`,
+`serde`/`serde_json`, `tracing`, `metrics`, `thiserror`, and `futures-util`
+(the `catch_unwind`/`FutureExt` combinator `AuditService::log` uses to
+release its advisory lock even across a panic) round out the crate's own
+dependency list.
 
 ## Implementation surface
 
