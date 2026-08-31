@@ -374,11 +374,23 @@ gh pr create --base launchpad
 - **`git commit -s` every time.** The DCO check fails any commit without a
   `Signed-off-by` trailer.
 - **Conventional commit titles**: `feat(deploy): ...`, `fix(ci): ...`, `docs(...): ...`.
-  We squash-merge, so the **PR title** becomes the commit subject on `launchpad`.
-  - **Open, and not decided by ADR-0052:** squashing a batch of 10 Tasks into one commit
-    collapses per-Task history and makes `git bisect` coarser. Until it is settled, keep
-    one commit per child Task on the branch so the history exists to preserve if the
-    answer turns out to be a merge commit.
+  Every commit on the branch gets one, because every one of them survives the merge.
+- **A PR lands as a merge commit — never a squash, never a rebase.** ADR-0055 (#1960)
+  settles the question ADR-0052 left open, in the direction the platform already enforces:
+  `allow_squash_merge` and `allow_rebase_merge` are **off** on this repository, so `merge`
+  is the only method the button offers. Use `gh pr merge --merge`, and do not ask for the
+  others to be re-enabled.
+  - **Keep one commit per child Task.** Under ADR-0054 a whole Feature lands in one PR, so
+    those commits are the unit a reviewer walks and the granularity `git bisect` gets.
+    Merging preserves them; squashing would discard exactly what makes a large batch
+    reviewable.
+  - **The PR title is not the commit subject.** `merge_commit_title` is `MERGE_MESSAGE`, so
+    the subject on `launchpad` is `Merge pull request #N from <branch>`; the PR title lands
+    in the message body (`merge_commit_message: PR_TITLE`). Write conventional titles for
+    the branch commits and the PR, not on the assumption either becomes the trunk subject.
+  - **Do not rebase a pushed branch to tidy it.** Rewriting commits that a reviewer already
+    read, and that carry DCO sign-off, breaks the correspondence between what was approved
+    and what lands. Merge `launchpad` in instead when your branch falls behind.
 - **One Feature, one PR.** A Feature is the PR-worthy unit: the child Tasks of one
   Feature land in one batch PR, not one PR each. Name the Feature in the PR body's
   `### Feature` section, and carry one closing keyword per child — `Closes #12`, one per
