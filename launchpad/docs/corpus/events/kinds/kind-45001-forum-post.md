@@ -261,8 +261,10 @@ apply:
 ```
 
 This exercises every tag named in §4 (`h`, one `p` mention, one `imeta` media
-attachment) and the plaintext content shape from §5. `sig` is illustrative —
-redacted, not a real signature.
+attachment) and the plaintext content shape from §5. This whole example is
+synthetic/illustrative — `id`, `pubkey`, and `sig` are placeholder hex, not
+captured from a real signed event; `sig` in particular is not a valid
+signature over the rest of the fields.
 
 ## 9. Versioning and supersession
 
