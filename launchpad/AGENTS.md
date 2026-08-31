@@ -384,11 +384,15 @@ gh pr create --base launchpad
   `### Feature` section, and carry one closing keyword per child — `Closes #12`, one per
   line. Every issue a batch closes must be a child of the Feature it names, or be that
   Feature; the PR body check enforces it.
-  - **The batch is capped: 1,500 added lines or 10 changed files, whichever binds
-    first.** A Feature above the cap splits into sequential batch PRs rather than one
-    oversized PR. Features here run 15–41 children, so an uncapped batch would be
-    ~16,000 additions across ~80 files — fewer PRs bought at the price of a review
-    nobody can actually perform.
+  - **One Feature's work is one PR, whatever its size.** ADR-0054 (#1956) withdrew
+    ADR-0052 part C's 1,500-line / 10-file cap: Features here run 15-41 children, so
+    every real batch exceeded it and the "split into sequential batch PRs" escape
+    cancelled the one-Feature-one-PR rule in every case — which is the micro-PR volume
+    batching existed to remove. Do not split a Feature because it is large. The PR body
+    check reports `+N lines across M files` on every batch without gating on it.
+  - **The per-child-Task commits are the review unit inside that PR.** A 16,000-line
+    batch is not read line by line, so keep one commit per child Task (the rule above) —
+    that is what a reviewer walks.
   - If a PR genuinely completes nothing — a plan, one step, a docs correction — use
     `Refs #12`. Both satisfy the PR body check; only `Closes` moves the board, so do not
     reach for it to make a check go green.
