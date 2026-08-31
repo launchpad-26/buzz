@@ -77,7 +77,7 @@ evidence:
     entry_class: FACT
     evidence:
       - "crates/buzz-auth/src/error.rs"
-  - statement: "Counting #[test]/#[tokio::test] attributes per file gives: nip42.rs 8, lib.rs 4, nip98.rs 14, nip98_replay.rs 7, scope.rs 5, access.rs 5, rate_limit.rs 6, nip_fi/verifier/tests.rs 64, error.rs 0 -- all are synchronous unit tests runnable via `just test-unit` with no external infrastructure, in contrast to the ignored, infrastructure-requiring end-to-end tests in buzz-test-client that exercise this crate indirectly over the wire."
+  - statement: "Counting #[test] and #[tokio::test] attributes separately per file gives: nip42.rs 8 sync/0 async, lib.rs 1 sync/3 async, nip98.rs 14 sync/0 async, nip98_replay.rs 6 sync/1 async, scope.rs 5 sync/0 async, access.rs 0 sync/5 async, rate_limit.rs 5 sync/1 async, nip_fi/verifier/tests.rs 64 sync/0 async, error.rs 0/0 -- a mix of plain and tokio-async unit tests, all runnable via `just test-unit` with no external infrastructure, in contrast to the ignored, infrastructure-requiring end-to-end tests in buzz-test-client that exercise this crate indirectly over the wire."
     entry_class: FACT
     evidence:
       - "crates/buzz-auth/src/nip42.rs"
@@ -93,6 +93,10 @@ evidence:
     entry_class: FACT
     evidence:
       - "launchpad/docs/corpus/architecture/flows/websocket-authentication.md"
+  - statement: "crates/buzz-test-client/tests/conformance_multitenant.rs contains a #[tokio::test], #[ignore]-gated conformance test named nip98_replay_seenset_is_shared_and_community_scoped that posts the same NIP-98-signed event twice, wire-only via POST /events with an Authorization: Nostr header, to assert within-community replay rejection and cross-community independence; its doc comment cites crates/buzz-auth/src/nip98_replay.rs:103 and :163 directly as the behavior it targets, and a sibling stub in the same file's membership_allowlist module (archive_in_a_does_not_affect_b) calls pending_lane(\"buzz-auth\", ...) rather than asserting anything, per that file's own documented pending-lane convention. No test in this file, or elsewhere in crates/buzz-test-client/tests, does a literal `use buzz_auth` or `buzz_auth::` crate import."
+    entry_class: FACT
+    evidence:
+      - "crates/buzz-test-client/tests/conformance_multitenant.rs"
 relationships:
   - type: references
     target: architecture-flows-websocket-authentication
@@ -198,9 +202,25 @@ NIP-42/NIP-98 spec text, which this node's evidence does not extend to (see
   `test_auth_event_kind_rejected`, and `test_pubkey_mismatch_rejected` in
   `crates/buzz-test-client/tests/e2e_relay.rs` as representative end-to-end
   NIP-42 coverage; this node does not re-derive that list, only points at it.
-- **No end-to-end test naming `buzz_auth` directly was found** in
-  `crates/buzz-test-client/tests` -- the e2e suite exercises this crate only
-  indirectly, over the wire protocol, never by importing it.
+- **NIP-98 replay, wire-level:** `nip98_replay_seenset_is_shared_and_community_scoped`
+  in `crates/buzz-test-client/tests/conformance_multitenant.rs` is a
+  `#[tokio::test]`, `#[ignore]`-gated conformance test that posts the same
+  NIP-98-signed event twice within one community (expecting the second
+  attempt to be rejected as a replay) and once each to two different
+  communities (expecting no cross-community leak), driving the seen-set that
+  `nip98_replay.rs` defines and `RedisNip98ReplayGuard` implements entirely
+  from the wire (`POST /events` with `Authorization: Nostr ...`), never by
+  importing the `buzz-auth` crate. Its doc comment cites
+  `crates/buzz-auth/src/nip98_replay.rs:103` and `:163` directly as the
+  behavior under test. No test in this file or elsewhere in
+  `crates/buzz-test-client/tests` does a literal `use buzz_auth` /
+  `buzz_auth::` crate import -- every case exercises this crate only
+  indirectly, over the wire.
+- **A second, unfinished case in the same file is a stub, not coverage:**
+  `archive_in_a_does_not_affect_b` (same file, `membership_allowlist` module)
+  calls `pending_lane("buzz-auth", ...)`, which the file's own convention
+  marks as a named-but-not-yet-implemented obligation lane, not an assertion
+  that runs.
 - **`nip_fi`'s 64 tests are the only verification found for that module** --
   no integration or end-to-end coverage exists because nothing in this
   workspace calls it yet.
