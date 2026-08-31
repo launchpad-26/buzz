@@ -17,7 +17,17 @@ Lanes:
 
 ## GitHub transport
 
-- Every read uses REST GET through `github_rest.py`.
+- Every per-PR read uses REST GET through `github_rest.py`, including the
+  mandatory revalidation immediately before an approval mutation.
+- Bulk queue inventory uses one allowlisted, read-only GraphQL query per page of
+  open pull requests, through `github_query.py`. Amended 2026-08-31 (#1962): the
+  earlier rule was "every read uses REST GET". Assembling the same facts over
+  REST cost one list call plus five per-PR calls — about 151 calls for thirty
+  open pull requests, on every sweep. `github_query.py` carries no mutation
+  vocabulary, shares no code with `github_mutate.py`, refuses any document
+  outside its named allowlist, and fails closed on a truncated connection rather
+  than reconciling a partial queue. Reads and mutations remain separate
+  chokepoints; only the read transport for bulk inventory changed.
 - Every GitHub mutation uses a named template in `github_mutate.py`.
 - REST responses use ETags, maximum supported page size, conditional requests, and recorded rate headers.
 - GraphQL mutations use cached REST `node_id` values, variables, `clientMutationId`, and the smallest useful selection set.

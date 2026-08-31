@@ -106,7 +106,6 @@ OPERATIONS = {
     "issue_comments": lambda reader, args: reader.issue_comments(args.repo, args.number),
     "requested_reviewers": lambda reader, args: reader.requested_reviewers(args.repo, args.number),
     "checks": lambda reader, args: reader.checks(args.repo, args.number),
-    "checks": lambda reader, args: reader.checks(args.repo, args.number),
 }
 
 
