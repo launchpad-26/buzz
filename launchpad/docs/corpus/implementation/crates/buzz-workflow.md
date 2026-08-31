@@ -71,7 +71,7 @@ evidence:
     entry_class: FACT
     evidence:
       - "crates/buzz-workflow/src/schema.rs:161-169"
-  - statement: "WorkflowDef::validate() enforces: non-empty name; at least one step; every step id non-empty, <=64 chars, matching only ASCII alphanumerics and underscore (because step ids become evalexpr variable names of the form steps_{id}_output_{field}), and unique within the definition; reply_in_thread rejected at definition time unless the trigger is MessagePosted/ReactionAdded/DiffPosted (schedule and webhook triggers have no triggering message to reply to); and for a Schedule trigger, exactly one of cron/interval is required (both-or-neither is InvalidDefinition), a supplied cron string is parsed by the cron crate via a 5/6/7-field normalizer (normalize_cron), and a supplied interval below 60 seconds is rejected because the cron loop itself only ticks once a minute."
+  - statement: "architecture-flows-workflow-execution's own evidence ledger already enumerates WorkflowDef::validate()'s precondition list (non-empty name, at least one step, unique step ids restricted to [A-Za-z0-9_]{1,64}, and a Schedule trigger's cron/interval XOR with a 60s interval floor) as a run-creation precondition; this node does not restate that enumeration. Two details schema.rs's own code and comments carry that the flow doc's precondition framing does not: the step-id character restriction exists specifically because step ids become evalexpr variable names of the form steps_{id}_output_{field}, and reply_in_thread is rejected at definition time unless the trigger is MessagePosted/ReactionAdded/DiffPosted, because Schedule and Webhook triggers carry no triggering message to reply to."
     entry_class: FACT
     evidence:
       - "crates/buzz-workflow/src/schema.rs:169-273"
@@ -100,7 +100,7 @@ evidence:
     entry_class: FACT
     evidence:
       - "crates/buzz-workflow/src/action_sink.rs"
-  - statement: "WorkflowError has nine variants (InvalidYaml, InvalidDefinition, ConditionError, TemplateError, StepTimeout{step_id,timeout_secs}, WebhookError, CapacityExceeded, Database, Unauthorized) and a From<buzz_db::error::DbError> impl mapping DB errors into the Database variant; error.rs's own unit test module (mod tests) verifies at least one property of WorkflowError's behavior directly in-crate."
+  - statement: "WorkflowError has ten variants (InvalidYaml, InvalidDefinition, ConditionError, TemplateError, StepTimeout{step_id,timeout_secs}, WebhookError, CapacityExceeded, Database, Unauthorized, NotImplemented), a From<buzz_db::error::DbError> impl mapping DB errors into the Database variant, and a const fn code() mapping each variant to a stable, secret-free string (e.g. step_timeout, webhook_failed, action_not_implemented) kept separate from the Display diagnostic text; the unit test workflow_error_codes_are_stable_and_separate_from_diagnostics (error.rs's own #[cfg(test)] mod tests) asserts a WebhookError's code() does not contain the detail string passed into its Display text."
     entry_class: FACT
     evidence:
       - "crates/buzz-workflow/src/error.rs"
