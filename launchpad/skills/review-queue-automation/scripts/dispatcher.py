@@ -31,9 +31,10 @@ import time
 from typing import Any
 
 from assurance import Profile, drive
-from checks import all_passing as all_checks_passing
 from authority import mode_for
-from common import State, expand_path
+from cadence import decide as cadence_decide, due as cadence_due, read as cadence_read, schedule_after, write as cadence_write
+from checks import all_passing as all_checks_passing
+from common import State, expand_path, utcnow
 from config import load_repo_config
 from errors import EvidenceIncompleteError, JobBlockingError
 from evidence import collect as collect_evidence
@@ -2136,6 +2137,49 @@ def runtime_status(state: State) -> dict[str, Any]:
     }
 
 
+def _managed_sweep(
+    cfg: dict[str, Any],
+    state: State,
+    slug: str,
+    *,
+    lane: str,
+    limit: int,
+    capability_mode: Any,
+) -> dict[str, Any]:
+    """Reconcile the queue, then run up to `limit` detected jobs of one lane.
+
+    Intentionally serial per state directory. `limit` controls batch size, not
+    parallelism, and order is a stable FIFO even when two jobs were detected in
+    the same second.
+
+    `pending` is the number of jobs still `detected` in this lane AFTER the batch
+    ran — the cadence reads it to decide whether the next sweep should be at the
+    active interval or one step further into backoff.
+    """
+    queue_result = _reconcile_queue(cfg, state, slug)
+    rows = state.db.execute(
+        "SELECT id AS job_id, repo, number, lane FROM jobs "
+        "WHERE lane=? AND status='detected' ORDER BY created_at, id LIMIT ?",
+        (lane, limit),
+    ).fetchall()
+    results = []
+    for row in rows:
+        try:
+            result = run_job(
+                cfg,
+                {"job_id": row["job_id"], "repo": row["repo"], "number": row["number"], "lane": row["lane"]},
+                state=state,
+                capability_mode=capability_mode,
+            )
+        except Exception as exc:
+            result = {"job": row["job_id"], "status": "error", "reason": str(exc)[:500]}
+        results.append(result)
+    pending = state.db.execute(
+        "SELECT COUNT(*) AS n FROM jobs WHERE lane=? AND status='detected'", (lane,)
+    ).fetchone()["n"]
+    return {"queue": queue_result, "results": results, "pending": int(pending)}
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="Review-queue dispatch / onboarding gate")
     parser.add_argument("--config", default=None)
@@ -2147,6 +2191,20 @@ def main(argv: list[str] | None = None) -> int:
     sw = sub.add_parser("sweep")
     sw.add_argument("--lane", default="incoming_review")
     sw.add_argument("--limit", type=int, default=2)
+
+    # The scheduler's entry point. A timer runs this at the SHORTEST interval the
+    # cadence can choose; `tick` decides whether this is actually the moment to
+    # sweep, so backoff lives in persisted state rather than in the timer.
+    tick = sub.add_parser(
+        "tick",
+        help="sweep only if the persisted cadence says it is due, then reschedule",
+    )
+    tick.add_argument("--lane", default="incoming_review")
+    tick.add_argument("--limit", type=int, default=2)
+    tick.add_argument("--force", action="store_true",
+                      help="sweep regardless of the schedule; still reschedules afterwards")
+    tick.add_argument("--dry-run", action="store_true",
+                      help="report the decision and exit without sweeping or rescheduling")
 
     one = sub.add_parser("dispatch-one")
     one.add_argument("--number", required=True, type=int)
@@ -2253,33 +2311,65 @@ def main(argv: list[str] | None = None) -> int:
         elif args.command == "sweep":
             if not slug:
                 raise SystemExit("repository.slug is required for a managed sweep")
-            queue_result = _reconcile_queue(cfg, state, slug)
-            # This is intentionally serial per state directory. `limit` controls
-            # batch size, not parallelism, and order is a stable FIFO even when two
-            # jobs were detected in the same second.
-            rows = state.db.execute(
-                "SELECT id AS job_id, repo, number, lane FROM jobs "
-                "WHERE lane=? AND status='detected' ORDER BY created_at, id LIMIT ?",
-                (args.lane, args.limit),
-            ).fetchall()
-            results = []
-            for row in rows:
-                try:
-                    result = run_job(
-                        cfg,
-                        {"job_id": row["job_id"], "repo": row["repo"], "number": row["number"], "lane": row["lane"]},
-                        state=state,
-                        capability_mode=capability_mode,
-                    )
-                except Exception as exc:
-                    result = {"job": row["job_id"], "status": "error", "reason": str(exc)[:500]}
-                results.append(result)
             json.dump(
-                {"queue": queue_result, "results": results},
+                _managed_sweep(
+                    cfg, state, slug,
+                    lane=args.lane, limit=args.limit, capability_mode=capability_mode,
+                ),
                 sys.stdout,
                 indent=2,
                 sort_keys=True,
             )
+        elif args.command == "tick":
+            if not slug:
+                raise SystemExit("repository.slug is required for a scheduled tick")
+            scope = f"{slug}:{args.lane}"
+            stored = cadence_read(state, scope)
+            is_due = args.force or cadence_due(stored.get("next_run_at"))
+            if not is_due:
+                # The common case. A timer fires at the shortest interval and most
+                # of those firings are meant to do nothing.
+                json.dump({
+                    "status": "not_due",
+                    "scope": scope,
+                    "next_run_at": stored.get("next_run_at"),
+                    "idle_streak": stored.get("idle_streak", 0),
+                    "last_reason": stored.get("last_reason"),
+                }, sys.stdout, indent=2, sort_keys=True)
+            elif args.dry_run:
+                json.dump({
+                    "status": "due",
+                    "scope": scope,
+                    "dry_run": True,
+                    "next_run_at": stored.get("next_run_at"),
+                    "idle_streak": stored.get("idle_streak", 0),
+                }, sys.stdout, indent=2, sort_keys=True)
+            else:
+                swept = _managed_sweep(
+                    cfg, state, slug,
+                    lane=args.lane, limit=args.limit, capability_mode=capability_mode,
+                )
+                decision = cadence_decide(
+                    cfg.get("poll"),
+                    queue_count=int(swept.get("pending") or 0) + len(swept.get("results") or []),
+                    remaining=_rest_remaining(state),
+                    idle_streak=int(stored.get("idle_streak") or 0),
+                )
+                ran_at = utcnow()
+                next_run_at = schedule_after(decision.delay_seconds, ran_at)
+                cadence_write(
+                    state, scope,
+                    idle_streak=decision.idle_streak,
+                    next_run_at=next_run_at,
+                    last_run_at=ran_at,
+                    reason=decision.reason,
+                )
+                json.dump({
+                    "status": "swept",
+                    "scope": scope,
+                    "cadence": {**decision.as_dict(), "next_run_at": next_run_at},
+                    **swept,
+                }, sys.stdout, indent=2, sort_keys=True)
         else:
             row = state.db.execute(
                 "SELECT repo, number, lane FROM jobs WHERE id=?", (args.job,)
