@@ -14,7 +14,7 @@ evidence:
   - statement: "ActionDef::SendMessage carries three fields -- text (String), an optional channel UUID-string override (channel, defaults to None), and reply_in_thread (bool, defaults to false) -- and its doc comment states it posts to 'the workflow's channel (or an override channel).'"
     entry_class: FACT
     evidence:
-      - "crates/buzz-workflow/src/schema.rs:96-109"
+      - "crates/buzz-workflow/src/schema.rs:96-108"
   - statement: "dispatch_action's SendMessage arm loads the workflow_run and workflow rows scoped to (community_id, run_id), resolves the destination channel via resolve_send_message_channel, computes an optional reply target from trigger_ctx.message_id only when reply_in_thread is set (erroring if that id is empty), logs the dispatch, and calls engine.action_sink()?.send_message(...), wrapping the returned event id in StepResult::Completed({'sent': true, 'event_id': ...})."
     entry_class: FACT
     evidence:
