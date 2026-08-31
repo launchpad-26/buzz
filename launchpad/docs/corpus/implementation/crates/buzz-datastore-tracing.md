@@ -43,9 +43,10 @@ evidence:
       - "crates/buzz-search/Cargo.toml"
       - "crates/buzz-db/Cargo.toml"
       - "crates/buzz-relay/Cargo.toml"
-  - statement: "In buzz-db, #[datastore_span(...)] annotates async fns across roughly thirty store/runtime modules (e.g. store/event.rs's insert_event, query_events, query_events_routed, query_events_routed_bounded at lines 1353/1379/1400/1435, and store/relay_admin_actions.rs, store/relay_operators.rs, runtime/replica_fence.rs, runtime/mod.rs among others), each wrapping one logical Postgres-backed operation."
+  - statement: "In buzz-db, #[datastore_span(...)] annotates async fns across 250 call sites in 28 source files under src/ (e.g. store/event.rs's insert_event, query_events, query_events_routed, query_events_routed_bounded at lines 1353/1379/1400/1435, and store/relay_admin_actions.rs, store/relay_operators.rs, runtime/replica_fence.rs, runtime/mod.rs among others), each wrapping one logical Postgres-backed operation."
     entry_class: FACT
     evidence:
+      - "grep_count(pattern='#\\[datastore_span', path='crates/buzz-db/src') -> 250 occurrences across 28 files"
       - "crates/buzz-db/src/store/event.rs:1353-1435"
       - "crates/buzz-db/src/store/relay_admin_actions.rs"
       - "crates/buzz-db/src/store/relay_operators.rs"
@@ -66,7 +67,7 @@ evidence:
   - statement: "crates/buzz-relay/src/router.rs's http_and_datastore_spans_are_exported_in_the_same_trace test asserts a manually constructed span carrying the same target/otel.kind/db.system.name fields datastore_span generates is exported as a child of the surrounding HTTP request span under the same trace id, verifying the macro's span shape composes with the relay's own HTTP tracing layer rather than the macro itself being re-tested."
     entry_class: FACT
     evidence:
-      - "crates/buzz-relay/src/router.rs:716-760"
+      - "crates/buzz-relay/src/router.rs:716-767"
   - statement: "crates/buzz-db/tests/observability_source.rs's database_metrics_and_slow_logs_exclude_sensitive_or_unbounded_fields test does a literal source-text scan (include_str! of both buzz-db's own runtime/observability.rs and this crate's src/lib.rs) asserting neither ever emits forbidden field names (community, event_id, event_kind, kind, sql, query, query_id, d_tag, coordinate) as metric/log labels, and separately asserts datastore_macro.contains(\"parent: None\") specifically so that slow-operation warnings never inherit dynamic datastore span fields."
     entry_class: FACT
     evidence:
@@ -74,7 +75,7 @@ evidence:
   - statement: "crates/buzz-db/src/runtime/observability.rs is a separate module (module doc: \"Bounded-cardinality database pressure instrumentation primitives... Label values come only from the closed enums in this module\") providing connection-pool pressure metrics (PoolRole, LockType enums) that buzz-datastore-tracing does not implement, own, or depend on -- the two are tested together only by the shared source-scan policy test above, not because one wraps the other."
     entry_class: FACT
     evidence:
-      - "crates/buzz-db/src/runtime/observability.rs:1-25"
+      - "crates/buzz-db/src/runtime/observability.rs:1-53"
   - statement: "git log for crates/buzz-datastore-tracing shows two commits: 397796c5f \"feat(tracing): add PostgreSQL tracing spans (#3678)\" (crate creation) and 113a33b7e \"Add database pressure observability (#6700)\"."
     entry_class: FACT
     evidence:
@@ -119,7 +120,7 @@ declared (see *Relationships* below).
 |---|---|---|
 | `crates/buzz-datastore-tracing/src/lib.rs::datastore_span` | The whole policy: argument-omitting span, canonical/safe-only fields, error-status-without-error-value, duration histogram, sampled slow-op log | The only public item this crate exports (`#[proc_macro_attribute]`) |
 | `crates/buzz-datastore-tracing/src/lib.rs::DatastoreArgs` (private parser) | Parses `name`, `system`, `fields` macro arguments; rejects duplicates and non-`"postgresql"` systems | Unit-tested directly in `mod tests` within the same file |
-| `crates/buzz-db/src/store/event.rs` (`insert_event`, `query_events`, `query_events_routed`, `query_events_routed_bounded`, and ~25 more across `store/`, `runtime/`) | Applies `#[datastore_span]` to buzz-db's own Postgres-backed operations | Representative sample; not exhaustively enumerated here |
+| `crates/buzz-db/src/store/event.rs` (`insert_event`, `query_events`, `query_events_routed`, `query_events_routed_bounded`, and 246 more call sites across 27 other files in `store/`, `runtime/`) | Applies `#[datastore_span]` to buzz-db's own Postgres-backed operations | Representative sample; not exhaustively enumerated here |
 | `crates/buzz-audit/src/service.rs::AuditService::log` | Applies `#[datastore_span(name = "audit_log", ..., fields(action = %entry.action))]` to the hash-chain audit append | One `fields(...)` argument beyond the canonical set |
 | `crates/buzz-search/src/query.rs::search` | Applies `#[datastore_span(name = "search", system = "postgresql")]` to the full-text search entry point | No extra fields |
 | `crates/buzz-relay/src/handlers/command_executor.rs::persist_command_event` | Applies `#[datastore_span(name = "persist_command_event", system = "postgresql")]` to the relay's event-insert path | No extra fields |
@@ -182,7 +183,7 @@ policy is verified today.
 |---|---|
 | Connection-pool pressure instrumentation (`PoolRole`, `LockType` metrics) | `crates/buzz-db/src/runtime/observability.rs` -- a separate module this crate does not implement or depend on |
 | The metrics/tracing pipeline the emitted spans and histogram feed into (OpenTelemetry exporter configuration, Prometheus scraping) | `crates/buzz-relay/src/telemetry.rs` (e.g. `otel_env_filter`) and relay-level deployment configuration, not this crate |
-| Whether every one of the ~30 `buzz-db` call sites individually satisfies the policy, beyond the source-scan test's blanket assertion | `crates/buzz-db/tests/observability_source.rs`, which checks the generated code and the observability module textually, not each call site's specific `fields(...)` arguments |
+| Whether every one of the ~250 `#[datastore_span]` call sites across ~28 `buzz-db` modules individually satisfies the policy, beyond the source-scan test's blanket assertion | `crates/buzz-db/tests/observability_source.rs`, which checks the generated code and the observability module textually, not each call site's specific `fields(...)` arguments |
 | Non-PostgreSQL datastore tracing | Not implemented; the macro compile-errors on any `system` value other than `"postgresql"` |
 
 **Expected but not verified when this node was written:**
@@ -201,4 +202,4 @@ policy is verified today.
   whether it independently avoids the forbidden field list beyond what
   `observability_source.rs`'s blanket source-text scan already checks; the
   scan covers this crate's generated code and `buzz-db`'s own module, not each
-  of the ~30 call sites' bespoke `fields(...)` expressions individually.
+  of the ~250 call sites' bespoke `fields(...)` expressions individually.
