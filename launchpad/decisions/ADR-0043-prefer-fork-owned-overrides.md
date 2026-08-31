@@ -1,5 +1,5 @@
 ---
-status: Proposed
+status: Accepted
 date: 2026-08-25
 issue: launchpad-26/buzz#307
 decided_in: launchpad-26/buzz#307
@@ -10,12 +10,7 @@ supersedes: none
 
 ## Decision
 
-**Not yet settled by a human.** This record is `Proposed`, not `Accepted`.
-`launchpad/AGENTS.md` §5.1 reserves the choice for a human and #307's *Decision outcome*
-is still blank. When a human states the outcome in #307, this record's `status` becomes
-`Accepted`.
-
-The proposed option is A. The default for a standing disagreement with upstream is a
+Option A. The default for a standing disagreement with upstream is a
 fork-owned file that overrides, wraps, or delegates to upstream's — never a copy. The
 distinction between *override* (delegates to upstream, keeps receiving upstream's changes)
 and *copy* (diverges silently) is explicit: copies are prohibited.
@@ -78,5 +73,9 @@ none
 
 ## Provenance
 
-Drafted by an agent from #307's options; the decision itself is pending a human, as stated
-at the top of *Decision*. Full alternatives remain in #307.
+Drafted by an agent from #307's options. Jeffrey (@tucktuck101) made the decision on
+2026-08-31 after reviewing options A–D with their positive and negative consequences —
+including the interim gap that the ledger (ADR-0047, PR #1443) does not yet exist, so
+justifications live in PR bodies as owed rows until it lands — and the agent's
+recommendation of Option A; he replied verbatim: **"a"**. Full alternatives remain in
+#307.
