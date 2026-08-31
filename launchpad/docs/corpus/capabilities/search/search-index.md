@@ -126,6 +126,32 @@ capability directly (see the evidence ledger), so this maturity claim rests on t
 migrations, the query crate, the CLI/desktop consumers and the test suites cited
 above, not on a status table row.
 
+## Behavior: rules, constraints and variants
+
+- **Query text is normalized and bounded before any SQL runs.** The search string
+  is trimmed, embedded NUL bytes are replaced with spaces, and the result is capped
+  at 4096 characters; an empty or whitespace-only query returns zero hits with no
+  Postgres round trip at all.
+- **A request cannot mix a search filter with a non-search filter.** Both transports
+  reject such a request outright — WS closes the subscription, HTTP returns 400 —
+  rather than partially serving it.
+- **Two matching variants exist over the same index.** `FullText` uses
+  `websearch_to_tsquery` for ordinary word/lexeme search; `Prefix` treats completed
+  tokens as exact and prefix-matches only the trailing token, for bounded typeahead
+  callers such as the desktop topbar. Both variants still refetch and re-authorize
+  every hit identically — the variant changes only the candidate tsquery, never the
+  access boundary.
+- **Certain kinds are unsearchable at the storage level, independent of any query or
+  caller.** Privacy-sensitive kinds (gift wraps, DM-visibility markers, membership
+  notices, agent-turn metrics, NIP-PL endpoint ciphertext) have their `search_tsv`
+  generated as `NULL`, which never matches `@@` — no query shape or authorization
+  level can surface them through this capability.
+- **The community boundary is non-negotiable.** Every query is scoped to exactly one
+  community as its first predicate; there is no call path that omits it.
+- **Search results are never the access decision.** Every hit is independently
+  re-authorized against the full per-event visibility gate before being returned,
+  regardless of which transport or matching variant produced the candidate.
+
 ## Boundary
 
 This node does not describe:
