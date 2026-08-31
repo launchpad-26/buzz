@@ -194,14 +194,21 @@ def test_no_module_reimplements_the_vocabulary() -> None:
     Four modules each carried their own set, and the one feeding the approval
     gate was wrong. A grep-level guard is crude, but it is the property that was
     actually violated: the literals were duplicated, and they drifted.
+
+    `github_query.py` used to be exempted here by name, because it landed in
+    parallel with `checks.py` and grew its own copy first (#1990). The exemption
+    is gone: it was switched off for the one module that PRODUCES conclusions,
+    which is the worst place for drift to hide.
     """
     scripts = pathlib.Path(__file__).resolve().parent.parent / "scripts"
     offenders = []
     for path in sorted(scripts.glob("*.py")):
-        if path.name in ("checks.py", "github_query.py"):
-            continue  # the definition, and the transport that maps onto it
+        if path.name == "checks.py":
+            continue  # the definition itself
         source = path.read_text(encoding="utf-8")
-        for literal in ('"TIMED_OUT"', '"ACTION_REQUIRED"'):
+        # `EXPECTED` and `ERROR` are the StatusState side of the mapping, which
+        # also belongs to the vocabulary and also used to be duplicated.
+        for literal in ('"TIMED_OUT"', '"ACTION_REQUIRED"', '"EXPECTED"'):
             # Only flag real code, not prose in a docstring or comment.
             for line in source.splitlines():
                 stripped = line.strip()
@@ -210,6 +217,36 @@ def test_no_module_reimplements_the_vocabulary() -> None:
                 if literal in stripped:
                     offenders.append(f"{path.name}: {stripped[:70]}")
     assert not offenders, "conclusion vocabulary duplicated outside checks.py: " + "; ".join(offenders)
+
+
+def test_status_state_maps_through_the_shared_vocabulary() -> None:
+    """A commit status and a check run must agree, in either spelling.
+
+    `github_query.py` previously answered this with its own table. It now calls
+    `checks.conclusion_from_status`, so this is the one place the mapping is
+    asserted.
+    """
+    assert checks_mod.conclusion_from_status("success") == "SUCCESS"
+    assert checks_mod.conclusion_from_status("SUCCESS") == "SUCCESS"
+    assert checks_mod.conclusion_from_status("error") == "FAILURE"
+    assert checks_mod.conclusion_from_status("failure") == "FAILURE"
+    # `EXPECTED` is a green commit status with no check-run equivalent.
+    assert checks_mod.conclusion_from_status("expected") == "SUCCESS"
+    # Pending is not a conclusion; `is_pending` answers that question.
+    assert checks_mod.conclusion_from_status("pending") == ""
+    # An unknown state is not forced into a known value...
+    assert checks_mod.conclusion_from_status("teleported") == "TELEPORTED"
+    # ...and therefore reads as standing in the way rather than as green.
+    assert checks_mod.is_passing({"conclusion": "TELEPORTED"}) is False
+    assert checks_mod.is_failing({"conclusion": "TELEPORTED"}) is True
+
+
+def test_the_inventory_reader_uses_the_shared_vocabulary() -> None:
+    """Not just equal by coincidence — the same function object."""
+    import github_query
+
+    assert github_query._upper is checks_mod.canonical
+    assert github_query._rollup_state_to_conclusion is checks_mod.conclusion_from_status
 
 
 if __name__ == "__main__":

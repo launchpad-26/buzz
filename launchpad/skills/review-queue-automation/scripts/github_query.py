@@ -34,6 +34,7 @@ import urllib.error
 import urllib.request
 from typing import Any, Callable
 
+from checks import canonical as _upper, conclusion_from_status as _rollup_state_to_conclusion
 from common import State, github_token, load_config
 
 _BASE = "https://api.github.com/graphql"
@@ -243,24 +244,11 @@ def handle_http_post(
         return response.status, json.loads(body) if body else {}
 
 
-def _upper(value: Any) -> str:
-    return str(value or "").strip().upper()
-
-
-def _rollup_state_to_conclusion(state: str) -> str:
-    """Map a StatusContext `state` onto the CheckRun `conclusion` vocabulary.
-
-    Commit statuses and check runs report the same idea in two spellings. The
-    consumer compares one canonical set, so the two are unified here at the
-    boundary rather than at each comparison.
-    """
-    return {
-        "SUCCESS": "SUCCESS",
-        "FAILURE": "FAILURE",
-        "ERROR": "FAILURE",
-        "EXPECTED": "SUCCESS",
-        "PENDING": "",
-    }.get(_upper(state), _upper(state))
+# The conclusion vocabulary lives in `checks.py` and nowhere else. This module
+# is the transport that PRODUCES conclusions, which makes it the worst possible
+# place to keep a second copy: drift here feeds every consumer wrong data.
+# Aliased rather than re-wrapped so there is one implementation, not two names
+# for two functions that happen to agree today.
 
 
 class InventoryReader:
