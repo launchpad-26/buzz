@@ -26,19 +26,19 @@ evidence:
     entry_class: FACT
     evidence:
       - "crates/buzz-search/src/query.rs"
-  - statement: "`buzz_db::channel::get_accessible_channel_ids` (crates/buzz-db/src/channel.rs:754-782) returns the UNION of two sets: channel ids the caller has an active row for in `channel_members` (`removed_at IS NULL`), and channel ids of every channel in the community whose `visibility = 'open'`; a channel that is not `open` and for which the caller has no active membership row is absent from both branches."
+  - statement: "`buzz_db::channel_members::get_accessible_channel_ids` (crates/buzz-db/src/store/channel_members.rs:756-782) returns the UNION of two sets: channel ids the caller has an active row for in `channel_members` (`removed_at IS NULL`), and channel ids of every channel in the community whose `visibility = 'open'`; a channel that is not `open` and for which the caller has no active membership row is absent from both branches."
     entry_class: FACT
     evidence:
-      - "crates/buzz-db/src/channel.rs:754-782"
-  - statement: "`channels.channel_type` is a three-valued column ('stream', 'forum', 'dm'); `buzz_db::channel`'s own listing query joins `channel_members` identically for every `channel_type` value and adds only one dm-specific clause (`c.channel_type != 'dm' OR cm.hidden_at IS NULL`, hiding a DM the caller archived), so a direct-message channel is a `channel_type` variant of the same `channels`/`channel_members` schema every other channel uses, not a separately modeled object with its own access path."
+      - "crates/buzz-db/src/store/channel_members.rs:756-782"
+  - statement: "`channels.channel_type` is a three-valued column ('stream', 'forum', 'dm'); `buzz_db::channel_members::get_accessible_channels` (a sibling accessible-channel query used for listing rather than the id-only search path) joins `channel_members` identically for every `channel_type` value and adds only one dm-specific clause (`c.channel_type != 'dm' OR cm.hidden_at IS NULL`, hiding a DM the caller archived), so a direct-message channel is a `channel_type` variant of the same `channels`/`channel_members` schema every other channel uses, not a separately modeled object with its own access path."
     entry_class: FACT
     evidence:
-      - "crates/buzz-db/src/channel.rs:963-984"
+      - "crates/buzz-db/src/store/channel_members.rs:960-1018"
   - statement: "Because a DM is a `channel_type = 'dm'` row in the same `channels` table, and `get_accessible_channel_ids` only admits a non-open channel through an active `channel_members` row, a DM's accessibility for search is decided by the identical membership check that gates a private stream or forum channel -- there is no DM-specific branch in `get_accessible_channel_ids` itself."
     entry_class: INFERENCE
     evidence:
-      - "crates/buzz-db/src/channel.rs:754-782"
-      - "crates/buzz-db/src/channel.rs:963-984"
+      - "crates/buzz-db/src/store/channel_members.rs:756-782"
+      - "crates/buzz-db/src/store/channel_members.rs:960-1018"
     confidence: 0.85
   - statement: "`AppState::get_accessible_channel_ids_cached` (crates/buzz-relay/src/state.rs:1232-1249) wraps `get_accessible_channel_ids` behind a 10-second per-(community, pubkey) cache and is the function both the WS `handle_search_req` path and the HTTP bridge path call to obtain the caller's `accessible_channels` before running any search."
     entry_class: FACT
