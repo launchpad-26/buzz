@@ -31,7 +31,36 @@ def _init_repo_with_files(root: Path, files: dict[str, str]) -> None:
     subprocess.run(["git", "commit", "-q", "-m", "test fixture"], cwd=root, check=True)
 
 
-class TrackedSensitiveFilesTest(unittest.TestCase):
+def _oid(root: Path, rel_path: str) -> str:
+    """The committed blob OID of `rel_path`, for building a fake upstream tree."""
+    result = subprocess.run(
+        ["git", "rev-parse", f"HEAD:{rel_path}"],
+        cwd=root, check=True, capture_output=True, text=True,
+    )
+    return result.stdout.strip()
+
+
+class _NoUpstreamMixin:
+    """Keep these tests off the network.
+
+    `run()` now asks `security_audit_classifier.fetch_upstream_blobs` who owns a
+    sensitive-shaped hit, and that shells out to `git fetch` against block/buzz.
+    Unpatched, every case below would clone a real remote to decide something
+    the fixture already knows. An empty upstream tree is the honest stand-in for
+    "this fixture repo inherited nothing", which is what makes every
+    pre-existing expectation here still the right one.
+    """
+
+    def setUp(self):
+        patcher = mock.patch(
+            "security_audit_tracked_files_check.fetch_upstream_blobs",
+            return_value={},
+        )
+        self.fetch_upstream = patcher.start()
+        self.addCleanup(patcher.stop)
+
+
+class TrackedSensitiveFilesTest(_NoUpstreamMixin, unittest.TestCase):
     def test_clean_repo_passes(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
@@ -103,7 +132,93 @@ class TrackedSensitiveFilesTest(unittest.TestCase):
         self.assertEqual(result.status, Status.INDETERMINATE)
 
 
-class NewlyHiddenTrackedFileTest(unittest.TestCase):
+class UpstreamOwnershipTest(unittest.TestCase):
+    """Ownership scoping for #1965.
+
+    Upstream ships genuinely private-key-shaped APNs test fixtures. This fork
+    operates the upstream product rather than developing it, cannot fix those
+    files, and was reporting FAIL on every branch for all six — so `audit` was
+    red on trunk and unreadable on every pull request. Scoping by ownership must
+    silence exactly that case and nothing else.
+    """
+
+    def test_upstream_identical_fixture_does_not_fail_and_is_named(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            _init_repo_with_files(
+                root, {"crates/gw/tests/fixtures/apns-test-identity.pem": "-----BEGIN PRIVATE KEY-----\n"}
+            )
+            upstream = {"crates/gw/tests/fixtures/apns-test-identity.pem":
+                        _oid(root, "crates/gw/tests/fixtures/apns-test-identity.pem")}
+            with mock.patch(
+                "security_audit_tracked_files_check.fetch_upstream_blobs",
+                return_value=upstream,
+            ):
+                result = run(root)
+        self.assertEqual(result.status, Status.PASS)
+        # Named, not silently dropped: a skip nobody can see is a check that stopped looking.
+        self.assertIn("apns-test-identity.pem", result.detail)
+        self.assertIn("upstream", result.detail)
+
+    def test_a_cohort_added_key_still_fails_alongside_upstream_fixtures(self):
+        """The acceptance criterion: narrowing must not blind the check.
+
+        An upstream-identical fixture and a cohort-added key in the same tree —
+        the second one must still fail the run.
+        """
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            _init_repo_with_files(root, {
+                "crates/gw/tests/fixtures/apns-test-identity.pem": "-----BEGIN PRIVATE KEY-----\n",
+                "launchpad/deploy/relay.pem": "-----BEGIN PRIVATE KEY-----\n",
+            })
+            upstream = {"crates/gw/tests/fixtures/apns-test-identity.pem":
+                        _oid(root, "crates/gw/tests/fixtures/apns-test-identity.pem")}
+            with mock.patch(
+                "security_audit_tracked_files_check.fetch_upstream_blobs",
+                return_value=upstream,
+            ):
+                result = run(root)
+        self.assertEqual(result.status, Status.FAIL)
+        self.assertIn("relay.pem", result.detail)
+        # The upstream fixture must not be counted against the cohort.
+        self.assertNotIn("apns-test-identity.pem", result.detail)
+
+    def test_an_inherited_path_modified_here_still_fails(self):
+        """Identity, not origin.
+
+        An inherited filename is exactly where cohort-added key material could
+        hide, so presence upstream is not enough — the bytes must match.
+        """
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            _init_repo_with_files(
+                root, {"crates/gw/tests/fixtures/apns-test-identity.pem": "-----BEGIN PRIVATE KEY-----\nours\n"}
+            )
+            upstream = {"crates/gw/tests/fixtures/apns-test-identity.pem": "0" * 40}
+            with mock.patch(
+                "security_audit_tracked_files_check.fetch_upstream_blobs",
+                return_value=upstream,
+            ):
+                result = run(root)
+        self.assertEqual(result.status, Status.FAIL)
+        self.assertIn("apns-test-identity.pem", result.detail)
+
+    def test_unreachable_upstream_is_indeterminate_not_pass(self):
+        """Ownership unknown is neither clean nor damning, and must not read as clean."""
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            _init_repo_with_files(root, {"deploy/host.pem": "-----BEGIN PRIVATE KEY-----\n"})
+            with mock.patch(
+                "security_audit_tracked_files_check.fetch_upstream_blobs",
+                return_value=None,
+            ):
+                result = run(root)
+        self.assertEqual(result.status, Status.INDETERMINATE)
+        self.assertIn("host.pem", result.detail)
+
+
+class NewlyHiddenTrackedFileTest(_NoUpstreamMixin, unittest.TestCase):
     """PR-mode only: a real two-commit history against a real 'origin' remote
     (a second bare repo, not a mock) -- proves the diff-against-base-ref path
     actually reads real git history, not a mocked stand-in for it.
