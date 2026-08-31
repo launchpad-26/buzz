@@ -51,6 +51,11 @@ evidence:
     evidence:
       - "git_ls_tree(ref='origin/launchpad', path='launchpad/docs/corpus') -> no interfaces-events-typed node present at commit 131b02f989684117d9ab1dd426f1673fa638e523"
     confidence: 0.8
+  - statement: "The capability-level guarantee that a turn's user-visible effects are not double-produced is under test: run_prompt_task_commits_standing_context_only_after_acp_success asserts standing conversational context is committed only after the agent's response succeeds, and merged_cancel_prompt_commits_and_deduplicates_all_rendered_event_ids asserts a cancel-then-re-prompt sequence does not render the same triggering event twice."
+    entry_class: FACT
+    evidence:
+      - "crates/buzz-acp/src/pool.rs:6228"
+      - "crates/buzz-acp/src/pool.rs:6448"
 relationships:
   - type: references
     target: architecture-flows-agent-turn
@@ -93,6 +98,16 @@ This node does not describe:
 - **How the running harness is operated** -- deployment, key provisioning, and
   incident response for `buzz-acp` are an operations concern, not a product
   capability.
+
+## Verification
+
+The user-visible guarantee this capability depends on -- that a turn does not
+double-produce its effects -- is directly tested: `run_prompt_task_commits_standing_context_only_after_acp_success`
+(`crates/buzz-acp/src/pool.rs:6228`) and `merged_cancel_prompt_commits_and_deduplicates_all_rendered_event_ids`
+(`crates/buzz-acp/src/pool.rs:6448`). The fuller set of representative tests covering the
+turn mechanism's internal retry, dead-letter and steer-ordering guarantees is catalogued
+by `architecture-flows-agent-turn`'s own *Failure, abort, and rollback behavior* section
+rather than repeated here.
 
 ## Relationships
 
