@@ -233,6 +233,34 @@ commands from this capability." The agent's `initialize` response may carry an
 actual credential exchange end to end — this interface only discovers and invokes
 it.
 
+## Examples
+
+**Valid round trip**, from the scripted-subprocess test
+`goose_system_prompt_request_uses_set_contract`
+(`crates/buzz-acp/src/acp.rs:3493-3514`), where the fake agent echoes back exactly
+what it received:
+
+```json
+// harness -> agent
+{"jsonrpc":"2.0","id":0,"method":"_goose/unstable/session/system-prompt/set","params":{"sessionId":"ses_goose","mode":"set","key":"buzz","text":"Be terse"}}
+
+// agent -> harness
+{"jsonrpc":"2.0","id":0,"result":{"_receivedRequest":{"method":"_goose/unstable/session/system-prompt/set","params":{"sessionId":"ses_goose","mode":"set","key":"buzz","text":"Be terse"}}}}
+```
+
+**Failure: a JSON-RPC error object surfaced as `AcpError::AgentError`**, from the
+companion test `goose_system_prompt_preserves_method_not_found_for_fallback`
+(`crates/buzz-acp/src/acp.rs:3516-3530`):
+
+```json
+// agent -> harness
+{"jsonrpc":"2.0","id":0,"error":{"code":-32601,"message":"Method not found"}}
+```
+
+resolves, at the calling `AcpClient` method's return, to
+`Err(AcpError::AgentError { code: -32601, message: "Method not found".to_string() })`
+— never a panic, never a silently swallowed error.
+
 ## Boundary
 
 This node does not describe:
