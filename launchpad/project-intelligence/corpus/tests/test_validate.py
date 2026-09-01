@@ -32,6 +32,8 @@ import importlib.util
 import io
 import sys
 import tempfile
+import threading
+from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 import unittest
 from pathlib import Path
 
@@ -251,7 +253,9 @@ class AbsolutePathCitationTest(unittest.TestCase):
         self.assertIn("repo-relative", errors[0])
 
 
-def _classify_one(citation: str) -> tuple[list[str], list[str]]:
+def _classify_one(
+    citation: str, *, check_links: bool = False
+) -> tuple[list[str], list[str]]:
     """Run one citation through the real find_citation_problems path.
 
     Deliberately not calling _classify_citation directly: the message-building,
@@ -268,41 +272,105 @@ def _classify_one(citation: str) -> tuple[list[str], list[str]]:
             ]
         },
     )
-    return validate.find_citation_problems([node], validate.repo_root())
+    return validate.find_citation_problems(
+        [node], validate.repo_root(), check_links=check_links
+    )
+
+class _CitationUrlHandler(BaseHTTPRequestHandler):
+    def do_HEAD(self) -> None:
+        self._respond()
+
+    def do_GET(self) -> None:
+        self._respond()
+
+    def log_message(self, _format: str, *_args: object) -> None:
+        return
+
+    def _respond(self) -> None:
+        if self.path == "/ok" or self.path == "/posts/id_rsa-security-best-practices":
+            self.send_response(200)
+            self.end_headers()
+            return
+        self.send_response(404)
+        self.end_headers()
+
+
+class _LocalCitationServer:
+    def __enter__(self) -> str:
+        self.server = ThreadingHTTPServer(("127.0.0.1", 0), _CitationUrlHandler)
+        self.thread = threading.Thread(target=self.server.serve_forever)
+        self.thread.start()
+        host, port = self.server.server_address
+        return f"http://{host}:{port}"
+
+    def __exit__(self, *_exc: object) -> None:
+        self.server.shutdown()
+        self.server.server_close()
+        self.thread.join()
+
 
 
 class UrlCitationTest(unittest.TestCase):
-    """A repository file link must be pinned to a full commit SHA (ADR-0003); any
-    other URL is unpinnable and uncheckable offline, so it is reported unverified.
+    """URL citations must be verified, not downgraded to passing noise.
 
-    An earlier revision waved every `http`-prefixed string through untouched. A
-    cross-model review panel found it, pointing at this repo's own passing fixture,
-    which cited a mutable `blob/main` URL while ADR-0003 forbids exactly that.
+    Repository file links must still be pinned to a full commit SHA (ADR-0003),
+    but a non-GitHub URL is openable over HTTP. A validator that never tries the
+    request cannot tell a real primary-source citation from a typo.
     """
 
-    def test_url_accepted_even_when_path_looks_credential_like(self) -> None:
-        # The credential blocklist must still run AFTER the URL check -- an
-        # independent review-code pass found it running first, silently rejecting
-        # public URLs whose path merely resembled a credential filename.
-        errors, unverified = _classify_one(
-            "https://example.com/posts/id_rsa-security-best-practices"
-        )
+    def test_external_url_is_unverified_without_check_links(self) -> None:
+        errors, unverified = _classify_one("https://example.com/spec")
         self.assertEqual(errors, [])
         self.assertEqual(len(unverified), 1)
-        self.assertIn("external URL", unverified[0])
+        self.assertIn("requires --check-links", unverified[0])
 
-    def test_commit_pinned_github_url_accepted(self) -> None:
+    def test_external_url_accepted_when_it_resolves_even_if_path_looks_credential_like(self) -> None:
+        # URL routing still runs before the credential blocklist: a public URL path
+        # can contain credential-looking prose without being a local secret path.
+        with _LocalCitationServer() as base_url:
+            errors, unverified = _classify_one(
+                f"{base_url}/posts/id_rsa-security-best-practices", check_links=True
+            )
+        self.assertEqual(errors, [])
+        self.assertEqual(unverified, [])
+
+    def test_external_url_that_does_not_resolve_is_rejected(self) -> None:
+        with _LocalCitationServer() as base_url:
+            errors, unverified = _classify_one(f"{base_url}/missing", check_links=True)
+        self.assertEqual(len(errors), 1)
+        self.assertEqual(unverified, [])
+        self.assertIn("does not resolve", errors[0])
+
+    def test_external_url_with_trailing_metadata_checks_url_target(self) -> None:
+        with _LocalCitationServer() as base_url:
+            errors, unverified = _classify_one(
+                f"{base_url}/ok, ms.date 2026-01-01", check_links=True
+            )
+        self.assertEqual(errors, [])
+        self.assertEqual(unverified, [])
+
+    def test_commit_pinned_github_url_requires_check_links_to_verify_target(self) -> None:
         errors, unverified = _classify_one(
             "https://github.com/launchpad-26/buzz/blob/"
             "69baedd197e5d35c9ae4736115789da59929e288/.env.example"
         )
         self.assertEqual(errors, [])
+        self.assertEqual(len(unverified), 1)
+
+    def test_commit_pinned_github_url_accepted_with_check_links(self) -> None:
+        errors, unverified = _classify_one(
+            "https://github.com/launchpad-26/buzz/blob/"
+            "69baedd197e5d35c9ae4736115789da59929e288/.env.example",
+            check_links=True,
+        )
+        self.assertEqual(errors, [])
         self.assertEqual(unverified, [])
 
-    def test_commit_pinned_raw_github_url_accepted(self) -> None:
+    def test_commit_pinned_raw_github_url_accepted_with_check_links(self) -> None:
         errors, unverified = _classify_one(
             "https://raw.githubusercontent.com/launchpad-26/buzz/"
-            "69baedd197e5d35c9ae4736115789da59929e288/Justfile"
+            "69baedd197e5d35c9ae4736115789da59929e288/Justfile",
+            check_links=True,
         )
         self.assertEqual(errors, [])
         self.assertEqual(unverified, [])
@@ -403,7 +471,7 @@ class UrlCitationTest(unittest.TestCase):
             "[.env.example](https://github.com/launchpad-26/buzz/blob/"
             "69baedd197e5d35c9ae4736115789da59929e288/.env.example)"
         )
-        errors, unverified = _classify_one(pinned)
+        errors, unverified = _classify_one(pinned, check_links=True)
         self.assertEqual(errors, [])
         self.assertEqual(unverified, [])
 
@@ -429,17 +497,17 @@ class CitationFormTest(unittest.TestCase):
         self.assertEqual(errors, [])
         self.assertEqual(unverified, [])
 
-    def test_file_line_citation_accepted(self) -> None:
-        # The line number is deliberately past the end of the file. Positional
-        # citations are checked for their internal consistency and for the file
-        # they name, NOT against the file's length -- bounds-checking a cited line
-        # is staleness detection, which belongs with the staleness work rather than
-        # here (see _classify_citation). Do not "fix" this to an in-range number:
-        # that would silently drop the only coverage of that documented boundary.
-        # A cross-model review-final pass raised the out-of-range line as a
-        # separate, deferred finding; it is tracked, not forgotten.
+    def test_file_line_citation_rejects_out_of_range_line(self) -> None:
         errors, unverified = _classify_one(
             "launchpad/project-intelligence/corpus/validate.py:1077"
+        )
+        self.assertEqual(len(errors), 1)
+        self.assertEqual(unverified, [])
+        self.assertIn("line position exceeds", errors[0])
+
+    def test_file_line_citation_accepts_existing_line(self) -> None:
+        errors, unverified = _classify_one(
+            "launchpad/project-intelligence/corpus/validate.py:1"
         )
         self.assertEqual(errors, [])
         self.assertEqual(unverified, [])
@@ -464,13 +532,20 @@ class CitationFormTest(unittest.TestCase):
         self.assertEqual(errors, [])
         self.assertEqual(len(unverified), 1)
 
-    def test_commit_reference_reported_unverified_not_missing(self) -> None:
+    def test_existing_commit_reference_is_verified_locally(self) -> None:
         errors, unverified = _classify_one(
             "commit 69baedd197e5d35c9ae4736115789da59929e288 (2026-08-25) by Serina"
         )
         self.assertEqual(errors, [])
-        self.assertEqual(len(unverified), 1)
-        self.assertIn("commit reference", unverified[0])
+        self.assertEqual(unverified, [])
+
+    def test_missing_commit_reference_is_rejected(self) -> None:
+        errors, unverified = _classify_one(
+            "commit 0000000000000000000000000000000000000000 (2026-08-25) by Serina"
+        )
+        self.assertEqual(len(errors), 1)
+        self.assertEqual(unverified, [])
+        self.assertIn("commit", errors[0])
 
     def test_unrecognised_form_is_an_error_not_a_pass(self) -> None:
         # The unverified channel is for RECOGNISED-but-uncheckable forms only.
@@ -980,30 +1055,64 @@ class MissingInputTest(unittest.TestCase):
 
 
 class UnverifiedChannelTest(unittest.TestCase):
-    """The unverified channel must be visible and must not decide the exit code.
+    """Recognised-but-unchecked citations must remain visible and block CI.
 
-    Two failure modes it sits between. Failing on an unverifiable-by-nature
-    citation would make CONTRACT.md's own commit/graph-edge/tool-result forms
-    unusable in the corpus. Hiding them would let a green run claim it checked
-    things it never opened. So: always printed, never fatal, and the summary line
-    says how many there were rather than the bare word "clean".
+    The channel still distinguishes syntax errors from citation forms this local
+    checker cannot prove, but merge validation must fail closed: a green run with
+    unverified evidence is indistinguishable from a trusted pass in branch policy.
     """
 
-    def _run_main(self, root: Path) -> tuple[int, str, str]:
+    def _run_main(self, root: Path, *args: str) -> tuple[int, str, str]:
         out, err = io.StringIO(), io.StringIO()
         with contextlib.redirect_stdout(out), contextlib.redirect_stderr(err):
-            exit_code = validate.main(["--root", str(root)])
+            exit_code = validate.main(["--root", str(root), *args])
         return exit_code, out.getvalue(), err.getvalue()
 
-    def test_unverified_items_print_but_do_not_fail_the_run(self) -> None:
-        exit_code, stdout, stderr = self._run_main(VALID_DIR)
-        self.assertEqual(exit_code, 0)
+    def _write_single_citation_root(self, root: Path, citation: str) -> None:
+        (root / "node.md").write_text(
+            "---\n"
+            "id: validator-single-citation\n"
+            "type: verification\n"
+            "status: active\n"
+            "origin: launchpad\n"
+            "audiences:\n"
+            "  - agent\n"
+            "evidence:\n"
+            "  - statement: \"one citation\"\n"
+            "    entry_class: FACT\n"
+            "    evidence:\n"
+            f"      - \"{citation}\"\n"
+            "---\n"
+            "\n"
+            "# Test node\n"
+        )
+
+    def test_offline_mode_is_default_and_blocks_unverified_urls(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp, _LocalCitationServer() as base_url:
+            root = Path(tmp)
+            self._write_single_citation_root(root, f"{base_url}/ok")
+            exit_code, stdout, stderr = self._run_main(root)
+        self.assertEqual(exit_code, 1)
         self.assertIn("UNVERIFIED", stderr)
-        self.assertIn("PASS", stdout)
-        # The summary must not read as an unqualified all-clear when items were
-        # reported but not checked.
-        self.assertNotIn("corpus validation clean", stdout)
-        self.assertIn("unverified", stdout)
+        self.assertIn("requires --check-links", stderr)
+        self.assertNotIn("PASS", stdout)
+
+    def test_check_links_mode_verifies_reachable_url_and_allows_clean_pass(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp, _LocalCitationServer() as base_url:
+            root = Path(tmp)
+            self._write_single_citation_root(root, f"{base_url}/ok")
+            exit_code, stdout, stderr = self._run_main(root, "--check-links")
+        self.assertEqual(exit_code, 0)
+        self.assertEqual(stderr, "")
+        self.assertIn("PASS  corpus validation clean", stdout)
+
+    def test_unverified_items_print_and_fail_the_run(self) -> None:
+        exit_code, stdout, stderr = self._run_main(VALID_DIR)
+        self.assertEqual(exit_code, 1)
+        self.assertIn("UNVERIFIED", stderr)
+        self.assertIn("FAIL", stderr)
+        self.assertNotIn("PASS", stdout)
+        self.assertIn("unverified", stderr)
 
     def test_errors_still_fail_even_alongside_unverified_items(self) -> None:
         exit_code, stdout, stderr = self._run_main(INVALID_DIR / "escaping-citation")

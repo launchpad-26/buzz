@@ -77,4 +77,4 @@ jobs:
         run: python3 -m unittest discover -s launchpad/project-intelligence/corpus/tests -p "test_*.py" -v
 
       - name: Validate the real corpus
-        run: python3 launchpad/project-intelligence/corpus/validate.py
+        run: python3 launchpad/project-intelligence/corpus/validate.py --check-links

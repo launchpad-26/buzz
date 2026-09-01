@@ -7,12 +7,12 @@ cannot express on its own: duplicate ids, unresolved relationship targets,
 unverifiable/prohibited evidence citations, and stray non-canonical files.
 
 Citations are parsed against CONTRACT.md section 3's six forms before anything is
-checked, and reported in two channels -- hard errors, and an `UNVERIFIED` channel
-for the forms that name nothing openable (see ValidationReport). Exit status is 1
-for any error, 0 otherwise; unverified notices never fail a run, but they always
-print, so a PASS never claims more than was actually checked.
+checked. Offline mode performs deterministic local checks only; URL citations are
+reported as UNVERIFIED and still block the run. --check-links additionally opens
+HTTP(S) citations so reachable links can pass and unreachable links fail.
 
 Run:  python3 launchpad/project-intelligence/corpus/validate.py [--root PATH]
+  or: python3 launchpad/project-intelligence/corpus/validate.py --check-links
   or: just corpus-validate
 """
 
@@ -24,6 +24,9 @@ import math
 import re
 import subprocess
 import sys
+import http.client
+import urllib.error
+import urllib.request
 from dataclasses import dataclass, field
 from pathlib import Path, PurePosixPath
 
@@ -594,81 +597,45 @@ class CitationVerdict:
     detail: str = ""
 
 
-def _classify_url(url: str) -> CitationVerdict:
-    """A repository file link must be pinned to a full commit SHA; other URLs can't be.
 
-    ADR-0003 fixes the reference format as "a markdown link to the cited file at the
-    pinned commit, using the full SHA. Never `blob/main`", and the schema README
-    repeats it. A `blob/main` link is evidence that can change underneath a green
-    validation run, which is the whole failure mode provenance exists to prevent.
+_URL_CHECK_TIMEOUT_SECONDS = 5
+_URL_CHECK_USER_AGENT = "buzz-corpus-validator/1.0"
 
-    A URL that is not a repository file link (a spec, a blog post, an upstream
-    issue) has no commit to pin to and no offline way to check it, so it is
-    reported unverified rather than either failed or silently passed.
 
-    DELIBERATELY NOT ENFORCED: ADR-0003's format is "a markdown link to the cited
-    file at the pinned commit", and a bare pinned URL is accepted here anyway. Two
-    review-final passes have now flagged that as unfinished, so the reasoning
-    belongs in the code rather than in a review thread. ADR-0003 governs handbook
-    PAGE provenance, where the link is rendered prose; this validator governs
-    corpus evidence, and the corpus schema's own description of the field
-    (schema/README.md: "Citations (paths, commit-pinned links)") asks for pinning
-    without prescribing a presentation. Pinning is the property staleness detection
-    depends on and is enforced; requiring the markdown wrapper on corpus evidence
-    would extend a handbook page-format rule to a surface that has not adopted it,
-    which is #605's contract to decide and this issue's out-of-scope list to
-    refuse. If #605 does adopt it, the check is a one-line addition here.
+def _url_request_target(url_text: str) -> str:
+    """Return the URL portion of a citation that may carry trailing metadata."""
+    return url_text.split()[0].rstrip(",.;")
+
+
+def _url_resolves(url: str) -> bool:
+    """Return True only when an HTTP(S) citation resolves to content.
+
+    The citation value is deliberately kept out of diagnostics: callers report the
+    evidence entry and citation index instead, matching the rest of this module's
+    no-leak output contract.
     """
-    match = _GITHUB_URL_RE.match(url) or _RAW_GITHUB_URL_RE.match(url)
-    if match:
-        if not _FULL_SHA_RE.match(match.group("ref")):
-            return CitationVerdict(
-                "error",
-                "is a repository link pinned to a mutable ref rather than a "
-                "full commit SHA (ADR-0003)",
-            )
-        # raw.githubusercontent.com has no verb segment; it is always file content.
-        verb = match.groupdict().get("verb") or "raw"
-        if verb not in _GITHUB_FILE_VERBS:
-            return CitationVerdict(
-                "error",
-                f"is a repository '{verb}' view rather than a link to the cited "
-                "file itself (ADR-0003)",
-            )
-        # Making the trailing path optional closed one hole and opened another: a
-        # pinned link with nothing after the ref names a repository at a commit,
-        # not the cited file, and came back "ok". A third cross-model review-final
-        # pass found it. The path is optional to MATCH -- so the pin check runs on
-        # truncated links -- and required to PASS.
-        if not match.groupdict().get("path"):
-            return CitationVerdict(
-                "error", "is pinned but names no file within the repository"
-            )
-        return CitationVerdict("ok")
-    return CitationVerdict(
-        "unverified", "is an external URL this validator can neither pin nor open"
-    )
+    headers = {"User-Agent": _URL_CHECK_USER_AGENT}
+    for method, extra_headers in (("HEAD", {}), ("GET", {"Range": "bytes=0-0"})):
+        request = urllib.request.Request(
+            url,
+            headers={**headers, **extra_headers},
+            method=method,
+        )
+        try:
+            with urllib.request.urlopen(
+                request, timeout=_URL_CHECK_TIMEOUT_SECONDS
+            ) as response:
+                return 200 <= response.status < 400
+        except urllib.error.HTTPError as exc:
+            if method == "HEAD" and exc.code in {405, 501}:
+                continue
+            return False
+        except (OSError, TimeoutError, ValueError, http.client.HTTPException):
+            return False
+    return False
 
 
-def _classify_repo_path(path_text: str, repo_root_path: Path) -> CitationVerdict:
-    """A repo-relative citation must resolve to a real file INSIDE the repository.
-
-    Three distinct rejections, in order:
-
-    Prohibited credential-like names are rejected first and without echoing the
-    value -- the DoD's "without leaking private source content".
-
-    An absolute path (e.g. /etc/passwd) is rejected explicitly rather than
-    existence-checked: pathlib's `/` operator silently discards the left operand
-    when the right is absolute, so `repo_root_path / "/etc/passwd"` would otherwise
-    evaluate to `/etc/passwd` itself and "validate" against the host filesystem.
-
-    Containment is then enforced on the RESOLVED path, not the literal one. An
-    earlier revision checked only `(repo_root_path / citation).exists()`, so
-    `../../../../etc/passwd` escaped the repository entirely and a bare directory
-    name like `launchpad` passed as though it were a file. Resolving first also
-    means a symlink pointing out of the tree is caught, not followed.
-    """
+def _resolved_repo_file(path_text: str, repo_root_path: Path) -> Path | CitationVerdict:
     if _is_prohibited_citation(path_text):
         return CitationVerdict(
             "error", "matches a prohibited credential-like pattern"
@@ -682,23 +649,103 @@ def _classify_repo_path(path_text: str, repo_root_path: Path) -> CitationVerdict
     try:
         candidate = (root / path_text).resolve()
     except (OSError, RuntimeError):
-        # A citation naming a self-referential symlink inside the repository made
-        # .resolve() raise, and it escaped as a traceback. Same class of defect as
-        # the one _is_canonical_location catches for discovery; a third cross-model
-        # review-final pass found this second, unguarded site.
         return CitationVerdict("error", "cannot be resolved to a path")
     if not candidate.is_relative_to(root):
-        return CitationVerdict(
-            "error", "resolves outside the repository"
-        )
+        return CitationVerdict("error", "resolves outside the repository")
     if not candidate.is_file():
         return CitationVerdict(
             "error", "does not resolve to a real file in the repository"
         )
+    return candidate
+
+
+def _file_line_count(path: Path) -> int:
+    line_count = 0
+    saw_any_bytes = False
+    last_byte = b""
+    with path.open("rb") as handle:
+        for chunk in iter(lambda: handle.read(8192), b""):
+            saw_any_bytes = True
+            line_count += chunk.count(b"\n")
+            last_byte = chunk[-1:]
+    if saw_any_bytes and last_byte != b"\n":
+        line_count += 1
+    return line_count
+
+
+def _classify_repo_position(
+    path_text: str, end_line: int, repo_root_path: Path
+) -> CitationVerdict:
+    candidate = _resolved_repo_file(path_text, repo_root_path)
+    if isinstance(candidate, CitationVerdict):
+        return candidate
+    if end_line > _file_line_count(candidate):
+        return CitationVerdict(
+            "error", "line position exceeds the cited file's length"
+        )
+    return CitationVerdict("ok")
+
+def _classify_url(url: str, *, check_links: bool) -> CitationVerdict:
+    """A URL citation must satisfy syntax rules, then resolve in link-check mode.
+
+    Repository file links still have the strongest structural requirement: full
+    commit SHA, file-content verb, and a non-empty path. Other HTTP(S) URLs have
+    no commit pin, but they are not unverifiable by nature; --check-links can at
+    least establish that the referenced source exists at validation time.
+    """
+    target = _url_request_target(url)
+    match = _GITHUB_URL_RE.match(target) or _RAW_GITHUB_URL_RE.match(target)
+    if match:
+        if not _FULL_SHA_RE.match(match.group("ref")):
+            return CitationVerdict(
+                "error",
+                "is a repository link pinned to a mutable ref rather than a "
+                "full commit SHA (ADR-0003)",
+            )
+        verb = match.groupdict().get("verb") or "raw"
+        if verb not in _GITHUB_FILE_VERBS:
+            return CitationVerdict(
+                "error",
+                f"is a repository '{verb}' view rather than a link to the cited "
+                "file itself (ADR-0003)",
+            )
+        if not match.groupdict().get("path"):
+            return CitationVerdict(
+                "error", "is pinned but names no file within the repository"
+            )
+    if not check_links:
+        return CitationVerdict(
+            "unverified", "requires --check-links to verify reachable content"
+        )
+    if not _url_resolves(target):
+        return CitationVerdict("error", "does not resolve to reachable content")
+    return CitationVerdict("ok")
+
+def _classify_commit_reference(text: str, repo_root_path: Path) -> CitationVerdict:
+    sha = text.split()[1]
+    result = subprocess.run(
+        ["git", "cat-file", "-e", f"{sha}^{{commit}}"],
+        cwd=repo_root_path,
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+        check=False,
+    )
+    if result.returncode == 0:
+        return CitationVerdict("ok")
+    return CitationVerdict("error", "names a commit that does not exist in this repository")
+
+
+def _classify_repo_path(path_text: str, repo_root_path: Path) -> CitationVerdict:
+    """A repo-relative citation must resolve to a real file INSIDE the repository."""
+    candidate = _resolved_repo_file(path_text, repo_root_path)
+    if isinstance(candidate, CitationVerdict):
+        return candidate
     return CitationVerdict("ok")
 
 
-def _classify_citation(citation: str, repo_root_path: Path) -> CitationVerdict:
+def _classify_citation(
+    citation: str, repo_root_path: Path, *, check_links: bool = False
+) -> CitationVerdict:
     """Route one citation to the rule for its form (CONTRACT.md section 3).
 
     Order matters. Markdown links unwrap first, because ADR-0003's own reference
@@ -717,7 +764,7 @@ def _classify_citation(citation: str, repo_root_path: Path) -> CitationVerdict:
         text = link.group("target")
 
     if text.startswith(_URL_PREFIXES):
-        return _classify_url(text)
+        return _classify_url(text, check_links=check_links)
 
     if (
         _COMMIT_CITATION_RE.match(text)
@@ -734,9 +781,7 @@ def _classify_citation(citation: str, repo_root_path: Path) -> CitationVerdict:
                 "error", "matches a prohibited credential-like pattern"
             )
         if _COMMIT_CITATION_RE.match(text):
-            return CitationVerdict(
-                "unverified", "is a commit reference, which names no openable file"
-            )
+            return _classify_commit_reference(text, repo_root_path)
         return CitationVerdict(
             "unverified",
             "is a graph-edge or tool-result citation, which names no openable file",
@@ -746,12 +791,13 @@ def _classify_citation(citation: str, repo_root_path: Path) -> CitationVerdict:
     if position:
         start = int(position.group("start"))
         end = position.group("end")
-        # Only the position's internal consistency is checked, not whether the file
-        # is actually that long. Bounds-checking line numbers against file contents
-        # is real staleness detection and belongs with the staleness work, not here.
+        # A line citation that points beyond the file is no better than a missing
+        # file citation: the claimed evidence location does not exist.
         if start < 1 or (end is not None and int(end) < start):
             return CitationVerdict("error", "carries a malformed line position")
-        return _classify_repo_path(position.group("path"), repo_root_path)
+        return _classify_repo_position(
+            position.group("path"), int(end) if end is not None else start, repo_root_path
+        )
 
     if any(character.isspace() for character in text):
         return CitationVerdict(
@@ -763,7 +809,7 @@ def _classify_citation(citation: str, repo_root_path: Path) -> CitationVerdict:
 
 
 def find_citation_problems(
-    nodes: list[LoadedNode], repo_root_path: Path
+    nodes: list[LoadedNode], repo_root_path: Path, *, check_links: bool = False
 ) -> tuple[list[str], list[str]]:
     """Classify every evidence citation; return (errors, unverified).
 
@@ -787,7 +833,7 @@ def find_citation_problems(
             for citation_index, citation in enumerate(citations, start=1):
                 if not isinstance(citation, str):
                     continue
-                verdict = _classify_citation(citation, repo_root_path)
+                verdict = _classify_citation(citation, repo_root_path, check_links=check_links)
                 if verdict.status == "ok":
                     continue
                 message = (
@@ -878,7 +924,7 @@ def find_ownership_violations(corpus_root: Path) -> list[str]:
     return errors
 
 
-def validate_corpus(corpus_root: Path) -> ValidationReport:
+def validate_corpus(corpus_root: Path, *, check_links: bool = False) -> ValidationReport:
     """Validate the corpus at `corpus_root`, returning errors and unverified notices."""
     root = repo_root()
     nodes = load_nodes(corpus_root)
@@ -888,7 +934,7 @@ def validate_corpus(corpus_root: Path) -> ValidationReport:
     report.errors.extend(find_unresolved_relationship_targets(nodes))
     report.errors.extend(find_non_finite_confidence(nodes))
 
-    citation_errors, citation_unverified = find_citation_problems(nodes, root)
+    citation_errors, citation_unverified = find_citation_problems(nodes, root, check_links=check_links)
     report.errors.extend(citation_errors)
     report.unverified.extend(citation_unverified)
 
@@ -901,34 +947,37 @@ def validate_corpus(corpus_root: Path) -> ValidationReport:
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--root", default=None, help=f"corpus root (default: {DEFAULT_ROOT})")
+    parser.add_argument(
+        "--check-links",
+        action="store_true",
+        help="open HTTP(S) citations and fail unreachable targets",
+    )
     args = parser.parse_args(argv)
 
     root = Path(args.root) if args.root else repo_root() / DEFAULT_ROOT
 
     try:
-        report = validate_corpus(root)
+        report = validate_corpus(root, check_links=args.check_links)
     except CorpusRootMissing as exc:
         print(f"FAIL  corpus root does not exist: {exc}", file=sys.stderr)
         return 1
 
-    # Printed whether or not the run fails: an unverified citation is not a defect,
-    # but a run that hid them would let "PASS" claim more than it checked.
     for notice in report.unverified:
         print(f"UNVERIFIED  {notice}", file=sys.stderr)
 
-    if report.errors:
+    if report.errors or report.unverified:
         for error in report.errors:
             print(f"FAIL  {error}", file=sys.stderr)
-        print(f"FAIL  {len(report.errors)} corpus validation error(s)", file=sys.stderr)
+        if report.unverified:
+            print(
+                f"FAIL  {len(report.unverified)} unverified citation(s) block validation",
+                file=sys.stderr,
+            )
+        if report.errors:
+            print(f"FAIL  {len(report.errors)} corpus validation error(s)", file=sys.stderr)
         return 1
 
-    if report.unverified:
-        print(
-            f"PASS  corpus validation found no errors; {len(report.unverified)} "
-            "item(s) reported unverified"
-        )
-    else:
-        print("PASS  corpus validation clean")
+    print("PASS  corpus validation clean")
     return 0
 
 

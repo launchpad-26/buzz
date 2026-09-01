@@ -13,6 +13,7 @@ schema-shaped in isolation but genuinely passes the corpus's own checker.
 from __future__ import annotations
 
 import importlib.util
+import subprocess
 import sys
 import tempfile
 import unittest
@@ -111,11 +112,19 @@ class SuccessfulCreateTest(unittest.TestCase):
         sys.modules[vspec.name] = validate
         vspec.loader.exec_module(validate)
 
+        revision = subprocess.run(
+            ["git", "rev-parse", "HEAD"],
+            cwd=validate.repo_root(),
+            text=True,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            check=True,
+        ).stdout.strip()
+
         with tempfile.TemporaryDirectory() as tmp:
             root = _fixture_root(tmp)
             row = _make_row()
-            scaffold.scaffold_node(root, row, node_type="capabilities", origin="launchpad", revision="a" * 40)
-
+            scaffold.scaffold_node(root, row, node_type="capabilities", origin="launchpad", revision=revision)
             corpus_root = root / "launchpad" / "docs" / "corpus"
             report = validate.validate_corpus(corpus_root)
 
