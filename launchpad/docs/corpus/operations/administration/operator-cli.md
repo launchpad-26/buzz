@@ -71,6 +71,10 @@ evidence:
     entry_class: FACT
     evidence:
       - "crates/buzz-admin/src/main.rs"
+  - statement: "cmd_list_members opens a fresh database connection via connect_db() and queries list_relay_members on every invocation with no in-process or on-disk cache, and buzz-admin's Command enum has no subcommand whose purpose is to undo or revert a prior add-member/remove-member -- the only way to reverse a membership change is running the inverse subcommand with the same --pubkey."
+    entry_class: FACT
+    evidence:
+      - "crates/buzz-admin/src/main.rs"
   - statement: "generate-key prints a freshly generated Nostr keypair's hex public key and displayed secret key to stdout, followed by a one-line instruction to set BUZZ_PRIVATE_KEY to the secret key; it touches no database, Redis connection, or relay, unlike every other buzz-admin subcommand except pack-free -- it is the one subcommand connect_db()/connect_member_services() are never called for."
     entry_class: FACT
     evidence:
@@ -215,7 +219,16 @@ administrative tasks. Not `buzz-cli` — see *Boundary* below.
    database but the live-client broadcast failed — the command prints a
    `warning:` line (not an `error:` line) in exactly that case, distinct from
    a hard failure before the database write happened at all.
-5. As a WebSocket-native alternative to any of the above, an already-
+5. Verify the change by running `list-members` again and confirming the
+   pubkey's row (or its absence) — the printed roster is read fresh from the
+   database on every invocation, not cached. To roll back an accidental
+   `add-member` or `remove-member`, run the inverse command with the same
+   `--pubkey`: each roster event `publish_membership_list_with_bump` signs is
+   a full-membership snapshot (not a delta), so a corrective `remove-member`
+   or `add-member` fully replaces what the mistaken command published, with
+   no separate cleanup step. There is no `buzz-admin` command that reverts a
+   membership change automatically — the inverse subcommand is the rollback.
+6. As a WebSocket-native alternative to any of the above, an already-
    authenticated owner or admin can send NIP-43 admin events directly
    (kind:9030 add, kind:9031 remove, kind:9032 change role) instead of
    invoking the CLI — useful when the operator already holds an authenticated
