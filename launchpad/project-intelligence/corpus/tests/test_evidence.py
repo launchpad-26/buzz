@@ -50,6 +50,39 @@ class FakeGitHubClient(evidence.GitHubClient):
         return self._issue_comments
 
 
+class CitationParserTest(unittest.TestCase):
+    def test_parses_local_file_range(self) -> None:
+        parsed = evidence.parse_citation("crates/buzz-core/src/kind.rs:219-221")
+        self.assertEqual(parsed.kind, evidence.EvidenceKind.LOCAL_FILE_RANGE)
+        self.assertEqual(parsed.path, "crates/buzz-core/src/kind.rs")
+        self.assertEqual(parsed.start_line, 219)
+        self.assertEqual(parsed.end_line, 221)
+
+    def test_parses_commit_reference_without_echoing_raw_value_in_detail(self) -> None:
+        parsed = evidence.parse_citation(
+            "commit 69baedd197e5d35c9ae4736115789da59929e288 (2026-08-25)"
+        )
+        self.assertEqual(parsed.kind, evidence.EvidenceKind.COMMIT)
+        self.assertEqual(parsed.commit, "69baedd197e5d35c9ae4736115789da59929e288")
+
+    def test_parses_external_url_and_discards_trailing_metadata(self) -> None:
+        parsed = evidence.parse_citation(
+            "https://example.com/spec, ms.date 2026-01-01"
+        )
+        self.assertEqual(parsed.kind, evidence.EvidenceKind.EXTERNAL_URL)
+        self.assertEqual(parsed.url, "https://example.com/spec")
+
+    def test_parses_graph_and_tool_results_as_distinct_unopenable_kinds(self) -> None:
+        graph = evidence.parse_citation("source_symbol -> target_symbol (1 hop)")
+        tool = evidence.parse_citation("grep_repo('needle') -> no matches")
+        self.assertEqual(graph.kind, evidence.EvidenceKind.GRAPH_EDGE)
+        self.assertEqual(tool.kind, evidence.EvidenceKind.TOOL_RESULT)
+
+    def test_unknown_citation_is_explicitly_unknown(self) -> None:
+        parsed = evidence.parse_citation("free prose is not a citation")
+        self.assertEqual(parsed.kind, evidence.EvidenceKind.UNKNOWN)
+
+
 class CredentialLikePathTest(unittest.TestCase):
     def test_env_local_is_prohibited(self) -> None:
         self.assertTrue(evidence._is_credential_like_path(".env.local"))

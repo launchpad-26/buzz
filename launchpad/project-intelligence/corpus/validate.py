@@ -18,6 +18,7 @@ Run:  python3 launchpad/project-intelligence/corpus/validate.py [--root PATH]
 
 from __future__ import annotations
 
+import importlib.util
 import argparse
 import json
 import math
@@ -33,6 +34,24 @@ from pathlib import Path, PurePosixPath
 import jsonschema
 import yaml
 
+
+
+def _load_evidence_parser():
+    module_name = "_corpus_evidence_parser"
+    existing = sys.modules.get(module_name)
+    if existing is not None:
+        return existing
+    parser_path = Path(__file__).with_name("evidence.py")
+    spec = importlib.util.spec_from_file_location(module_name, parser_path)
+    if spec is None or spec.loader is None:
+        raise ImportError(f"cannot load evidence parser from {parser_path}")
+    module = importlib.util.module_from_spec(spec)
+    sys.modules[module_name] = module
+    spec.loader.exec_module(module)
+    return module
+
+
+_EVIDENCE_PARSER = _load_evidence_parser()
 DEFAULT_ROOT = "launchpad/docs/corpus"
 
 # `schema/` is #622's own schema-testing infrastructure (node.schema.json,
@@ -763,13 +782,18 @@ def _classify_citation(
     if link:
         text = link.group("target")
 
-    if text.startswith(_URL_PREFIXES):
+    parsed = _EVIDENCE_PARSER.parse_citation(text)
+
+    if parsed.kind in (
+        _EVIDENCE_PARSER.EvidenceKind.GITHUB_URL,
+        _EVIDENCE_PARSER.EvidenceKind.EXTERNAL_URL,
+    ):
         return _classify_url(text, check_links=check_links)
 
-    if (
-        _COMMIT_CITATION_RE.match(text)
-        or _GRAPH_EDGE_RE.match(text)
-        or _TOOL_RESULT_RE.match(text)
+    if parsed.kind in (
+        _EVIDENCE_PARSER.EvidenceKind.COMMIT,
+        _EVIDENCE_PARSER.EvidenceKind.GRAPH_EDGE,
+        _EVIDENCE_PARSER.EvidenceKind.TOOL_RESULT,
     ):
         # Defence in depth: the shape checks above are what stop a path being
         # laundered into the non-fatal channel, and the blocklist is a second,
@@ -780,7 +804,7 @@ def _classify_citation(
             return CitationVerdict(
                 "error", "matches a prohibited credential-like pattern"
             )
-        if _COMMIT_CITATION_RE.match(text):
+        if parsed.kind == _EVIDENCE_PARSER.EvidenceKind.COMMIT:
             return _classify_commit_reference(text, repo_root_path)
         return CitationVerdict(
             "unverified",

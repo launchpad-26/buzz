@@ -38,6 +38,8 @@ tests) construct entries with `collect_*` and assemble them with
 from __future__ import annotations
 
 import json
+import enum
+import re
 import subprocess
 from dataclasses import dataclass, field
 from pathlib import Path, PurePosixPath
@@ -69,6 +71,88 @@ _VALID_CLASSES = {
     "issue_discussion",
     "adr",
 }
+
+
+class EvidenceKind(enum.Enum):
+    LOCAL_FILE = "local_file"
+    LOCAL_FILE_LINE = "local_file_line"
+    LOCAL_FILE_RANGE = "local_file_range"
+    COMMIT = "commit"
+    GITHUB_URL = "github_url"
+    EXTERNAL_URL = "external_url"
+    GRAPH_EDGE = "graph_edge"
+    TOOL_RESULT = "tool_result"
+    UNKNOWN = "unknown"
+
+
+@dataclass(frozen=True)
+class ParsedCitation:
+    kind: EvidenceKind
+    path: str | None = None
+    start_line: int | None = None
+    end_line: int | None = None
+    commit: str | None = None
+    url: str | None = None
+
+
+_PARSE_URL_PREFIXES = ("http://", "https://")
+_PARSE_MARKDOWN_LINK_RE = re.compile(r"^\[[^\]]*\]\((?P<target>[^)\s]+)\)$")
+_PARSE_COMMIT_RE = re.compile(r"^commit\s+(?P<sha>[0-9a-fA-F]{7,40})\b")
+_PARSE_FILE_POSITION_RE = re.compile(
+    r"^(?P<path>\S+?):(?P<start>\d+)(?:-(?P<end>\d+))?$"
+)
+_PARSE_SYMBOL = r"[A-Za-z_][A-Za-z0-9_.:]*"
+_PARSE_GRAPH_EDGE_RE = re.compile(
+    rf"^{_PARSE_SYMBOL} -> {_PARSE_SYMBOL} \(\d+ hops?\)$"
+)
+_PARSE_TOOL_RESULT_RE = re.compile(rf"^{_PARSE_SYMBOL}\(.*\) -> .+$")
+
+
+def _parse_url_target(text: str) -> str:
+    return text.split()[0].rstrip(",.;")
+
+
+def parse_citation(citation: str) -> ParsedCitation:
+    """Parse one citation into a typed, normalized evidence reference.
+
+    Parsing identifies the evidence kind only. It does not claim the source is
+    valid or reachable; that is the verifier layer's responsibility.
+    """
+    text = citation.strip()
+    link = _PARSE_MARKDOWN_LINK_RE.match(text)
+    if link:
+        text = link.group("target")
+    if text.startswith(_PARSE_URL_PREFIXES):
+        target = _parse_url_target(text)
+        kind = (
+            EvidenceKind.GITHUB_URL
+            if "github.com/" in target or "raw.githubusercontent.com/" in target
+            else EvidenceKind.EXTERNAL_URL
+        )
+        return ParsedCitation(kind=kind, url=target)
+    commit = _PARSE_COMMIT_RE.match(text)
+    if commit:
+        return ParsedCitation(kind=EvidenceKind.COMMIT, commit=commit.group("sha"))
+    if _PARSE_GRAPH_EDGE_RE.match(text):
+        return ParsedCitation(kind=EvidenceKind.GRAPH_EDGE)
+    if _PARSE_TOOL_RESULT_RE.match(text):
+        return ParsedCitation(kind=EvidenceKind.TOOL_RESULT)
+    position = _PARSE_FILE_POSITION_RE.match(text)
+    if position:
+        end = position.group("end")
+        return ParsedCitation(
+            kind=(
+                EvidenceKind.LOCAL_FILE_RANGE
+                if end is not None
+                else EvidenceKind.LOCAL_FILE_LINE
+            ),
+            path=position.group("path"),
+            start_line=int(position.group("start")),
+            end_line=int(end) if end is not None else int(position.group("start")),
+        )
+    if text and not any(character.isspace() for character in text):
+        return ParsedCitation(kind=EvidenceKind.LOCAL_FILE, path=text)
+    return ParsedCitation(kind=EvidenceKind.UNKNOWN)
 
 
 class ProhibitedPathError(Exception):
