@@ -45,7 +45,15 @@ jobs:
   validate:
     runs-on: ubuntu-latest
     steps:
+      # fetch-depth: 0, deliberately. The validator resolves refs and commits
+      # named by tool-result citations, and the default shallow clone contains
+      # almost none of them. The verifier declines to accuse a citation in a
+      # shallow checkout (see `_is_shallow_repository`), so a shallow clone here
+      # would not produce false failures -- it would silently check nothing,
+      # which is worse. Full history is what makes this stage a real check.
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - uses: actions/setup-python@v5
         with:
@@ -76,5 +84,19 @@ jobs:
       - name: Run corpus validator unit tests
         run: python3 -m unittest discover -s launchpad/project-intelligence/corpus/tests -p "test_*.py" -v
 
-      - name: Validate the real corpus
+      # Two stages, deliberately separate. The structural stage is
+      # deterministic and touches no network: if it fails, the corpus is wrong.
+      # The link stage reaches third-party hosts, so it can fail for reasons
+      # that have nothing to do with this pull request. Splitting them means a
+      # flaky remote host is legible as a link failure instead of being reported
+      # as a corpus defect.
+      - name: Validate the real corpus — structure (offline, deterministic)
+        run: python3 launchpad/project-intelligence/corpus/validate.py
+
+      # `!cancelled()` rather than `always()`: run even when the structural
+      # stage failed, so one run reports both kinds of problem instead of
+      # hiding link results behind a structural failure, but stop promptly when
+      # the workflow is cancelled.
+      - name: Validate the real corpus — links (network)
+        if: ${{ !cancelled() }}
         run: python3 launchpad/project-intelligence/corpus/validate.py --check-links

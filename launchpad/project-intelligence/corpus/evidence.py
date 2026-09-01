@@ -308,6 +308,51 @@ def _git_object_exists(repo_root: Path, revision: str) -> bool:
     return result.returncode == 0
 
 
+def _is_shallow_repository(repo_root: Path) -> bool:
+    result = subprocess.run(
+        ["git", "rev-parse", "--is-shallow-repository"],
+        cwd=repo_root,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    return result.stdout.strip() == "true"
+
+
+def _remote_tracking_refs_present(repo_root: Path, remote: str) -> bool:
+    result = subprocess.run(
+        ["git", "for-each-ref", "--format=%(refname)", f"refs/remotes/{remote}/"],
+        cwd=repo_root,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    return bool(result.stdout.strip())
+
+
+def _missing_ref_is_conclusive(repo_root: Path, ref: str) -> bool:
+    """Whether this checkout has standing to call a missing ref an error.
+
+    Shallowness truncates history DEPTH, not the ref LIST -- a `--depth 1`
+    clone of one branch has neither, but a clone that fetched every branch and
+    shortened their history has a complete ref list. So the two cases split:
+
+    - a remote-tracking NAME (`origin/task/...`): conclusive whenever this
+      checkout holds any refs for that remote, because then the branch list was
+      fetched and this name is not in it.
+    - a bare SHA: conclusive only in a full clone, since a shortened history is
+      exactly what makes an old commit unreachable here but real upstream.
+
+    Without this split the verifier either accuses citations a shallow CI
+    checkout cannot judge, or -- worse -- silently stops reporting genuine rot
+    to anyone whose clone happens to be shallow.
+    """
+    remote, _, branch = ref.partition("/")
+    if branch and _remote_tracking_refs_present(repo_root, remote):
+        return True
+    return not _is_shallow_repository(repo_root)
+
+
 def _verify_git_tool(parsed: ParsedCitation, repo_root: Path) -> VerificationResult:
     assert parsed.tool_args is not None
     if any(token in parsed.tool_args for token in _GIT_ARG_SHELL_METACHARACTERS):
@@ -331,6 +376,12 @@ def _verify_git_tool(parsed: ParsedCitation, repo_root: Path) -> VerificationRes
             "it was not replayed",
         )
     if not _git_object_exists(repo_root, f"{ref}^{{commit}}"):
+        if not _missing_ref_is_conclusive(repo_root, ref):
+            return VerificationResult(
+                "unverified",
+                "cites a git ref this checkout cannot resolve and cannot rule "
+                "out either, because its history is shallow",
+            )
         return VerificationResult(
             "error",
             "cites a git ref that no longer exists in this repository",

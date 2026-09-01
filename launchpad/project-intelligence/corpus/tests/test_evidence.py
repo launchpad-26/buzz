@@ -249,6 +249,41 @@ class GitToolCitationVerifierTest(unittest.TestCase):
         self.assertEqual(result.status, "unverified")
         self.assertIn("could not be parsed", result.detail)
 
+    def test_missing_bare_sha_is_not_an_error_in_a_shallow_clone(self) -> None:
+        """A shortened history is exactly what makes an old commit unreachable
+        here but real upstream, so absence proves nothing about the citation."""
+        with unittest.mock.patch.object(
+            evidence, "_is_shallow_repository", return_value=True
+        ):
+            result = self._verify(
+                "git_show('0123456789abcdef0123456789abcdef01234567"
+                ":launchpad/docs/corpus/AGENTS.md') -> a heading"
+            )
+        self.assertEqual(result.status, "unverified")
+        self.assertIn("shallow", result.detail)
+
+    def test_missing_branch_name_is_conclusive_even_in_a_shallow_clone(self) -> None:
+        """Shallowness truncates history depth, not the ref list. If this
+        checkout holds refs for the remote, the branch list was fetched and a
+        name absent from it is genuinely gone -- confirmed against the remote
+        for the refs this branch reports."""
+        with unittest.mock.patch.object(
+            evidence, "_is_shallow_repository", return_value=True
+        ):
+            result = self._verify(
+                "git_ls_tree(ref='origin/task/0000-branch-deleted-long-ago', "
+                "path='launchpad/docs/corpus') -> AGENTS.md"
+            )
+        self.assertEqual(result.status, "error")
+
+    def test_this_checkout_holds_remote_refs_so_the_error_path_is_live(self) -> None:
+        """Guards the error-path tests from passing vacuously: without remote
+        refs every one of them would exercise the shallow downgrade instead of
+        the behaviour it names."""
+        self.assertTrue(
+            evidence._remote_tracking_refs_present(self.REPO_ROOT, "origin")
+        )
+
     def test_no_input_ever_verifies_ok(self) -> None:
         """The load-bearing guarantee of DECISION-1."""
         for citation in (
