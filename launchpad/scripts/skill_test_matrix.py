@@ -121,6 +121,14 @@ def coverage_problems(discovered, run_here, covered_elsewhere, repo_root=REPO_RO
                 f"restore the suite."
             )
 
+    if not run_here:
+        problems.append(
+            "'run_here' is empty, so this lane would build a matrix with no legs "
+            "and run no suite at all. If every skill really is covered elsewhere, "
+            "delete this workflow rather than leaving one that reports success "
+            "for running nothing."
+        )
+
     for skill, floor in sorted(run_here.items()):
         if not isinstance(floor, int) or floor < 1:
             problems.append(
@@ -146,14 +154,38 @@ def coverage_problems(discovered, run_here, covered_elsewhere, repo_root=REPO_RO
     return problems
 
 
+def summary_line(output):
+    """pytest's last non-empty line, which is always its collection summary.
+
+    Verified against pytest 8.3.4 for all three outcomes:
+        healthy   "3 tests collected in 0.00s"
+        error     "3 tests collected, 1 error in 0.07s"
+        empty     "no tests collected in 0.00s"
+
+    ONLY THIS LINE IS PARSED, and that is the whole point. `-q --collect-only`
+    prints one node id per collected test above the summary, and a node id can
+    contain arbitrary text from a parametrize id -- pytest renders
+    `@pytest.mark.parametrize("msg", ["1 error"])` as the literal line
+    `tests/test_probe.py::test_reports[1 error]`, spaces intact. Scanning the
+    whole output therefore let one parametrized test id in a perfectly healthy
+    suite match the error pattern and fail the build red. Reproduced end to end
+    before this was narrowed.
+    """
+    for line in reversed(output.splitlines()):
+        if line.strip():
+            return line
+    return ""
+
+
 def parse_collected(output):
     """Cases pytest collected, or None when it reported no usable summary."""
-    if _ERRORS.search(output):
+    summary = summary_line(output)
+    if _ERRORS.search(summary):
         return None
-    matches = _COLLECTED.findall(output)
-    if matches:
-        return int(matches[-1])
-    if _NONE_COLLECTED.search(output):
+    match = _COLLECTED.search(summary)
+    if match:
+        return int(match.group(1))
+    if _NONE_COLLECTED.search(summary):
         return 0
     return None
 

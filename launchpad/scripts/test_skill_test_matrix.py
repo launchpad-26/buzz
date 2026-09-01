@@ -73,6 +73,21 @@ class CoverageProblemTests(unittest.TestCase):
         self.assertEqual(len(problems), 1)
         self.assertIn("no launchpad/skills/alpha/tests", problems[0])
 
+    def test_empty_run_here_is_rejected(self):
+        """A manifest that runs nothing must not report itself consistent.
+
+        Without this the matrix builds with no legs, no suite executes, and the
+        pipeline is green -- the same silent-zero shape the floors exist to catch,
+        one level up.
+        """
+        with tempfile.TemporaryDirectory() as tmp:
+            root = pathlib.Path(tmp)
+            (root / "wf.yml").write_text("launchpad/skills/alpha", encoding="utf-8")
+            problems = m.coverage_problems(
+                ["alpha"], {}, {"alpha": "wf.yml"}, repo_root=root
+            )
+        self.assertTrue(any("run no suite at all" in p for p in problems))
+
     def test_zero_floor_is_rejected(self):
         problems = m.coverage_problems(["alpha"], {"alpha": 0}, {})
         self.assertTrue(any("positive integer" in p for p in problems))
@@ -81,10 +96,16 @@ class CoverageProblemTests(unittest.TestCase):
         problems = m.coverage_problems(["alpha"], {"alpha": "many"}, {})
         self.assertTrue(any("positive integer" in p for p in problems))
 
+    # These three isolate the exclusion rules, so they keep one real entry in
+    # 'run_here'. An empty one is its own finding (see
+    # test_empty_run_here_is_rejected) and would otherwise mask what they assert.
     def test_exclusion_naming_a_missing_workflow_is_reported(self):
         with tempfile.TemporaryDirectory() as tmp:
             problems = m.coverage_problems(
-                ["alpha"], {}, {"alpha": "gone.yml"}, repo_root=pathlib.Path(tmp)
+                ["alpha", "kept"],
+                {"kept": 1},
+                {"alpha": "gone.yml"},
+                repo_root=pathlib.Path(tmp),
             )
         self.assertEqual(len(problems), 1)
         self.assertIn("does not exist", problems[0])
@@ -96,7 +117,7 @@ class CoverageProblemTests(unittest.TestCase):
                 "paths:\n  - launchpad/skills/something-else/**\n", encoding="utf-8"
             )
             problems = m.coverage_problems(
-                ["alpha"], {}, {"alpha": "wf.yml"}, repo_root=root
+                ["alpha", "kept"], {"kept": 1}, {"alpha": "wf.yml"}, repo_root=root
             )
         self.assertEqual(len(problems), 1)
         self.assertIn("never mentions", problems[0])
@@ -108,7 +129,7 @@ class CoverageProblemTests(unittest.TestCase):
                 "paths:\n  - launchpad/skills/alpha/**\n", encoding="utf-8"
             )
             problems = m.coverage_problems(
-                ["alpha"], {}, {"alpha": "wf.yml"}, repo_root=root
+                ["alpha", "kept"], {"kept": 1}, {"alpha": "wf.yml"}, repo_root=root
             )
         self.assertEqual(problems, [])
 
@@ -131,6 +152,57 @@ class ParseCollectedTests(unittest.TestCase):
 
     def test_no_summary_is_none(self):
         self.assertIsNone(m.parse_collected("something else entirely"))
+
+    def test_a_parametrized_node_id_cannot_suppress_a_healthy_count(self):
+        """Regression: a healthy suite must not go red because of a test's name.
+
+        pytest renders `parametrize("msg", ["1 error"])` as the literal collection
+        line `tests/test_probe.py::test_reports[1 error]` -- verified against
+        pytest 8.3.4, spaces intact. Scanning the whole output matched the error
+        pattern there and reported a healthy 3-test suite as unreadable.
+        """
+        output = (
+            "tests/test_probe.py::test_reports[1 error]\n"
+            "tests/test_probe.py::test_reports[ok]\n"
+            "tests/test_probe.py::test_other\n"
+            "\n"
+            "3 tests collected in 0.01s\n"
+        )
+        self.assertEqual(m.parse_collected(output), 3)
+
+    def test_a_parametrized_node_id_cannot_forge_a_count(self):
+        output = (
+            "tests/test_x.py::test_a[25 tests collected]\n"
+            "\n"
+            "1 test collected in 0.01s\n"
+        )
+        self.assertEqual(m.parse_collected(output), 1)
+
+    def test_a_parametrized_node_id_cannot_forge_an_empty_suite(self):
+        output = (
+            "tests/test_x.py::test_a[no tests collected]\n"
+            "\n"
+            "7 tests collected in 0.01s\n"
+        )
+        self.assertEqual(m.parse_collected(output), 7)
+
+    def test_real_collection_error_summary_is_still_rejected(self):
+        """pytest 8.3.4's actual error summary, which must still fail."""
+        output = (
+            "ERROR tests/test_broken.py\n"
+            "!!!!!!!! Interrupted: 1 error during collection !!!!!!!!\n"
+            "3 tests collected, 1 error in 0.07s\n"
+        )
+        self.assertIsNone(m.parse_collected(output))
+
+    def test_summary_line_ignores_trailing_blank_lines(self):
+        self.assertEqual(
+            m.summary_line("9 tests collected in 0.1s\n\n\n"),
+            "9 tests collected in 0.1s",
+        )
+
+    def test_summary_line_of_empty_output_is_empty(self):
+        self.assertEqual(m.summary_line(""), "")
 
     def test_pytests_empty_suite_phrasing_is_zero_not_none(self):
         """The output produced by renaming every test_* to check_*.
