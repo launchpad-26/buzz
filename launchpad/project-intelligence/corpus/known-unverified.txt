@@ -87,7 +87,6 @@ capabilities-presence-typing-indicator: evidence entry 12, citation 2
 capabilities-presence-user-status: evidence entry 10, citation 2
 capabilities-presence-user-status: evidence entry 21, citation 2
 capabilities-presence-user-status: evidence entry 25, citation 1
-capabilities-presence-user-status: evidence entry 25, citation 2
 capabilities-search-search-index: evidence entry 17, citation 1
 capabilities-search-search-query: evidence entry 5, citation 2
 capabilities-search-search: evidence entry 24, citation 1
@@ -197,8 +196,6 @@ layers-configuration-secrets: evidence entry 5, citation 1
 layers-configuration-secrets: evidence entry 9, citation 2
 layers-lifecycle-background-workers: evidence entry 4, citation 3
 layers-lifecycle-background-workers: evidence entry 4, citation 4
-layers-lifecycle-resource-cleanup: evidence entry 3, citation 2
-layers-lifecycle-resource-cleanup: evidence entry 3, citation 3
 layers-observability-datastore-tracing: evidence entry 15, citation 1
 layers-observability-health-checks: evidence entry 14, citation 1
 layers-observability-opentelemetry: evidence entry 11, citation 1

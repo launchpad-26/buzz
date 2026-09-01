@@ -864,7 +864,15 @@ def validate_corpus(corpus_root: Path, *, check_links: bool = False) -> Validati
     report.deferred.extend(citation_deferred)
 
     baseline = load_baseline(root, corpus_root)
-    seen_keys = {baseline_key(message) for message in citation_unverified}
+    # A citation that turned into a hard ERROR is still outstanding, so its
+    # baseline line is not stale. Counting only the unverified ones reported it
+    # twice -- once as the error, once as "no longer blocks validation", which
+    # was the opposite of true and told the reader to delete the line tracking a
+    # citation that had just started failing harder.
+    seen_keys = {
+        baseline_key(message)
+        for message in (*citation_unverified, *citation_errors)
+    }
     for message in citation_unverified:
         if baseline_key(message) in baseline:
             report.baselined.append(message)

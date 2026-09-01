@@ -17,12 +17,12 @@ evidence:
     evidence:
       - "launchpad/docs/corpus/schema/node.schema.json"
       - "launchpad/docs/corpus/schema/README.md"
-  - statement: "This node uses type: layers rather than flow.md's own worked-skeleton default of type: architecture, for the same reason siblings layers/lifecycle/graceful-shutdown.md (#1118) and layers/lifecycle/startup.md (#1120) each give in their own 'A note on type' sections: Feature #611 (this node's parent) organizes its whole task set under a layers/lifecycle/ directory naming convention -- a cross-cutting technical-behavior grouping distinct from the architecture/ subtree's C4 static-diagram family -- and layers is node.schema.json's own dedicated enum member for that surface. Both sibling files were opened directly from their own local, unpushed worktree branches (task/1118-graceful-shutdown at commit d00a82b5b, task/1120-startup at commit 55feadf0a) rather than assumed from memory."
+  - statement: "This node uses type: layers rather than flow.md's own worked-skeleton default of type: architecture, for the same reason siblings layers/lifecycle/graceful-shutdown.md (#1118) and layers/lifecycle/startup.md (#1120) each give in their own 'A note on type' sections: Feature #611 (this node's parent) organizes its whole task set under a layers/lifecycle/ directory naming convention -- a cross-cutting technical-behavior grouping distinct from the architecture/ subtree's C4 static-diagram family -- and layers is node.schema.json's own dedicated enum member for that surface. Both sibling files were opened directly rather than assumed from memory; at authoring time they existed only on their own unpushed worktree branches, and both have since merged to origin/launchpad, so they are cited here by path."
     entry_class: INFERENCE
     evidence:
       - "launchpad/docs/corpus/schema/node.schema.json"
-      - "git_show(ref='d00a82b5b', path='launchpad/docs/corpus/layers/lifecycle/graceful-shutdown.md') -> 'A note on `type`' section"
-      - "git_show(ref='55feadf0a', path='launchpad/docs/corpus/layers/lifecycle/startup.md') -> 'A note on `type`' section"
+      - "launchpad/docs/corpus/layers/lifecycle/graceful-shutdown.md"
+      - "launchpad/docs/corpus/layers/lifecycle/startup.md"
     confidence: 0.75
   - statement: "hydrate.rs's own module doc comment states: 'The returned HydratedRepo owns a tempfile::TempDir; dropping it cleans up. Cached pack/index pairs are immutable performance state; object storage remains authoritative.'"
     entry_class: FACT

@@ -1148,6 +1148,22 @@ class UnverifiedChannelTest(unittest.TestCase):
         self.assertIn("no longer blocks validation", stderr)
         self.assertIn("remove this line", stderr)
 
+    def test_a_baselined_citation_that_became_an_error_is_not_called_stale(self) -> None:
+        """CI caught this: a citation that turned into a hard error was reported
+        twice -- once as the error, once as "no longer blocks validation", which
+        told the reader to delete the line tracking a citation that had just
+        started failing harder."""
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            self._write_single_citation_root(root, "launchpad/nope/missing.md")
+            key = "validator-single-citation: evidence entry 1, citation 1"
+            with unittest.mock.patch.object(
+                validate, "load_baseline", lambda _root, _corpus: {key}
+            ):
+                exit_code, stdout, stderr = self._run_main(root)
+        self.assertEqual(exit_code, 1)
+        self.assertNotIn("no longer blocks validation", stderr)
+
     def test_baseline_key_ignores_the_detail_text(self) -> None:
         """Rewording a verifier's message must not invalidate the baseline, and
         the key must not carry citation prose into a tracked file."""

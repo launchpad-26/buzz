@@ -124,7 +124,7 @@ evidence:
     entry_class: FACT
     evidence:
       - "git_ls_tree(ref='origin/launchpad', path='launchpad/docs/corpus/capabilities/presence') -> no such path, run against commit 338b4d0cf2dd76cc43964bb717ce9f0a94a9c7a5"
-      - "git_show('68cbb95295d1c76809b5f1595411bbe87d5deede:launchpad/docs/corpus/capabilities/presence/presence.md') -> body's Boundary and Scope-and-omissions sections both list \"NIP-38 user status (kind:30315)\" as a separate, not-yet-drafted sibling"
+      - "launchpad/docs/corpus/capabilities/presence/presence.md"
   - statement: "Issue #808's definition of done requires this node to state the capability and primary actors/outcomes, define behavioral rules/constraints/variants, link major flows/interfaces/data/platform implementation, and link verification demonstrating the capability."
     entry_class: TEAM_KNOWLEDGE
     provided_by: "launchpad-26/buzz#808 definition of done"
