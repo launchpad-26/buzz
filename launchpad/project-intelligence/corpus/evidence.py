@@ -319,8 +319,25 @@ def _verify_absent_path(parsed: ParsedCitation, repo_root: Path) -> Verification
     # returned `ok` against a file that is right there: a vacuous pass in the
     # one form built to make absence provable. Reject the spelling instead of
     # normalising it, so the citation says exactly what was checked.
-    parts = parsed.path.split("/")
-    if any(part in ("", ".") for part in parts):
+    if len(parsed.path) > _MAX_CITATION_PATH_LENGTH:
+        # `git` rejects an over-long argument with OSError E2BIG, which escaped
+        # as a traceback and took the whole run down. It is also not a real
+        # path, so refuse it here rather than letting the subprocess decide.
+        return VerificationResult(
+            "error", "is longer than any real repository path"
+        )
+    # A backslash is not a path separator to git, so `launchpad\\README.md` is
+    # simply a filename git cannot resolve -- and this verifier reads any
+    # failure to resolve as proven absence. That made every Windows-style
+    # spelling of an EXISTING file verify `ok`, which is the same vacuous pass
+    # the check below was added to close, entered through a different door.
+    if "\\" in parsed.path:
+        return VerificationResult(
+            "error",
+            "uses a backslash, which git does not treat as a path separator, so "
+            "its absence would only mean git could not resolve the spelling",
+        )
+    if any(part in ("", ".") for part in parsed.path.split("/")):
         return VerificationResult(
             "error",
             "is not a canonical repository path, so its absence would not be "
@@ -778,8 +795,20 @@ _URL_CHECK_USER_AGENT = "buzz-corpus-validator/1.0"
 
 
 # Statuses that describe the service rather than the target. Retried, then
-# reported as indeterminate -- never as a dead link.
-_TRANSIENT_STATUSES = frozenset({408, 425, 429, 500, 502, 503, 504})
+# reported as indeterminate -- never as a dead link. Enumerating 5xx individually
+# missed 505 and the 52x range Cloudflare uses, so those were still reported as
+# dead links; NO 5xx says anything about whether the cited page exists, so the
+# rule is the whole class rather than a list to keep extending.
+_TRANSIENT_CLIENT_STATUSES = frozenset({408, 425, 429})
+
+
+def _is_transient_status(code: int) -> bool:
+    return code >= 500 or code in _TRANSIENT_CLIENT_STATUSES
+
+
+# Longest path this validator will hand to git. Well past any real repository
+# path, and short enough that an argument never trips E2BIG.
+_MAX_CITATION_PATH_LENGTH = 4096
 # Statuses that mean "this server dislikes HEAD", not "no such page". A server
 # answering 403 to HEAD and 200 to GET was being called dead.
 _HEAD_UNSUPPORTED_STATUSES = frozenset({403, 405, 501})
@@ -825,7 +854,7 @@ def _url_resolves(url: str) -> bool | None:
             except urllib.error.HTTPError as exc:
                 if method == "HEAD" and exc.code in _HEAD_UNSUPPORTED_STATUSES:
                     continue
-                if exc.code in _TRANSIENT_STATUSES:
+                if _is_transient_status(exc.code):
                     # A status came back, but not one that says anything about
                     # the TARGET: 429 and 5xx describe the service's mood.
                     # Treating them as dead links is the same flap this

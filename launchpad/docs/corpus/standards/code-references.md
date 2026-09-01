@@ -171,7 +171,8 @@ accepted wherever its bare target would be, and rejected wherever its target wou
 **Read the right-hand column, not the middle one.** An `ok` still establishes less than an
 author would assume: no citation form opens a file and compares it against the statement it
 sits under. What changed is that fewer forms now return `ok` for nothing — a line past the
-end of a file fails, a missing commit fails, a renamed symbol fails, and a dead ref fails.
+end of a file fails, a missing commit fails, a symbol whose name has vanished from its file
+fails, and a dead ref fails.
 
 **Prefer the symbol anchor for a claim about code.** A line number names a place in the file
 as it was; a symbol names the thing the claim is about. When code above it moves, the line

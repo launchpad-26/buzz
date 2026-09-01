@@ -286,6 +286,37 @@ class UrlReachabilityTriStateTest(unittest.TestCase):
         self.assertEqual(result.status, "unverified")
         self.assertIn("network failure", result.detail)
 
+    def test_every_5xx_is_transient_not_a_dead_link(self) -> None:
+        """Second-round review finding. Enumerating 5xx individually missed 505
+        and Cloudflare's 52x range, so those were still called dead links. No
+        5xx says anything about whether the cited page exists."""
+        import urllib.error
+
+        for code in (500, 502, 503, 504, 505, 520, 522, 599):
+            with self.subTest(status=code):
+                def fail(*_a, _c=code, **_k):
+                    raise urllib.error.HTTPError("u", _c, "x", {}, None)
+
+                with unittest.mock.patch.object(
+                    evidence.urllib.request, "urlopen", fail
+                ), unittest.mock.patch.object(evidence.time, "sleep", lambda _s: None):
+                    self.assertIsNone(evidence._url_resolves("https://example.com/x"))
+
+    def test_client_errors_about_the_target_are_still_dead_links(self) -> None:
+        """Guards the fix above from over-correcting into "nothing is ever
+        dead"."""
+        import urllib.error
+
+        for code in (404, 410):
+            with self.subTest(status=code):
+                def fail(*_a, _c=code, **_k):
+                    raise urllib.error.HTTPError("u", _c, "x", {}, None)
+
+                with unittest.mock.patch.object(
+                    evidence.urllib.request, "urlopen", fail
+                ), unittest.mock.patch.object(evidence.time, "sleep", lambda _s: None):
+                    self.assertIs(evidence._url_resolves("https://example.com/x"), False)
+
     def test_a_genuinely_dead_link_still_fails_hard(self) -> None:
         """The retry must not have turned the check into a no-op."""
         with unittest.mock.patch.object(
@@ -364,6 +395,24 @@ class AbsentPathCitationTest(unittest.TestCase):
             with self.subTest(citation=unpinned):
                 parsed = evidence.parse_citation(unpinned)
                 self.assertNotEqual(parsed.kind, evidence.EvidenceKind.ABSENT_PATH)
+
+    def test_backslash_spelling_of_an_existing_path_is_refused(self) -> None:
+        """Second-round review finding. A backslash is not a separator to git,
+        so `launchpad\\README.md` is a filename git cannot resolve — and this
+        verifier reads any failure to resolve as proven absence. Every
+        Windows-style spelling of an existing file verified `ok`."""
+        for spelling in ("launchpad\\README.md", "C:\\repo\\Justfile"):
+            with self.subTest(path=spelling):
+                result = self._verify(f"absent:{spelling}@{self.HEAD}")
+                self.assertEqual(result.status, "error")
+                self.assertNotEqual(result.status, "ok")
+
+    def test_oversized_path_is_refused_rather_than_crashing(self) -> None:
+        """git rejects an over-long argument with OSError E2BIG, which escaped
+        as a traceback and took the whole validation run down."""
+        result = self._verify(f"absent:{'a' * 200_000}@{self.HEAD}")
+        self.assertEqual(result.status, "error")
+        self.assertIn("longer than any real repository path", result.detail)
 
     def test_credential_guard_applies(self) -> None:
         result = self._verify(f"absent:.env.local@{self.HEAD}")
