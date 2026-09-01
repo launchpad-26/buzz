@@ -96,6 +96,19 @@ class CoverageProblemTests(unittest.TestCase):
         problems = m.coverage_problems(["alpha"], {"alpha": "many"}, {})
         self.assertTrue(any("positive integer" in p for p in problems))
 
+    def test_negative_floor_is_rejected(self):
+        problems = m.coverage_problems(["alpha"], {"alpha": -1}, {})
+        self.assertTrue(any("positive integer" in p for p in problems))
+
+    def test_boolean_floor_is_rejected(self):
+        """JSON `true` is an int in Python and would pass as floor 1."""
+        problems = m.coverage_problems(["alpha"], {"alpha": True}, {})
+        self.assertTrue(any("positive integer" in p for p in problems))
+
+    def test_floor_of_one_is_accepted(self):
+        """The boundary itself: 1 passes, 0 does not."""
+        self.assertEqual(m.coverage_problems(["alpha"], {"alpha": 1}, {}), [])
+
     # These three isolate the exclusion rules, so they keep one real entry in
     # 'run_here'. An empty one is its own finding (see
     # test_empty_run_here_is_rejected) and would otherwise mask what they assert.
@@ -287,13 +300,70 @@ class RealTreeTests(unittest.TestCase):
         self.assertIn("run_here", data)
         self.assertIn("covered_elsewhere", data)
 
-    def test_matrix_covers_every_run_here_entry(self):
+class CommandTests(unittest.TestCase):
+    """Drive the two subcommands the workflow actually invokes.
+
+    An earlier version of this file asserted on a list comprehension written
+    inside the test rather than on cmd_matrix's output. It passed with
+    cmd_matrix gutted to `print(json.dumps([]))` -- an empty matrix that runs
+    no suite at all, which is the exact catastrophe this lane exists to
+    prevent. These call the real commands and read their real stdout.
+    """
+
+    def _capture(self, argv, run_here, covered_elsewhere=None):
+        import contextlib
+        import io
+
+        real_load = m.load_manifest
+        m.load_manifest = lambda *a, **k: (run_here, covered_elsewhere or {})
+        try:
+            with contextlib.redirect_stdout(io.StringIO()) as out:
+                code = m.main(argv)
+            return code, out.getvalue()
+        finally:
+            m.load_manifest = real_load
+
+    def test_matrix_emits_one_entry_per_run_here_skill(self):
+        code, out = self._capture(["matrix"], {"beta": 2, "alpha": 9})
+        self.assertEqual(code, 0)
+        self.assertEqual(
+            json.loads(out),
+            [{"skill": "alpha", "floor": 9}, {"skill": "beta", "floor": 2}],
+        )
+
+    def test_matrix_is_sorted_so_job_names_are_stable(self):
+        _, out = self._capture(["matrix"], {"zulu": 1, "alpha": 1, "mike": 1})
+        self.assertEqual(
+            [e["skill"] for e in json.loads(out)], ["alpha", "mike", "zulu"]
+        )
+
+    def test_matrix_of_a_single_skill_is_still_a_list(self):
+        _, out = self._capture(["matrix"], {"only": 3})
+        self.assertEqual(json.loads(out), [{"skill": "only", "floor": 3}])
+
+    def test_check_exits_zero_on_the_real_consistent_tree(self):
+        run_here, covered = m.load_manifest()
+        code, out = self._capture(["check"], run_here, covered)
+        self.assertEqual(code, 0)
+        self.assertIn("consistent", out)
+
+    def test_check_exits_one_and_names_the_skill_when_undeclared(self):
+        code, out = self._capture(["check"], {"analysis-technique": 25})
+        self.assertEqual(code, 1)
+        self.assertIn("::error::", out)
+        self.assertIn("evidence-reduce", out)
+
+
+class RealManifestTests(unittest.TestCase):
+    def test_every_floor_in_the_committed_manifest_is_a_real_int(self):
+        """A JSON `true` would otherwise pass as floor 1 -- bool subclasses int."""
         run_here, _ = m.load_manifest()
-        entries = [
-            {"skill": s, "floor": f} for s, f in sorted(run_here.items())
-        ]
-        self.assertEqual(len(entries), len(run_here))
-        self.assertTrue(all(e["floor"] >= 1 for e in entries))
+        self.assertNotEqual(run_here, {})
+        for skill, floor in run_here.items():
+            with self.subTest(skill=skill):
+                self.assertNotIsInstance(floor, bool)
+                self.assertIsInstance(floor, int)
+                self.assertGreaterEqual(floor, 1)
 
 
 if __name__ == "__main__":

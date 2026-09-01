@@ -130,7 +130,10 @@ def coverage_problems(discovered, run_here, covered_elsewhere, repo_root=REPO_RO
         )
 
     for skill, floor in sorted(run_here.items()):
-        if not isinstance(floor, int) or floor < 1:
+        # `bool` subclasses `int`, so a JSON `true` would otherwise survive as
+        # floor 1 and let a 90-test suite shrink to one case unnoticed. The same
+        # trap is guarded in pr_body_check.py's closing-ref parser.
+        if isinstance(floor, bool) or not isinstance(floor, int) or floor < 1:
             problems.append(
                 f"{skill} has floor {floor!r}; a floor must be a positive "
                 f"integer. A floor of 0 would pass on an empty suite."
