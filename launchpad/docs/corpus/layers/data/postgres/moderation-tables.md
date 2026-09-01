@@ -35,18 +35,18 @@ evidence:
     entry_class: FACT
     evidence:
       - "migrations/0006_moderation.sql"
-  - statement: "crates/buzz-db/src/moderation.rs's own module doc states it 'Backs the NIP-56 report queue (moderation_reports), ban/timeout state (community_bans), and the moderation audit trail (moderation_actions) from migrations/0006_moderation.sql,' and states a tenant invariant that 'every function takes a CommunityId and touches exactly one community's rows... no function here may perform a cross-community or global lookup.' The module's MODERATION_ACTION_CHECK_VOCAB constant (a &[&str] of the same 12 values) carries its own comment: 'Keep this in lockstep with migrations/0006_moderation.sql.'"
+  - statement: "crates/buzz-db/src/store/moderation.rs's own module doc states it 'Backs the NIP-56 report queue (moderation_reports), ban/timeout state (community_bans), and the moderation audit trail (moderation_actions) from migrations/0006_moderation.sql,' and states a tenant invariant that 'every function takes a CommunityId and touches exactly one community's rows... no function here may perform a cross-community or global lookup.' The module's MODERATION_ACTION_CHECK_VOCAB constant (a &[&str] of the same 12 values) carries its own comment: 'Keep this in lockstep with migrations/0006_moderation.sql.'"
     entry_class: FACT
     evidence:
-      - "crates/buzz-db/src/moderation.rs"
-  - statement: "crates/buzz-db/src/moderation.rs's insert_action function runs `INSERT INTO moderation_actions (community_id, actor_pubkey, action, target_pubkey, target_event_id, channel_id, reason_code, public_reason, private_reason, matched_principal) VALUES (...) RETURNING id`, binding a NewAction<'_> struct's fields positionally, and returns the generated Uuid; list_actions runs `SELECT id, actor_pubkey, action, target_pubkey, target_event_id, channel_id, reason_code, public_reason, private_reason, matched_principal, created_at FROM moderation_actions WHERE community_id = $1 ORDER BY created_at DESC LIMIT $2`, with a doc comment 'List audit rows, newest first (`buzz moderation audit`).' No other function in this file, and no UPDATE or DELETE statement against moderation_actions, was found anywhere in the repository (grep for 'UPDATE moderation_actions' and 'DELETE FROM moderation_actions' across crates/ returned zero matches)."
+      - "crates/buzz-db/src/store/moderation.rs"
+  - statement: "crates/buzz-db/src/store/moderation.rs's insert_action function runs `INSERT INTO moderation_actions (community_id, actor_pubkey, action, target_pubkey, target_event_id, channel_id, reason_code, public_reason, private_reason, matched_principal) VALUES (...) RETURNING id`, binding a NewAction<'_> struct's fields positionally, and returns the generated Uuid; list_actions runs `SELECT id, actor_pubkey, action, target_pubkey, target_event_id, channel_id, reason_code, public_reason, private_reason, matched_principal, created_at FROM moderation_actions WHERE community_id = $1 ORDER BY created_at DESC LIMIT $2`, with a doc comment 'List audit rows, newest first (`buzz moderation audit`).' No other function in this file, and no UPDATE or DELETE statement against moderation_actions, was found anywhere in the repository (grep for 'UPDATE moderation_actions' and 'DELETE FROM moderation_actions' across crates/ returned zero matches)."
     entry_class: FACT
     evidence:
-      - "crates/buzz-db/src/moderation.rs"
-  - statement: "crates/buzz-db/src/moderation.rs's resolve_report function updates a moderation_reports row's status, resolved_by, resolved_at and action_id ('linking the audit action,' per its own doc comment), scoped `WHERE community_id = $1 AND id = $2 AND status = 'open'` -- the code-level mechanism that populates moderation_reports.action_id with a moderation_actions.id value."
+      - "crates/buzz-db/src/store/moderation.rs"
+  - statement: "crates/buzz-db/src/store/moderation.rs's resolve_report function updates a moderation_reports row's status, resolved_by, resolved_at and action_id ('linking the audit action,' per its own doc comment), scoped `WHERE community_id = $1 AND id = $2 AND status = 'open'` -- the code-level mechanism that populates moderation_reports.action_id with a moderation_actions.id value."
     entry_class: FACT
     evidence:
-      - "crates/buzz-db/src/moderation.rs"
+      - "crates/buzz-db/src/store/moderation.rs"
   - statement: "crates/buzz-core/src/kind.rs defines KIND_MODERATION_BAN=9040, KIND_MODERATION_UNBAN=9041, KIND_MODERATION_TIMEOUT=9042, KIND_MODERATION_UNTIMEOUT=9043 and KIND_MODERATION_RESOLVE_REPORT=9044 under a comment stating these are 'Buzz community moderation commands (mod-signed, processed like 9030-series: validated + executed directly, never stored as regular events; every accepted command writes a moderation_actions audit row).'"
     entry_class: FACT
     evidence:
@@ -67,10 +67,10 @@ evidence:
     entry_class: FACT
     evidence:
       - "crates/buzz-cli/src/commands/moderation.rs"
-  - statement: "crates/buzz-db/src/deletion.rs's EXPECTED_SCOPED_TABLES constant (the exact set of community-scoped tables its pre-deletion inventory checks) and its PURGE_SCOPED_TABLES constant (the foreign-key-safe child-before-parent purge order) both include moderation_actions; PURGE_SCOPED_TABLES lists moderation_reports before moderation_actions, consistent with moderation_reports.action_id's foreign key onto moderation_actions.id requiring the child row purged first. The module's own doc comment describes it as owning the 'durable whole-community deletion lifecycle,' and DeletionStage's fixed, forward-only stage order names PostgresPurged as the stage at which all EXPECTED_SCOPED_TABLES rows, moderation_actions included, are physically deleted."
+  - statement: "crates/buzz-db/src/store/deletion.rs's EXPECTED_SCOPED_TABLES constant (the exact set of community-scoped tables its pre-deletion inventory checks) and its PURGE_SCOPED_TABLES constant (the foreign-key-safe child-before-parent purge order) both include moderation_actions; PURGE_SCOPED_TABLES lists moderation_reports before moderation_actions, consistent with moderation_reports.action_id's foreign key onto moderation_actions.id requiring the child row purged first. The module's own doc comment describes it as owning the 'durable whole-community deletion lifecycle,' and DeletionStage's fixed, forward-only stage order names PostgresPurged as the stage at which all EXPECTED_SCOPED_TABLES rows, moderation_actions included, are physically deleted."
     entry_class: FACT
     evidence:
-      - "crates/buzz-db/src/deletion.rs"
+      - "crates/buzz-db/src/store/deletion.rs"
   - statement: "migrations/0029_community_deletion.sql's `SELECT attach_community_write_fence('moderation_actions');` (line 557) attaches the enforce_community_write_fence() BEFORE INSERT/UPDATE/DELETE trigger to moderation_actions, alongside events, channels, audit_log and the rest of this migration's community-scoped table list; that trigger calls assert_community_write_allowed(community_id), which raises 'community write fenced: community % generation %' (SQLSTATE object_not_in_prerequisite_state) whenever the row's community's deletion lifecycle is not 'active' -- so once a community leaves 'active', new moderation_actions rows for it are rejected at the database level, not only by application-level checks."
     entry_class: FACT
     evidence:
@@ -79,19 +79,19 @@ evidence:
     entry_class: FACT
     evidence:
       - "crates/buzz-relay/src/config.rs"
-  - statement: "crates/buzz-db/src/moderation.rs's own #[cfg(test)] module (gated `#[ignore = \"requires Postgres\"]`) tests tenant isolation for ban/timeout/report functions (e.g. restrictions_are_confined_to_their_community, checked directly), but no test in that module calls insert_action or list_actions -- grepping the module for those two identifiers finds only their own definitions, not a call site inside `mod tests`. Read/write correctness of moderation_actions itself is exercised indirectly, via moderation_commands.rs's resolution_audit_action test above, not by a Postgres-backed test of insert_action/list_actions."
+  - statement: "crates/buzz-db/src/store/moderation.rs's own #[cfg(test)] module (gated `#[ignore = \"requires Postgres\"]`) tests tenant isolation for ban/timeout/report functions (e.g. restrictions_are_confined_to_their_community, checked directly), but no test in that module calls insert_action or list_actions -- grepping the module for those two identifiers finds only their own definitions, not a call site inside `mod tests`. Read/write correctness of moderation_actions itself is exercised indirectly, via moderation_commands.rs's resolution_audit_action test above, not by a Postgres-backed test of insert_action/list_actions."
     entry_class: FACT
     evidence:
-      - "crates/buzz-db/src/moderation.rs"
+      - "crates/buzz-db/src/store/moderation.rs"
   - statement: "At the recorded revision, git ls-tree -r --name-only origin/launchpad -- launchpad/docs/corpus carries no path under layers/data/postgres/ or layers/data/object-storage/ -- every sibling data-entity/datastore node for this batch (audit-tables, backup-boundary, channel-members-table, channels-table, communities-table, media-objects, minio, and this document's own moderation-tables) exists only on unmerged task branches, so none is a valid relationships.target for this node per AGENTS.md's step 9 merge-target rule."
     entry_class: FACT
     evidence:
       - "git_ls_tree(origin/launchpad, launchpad/docs/corpus) -> no layers/ path present"
-  - statement: "No source found in this repository establishes that any UPDATE or DELETE ever runs against moderation_actions outside the whole-community purge path in crates/buzz-db/src/deletion.rs, so moderation_actions rows are treated here as append-only for the life of the community that produced them -- the same lifecycle shape audit-tables.md's own audit_log node records, reached independently by the identical grep-for-mutating-statements method rather than assumed by analogy."
+  - statement: "No source found in this repository establishes that any UPDATE or DELETE ever runs against moderation_actions outside the whole-community purge path in crates/buzz-db/src/store/deletion.rs, so moderation_actions rows are treated here as append-only for the life of the community that produced them -- the same lifecycle shape audit-tables.md's own audit_log node records, reached independently by the identical grep-for-mutating-statements method rather than assumed by analogy."
     entry_class: INFERENCE
     evidence:
-      - "crates/buzz-db/src/moderation.rs"
-      - "crates/buzz-db/src/deletion.rs"
+      - "crates/buzz-db/src/store/moderation.rs"
+      - "crates/buzz-db/src/store/deletion.rs"
     confidence: 0.8
 relationships:
   - type: part-of
@@ -128,7 +128,7 @@ only the composite key identifies a row, the same shape
 repository's tenant-scoped tables.
 
 **Semantic ownership.** `moderation_actions` is written and read exclusively
-through `crates/buzz-db/src/moderation.rs`'s `insert_action` and
+through `crates/buzz-db/src/store/moderation.rs`'s `insert_action` and
 `list_actions` functions. The module's own doc comment states its tenant
 invariant plainly: "every function takes a `CommunityId` and touches exactly
 one community's rows... no function here may perform a cross-community or
@@ -139,7 +139,7 @@ global lookup." No other crate issues SQL against this table directly.
 Not JSON Schema -- `moderation_actions` is a plain relational table with no
 JSON-typed column, the same treatment `audit-tables.md`'s own `audit_log`
 node gives its own (mostly) relational shape. Each row, per
-`migrations/0006_moderation.sql` and `crates/buzz-db/src/moderation.rs`'s
+`migrations/0006_moderation.sql` and `crates/buzz-db/src/store/moderation.rs`'s
 `NewAction`/`ActionRecord` field docs:
 
 | Column | Type | Meaning |
@@ -165,7 +165,7 @@ call site in `moderation_commands.rs`, not a database constraint.
 ## Invariants
 
 - **Action vocabulary.** `action` is CHECK-constrained to the 12-value list
-  above. `crates/buzz-db/src/moderation.rs`'s `MODERATION_ACTION_CHECK_VOCAB`
+  above. `crates/buzz-db/src/store/moderation.rs`'s `MODERATION_ACTION_CHECK_VOCAB`
   duplicates that list in Rust for the write side, and
   `crates/buzz-relay/src/handlers/moderation_commands.rs`'s own
   `#[cfg(test)]` unit test `resolve_audit_actions_are_allowed_by_db_check_vocabulary`
@@ -183,7 +183,7 @@ call site in `moderation_commands.rs`, not a database constraint.
   level.
 - **Append-only in application code.** No `UPDATE` or `DELETE` statement
   against `moderation_actions` was found anywhere in this repository outside
-  the whole-community purge path in `crates/buzz-db/src/deletion.rs` --
+  the whole-community purge path in `crates/buzz-db/src/store/deletion.rs` --
   checked by grepping `crates/` directly, not assumed by analogy with
   `audit_log`. This is recorded as an `INFERENCE`, not a `FACT`: absence of a
   call site is evidence of the current behavior, not a schema-level
@@ -203,7 +203,7 @@ helper, immediately after its triggering command is authorized and applied
 (e.g. `handle_ban` applies the ban via `buzz-db`, *then* calls `insert_audit`
 with `action = "ban"`). Rows are never updated after insert; a row's
 lifespan is bounded by its **community's** own lifecycle rather than treated
-as permanent independently of it: `crates/buzz-db/src/deletion.rs` lists
+as permanent independently of it: `crates/buzz-db/src/store/deletion.rs` lists
 `moderation_actions` in both `EXPECTED_SCOPED_TABLES` and
 `PURGE_SCOPED_TABLES`, and `DeletionStage`'s fixed, forward-only stage order
 reaches `PostgresPurged` -- the stage at which those rows are physically
@@ -226,7 +226,7 @@ it.
   as a foreign key onto `moderation_actions (community_id, id)` *after*
   `moderation_actions` is created, under the comment "Same-community
   resolution provenance: a report can only be resolved by an action row in
-  its own community." `crates/buzz-db/src/moderation.rs`'s `resolve_report`
+  its own community." `crates/buzz-db/src/store/moderation.rs`'s `resolve_report`
   function is the code path that populates that column, via `UPDATE
   moderation_reports SET ... action_id = $5 WHERE ... status = 'open'`.
   This is a row-to-row relationship in code, not a corpus `relationships`

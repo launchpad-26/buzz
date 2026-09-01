@@ -59,7 +59,7 @@ evidence:
   - statement: "replica_fence.rs defines CREATED_AT_FLOOR_SECS: i64 = 960 (the GUC value the writer pool's after_connect hook arms on every connection) and FENCE_STALENESS: Duration = Duration::from_secs(30); DbConfig::replica_read_max_age_ms's own doc comment states '0 disables bounded-staleness routing -- the rollout default' and that values above FENCE_STALENESS 'are clamped to it,' which lib.rs's read_budget_from_ms function implements directly (ms => Some(Duration::from_millis(ms).min(replica_fence::FENCE_STALENESS)))."
     entry_class: FACT
     evidence:
-      - "crates/buzz-db/src/replica_fence.rs"
+      - "crates/buzz-db/src/runtime/replica_fence.rs"
       - "crates/buzz-db/src/lib.rs"
   - statement: "crates/buzz-relay/src/config.rs's Config struct fields db_pool_size (u32) and db_read_pool_size (Option<u32>) are parsed from BUZZ_DB_POOL_SIZE (env var parsed as u32, filtered to v > 0, default 50) and BUZZ_DB_READ_POOL_SIZE (same parsing, no default -- None when unset or invalid); a doc comment on db_pool_size states buzz-db's own crate default of 20 'was sized for a handful of pods against max_connections=100. Against Aurora (~5,000 connections) that cap is the binding constraint.'"
     entry_class: FACT
@@ -310,7 +310,7 @@ connection-establishment latency or genuine contention.
   `Db::spawn_read_pool_boot_ping`, `Db::proved_reader`, `DbPoolStats`,
   `Db::has_read_pool`, `Db::pool_stats`, `Db::read_pool_stats`. This is the primary
   source for every sizing default and failure path this node describes.
-- `crates/buzz-db/src/replica_fence.rs` -- `CREATED_AT_FLOOR_SECS`,
+- `crates/buzz-db/src/runtime/replica_fence.rs` -- `CREATED_AT_FLOOR_SECS`,
   `FENCE_STALENESS`, `read_budget_from_ms`, and the fence proof `proved_reader`
   resolves against. This node does not restate the fence's full correctness proof;
   `architecture-containers-postgres.md` already defers that to this same file.
@@ -347,7 +347,7 @@ enforce, and how each pool behaves when it cannot get a connection.
 | Migration ordering, the schema-destruction lock, and partitioning | `architecture-containers-postgres.md` |
 | Table-by-table schema contents and the multi-tenant conformance contract | `migrations/0001_initial_schema.sql`, `docs/multi-tenant-conformance.md` |
 | Backup and restore of the datastore these pools connect to | `backup-boundary.md` (unmerged, PR #1875) |
-| The replica-freshness fence's full correctness proof | `crates/buzz-db/src/replica_fence.rs` |
+| The replica-freshness fence's full correctness proof | `crates/buzz-db/src/runtime/replica_fence.rs` |
 | The Redis connection pool (`deadpool_redis`-backed, structurally distinct) | `layers/data/redis/connection-pool.md` (issue #1092, not yet drafted) |
 | Production/staging Postgres provisioning, topology, and the actual value of `DATABASE_URL`/`READ_DATABASE_URL` per environment | `squareup/block-coder-tf-stacks` (private, not opened by this task) |
 

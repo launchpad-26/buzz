@@ -66,19 +66,19 @@ evidence:
     evidence:
       - "migrations/0022_event_ttl_refresh.sql"
       - "migrations/0024_event_ttl_refresh_shared_lock.sql"
-  - statement: "migrations/0024_event_ttl_refresh_shared_lock.sql's own comment states that the permanent-to-ephemeral (or TTL-change) transition, implemented by update_channel in crates/buzz-db/src/channel.rs, takes the same advisory-lock key in EXCLUSIVE mode before its UPDATE, so that either the transition commits first (and the event's shared-lock read then sees the new TTL and refreshes) or the event commits first (and the transition's own deadline reset is later than anything the event would have written) — 'no stale-NULL hole in either order.'"
+  - statement: "migrations/0024_event_ttl_refresh_shared_lock.sql's own comment states that the permanent-to-ephemeral (or TTL-change) transition, implemented by update_channel in crates/buzz-db/src/store/channel.rs, takes the same advisory-lock key in EXCLUSIVE mode before its UPDATE, so that either the transition commits first (and the event's shared-lock read then sees the new TTL and refreshes) or the event commits first (and the transition's own deadline reset is later than anything the event would have written) — 'no stale-NULL hole in either order.'"
     entry_class: FACT
     evidence:
       - "migrations/0024_event_ttl_refresh_shared_lock.sql"
-      - "crates/buzz-db/src/channel.rs"
-  - statement: "crates/buzz-db/src/channel.rs's reap_expired_ephemeral_channels function runs a single UPDATE that sets archived_at = NOW() for every channel row whose ttl_seconds IS NOT NULL, whose ttl_deadline has passed, that is not already archived or deleted, whose owning community is not archived, and for which community_write_allowed(community_id) holds, returning the community_id, community host and channel id of each row it archived."
+      - "crates/buzz-db/src/store/channel.rs"
+  - statement: "crates/buzz-db/src/store/channel.rs's reap_expired_ephemeral_channels function runs a single UPDATE that sets archived_at = NOW() for every channel row whose ttl_seconds IS NOT NULL, whose ttl_deadline has passed, that is not already archived or deleted, whose owning community is not archived, and for which community_write_allowed(community_id) holds, returning the community_id, community host and channel id of each row it archived."
     entry_class: FACT
     evidence:
-      - "crates/buzz-db/src/channel.rs"
-  - statement: "crates/buzz-db/src/channel.rs's archive_channel sets archived_at = NOW() (refusing with AccessDenied if already archived, or ChannelNotFound if the row does not exist or is soft-deleted); unarchive_channel clears archived_at back to NULL and, if ttl_seconds is set, resets ttl_deadline to NOW() + ttl_seconds (refusing with AccessDenied if not currently archived); soft_delete_channel sets deleted_at = NOW() and returns Ok(false) if the row was already deleted or not found, never hard-deleting the row."
+      - "crates/buzz-db/src/store/channel.rs"
+  - statement: "crates/buzz-db/src/store/channel.rs's archive_channel sets archived_at = NOW() (refusing with AccessDenied if already archived, or ChannelNotFound if the row does not exist or is soft-deleted); unarchive_channel clears archived_at back to NULL and, if ttl_seconds is set, resets ttl_deadline to NOW() + ttl_seconds (refusing with AccessDenied if not currently archived); soft_delete_channel sets deleted_at = NOW() and returns Ok(false) if the row was already deleted or not found, never hard-deleting the row."
     entry_class: FACT
     evidence:
-      - "crates/buzz-db/src/channel.rs"
+      - "crates/buzz-db/src/store/channel.rs"
   - statement: "migrations/0027_channels_id_lookup_index.sql's own comment states that channels is keyed PRIMARY KEY (community_id, id) with every secondary index leading with community_id, that Db::communities_of_channels and Db::community_of_channel both query by id alone with no community_id predicate ('that independence is the point... which is what makes Inv_NonInterference non-vacuous'), that no existing composite index can serve those queries so both sequentially scanned channels on every call (observed as the top wait on the staging writer), and that the new idx_channels_id_live index is deliberately NOT UNIQUE because 'id alone is not unique in this table' — the same fact migrations/0001's own PK comment establishes."
     entry_class: FACT
     evidence:
@@ -99,21 +99,21 @@ evidence:
     entry_class: FACT
     evidence:
       - "crates/buzz-relay/src/handlers/side_effects.rs"
-  - statement: "crates/buzz-relay/src/handlers/side_effects.rs's reconciliation helper (around its own comment 'Reconcile channels that exist in the DB but don't have kind:39000 events') is doc-commented 'Emits kind:39000 (metadata) and kind:39002 (members) for each channel' and 'Idempotent: checks for existing kind:39000 events before emitting' -- confirming the channels row, not the kind:39000/39001/39002 events, is this system's actual source of truth for a channel's existence and current metadata/membership: the events are a derived, relay-signed projection that can be (and is) regenerated from the row, the inverse relationship of thread_metadata, whose own module doc (crates/buzz-db/src/thread.rs) states it 'is populated when events are ingested and updated as replies arrive or are deleted' -- there, the events are the source of truth and the table is derived; here, the table is the source of truth and the events are derived."
+  - statement: "crates/buzz-relay/src/handlers/side_effects.rs's reconciliation helper (around its own comment 'Reconcile channels that exist in the DB but don't have kind:39000 events') is doc-commented 'Emits kind:39000 (metadata) and kind:39002 (members) for each channel' and 'Idempotent: checks for existing kind:39000 events before emitting' -- confirming the channels row, not the kind:39000/39001/39002 events, is this system's actual source of truth for a channel's existence and current metadata/membership: the events are a derived, relay-signed projection that can be (and is) regenerated from the row, the inverse relationship of thread_metadata, whose own module doc (crates/buzz-db/src/store/thread.rs) states it 'is populated when events are ingested and updated as replies arrive or are deleted' -- there, the events are the source of truth and the table is derived; here, the table is the source of truth and the events are derived."
     entry_class: INFERENCE
     evidence:
       - "crates/buzz-relay/src/handlers/side_effects.rs"
-      - "crates/buzz-db/src/thread.rs"
+      - "crates/buzz-db/src/store/thread.rs"
       - "launchpad/docs/corpus/templates/data-entity.md"
     confidence: 0.8
   - statement: "Root CLAUDE.md's 'Channel scoping' entry states: 'Channels use h tags (NIP-29 group tag), not e tags... Addressable events that describe a channel carry its id in their d tag instead: kind:39000 (metadata), kind:39001, kind:39002 (membership). get_channels resolves a user's channels from the d tag of their kind:39002 events, not from h.'"
     entry_class: FACT
     evidence:
       - "CLAUDE.md"
-  - statement: "crates/buzz-db/src/channel.rs defines the read/write surface for this table as a flat set of pub async fn functions taking &PgPool (or an active transaction) and a CommunityId: create_channel, create_channel_with_id, get_channel, get_canvas, set_canvas, add_member, remove_member, is_member, membership_pairs, get_members, get_members_bulk, get_accessible_channel_ids, list_channels, get_accessible_channels, get_bot_members, get_users_bulk, update_channel, set_topic, set_purpose, archive_channel, unarchive_channel, soft_delete_channel, get_member_count, get_member_counts_bulk, get_member_role and reap_expired_ephemeral_channels, and re-exports ChannelType/ChannelVisibility/MemberRole from buzz_core::channel rather than redefining them, per its own comment 'Re-export the canonical enum definitions from buzz-core... These live in core (zero I/O deps) so the SDK can share them without pulling in sqlx/tokio.'"
+  - statement: "crates/buzz-db/src/store/channel.rs defines the read/write surface for this table as a flat set of pub async fn functions taking &PgPool (or an active transaction) and a CommunityId: create_channel, create_channel_with_id, get_channel, get_canvas, set_canvas, add_member, remove_member, is_member, membership_pairs, get_members, get_members_bulk, get_accessible_channel_ids, list_channels, get_accessible_channels, get_bot_members, get_users_bulk, update_channel, set_topic, set_purpose, archive_channel, unarchive_channel, soft_delete_channel, get_member_count, get_member_counts_bulk, get_member_role and reap_expired_ephemeral_channels, and re-exports ChannelType/ChannelVisibility/MemberRole from buzz_core::channel rather than redefining them, per its own comment 'Re-export the canonical enum definitions from buzz-core... These live in core (zero I/O deps) so the SDK can share them without pulling in sqlx/tokio.'"
     entry_class: FACT
     evidence:
-      - "crates/buzz-db/src/channel.rs"
+      - "crates/buzz-db/src/store/channel.rs"
   - statement: "At the recorded revision, git ls-tree -r --name-only origin/launchpad -- launchpad/docs/corpus lists no node under layers/data/postgres/ and no node whose id or path names channels, communities, datastore or data-entity, so no relationships.target exists for this node to point at yet -- checked directly rather than assumed, per AGENTS.md's own warning that an absent-target justification decays the moment a sibling node merges."
     entry_class: FACT
     evidence:
@@ -290,7 +290,7 @@ table" makes every such lookup a sequential scan without it), and
 this table's own engine, replication or backup posture -- see *Scope and
 omissions*.
 
-The read/write surface is `crates/buzz-db/src/channel.rs`, whose public functions
+The read/write surface is `crates/buzz-db/src/store/channel.rs`, whose public functions
 are enumerated in the evidence ledger above; `crates/buzz-relay/src/handlers/side_effects.rs`
 and `crates/buzz-relay/src/handlers/ingest.rs` are the call sites that create a row
 from a kind-9007 event and emit the kind:39000/39001/39002 projection.

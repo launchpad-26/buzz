@@ -60,24 +60,24 @@ evidence:
     entry_class: FACT
     evidence:
       - "migrations/0027_channels_id_lookup_index.sql"
-  - statement: "crates/buzz-db/src/event.rs cites idx_events_parameterized by name in a doc comment on the EventQuery.d_tag field ('Pushed into SQL via the idx_events_parameterized index'), and cites idx_events_tags_gin by name at two separate call sites (the e-tag JSONB-containment pushdown, and the SHARED_GATED_KINDS visibility pushdown), the second of which states the GIN index was added because unindexed containment made a channel-window fan-out 'the dominant scroll-back cost (~1.7s/page on staging)' per migrations/0004_events_tags_gin.sql's own comment."
+  - statement: "crates/buzz-db/src/store/event.rs cites idx_events_parameterized by name in a doc comment on the EventQuery.d_tag field ('Pushed into SQL via the idx_events_parameterized index'), and cites idx_events_tags_gin by name at two separate call sites (the e-tag JSONB-containment pushdown, and the SHARED_GATED_KINDS visibility pushdown), the second of which states the GIN index was added because unindexed containment made a channel-window fan-out 'the dominant scroll-back cost (~1.7s/page on staging)' per migrations/0004_events_tags_gin.sql's own comment."
     entry_class: FACT
     evidence:
-      - "crates/buzz-db/src/event.rs"
+      - "crates/buzz-db/src/store/event.rs"
       - "migrations/0004_events_tags_gin.sql"
-  - statement: "migrations/0004_events_tags_gin.sql's own comment states 'Partitioned parent: CREATE INDEX recurses to all partitions and future partitions inherit it', and crates/buzz-db/src/partition.rs's ensure_partition function creates each new monthly partition with a plain CREATE TABLE ... PARTITION OF <table> statement (no ONLY clause and no per-partition index DDL) -- the mechanism by which a partitioned-parent index automatically extends to a partition the code creates later, without any index-specific code in partition.rs."
+  - statement: "migrations/0004_events_tags_gin.sql's own comment states 'Partitioned parent: CREATE INDEX recurses to all partitions and future partitions inherit it', and crates/buzz-db/src/store/partition.rs's ensure_partition function creates each new monthly partition with a plain CREATE TABLE ... PARTITION OF <table> statement (no ONLY clause and no per-partition index DDL) -- the mechanism by which a partitioned-parent index automatically extends to a partition the code creates later, without any index-specific code in partition.rs."
     entry_class: FACT
     evidence:
       - "migrations/0004_events_tags_gin.sql"
-      - "crates/buzz-db/src/partition.rs"
-  - statement: "crates/buzz-db/src/partition.rs's PARTITIONED_TABLES constant restricts partition management to exactly events and delivery_log, and ensure_partition validates the table name against that allowlist, the partition suffix against a digits-and-underscores check, and both date strings against a fixed YYYY-MM-DD format before interpolating any of them into DDL, because 'parameterized queries cannot be used for DDL identifiers.'"
+      - "crates/buzz-db/src/store/partition.rs"
+  - statement: "crates/buzz-db/src/store/partition.rs's PARTITIONED_TABLES constant restricts partition management to exactly events and delivery_log, and ensure_partition validates the table name against that allowlist, the partition suffix against a digits-and-underscores check, and both date strings against a fixed YYYY-MM-DD format before interpolating any of them into DDL, because 'parameterized queries cannot be used for DDL identifiers.'"
     entry_class: FACT
     evidence:
-      - "crates/buzz-db/src/partition.rs"
-  - statement: "crates/buzz-db/src/migration.rs's run_migrations function runs the embedded sqlx::migrate! MIGRATOR while holding the exclusive SCHEMA_DESTRUCTION_LOCK_KEY session lock, its own doc comment stating this 'serializ[es] schema changes against destructive deletion transactions' and that a source lint (migration_execution_cannot_bypass_schema_destruction_lock) enforces MIGRATOR.run has no other call site -- index-creating migrations run under this same single, guarded entry point as every other schema change, with no separate mechanism of their own."
+      - "crates/buzz-db/src/store/partition.rs"
+  - statement: "crates/buzz-db/src/runtime/migration.rs's run_migrations function runs the embedded sqlx::migrate! MIGRATOR while holding the exclusive SCHEMA_DESTRUCTION_LOCK_KEY session lock, its own doc comment stating this 'serializ[es] schema changes against destructive deletion transactions' and that a source lint (migration_execution_cannot_bypass_schema_destruction_lock) enforces MIGRATOR.run has no other call site -- index-creating migrations run under this same single, guarded entry point as every other schema change, with no separate mechanism of their own."
     entry_class: FACT
     evidence:
-      - "crates/buzz-db/src/migration.rs"
+      - "crates/buzz-db/src/runtime/migration.rs"
   - statement: "migrations/0027_channels_id_lookup_index.sql's comment states plainly that sqlx wraps each migration in a transaction and 'CREATE INDEX CONCURRENTLY cannot run in one', so the index is built without CONCURRENTLY and takes a SHARE lock on the table (blocking writes, not reads) for the build's duration; migrations/0004_events_tags_gin.sql's comment makes the same statement about its own GIN index, adding that CONCURRENTLY 'is not supported on partitioned parents' at all, so this constraint holds independently of the transaction-wrapping for any index on the events table."
     entry_class: FACT
     evidence:
@@ -87,10 +87,10 @@ evidence:
     entry_class: FACT
     evidence:
       - "migrations/0027_channels_id_lookup_index.sql"
-  - statement: "crates/buzz-db/src/migration.rs contains a test, embedded_migrator_contains_consolidated_initial_schema, that asserts on the literal SQL text of specific migrations, including that migrations[26] (version 27) 'contains(\"idx_channels_id_live\")', 'contains(\"INCLUDE (community_id)\")', 'contains(\"WHERE deleted_at IS NULL\")' and '!contains(\"CREATE UNIQUE INDEX\")', and that schema/schema.sql -- loaded in the same test via include_str! -- also 'contains(\"idx_channels_id_live\")'; this is a real, running regression test pinning at least one index's shape and its presence in both the migration and the desired-state schema file."
+  - statement: "crates/buzz-db/src/runtime/migration.rs contains a test, embedded_migrator_contains_consolidated_initial_schema, that asserts on the literal SQL text of specific migrations, including that migrations[26] (version 27) 'contains(\"idx_channels_id_live\")', 'contains(\"INCLUDE (community_id)\")', 'contains(\"WHERE deleted_at IS NULL\")' and '!contains(\"CREATE UNIQUE INDEX\")', and that schema/schema.sql -- loaded in the same test via include_str! -- also 'contains(\"idx_channels_id_live\")'; this is a real, running regression test pinning at least one index's shape and its presence in both the migration and the desired-state schema file."
     entry_class: FACT
     evidence:
-      - "crates/buzz-db/src/migration.rs"
+      - "crates/buzz-db/src/runtime/migration.rs"
   - statement: "idx_events_tags_gin, the GIN index created in migrations/0004_events_tags_gin.sql, does not appear anywhere in schema/schema.sql (grep for 'tags_gin' and for 'USING GIN' in that file finds only idx_events_search_tsv), and git log on schema/schema.sql shows no commit touching it for migration 0004's change, while migration 0027's own index (idx_channels_id_live) does appear in schema.sql and was added to it in the same commit (bc9e6528a) that added the migration -- a real, checked discrepancy between the two sources of truth for this specific index, not established for any other index in the inventory."
     entry_class: FACT
     evidence:
@@ -195,7 +195,7 @@ is merged yet to link to instead (see *Scope and omissions*).
 
 Index-creating statements are ordinary statements inside the same
 `migrations/*.sql` files and the same embedded `sqlx::migrate!` `MIGRATOR`
-(`crates/buzz-db/src/migration.rs`) that versions every other schema change.
+(`crates/buzz-db/src/runtime/migration.rs`) that versions every other schema change.
 `run_migrations` holds the exclusive `SCHEMA_DESTRUCTION_LOCK_KEY` session
 lock for the whole run, and a source lint enforces that `MIGRATOR.run` has no
 call site outside that wrapper -- there is no separate index-specific
@@ -213,7 +213,7 @@ migrations that add one:
   deploy.
 - **Index creation on the partitioned `events` parent recurses to every
   existing partition and is inherited by every future one.** New monthly
-  partitions are created by `crates/buzz-db/src/partition.rs`'s
+  partitions are created by `crates/buzz-db/src/store/partition.rs`'s
   `ensure_partition` as a plain `CREATE TABLE ... PARTITION OF events`
   statement with an allowlisted table name and validated, non-parameterized
   date/suffix literals -- the parent's existing indexes attach automatically;
@@ -224,7 +224,7 @@ truth for fresh database setup," per its own header) that is expected to
 mirror the migrations' cumulative effect but is not generated from them, and
 is not kept in lockstep by any enforced mechanism beyond the specific
 assertions a given migration's author chooses to add to
-`crates/buzz-db/src/migration.rs`'s
+`crates/buzz-db/src/runtime/migration.rs`'s
 `embedded_migrator_contains_consolidated_initial_schema` test -- that test
 pins `idx_channels_id_live`'s exact shape (`INCLUDE (community_id)`,
 `WHERE deleted_at IS NULL`, not unique) in both the migration and
@@ -240,7 +240,7 @@ repaired here.
 Application code cites specific index names directly where a query is built
 to rely on one, rather than leaving the dependency implicit:
 
-- `crates/buzz-db/src/event.rs`'s `EventQuery.d_tag` field doc comment states
+- `crates/buzz-db/src/store/event.rs`'s `EventQuery.d_tag` field doc comment states
   it is "Pushed into SQL via the `idx_events_parameterized` index."
 - The same file's e-tag containment pushdown and its shared-gated-kind
   visibility pushdown both cite `idx_events_tags_gin` by name as the index

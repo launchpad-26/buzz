@@ -31,11 +31,11 @@ evidence:
   - statement: "crates/buzz-db/src/event.rs's module doc states: 'AUTH events (kind 22242) are never stored — they carry bearer tokens. Ephemeral events (kinds 20000–29999) are never stored — Redis pub/sub only. Deduplication is application-layer: ON CONFLICT DO NOTHING.'"
     entry_class: FACT
     evidence:
-      - "crates/buzz-db/src/event.rs:1-5"
-  - statement: "insert_event (crates/buzz-db/src/event.rs:273-329) rejects KIND_AUTH and any ephemeral kind before writing, then INSERTs with ON CONFLICT DO NOTHING against the table's primary key, so a duplicate (community_id, created_at, id) tuple is silently dropped rather than erroring; the returned was_inserted flag is result.rows_affected() > 0, telling the caller whether the row was new."
+      - "crates/buzz-db/src/store/event.rs:1-5"
+  - statement: "insert_event (crates/buzz-db/src/store/event.rs:271-352) rejects KIND_AUTH and any ephemeral kind before writing, then INSERTs with ON CONFLICT DO NOTHING against the table's primary key, so a duplicate (community_id, created_at, id) tuple is silently dropped rather than erroring; the returned was_inserted flag is result.rows_affected() > 0, telling the caller whether the row was new."
     entry_class: FACT
     evidence:
-      - "crates/buzz-db/src/event.rs:273-329"
+      - "crates/buzz-db/src/store/event.rs:271-352"
   - statement: "crates/buzz-core/src/kind.rs defines KIND_AUTH = 22242 (line 77); is_ephemeral (lines 769-771) for the range 20000-29999; is_replaceable (lines 776-778, kinds 0, 3, KIND_CHANNEL_METADATA, 10000-19999) whose own doc comment states NIP-33 parameterized-replaceable kinds (30000-39999) 'use a different replacement key (includes d-tag) and are handled separately via replace_parameterized_event'; and is_parameterized_replaceable (lines 783-785) whose doc comment states 'These events are keyed by (pubkey, kind, d_tag) — the latest created_at wins.'"
     entry_class: FACT
     evidence:
@@ -44,18 +44,18 @@ evidence:
   - statement: "crates/buzz-db/src/lib.rs defines replace_addressable_event (line 4829) and replace_parameterized_event (line 5156) — the two functions kind.rs's own doc comment names as the separate replacement path for NIP-01/NIP-33 replaceable and parameterized-replaceable kinds, distinct from insert_event's plain-id-conflict dedup path."
     entry_class: FACT
     evidence:
-      - "crates/buzz-db/src/lib.rs:4829"
-      - "crates/buzz-db/src/lib.rs:5156"
+      - "crates/buzz-db/src/store/replaceable.rs:374"
+      - "crates/buzz-db/src/store/replaceable.rs:552"
   - statement: "soft_delete_event (crates/buzz-db/src/event.rs:788-807) sets deleted_at = NOW() by (community_id, id) and returns whether a live row was found; soft_delete_by_coordinate (838-862) does the same by the NIP-33 coordinate (community_id, kind, pubkey, d_tag), guarded by created_at <= the deletion event's own created_at so a tombstone cannot erase a version newer than itself; soft_delete_event_and_update_thread (869-919ish) wraps a delete with a thread reply-counter decrement in one transaction so a crash between the two cannot leave counters inflated."
     entry_class: FACT
     evidence:
-      - "crates/buzz-db/src/event.rs:788-862"
-      - "crates/buzz-db/src/event.rs:869-919"
+      - "crates/buzz-db/src/store/event.rs:821-896"
+      - "crates/buzz-db/src/store/event.rs:897-946"
   - statement: "Every live-row read in crates/buzz-db/src/event.rs (query_events, count_events, get_event_by_id, get_latest_global_replaceable, get_events_by_ids, get_last_message_at, and more) filters deleted_at IS NULL; get_event_by_id_including_deleted (line 1037) is the one function in the file documented as the exception to that filter."
     entry_class: FACT
     evidence:
-      - "crates/buzz-db/src/event.rs:335-401"
-      - "crates/buzz-db/src/event.rs:981-1037"
+      - "crates/buzz-db/src/store/event.rs:357-420"
+      - "crates/buzz-db/src/store/event.rs:1009-1088"
   - statement: "crates/buzz-core/src/event.rs defines StoredEvent (lines 9-51) as 'a Nostr event with relay-assigned metadata': a nostr::Event plus received_at, channel_id (Option<Uuid>, doc comment 'None for global/DM events'), and a private verified flag — the relay's in-process wrapper around one row, not the row's own persisted shape."
     entry_class: FACT
     evidence:
@@ -64,10 +64,10 @@ evidence:
     entry_class: FACT
     evidence:
       - "migrations/0001_initial_schema.sql:280-294"
-  - statement: "query_due_reminders (crates/buzz-db/src/event.rs:1417-1436) documents its own predicate as 'not_before <= now, deleted_at IS NULL, delivered_at IS NULL', confirming not_before and delivered_at are used together to schedule and mark delivery of reminder-kind events stored as ordinary rows in this same table, not a separate scheduling table."
+  - statement: "query_due_reminders (crates/buzz-db/src/store/reminder.rs:43-70) documents its own predicate as 'not_before <= now, deleted_at IS NULL, delivered_at IS NULL', confirming not_before and delivered_at are used together to schedule and mark delivery of reminder-kind events stored as ordinary rows in this same table, not a separate scheduling table."
     entry_class: FACT
     evidence:
-      - "crates/buzz-db/src/event.rs:1417-1436"
+      - "crates/buzz-db/src/store/reminder.rs:43-70"
   - statement: "launchpad/docs/corpus/architecture/containers/postgres.md carries id architecture-containers-postgres, type: architecture, status: draft — the container-level node for the Postgres instance the events table is physically stored in."
     entry_class: FACT
     evidence:

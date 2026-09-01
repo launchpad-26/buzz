@@ -26,28 +26,28 @@ evidence:
     evidence:
       - "crates/buzz-relay/src/handlers/side_effects.rs"
       - "crates/buzz-relay/src/handlers/ingest.rs"
-  - statement: "The one exception to the author-match requirement is a registered agent owner: is_agent_owner (crates/buzz-db/src/user.rs) lets the deletion proceed when the actor's pubkey is recorded in the target author's own agent_owner_pubkey column, so an owner may delete on a managed agent's behalf without holding or using the agent's own signing key."
+  - statement: "The one exception to the author-match requirement is a registered agent owner: is_agent_owner (crates/buzz-db/src/store/user.rs) lets the deletion proceed when the actor's pubkey is recorded in the target author's own agent_owner_pubkey column, so an owner may delete on a managed agent's behalf without holding or using the agent's own signing key."
     entry_class: FACT
     evidence:
-      - "crates/buzz-db/src/user.rs"
+      - "crates/buzz-db/src/store/user.rs"
       - "crates/buzz-relay/src/handlers/side_effects.rs"
   - statement: "set_agent_owner assigns that column exactly once per agent pubkey: it is a conditional UPDATE guarded by WHERE agent_owner_pubkey IS NULL, and the function's own comment states this is deliberate 'first mint wins' semantics chosen to avoid a race between concurrent claims -- so an agent's owner, once set by this function, is not reassigned by a second call."
     entry_class: FACT
     evidence:
-      - "crates/buzz-db/src/user.rs"
+      - "crates/buzz-db/src/store/user.rs"
   - statement: "is_agent_owner's query filters on community_id in addition to the target and actor pubkeys, so an agent-owner binding established in one community says nothing about the same two pubkeys in another community."
     entry_class: FACT
     evidence:
-      - "crates/buzz-db/src/user.rs"
-  - statement: "A stored event's own row-level ownership (its pubkey column) is a different concept from a community's ownership: transfer_community and list_owned_communities in crates/buzz-relay/src/api/operator.rs, backed by transfer_ownership in crates/buzz-db/src/relay_members.rs, govern who administers a whole community, keyed by a relay-membership 'owner' role rather than by any individual event's pubkey column."
+      - "crates/buzz-db/src/store/user.rs"
+  - statement: "A stored event's own row-level ownership (its pubkey column) is a different concept from a community's ownership: transfer_community and list_owned_communities in crates/buzz-relay/src/api/operator.rs, backed by transfer_ownership in crates/buzz-db/src/store/relay_members.rs, govern who administers a whole community, keyed by a relay-membership 'owner' role rather than by any individual event's pubkey column."
     entry_class: FACT
     evidence:
       - "crates/buzz-relay/src/api/operator.rs"
-      - "crates/buzz-db/src/relay_members.rs"
-  - statement: "crates/buzz-db/src/deletion.rs implements a separate, whole-community destructive-deletion pipeline (DeletionRequest, DeletionStage, manifest freezing, quiescing, a Postgres purge step) that operates on a community as a unit rather than checking any individual event's author pubkey -- a different mechanism from the per-event ownership check this node documents."
+      - "crates/buzz-db/src/store/relay_members.rs"
+  - statement: "crates/buzz-db/src/store/deletion.rs implements a separate, whole-community destructive-deletion pipeline (DeletionRequest, DeletionStage, manifest freezing, quiescing, a Postgres purge step) that operates on a community as a unit rather than checking any individual event's author pubkey -- a different mechanism from the per-event ownership check this node documents."
     entry_class: FACT
     evidence:
-      - "crates/buzz-db/src/deletion.rs"
+      - "crates/buzz-db/src/store/deletion.rs"
   - statement: "crates/buzz-test-client/tests/e2e_human_edit_agent_content.rs carries E2E coverage of this exact author-match/agent-owner boundary at the kind:5 NIP-09 path: test_owner_can_delete_agent_message_kind5 asserts a registered owner's kind:5 deletion of their agent's message is accepted, and the adjacent test_third_party_cannot_delete_agent_message_kind5 asserts the same deletion attempted from an unrelated third party's key is rejected. Both are marked #[tokio::test] #[ignore] and require a live relay, so their assertions were read directly but neither was executed this session."
     entry_class: FACT
     evidence:
@@ -153,7 +153,7 @@ lets a second pubkey act on an owned event's behalf.
 |---|---|
 | Community/tenant-level ownership — who administers a whole community, `transfer_community`, `list_owned_communities`, the `relay_members` `owner` role | Keyed by a membership role, not by any event's `pubkey` column; a different data model answering a different question. No corpus node exists for it yet at this revision. |
 | The agent-owner delegation mechanism's full semantics — revocation, multiple owners, the CLI/UI surface for minting or viewing an agent's owner | Only the shape relevant to the deletion-authorization check documented here (first-mint-wins, community-scoped) was verified. A fuller treatment is a candidate for its own future node rather than folded in here, per the corpus's one-node-one-idea rule. |
-| The whole-community destructive-deletion pipeline (`crates/buzz-db/src/deletion.rs`: `DeletionRequest`, `DeletionStage`, manifest freezing, quiescing, Postgres purge) | Operates on an entire community as a unit; it does not check or consult any individual event's author pubkey, so it is a different mechanism from the per-event ownership binding this node documents. |
+| The whole-community destructive-deletion pipeline (`crates/buzz-db/src/store/deletion.rs`: `DeletionRequest`, `DeletionStage`, manifest freezing, quiescing, Postgres purge) | Operates on an entire community as a unit; it does not check or consult any individual event's author pubkey, so it is a different mechanism from the per-event ownership binding this node documents. |
 | Channel-level roles (owner/admin/member via `relay_members`, moderation bans and timeouts) | Capability-layer governance over who may act *within* a channel, not the data-layer binding between one event and its authoring pubkey. |
 | The cryptographic mechanism that makes a `pubkey` column trustworthy (id-hash correctness, Schnorr signature validity) | Documented in `architecture-principles-signed-events`, linked via this node's `references` relationship rather than restated. |
 | The tenant-isolation mechanism that scopes every ownership check to one community | Documented in `architecture-principles-community-is-security-boundary`, linked via this node's `references` relationship rather than restated. |

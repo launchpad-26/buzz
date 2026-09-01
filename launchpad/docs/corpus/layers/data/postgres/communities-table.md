@@ -73,10 +73,10 @@ evidence:
     evidence:
       - "migrations/0029_community_deletion.sql:430"
       - "migrations/0029_community_deletion.sql:468"
-  - statement: "crates/buzz-db/src/deletion.rs's postgres-purge step runs `UPDATE communities SET deletion_state = 'tombstone', deleted_at = COALESCE(deleted_at, now()), archived_at = COALESCE(archived_at, now()), signing_key = NULL, icon = NULL WHERE id = $1 AND deletion_state = 'fenced' AND deletion_fence_generation = $2`, and treats any affected-row count other than 1 as a DbError::DeletionSafety -- the terminal step of the whole-community deletion pipeline, run only after every PURGE_SCOPED_TABLES row for that community has already been deleted in the same transaction."
+  - statement: "crates/buzz-db/src/store/deletion.rs's postgres-purge step runs `UPDATE communities SET deletion_state = 'tombstone', deleted_at = COALESCE(deleted_at, now()), archived_at = COALESCE(archived_at, now()), signing_key = NULL, icon = NULL WHERE id = $1 AND deletion_state = 'fenced' AND deletion_fence_generation = $2`, and treats any affected-row count other than 1 as a DbError::DeletionSafety -- the terminal step of the whole-community deletion pipeline, run only after every PURGE_SCOPED_TABLES row for that community has already been deleted in the same transaction."
     entry_class: FACT
     evidence:
-      - "crates/buzz-db/src/deletion.rs"
+      - "crates/buzz-db/src/store/deletion.rs"
   - statement: "migrations/0030_community_deletion_recovery.sql changes product_feedback's community_id foreign key to `ON DELETE SET NULL` and its own comment states product_feedback and rate_limit_violations are 'deployment-global operator evidence. community_id is provenance, not ownership, so they are neither fenced nor purged with a tenant' -- meaning a communities row's tombstone (which never physically deletes the row per the trigger above) still leaves those two tables' community_id columns nullable rather than fenced the same way tenant data is."
     entry_class: FACT
     evidence:
@@ -113,7 +113,7 @@ evidence:
     entry_class: FACT
     evidence:
       - "crates/buzz-db/src/lib.rs"
-      - "crates/buzz-db/src/relay_members.rs"
+      - "crates/buzz-db/src/store/relay_members.rs"
   - statement: "crates/buzz-db/src/lib.rs's get_community_icon/set_community_icon read and write the icon column directly by community_id with no lifecycle filter, and archive_community_owned_by/unarchive_community_owned_by both UPDATE communities joined to relay_members, requiring the asserted pubkey to hold the 'owner' role for that community and (for archive) that the target host does not equal a separately-passed protected_deployment_host, so the deployment's own configured host cannot be archived by its owner."
     entry_class: FACT
     evidence:
@@ -125,13 +125,13 @@ evidence:
   - statement: "No production INSERT or UPDATE statement against communities.signing_key was found anywhere under crates/ at the checked revision; the only write is the NULLing UPDATE in the deletion pipeline's tombstone step, and the only place a non-null value is ever inserted is a test fixture in crates/buzz-search/tests/fts_integration.rs (`INSERT INTO communities (id, host, signing_key) VALUES ($1, $2, $3)`)."
     entry_class: FACT
     evidence:
-      - "crates/buzz-db/src/deletion.rs"
+      - "crates/buzz-db/src/store/deletion.rs"
       - "crates/buzz-search/tests/fts_integration.rs"
   - statement: "Whether communities.signing_key is a reserved column awaiting a not-yet-built feature (e.g. relay-level Nostr signing) or genuinely dead schema was not established anywhere found this session -- no migration comment, code comment, issue, or PR explaining its purpose was located, and this gap is intentionally left open rather than guessed at."
     entry_class: INFERENCE
     evidence:
       - "migrations/0001_initial_schema.sql:56"
-      - "crates/buzz-db/src/deletion.rs"
+      - "crates/buzz-db/src/store/deletion.rs"
     confidence: 0.5
   - statement: "architecture-containers-postgres is a validated node on origin/launchpad at the checked revision (status: draft), describing buzz-db as 'the crate that owns Postgres connection pooling, migrations, and every typed data-access module' -- confirmed with git ls-tree -r --name-only origin/launchpad -- launchpad/docs/corpus, which also confirms no layers/data/postgres/* sibling table node exists there yet, so no relationships edge to a sibling table document is declared."
     entry_class: FACT
@@ -225,7 +225,7 @@ caller presents matching `buzz.deletion_executor_community` /
 `buzz.deletion_fence_generation` session-local settings for the row's own
 id and expected next generation. In practice this means the deletion
 lifecycle can only be advanced by the guarded deletion executor path in
-`crates/buzz-db/src/deletion.rs`, never by an arbitrary `UPDATE communities`
+`crates/buzz-db/src/store/deletion.rs`, never by an arbitrary `UPDATE communities`
 statement.
 
 **The deletion lifecycle's terminal step nulls two columns.** The
@@ -295,7 +295,7 @@ sibling table document is declared here -- see *Scope and omissions*.
 | `migrations/0030_community_deletion_recovery.sql` | Loosens `product_feedback`'s foreign key to this table to `ON DELETE SET NULL`; does not itself alter the `communities` table's own columns. |
 
 All five are applied, in this numeric order, by the single embedded
-`sqlx::migrate!` migrator in `crates/buzz-db/src/migration.rs`, which the
+`sqlx::migrate!` migrator in `crates/buzz-db/src/runtime/migration.rs`, which the
 same crate documents as holding an exclusive schema-destruction lock for
 the whole run.
 
@@ -316,7 +316,7 @@ directly (test-only helpers that insert fixture rows are not included):
 | `ensure_configured_community` | Idempotent insert-or-touch for the N=1 startup seeding path. |
 | `create_community_with_owner` | Atomic create-with-owner, advisory-locked and quota-enforced. |
 | `archive_community_owned_by` / `unarchive_community_owned_by` | Owner-authorized soft archive/restore. |
-| `crates/buzz-db/src/deletion.rs` postgres-purge step | The guarded tombstone `UPDATE` that terminates the deletion lifecycle. |
+| `crates/buzz-db/src/store/deletion.rs` postgres-purge step | The guarded tombstone `UPDATE` that terminates the deletion lifecycle. |
 
 Every method above is instrumented under `#[datastore_span(..., system =
 "postgresql")]` per `buzz-db`'s tracing convention, except the

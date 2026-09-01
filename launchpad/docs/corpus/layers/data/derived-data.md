@@ -19,12 +19,12 @@ evidence:
   - statement: "`insert_thread_metadata` wraps the `thread_metadata` row insert and the parent's `reply_count`/root's `descendant_count` UPDATEs in a single Postgres transaction specifically so a crash between them cannot leave the counters inconsistent with the actual number of reply rows; the doc comment names this invariant \"F9\"."
     entry_class: FACT
     evidence:
-      - "crates/buzz-db/src/thread.rs:107-114"
-      - "crates/buzz-db/src/thread.rs:128-239"
+      - "crates/buzz-db/src/store/thread.rs:109-117"
+      - "crates/buzz-db/src/store/thread.rs:120-244"
   - statement: "`decrement_reply_count` mirrors the increment path and floors both counters at 0 (`GREATEST(reply_count - 1, 0)`, `GREATEST(descendant_count - 1, 0)`), so the derived counters cannot go negative even under an unexpected delete ordering."
     entry_class: FACT
     evidence:
-      - "crates/buzz-db/src/thread.rs:289-327"
+      - "crates/buzz-db/src/store/thread.rs:297-331"
   - statement: "Buzz's own contributor guide names this exact case as a required pattern to preserve: \"Thread counters: reply_count and descendant_count are materialized on thread root events. Any code that inserts replies must update these counters — check existing reply handlers for the pattern.\""
     entry_class: FACT
     evidence:
@@ -43,7 +43,7 @@ evidence:
     evidence:
       - "migrations/0001_initial_schema.sql:512-526"
       - "migrations/0001_initial_schema.sql:197-224"
-      - "crates/buzz-db/src/thread.rs:107-239"
+      - "crates/buzz-db/src/store/thread.rs:109-244"
     confidence: 0.8
   - statement: "`architecture-principles-relay-is-source-of-truth` documents that the relay's own event log, not any derived index or cache, is Buzz's authoritative record — derived data of both forms described here is downstream of that source, never a competing copy of it."
     entry_class: FACT

@@ -15,22 +15,22 @@ evidence:
   - statement: "insert_event rejects a kind:22242 NIP-42 AUTH event outright, and rejects any event whose kind falls in the ephemeral range (20000-29999), so ephemeral events never become durable and never enter the lifecycle described here at all."
     entry_class: FACT
     evidence:
-      - "crates/buzz-db/src/event.rs:282-286"
+      - "crates/buzz-db/src/store/event.rs:301-306"
       - "crates/buzz-core/src/kind.rs:768-771"
       - "crates/buzz-core/src/kind.rs:457-459"
   - statement: "A regular (non-replaceable) Nostr event, once accepted by insert_event, is identified by its own content-addressed id and is not itself mutated again -- the only state that later changes on its row is deleted_at."
     entry_class: FACT
     evidence:
-      - "crates/buzz-db/src/event.rs:273-329"
+      - "crates/buzz-db/src/store/event.rs:271-352"
   - statement: "Replaceable (kinds 0, 3, 41, 10000-19999) and parameterized-replaceable (kinds 30000-39999) events are handled by a distinct write path, replace_parameterized_event, keyed on kind+pubkey(+d-tag) rather than on event id, because a newer version for the same coordinate supersedes the current live head."
     entry_class: FACT
     evidence:
       - "crates/buzz-core/src/kind.rs:773-778"
-      - "crates/buzz-db/src/lib.rs:5155-5251"
+      - "crates/buzz-db/src/store/replaceable.rs:105-373"
   - statement: "By default, replace_parameterized_event soft-deletes the previously live row for a coordinate as it accepts the newer one -- the superseded version is tombstoned, not physically removed."
     entry_class: INFERENCE
     evidence:
-      - "crates/buzz-db/src/lib.rs:5216-5251"
+      - "crates/buzz-db/src/store/replaceable.rs:300-373"
     confidence: 0.75
   - statement: "A NIP-09 kind:5 deletion event and a NIP-29 kind:9005 delete-event command both name their target by an e tag (regular/replaceable event id) or an a tag (addressable/parameterized-replaceable coordinate), and Buzz's own ingest validation requires exactly one such reference."
     entry_class: FACT
@@ -42,21 +42,21 @@ evidence:
       - "crates/buzz-relay/src/handlers/side_effects.rs:198-206"
       - "crates/buzz-relay/src/handlers/side_effects.rs:2223-2268"
       - "crates/buzz-relay/src/handlers/side_effects.rs:2085-2184"
-      - "crates/buzz-db/src/event.rs:793-799"
-      - "crates/buzz-db/src/event.rs:838-862"
+      - "crates/buzz-db/src/store/event.rs:821-833"
+      - "crates/buzz-db/src/store/event.rs:866-896"
   - statement: "Soft-deleting an event sets its deleted_at timestamp; every ordinary read path filters on deleted_at IS NULL, so a soft-deleted event is invisible to every query built on those paths even though its row is still physically present."
     entry_class: FACT
     evidence:
-      - "crates/buzz-db/src/event.rs:788-799"
-      - "crates/buzz-db/src/event.rs:986-988"
+      - "crates/buzz-db/src/store/event.rs:821-833"
+      - "crates/buzz-db/src/store/event.rs:1009-1034"
   - statement: "get_event_by_id_including_deleted is the deliberate escape hatch that returns a soft-deleted row anyway, documented as existing for callers that must distinguish 'never existed' from 'was deleted' -- for example audit trails and compliance queries -- which is the concrete case a moderator or reviewer relies on when re-inspecting a deleted message."
     entry_class: FACT
     evidence:
-      - "crates/buzz-db/src/event.rs:1032-1037"
+      - "crates/buzz-db/src/store/event.rs:1065-1088"
   - statement: "A soft-deleted event's row is retained by default with no general sweep that later removes it; the tombstone is the terminal state for an individual event outside of the two narrow exceptions and the whole-community purge described below."
     entry_class: INFERENCE
     evidence:
-      - "crates/buzz-db/src/event.rs:793-799"
+      - "crates/buzz-db/src/store/event.rs:821-833"
       - "migrations/0019_mesh_status_retention.sql"
       - "migrations/0009_nip_rs_database_guards.sql"
     confidence: 0.7
@@ -78,28 +78,28 @@ evidence:
   - statement: "A background reaper task, started at relay boot and running on a fixed interval (default 60 seconds, overridable via BUZZ_REAPER_INTERVAL_SECS), archives -- sets archived_at, does not delete -- every ephemeral channel whose ttl_deadline has passed; this is idempotent across concurrently running relay pods because the update is guarded on archived_at IS NULL."
     entry_class: FACT
     evidence:
-      - "crates/buzz-db/src/channel.rs:1498-1531"
+      - "crates/buzz-db/src/store/channel.rs:716-742"
       - "crates/buzz-relay/src/main.rs:635-667"
   - statement: "Channel-level TTL reaping is orthogonal to an individual event's own soft-delete state: reaping acts on the channel container based on inactivity, not on any single event's deleted_at, and archiving a channel does not itself soft-delete the events inside it."
     entry_class: INFERENCE
     evidence:
       - "migrations/0024_event_ttl_refresh_shared_lock.sql"
-      - "crates/buzz-db/src/channel.rs:1498-1531"
+      - "crates/buzz-db/src/store/channel.rs:716-742"
     confidence: 0.7
   - statement: "A whole-community deletion is a separate, durable, multi-stage lifecycle with its own fixed stage order and no backwards or skipping transitions: Submitted, Inventoried, Approved, Fenced, Drained, BindingsRemoved, PostgresPurged, CachePurged, LogicallyVerified, RetentionPending -- or Aborted, only before the irreversible point."
     entry_class: FACT
     evidence:
-      - "crates/buzz-db/src/deletion.rs:1-5"
-      - "crates/buzz-db/src/deletion.rs:119-177"
+      - "crates/buzz-db/src/store/deletion.rs:1-5"
+      - "crates/buzz-db/src/store/deletion.rs:119-154"
   - statement: "The PostgresPurged stage of a whole-community deletion physically removes every row in every tenant-scoped table listed in PURGE_SCOPED_TABLES, in a foreign-key-safe child-before-parent order -- including the events table (so tombstoned rows are finally erased, not merely soft-deleted a second time) and the audit_log table itself. A fixed set of control-plane tables (the deletion request's own bookkeeping) is explicitly exempted and survives the purge."
     entry_class: FACT
     evidence:
-      - "crates/buzz-db/src/deletion.rs:42-117"
+      - "crates/buzz-db/src/store/deletion.rs:56-117"
   - statement: "The audit log is described in its own module as an append-only, per-community hash-chain audit log; nothing in the per-event soft-delete path (kind:5/kind:9005 handling) touches audit_log, so an individual event's deletion does not remove or alter the audit entries recording it. The audit log is purged only as part of a whole-community deletion's PostgresPurged stage."
     entry_class: FACT
     evidence:
       - "crates/buzz-audit/src/service.rs:32-38"
-      - "crates/buzz-db/src/deletion.rs:59-117"
+      - "crates/buzz-db/src/store/deletion.rs:56-117"
   - statement: "The relay's hourly S3 storage sweep (storage_sweep.rs) is a usage-metrics listing job that classifies and counts objects for observability dashboards; it does not delete, expire, or otherwise mutate any stored object, and is not part of the deletion lifecycle described in this node."
     entry_class: FACT
     evidence:

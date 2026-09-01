@@ -24,23 +24,23 @@ evidence:
   - statement: "replace_parameterized_event's own doc comment states it keeps only the event with the highest created_at per (kind, pubkey, d_tag) for NIP-33 parameterized-replaceable events (kind 30000-39999), with same-second ties broken by lowest event id, and that the entire check-retire-insert sequence runs in a single transaction with an advisory lock to prevent concurrent-insert races."
     entry_class: FACT
     evidence:
-      - "crates/buzz-db/src/lib.rs:5134-5155"
+      - "crates/buzz-db/src/store/replaceable.rs:546-582"
   - statement: "replace_parameterized_event acquires a Postgres advisory transaction lock (pg_advisory_xact_lock) keyed on (community_id, kind, pubkey, d_tag) before reading or mutating the coordinate's rows, serializing every concurrent writer targeting the same addressable resource onto one commit order."
     entry_class: FACT
     evidence:
-      - "crates/buzz-db/src/lib.rs:5156-5181"
+      - "crates/buzz-db/src/store/replaceable.rs:105-135"
   - statement: "Inside that same transaction, replace_parameterized_event re-reads the live head (and, for NIP-RS coordinates, a durable watermark) and rejects the incoming event as dominated -- rolling back with no write -- whenever the incoming (created_at, id) tuple does not strictly beat the accepted tuple by the created_at-then-lowest-id rule; a dominated write is accepted-shaped in its return value but writes nothing."
     entry_class: FACT
     evidence:
-      - "crates/buzz-db/src/lib.rs:5247-5261"
+      - "crates/buzz-db/src/store/replaceable.rs:230-250"
   - statement: "get_latest_global_replaceable's doc comment states it uses canonical NIP-16 ordering (created_at DESC, id ASC LIMIT 1) and that this matches the write path's tie-breaking logic, so a read against a non-parameterized replaceable coordinate resolves the same head the write path would have retired to."
     entry_class: FACT
     evidence:
-      - "crates/buzz-db/src/event.rs:1001-1024"
+      - "crates/buzz-db/src/store/event.rs:1035-1064"
   - statement: "soft_delete_by_coordinate's own doc comment states that Nostr never fixes the order of concurrent writes from different signers, and that even same-signer ordering is advisory -- a same-coordinate replacement racing a NIP-09 a-tag deletion can leave either as the observed outcome, and both are valid Nostr orderings the function's return value does not gate on."
     entry_class: FACT
     evidence:
-      - "crates/buzz-db/src/event.rs:809-837"
+      - "crates/buzz-db/src/store/event.rs:866-896"
   - statement: "buzz-core's engram (agent-memory) subsystem implements the identical created_at-then-lowest-id tiebreak independently of buzz-db, in a pure function (select_head) that picks a head from a set of events targeting the same slug, its own doc comment citing NIP-01 for the rule."
     entry_class: FACT
     evidence:
@@ -52,17 +52,17 @@ evidence:
   - statement: "insert_thread_metadata begins a Postgres transaction, and -- within that same transaction, before committing -- increments the parent event's reply_count and, when a root event id is present, the root's descendant_count; the counters are not recomputed asynchronously or in a separate write."
     entry_class: FACT
     evidence:
-      - "crates/buzz-db/src/thread.rs:129"
-      - "crates/buzz-db/src/thread.rs:208-231"
-      - "crates/buzz-db/src/thread.rs:236"
+      - "crates/buzz-db/src/store/thread.rs:134"
+      - "crates/buzz-db/src/store/thread.rs:209-233"
+      - "crates/buzz-db/src/store/thread.rs:241"
   - statement: "replica_fence.rs's module doc describes a proof that a read replica may serve a cursor page only when every row the page could contain is provably present on it, built from a commit-time floor guard plus an ordered heartbeat handshake, and states explicitly that 'everything fails closed': probe errors, masked activity-table visibility, an unreadable heartbeat row, an epoch mismatch, or an observed token below every retained entry all route the request back to the writer."
     entry_class: FACT
     evidence:
-      - "crates/buzz-db/src/replica_fence.rs:1-52"
+      - "crates/buzz-db/src/runtime/replica_fence.rs:1-56"
   - statement: "The background probe loop (run_probe) closes the fence on any error from one probe cycle, so a read that would otherwise be routed to a replica falls back to the single writer the moment the freshness proof cannot be renewed, rather than serving a stale page."
     entry_class: FACT
     evidence:
-      - "crates/buzz-db/src/replica_fence.rs:774-789"
+      - "crates/buzz-db/src/runtime/replica_fence.rs:776-800"
   - statement: "The already-merged corpus node architecture-principles-fail-closed-boundaries documents the same fail-closed discipline -- an error or an unproven state denies or degrades rather than admitting a default -- applied elsewhere in the relay (host binding, the pubkey allowlist, moderation ban checks); the replica fence's close-on-error behavior is a data-layer instance of that same architecture-wide principle, not a one-off."
     entry_class: FACT
     evidence:
@@ -74,8 +74,8 @@ evidence:
   - statement: "buzz-db's own test suite verifies both directions of the write-path claims above: nip_rs_replacement_hard_deletes_payload_and_watermark_rejects_replay asserts that replaying an already-superseded event is rejected (replace_parameterized_event's second call returns false) after a newer event has already replaced it, and coordinate_delete_spares_head_newer_than_the_deletion asserts that a NIP-09 tombstone timestamped between two versions deletes the older version but leaves the newer live head's content untouched."
     entry_class: FACT
     evidence:
-      - "crates/buzz-db/src/lib.rs:5566-5641"
-      - "crates/buzz-db/src/lib.rs:5712-5760"
+      - "crates/buzz-db/src/store/replaceable.rs:920-996"
+      - "crates/buzz-db/src/store/event.rs:2357-2422"
   - statement: "At the checked revision, git ls-tree -r --name-only origin/launchpad -- launchpad/docs/corpus lists no file under launchpad/docs/corpus/layers/ at all (this is the first layers-typed node), and among the merged architecture/principles nodes, relay-is-source-of-truth and fail-closed-boundaries are the two whose own claims this node's write-authority and read-freshness sections directly build on; no other merged node was found making a substantive claim about write ordering, replica freshness, or derived-aggregate consistency."
     entry_class: FACT
     evidence:
@@ -83,11 +83,11 @@ evidence:
   - statement: "Taken together, the write-path advisory lock plus created_at-then-lowest-id tiebreak, the read-path replica freshness fence, and the same-transaction derived thread counters describe one coherent model: every addressable coordinate has a single, deterministically-resolved head at the writer; a caller may read a bounded-staleness copy of that state only when the fence can prove it, and never an unbounded-staleness one; and no part of the model promises a single total order across coordinates or across different signers' writes."
     entry_class: INFERENCE
     evidence:
-      - "crates/buzz-db/src/lib.rs:5134-5261"
-      - "crates/buzz-db/src/event.rs:1001-1024"
-      - "crates/buzz-db/src/event.rs:809-837"
-      - "crates/buzz-db/src/replica_fence.rs:1-52"
-      - "crates/buzz-db/src/thread.rs:129"
+      - "crates/buzz-db/src/store/replaceable.rs:99-373"
+      - "crates/buzz-db/src/store/event.rs:1035-1064"
+      - "crates/buzz-db/src/store/event.rs:866-896"
+      - "crates/buzz-db/src/runtime/replica_fence.rs:1-56"
+      - "crates/buzz-db/src/store/thread.rs:134"
     confidence: 0.75
   - statement: "Issue #1061 requires this node to define the term in one sentence before deeper explanation, state boundaries/non-goals or what the concept must not be confused with, link the concept to related concepts/implementation/verification, and use examples only to clarify the concept without introducing a second canonical concept."
     entry_class: TEAM_KNOWLEDGE

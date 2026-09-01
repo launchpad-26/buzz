@@ -42,10 +42,10 @@ evidence:
       - "crates/buzz-pubsub/src/conn_control.rs"
       - "crates/buzz-pubsub/src/nip98_replay.rs"
       - "crates/buzz-pubsub/src/rate_limiter.rs"
-  - statement: "No migration or schema-versioning mechanism exists for any Redis key/channel family: unlike crates/buzz-db/src/migration.rs's embedded sqlx::migrate!(\"../../migrations\") MIGRATOR (numbered SQL files applied in order, guarded by an exclusive session lock), a Redis key format is a plain Rust string constant/format! call inside its owning module, changed by an ordinary code edit and a crate version bump -- there is no ordering guard, no lock, and no migrations/ directory analogue for Redis in this repository."
+  - statement: "No migration or schema-versioning mechanism exists for any Redis key/channel family: unlike crates/buzz-db/src/runtime/migration.rs's embedded sqlx::migrate!(\"../../migrations\") MIGRATOR (numbered SQL files applied in order, guarded by an exclusive session lock), a Redis key format is a plain Rust string constant/format! call inside its owning module, changed by an ordinary code edit and a crate version bump -- there is no ordering guard, no lock, and no migrations/ directory analogue for Redis in this repository."
     entry_class: FACT
     evidence:
-      - "crates/buzz-db/src/migration.rs"
+      - "crates/buzz-db/src/runtime/migration.rs"
       - "crates/buzz-pubsub/src/topic.rs"
       - "crates/buzz-pubsub/src/presence.rs"
   - statement: "buzz-pubsub owns every Redis access pattern in the repository; nothing outside that crate issues a Redis command directly, and buzz-auth (which defines the RateLimiter and Nip98ReplayGuard traits buzz-pubsub's Redis-backed types implement) has zero Redis dependency of its own, keeping the auth contract testable against an always-allow stub without Redis running."

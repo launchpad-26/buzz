@@ -35,36 +35,36 @@ evidence:
     evidence:
       - "launchpad/docs/corpus/templates/datastore.md"
     confidence: 0.75
-  - statement: "crates/buzz-db/src/migration.rs declares 'static MIGRATOR: sqlx::migrate::Migrator = sqlx::migrate!(\"../../migrations\");' and its module doc comment states 'Fresh deployments apply the checked-in SQL files under migrations/.'"
+  - statement: "crates/buzz-db/src/runtime/migration.rs declares 'static MIGRATOR: sqlx::migrate::Migrator = sqlx::migrate!(\"../../migrations\");' and its module doc comment states 'Fresh deployments apply the checked-in SQL files under migrations/.'"
     entry_class: FACT
     evidence:
-      - "crates/buzz-db/src/migration.rs"
-  - statement: "run_migrations (crates/buzz-db/src/migration.rs) is documented as holding 'the exclusive SCHEMA_DESTRUCTION_LOCK_KEY session lock, serializing schema changes against destructive deletion transactions (which take the shared counterpart while they validate the live catalog and act on it)', implemented by with_exclusive_schema_destruction_lock acquiring 'SELECT pg_advisory_lock($1)' before running migrations and releasing it with 'SELECT pg_advisory_unlock($1)' afterward, on the same connection for the whole run."
+      - "crates/buzz-db/src/runtime/migration.rs"
+  - statement: "run_migrations (crates/buzz-db/src/runtime/migration.rs) is documented as holding 'the exclusive SCHEMA_DESTRUCTION_LOCK_KEY session lock, serializing schema changes against destructive deletion transactions (which take the shared counterpart while they validate the live catalog and act on it)', implemented by with_exclusive_schema_destruction_lock acquiring 'SELECT pg_advisory_lock($1)' before running migrations and releasing it with 'SELECT pg_advisory_unlock($1)' afterward, on the same connection for the whole run."
     entry_class: FACT
     evidence:
-      - "crates/buzz-db/src/migration.rs"
+      - "crates/buzz-db/src/runtime/migration.rs"
   - statement: "run_migrations's own doc comment states 'Migration execution must never bypass this wrapper — a source lint (migration_execution_cannot_bypass_schema_destruction_lock) enforces that MIGRATOR.run has no other call site', and that lint is a real #[test] in the same file (migration_execution_cannot_bypass_schema_destruction_lock) that scans every .rs file under crates/ and asserts sqlx::migrate! and MIGRATOR.run() each appear exactly once, only in migration.rs, with one documented exception for crates/buzz-push-gateway/src/postgres.rs."
     entry_class: FACT
     evidence:
-      - "crates/buzz-db/src/migration.rs"
-  - statement: "run_migrations_locked (crates/buzz-db/src/migration.rs) calls reject_legacy_nip_rs_cardinality_ambiguity before MIGRATOR.run, and crate::replica_fence::verify_floor_guard_catalog after — the migration run fails closed on pre-existing data or a missing invariant guard, not merely applying pending SQL files unconditionally."
+      - "crates/buzz-db/src/runtime/migration.rs"
+  - statement: "run_migrations_locked (crates/buzz-db/src/runtime/migration.rs) calls reject_legacy_nip_rs_cardinality_ambiguity before MIGRATOR.run, and crate::replica_fence::verify_floor_guard_catalog after — the migration run fails closed on pre-existing data or a missing invariant guard, not merely applying pending SQL files unconditionally."
     entry_class: FACT
     evidence:
-      - "crates/buzz-db/src/migration.rs"
-  - statement: "reject_legacy_nip_rs_cardinality_ambiguity (crates/buzz-db/src/migration.rs) checks, before sqlx starts its migration transaction, whether a populated database still on migrations 0001-0006 contains kind-30078 rows with ambiguous d/t tag cardinality, and returns DbError::InvalidData with the message 'NIP-RS migration blocked: pre-0007 database contains kind-30078 rows with ambiguous d/t tag cardinality; repair or remove those nonconforming rows before retrying' rather than letting migration 0007 run against ambiguous data."
+      - "crates/buzz-db/src/runtime/migration.rs"
+  - statement: "reject_legacy_nip_rs_cardinality_ambiguity (crates/buzz-db/src/runtime/migration.rs) checks, before sqlx starts its migration transaction, whether a populated database still on migrations 0001-0006 contains kind-30078 rows with ambiguous d/t tag cardinality, and returns DbError::InvalidData with the message 'NIP-RS migration blocked: pre-0007 database contains kind-30078 rows with ambiguous d/t tag cardinality; repair or remove those nonconforming rows before retrying' rather than letting migration 0007 run against ambiguous data."
     entry_class: FACT
     evidence:
-      - "crates/buzz-db/src/migration.rs"
-  - statement: "The migrations/ directory contains 31 sequentially numbered SQL files, 0001_initial_schema.sql through 0031_workflow_run_error_codes.sql, applied by the embedded migrator in that numeric order; embedded_migrator_contains_consolidated_initial_schema (crates/buzz-db/src/migration.rs test module) asserts migrations.len() == 31 and each migration's version and description, one by one."
+      - "crates/buzz-db/src/runtime/migration.rs"
+  - statement: "The migrations/ directory contains 31 sequentially numbered SQL files, 0001_initial_schema.sql through 0031_workflow_run_error_codes.sql, applied by the embedded migrator in that numeric order; embedded_migrator_contains_consolidated_initial_schema (crates/buzz-db/src/runtime/migration.rs test module) asserts migrations.len() == 31 and each migration's version and description, one by one."
     entry_class: FACT
     evidence:
       - "migrations/0001_initial_schema.sql"
       - "migrations/0031_workflow_run_error_codes.sql"
-      - "crates/buzz-db/src/migration.rs"
-  - statement: "Test comments in crates/buzz-db/src/migration.rs state a rule for every additive migration after 0001: 'folding it would change 0001's checksum and break brownfield startup (sqlx VersionMismatch)', so a new migration is always its own new numbered file, never folded backward into an earlier one, once that earlier migration may already be recorded as applied by a running relay."
+      - "crates/buzz-db/src/runtime/migration.rs"
+  - statement: "Test comments in crates/buzz-db/src/runtime/migration.rs state a rule for every additive migration after 0001: 'folding it would change 0001's checksum and break brownfield startup (sqlx VersionMismatch)', so a new migration is always its own new numbered file, never folded backward into an earlier one, once that earlier migration may already be recorded as applied by a running relay."
     entry_class: FACT
     evidence:
-      - "crates/buzz-db/src/migration.rs"
+      - "crates/buzz-db/src/runtime/migration.rs"
   - statement: "Db::migrate (crates/buzz-db/src/lib.rs) is annotated #[datastore_span(name = \"migrate\", system = \"postgresql\")] and its body is 'migration::run_migrations(&self.pool).await' — the migration run is itself one instrumented datastore operation under this repository's own tracing policy."
     entry_class: FACT
     evidence:
@@ -87,14 +87,14 @@ evidence:
     entry_class: FACT
     evidence:
       - "schema/schema.sql"
-  - statement: "deletion_surface_parity_between_migration_0029_and_schema_sql (crates/buzz-db/src/migration.rs test module) structurally parses migration 0029's tables/functions/triggers/indexes/registry rows/fence attachments/added columns and asserts each exists with an identical normalized definition in schema/schema.sql, described in its own doc comment as guarding against schema.sql silently omitting part of the deletion surface migration 0029 defines."
+  - statement: "deletion_surface_parity_between_migration_0029_and_schema_sql (crates/buzz-db/src/runtime/migration.rs test module) structurally parses migration 0029's tables/functions/triggers/indexes/registry rows/fence attachments/added columns and asserts each exists with an identical normalized definition in schema/schema.sql, described in its own doc comment as guarding against schema.sql silently omitting part of the deletion surface migration 0029 defines."
     entry_class: FACT
     evidence:
-      - "crates/buzz-db/src/migration.rs"
+      - "crates/buzz-db/src/runtime/migration.rs"
   - statement: "crates/buzz-push-gateway/migrations is a second, separate sqlx migrator with its own migration files, exempted by name (push_gateway_exception) from the migration_execution_cannot_bypass_schema_destruction_lock lint, which additionally asserts every SQL file under crates/buzz-push-gateway/migrations does not reference community_id — confirming its tables are outside the relay's tenant schema and outside the schema/destruction lock this document covers."
     entry_class: FACT
     evidence:
-      - "crates/buzz-db/src/migration.rs"
+      - "crates/buzz-db/src/runtime/migration.rs"
 relationships:
   - type: part-of
     target: architecture-containers-postgres
@@ -120,7 +120,7 @@ works").
 Every schema change to the relay's tenant database lives as a numbered SQL
 file under `migrations/` (`0001_initial_schema.sql` through
 `0031_workflow_run_error_codes.sql` at the recorded revision — 31 files,
-sequential, no gaps). `crates/buzz-db/src/migration.rs` embeds them at compile
+sequential, no gaps). `crates/buzz-db/src/runtime/migration.rs` embeds them at compile
 time as a static `sqlx::migrate::Migrator` (`sqlx::migrate!("../../migrations")`)
 and applies them in numeric order. There is exactly one call site for that
 migrator's `.run()` method in the whole workspace, enforced by a source lint
@@ -156,17 +156,17 @@ test suite's own inline comments document this rule migration-by-migration
 
 | Property | Description | Evidence |
 |---|---|---|
-| Embedding | Migrations are compiled into the `buzz-db` binary via `sqlx::migrate!("../../migrations")`, not read from disk at runtime. | `crates/buzz-db/src/migration.rs` |
+| Embedding | Migrations are compiled into the `buzz-db` binary via `sqlx::migrate!("../../migrations")`, not read from disk at runtime. | `crates/buzz-db/src/runtime/migration.rs` |
 | Ordering | Applied strictly in ascending numeric-prefix order; 31 files at the recorded revision. | `migrations/0001_initial_schema.sql`–`migrations/0031_workflow_run_error_codes.sql` |
-| Single entry point | Exactly one call site for `MIGRATOR.run`, enforced by a compiled-in lint test scanning the whole workspace. | `crates/buzz-db/src/migration.rs` (`migration_execution_cannot_bypass_schema_destruction_lock`) |
-| Concurrency / locking | The whole run holds the exclusive `SCHEMA_DESTRUCTION_LOCK_KEY` Postgres advisory lock, serialized against destructive-deletion transactions' shared counterpart. | `crates/buzz-db/src/migration.rs` (`with_exclusive_schema_destruction_lock`) |
-| Pre-run guard | `reject_legacy_nip_rs_cardinality_ambiguity` blocks migration 0007 against pre-existing ambiguous kind-30078 rows rather than purging them silently. | `crates/buzz-db/src/migration.rs` |
-| Post-run guard | `replica_fence::verify_floor_guard_catalog` confirms every `events` partition still carries the required floor trigger after migrating. | `crates/buzz-db/src/migration.rs` |
-| Additivity rule | Once a version may already be applied in the field, its file is never edited (checksum-frozen); new schema changes are always a new, higher-numbered file. | `crates/buzz-db/src/migration.rs` (test-module comments, e.g. migrations 0002–0005) |
+| Single entry point | Exactly one call site for `MIGRATOR.run`, enforced by a compiled-in lint test scanning the whole workspace. | `crates/buzz-db/src/runtime/migration.rs` (`migration_execution_cannot_bypass_schema_destruction_lock`) |
+| Concurrency / locking | The whole run holds the exclusive `SCHEMA_DESTRUCTION_LOCK_KEY` Postgres advisory lock, serialized against destructive-deletion transactions' shared counterpart. | `crates/buzz-db/src/runtime/migration.rs` (`with_exclusive_schema_destruction_lock`) |
+| Pre-run guard | `reject_legacy_nip_rs_cardinality_ambiguity` blocks migration 0007 against pre-existing ambiguous kind-30078 rows rather than purging them silently. | `crates/buzz-db/src/runtime/migration.rs` |
+| Post-run guard | `replica_fence::verify_floor_guard_catalog` confirms every `events` partition still carries the required floor trigger after migrating. | `crates/buzz-db/src/runtime/migration.rs` |
+| Additivity rule | Once a version may already be applied in the field, its file is never edited (checksum-frozen); new schema changes are always a new, higher-numbered file. | `crates/buzz-db/src/runtime/migration.rs` (test-module comments, e.g. migrations 0002–0005) |
 | Instrumentation | The migration run is one `#[datastore_span(name = "migrate", system = "postgresql")]`-traced operation. | `crates/buzz-db/src/lib.rs` (`Db::migrate`) |
 | Trigger points | Auto-applied at relay startup (`crates/buzz-relay/src/main.rs`) and operator-triggered via `buzz-admin`'s `migrate` subcommand. | `crates/buzz-relay/src/main.rs`, `crates/buzz-admin/src/main.rs`, `CLAUDE.md` |
-| Desired-state cross-check | `schema/schema.sql` is a separate, hand-maintained "fresh install" schema, not applied by the migrator itself, but structurally parity-checked against migration 0029's deletion surface by a dedicated test so the two cannot silently diverge. | `schema/schema.sql`, `crates/buzz-db/src/migration.rs` (`deletion_surface_parity_between_migration_0029_and_schema_sql`) |
-| Separate migrator boundary | `crates/buzz-push-gateway/migrations` is a second, independent sqlx migrator for the push gateway's own non-tenant tables, explicitly exempted from and checked against this schema/destruction lock's scope. | `crates/buzz-db/src/migration.rs` (`push_gateway_exception`, `push_gateway_migrations`) |
+| Desired-state cross-check | `schema/schema.sql` is a separate, hand-maintained "fresh install" schema, not applied by the migrator itself, but structurally parity-checked against migration 0029's deletion surface by a dedicated test so the two cannot silently diverge. | `schema/schema.sql`, `crates/buzz-db/src/runtime/migration.rs` (`deletion_surface_parity_between_migration_0029_and_schema_sql`) |
+| Separate migrator boundary | `crates/buzz-push-gateway/migrations` is a second, independent sqlx migrator for the push gateway's own non-tenant tables, explicitly exempted from and checked against this schema/destruction lock's scope. | `crates/buzz-db/src/runtime/migration.rs` (`push_gateway_exception`, `push_gateway_migrations`) |
 
 ## Commands
 

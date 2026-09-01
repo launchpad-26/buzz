@@ -47,7 +47,7 @@ evidence:
     entry_class: FACT
     evidence:
       - "grep(pattern='media', glob='migrations/*.sql') -> no matches, at repository revision 338b4d0cf2dd76cc43964bb717ce9f0a94a9c7a5"
-      - "crates/buzz-db/src/migration.rs"
+      - "crates/buzz-db/src/runtime/migration.rs"
   - statement: "No other datastore in this repository holds a copy of object-store bytes: buzz-db (Postgres) and buzz-pubsub (Redis) are documented elsewhere as the event store and the pub/sub-and-presence store respectively, and neither is cited anywhere in buzz-media or the git object-storage path as a fallback or cache for blob or pack bytes. The bucket is the sole durable location for the bytes it holds — an authoritative store, not a cache, derived projection, or transport buffer."
     entry_class: INFERENCE
     evidence:

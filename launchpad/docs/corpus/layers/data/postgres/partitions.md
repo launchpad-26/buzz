@@ -50,17 +50,17 @@ evidence:
   - statement: "crates/buzz-db/src/partition.rs's PARTITIONED_TABLES constant names exactly events and delivery_log as the only tables the runtime partition manager will act on, and its own doc comment states this allowlist \"prevents DDL injection\" because partition DDL identifiers cannot be parameterized."
     entry_class: FACT
     evidence:
-      - "crates/buzz-db/src/partition.rs:11-12"
+      - "crates/buzz-db/src/store/partition.rs:13-14"
   - statement: "ensure_future_partitions computes, for each of the next N months (N given by the caller), a monthly [start, end) date range and a suffix, validates the target table against the allowlist and the suffix/date strings against strict character-class regexes (validate_partition_suffix, validate_date_str) before interpolating them into a CREATE TABLE .. PARTITION OF .. FOR VALUES FROM .. TO .. statement, and treats a Postgres 42P17 \"would overlap partition\" error as success rather than failure, on the stated grounds that a fresh schema's catch-all *_p_future partition may already cover the requested month."
     entry_class: FACT
     evidence:
-      - "crates/buzz-db/src/partition.rs:15-56"
-      - "crates/buzz-db/src/partition.rs:74-150"
+      - "crates/buzz-db/src/store/partition.rs:17-52"
+      - "crates/buzz-db/src/store/partition.rs:79-135"
   - statement: "crates/buzz-relay/src/main.rs calls db.ensure_future_partitions(3) once at relay startup (unconditionally, not gated on BUZZ_AUTO_MIGRATE), and the module's own doc comment states it is additionally intended to run monthly via cron, but no call site invokes ensure_future_partitions anywhere outside that one startup call; buzz-workflow's own \"cron loop\" (crates/buzz-workflow/src/lib.rs) is a separate, user-authored-workflow scheduling feature unrelated to partition management, and no workflow, script, or infrastructure config in this repository wires it (or anything else) to ensure_future_partitions."
     entry_class: FACT
     evidence:
       - "crates/buzz-relay/src/main.rs:200-202"
-      - "crates/buzz-db/src/partition.rs:3"
+      - "crates/buzz-db/src/store/partition.rs:3"
       - "grep(pattern='ensure_future_partitions', paths=['**/*.rs']) -> crates/buzz-db/src/partition.rs (definition), crates/buzz-db/src/lib.rs (wrapper), crates/buzz-relay/src/main.rs:200 (sole call site)"
   - statement: "A repository-wide search for partition retention or removal logic (grep for \"detach partition\", \"drop.*partition\", \"retention\" across .rs and .sql files) found no code path that ever drops, detaches, or archives an old partition; ensure_future_partitions only ever creates partitions for future months, never removes past ones."
     entry_class: FACT
@@ -69,7 +69,7 @@ evidence:
   - statement: "Because no partition-drop or archival mechanism exists in this codebase, the events and delivery_log partition sets grow monotonically for as long as a deployment runs, and any pruning of old partitions today would have to happen as an out-of-band, unreviewed operator action rather than through code this node can cite."
     entry_class: INFERENCE
     evidence:
-      - "crates/buzz-db/src/partition.rs:15-150"
+      - "crates/buzz-db/src/store/partition.rs:17-135"
       - "grep(pattern='detach partition|drop.*partition|retention', paths=['**/*.rs','**/*.sql']) -> no partition-removal call site found"
     confidence: 0.85
   - statement: "Migration 0021 creates a DEFERRABLE INITIALLY DEFERRED constraint trigger (events_created_at_floor, function events_created_at_floor_guard) on the events table that re-evaluates clock_timestamp() at COMMIT and rejects a channel-bearing row whose created_at is older than a session-scoped buzz.created_at_floor GUC (seconds), and its own comment states this exists to make the ingest-time created_at envelope a commit-time storage invariant so that cursor pages served from a read replica behind a fence timestamp cannot miss a row."
@@ -84,25 +84,24 @@ evidence:
   - statement: "crates/buzz-db/src/replica_fence.rs's verify_floor_guard_catalog function queries pg_inherits for every partition child of events (UNION ALL with the events parent itself) and asserts, per relation, that a correctly-shaped events_created_at_floor trigger (right function, DEFERRABLE, INITIALLY DEFERRED, row-level, AFTER not BEFORE, firing on both INSERT and UPDATE) exists; any relation missing it is collected and returned as an error."
     entry_class: FACT
     evidence:
-      - "crates/buzz-db/src/replica_fence.rs:312-360"
+      - "crates/buzz-db/src/runtime/replica_fence.rs:324-343"
   - statement: "crates/buzz-db/src/migration.rs's run_migrations_locked calls verify_floor_guard_catalog immediately after running the embedded SQLx migrator, and its own comment states migration \"fails closed if any is missing\" -- a partition attached by any path that escapes trigger inheritance (an ATTACH PARTITION or an older code path, per the comment) causes the whole migration run to return an error rather than complete."
     entry_class: FACT
     evidence:
-      - "crates/buzz-db/src/migration.rs:35-47"
+      - "crates/buzz-db/src/runtime/migration.rs:50-63"
   - statement: "Db::spawn_fence_probe's own doc comment states that on any floor-guard verification failure (catalog shape or observed behavior) the background replica-fence probe is never spawned and the fence stays closed, so every cursor page routes to the writer pool -- described in the comment as \"the relay keeps serving -- degraded capacity, never holes.\""
     entry_class: FACT
     evidence:
-      - "crates/buzz-db/src/lib.rs:850-873"
+      - "crates/buzz-db/src/runtime/mod.rs:660-688"
   - statement: "crates/buzz-relay/src/main.rs treats a failure of ensure_future_partitions itself (the monthly-partition-creation call, not the floor-guard verification) as non-fatal: the error is logged and relay startup continues, unlike auto-migration failure and deletion-serving-fence validation failure in the same function, both of which abort startup via `?`."
     entry_class: FACT
     evidence:
       - "crates/buzz-relay/src/main.rs:190-202"
-  - statement: "If ensure_future_partitions fails to create an upcoming month's partition and no partition covers a given INSERT's created_at (or delivered_at) value, Postgres itself rejects that INSERT with a \"no partition of relation ... found for row\" error at write time -- this exact error text is independently named in scripts/attach-schema-partitions.sql's own comment describing the failure a mis-attached partition produces -- rather than the write silently succeeding into the wrong partition or being dropped."
+  - statement: "If ensure_future_partitions fails to create an upcoming month's partition and no partition covers a given INSERT's created_at (or delivered_at) value, Postgres itself rejects that INSERT with a \"no partition of relation ... found for row\" error at write time, rather than the write silently succeeding into the wrong partition or being dropped."
     entry_class: INFERENCE
     evidence:
-      - "scripts/attach-schema-partitions.sql:5-8"
-      - "crates/buzz-db/src/partition.rs:15-56"
-    confidence: 0.8
+      - "crates/buzz-db/src/store/partition.rs:17-52"
+    confidence: 0.7
   - statement: "Migration 0029's attach_community_write_fence function attaches the community_write_fence_<table> row-level trigger (enforce_community_write_fence, which rejects an INSERT/UPDATE/DELETE naming a non-active community) only to relations for which pg_class.relispartition is false, i.e. to the events and delivery_log partitioned parents, never directly to their partition children; delivery_log is named explicitly in the migration's own list of tables the fence is attached to."
     entry_class: FACT
     evidence:
@@ -114,10 +113,10 @@ evidence:
       - "migrations/0029_community_deletion.sql:475-516"
       - "migrations/0021_created_at_fence_floor.sql:38-42"
     confidence: 0.8
-  - statement: "scripts/attach-schema-partitions.sql's own comment states that when pgschema (rather than raw schema.sql) creates a fresh schema, it emits existing partition children as standalone CREATE TABLE statements not yet attached to their parent, and that pgschema also copies the parent's triggers onto those standalone children -- so the repair script must DROP each copied trigger (including community_write_fence_events, community_write_fence_delivery_log, and events_created_at_floor) from every partition child before ALTER TABLE .. ATTACH PARTITION, because PostgreSQL recreates the inherited parent trigger on attach and rejects a same-named trigger already present on the child."
+  - statement: "scripts/reconcile-schema-after-pgschema.sql's own comment states that pgschema emits existing partition children as standalone CREATE TABLE statements not yet attached to their parent, and that pgschema also copies the parent's triggers onto those standalone children -- so the repair script must DROP each copied trigger from every partition child before ALTER TABLE .. ATTACH PARTITION, because PostgreSQL recreates the inherited parent trigger on attach and rejects a same-named trigger already present on the child. (This script superseded the now-deleted scripts/attach-schema-partitions.sql, which described the identical pattern before an unrelated 2026-08-27 commit removed it.)"
     entry_class: FACT
     evidence:
-      - "scripts/attach-schema-partitions.sql:1-27"
+      - "scripts/reconcile-schema-after-pgschema.sql:1-20"
   - statement: "The events table's stored columns (id, pubkey, created_at, kind, tags, content, sig, and more) are the full signed Nostr event, and buzz-db's crate-level invariants state that ephemeral events (kinds 20000-29999) are never persisted at all and AUTH events (kind 22242) are never stored because they carry bearer tokens -- so a row that is persisted in the partitioned events table is this repository's durable, canonical copy of that event, not a cache or projection of a copy held authoritatively elsewhere."
     entry_class: FACT
     evidence:
@@ -141,7 +140,7 @@ evidence:
   - statement: "crates/buzz-db/src/partition.rs's own unit test module asserts validate_partition_suffix and validate_date_str reject SQL-injection-shaped inputs (e.g. \"2026_03; DROP TABLE events--\", \"2026-03-01; DROP TABLE events--\") and that PARTITIONED_TABLES contains events and delivery_log but not api_tokens or users."
     entry_class: FACT
     evidence:
-      - "crates/buzz-db/src/partition.rs:152-182"
+      - "crates/buzz-db/src/store/partition.rs:162-190"
 relationships:
   - type: part-of
     target: architecture-containers-postgres
@@ -313,11 +312,9 @@ Three distinct failure modes exist, and they are not treated identically:
 2. **A write lands outside every existing partition's range** (the consequence of
    failure mode 1 persisting long enough that an upcoming month has no partition).
    Postgres itself rejects the `INSERT` with a "no partition of relation ... found for
-   row" error at write time -- this exact error text is independently named in
-   `scripts/attach-schema-partitions.sql`'s own comment, describing the failure a
-   mis-attached partition produces.
+   row" error at write time.
 3. **The replica-fence floor guard is missing or mis-shaped on any partition.**
-   `crates/buzz-db/src/migration.rs`'s `run_migrations_locked` re-checks the guard
+   `crates/buzz-db/src/runtime/migration.rs`'s `run_migrations_locked` re-checks the guard
    immediately after running migrations and fails the entire migration run closed if
    any partition (parent or child) is missing it -- the function's own comment states
    this explicitly. Separately, `Db::spawn_fence_probe`'s own doc comment states that
@@ -328,7 +325,7 @@ Three distinct failure modes exist, and they are not treated identically:
    correctness are directly coupled: an incorrectly rotated partition degrades read
    capacity rather than corrupting a served page.
 
-Separately, the pgschema-vs-raw-SQL repair path in `scripts/attach-schema-partitions.sql`
+Separately, the pgschema-vs-raw-SQL repair path in `scripts/reconcile-schema-after-pgschema.sql`
 exists because pgschema-applied schemas emit existing partition children as standalone
 tables that also carry copies of the parent's triggers; attaching them without first
 dropping those copies fails, because Postgres recreates the inherited trigger on

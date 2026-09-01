@@ -36,10 +36,10 @@ evidence:
     entry_class: FACT
     evidence:
       - ".env.example"
-  - statement: "crates/buzz-db/src/migration.rs embeds every file under migrations/ via a static sqlx::migrate! MIGRATOR and runs it through a single run_migrations call site; that call site's own doc comment states the entire run holds the exclusive SCHEMA_DESTRUCTION_LOCK_KEY session lock, serializing schema changes against destructive community-deletion transactions, and that a source lint (migration_execution_cannot_bypass_schema_destruction_lock) enforces MIGRATOR.run has no other caller."
+  - statement: "crates/buzz-db/src/runtime/migration.rs embeds every file under migrations/ via a static sqlx::migrate! MIGRATOR and runs it through a single run_migrations call site; that call site's own doc comment states the entire run holds the exclusive SCHEMA_DESTRUCTION_LOCK_KEY session lock, serializing schema changes against destructive community-deletion transactions, and that a source lint (migration_execution_cannot_bypass_schema_destruction_lock) enforces MIGRATOR.run has no other caller."
     entry_class: FACT
     evidence:
-      - "crates/buzz-db/src/migration.rs"
+      - "crates/buzz-db/src/runtime/migration.rs"
   - statement: "crates/buzz-relay/src/main.rs gates migration execution on buzz_auto_migrate_enabled(std::env::var(\"BUZZ_AUTO_MIGRATE\")); when the variable is absent or not truthy, main.rs logs \"Skipping database migrations because BUZZ_AUTO_MIGRATE is not enabled\" and starts the relay without applying pending migrations, rather than running them automatically."
     entry_class: FACT
     evidence:
@@ -48,15 +48,15 @@ evidence:
     entry_class: FACT
     evidence:
       - "crates/buzz-relay/src/main.rs"
-  - statement: "crates/buzz-db/src/replica_fence.rs's module doc comment describes a two-part bounded-staleness proof for routing keyset-cursor reads to a Postgres read replica: a commit-time floor guard trigger (migration 0021) that aborts any transaction inserting a channel-bearing events row with created_at more than floor seconds before commit time, and an ordered heartbeat-token handshake (migration 0026) that lets a reader session prove, from its own observed token, that every commit before that token has already replayed on the session it is about to read from. The same comment states every failure mode -- probe errors, masked pg_stat_activity visibility, an unreadable heartbeat row, an epoch mismatch, or a token below every retained entry -- routes the request back to the writer: \"Everything fails closed... degraded capacity, never holes.\""
+  - statement: "crates/buzz-db/src/runtime/replica_fence.rs's module doc comment describes a two-part bounded-staleness proof for routing keyset-cursor reads to a Postgres read replica: a commit-time floor guard trigger (migration 0021) that aborts any transaction inserting a channel-bearing events row with created_at more than floor seconds before commit time, and an ordered heartbeat-token handshake (migration 0026) that lets a reader session prove, from its own observed token, that every commit before that token has already replayed on the session it is about to read from. The same comment states every failure mode -- probe errors, masked pg_stat_activity visibility, an unreadable heartbeat row, an epoch mismatch, or a token below every retained entry -- routes the request back to the writer: \"Everything fails closed... degraded capacity, never holes.\""
     entry_class: FACT
     evidence:
-      - "crates/buzz-db/src/replica_fence.rs"
-  - statement: "replica_fence.rs's own mod tests (crates/buzz-db/src/replica_fence.rs) contains multiple #[test] and #[tokio::test] functions exercising the fence proof; migration.rs's own mod tests (crates/buzz-db/src/migration.rs) contains dedicated tenant-isolation lint tests -- all_non_operator_global_tables_have_not_null_community_id, scoped_primary_key_unique_and_foreign_key_constraints_lead_with_community_id, migration_lint_detects_tables_missing_community_id_by_default -- run against the concatenated SQL of every embedded migration."
+      - "crates/buzz-db/src/runtime/replica_fence.rs"
+  - statement: "replica_fence.rs's own mod tests (crates/buzz-db/src/runtime/replica_fence.rs) contains multiple #[test] and #[tokio::test] functions exercising the fence proof; migration.rs's own mod tests (crates/buzz-db/src/runtime/migration.rs) contains dedicated tenant-isolation lint tests -- all_non_operator_global_tables_have_not_null_community_id, scoped_primary_key_unique_and_foreign_key_constraints_lead_with_community_id, migration_lint_detects_tables_missing_community_id_by_default -- run against the concatenated SQL of every embedded migration."
     entry_class: FACT
     evidence:
-      - "crates/buzz-db/src/replica_fence.rs"
-      - "crates/buzz-db/src/migration.rs"
+      - "crates/buzz-db/src/runtime/replica_fence.rs"
+      - "crates/buzz-db/src/runtime/migration.rs"
   - statement: "migrations/0001_initial_schema.sql's own header comment states its governing contract is docs/multi-tenant-conformance.md and names \"row zero\" as the invariant that a request's community is resolved from the connection host by the server, never supplied by the client, and that every scoped row carries that immutable community_id; the communities table itself is marked operator-global (the tenant registry, not itself tenant-scoped) and its own comment states resolve_host(host) reads exactly one row here to mint the request's TenantContext."
     entry_class: FACT
     evidence:
@@ -182,7 +182,7 @@ that, and a future `layers/data/...` data-entity node for what any one row
 ## Migration / schema-versioning mechanism
 
 Every file under `migrations/` is embedded via a static `sqlx::migrate!`
-`MIGRATOR` in `crates/buzz-db/src/migration.rs` and applied through exactly
+`MIGRATOR` in `crates/buzz-db/src/runtime/migration.rs` and applied through exactly
 one call site, `run_migrations`, whose own doc comment states the entire run
 holds the exclusive `SCHEMA_DESTRUCTION_LOCK_KEY` Postgres advisory session
 lock, serializing schema changes against destructive community-deletion
@@ -225,7 +225,7 @@ gap rather than assumed either way.
 ## Operational characteristics
 
 **Consistency semantics -- bounded-staleness read-replica routing, fails
-closed.** `crates/buzz-db/src/replica_fence.rs` implements a two-part proof
+closed.** `crates/buzz-db/src/runtime/replica_fence.rs` implements a two-part proof
 before any keyset-cursor read is allowed to route to a configured read
 replica: a commit-time floor-guard trigger (migration 0021) that aborts, at
 commit, any transaction inserting a channel-bearing `events` row more than a
@@ -295,7 +295,7 @@ characteristics as observed in this repository's own code and configuration.
 | Table-by-table schema contents and the full multi-tenant conformance contract | `migrations/0001_initial_schema.sql`, `docs/multi-tenant-conformance.md` |
 | The domain meaning of the data Postgres holds (what a Nostr event, channel or thread *is*) | A future `layers/data/...` data-entity node, not yet drafted at this revision |
 | Where this Postgres instance actually runs per environment, replica counts, managed-vs-local, secret provisioning | A future deployment-scoped `layers/platforms/...` or `architecture/deployment/*` node |
-| The replica-freshness fence's full correctness proof | `crates/buzz-db/src/replica_fence.rs`'s own module doc comment and `mod tests` |
+| The replica-freshness fence's full correctness proof | `crates/buzz-db/src/runtime/replica_fence.rs`'s own module doc comment and `mod tests` |
 | Redis (pub/sub, presence, typing) as a separate datastore | `layers/data/redis/role.md` (#1097), not yet merged at this revision |
 | The object-storage (media, Git-CAS) datastore | `layers/data/object-storage/role.md` (#1073), not yet merged at this revision |
 | Whether the audit and search pools `buzz-relay` opens directly carry `#[datastore_span]` instrumentation | Not established by this task; named as a gap above |

@@ -43,14 +43,14 @@ evidence:
     entry_class: FACT
     evidence:
       - "migrations/0031_workflow_run_error_codes.sql"
-  - statement: "`crates/buzz-db/src/workflow.rs` is the sole read/write code path for all four tables (its own module doc states 'Workflow CRUD -- workflows, workflow_runs, and workflow_approvals tables'; grepping `crates/` for `FROM workflows`, `INSERT INTO workflows`, `UPDATE workflows`, `workflow_runs`, `workflow_approvals` and `scheduled_workflow_fires` outside `buzz-db` and `buzz-workflow` returns only test/router references, no other SQL call sites)."
+  - statement: "`crates/buzz-db/src/store/workflow.rs` is the sole read/write code path for all four tables (its own module doc states 'Workflow CRUD -- workflows, workflow_runs, and workflow_approvals tables'; grepping `crates/` for `FROM workflows`, `INSERT INTO workflows`, `UPDATE workflows`, `workflow_runs`, `workflow_approvals` and `scheduled_workflow_fires` outside `buzz-db` and `buzz-workflow` returns only test/router references, no other SQL call sites)."
     entry_class: FACT
     evidence:
-      - "crates/buzz-db/src/workflow.rs"
+      - "crates/buzz-db/src/store/workflow.rs"
   - statement: "`workflows` is keyed `(community_id, id)`, not by a globally unique `id` alone: `get_workflow`'s doc comment states 'the same workflow UUID can exist in two communities, so a request-scoped lookup must bind both,' and `claim_scheduled_workflow_fire`'s doc comment states the same for its own claim binding, adding that 'resolving the owning community from `id` alone is ambiguous and would fan a single claim across every community holding that UUID.' `workflow_approvals` is keyed `(community_id, token)` for the identical reason, per `get_approval_by_stored_hash`'s doc comment: 'the same token bytes could in principle collide across communities, so the lookup binds the server-resolved community alongside the token.'"
     entry_class: FACT
     evidence:
-      - "crates/buzz-db/src/workflow.rs"
+      - "crates/buzz-db/src/store/workflow.rs"
   - statement: "`community_id` on every row is server-resolved, never client-supplied: `buzz-core`'s `CommunityId` newtype wraps a `Uuid` and its constructor doc comment states 'this is intentionally not a parse-from-client entry point: callers must already hold a server-trusted UUID.'"
     entry_class: FACT
     evidence:
@@ -58,36 +58,36 @@ evidence:
   - statement: "Approval tokens are never stored in plaintext: `hash_approval_token` SHA-256-hashes the raw token before every INSERT/SELECT/UPDATE against `workflow_approvals.token`, and the module's own security note states 'Approval tokens are stored as SHA-256 hashes (never plaintext).'"
     entry_class: FACT
     evidence:
-      - "crates/buzz-db/src/workflow.rs"
+      - "crates/buzz-db/src/store/workflow.rs"
   - statement: "A `workflows` row's lifecycle has two independent axes: `status` (`workflow_status`, comment 'Update a workflow's status (active -> disabled -> archived)') and `enabled` (a boolean gate toggled independently by `set_workflow_enabled`, and forced to `FALSE` in bulk by `disable_workflows_for_owner_in_channel` -- labeled `SEC-006` -- 'when the owner loses channel membership ... so their workflows stop firing durably -- across pods and restarts.'). `list_enabled_channel_workflows`'s doc comment confirms the trigger-matching path requires both: 'Only returns workflows with status = 'active' AND enabled = TRUE.'"
     entry_class: FACT
     evidence:
-      - "crates/buzz-db/src/workflow.rs"
+      - "crates/buzz-db/src/store/workflow.rs"
   - statement: "Deleting a `workflows` row cascades to its `workflow_runs` and `workflow_approvals` (and, via `workflow_runs`, blocks a `scheduled_workflow_fires.workflow_run_id` link rather than orphaning it): `delete_workflow`'s doc comment states plainly 'Delete a workflow and all its runs/approvals (CASCADE).'"
     entry_class: FACT
     evidence:
-      - "crates/buzz-db/src/workflow.rs"
+      - "crates/buzz-db/src/store/workflow.rs"
       - "migrations/0001_initial_schema.sql"
   - statement: "`upsert_workflow` inserts at a caller-supplied NIP-33 `d`-tag UUID with `ON CONFLICT (community_id, id) DO UPDATE ... WHERE workflows.owner_pubkey = EXCLUDED.owner_pubkey AND workflows.channel_id IS NOT DISTINCT FROM EXCLUDED.channel_id`, and its doc comment states this predicate 'keeps a learned workflow UUID from becoming a cross-user or cross-channel overwrite primitive while still making retries idempotent' -- a row whose owner or channel does not match the existing one is rejected (`AccessDenied`), not silently overwritten."
     entry_class: FACT
     evidence:
-      - "crates/buzz-db/src/workflow.rs"
+      - "crates/buzz-db/src/store/workflow.rs"
   - statement: "`update_approval`'s WHERE clause includes `AND status = 'pending'`, documented under '# TOCTOU safety (N5)' as ensuring 'two concurrent grant/deny requests cannot both succeed'; a second request against an already-decided approval updates zero rows and the function returns `Ok(false)`, which callers are told to treat as an HTTP 409 conflict rather than a silent success."
     entry_class: FACT
     evidence:
-      - "crates/buzz-db/src/workflow.rs"
+      - "crates/buzz-db/src/store/workflow.rs"
   - statement: "`claim_scheduled_workflow_fire` performs its INSERT with `ON CONFLICT (community_id, workflow_id, scheduled_for) DO NOTHING ... RETURNING ...`, so only the first caller to reach a given `(community_id, workflow_id, scheduled_for)` triple receives `Some`; every other caller for the same triple receives `None` and must not create a duplicate `workflow_runs` row for that schedule instant."
     entry_class: FACT
     evidence:
-      - "crates/buzz-db/src/workflow.rs"
+      - "crates/buzz-db/src/store/workflow.rs"
   - statement: "`update_workflow_run`'s SQL sets `started_at` via `CASE WHEN $6 = 'running' AND started_at IS NULL THEN NOW() ELSE started_at END` and `completed_at` via `CASE WHEN $7 IN ('completed','failed','cancelled') THEN NOW() ELSE completed_at END`, both compared against the bind parameter rather than the column's post-UPDATE value -- the function's own comment ('Fix C3') states an earlier version read `status` from the column after `SET status = ?` had already changed it, making the `started_at` condition always false, and that the fix now checks the bind parameter directly."
     entry_class: FACT
     evidence:
-      - "crates/buzz-db/src/workflow.rs"
-  - statement: "None of these four tables carries a Nostr event id or any other event-derived column; every write is issued directly by relay-side code in `crates/buzz-db/src/workflow.rs` in response to a command, an event-triggered `WorkflowEngine` decision, a cron/interval fire, or an HTTP approval action -- not by ingesting and storing a signed Nostr event the way `events` or `thread_metadata` are populated."
+      - "crates/buzz-db/src/store/workflow.rs"
+  - statement: "None of these four tables carries a Nostr event id or any other event-derived column; every write is issued directly by relay-side code in `crates/buzz-db/src/store/workflow.rs` in response to a command, an event-triggered `WorkflowEngine` decision, a cron/interval fire, or an HTTP approval action -- not by ingesting and storing a signed Nostr event the way `events` or `thread_metadata` are populated."
     entry_class: INFERENCE
     evidence:
-      - "crates/buzz-db/src/workflow.rs"
+      - "crates/buzz-db/src/store/workflow.rs"
       - "launchpad/docs/corpus/architecture/flows/workflow-execution.md"
     confidence: 0.75
   - statement: "`architecture-flows-workflow-execution` (merged, `type: architecture`) documents that a workflow run's three trigger paths -- an in-process channel-event hook, a 60-second cron/interval loop, and an HTTP webhook handler -- are wired through `WorkflowEngine`, and separately that the per-channel enabled-workflow list is read through a 10-second TTL cache invalidated at 'the two workflow mutation sites (command upsert, NIP-09 deletion).' This corroborates, from the execution side, `update_workflow`'s own cache-invalidation NOTE cited above from the storage side."
@@ -264,7 +264,7 @@ described here.
 None of these four tables has a Nostr event as its own canonical form — no
 column stores an event id the way `thread_metadata` or the `events` table
 does. Instead, every write is issued directly by relay-side code in
-`crates/buzz-db/src/workflow.rs`, reached from: a command handler (workflow
+`crates/buzz-db/src/store/workflow.rs`, reached from: a command handler (workflow
 create/upsert), `WorkflowEngine`'s event-triggered execution path, the
 cron/interval scheduler loop, or the HTTP approval-grant/deny handlers. A
 workflow's `id` frequently originates from a NIP-33 `d`-tag on the defining
@@ -280,7 +280,7 @@ Postgres — this repository's single Postgres instance, per
 type, index, or partitioning detail is restated here; see
 `migrations/0001_initial_schema.sql` (lines 358–466) and
 `migrations/0031_workflow_run_error_codes.sql` for the authoritative schema,
-and `crates/buzz-db/src/workflow.rs` for every read/write code path against
+and `crates/buzz-db/src/store/workflow.rs` for every read/write code path against
 it.
 
 ## Scope and omissions
@@ -290,7 +290,7 @@ relationships, provenance and storage location of the `workflows`,
 `workflow_runs`, `workflow_approvals`, and `scheduled_workflow_fires`
 Postgres tables, as they exist in `migrations/0001_initial_schema.sql` and
 `migrations/0031_workflow_run_error_codes.sql`, and as they are read and
-written by `crates/buzz-db/src/workflow.rs`.
+written by `crates/buzz-db/src/store/workflow.rs`.
 
 **It does not cover, and these are gaps rather than silence:**
 

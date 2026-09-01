@@ -48,18 +48,18 @@ evidence:
     entry_class: FACT
     evidence:
       - "crates/buzz-media/src/bucket_index.rs"
-  - statement: "crates/buzz-db/src/deletion.rs's DeletionStage enum is a fixed, ordered lifecycle (Submitted, Inventoried, Approved, Fenced, Drained, BindingsRemoved, PostgresPurged, CachePurged, LogicallyVerified, RetentionPending, Aborted) whose own doc comment on Self::next states 'There are no backwards or skipping transitions'; RetentionPending's own variant doc comment reads 'Logical deletion complete; shared CAS physical expiry is deferred,' and DeletionStage::next returns None for both RetentionPending and Aborted -- no further transition out of RetentionPending exists anywhere in this codebase."
+  - statement: "crates/buzz-db/src/store/deletion.rs's DeletionStage enum is a fixed, ordered lifecycle (Submitted, Inventoried, Approved, Fenced, Drained, BindingsRemoved, PostgresPurged, CachePurged, LogicallyVerified, RetentionPending, Aborted) whose own doc comment on Self::next states 'There are no backwards or skipping transitions'; RetentionPending's own variant doc comment reads 'Logical deletion complete; shared CAS physical expiry is deferred,' and DeletionStage::next returns None for both RetentionPending and Aborted -- no further transition out of RetentionPending exists anywhere in this codebase."
     entry_class: FACT
     evidence:
-      - "crates/buzz-db/src/deletion.rs"
+      - "crates/buzz-db/src/store/deletion.rs"
   - statement: "crates/buzz-deletion/src/lib.rs's execute_stage match arm for DeletionStage::LogicallyVerified calls DeletionStore::mark_retention_pending with the literal recorded detail policy string 'member-erasure and fleet-wide shared-CAS GC are out of V1 scope' -- a deliberate, named non-implementation recorded in the request's own audit trail, not silence."
     entry_class: FACT
     evidence:
       - "crates/buzz-deletion/src/lib.rs"
-  - statement: "crates/buzz-db/src/deletion.rs's mark_retention_pending method has a doc comment 'Finish logical deletion and enter the physical-expiry pending state,' and its SQL UPDATE sets completed_at = now() when transitioning a request's stage to 'retention_pending' -- from the deletion pipeline's own perspective the request is complete at this point, even though the shared CAS bytes it could not touch remain physically present with no scheduled removal."
+  - statement: "crates/buzz-db/src/store/deletion.rs's mark_retention_pending method has a doc comment 'Finish logical deletion and enter the physical-expiry pending state,' and its SQL UPDATE sets completed_at = now() when transitioning a request's stage to 'retention_pending' -- from the deletion pipeline's own perspective the request is complete at this point, even though the shared CAS bytes it could not touch remain physically present with no scheduled removal."
     entry_class: FACT
     evidence:
-      - "crates/buzz-db/src/deletion.rs"
+      - "crates/buzz-db/src/store/deletion.rs"
   - statement: "docs/git-on-object-storage.md (root design doc, not a corpus node) states, independently of buzz-deletion, that 'because no writer removes packs. Physical pruning of unreachable packs is a backend retention concern outside this proof boundary; any such sweep must honor in-flight readers (e.g. a retention window longer than the max hydrate ...)' and separately that 'object-store deletion remains a separate retention concern outside this proof boundary' -- the identical no-scheduled-physical-deletion posture as buzz-deletion's RetentionPending stage, stated for the git-CAS half of the same bucket."
     entry_class: FACT
     evidence:
@@ -120,7 +120,7 @@ location of the bytes retention policy governs; nothing else in this
 repository holds a second copy that a retention decision here could instead
 apply to. Retention state itself (which deletion request has reached which
 stage) is authoritative in Postgres (`community_deletion_requests`,
-`crates/buzz-db/src/deletion.rs`), not in the object store — the object store
+`crates/buzz-db/src/store/deletion.rs`), not in the object store — the object store
 holds the bytes; Postgres holds the record of what has and has not been done
 to them.
 
@@ -240,7 +240,7 @@ nodes' own failure-behavior sections and is not repeated here.
   (`tenant_prefixes`, `is_tenant_owned_key`, `is_known_fleet_key`,
   `sweep_bucket_taxonomy`); `crates/buzz-deletion/src/lib.rs`
   (`execute_stage`, `enumerate_tenant_prefixes`, `Command::Sweep`);
-  `crates/buzz-db/src/deletion.rs` (`DeletionStage`, `mark_retention_pending`,
+  `crates/buzz-db/src/store/deletion.rs` (`DeletionStage`, `mark_retention_pending`,
   `record_taxonomy_sweep`); `crates/buzz-relay/src/storage_sweep.rs`
   (unrelated hourly usage-metrics task, linked here only to distinguish it
   from the fleet taxonomy sweep above).
@@ -266,7 +266,7 @@ on retention risk.
 | The Blossom/media datastore's own full schema, access patterns, and non-retention operational characteristics | `blossom-storage.md` (id `layers-data-object-storage-blossom-storage`), **not yet merged to `origin/launchpad` at this node's authoring revision** — no `relationships` edge to it exists here for that reason, per `AGENTS.md` step 9 |
 | The git-CAS datastore's own full schema, access patterns, and non-retention operational characteristics | `git-objects.md` (id `layers-data-object-storage-git-objects`), **not yet merged to `origin/launchpad` at this node's authoring revision** — same reason as above |
 | The formal safety proofs of `docs/git-on-object-storage.md` beyond its retention axiom | `docs/git-on-object-storage.md` |
-| The full whole-community deletion state machine (approval, fencing, drain, Postgres/Redis purge mechanics) beyond the retention-relevant stages | `crates/buzz-db/src/deletion.rs`, `crates/buzz-deletion/src/lib.rs` — a future corpus node, if one is scoped for the deletion engine itself |
+| The full whole-community deletion state machine (approval, fencing, drain, Postgres/Redis purge mechanics) beyond the retention-relevant stages | `crates/buzz-db/src/store/deletion.rs`, `crates/buzz-deletion/src/lib.rs` — a future corpus node, if one is scoped for the deletion engine itself |
 | The evidence-class contract (FACT/INFERENCE/TEAM_KNOWLEDGE, citation shapes) | `launchpad/docs/corpus/AGENTS.md` |
 
 **No `relationships` beyond the one declared above.** The only object-storage

@@ -32,11 +32,11 @@ evidence:
     entry_class: FACT
     evidence:
       - "crates/buzz-media/src/bucket_index.rs"
-  - statement: "There is no schema-migration tool for this key namespace, unlike Postgres's embedded sqlx::migrate! (crates/buzz-db/src/migration.rs); the key namespace instead evolves as a source-code change to classify_key, and any key shape the classifier does not recognize falls to Unknown rather than being silently coerced into an existing class, keeping the storage-sweep's usage gauges loud instead of wrong on an unrecognized shape."
+  - statement: "There is no schema-migration tool for this key namespace, unlike Postgres's embedded sqlx::migrate! (crates/buzz-db/src/runtime/migration.rs); the key namespace instead evolves as a source-code change to classify_key, and any key shape the classifier does not recognize falls to Unknown rather than being silently coerced into an existing class, keeping the storage-sweep's usage gauges loud instead of wrong on an unrecognized shape."
     entry_class: FACT
     evidence:
       - "crates/buzz-media/src/bucket_index.rs"
-      - "crates/buzz-db/src/migration.rs"
+      - "crates/buzz-db/src/runtime/migration.rs"
   - statement: "MediaStorage exposes put, put_file, get, get_range, get_stream, head, head_with_metadata, delete, delete_objects, get_sidecar, put_sidecar, ping and list_page/list_prefix_page; crates/buzz-relay/src/api/media.rs is the sole HTTP-facing caller (upload_blob, get_blob, head_blob), buzz-relay's storage_sweep.rs is the sole caller of list_page for read-only usage metrics, and buzz-deletion is the sole caller of delete_objects outside tests."
     entry_class: FACT
     evidence:
@@ -136,7 +136,7 @@ identifies — not a description of what the referenced data means.
 ## Migration / key-shape versioning mechanism
 
 There is no schema-migration tool for this namespace, unlike Postgres's
-embedded `sqlx::migrate!` (`crates/buzz-db/src/migration.rs`, linked rather
+embedded `sqlx::migrate!` (`crates/buzz-db/src/runtime/migration.rs`, linked rather
 than described here). The key namespace instead evolves as an ordinary
 source-code change to `classify_key` and the modules that construct each key
 shape (`storage.rs`'s `sidecar_key`, `upload_record.rs`). There is no lock,

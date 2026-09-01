@@ -27,7 +27,7 @@ evidence:
   - statement: "crates/buzz-db/src/event.rs's insert_event function's INSERT statement names exactly twelve columns (community_id, id, pubkey, created_at, kind, tags, content, sig, received_at, channel_id, d_tag, not_before); search_tsv does not appear in that column list, confirming the Rust write path never supplies a value for it — Postgres computes it from `content` and `kind` as part of the same statement."
     entry_class: FACT
     evidence:
-      - "crates/buzz-db/src/event.rs:273-322"
+      - "crates/buzz-db/src/store/event.rs:271-345"
   - statement: "migrations/0005_agent_turn_metric_fts.sql's own comment states 'PostgreSQL cannot alter a generated expression in place' and that the migration must 'DROP the generated column and re-ADD it with the extended exclusion list,' adding kind 44200 (agent turn metrics, NIP-44 ciphertext) to the exclusion set because indexing that ciphertext 'would waste storage and violate the spec's \"NOT index the event in any full-text search\" requirement.'"
     entry_class: FACT
     evidence:
@@ -56,7 +56,7 @@ evidence:
   - statement: "crates/buzz-db/src/migration.rs's run_migrations_applies_consolidated_initial_schema_on_fresh_database test reads the post-migration search_tsv generated expression back from pg_attrdef on a freshly migrated database and asserts it contains 'ARRAY[0, 9, 40002, 45001, 45003]' — confirming the fresh-install allowlist kinds directly against a running migration, not merely against the maintenance script's own text."
     entry_class: FACT
     evidence:
-      - "crates/buzz-db/src/migration.rs:1954-1968"
+      - "crates/buzz-db/src/runtime/migration.rs:2395-2450"
   - statement: "crates/buzz-core/src/kind.rs names the fresh-install allowlist's five kinds: KIND_PROFILE = 0, KIND_STREAM_MESSAGE = 9 (the NIP-29 group chat message kind), KIND_STREAM_MESSAGE_V2 = 40002, KIND_FORUM_POST = 45001, and KIND_FORUM_COMMENT = 45003."
     entry_class: FACT
     evidence:

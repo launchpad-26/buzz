@@ -15,10 +15,10 @@ evidence:
   - statement: "buzz-db's event.rs states its deduplication model in its own module doc: \"Deduplication is application-layer: ON CONFLICT DO NOTHING,\" and both insert_event and insert_event_with_thread_metadata insert new events with `INSERT ... ON CONFLICT DO NOTHING`, returning a `was_inserted: bool` derived from `rows_affected() > 0`."
     entry_class: FACT
     evidence:
-      - "crates/buzz-db/src/event.rs:5"
-      - "crates/buzz-db/src/event.rs:273"
-      - "crates/buzz-db/src/event.rs:301-328"
-      - "crates/buzz-db/src/event.rs:1161-1183"
+      - "crates/buzz-db/src/store/event.rs:5"
+      - "crates/buzz-db/src/store/event.rs:271"
+      - "crates/buzz-db/src/store/event.rs:320-336"
+      - "crates/buzz-db/src/store/event.rs:1160-1195"
   - statement: "The `events` table's primary key is `(community_id, created_at, id)`, where `id` is the Nostr event id -- a hash derived from the event's own content -- so resubmitting byte-identical event content collides on the same primary key and the `ON CONFLICT DO NOTHING` insert is a guaranteed no-op at the database layer, not merely an application convention."
     entry_class: FACT
     evidence:
@@ -34,7 +34,7 @@ evidence:
   - statement: "Inside the same transaction, thread-metadata counter updates (reply_count increments on parent/root rows) are gated behind the event insert's own `was_inserted` flag, so a duplicate event submission cannot double-count a reply even though the surrounding function is re-run in full on retry."
     entry_class: FACT
     evidence:
-      - "crates/buzz-db/src/event.rs:1183-1214"
+      - "crates/buzz-db/src/store/event.rs:1206-1230"
   - statement: "Buzz's media (Blossom) upload handler applies the same idea in an independent subsystem: uploaded bytes are keyed by their own `sha256` hash, and `process_buffered_upload` short-circuits the blob PUT -- explicitly commented \"Idempotent: short-circuit only if BOTH sidecar and blob exist\" -- when a matching sidecar and blob are already stored, re-uploading identical bytes without re-performing the write."
     entry_class: FACT
     evidence:
@@ -48,7 +48,7 @@ evidence:
   - statement: "NIP-33 parameterized-replaceable events use a different mechanism from idempotent deduplication: `replace_parameterized_event` keys replacement on `(kind, pubkey, d_tag)` -- not on the event id -- and applies last-write-wins ordering by `created_at`, so a second event with new content at the same coordinate deliberately overwrites the first rather than being treated as a no-op duplicate."
     entry_class: FACT
     evidence:
-      - "crates/buzz-db/src/lib.rs:5145-5162"
+      - "crates/buzz-db/src/store/replaceable.rs:546-582"
   - statement: "NIP-98 HTTP-auth replay protection takes the opposite response to a superficially similar problem: it rejects a reused event id outright via a TTL-scoped, community-scoped Redis seen-set (`try_mark`), rather than accepting the retry as a harmless no-op, because the property it protects is authentication freshness, not storage convergence."
     entry_class: FACT
     evidence:

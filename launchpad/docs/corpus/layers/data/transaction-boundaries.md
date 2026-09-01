@@ -35,14 +35,14 @@ evidence:
     entry_class: FACT
     evidence:
       - "crates/buzz-db/src/lib.rs"
-  - statement: "crates/buzz-db/src/event.rs's soft_delete_event_and_update_thread opens one sqlx transaction via pool.begin(), issues an UPDATE events SET deleted_at = NOW() ... followed conditionally by UPDATE thread_metadata statements decrementing reply_count and descendant_count, and commits all of them together with tx.commit(); its own doc comment states this exists so 'a crash between them cannot leave counters permanently inflated.'"
+  - statement: "crates/buzz-db/src/store/event.rs's soft_delete_event_and_update_thread opens one sqlx transaction via pool.begin(), issues an UPDATE events SET deleted_at = NOW() ... followed conditionally by UPDATE thread_metadata statements decrementing reply_count and descendant_count, and commits all of them together with tx.commit(); its own doc comment states this exists so 'a crash between them cannot leave counters permanently inflated.'"
     entry_class: FACT
     evidence:
-      - "crates/buzz-db/src/event.rs"
-  - statement: "crates/buzz-db/src/thread.rs's insert_thread_metadata wraps its INSERT INTO thread_metadata and the parent/root reply_count and descendant_count UPDATE statements (plus a stub-row INSERT for a not-yet-materialized parent) in one pool.begin()/tx.commit() transaction, using ON CONFLICT DO NOTHING and result.rows_affected() to skip the counter bumps on a duplicate insert; its doc comment names this requirement 'F9.'"
+      - "crates/buzz-db/src/store/event.rs"
+  - statement: "crates/buzz-db/src/store/thread.rs's insert_thread_metadata wraps its INSERT INTO thread_metadata and the parent/root reply_count and descendant_count UPDATE statements (plus a stub-row INSERT for a not-yet-materialized parent) in one pool.begin()/tx.commit() transaction, using ON CONFLICT DO NOTHING and result.rows_affected() to skip the counter bumps on a duplicate insert; its doc comment names this requirement 'F9.'"
     entry_class: FACT
     evidence:
-      - "crates/buzz-db/src/thread.rs"
+      - "crates/buzz-db/src/store/thread.rs"
   - statement: "crates/buzz-db/src/lib.rs's insert_event_with_serving_write_guard opens one transaction covering a deletion-guard check (guard_transaction_with_serving_lease) and the event insert (event::insert_event_with_thread_metadata_tx), commits it, and only afterward -- outside that transaction, on the plain pool -- calls insert_mentions, logging a warning (tracing::warn!) on failure rather than propagating an error."
     entry_class: FACT
     evidence:
@@ -60,31 +60,31 @@ evidence:
     entry_class: FACT
     evidence:
       - "crates/buzz-db/src/lib.rs"
-  - statement: "crates/buzz-db/src/channel.rs defines a CHANNEL_MEMBERSHIP_LOCK_NAMESPACE advisory-lock key and an acquire_channel_membership_lock helper whose doc comment requires it be 'the first statement in the transaction that then reads roles/owner counts and writes membership'; both add_member and remove_member call it immediately after pool.begin(), and the const's own comment explains an advisory key was chosen over SELECT ... FOR UPDATE on the channel row because 'membership is its own contention domain and must not serialize against unrelated channel metadata writers.'"
+  - statement: "crates/buzz-db/src/store/channel.rs defines a CHANNEL_MEMBERSHIP_LOCK_NAMESPACE advisory-lock key and an acquire_channel_membership_lock helper whose doc comment requires it be 'the first statement in the transaction that then reads roles/owner counts and writes membership'; both add_member and remove_member call it immediately after pool.begin(), and the const's own comment explains an advisory key was chosen over SELECT ... FOR UPDATE on the channel row because 'membership is its own contention domain and must not serialize against unrelated channel metadata writers.'"
     entry_class: FACT
     evidence:
-      - "crates/buzz-db/src/channel.rs"
-  - statement: "crates/buzz-db/src/relay_members.rs's transfer_ownership opens one transaction, takes SELECT pg_advisory_xact_lock($1) keyed on the transferee pubkey, then SELECT pubkey FROM relay_members WHERE ... role = 'owner' FOR UPDATE to lock and read the current owner row(s), and calls tx.rollback() explicitly on each business-logic failure branch (NoOwner, OwnerConflict, AlreadyOwner, LimitReached) rather than relying on drop -- combining an advisory lock (serializing on the transferee) with a row lock (serializing on the current owner) inside the same transaction."
+      - "crates/buzz-db/src/store/channel.rs"
+  - statement: "crates/buzz-db/src/store/relay_members.rs's transfer_ownership opens one transaction, takes SELECT pg_advisory_xact_lock($1) keyed on the transferee pubkey, then SELECT pubkey FROM relay_members WHERE ... role = 'owner' FOR UPDATE to lock and read the current owner row(s), and calls tx.rollback() explicitly on each business-logic failure branch (NoOwner, OwnerConflict, AlreadyOwner, LimitReached) rather than relying on drop -- combining an advisory lock (serializing on the transferee) with a row lock (serializing on the current owner) inside the same transaction."
     entry_class: FACT
     evidence:
-      - "crates/buzz-db/src/relay_members.rs"
-  - statement: "crates/buzz-db/src/relay_invite.rs's module doc states 'claim_relay_invite executes the full redemption in one PostgreSQL transaction: SELECT FOR UPDATE on the invite row, membership insert, join-policy evidence insert, and use_count increment all commit together,' and the function itself opens one transaction, runs a SELECT ... FOR UPDATE on the relay_invites row scoped by (community, token_hash), then performs the remaining inserts/updates before commit."
+      - "crates/buzz-db/src/store/relay_members.rs"
+  - statement: "crates/buzz-db/src/store/relay_invite.rs's module doc states 'claim_relay_invite executes the full redemption in one PostgreSQL transaction: SELECT FOR UPDATE on the invite row, membership insert, join-policy evidence insert, and use_count increment all commit together,' and the function itself opens one transaction, runs a SELECT ... FOR UPDATE on the relay_invites row scoped by (community, token_hash), then performs the remaining inserts/updates before commit."
     entry_class: FACT
     evidence:
-      - "crates/buzz-db/src/relay_invite.rs"
-  - statement: "crates/buzz-db/src/push.rs's enqueue_wakes opens one transaction and locks every distinct requested (author, installation_id) push_leases row in one SELECT ... FOR UPDATE statement, sorted and deduplicated first so the lock is acquired in one deterministic (author, installation_id) order; its doc comment states this ordering exists so that 'concurrent batches and replace_active_lease (single-row lock) acquire in a consistent order,' and names the requirement 'T2b.'"
+      - "crates/buzz-db/src/store/relay_invite.rs"
+  - statement: "crates/buzz-db/src/store/push.rs's enqueue_wakes opens one transaction and locks every distinct requested (author, installation_id) push_leases row in one SELECT ... FOR UPDATE statement, sorted and deduplicated first so the lock is acquired in one deterministic (author, installation_id) order; its doc comment states this ordering exists so that 'concurrent batches and replace_active_lease (single-row lock) acquire in a consistent order,' and names the requirement 'T2b.'"
     entry_class: FACT
     evidence:
-      - "crates/buzz-db/src/push.rs"
-  - statement: "crates/buzz-db/src/deletion.rs's approve method (inventoried to approved stage transition) opens one transaction and its first statement is SELECT community_id, inventory_digest, inventory_manifest FROM community_deletion_requests WHERE id = $1 AND stage = 'inventoried' AND blocked_at IS NULL FOR UPDATE -- locking the single request row for the duration of the stage-transition transaction; other deletion.rs stage-transition methods (begin_quiescing and others, grepped at the recorded revision) follow the same FOR UPDATE-row-first shape, and separate methods take SELECT pg_advisory_xact_lock(community_deletion_lock_key($1)) (exclusive) or pg_advisory_xact_lock_shared(...) (shared) to coordinate the whole deletion lifecycle against concurrent schema migration and against other deletion-pipeline readers."
+      - "crates/buzz-db/src/store/push.rs"
+  - statement: "crates/buzz-db/src/store/deletion.rs's approve method (inventoried to approved stage transition) opens one transaction and its first statement is SELECT community_id, inventory_digest, inventory_manifest FROM community_deletion_requests WHERE id = $1 AND stage = 'inventoried' AND blocked_at IS NULL FOR UPDATE -- locking the single request row for the duration of the stage-transition transaction; other deletion.rs stage-transition methods (begin_quiescing and others, grepped at the recorded revision) follow the same FOR UPDATE-row-first shape, and separate methods take SELECT pg_advisory_xact_lock(community_deletion_lock_key($1)) (exclusive) or pg_advisory_xact_lock_shared(...) (shared) to coordinate the whole deletion lifecycle against concurrent schema migration and against other deletion-pipeline readers."
     entry_class: FACT
     evidence:
-      - "crates/buzz-db/src/deletion.rs"
-  - statement: "Grepping crates/buzz-db/src for FOR UPDATE ... SKIP LOCKED at the recorded revision finds it used for queue-style dequeue in crates/buzz-db/src/push.rs (push_match_queue, push_wake_outbox) and crates/buzz-db/src/deletion.rs (the deletion request queue), distinct from the plain FOR UPDATE used elsewhere in this document's structured entries for single-row or small-set locking where blocking (not skipping) concurrent claimants is the intended behavior."
+      - "crates/buzz-db/src/store/deletion.rs"
+  - statement: "Grepping crates/buzz-db/src for FOR UPDATE ... SKIP LOCKED at the recorded revision finds it used for queue-style dequeue in crates/buzz-db/src/store/push.rs (push_match_queue, push_wake_outbox) and crates/buzz-db/src/store/deletion.rs (the deletion request queue), distinct from the plain FOR UPDATE used elsewhere in this document's structured entries for single-row or small-set locking where blocking (not skipping) concurrent claimants is the intended behavior."
     entry_class: FACT
     evidence:
-      - "crates/buzz-db/src/push.rs"
-      - "crates/buzz-db/src/deletion.rs"
+      - "crates/buzz-db/src/store/push.rs"
+      - "crates/buzz-db/src/store/deletion.rs"
   - statement: "launchpad/docs/corpus/architecture/containers/postgres.md (id architecture-containers-postgres, merged and status: draft on origin/launchpad) states in its own words that it 'does not restate the schema's table-by-table contents or the migration runner's full transaction/locking proof -- read the files above for that; this node exists to name the container's boundary and its neighbors, not to duplicate their detail,' naming exactly the gap this node fills for write-transaction boundaries specifically."
     entry_class: FACT
     evidence:

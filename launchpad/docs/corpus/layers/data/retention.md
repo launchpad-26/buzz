@@ -41,23 +41,23 @@ evidence:
   - statement: "insert_event's soft-delete functions (soft_delete_event, soft_delete_by_coordinate, soft_delete_event_and_update_thread) all set deleted_at = NOW() rather than issuing a DELETE, every ordinary read path filters on deleted_at IS NULL, and a dedicated function, get_event_by_id_including_deleted, exists specifically for callers -- its own doc comment names audit trails and compliance queries -- that must distinguish 'never existed' from 'was deleted'; nothing in this code path removes the row."
     entry_class: FACT
     evidence:
-      - "crates/buzz-db/src/event.rs"
+      - "crates/buzz-db/src/store/event.rs"
   - statement: "Exactly two coordinate shapes are hard-purged (a real DELETE, not a tombstone) the instant they are superseded or soft-deleted: kind:30078 NIP-RS read-state markers matching a 'read-state:<32-hex>' d-tag (migrations/0007_nip_rs_retention.sql, whose own header states its purpose is to 'Bound NIP-RS storage while preserving NIP-33 replay ordering' by retaining 'the only historical fact replacement needs without retaining user payloads'), and kind:30003 buzz-mesh-member-status heartbeats (migrations/0019_mesh_status_retention.sql, whose own header states 'Only the live head has product value; retaining every superseded 45-second payload creates unbounded physical history')."
     entry_class: FACT
     evidence:
       - "migrations/0007_nip_rs_retention.sql"
       - "migrations/0019_mesh_status_retention.sql"
-  - statement: "An ephemeral channel (ttl_seconds set) carries a ttl_deadline refreshed forward on every new durable event via a deferred, per-channel-locked trigger (migrations/0022_event_ttl_refresh.sql, migrations/0024_event_ttl_refresh_shared_lock.sql); crates/buzz-db/src/channel.rs's reaper archives (sets archived_at) a channel whose deadline has passed -- it does not delete the channel or the events inside it, and a permanent channel (ttl_seconds NULL) is never touched by this mechanism."
+  - statement: "An ephemeral channel (ttl_seconds set) carries a ttl_deadline refreshed forward on every new durable event via a deferred, per-channel-locked trigger (migrations/0022_event_ttl_refresh.sql, migrations/0024_event_ttl_refresh_shared_lock.sql); crates/buzz-db/src/store/channel.rs's reaper archives (sets archived_at) a channel whose deadline has passed -- it does not delete the channel or the events inside it, and a permanent channel (ttl_seconds NULL) is never touched by this mechanism."
     entry_class: FACT
     evidence:
       - "migrations/0022_event_ttl_refresh.sql"
       - "migrations/0024_event_ttl_refresh_shared_lock.sql"
-      - "crates/buzz-db/src/channel.rs"
+      - "crates/buzz-db/src/store/channel.rs"
   - statement: "buzz-audit's own module doc comment describes AuditService as backing an 'append-only, per-community hash-chain audit log'; the per-event soft-delete path never touches audit_log, and audit_log is one of the tables named in buzz-db/src/deletion.rs's PURGE_SCOPED_TABLES constant, meaning it is physically purged only as part of a whole-community deletion, never by any individual event's own lifecycle."
     entry_class: FACT
     evidence:
       - "crates/buzz-audit/src/service.rs"
-      - "crates/buzz-db/src/deletion.rs"
+      - "crates/buzz-db/src/store/deletion.rs"
   - statement: "crates/buzz-pubsub/src/presence.rs's own module doc comment states presence is stored as 'SET buzz:{community}:presence:{pubkey_hex} \"online\" EX 180', a 3x-heartbeat TTL so a single missed heartbeat does not flap status; set_presence issues that SET ... EX call, and clear_presence deletes the key immediately on a clean disconnect."
     entry_class: FACT
     evidence:
@@ -88,10 +88,10 @@ evidence:
     entry_class: FACT
     evidence:
       - "crates/buzz-media/src/bucket_index.rs"
-  - statement: "crates/buzz-db/src/deletion.rs's DeletionStage enum documents a fixed, ordered, no-skip whole-community deletion lifecycle ending at PostgresPurged (a physical DELETE across every table in PURGE_SCOPED_TABLES, including events and audit_log) then CachePurged; crates/buzz-deletion/src/lib.rs's purge_redis_namespace function implements that Redis step as a SCAN/UNLINK loop over the buzz:{community}:* key pattern -- a real, whole-namespace purge, not a reliance on individual keys' own TTLs to eventually clear community-scoped Redis state."
+  - statement: "crates/buzz-db/src/store/deletion.rs's DeletionStage enum documents a fixed, ordered, no-skip whole-community deletion lifecycle ending at PostgresPurged (a physical DELETE across every table in PURGE_SCOPED_TABLES, including events and audit_log) then CachePurged; crates/buzz-deletion/src/lib.rs's purge_redis_namespace function implements that Redis step as a SCAN/UNLINK loop over the buzz:{community}:* key pattern -- a real, whole-namespace purge, not a reliance on individual keys' own TTLs to eventually clear community-scoped Redis state."
     entry_class: FACT
     evidence:
-      - "crates/buzz-db/src/deletion.rs"
+      - "crates/buzz-db/src/store/deletion.rs"
       - "crates/buzz-deletion/src/lib.rs"
   - statement: "Whole-community deletion's object-storage step removes only the tenant-owned key bindings is_tenant_owned_key recognizes (media sidecars, upload records, git repository pointers); shared content-addressed blob, thumbnail, and git-CAS bytes are never targeted by any deletion code path in this repository, per #1072's own independently-cited evidence for that same function -- restated here only as a one-line summary, not re-derived, since #1072 (layers/data/object-storage/retention.md) owns the full bucket-level retention detail and is not yet merged to origin/launchpad."
     entry_class: TEAM_KNOWLEDGE

@@ -118,11 +118,11 @@ evidence:
     entry_class: FACT
     evidence:
       - "crates/buzz-relay/src/api/git/transport.rs"
-  - statement: "Repository-name uniqueness is tracked in Postgres, not in the object store: migrations/0002_git_repo_names.sql creates git_repo_names(community_id, repo_id, owner_pubkey, created_at) with primary key (community_id, repo_id), and crates/buzz-db/src/git_repo.rs implements reserve_repo_name / release_repo_name / count_repos_for_owner against it, scoped per community so the same repo name may be independently reserved by different owners in different communities."
+  - statement: "Repository-name uniqueness is tracked in Postgres, not in the object store: migrations/0002_git_repo_names.sql creates git_repo_names(community_id, repo_id, owner_pubkey, created_at) with primary key (community_id, repo_id), and crates/buzz-db/src/store/git_repo.rs implements reserve_repo_name / release_repo_name / count_repos_for_owner against it, scoped per community so the same repo name may be independently reserved by different owners in different communities."
     entry_class: FACT
     evidence:
       - "migrations/0002_git_repo_names.sql"
-      - "crates/buzz-db/src/git_repo.rs"
+      - "crates/buzz-db/src/store/git_repo.rs"
   - statement: "crates/buzz-core/src/kind.rs defines KIND_GIT_REPO_ANNOUNCEMENT = 30617 (the announcement event whose tags seed channel binding and protection rules) and KIND_GIT_REPO_STATE = 30618 (the derived ref-state notification built by manifest_event::build_ref_state_event after a successful CAS, per docs/git-on-object-storage.md's Implementation Correspondence section)."
     entry_class: FACT
     evidence:
@@ -341,7 +341,7 @@ the protocol's expected outcome under contention rather than a fault.
 - Live end-to-end regression coverage (clone/push/fetch/force-push roundtrip,
   N-way concurrent-push no-fork): `crates/buzz-test-client/tests/e2e_git.rs`
 - Repository-name registry (a different datastore, Postgres):
-  `migrations/0002_git_repo_names.sql`, `crates/buzz-db/src/git_repo.rs`
+  `migrations/0002_git_repo_names.sql`, `crates/buzz-db/src/store/git_repo.rs`
 - Push-side authorization model: `crates/buzz-core/src/git_perms.rs`
 - Event kinds: `crates/buzz-core/src/kind.rs`
   (`KIND_GIT_REPO_ANNOUNCEMENT = 30617`, `KIND_GIT_REPO_STATE = 30618`)
@@ -360,7 +360,7 @@ operational characteristics, and its tenancy/security/failure behavior.
 | The object-storage container's existence, shared-bucket summary, and Blossom media's own key taxonomy | `architecture-containers-object-storage` |
 | The formal safety proofs (Theorems 1-3, the object-store axioms, the TLA+ model) | `docs/git-on-object-storage.md` |
 | The ordered request/response sequence of one push | `architecture-flows-git-push` |
-| Repository-name uniqueness (a different datastore, Postgres) | `migrations/0002_git_repo_names.sql`, `crates/buzz-db/src/git_repo.rs` |
+| Repository-name uniqueness (a different datastore, Postgres) | `migrations/0002_git_repo_names.sql`, `crates/buzz-db/src/store/git_repo.rs` |
 | The domain meaning of a git object, ref, or commit | Not yet documented anywhere in this corpus |
 | Per-endpoint HTTP request/response schemas beyond the failure-status table above | `ARCHITECTURE.md`, `crates/buzz-relay/src/api/git/transport.rs` |
 | The evidence-class contract (FACT/INFERENCE/TEAM_KNOWLEDGE, citation shapes) | `launchpad/docs/corpus/AGENTS.md` |

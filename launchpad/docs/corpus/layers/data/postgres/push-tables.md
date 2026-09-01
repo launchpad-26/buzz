@@ -41,7 +41,7 @@ evidence:
     entry_class: FACT
     evidence:
       - "migrations/0018_push_match_queue.sql"
-  - statement: "migrations/0023_push_match_gate.sql replaces enqueue_push_match_job() (same trigger, same table) so the push_match_queue insert only happens when an active, endpoint_enabled, unexpired push_leases row exists for that community, gated by a per-community pg_advisory_xact_lock_shared keyed 'buzz_push_gate:{community_id}'; its own header comment names this the 'T1b push gate' and states its purpose is to skip matcher cost entirely in the common case of a community with no active lease, and explains a lost-wake race is closed by making lease-activating transitions take the same lock key EXCLUSIVE in crates/buzz-db/src/push.rs (acquire_push_gate_lock)."
+  - statement: "migrations/0023_push_match_gate.sql replaces enqueue_push_match_job() (same trigger, same table) so the push_match_queue insert only happens when an active, endpoint_enabled, unexpired push_leases row exists for that community, gated by a per-community pg_advisory_xact_lock_shared keyed 'buzz_push_gate:{community_id}'; its own header comment names this the 'T1b push gate' and states its purpose is to skip matcher cost entirely in the common case of a community with no active lease, and explains a lost-wake race is closed by making lease-activating transitions take the same lock key EXCLUSIVE in crates/buzz-db/src/store/push.rs (acquire_push_gate_lock)."
     entry_class: FACT
     evidence:
       - "migrations/0023_push_match_gate.sql"
@@ -50,33 +50,33 @@ evidence:
     evidence:
       - "crates/buzz-core/src/kind.rs"
       - "crates/buzz-relay/src/handlers/push_lease.rs"
-  - statement: "crates/buzz-db/src/push.rs's module doc states it implements 'community-scoped NIP-PL lease and durable wake-outbox persistence' and that 'every operation requires a server-resolved CommunityId; client-provided origins never select rows in this module.' Its accept_lease_event and replace_lease functions atomically upsert push_leases keyed on (community_id, author, installation_id), enforcing NIP-01 addressable-event ordering (higher source_created_at wins, ties broken by lower source_event_id) and strictly increasing generation before accepting a replacement, returning distinct outcomes (StaleEvent, StaleGeneration, EndpointAlreadyLeased, LeaseQuotaExceeded, SourceEventCollision, ConstraintViolation) rather than a bare boolean. accept_lease_event also inserts the signed kind:30350 event into the events table and soft-deletes the author's prior kind:30350 event for that installation_id in the same transaction."
+  - statement: "crates/buzz-db/src/store/push.rs's module doc states it implements 'community-scoped NIP-PL lease and durable wake-outbox persistence' and that 'every operation requires a server-resolved CommunityId; client-provided origins never select rows in this module.' Its accept_lease_event and replace_lease functions atomically upsert push_leases keyed on (community_id, author, installation_id), enforcing NIP-01 addressable-event ordering (higher source_created_at wins, ties broken by lower source_event_id) and strictly increasing generation before accepting a replacement, returning distinct outcomes (StaleEvent, StaleGeneration, EndpointAlreadyLeased, LeaseQuotaExceeded, SourceEventCollision, ConstraintViolation) rather than a bare boolean. accept_lease_event also inserts the signed kind:30350 event into the events table and soft-deletes the author's prior kind:30350 event for that installation_id in the same transaction."
     entry_class: FACT
     evidence:
-      - "crates/buzz-db/src/push.rs"
-  - statement: "crates/buzz-db/src/push.rs's enqueue_wakes function atomically inserts into push_wake_outbox, copying endpoint_hash and endpoint_grant from the current push_leases row rather than trusting caller-supplied values, with the comment 'callers cannot redirect a wake by supplying either value'; claim_due_wakes and revalidate_wake_for_send join push_wake_outbox to push_leases (and to events, checking deleted_at IS NULL) on every claim and again immediately before send, with revalidate_wake_for_send's own comment calling that final join 'the load-bearing RF1 gate' that neither claim-time eligibility nor replacement-time cancellation can replace."
+      - "crates/buzz-db/src/store/push.rs"
+  - statement: "crates/buzz-db/src/store/push.rs's enqueue_wakes function atomically inserts into push_wake_outbox, copying endpoint_hash and endpoint_grant from the current push_leases row rather than trusting caller-supplied values, with the comment 'callers cannot redirect a wake by supplying either value'; claim_due_wakes and revalidate_wake_for_send join push_wake_outbox to push_leases (and to events, checking deleted_at IS NULL) on every claim and again immediately before send, with revalidate_wake_for_send's own comment calling that final join 'the load-bearing RF1 gate' that neither claim-time eligibility nor replacement-time cancellation can replace."
     entry_class: FACT
     evidence:
-      - "crates/buzz-db/src/push.rs"
-  - statement: "crates/buzz-db/src/push.rs's claim_due_match_batch_with_loader claims due push_match_queue rows for exactly one community per call (SELECT ... FOR UPDATE SKIP LOCKED, community-scoped via a target CTE), and complete_match_batch/retry_match_batch/reap_exhausted_matches operate on push_match_queue keyed by claim_id and community_id; reap_exhausted_matches and claim_due_match_batch_with_loader's queries both gate on community_write_allowed(community_id)."
+      - "crates/buzz-db/src/store/push.rs"
+  - statement: "crates/buzz-db/src/store/push.rs's claim_due_match_batch_with_loader claims due push_match_queue rows for exactly one community per call (SELECT ... FOR UPDATE SKIP LOCKED, community-scoped via a target CTE), and complete_match_batch/retry_match_batch/reap_exhausted_matches operate on push_match_queue keyed by claim_id and community_id; reap_exhausted_matches and claim_due_match_batch_with_loader's queries both gate on community_write_allowed(community_id)."
     entry_class: FACT
     evidence:
-      - "crates/buzz-db/src/push.rs"
+      - "crates/buzz-db/src/store/push.rs"
   - statement: "crates/buzz-relay/src/push_runtime.rs's module doc states it is the 'durable NIP-PL event matcher and gateway delivery worker'; run_matcher's own doc comment states it 'continuously claims accepted events in per-community batches and matches them against active leases,' periodically calling state.db.reap_exhausted_push_matches() on a fixed REAP_INTERVAL (30s) off the claim path; a second function (run_delivery_worker, referenced by push_runtime.rs's own symbol list) claims due push_wake_outbox rows and sends them to buzz-push-gateway's delivery endpoint."
     entry_class: FACT
     evidence:
       - "crates/buzz-relay/src/push_runtime.rs"
-  - statement: "crates/buzz-db/src/deletion.rs's EXPECTED_SCOPED_TABLES constant (the exact catalog of community-scoped tables a whole-community deletion purges) lists push_leases, push_match_queue and push_wake_outbox alongside events, channels, users and the rest; its PURGE_SCOPED_TABLES constant (the FK-safe child-before-parent purge order) orders push_wake_outbox before push_match_queue and push_leases, consistent with push_wake_outbox's foreign key onto push_leases."
+  - statement: "crates/buzz-db/src/store/deletion.rs's EXPECTED_SCOPED_TABLES constant (the exact catalog of community-scoped tables a whole-community deletion purges) lists push_leases, push_match_queue and push_wake_outbox alongside events, channels, users and the rest; its PURGE_SCOPED_TABLES constant (the FK-safe child-before-parent purge order) orders push_wake_outbox before push_match_queue and push_leases, consistent with push_wake_outbox's foreign key onto push_leases."
     entry_class: FACT
     evidence:
-      - "crates/buzz-db/src/deletion.rs"
-  - statement: "crates/buzz-push-gateway/migrations/0001_push_gateway_authority.sql creates push_gateway_challenges, push_gateway_installations, push_gateway_delegations, push_gateway_endpoint_quotas, push_gateway_delivery_auth_replays and push_gateway_delivery_request_replays; the main relay's own migrations/0015_push_gateway_authority.sql creates byte-identical table definitions and additionally records all six as `_operator_global_tables` (deployment-global, outside community tenancy); crates/buzz-push-gateway/src/postgres.rs is buzz-push-gateway's own separate Postgres connection module, and crates/buzz-db/src/migration.rs's own destructive-lock test explicitly names crates/buzz-push-gateway/src/postgres.rs and crates/buzz-push-gateway/migrations as an exception to its single-migration-runner assertion, confirming buzz-push-gateway runs its own independent migration set rather than sharing buzz-db's."
+      - "crates/buzz-db/src/store/deletion.rs"
+  - statement: "crates/buzz-push-gateway/migrations/0001_push_gateway_authority.sql creates push_gateway_challenges, push_gateway_installations, push_gateway_delegations, push_gateway_endpoint_quotas, push_gateway_delivery_auth_replays and push_gateway_delivery_request_replays; the main relay's own migrations/0015_push_gateway_authority.sql creates byte-identical table definitions and additionally records all six as `_operator_global_tables` (deployment-global, outside community tenancy); crates/buzz-push-gateway/src/postgres.rs is buzz-push-gateway's own separate Postgres connection module, and crates/buzz-db/src/runtime/migration.rs's own destructive-lock test explicitly names crates/buzz-push-gateway/src/postgres.rs and crates/buzz-push-gateway/migrations as an exception to its single-migration-runner assertion, confirming buzz-push-gateway runs its own independent migration set rather than sharing buzz-db's."
     entry_class: FACT
     evidence:
       - "crates/buzz-push-gateway/migrations/0001_push_gateway_authority.sql"
       - "migrations/0015_push_gateway_authority.sql"
       - "crates/buzz-push-gateway/src/postgres.rs"
-      - "crates/buzz-db/src/migration.rs"
+      - "crates/buzz-db/src/runtime/migration.rs"
   - statement: "Whether the main relay's own copy of the push_gateway_* tables (migrations/0015, marked _operator_global_tables) is a live, load-bearing second store the relay itself queries, or historical drift left over from an earlier co-located architecture that buzz-push-gateway's later split did not clean up, was not established: no call site in crates/buzz-relay/src querying push_gateway_challenges, push_gateway_installations, push_gateway_delegations, push_gateway_endpoint_quotas, push_gateway_delivery_auth_replays or push_gateway_delivery_request_replays was found by inspection of crates/buzz-relay/src's push-related modules (config.rs, push_runtime.rs, nip11.rs, main.rs, handlers/push_lease.rs), which reference push_gateway_ only as configuration (the gateway's URL/keys), not as SQL table names."
     entry_class: INFERENCE
     evidence:
@@ -85,10 +85,10 @@ evidence:
       - "crates/buzz-relay/src/push_runtime.rs"
       - "crates/buzz-relay/src/handlers/push_lease.rs"
     confidence: 0.6
-  - statement: "crates/buzz-db/src/push.rs's own #[cfg(test)] module contains 16 #[tokio::test] cases, each #[ignore = \"requires Postgres\"], directly exercising the invariants named above by name: acceptance_constraint_failure_rolls_back_source_event, source_event_collision_is_protocol_outcome_without_event_insert and replacement_and_revoke_are_community_scoped_and_dual_ordered (addressable-event ordering and generation monotonicity), concurrent_enqueue_is_atomic_and_community_scoped and setwise_enqueue_maps_outcomes_per_request (endpoint/event dedup), send_revalidation_suppresses_rotated_claim_and_retry_preserves_id (the send-time revalidation gate), endpoint_invalidation_is_scoped_to_community_and_generation (endpoint_enabled scoping), matcher_trigger_is_allowlisted_and_deleted_events_are_discarded, matcher_claim_is_exclusive_across_workers and batch_claim_is_single_community_and_setwise_ops_honor_the_fence (write fencing and per-community claim isolation), exhausted_match_job_is_reaped_and_cannot_pin_retention and exhausted_match_reaper_skips_quiescing_tenant_and_reaps_active_bystanders (poison-job termination), and gate_orders_lease_activation_after_in_flight_event_and_backfills_it (the T1b lost-wake race closure)."
+  - statement: "crates/buzz-db/src/store/push.rs's own #[cfg(test)] module contains 16 #[tokio::test] cases, each #[ignore = \"requires Postgres\"], directly exercising the invariants named above by name: acceptance_constraint_failure_rolls_back_source_event, source_event_collision_is_protocol_outcome_without_event_insert and replacement_and_revoke_are_community_scoped_and_dual_ordered (addressable-event ordering and generation monotonicity), concurrent_enqueue_is_atomic_and_community_scoped and setwise_enqueue_maps_outcomes_per_request (endpoint/event dedup), send_revalidation_suppresses_rotated_claim_and_retry_preserves_id (the send-time revalidation gate), endpoint_invalidation_is_scoped_to_community_and_generation (endpoint_enabled scoping), matcher_trigger_is_allowlisted_and_deleted_events_are_discarded, matcher_claim_is_exclusive_across_workers and batch_claim_is_single_community_and_setwise_ops_honor_the_fence (write fencing and per-community claim isolation), exhausted_match_job_is_reaped_and_cannot_pin_retention and exhausted_match_reaper_skips_quiescing_tenant_and_reaps_active_bystanders (poison-job termination), and gate_orders_lease_activation_after_in_flight_event_and_backfills_it (the T1b lost-wake race closure)."
     entry_class: FACT
     evidence:
-      - "crates/buzz-db/src/push.rs"
+      - "crates/buzz-db/src/store/push.rs"
 relationships:
   - type: references
     target: architecture-containers-postgres
@@ -173,7 +173,7 @@ authoritative shape is the `CREATE TABLE` statements in migrations 0012, 0013 an
 - **Addressable-event ordering and generation monotonicity**: a lease replacement is
   accepted only if it wins NIP-01 addressable-event ordering against the currently
   stored `(source_created_at, source_event_id)` *and* its `generation` strictly exceeds
-  the stored one; `crates/buzz-db/src/push.rs`'s `accept_lease_event`/`replace_lease`
+  the stored one; `crates/buzz-db/src/store/push.rs`'s `accept_lease_event`/`replace_lease`
   enforce both gates atomically inside one transaction, returning `StaleEvent` or
   `StaleGeneration` rather than silently ignoring a losing write.
 - **Endpoint/event dedup**: `push_wake_outbox`'s `UNIQUE (community_id, endpoint_hash,
@@ -201,7 +201,7 @@ authoritative shape is the `CREATE TABLE` statements in migrations 0012, 0013 an
   moment its rows are physically purged.
 
 **Verification.** All ten invariants above are directly exercised, by name, in
-`crates/buzz-db/src/push.rs`'s own `#[cfg(test)]` module — 16 `#[tokio::test]` cases,
+`crates/buzz-db/src/store/push.rs`'s own `#[cfg(test)]` module — 16 `#[tokio::test]` cases,
 each `#[ignore = "requires Postgres"]` (see the evidence ledger entry above for the
 per-invariant test-name mapping). No integration/E2E test exercising these tables
 through the live WebSocket protocol was located while drafting this node; that gap is
@@ -220,7 +220,7 @@ the sole producer of `push_match_queue` rows, firing inside the same transaction
 producer of `push_wake_outbox` rows, and its delivery worker is the sole consumer that
 calls out to `buzz-push-gateway`.
 
-**Community-deletion lifecycle:** `crates/buzz-db/src/deletion.rs`'s
+**Community-deletion lifecycle:** `crates/buzz-db/src/store/deletion.rs`'s
 `EXPECTED_SCOPED_TABLES` lists all three tables as community-scoped and subject to
 whole-community purge; `PURGE_SCOPED_TABLES` orders `push_wake_outbox` before
 `push_match_queue` and `push_leases`, consistent with `push_wake_outbox`'s foreign key

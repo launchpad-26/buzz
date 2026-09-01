@@ -28,12 +28,12 @@ evidence:
   - statement: "A kind:5/kind:9005 deletion request targeting an existing event is executed by soft_delete_event_and_update_thread, which runs `UPDATE events SET deleted_at = NOW() WHERE community_id = $1 AND id = $2 AND deleted_at IS NULL` inside a transaction that also decrements the target's thread reply/descendant counters; the row is not physically removed."
     entry_class: FACT
     evidence:
-      - "crates/buzz-db/src/event.rs:868-911"
+      - "crates/buzz-db/src/store/event.rs:897-946"
   - statement: "A kind:9008 (delete group) request is executed by handle_delete_group, which calls soft_delete_channel; that function runs `UPDATE channels SET deleted_at = NOW() WHERE community_id = $1 AND id = $2 AND deleted_at IS NULL` and returns whether a row was actually changed."
     entry_class: FACT
     evidence:
       - "crates/buzz-relay/src/handlers/side_effects.rs:1886-1901"
-      - "crates/buzz-db/src/channel.rs:1403-1419"
+      - "crates/buzz-db/src/store/channel.rs:609-650"
   - statement: "Ingest routes kind:5 and kind:9005/9008 events to this soft-delete side effect: handle_standard_deletion_event resolves each e-tagged target via get_event_by_id_including_deleted and calls soft_delete_event_and_update_thread per target, and the a-tag (addressable-event) deletion path is handled separately by handle_a_tag_deletion."
     entry_class: FACT
     evidence:
@@ -42,8 +42,8 @@ evidence:
   - statement: "Ordinary event reads filter on `deleted_at IS NULL` (for example get_last_message_at's query), while get_event_by_id_including_deleted deliberately bypasses that filter; its own doc comment states most callers should use get_event_by_id instead, and that the including-deleted variant \"is needed when the caller must distinguish 'never existed' from 'was deleted' (e.g. audit trails, compliance queries).\""
     entry_class: FACT
     evidence:
-      - "crates/buzz-db/src/event.rs:914-931"
-      - "crates/buzz-db/src/event.rs:1032-1053"
+      - "crates/buzz-db/src/store/event.rs:947-971"
+      - "crates/buzz-db/src/store/event.rs:1065-1088"
   - statement: "The events table has carried a deleted_at TIMESTAMPTZ column, and the index idx_events_community_deleted on (community_id, deleted_at), since the initial schema migration -- soft-deletion of individual events is not a later addition to the data layer."
     entry_class: FACT
     evidence:
@@ -53,12 +53,12 @@ evidence:
     entry_class: FACT
     evidence:
       - "crates/buzz-deletion/Cargo.toml:1-9"
-      - "crates/buzz-db/src/deletion.rs:1-5"
+      - "crates/buzz-db/src/store/deletion.rs:1-5"
   - statement: "The durable community-deletion lifecycle is a fixed, non-skippable stage sequence -- DeletionStage: Submitted, Inventoried, Approved, Fenced, Drained, BindingsRemoved, PostgresPurged, CachePurged, LogicallyVerified, RetentionPending, or the terminal Aborted -- and PURGE_SCOPED_TABLES names the foreign-key-safe child-before-parent order in which every community-scoped PostgreSQL table, including events, is physically purged once that lifecycle reaches PostgresPurged."
     entry_class: FACT
     evidence:
-      - "crates/buzz-db/src/deletion.rs:119-177"
-      - "crates/buzz-db/src/deletion.rs:87-117"
+      - "crates/buzz-db/src/store/deletion.rs:119-154"
+      - "crates/buzz-db/src/store/deletion.rs:89-117"
   - statement: "Migration 0029's own header states the boundary of what whole-community deletion actually removes: \"The community row is never removed: it becomes the permanent name tombstone,\" and adds a deletion_state column to communities constrained to ('active', 'quiescing', 'fenced', 'tombstone') alongside deletion_fence_generation and deleted_at."
     entry_class: FACT
     evidence:
@@ -71,9 +71,9 @@ evidence:
   - statement: "Soft-deletion (per-event, per-channel) and durable whole-community deletion are two deliberately separate mechanisms rather than two implementations of one idea, because they differ in every dimension that matters for a data-layer concept: trigger surface (any authorized user's signed protocol event vs. an operator's CLI command), blast radius (one event or channel vs. every community-scoped row across PostgreSQL, Redis and object storage), and physical effect (a single UPDATE ... SET deleted_at vs. a staged, fenced, checkpointed purge)."
     entry_class: INFERENCE
     evidence:
-      - "crates/buzz-db/src/event.rs:868-911"
+      - "crates/buzz-db/src/store/event.rs:897-946"
       - "crates/buzz-relay/src/handlers/side_effects.rs:1886-1901"
-      - "crates/buzz-db/src/deletion.rs:87-177"
+      - "crates/buzz-db/src/store/deletion.rs:89-154"
       - "migrations/0029_community_deletion.sql:1"
     confidence: 0.75
   - statement: "At the recorded revision, no other child task in Feature #610's 42-document batch (#1060-#1101) is scoped to the whole-community deletion engine specifically; #1100 (layers/data/retention.md) and #1072 (layers/data/object-storage/retention.md) are named for time-based expiry, a distinct concept from deletion triggered on request."
