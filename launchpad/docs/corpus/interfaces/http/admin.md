@@ -119,6 +119,11 @@ evidence:
       - "crates/buzz-relay/src/api/admin/mod.rs:1257"
       - "grep_repo(pattern='admin/v1|api/admin', path='crates/buzz-test-client/tests') -> zero matches at commit 650354eab8d41ab6ce1a71de079a6c6d95c69052"
     confidence: 0.8
+relationships:
+  - type: part-of
+    target: architecture-containers-relay
+  - type: references
+    target: architecture-principles-fail-closed-boundaries
 ---
 
 # Deployment-admin HTTP API: interface
