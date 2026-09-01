@@ -63,7 +63,7 @@ evidence:
   - statement: "create_workflow_run inserts a workflow_runs row with status 'pending', current_step 0 and an empty execution_trace before any step runs, scoped to (community_id, id); this is the run's starting state for all three trigger paths."
     entry_class: FACT
     evidence:
-      - "crates/buzz-db/src/workflow.rs"
+      - "crates/buzz-db/src/store/workflow.rs"
   - statement: "Within execute_steps, def.steps run strictly in order: for each step the optional if: expression is evaluated first (evalexpr, against trigger fields and prior steps' outputs) and a false result records a 'skipped' trace entry and moves to the next step without dispatching the action; a condition-evaluation error aborts the run."
     entry_class: FACT
     evidence:
@@ -142,7 +142,7 @@ evidence:
   - statement: "RunStatus's six values (Pending, Running, WaitingApproval, Completed, Failed, Cancelled) are the full set of states a run's row can occupy; of these, only Completed and Failed are states this document's three trigger paths actually reach on their own, because WaitingApproval is unreachable (RequestApproval is mapped to Failed, not WaitingApproval, per the entry above) and Cancelled is not set by any code path covered here."
     entry_class: FACT
     evidence:
-      - "crates/buzz-db/src/workflow.rs"
+      - "crates/buzz-db/src/store/workflow.rs"
       - "crates/buzz-workflow/src/lib.rs"
   - statement: "Because on_event is spawned via tokio::spawn from the relay's post-store hook rather than awaited inline, a workflow run's failure -- of any kind, including an authority denial or a step error -- has no path back to the triggering event: the event that fired the trigger is already durably stored and acknowledged before workflow execution even begins, so this flow never rolls back or blocks on the event it reacts to."
     entry_class: FACT
