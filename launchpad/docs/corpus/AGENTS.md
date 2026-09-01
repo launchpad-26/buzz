@@ -7,10 +7,10 @@ audiences:
   - agent
   - reviewer
 evidence:
-  - statement: "This node was authored and checked against repository revision 0052f5a7820ca4ca261efa233feb8bb53858ade6."
+  - statement: "This node was authored and checked against repository revision e30f3c568fda9a0fc2c7c921563f9f8313e50ccf."
     entry_class: FACT
     evidence:
-      - "commit 0052f5a7820ca4ca261efa233feb8bb53858ade6"
+      - "commit e30f3c568fda9a0fc2c7c921563f9f8313e50ccf"
   - statement: "Markdown with YAML front matter is the one canonical authored representation of a corpus node; every other serialization is a generated derived view."
     entry_class: FACT
     evidence:
@@ -61,11 +61,11 @@ evidence:
     entry_class: FACT
     evidence:
       - "launchpad/docs/corpus/schema/relationships.schema.json"
-  - statement: "A non-GitHub external URL is reported UNVERIFIED, because the validator can neither pin it to a commit nor open it."
+  - statement: "A non-GitHub external URL is reported UNVERIFIED on a default run, which blocks validation rather than passing as a notice; under --check-links it is fetched, verifying ok when it resolves and error when it does not."
     entry_class: FACT
     evidence:
       - "launchpad/project-intelligence/corpus/validate.py"
-  - statement: "A GitHub file link is checked for a full-SHA pin and a non-empty path segment only; the validator never establishes that the named file exists."
+  - statement: "A GitHub file link must be pinned to a full 40-character commit SHA, use a file-content verb, and name a path within the repository; under --check-links it is additionally fetched, so a well-formed link naming a file that does not exist is reported error."
     entry_class: FACT
     evidence:
       - "launchpad/project-intelligence/corpus/validate.py"
@@ -93,11 +93,11 @@ evidence:
     entry_class: FACT
     evidence:
       - "launchpad/project-intelligence/corpus/validate.py"
-  - statement: "A second or subsequent FACT resting only on a commit citation produces another non-fatal UNVERIFIED notice and does not fail the run."
+  - statement: "A commit citation is resolved against this repository's object store: a commit that exists verifies ok and one that does not is a hard error, so a FACT resting only on a commit citation is no longer reported UNVERIFIED at all."
     entry_class: FACT
     evidence:
       - "launchpad/project-intelligence/corpus/validate.py"
-  - statement: "A citation naming a line or line range is checked for the path only; the line number is never compared against the file's length."
+  - statement: "A citation naming a line or line range is checked for both the path and the position: a line or range extending past the cited file's length is a hard error (#1459)."
     entry_class: FACT
     evidence:
       - "launchpad/project-intelligence/corpus/validate.py"
@@ -269,16 +269,25 @@ the issue — that is what the class is for, and ADR-0029 requires GitHub histor
 attributed rather than be promoted to fact. An earlier draft of this section left that
 case with no honest class at all, which an agent authoring a sibling node hit directly.
 
-**Nothing enforces this.** The checker treats every commit citation identically: a
-second, third or tenth `FACT` resting only on `commit <sha>` produces nothing but
-extra non-fatal `UNVERIFIED` notices and still exits 0. Verified by adding one and
-watching the run pass. So this is a convention a **reviewer** has to hold, not a rule
-the tooling holds — if a node's ledger shows more than one commit-only `FACT`, that is
-the signal, and no check will raise it for you.
+**Nothing enforces the convention, though the citation itself is now checked.** A
+commit citation resolves against this repository's object store: one that exists
+verifies `ok`, one that does not is a hard error. What stays unenforced is the *count*
+— a second, third or tenth `FACT` resting only on `commit <sha>` is a reviewer's
+signal, not a rule the tooling holds. If a node's ledger shows more than one
+commit-only `FACT`, no check will raise it for you.
 
-**3. A line number is not verified.** `Justfile:999999` is accepted against a
-1005-line file (#1459). Prefer a bare path until that is fixed; a position that has
-silently drifted is worse than no position, because it looks precise.
+**3. A line number is checked for bounds, not for meaning.** `Justfile:999999` against
+a 1005-line file is now a hard error, closing #1459. But bounds are all a line number
+exposes: a position that has drifted to a *different line that still exists* passes
+the check while naming the wrong code, and nothing detects that. So the preference
+stands — prefer a bare path, because a position that has silently drifted is worse
+than no position, because it looks precise.
+
+This is not hypothetical. `agents/invariants.md` cited this validator's own source at
+seven line positions; reshaping `validate.py` moved all seven, and only the one that
+fell past the end of the file was caught. The other six passed while pointing at
+unrelated code. All seven are now bare paths. The missing symbol-anchored citation
+form — a position that would survive edits — is #2012.
 
 ### Pinning
 

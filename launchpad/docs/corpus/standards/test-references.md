@@ -8,10 +8,10 @@ audiences:
   - developer
   - reviewer
 evidence:
-  - statement: "This node was authored and checked against repository revision 919886b4192df6251de50c547548ecae5d85afce."
+  - statement: "This node was authored and checked against repository revision e30f3c568fda9a0fc2c7c921563f9f8313e50ccf."
     entry_class: FACT
     evidence:
-      - "commit 919886b4192df6251de50c547548ecae5d85afce"
+      - "commit e30f3c568fda9a0fc2c7c921563f9f8313e50ccf"
   - statement: "A citation lives in a node's frontmatter evidence array, because the schema requires that array, defines no other field for citations, and rejects any field beyond the seven it names."
     entry_class: FACT
     evidence:
@@ -24,7 +24,7 @@ evidence:
     entry_class: FACT
     evidence:
       - "launchpad/docs/corpus/AGENTS.md"
-  - statement: "The tool-result shape's regular expression requires an identifier matched by [A-Za-z_][A-Za-z0-9_.:]* -- no space, no hyphen -- immediately followed by an opening parenthesis, arbitrary content, a closing parenthesis, a literal ' -> ', and then the result; the graph-edge shape requires two such identifiers joined by ' -> ' and a trailing '(N hop(s))', and the checker reports the identical 'names no openable file' verdict for both shapes."
+  - statement: "The tool-result shape's regular expression requires an identifier matched by [A-Za-z_][A-Za-z0-9_.:]* -- no space, no hyphen -- immediately followed by an opening parenthesis, arbitrary content, a closing parenthesis, a literal ' -> ', and then the result; the graph-edge shape requires two such identifiers joined by ' -> ' and a trailing '(N hop(s))', and the checker reports the shared 'names no openable file' verdict for a graph edge and for any tool family no verifier covers, while a tool-result citation naming git or grep is routed to a verifier that reports a family-specific reason and, where the cited source is gone or a pinned replay is contradicted, a hard error."
     entry_class: FACT
     evidence:
       - "launchpad/project-intelligence/corpus/validate.py"
@@ -33,12 +33,12 @@ evidence:
     evidence:
       - "launchpad/project-intelligence/corpus/validate.py"
       - "run_python_check('_SYMBOL, _TOOL_RESULT_RE, _GRAPH_EDGE_RE, _COMMIT_CITATION_RE and _FILE_POSITION_RE copied verbatim from validate.py, tested against both strings') -> unwrapped invocation string matches no pattern and contains whitespace; wrapped invocation string matches _TOOL_RESULT_RE only"
-  - statement: "A bare repository path or a path:line/path:range citation naming a test file is resolved on disk exactly as any other file citation: the checker confirms only that the path names a real file, never opens its contents, and a line position's number is checked only for internal consistency -- start at least 1, end not before start -- never against the file's length or content."
+  - statement: "A bare repository path or a path:line/path:range citation naming a test file is resolved on disk exactly as any other file citation: the checker confirms only that the path names a real file, never opens its contents, and a line position's number is checked both for internal consistency -- start at least 1, end not before start -- and against the cited file's length, a position past the end being a hard error since #1459; its content is still never read, so a position that has drifted to a different line that still exists passes while naming the wrong code."
     entry_class: FACT
     evidence:
       - "launchpad/project-intelligence/corpus/validate.py"
       - "launchpad/docs/corpus/AGENTS.md"
-  - statement: "A FACT resting only on citations the checker classifies UNVERIFIED -- which includes every tool-result citation, because a tool result names no openable file -- has, in AGENTS.md's own words, 'not been checked by anything'; the UNVERIFIED notice is printed but never fails the run."
+  - statement: "A FACT resting only on citations the checker classifies UNVERIFIED has, in AGENTS.md's own words, 'not been checked by anything', and under fail-closed validation the UNVERIFIED notice now blocks the run rather than passing as a notice; a tool result no verifier covers still names no openable file, but tool-result citations naming git or grep are no longer uniformly UNVERIFIED -- one whose cited ref no longer exists is a hard error."
     entry_class: FACT
     evidence:
       - "launchpad/docs/corpus/AGENTS.md"

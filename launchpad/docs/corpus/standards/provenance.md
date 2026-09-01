@@ -7,10 +7,10 @@ audiences:
   - agent
   - reviewer
 evidence:
-  - statement: "This node was authored and checked against repository revision 919886b4192df6251de50c547548ecae5d85afce."
+  - statement: "This node was authored and checked against repository revision e30f3c568fda9a0fc2c7c921563f9f8313e50ccf."
     entry_class: FACT
     evidence:
-      - "commit 919886b4192df6251de50c547548ecae5d85afce"
+      - "commit e30f3c568fda9a0fc2c7c921563f9f8313e50ccf"
   - statement: "node.schema.json defines no revision or provenance field anywhere in a node's front matter: the seven top-level properties are id, type, status, origin, audiences, evidence and relationships, and an evidence entry's only fields are statement, entry_class, evidence, confidence and provided_by. No field records which revision a specific claim was checked against."
     entry_class: FACT
     evidence:
@@ -26,7 +26,7 @@ evidence:
       - "launchpad/docs/corpus/standards/confidence.md"
       - "launchpad/docs/corpus/standards/decision-references.md"
       - "launchpad/docs/corpus/README.md"
-  - statement: "validate.py recognises a citation of the shape 'commit <7-to-40-hex-chars>' as a commit reference and reports it UNVERIFIED: it is never opened, never compared against git, and an UNVERIFIED notice never causes a non-zero exit status."
+  - statement: "validate.py recognises a citation of the shape 'commit <7-to-40-hex-chars>' as a commit reference and resolves it against this repository's object store: a commit that exists verifies ok, and one that does not is a hard error. Its contents are still never opened, so the citation establishes that the commit exists, never that it supports the statement above it."
     entry_class: FACT
     evidence:
       - "launchpad/project-intelligence/corpus/validate.py"

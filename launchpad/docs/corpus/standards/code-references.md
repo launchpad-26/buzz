@@ -8,10 +8,10 @@ audiences:
   - developer
   - reviewer
 evidence:
-  - statement: "This node was authored and checked against repository revision 60d4947b7145a6ef25f185b9c25d43e43d99de3c."
+  - statement: "This node was authored and checked against repository revision e30f3c568fda9a0fc2c7c921563f9f8313e50ccf."
     entry_class: FACT
     evidence:
-      - "commit 60d4947b7145a6ef25f185b9c25d43e43d99de3c"
+      - "commit e30f3c568fda9a0fc2c7c921563f9f8313e50ccf"
   - statement: "A code reference lives in a node's frontmatter evidence array, because the schema requires that array, defines no other field for citations, and rejects any field beyond the seven it names."
     entry_class: FACT
     evidence:
@@ -40,7 +40,7 @@ evidence:
     entry_class: FACT
     evidence:
       - "launchpad/decisions/ADR-0003-handbook-page-provenance-contract.md"
-  - statement: "Commit references, graph edges, tool results and external URLs that are not pinned repository links -- including GitHub issue and pull-request URLs -- are routed to a non-fatal UNVERIFIED channel that always prints and never changes the exit status."
+  - statement: "Graph edges, tool results no verifier covers, and external URLs on a default run are routed to an UNVERIFIED channel that prints and, under fail-closed validation, blocks the run. Commit references are no longer among them: a commit is resolved against the object store, verifying ok or failing hard. Tool results naming git or grep are routed to verifiers that may also fail hard."
     entry_class: FACT
     evidence:
       - "launchpad/project-intelligence/corpus/validate.py"

@@ -7,10 +7,10 @@ audiences:
   - developer
   - reviewer
 evidence:
-  - statement: "This node was authored and checked against repository revision a1e8bbcd0846321c6f6684acfe551096da4d974a."
+  - statement: "This node was authored and checked against repository revision e30f3c568fda9a0fc2c7c921563f9f8313e50ccf."
     entry_class: FACT
     evidence:
-      - "commit a1e8bbcd0846321c6f6684acfe551096da4d974a"
+      - "commit e30f3c568fda9a0fc2c7c921563f9f8313e50ccf"
   - statement: "Markdown with YAML front matter is the one canonical authored representation of a corpus node; every other serialization is a generated derived view."
     entry_class: FACT
     evidence:
@@ -62,7 +62,7 @@ evidence:
     entry_class: FACT
     evidence:
       - ".github/workflows/launchpad-corpus-validate.yml"
-  - statement: "UNVERIFIED notices are printed on every run and are never fatal; a run that reports them still exits 0."
+  - statement: "UNVERIFIED notices are printed on every run and block it: under fail-closed validation a run that reports any UNVERIFIED citation exits non-zero, because a citation nothing could check is not a passing state."
     entry_class: FACT
     evidence:
       - "launchpad/project-intelligence/corpus/validate.py"

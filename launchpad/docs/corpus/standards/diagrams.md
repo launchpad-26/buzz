@@ -7,10 +7,10 @@ audiences:
   - agent
   - reviewer
 evidence:
-  - statement: "This node was authored and checked against repository revision ebe2daf721c7d7a96fdd84eba0a0a5d37eefa109."
+  - statement: "This node was authored and checked against repository revision e30f3c568fda9a0fc2c7c921563f9f8313e50ccf."
     entry_class: FACT
     evidence:
-      - "commit ebe2daf721c7d7a96fdd84eba0a0a5d37eefa109"
+      - "commit e30f3c568fda9a0fc2c7c921563f9f8313e50ccf"
   - statement: "Markdown with YAML front matter is the one canonical authored representation of a corpus node, and every other serialization is a generated derived view that is never hand-authored."
     entry_class: FACT
     evidence:
@@ -48,7 +48,7 @@ evidence:
     entry_class: FACT
     evidence:
       - "launchpad/project-intelligence/corpus/validate.py"
-  - statement: "A citation naming a line or line range is checked for the path and for the position's internal consistency only; the line number is never compared against the file's length."
+  - statement: "A citation naming a line or line range is checked for the path, for the position's internal consistency, and against the cited file's length: a position past the end of the file is a hard error (#1459). The file's contents are still never read, so a position that has drifted to a different line that still exists passes while naming the wrong code."
     entry_class: FACT
     evidence:
       - "launchpad/project-intelligence/corpus/validate.py"
