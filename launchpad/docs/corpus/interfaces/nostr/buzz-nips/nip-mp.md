@@ -93,10 +93,10 @@ authority, versioning and ordering work. It does not restate the client-side
 rendering algorithm (the fold) in full — that is cited, not duplicated, since
 the authoritative text already lives in the spec.
 
-**Authoritative spec**: [`docs/nips/NIP-MP.md`](../../../../../docs/nips/NIP-MP.md).
-**Machine conformance oracle**: [`docs/nips/NIP-MP.fixtures.json`](../../../../../docs/nips/NIP-MP.fixtures.json)
+**Authoritative spec**: [`docs/nips/NIP-MP.md`](../../../../../../docs/nips/NIP-MP.md).
+**Machine conformance oracle**: [`docs/nips/NIP-MP.fixtures.json`](../../../../../../docs/nips/NIP-MP.fixtures.json)
 (ingest accept/reject cases) and
-[`docs/nips/NIP-MP.fold-fixtures.json`](../../../../../docs/nips/NIP-MP.fold-fixtures.json)
+[`docs/nips/NIP-MP.fold-fixtures.json`](../../../../../../docs/nips/NIP-MP.fold-fixtures.json)
 (client-fold placement cases).
 
 ## Kind
