@@ -128,6 +128,10 @@ evidence:
     entry_class: FACT
     evidence:
       - "launchpad/docs/corpus/layers/lifecycle/startup.md"
+  - statement: "After a successful migration run, main() spawns the replica-fence probe and, if verification of the floor-guard trigger catalog and behavior fails, logs \"Replica fence disabled -- floor guard verification failed: {e}. All cursor reads stay on the writer\" as a non-fatal error rather than exiting; this is the same floor-guard catalog run_migrations_locked itself re-verifies under the advisory lock on every successful migration run."
+    entry_class: FACT
+    evidence:
+      - "crates/buzz-relay/src/main.rs:232-241"
   - statement: "This node was written using launchpad/docs/corpus/templates/runbook.md, which was already merged on origin/launchpad at the recorded revision and directs a runbook's body to carry a trigger, severity and impact, diagnosis, mitigation and resolution, escalation, and a scope-and-omissions section, each traceable to the Google SRE Workbook's playbook definition."
     entry_class: FACT
     evidence:
@@ -348,7 +352,60 @@ whether it mutates anything.
    lock state can be watched directly rather than inferred from relay
    restart-loop logs.
 
+### Verify the recovery
+
+Whichever step above applied, confirm all of the following before treating
+the incident as closed — a relay that merely stopped crash-looping is not yet
+confirmed to be on the schema version it should be:
+
+1. **`SELECT version, success FROM _sqlx_migrations ORDER BY version;`**
+   again. The highest `version` with `success = true` should now match the
+   highest version number under `migrations/` in the deployed image, and no
+   row should show `success = false`.
+2. **Start (or restart) the relay** and confirm the log line
+   `Database migrations complete` appears, not `Failed to run database
+   migrations`. If `buzz-admin migrate` was run out-of-band with
+   `BUZZ_AUTO_MIGRATE` left disabled, the relay's own startup will instead log
+   the skip message — that is expected in that mode, not a sign the migration
+   did not take effect.
+3. **`/_readiness` reports `200` with `"status":"ready"`** — in Compose, watch
+   `docker compose ps` for the container leaving its restart loop and the
+   healthcheck reporting healthy; in Kubernetes, watch the pod leave
+   `CrashLoopBackOff` and its readiness probe pass.
+4. **No `Replica fence disabled` error is logged**, if a read replica is
+   configured. `run_migrations_locked`'s own post-migration steps re-verify
+   the replica-fence floor-guard and channel-roster fence catalogs on every
+   successful run; a relay that migrated cleanly but still logs a fence
+   refusal has a schema problem this runbook's steps did not fully resolve
+   and warrants returning to *Diagnosis*.
+
 ## Escalation
+
+### Evidence to preserve
+
+Before touching anything that writes to the database (steps 2 and 4 under
+*Mitigation and resolution*, and certainly before any restore), capture:
+
+- The full text of the failing log line (`Failed to run database migrations:
+  {e}`) and, if reachable, the container/pod's complete startup log for that
+  attempt.
+- The output of `SELECT version, success FROM _sqlx_migrations ORDER BY
+  version;` (or `SELECT * FROM _sqlx_migrations ORDER BY version;` for
+  whatever additional columns this deployment's `sqlx` version carries,
+  uninspected by this runbook — see *Diagnosis*).
+- If a lock investigation was needed: the `pg_locks`/`pg_stat_activity` join
+  output identifying the holder, captured before any `pg_terminate_backend`
+  call.
+- For a suspected checksum/version mismatch: the deployed image's tag/digest
+  and the exact set of files under its embedded `migrations/` directory.
+- A fresh backup per the deployment's own checklist — Compose:
+  `deploy/compose/run.sh`'s `backup_hint` (`.env` secrets, `pg_dump` or a
+  quiesced Postgres volume snapshot, MinIO/S3 bucket contents, the
+  `buzz-git-data` volume, Caddy volumes if used); Kubernetes: the Helm
+  chart's own list (`BUZZ_RELAY_PRIVATE_KEY`, the PostgreSQL database, the S3
+  media bucket, the git PVC, the owner private key held outside the chart).
+  Both sources are explicit that the Postgres and object/git snapshots must
+  come from the same maintenance window to be useful together.
 
 **There is no down-migration path in this repository, at any level.** No
 migration file under `migrations/` has a corresponding down/revert
