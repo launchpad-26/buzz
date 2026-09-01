@@ -48,16 +48,16 @@ evidence:
     evidence:
       - "crates/buzz-db/src/store/event.rs:37-39"
       - "crates/buzz-db/src/store/event.rs:118-148"
-  - statement: "crates/buzz-db/src/store/channel.rs's get_accessible_channel_ids takes an explicit community_id: CommunityId parameter and scopes both halves of its UNION query with WHERE cm.community_id = $1 and WHERE community_id = $1 respectively; every call site found in the repository (crates/buzz-relay/src/handlers/req.rs:114, handlers/count.rs:85, api/bridge.rs:1011 and :1488, api/workflows.rs:96, via the cached wrapper in crates/buzz-relay/src/state.rs:1232) passes tenant.community() or conn.tenant.community(), the resolved TenantContext's own community, not a value derived from client-supplied data."
+  - statement: "crates/buzz-db/src/store/channel_members.rs's get_accessible_channel_ids takes an explicit community_id: CommunityId parameter and scopes both halves of its UNION query with WHERE cm.community_id = $1 and WHERE community_id = $1 respectively; every call site found in the repository (crates/buzz-relay/src/handlers/req.rs:114, handlers/count.rs:85, api/bridge.rs:1097 and :1616, api/workflows.rs:96, via the cached wrapper in crates/buzz-relay/src/state.rs:1250) passes tenant.community() or conn.tenant.community(), the resolved TenantContext's own community, not a value derived from client-supplied data."
     entry_class: FACT
     evidence:
-      - "crates/buzz-db/src/store/channel.rs:754-774"
+      - "crates/buzz-db/src/store/channel_members.rs:756-784"
       - "crates/buzz-relay/src/handlers/req.rs:114"
       - "crates/buzz-relay/src/handlers/count.rs:85"
-      - "crates/buzz-relay/src/api/bridge.rs:1011"
-      - "crates/buzz-relay/src/api/bridge.rs:1488"
+      - "crates/buzz-relay/src/api/bridge.rs:1097"
+      - "crates/buzz-relay/src/api/bridge.rs:1616"
       - "crates/buzz-relay/src/api/workflows.rs:96"
-      - "crates/buzz-relay/src/state.rs:1232-1245"
+      - "crates/buzz-relay/src/state.rs:1237-1251"
   - statement: "buzz-core's tenant.rs module doc states the whole multi-tenant safety story is a 'lint-and-review fence, not a compiler fence': TenantContext::resolved and CommunityId::from_uuid are both pub, so while the type removes the accidental path (deserializing a client-chosen community), a determined or mistaken caller elsewhere could still construct a CommunityId or TenantContext outside host resolution, and only review closes that deliberate path."
     entry_class: FACT
     evidence:
@@ -93,7 +93,7 @@ evidence:
     entry_class: INFERENCE
     evidence:
       - "crates/buzz-db/src/store/event.rs:118-148"
-      - "crates/buzz-db/src/store/channel.rs:754-774"
+      - "crates/buzz-db/src/store/channel_members.rs:756-784"
       - "migrations/0001_initial_schema.sql:17-19"
       - "crates/buzz-core/src/tenant.rs:1-25"
     confidence: 0.6

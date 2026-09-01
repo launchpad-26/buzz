@@ -34,11 +34,11 @@ evidence:
     entry_class: FACT
     evidence:
       - "crates/buzz-relay/src/handlers/moderation_authz.rs"
-  - statement: "An actor holding no community owner/admin role is authorized only for DeleteMessage and Kick, and only when they hold the channel-level owner or admin role for the given channel_id, resolved via buzz_db::channel::get_member_role; every other actor/action combination is denied."
+  - statement: "An actor holding no community owner/admin role is authorized only for DeleteMessage and Kick, and only when they hold the channel-level owner or admin role for the given channel_id, resolved via buzz_db::channel_members::get_member_role; every other actor/action combination is denied."
     entry_class: FACT
     evidence:
       - "crates/buzz-relay/src/handlers/moderation_authz.rs"
-      - "crates/buzz-db/src/store/channel.rs"
+      - "crates/buzz-db/src/store/channel_members.rs:1176-1210"
   - statement: "Community role is stored in relay_members.role, a TEXT column constrained by CHECK (role IN ('owner', 'admin', 'member')). Channel role is stored in channel_members.role, a Postgres ENUM type member_role with five values ('owner', 'admin', 'member', 'guest', 'bot'), of which decide_authority only ever matches 'owner' and 'admin'."
     entry_class: FACT
     evidence:

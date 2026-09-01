@@ -66,7 +66,9 @@ evidence:
     evidence:
       - "crates/buzz-db/src/store/api_token.rs:18-60"
       - "crates/buzz-db/src/store/api_token.rs:72-129"
+      - "crates/buzz-db/src/store/api_token.rs:147-306"
       - "crates/buzz-db/src/store/api_token.rs:706"
+      - "crates/buzz-db/src/store/api_token.rs:769"
   - statement: "Neither `create_api_token` nor `get_api_token_by_hash`/`get_api_token_by_hash_including_revoked` has any call site inside `crates/buzz-relay` at this revision (repo-wide grep for both symbols across `crates/` returns matches only inside `buzz-db` itself and its own doc-comments), and `crates/buzz-relay/src/router.rs`'s full route list — `/`, `/info`, `/.well-known/nostr.json`, `/health`, `/_liveness`, `/_readiness`, `/events`, `/query`, `/count`, `/hooks/{id}`, plus the media/git/git-policy sub-routers — has no `/tokens` route."
     entry_class: FACT
     evidence:

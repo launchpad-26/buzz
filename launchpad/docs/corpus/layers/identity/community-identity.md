@@ -37,7 +37,7 @@ evidence:
   - statement: "The `signing_key BYTEA` column on `communities` is only ever written as `NULL` (cleared as part of the community-deletion purge path); a repository-wide search of the relay, db and core crates for `signing_key` found no other read or write site, so it is not currently wired into how a community identifies or signs anything."
     entry_class: FACT
     evidence:
-      - "grep_signing_key(crates/buzz-db/src, crates/buzz-relay/src, crates/buzz-core/src, migrations) -> only migrations/0001_initial_schema.sql (column definition) and crates/buzz-db/src/deletion.rs:1622 (cleared to NULL on deletion) matched; no other read or write site"
+      - "grep_signing_key(crates/buzz-db/src, crates/buzz-relay/src, crates/buzz-core/src, migrations) -> only migrations/0001_initial_schema.sql (column definition) and crates/buzz-db/src/store/deletion.rs:1739 (cleared to NULL on deletion) matched; no other read or write site"
   - statement: "A community is bound from an inbound request's Host header, normalized and resolved to a `CommunityId` before any tenant-scoped handler runs, and this binding fails closed on an unmapped or malformed host rather than falling back to a default community."
     entry_class: FACT
     evidence:

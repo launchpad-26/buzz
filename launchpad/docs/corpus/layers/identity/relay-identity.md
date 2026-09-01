@@ -56,7 +56,7 @@ evidence:
   - statement: "`RELAY_OWNER_PUBKEY` (`config.relay_owner_pubkey`) is a separate concept from `relay_keypair`: `main.rs` requires it only to bootstrap an administrative row, and `relay_members::bootstrap_owner` upserts it into the `relay_members` table with `role = 'owner'` -- a stored pubkey string the relay never holds a matching secret key for and never uses to sign or decrypt anything; it identifies a human administrator, not the relay's own runtime identity."
     entry_class: FACT
     evidence:
-      - "crates/buzz-relay/src/main.rs:230-242"
+      - "crates/buzz-relay/src/main.rs:244-253"
       - "crates/buzz-relay/src/main.rs:322-345"
       - "crates/buzz-db/src/store/relay_members.rs:350-378"
   - statement: "`git-sign-nostr` signs git commits and tags with a Nostr keypair loaded from `NOSTR_PRIVATE_KEY`, then `BUZZ_PRIVATE_KEY`, then a keyfile -- the acting user's or agent's own key, never the relay's `relay_keypair` -- and Buzz's dev MCP tooling (`buzz-dev-mcp`) depends on it for that purpose; it is a per-actor git-signing mechanism, not a relay-identity mechanism."

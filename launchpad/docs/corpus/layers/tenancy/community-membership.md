@@ -234,7 +234,7 @@ contract, and it does not cover:
   node's recorded revision (PR #1799 is open, not merged), so no
   `relationships` edge is declared to it here; add one once it merges.
 - **Channel-level membership** (`channel_members`, `get_member_role`,
-  `is_member` in `crates/buzz-db/src/channel.rs`, and the kind:9001/9022
+  `is_member` in `crates/buzz-db/src/store/channel_members.rs`, and the kind:9001/9022
   channel join/leave/kick flows in
   `crates/buzz-relay/src/handlers/side_effects.rs`). Channel membership is a
   separate, channel-scoped tenancy question — a pubkey can be a community

@@ -37,7 +37,7 @@ evidence:
   - statement: "`buzz-db`'s channel module does not define its own role type; it re-exports the canonical one directly: `pub use buzz_core::channel::{ChannelType, ChannelVisibility, MemberRole};`. Every `buzz_db::channel::MemberRole` reference elsewhere in the codebase (e.g. `buzz-relay`'s handlers) resolves to this same `buzz-core` type, not a second, independent role type."
     entry_class: FACT
     evidence:
-      - "crates/buzz-db/src/store/channel.rs:17"
+      - "crates/buzz-db/src/store/channel.rs:19"
   - statement: "For kind:9000 (PUT_USER) on a private channel, the relay's `validate_admin_event` requires the actor to already be an active member, and separately rejects the request with 'only owners/admins may grant elevated roles' when the requested role `is_elevated()` and the actor's own role does not."
     entry_class: FACT
     evidence:

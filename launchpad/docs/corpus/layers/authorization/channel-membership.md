@@ -23,19 +23,19 @@ evidence:
   - statement: "is_member(pool, community_id, channel_id, pubkey) returns true only when a channel_members row exists for that exact (community_id, channel_id, pubkey) with removed_at IS NULL, joined to a channels row with deleted_at IS NULL."
     entry_class: FACT
     evidence:
-      - "crates/buzz-db/src/store/channel.rs:643-661"
+      - "crates/buzz-db/src/store/channel_members.rs:645-663"
   - statement: "get_accessible_channel_ids(pool, community_id, pubkey) returns the UNION of two sets: channel_ids where the pubkey has an active (removed_at IS NULL) channel_members row on a non-deleted channel, and channel_ids of every non-deleted channel in the community whose visibility is 'open' -- so an open channel is accessible to every community member without any channel_members row existing for them."
     entry_class: FACT
     evidence:
-      - "crates/buzz-db/src/store/channel.rs:754-782"
+      - "crates/buzz-db/src/store/channel_members.rs:756-784"
   - statement: "add_member requires an inviter for a private channel (with a bootstrap exception letting a channel's creator add themselves as its first member), and gates granting or changing to an elevated role behind the inviter or acting member already holding an elevated role; demoting an active member out of 'owner' is blocked if it would leave the channel with zero active owners."
     entry_class: FACT
     evidence:
-      - "crates/buzz-db/src/store/channel.rs:382-539"
+      - "crates/buzz-db/src/store/channel_members.rs:384-541"
   - statement: "remove_member performs a soft delete (sets removed_at/removed_by rather than deleting the row), requires the actor to be an active owner/admin, the agent's owner, or the member removing themselves, and refuses to remove the channel's last active owner regardless of caller."
     entry_class: FACT
     evidence:
-      - "crates/buzz-db/src/store/channel.rs:560-640"
+      - "crates/buzz-db/src/store/channel_members.rs:562-642"
   - statement: "buzz-auth defines a ChannelAccessChecker trait (accessible_channel_ids, can_access) that every method takes a TenantContext for, with a doc comment stating implementations MUST scope every query by ctx.community() because the channels primary key is (community_id, id) and an unscoped query would be a cross-community existence oracle; check_read_access and check_write_access each require both a Scope (MessagesRead/MessagesWrite) and passing membership via can_access."
     entry_class: FACT
     evidence:
@@ -69,8 +69,8 @@ evidence:
   - statement: "An open channel needs no explicit channel_members row for a community member to read or write to it because get_accessible_channel_ids computes open-channel access structurally, from the channel's own visibility column, rather than by materializing one channel_members row per community member per open channel; a private channel has no such structural shortcut; is_member's positive path is always a literal row."
     entry_class: INFERENCE
     evidence:
-      - "crates/buzz-db/src/store/channel.rs:754-782"
-      - "crates/buzz-db/src/store/channel.rs:643-661"
+      - "crates/buzz-db/src/store/channel_members.rs:756-784"
+      - "crates/buzz-db/src/store/channel_members.rs:645-663"
     confidence: 0.75
   - statement: "CLAUDE.md's 'Relay queries must specify kinds' gotcha and buzz-relay's p_gated_filters_authorized are a related but distinct authorization mechanism from channel membership: the p-gate governs whether a #p-tagged (pubkey-addressed) kind may be read at all, independent of any channel, whereas membership governs which #h-scoped channels a REQ, COUNT or event may touch."
     entry_class: INFERENCE
@@ -105,11 +105,11 @@ question in one of two ways, both grounded in the `channel_members` table
 - **Private channels** require a literal, active row: `is_member` returns true
   only when a `channel_members` row exists for that exact
   `(community_id, channel_id, pubkey)` with `removed_at IS NULL`, joined to a
-  non-deleted channel (crates/buzz-db/src/store/channel.rs:643-661).
+  non-deleted channel (crates/buzz-db/src/store/channel_members.rs:645-663).
 - **Open channels** need no such row for a member of the community: the
   relay's `get_accessible_channel_ids` query unions the explicit-row set above
   with every non-deleted, `open`-visibility channel in the community
-  (crates/buzz-db/src/store/channel.rs:754-782). Community membership itself, not a
+  (crates/buzz-db/src/store/channel_members.rs:756-784). Community membership itself, not a
   per-channel row, is what grants access.
 
 **What this is not.** Membership is not the same thing as *role* — a member row
@@ -117,7 +117,7 @@ carries a `role` (`member`, `admin`, `owner`, ...), and role governs
 *escalated* actions (granting elevated roles, demoting an owner, removing
 another member) rather than whether the pubkey can see the channel at all;
 `add_member`'s and `remove_member`'s role-escalation guards
-(crates/buzz-db/src/store/channel.rs:382-539, 560-640) are a related but separate
+(crates/buzz-db/src/store/channel_members.rs:384-541, 562-642) are a related but separate
 concept, out of scope here. Membership is also not the same thing as the
 `#p`-tag "p-gate" that guards certain event kinds independent of any channel
 (crates/buzz-relay/src/handlers/req.rs:1182-1237) — see *Scope and omissions*.

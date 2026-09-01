@@ -36,9 +36,10 @@ evidence:
   - statement: "Several event kinds carry additional, stricter size and cardinality checks beyond the blanket 256 KiB content bound: kind:40008 diff events cap content at 61,440 bytes (60 KiB); buzz-db's D_TAG_MAX_LEN constant bounds any `d` tag to 1024 bytes; project events bound their `name` tag to PROJECT_NAME_MAX_LEN (256 bytes), `description` to PROJECT_DESCRIPTION_MAX_LEN (2048 bytes), and `buzz-channel`/`buzz-visibility` to PROJECT_METADATA_TAG_MAX_LEN (256 bytes each)."
     entry_class: FACT
     evidence:
-      - "crates/buzz-relay/src/handlers/ingest.rs:1053-1060"
+      - "crates/buzz-relay/src/handlers/ingest.rs:1274"
       - "crates/buzz-db/src/store/event.rs:155"
-      - "crates/buzz-relay/src/handlers/ingest.rs:1314-1327"
+      - "crates/buzz-relay/src/handlers/ingest.rs:1533-1542"
+      - "crates/buzz-relay/src/handlers/ingest.rs:1716-1753"
   - statement: "ingest.rs contains kind-specific structural validators that walk an event's raw tag list and reject it if required tags are missing, duplicated, or shaped wrong -- for example validate_engram_envelope requires exactly one `d` tag and exactly one `p` tag (rejecting zero or multiple of either), and further requires the `d` tag value be exactly 64 characters; validate_diff_event and the project-event validator apply comparable per-tag-name arity and shape rules."
     entry_class: FACT
     evidence:
