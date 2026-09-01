@@ -61,6 +61,30 @@ def canonical(value: Any) -> str:
     return str(value or "").strip().upper()
 
 
+#: A commit status reports the same idea as a check run in a different
+#: vocabulary. GraphQL's `StatusState` -> `CheckConclusionState`, so consumers
+#: compare one set. `PENDING` maps to "" — pending is not a conclusion, and
+#: `is_pending` is what answers that question.
+_STATUS_TO_CONCLUSION = {
+    "SUCCESS": "SUCCESS",
+    "FAILURE": "FAILURE",
+    "ERROR": "FAILURE",
+    "EXPECTED": "SUCCESS",
+    "PENDING": "",
+}
+
+
+def conclusion_from_status(state: Any) -> str:
+    """The conclusion a commit status implies, in the canonical vocabulary.
+
+    An unrecognised state passes through canonicalised rather than being forced
+    into a known value: `is_failing` then treats it as standing in the way, which
+    is the safe reading of a state we do not know.
+    """
+    key = canonical(state)
+    return _STATUS_TO_CONCLUSION.get(key, key)
+
+
 def conclusion_of(check: Any) -> str:
     """The canonical conclusion of one check entry, or "" when absent."""
     if not isinstance(check, dict):

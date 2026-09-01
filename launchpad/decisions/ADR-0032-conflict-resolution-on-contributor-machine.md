@@ -1,5 +1,5 @@
 ---
-status: Proposed
+status: Accepted
 date: 2026-08-25
 issue: launchpad-26/buzz#297
 decided_in: launchpad-26/buzz#297
@@ -10,14 +10,8 @@ supersedes: none
 
 ## Decision
 
-**Not yet settled by a human.** This record is `Proposed`, not `Accepted`. The option
-below was drafted by an agent; `launchpad/AGENTS.md` §5.1 reserves the choice itself
-for a human, and #297's *Decision outcome* is still blank. When a human states the
-outcome in #297, this record's `status` becomes `Accepted` and cites that comment.
-Until then nothing here is binding.
-
-The proposed option: escalated upstream merge conflicts are resolved on a contributor
-machine through a documented `just` entry point that recreates the merge and leaves the
+Option D — escalated upstream merge conflicts are resolved on a contributor machine
+through a documented `just` entry point that recreates the merge and leaves the
 conflicted tree for a human. The workflow supplies a deterministic escalation bundle; it
 does not attempt an interactive resolution inside GitHub Actions.
 
@@ -76,5 +70,9 @@ none
 
 ## Provenance
 
-Drafted by an agent from #297's options; the decision itself is pending a human, as
-stated at the top of *Decision*. Full alternatives and evidence remain in #297.
+Drafted by an agent from #297's options. Jeffrey (@tucktuck101) made the decision on
+2026-08-31 after reviewing options A–D with their positive and negative consequences and
+the agent's recommendation of Option D (contributor machine now, provisioned environment
+deferred behind two named reconsideration triggers); he replied verbatim: **"just A"**,
+immediately corrected to **"sorry meand D."** — Option D is the decision. Full
+alternatives and evidence remain in #297.

@@ -46,8 +46,8 @@ evidence:
   - statement: "At the storage layer, `EventQuery::for_community` requires a `CommunityId` argument to construct a query filter at all, so an event query cannot be built without a resolved community; `buzz-db`'s channel functions write and read `channels` and `channel_members` rows keyed by the same `community_id` parameter (including the `ON CONFLICT (community_id, channel_id, pubkey)` membership upsert)."
     entry_class: FACT
     evidence:
-      - "crates/buzz-db/src/event.rs"
-      - "crates/buzz-db/src/channel.rs"
+      - "crates/buzz-db/src/store/event.rs"
+      - "crates/buzz-db/src/store/channel.rs"
   - statement: "A client-supplied `#h` channel tag is checked against the host-derived community rather than honored as an alternate selector: `check_channel_membership` resolves membership as `is_member_cached(tenant.community(), ch_id, pubkey_bytes)`, where `tenant` is the connection's `TenantContext` and never the tag; a caller who is not a member and the channel is not `open` is rejected with the fixed string `restricted: not a channel member`."
     entry_class: FACT
     evidence:
@@ -77,7 +77,7 @@ evidence:
     entry_class: INFERENCE
     evidence:
       - "crates/buzz-core/src/tenant.rs"
-      - "crates/buzz-db/src/event.rs"
+      - "crates/buzz-db/src/store/event.rs"
       - "crates/buzz-relay/src/handlers/ingest.rs"
     confidence: 0.6
   - statement: "Issue #689's category-specific definition of done requires this node to state the invariant as one unambiguous property using MUST/MUST NOT only where normative, explain its scope, name enforcement points and observable failure behavior, and link a verification/conformance mechanism or explicitly record that verification is missing."
@@ -132,7 +132,7 @@ below — so the invariant still holds there, it is just bound from a different 
 | `bind_community` (`crates/buzz-relay/src/tenant.rs`) | The single seam every request surface calls. Normalizes the Host header, looks it up, and returns a `TenantContext` on success or a generic `BindError` on any failure — unmapped host, empty host, or a lookup error alike. |
 | `router.rs`'s WebSocket door | Calls `bind_community` before `WebSocketUpgrade::from_request`, so a socket that fails to bind never has a frame read from it. |
 | 24 REST/media/git/workflow call sites (11 files, listed in the evidence ledger) | Each calls `bind_community` before doing any tenant-scoped work, so the same fail-closed rule applies uniformly rather than being re-implemented per surface. |
-| `EventQuery::for_community` (`crates/buzz-db/src/event.rs`) | Requires a `CommunityId` to construct a query filter at all — there is no query-building path that omits it. |
+| `EventQuery::for_community` (`crates/buzz-db/src/store/event.rs`) | Requires a `CommunityId` to construct a query filter at all — there is no query-building path that omits it. |
 | `check_channel_membership` (`crates/buzz-relay/src/handlers/ingest.rs`) | Resolves a `#h`-tagged channel against `tenant.community()`, the connection's own bound community, never against a value read from the tag. |
 | `communities` table's unique index on `lower(host)` (`migrations/0001_initial_schema.sql`) | Guarantees, at the database level, that normalized host variants cannot be split across two different community rows. |
 

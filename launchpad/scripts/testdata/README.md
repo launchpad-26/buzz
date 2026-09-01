@@ -12,6 +12,7 @@ Re-record with `launchpad/scripts/testdata/record.sh` and read the diff.
 | `pr86-pr.json` | `GET /repos/{o}/{r}/pulls/86` | the PR identity read — base ref, head sha |
 | `pr86-meta.json` | `gh pr view 86 --json title,body,labels` | the metadata read |
 | `pr86-checks.json` | GraphQL `statusCheckRollup` with `isRequired` | **47 checks, three named `check`** — names collide, so the record carries a list |
+| `upstream2-checks.json` | the same query against `block/buzz#2` | **a real `StatusContext`** — `github-security/two-human-approvals-needed`, a Square internal security bot still posting via the legacy commit-status API. No fixture recorded from this fork carries one; PR 86's 47 contexts are all `CheckRun` |
 | `pr86-compare.json` | `GET /compare/{base.sha}...{head.sha}` | merge base and per-file counts |
 | `pr86-tree.json` | `GET /git/trees/{head}?recursive=1` | the head tree nearest-rules resolves against |
 | `pr92-meta.json` | a PR whose body carries `Closes #n` in visible text | the keyword-present case |

@@ -24,7 +24,7 @@ evidence:
     entry_class: FACT
     evidence:
       - "crates/buzz-relay/src/handlers/ingest.rs"
-      - "crates/buzz-db/src/deletion.rs"
+      - "crates/buzz-db/src/store/deletion.rs"
   - statement: "After the write fence, ingest rejects client-submitted AUTH events (kind 22242) and relay-signed-only membership notifications outright, rejects gift-wrap and presence-update kinds when the transport is HTTP, and rejects any kind classified `is_relay_only_kind` -- all before the event's signature is checked."
     entry_class: FACT
     evidence:
@@ -87,7 +87,7 @@ evidence:
   - statement: "Non-replaceable persistent events are stored via `insert_event_with_thread_metadata`, which runs inside a single Postgres transaction: an `INSERT ... ON CONFLICT DO NOTHING` into `events` (the id-uniqueness dedupe -- a resubmitted event with an identical id is a no-op, not an error), and, only when a new row was actually inserted and NIP-10 thread metadata was resolved, an `INSERT ... ON CONFLICT DO NOTHING` into `thread_metadata` followed by `UPDATE thread_metadata SET reply_count = reply_count + 1, last_reply_at = NOW()` against the parent and (separately) the root event -- so a duplicate event's thread counters are never double-incremented, and dedupe and the counter update are part of the same atomic transaction as the row insert."
     entry_class: FACT
     evidence:
-      - "crates/buzz-db/src/event.rs"
+      - "crates/buzz-db/src/store/event.rs"
   - statement: "Replaceable (NIP-16) and parameterized-replaceable (NIP-33) kinds skip `insert_event_with_thread_metadata` entirely and instead call `replace_addressable_event` / `replace_parameterized_event`, which perform an atomic replace with stale-write protection rather than a plain insert; a NIP-33 `d` tag longer than `D_TAG_MAX_LEN` is rejected before either path runs."
     entry_class: FACT
     evidence:
@@ -96,7 +96,7 @@ evidence:
     entry_class: FACT
     evidence:
       - "crates/buzz-relay/src/handlers/ingest.rs"
-      - "crates/buzz-db/src/event.rs"
+      - "crates/buzz-db/src/store/event.rs"
   - statement: "On successful, non-duplicate storage, ingest runs any kind-specific side effects (`handle_side_effects`, logged at `error!` rather than `warn!` if they fail, because the event was already accepted and the relay is now in a state the client does not know about), pushes a fresh relay-signed kind:39005 live-thread-summary event for the affected thread when NIP-10 metadata was resolved, and then calls `dispatch_persistent_event`."
     entry_class: FACT
     evidence:

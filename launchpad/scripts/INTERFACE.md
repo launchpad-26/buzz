@@ -34,6 +34,17 @@ commit.
 | `nearest_rules` | per changed path, the resolved AGENTS.md **and** CLAUDE.md |
 | `skips` | [field, source, reason, detail, endpoint] |
 
+**`conclusion` is not always a `CheckConclusionState`.** A `checks` entry sourced from a
+`CheckRun` carries a real `CheckConclusionState` — `SUCCESS`, `FAILURE`, and the rest.
+A `checks` entry sourced from the older commit-status API (a `StatusContext`, still used
+by some third-party integrations) has no `CheckConclusionState` at all; its GraphQL
+`StatusState` — which includes `PENDING` and `EXPECTED`, values a `CheckConclusionState`
+never carries — is mapped onto `conclusion` because it is the closest analogue, with
+`status` left `null` rather than invented. A consumer that reads any `conclusion` other
+than `SUCCESS` as "failed" will misread a running external check as a failed one. There
+is no separate field distinguishing the two node shapes; a `StatusState` value in
+`conclusion` is the only signal.
+
 **Two gates, asked separately.** `launchpad/AGENTS.md` §6 states that the `launchpad`
 branch requires at least two approving reviews, that the ruleset enforcing it is
 unreadable without `admin:org`, and that a live PR's `reviewDecision` confirms review is

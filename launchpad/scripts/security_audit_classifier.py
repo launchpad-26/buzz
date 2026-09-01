@@ -23,7 +23,7 @@ blind to exactly the files #62 exists to watch.
 import re
 import subprocess
 from pathlib import Path, PurePosixPath
-from typing import Optional, Set
+from typing import Dict, Optional, Set
 
 #: Matches a Windows drive letter root ("C:/", "d:/") after backslash-to-slash
 #: normalization. PurePosixPath.is_absolute() only recognizes a leading "/" --
@@ -85,3 +85,91 @@ def classify(path: str, upstream_paths: Optional[Set[str]]) -> str:
     if PurePosixPath(normalized).is_absolute() or _WINDOWS_DRIVE_ROOT.match(normalized):
         return "indeterminate"
     return "inherited" if normalized in upstream_paths else "fork-added"
+
+
+def fetch_upstream_blobs(repo_root: Path, timeout: int = 30) -> Optional[Dict[str, str]]:
+    """Map every upstream path to its blob OID, or None if upstream is unreachable.
+
+    Same single fetch as `fetch_upstream_paths`, one column wider: `git ls-tree`
+    already carries the OID, so identity costs no extra network. Callers that
+    only need origin should keep using `fetch_upstream_paths`.
+
+    Origin is not enough for a check that asks "is the cohort accountable for
+    this file". A path present upstream may still have been modified here, and a
+    modification is exactly where cohort-owned content could hide inside an
+    inherited filename. Comparing OIDs answers "is this byte-for-byte upstream's
+    file", which is the question that licenses skipping it.
+    """
+    try:
+        subprocess.run(
+            ["git", "fetch", "--depth=1", UPSTREAM_URL, UPSTREAM_REF],
+            cwd=repo_root,
+            check=True,
+            capture_output=True,
+            timeout=timeout,
+        )
+        result = subprocess.run(
+            # -z for the same quoting reason `fetch_upstream_paths` documents.
+            # Default (non---name-only) output is "<mode> <type> <oid>\t<path>".
+            ["git", "ls-tree", "-r", "-z", "FETCH_HEAD"],
+            cwd=repo_root,
+            check=True,
+            capture_output=True,
+            text=True,
+            timeout=timeout,
+        )
+    except (subprocess.CalledProcessError, subprocess.TimeoutExpired, OSError):
+        return None
+    blobs: Dict[str, str] = {}
+    for entry in filter(None, result.stdout.split("\0")):
+        meta, _, path = entry.partition("\t")
+        parts = meta.split()
+        if not path or len(parts) < 3:
+            continue
+        blobs[path] = parts[2]
+    return blobs
+
+
+def local_blob(repo_root: Path, path: str, timeout: int = 30) -> Optional[str]:
+    """The blob OID of `path` at HEAD, or None when it cannot be resolved."""
+    try:
+        result = subprocess.run(
+            ["git", "rev-parse", f"HEAD:{path}"],
+            cwd=repo_root,
+            check=True,
+            capture_output=True,
+            text=True,
+            timeout=timeout,
+        )
+    except (subprocess.CalledProcessError, subprocess.TimeoutExpired, OSError):
+        return None
+    return result.stdout.strip() or None
+
+
+def divergence(path: str, repo_root: Path, upstream_blobs: Optional[Dict[str, str]]) -> str:
+    """Ownership of one path, as one of four answers.
+
+    - `fork-added`         — absent upstream. The cohort wrote it.
+    - `inherited-modified` — present upstream, different content here.
+    - `inherited-identical`— present upstream, byte-for-byte identical.
+    - `indeterminate`      — upstream unreachable, or the local OID would not
+                             resolve. Never guessed in either direction, for the
+                             asymmetry this module's docstring sets out.
+
+    Only `inherited-identical` licenses a caller to treat a file as none of the
+    cohort's business. The other three are all cohort-accountable or unknown.
+    """
+    if upstream_blobs is None:
+        return "indeterminate"
+    normalized = path.replace("\\", "/")
+    if normalized.startswith("./"):
+        normalized = normalized[2:]
+    if PurePosixPath(normalized).is_absolute() or _WINDOWS_DRIVE_ROOT.match(normalized):
+        return "indeterminate"
+    upstream_oid = upstream_blobs.get(normalized)
+    if upstream_oid is None:
+        return "fork-added"
+    here = local_blob(repo_root, normalized)
+    if here is None:
+        return "indeterminate"
+    return "inherited-identical" if here == upstream_oid else "inherited-modified"

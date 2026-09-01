@@ -1,5 +1,5 @@
 ---
-status: Proposed
+status: Accepted
 date: 2026-08-25
 issue: launchpad-26/buzz#305
 decided_in: launchpad-26/buzz#305
@@ -10,12 +10,7 @@ supersedes: none
 
 ## Decision
 
-**Not yet settled by a human.** This record is `Proposed`, not `Accepted`.
-`launchpad/AGENTS.md` §5.1 reserves the choice for a human and #305's *Decision outcome*
-is still blank. When a human states the outcome in #305, this record's `status` becomes
-`Accepted`.
-
-The proposed option: Option A. The vendor branch `launchpad-26/main` is advanced only to
+Option A. The vendor branch `launchpad-26/main` is advanced only to
 named upstream release tags — `relay-v*` or `desktop-v*` — ignoring the mobile RC stream,
 and each pin is recorded as the resolved commit SHA alongside the tag name. A standing
 automated report prompts the drop decision; a human takes the drop deliberately.
@@ -90,8 +85,11 @@ none
 
 ## Provenance
 
-Drafted by an agent from #305's options; the decision itself is pending a human, as stated
-at the top of *Decision*. Full alternatives remain in #305. The tag list, the merge-base,
+Drafted by an agent from #305's options. Jeffrey (@tucktuck101) made the decision on
+2026-08-31 after reviewing options A–E with their positive and negative consequences —
+including the record's own correction that Option A does not reduce prompt cadence, and
+the named one-off merge-base exception — and the agent's recommendation of Option A; he
+replied verbatim: **"a"**. Full alternatives remain in #305. The tag list, the merge-base,
 the `describe` result and the ahead/behind counts in this record were measured against the
 local clone on 2026-08-26 with the commands shown; #305's own 228 figure is dated
 2026-08-21 there. This record does not conflict with ADR-0005, whose Decision is scoped to

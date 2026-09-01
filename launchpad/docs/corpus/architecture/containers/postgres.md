@@ -46,7 +46,7 @@ evidence:
   - statement: "Migrations are embedded via sqlx::migrate!(\"../../migrations\") in buzz-db's migration module and applied with MIGRATOR.run inside a single call site guarded by an exclusive Postgres advisory session lock (SCHEMA_DESTRUCTION_LOCK_KEY), which a source lint enforces has no other caller; after running pending migrations the same code path re-verifies the replica-fence floor-guard trigger exists on the events parent table and every partition."
     entry_class: FACT
     evidence:
-      - "crates/buzz-db/src/migration.rs"
+      - "crates/buzz-db/src/runtime/migration.rs"
   - statement: "At relay startup, migrations only run when the BUZZ_AUTO_MIGRATE environment variable is truthy (\"true\"/\"1\"/\"yes\"/\"on\", case-insensitive and trimmed); the flag's own parser treats an absent or any other value as disabled, so a plain deploy with the variable unset starts the relay without running pending migrations and only logs \"Skipping database migrations because BUZZ_AUTO_MIGRATE is not enabled\"."
     entry_class: FACT
     evidence:
@@ -79,7 +79,7 @@ evidence:
     entry_class: FACT
     evidence:
       - "crates/buzz-db/src/lib.rs"
-      - "crates/buzz-db/src/migration.rs"
+      - "crates/buzz-db/src/runtime/migration.rs"
   - statement: "Because BUZZ_AUTO_MIGRATE defaults off and the code path that would apply migrations 0001-0021+ is opt-in, an operator who deploys with the variable unset is running against whatever schema Postgres already has; this node cannot verify from the repository alone whether the staging/production deploy pipelines referenced by this repo's own contributor guide (squareup/block-coder-tf-stacks, squareup/sprout-oss) set BUZZ_AUTO_MIGRATE, because those are separate private repositories this task did not open."
     entry_class: INFERENCE
     evidence:
@@ -215,7 +215,7 @@ replica technology.
 - `crates/buzz-db/` — connection pooling, migrations, and all typed
   data-access modules (see `crates/buzz-db/src/lib.rs`'s module list for the
   full set: events, channels, users, moderation, workflow, and more).
-- `crates/buzz-db/src/migration.rs` — embedded migration runner and its
+- `crates/buzz-db/src/runtime/migration.rs` — embedded migration runner and its
   schema-destruction-lock wrapper.
 - `crates/buzz-relay/src/main.rs` — startup wiring: `DbConfig` construction,
   the `BUZZ_AUTO_MIGRATE` gate, partition maintenance, the audit pool, and
