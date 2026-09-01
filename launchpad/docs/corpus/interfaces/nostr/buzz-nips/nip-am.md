@@ -31,7 +31,7 @@ evidence:
   - statement: "buzz-relay's ingest handler validates the public (unencrypted) envelope of a kind:44200 event before touching ciphertext: exactly one p tag of 64 lowercase hex chars, exactly one agent tag of 64 lowercase hex chars, and no h tag, rejecting violations with an `invalid: ...` message from IngestError::Rejected."
     entry_class: FACT
     evidence:
-      - "crates/buzz-relay/src/handlers/ingest.rs:1873-1929"
+      - "crates/buzz-relay/src/handlers/ingest.rs:1873-1947"
   - statement: "After the envelope check, ingest.rs performs an async ownership lookup (state.db.is_agent_owner(community, agent_pubkey, owner_pubkey)) and rejects the event with IngestError::AuthFailed(\"restricted: agent-turn-metric `p` tag must be the registered owner of this agent\") when the p tag does not name the event's registered owner -- tag matching alone is not sufficient, matching the spec's explicit warning."
     entry_class: FACT
     evidence:
@@ -56,11 +56,11 @@ evidence:
     entry_class: FACT
     evidence:
       - "crates/buzz-db/src/runtime/migration.rs:895-902"
-      - "crates/buzz-search/tests/fts_integration.rs:1150-1264"
+      - "crates/buzz-search/tests/fts_integration.rs:1150-1309"
   - statement: "buzz-acp's pool.rs implements the publisher: publish_agent_turn_metric builds an AgentTurnMetricPayload from harness-reported TurnUsage, encrypts it, and publishes a kind:44200 event tagged with p (owner) and agent (agent pubkey); it is a best-effort operation that returns silently when usage or the configured owner pubkey is absent, and logs (never propagates) an encryption failure, matching the spec's Publisher Behavior section (one event per completed turn, no publish when no usage was observed)."
     entry_class: FACT
     evidence:
-      - "crates/buzz-acp/src/pool.rs:4602-4665"
+      - "crates/buzz-acp/src/pool.rs:4602-4695"
   - statement: "node.schema.json's type enum has no dedicated 'interface' value; its closed enum member for both interface- and event-kind-shaped corpus nodes is the single combined value interfaces-events, per Feature #602's success criteria listing 'interfaces/events' as one item."
     entry_class: FACT
     evidence:
@@ -96,7 +96,7 @@ description.
 
 | Operation | Defined in | Summary |
 |---|---|---|
-| Publish one turn metric | `crates/buzz-acp/src/pool.rs#publish_agent_turn_metric` (`:4602-4665`) | Best-effort, at most one `kind:44200` event per completed turn; silently no-ops when no usage was observed or no owner pubkey is configured. |
+| Publish one turn metric | `crates/buzz-acp/src/pool.rs#publish_agent_turn_metric` (`:4602-4695`) | Best-effort, at most one `kind:44200` event per completed turn; silently no-ops when no usage was observed or no owner pubkey is configured. |
 | Encrypt/decrypt the payload | `crates/buzz-core/src/agent_turn_metric.rs#encrypt_agent_turn_metric` / `#decrypt_agent_turn_metric` | NIP-44 v2, `(agent_keys, owner_pubkey)`; both validate numeric fields and reject a negative/non-finite `costUsd`. |
 | Ingest-time envelope + ownership validation | `crates/buzz-relay/src/handlers/ingest.rs#validate_agent_turn_metric_envelope` (`:1884`) and the ownership check at `:2733-2767` | Tag-shape check (exactly one `p`, one `agent`, no `h`) followed by an async `is_agent_owner` DB lookup; either failure rejects the publish. |
 | Owner read (WebSocket REQ or HTTP `/query`) | `crates/buzz-relay/src/handlers/req.rs#event_visible_to_reader` / `#reader_authorized_for_event` (`buzz-core/src/filter.rs`) | Every read surface calls the same per-event gate; a non-owner reader never receives the event, `ids`-only filters included. |
@@ -174,7 +174,7 @@ and `timestamp` required and every other field optional/nullable per
   tag, or an `agent` tag not equal to `event.pubkey` is rejected by
   `validate_agent_turn_metric_envelope` before any DB lookup runs, with an
   `invalid: ...`-prefixed message
-  (`crates/buzz-relay/src/handlers/ingest.rs:1884-1929`).
+  (`crates/buzz-relay/src/handlers/ingest.rs:1884-1947`).
 - **Ownership failure**: an otherwise well-formed event whose `p` tag names a
   pubkey that is not the registered owner of `event.pubkey` is rejected with
   `restricted: agent-turn-metric \`p\` tag must be the registered owner of
