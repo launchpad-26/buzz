@@ -368,8 +368,8 @@ relationships:
 
 ## Sequence
 
-1. [Actor A does X.] (`path/to/file.rs:NN`)
-2. [Actor B receives X and does Y.] (`path/to/other_file.rs:NN`)
+1. [Actor A does X.] (`path/to/file.rs#symbol=handler_name`)
+2. [Actor B receives X and does Y.] (`path/to/other_file.rs#symbol=OtherType.method`)
 3. ...
 
 ## Diagram
@@ -432,12 +432,16 @@ shape:
   cited to nothing, or cited to a source the author did not open, is not a step this
   template's *Sequence* section accepts -- reclassify as `INFERENCE` with reasoning
   and confidence, or remove the step until it can be checked.
-- **A step citing a line number is checked structurally, not semantically.**
-  `AGENTS.md` states plainly that the validator opens a cited file but never checks
-  a cited line number against the file's actual length, and never confirms a
-  citation supports the claim it sits under. A flow node's line-numbered steps carry
-  the same limit as any other corpus citation -- a green `validate.py` run does not
-  mean a human reviewer has confirmed each step happens where it says it does.
+- **A step citation is checked structurally, not semantically.** The validator
+  confirms a cited symbol appears in the cited file, or that a cited line is within
+  it, but never that the source supports the claim the step makes. A green
+  `validate.py` run does not mean a human reviewer has confirmed each step happens
+  where it says it does.
+- **Prefer `#symbol=` over a line number for every step.** A line number names a
+  place in the file as it was: an edit above it repoints the citation at unrelated
+  code, and because a bounds check is not a meaning check, the step keeps passing
+  while being wrong. A symbol anchor still resolves after the code above it moves,
+  and fails honestly when the symbol is renamed or deleted (#1726, #2012).
 
 ## Note on Definition of Done
 

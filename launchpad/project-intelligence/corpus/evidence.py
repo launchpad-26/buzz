@@ -80,6 +80,7 @@ class EvidenceKind(enum.Enum):
     LOCAL_FILE = "local_file"
     LOCAL_FILE_LINE = "local_file_line"
     LOCAL_FILE_RANGE = "local_file_range"
+    LOCAL_FILE_SYMBOL = "local_file_symbol"
     COMMIT = "commit"
     GITHUB_URL = "github_url"
     EXTERNAL_URL = "external_url"
@@ -96,6 +97,7 @@ class ParsedCitation:
     end_line: int | None = None
     commit: str | None = None
     url: str | None = None
+    symbol: str | None = None
     # Tool-result citations only. `tool_assertion` is captured so a detail can
     # say it went uncompared -- never so a verifier can judge it. See
     # `_verify_git_tool` for why comparing it is not on offer.
@@ -109,6 +111,13 @@ _PARSE_MARKDOWN_LINK_RE = re.compile(r"^\[[^\]]*\]\((?P<target>[^)\s]+)\)$")
 _PARSE_COMMIT_RE = re.compile(r"^commit\s+(?P<sha>[0-9a-fA-F]{7,40})\b")
 _PARSE_FILE_POSITION_RE = re.compile(
     r"^(?P<path>\S+?):(?P<start>\d+)(?:-(?P<end>\d+))?$"
+)
+# `path#symbol=NAME` -- a position that survives edits. A line number names a
+# place in a file as it was; a symbol names the thing the claim is about, and
+# still finds it after the code above it moves. See #2012 for why the vocabulary
+# lacked this and what its absence cost.
+_PARSE_FILE_SYMBOL_RE = re.compile(
+    r"^(?P<path>\S+?)#symbol=(?P<symbol>[A-Za-z_][A-Za-z0-9_.]*)$"
 )
 _PARSE_SYMBOL = r"[A-Za-z_][A-Za-z0-9_.:]*"
 _PARSE_GRAPH_EDGE_RE = re.compile(
@@ -153,6 +162,13 @@ def parse_citation(citation: str) -> ParsedCitation:
             tool=tool_result.group("tool"),
             tool_args=tool_result.group("args"),
             tool_assertion=tool_result.group("assertion"),
+        )
+    symbol_anchor = _PARSE_FILE_SYMBOL_RE.match(text)
+    if symbol_anchor:
+        return ParsedCitation(
+            kind=EvidenceKind.LOCAL_FILE_SYMBOL,
+            path=symbol_anchor.group("path"),
+            symbol=symbol_anchor.group("symbol"),
         )
     position = _PARSE_FILE_POSITION_RE.match(text)
     if position:
@@ -211,6 +227,44 @@ def _verify_local(parsed: ParsedCitation, repo_root: Path) -> VerificationResult
     if parsed.end_line is not None and parsed.end_line > _verification_line_count(candidate):
         return VerificationResult("error", "line position exceeds the cited file's length")
     return VerificationResult("ok")
+
+
+def _verify_local_symbol(parsed: ParsedCitation, repo_root: Path) -> VerificationResult:
+    """Resolve `path#symbol=NAME`: the file must exist and must name the symbol.
+
+    What this establishes is deliberately the same as every other citation form:
+    that you cited something real. It confirms the symbol APPEARS in the cited
+    file, never that the file supports the statement above it -- `standards/
+    evidence.md` is explicit that only a person reading the source establishes a
+    FACT.
+
+    What it adds over `path:line` is durability. A line number names a place in
+    the file as it was, and an edit above it silently repoints the citation at
+    unrelated code while the bounds check still passes. A symbol names the thing
+    the claim is about, so it still resolves after the code above it moves --
+    and when the symbol is renamed or deleted the citation FAILS instead of
+    quietly pointing somewhere wrong.
+
+    The path guards are the shared ones: this form must not become a way around
+    the credential blocklist or the repository-containment rule.
+    """
+    assert parsed.path is not None
+    assert parsed.symbol is not None
+    location = _verify_local(
+        ParsedCitation(kind=EvidenceKind.LOCAL_FILE, path=parsed.path), repo_root
+    )
+    if location.status != "ok":
+        return location
+    candidate = (repo_root.resolve() / parsed.path).resolve()
+    try:
+        content = candidate.read_text(errors="replace")
+    except OSError:
+        return VerificationResult("error", "names a file that could not be read")
+    if re.search(rf"(?<![A-Za-z0-9_]){re.escape(parsed.symbol)}(?![A-Za-z0-9_])", content):
+        return VerificationResult("ok")
+    return VerificationResult(
+        "error", "names a symbol that does not appear in the cited file"
+    )
 
 
 def _verify_commit(parsed: ParsedCitation, repo_root: Path) -> VerificationResult:
@@ -734,6 +788,8 @@ def verify_citation(
         EvidenceKind.LOCAL_FILE_RANGE,
     }:
         return _verify_local(parsed, repo_root)
+    if parsed.kind is EvidenceKind.LOCAL_FILE_SYMBOL:
+        return _verify_local_symbol(parsed, repo_root)
     if parsed.kind is EvidenceKind.COMMIT:
         return _verify_commit(parsed, repo_root)
     if parsed.kind in {EvidenceKind.EXTERNAL_URL, EvidenceKind.GITHUB_URL}:

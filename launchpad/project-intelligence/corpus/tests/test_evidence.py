@@ -126,6 +126,114 @@ class EvidenceVerifierTest(unittest.TestCase):
         self.assertEqual(result.detail, evidence.UNVERIFIABLE_KIND_DETAIL)
 
 
+class SymbolAnchoredCitationTest(unittest.TestCase):
+    """#2012: a position that survives edits.
+
+    The corpus had only `path` (durable, no position) and `path:line` (precise,
+    rots). This form is both, and it is the first precise code citation that can
+    genuinely fail rather than have a bounds check stand in for a meaning check.
+    """
+
+    def test_parses_path_and_symbol(self) -> None:
+        parsed = evidence.parse_citation(
+            "launchpad/project-intelligence/corpus/validate.py#symbol=find_duplicate_ids"
+        )
+        self.assertEqual(parsed.kind, evidence.EvidenceKind.LOCAL_FILE_SYMBOL)
+        self.assertEqual(
+            parsed.path, "launchpad/project-intelligence/corpus/validate.py"
+        )
+        self.assertEqual(parsed.symbol, "find_duplicate_ids")
+
+    def test_parses_dotted_member_symbol(self) -> None:
+        parsed = evidence.parse_citation("a/b.py#symbol=ClassName.method_name")
+        self.assertEqual(parsed.symbol, "ClassName.method_name")
+
+    def test_present_symbol_verifies_ok(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            (root / "source.py").write_text("def find_me():\n    return 1\n")
+            result = evidence.verify_citation(
+                evidence.parse_citation("source.py#symbol=find_me"), root
+            )
+        self.assertEqual(result.status, "ok")
+
+    def test_absent_symbol_is_an_error(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            (root / "source.py").write_text("def something_else():\n    return 1\n")
+            result = evidence.verify_citation(
+                evidence.parse_citation("source.py#symbol=find_me"), root
+            )
+        self.assertEqual(result.status, "error")
+        self.assertIn("does not appear in the cited file", result.detail)
+
+    def test_survives_edits_above_it_where_a_line_number_would_not(self) -> None:
+        """The property the form exists for. Both citations are correct before
+        the edit; after 20 lines are inserted above, only the symbol anchor is
+        still right -- and the line citation does not fail, it silently points
+        at the wrong code."""
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            source = root / "source.py"
+            source.write_text("def target():\n    return 1\n" + "# tail\n" * 30)
+            before_symbol = evidence.verify_citation(
+                evidence.parse_citation("source.py#symbol=target"), root
+            )
+            before_line = evidence.verify_citation(
+                evidence.parse_citation("source.py:1"), root
+            )
+            self.assertEqual(before_symbol.status, "ok")
+            self.assertEqual(before_line.status, "ok")
+
+            source.write_text("# inserted\n" * 20 + source.read_text())
+            after_symbol = evidence.verify_citation(
+                evidence.parse_citation("source.py#symbol=target"), root
+            )
+            after_line = evidence.verify_citation(
+                evidence.parse_citation("source.py:1"), root
+            )
+        self.assertEqual(after_symbol.status, "ok")
+        # Still "ok", now naming an inserted comment. Nothing detects it.
+        self.assertEqual(after_line.status, "ok")
+
+    def test_partial_word_does_not_count_as_the_symbol(self) -> None:
+        """Without a word boundary, `#symbol=Foo` would be satisfied by
+        `FooBarBaz`, and a renamed symbol would keep verifying."""
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            (root / "source.py").write_text("class FooBarBaz:\n    pass\n")
+            result = evidence.verify_citation(
+                evidence.parse_citation("source.py#symbol=Foo"), root
+            )
+        self.assertEqual(result.status, "error")
+
+    def test_missing_file_is_an_error_before_the_symbol_is_considered(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            result = evidence.verify_citation(
+                evidence.parse_citation("no/such/file.py#symbol=whatever"), Path(tmp)
+            )
+        self.assertEqual(result.status, "error")
+        self.assertIn("does not resolve to a real file", result.detail)
+
+    def test_credential_guard_is_not_bypassed_by_the_new_form(self) -> None:
+        """A new citation shape must not become a way around the blocklist."""
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            (root / ".env.local").write_text("TOKEN=xyz\n")
+            result = evidence.verify_citation(
+                evidence.parse_citation(".env.local#symbol=TOKEN"), root
+            )
+        self.assertEqual(result.status, "error")
+        self.assertIn("prohibited credential-like pattern", result.detail)
+
+    def test_escaping_the_repository_is_refused(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            result = evidence.verify_citation(
+                evidence.parse_citation("../../etc/passwd#symbol=root"), Path(tmp)
+            )
+        self.assertEqual(result.status, "error")
+
+
 class GitToolCitationParseTest(unittest.TestCase):
     """The argument half of a tool-result citation is tractable; the asserted
     half is prose. Parsing must expose the first without pretending about the

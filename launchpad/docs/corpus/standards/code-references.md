@@ -24,7 +24,7 @@ evidence:
     entry_class: FACT
     evidence:
       - "launchpad/project-intelligence/corpus/validate.py"
-  - statement: "In a path:line or path:start-end citation the path is checked exactly as a bare path is, while the line number is compared only against itself -- start at least 1, end not before start -- and never against the length of the file."
+  - statement: "In a path:line or path:start-end citation the path is checked exactly as a bare path is, and the line number is compared both against itself -- start at least 1, end not before start -- and against the length of the file, a position past the end being a hard error since #1459."
     entry_class: FACT
     evidence:
       - "launchpad/project-intelligence/corpus/validate.py"
@@ -60,7 +60,7 @@ evidence:
     entry_class: FACT
     evidence:
       - "launchpad/project-intelligence/corpus/validate.py"
-  - statement: "CONTRACT.md section 3 enumerates six citation shapes -- file range, file line, bare path, graph edge, tool result and commit -- and none of them is a URL."
+  - statement: "CONTRACT.md section 3 enumerates seven citation shapes -- symbol anchor, file range, file line, bare path, graph edge, tool result and commit -- and none of them is a URL."
     entry_class: FACT
     evidence:
       - "launchpad/project-intelligence/CONTRACT.md"
@@ -129,41 +129,54 @@ state and leaves it open.
 
 ## The forms, and what a pass proves
 
-Six shapes are enumerated in `CONTRACT.md` §3. Four of them can name code in this
-repository; the validator additionally accepts a seventh form — a URL — that §3 does not
-enumerate at all. Every verdict below was measured against `_classify_citation` at the
-revision this node records.
+Seven shapes are enumerated in `CONTRACT.md` §3. Five of them can name code in this
+repository; the validator additionally accepts a URL form that §3 does not enumerate at
+all. Every verdict below was measured against `_classify_citation` at the revision this
+node records.
+
+Verdicts marked `deferred` are decided by the `--check-links` stage, which CI always runs;
+they are reported and do not block the offline stage.
 
 | Form | Example | Verdict | What the verdict establishes |
 |---|---|---|---|
+| Symbol anchor | `…kind.rs#symbol=is_shared_gated_kind` | `ok` | **The file exists and names that symbol**, matched on word boundaries. Not that it supports the claim. |
+| Symbol anchor, symbol absent | `…kind.rs#symbol=renamed_away` | `error` | — the symbol does not appear in the cited file |
 | Bare repository path | `Justfile` | `ok` | **The file exists.** The path was resolved and opened. |
 | Bare path, directory | `launchpad` | `error` | — a directory is not a file |
 | Bare path, absolute | `/etc/passwd` | `error` | — must be repo-relative |
 | Bare path, escaping | `../buzz/Justfile` | `error` | — resolves outside the repository |
-| Path with a line | `Justfile:1` | `ok` | **The file exists.** The line does not. |
-| Path with a line, out of range | `Justfile:999999` | `ok` | **The file exists.** Nothing else — the file is 1005 lines long. |
-| Path with a range | `Justfile:1-99999999` | `ok` | Same: path checked, bounds not. |
+| Path with a line | `Justfile:1` | `ok` | **The file exists and is at least that long.** Not that the line says anything relevant. |
+| Path with a line, out of range | `Justfile:999999` | `error` | — the position exceeds the file's length (#1459) |
+| Path with a range, out of range | `Justfile:1-99999999` | `error` | — same bounds check applies to the range |
 | Path with a malformed position | `Justfile:0`, `Justfile:5-1` | `error` | — the position is inconsistent with itself |
-| Path with a column or fragment | `…kind.rs:219:5`, `…kind.rs#symbol=Kind` | `error` | — not a supported form; see *Enforcement* for the misleading message |
-| GitHub file link, pinned | `…/blob/<40-hex>/Justfile` | `ok` | **Nothing about the target.** Syntax only. |
-| GitHub file link, pinned, target never existed | `…/blob/<40-hex>/does-not-exist.md` | `ok` | **Nothing.** The validator never contacts GitHub. |
+| Path with a column | `…kind.rs:219:5` | `error` | — not a supported form; see *Enforcement* for the misleading message |
+| GitHub file link, pinned | `…/blob/<40-hex>/Justfile` | `deferred` → `ok` | Syntax offline; the link stage fetches it. |
+| GitHub file link, pinned, target never existed | `…/blob/<40-hex>/does-not-exist.md` | `deferred` → `error` | The link stage does contact GitHub, and this fails there. |
 | GitHub file link, mutable ref | `…/blob/main/Justfile` | `error` | — not pinned to a full SHA |
 | GitHub file link, abbreviated or uppercase SHA | `…/blob/60d4947/…`, `…/blob/<40-HEX>/…` | `error` | — the SHA must be forty lowercase hex characters |
 | GitHub link, no file after the ref | `…/blob/<40-hex>` | `error` | — names a repository at a commit, not a file |
 | GitHub link, non-file verb | `…/tree/…`, `…/blame/…`, `…/commits/…`, `…/edit/…` | `error` | — a view of a file is not a citation of it |
-| `raw.githubusercontent.com`, pinned | `…/<40-hex>/Justfile` | `ok` | Syntax only, as above. |
-| GitHub issue or pull-request URL | `…/issues/1459` | `unverified` | Nothing. Recognised, unopenable. |
-| Other external URL | `https://example.com/spec` | `unverified` | Nothing. |
-| Commit reference | `commit <7-40 hex>` | `unverified` | Nothing on disk. See *Exceptions and escalation*. |
-| Graph edge, tool result | `a -> b (1 hop)` | `unverified` | Nothing. Owned by #1314. |
+| `raw.githubusercontent.com`, pinned | `…/<40-hex>/Justfile` | `deferred` → `ok`/`error` | As above. |
+| GitHub issue or pull-request URL | `…/issues/1459` | `deferred` → `ok`/`error` | That the URL resolves. Never what it says. |
+| Other external URL | `https://example.com/spec` | `deferred` → `ok`/`error` | That the URL resolves. |
+| Commit reference | `commit <7-40 hex>` | `ok` | **The commit exists in this repository.** A commit that does not is an `error`. |
+| Graph edge | `a -> b (1 hop)` | `unverified` | Nothing. Owned by #1314. |
+| Tool result, git or grep | `git_ls_tree(ref=…, path=…) -> …` | `unverified` / `error` | That the cited ref and path still resolve. Never the asserted result, which is prose. |
+| Tool result, other families | `shell('…') -> …` | `unverified` | Nothing, and the message names why that family has no verifier. |
 | Anything else | `#1459`, `issue #1459`, free text | `error` | — hard error, never a notice |
 
 A markdown wrapper — `[label](target)` — is unwrapped before any of this, so it is
 accepted wherever its bare target would be, and rejected wherever its target would be.
 
-**Read the right-hand column, not the middle one.** Three of the four code-naming forms
-return `ok` while establishing less than an author would assume: a line number is not
-checked, and a GitHub link is not checked at all.
+**Read the right-hand column, not the middle one.** An `ok` still establishes less than an
+author would assume: no citation form opens a file and compares it against the statement it
+sits under. What changed is that fewer forms now return `ok` for nothing — a line past the
+end of a file fails, a missing commit fails, a renamed symbol fails, and a dead ref fails.
+
+**Prefer the symbol anchor for a claim about code.** A line number names a place in the file
+as it was; a symbol names the thing the claim is about. When code above it moves, the line
+citation keeps passing while naming unrelated code, and the symbol citation still resolves.
+When the symbol itself is renamed or deleted, the citation fails — which is the point.
 
 ## MUST
 

@@ -653,6 +653,7 @@ def _classify_citation(
         _EVIDENCE_PARSER.EvidenceKind.LOCAL_FILE,
         _EVIDENCE_PARSER.EvidenceKind.LOCAL_FILE_LINE,
         _EVIDENCE_PARSER.EvidenceKind.LOCAL_FILE_RANGE,
+        _EVIDENCE_PARSER.EvidenceKind.LOCAL_FILE_SYMBOL,
         _EVIDENCE_PARSER.EvidenceKind.COMMIT,
     ):
         result = _EVIDENCE_PARSER.verify_citation(parsed, repo_root_path)
