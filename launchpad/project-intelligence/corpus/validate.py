@@ -656,10 +656,13 @@ def _classify_citation(
             return CitationVerdict(
                 "error", "matches a prohibited credential-like pattern"
             )
-        return CitationVerdict(
-            "unverified",
-            "is a graph-edge or tool-result citation, which names no openable file",
-        )
+        # The credential guard runs first and stays first: it decides whether
+        # this text may be looked at, before any verifier decides what it means.
+        # Past that, the registry owns the verdict. Kinds it has no verifier for
+        # come back carrying `UNVERIFIABLE_KIND_DETAIL`, so the wording nodes
+        # quote as a FACT is unchanged for them.
+        result = _EVIDENCE_PARSER.verify_citation(parsed, repo_root_path)
+        return CitationVerdict(result.status, result.detail)
 
     return CitationVerdict(
         "error",

@@ -96,6 +96,12 @@ class ParsedCitation:
     end_line: int | None = None
     commit: str | None = None
     url: str | None = None
+    # Tool-result citations only. `tool_assertion` is captured so a detail can
+    # say it went uncompared -- never so a verifier can judge it. See
+    # `_verify_git_tool` for why comparing it is not on offer.
+    tool: str | None = None
+    tool_args: str | None = None
+    tool_assertion: str | None = None
 
 
 _PARSE_URL_PREFIXES = ("http://", "https://")
@@ -108,7 +114,9 @@ _PARSE_SYMBOL = r"[A-Za-z_][A-Za-z0-9_.:]*"
 _PARSE_GRAPH_EDGE_RE = re.compile(
     rf"^{_PARSE_SYMBOL} -> {_PARSE_SYMBOL} \(\d+ hops?\)$"
 )
-_PARSE_TOOL_RESULT_RE = re.compile(rf"^{_PARSE_SYMBOL}\(.*\) -> .+$")
+_PARSE_TOOL_RESULT_RE = re.compile(
+    rf"^(?P<tool>{_PARSE_SYMBOL})\((?P<args>.*)\) -> (?P<assertion>.+)$"
+)
 
 
 def _parse_url_target(text: str) -> str:
@@ -138,8 +146,14 @@ def parse_citation(citation: str) -> ParsedCitation:
         return ParsedCitation(kind=EvidenceKind.COMMIT, commit=commit.group("sha"))
     if _PARSE_GRAPH_EDGE_RE.match(text):
         return ParsedCitation(kind=EvidenceKind.GRAPH_EDGE)
-    if _PARSE_TOOL_RESULT_RE.match(text):
-        return ParsedCitation(kind=EvidenceKind.TOOL_RESULT)
+    tool_result = _PARSE_TOOL_RESULT_RE.match(text)
+    if tool_result:
+        return ParsedCitation(
+            kind=EvidenceKind.TOOL_RESULT,
+            tool=tool_result.group("tool"),
+            tool_args=tool_result.group("args"),
+            tool_assertion=tool_result.group("assertion"),
+        )
     position = _PARSE_FILE_POSITION_RE.match(text)
     if position:
         end = position.group("end")
@@ -163,6 +177,15 @@ def parse_citation(citation: str) -> ParsedCitation:
 class VerificationResult:
     status: str  # "ok" | "error" | "unverified"
     detail: str = ""
+
+
+# The verdict for an evidence kind no verifier covers. Shared with `validate.py`
+# so the two modules cannot drift apart on the wording, which corpus nodes quote
+# verbatim as a FACT about checker behaviour
+# (`standards/test-references.md`). Change it in one place or not at all.
+UNVERIFIABLE_KIND_DETAIL = (
+    "is a graph-edge or tool-result citation, which names no openable file"
+)
 
 
 def _verification_line_count(path: Path) -> int:
@@ -202,6 +225,126 @@ def _verify_commit(parsed: ParsedCitation, repo_root: Path) -> VerificationResul
     if result.returncode == 0:
         return VerificationResult("ok")
     return VerificationResult("error", "names a commit that does not exist in this repository")
+
+
+# Tool-result citations naming read-only git plumbing. This verifier is
+# deliberately FAIL-ONLY: it can report `error` when a cited source is gone, and
+# otherwise leaves the citation blocking as `unverified`. It never returns `ok`.
+#
+# The reason is measured, not stylistic. Across the corpus's 80 `git_ls_tree` /
+# `git_show` citations, only ONE asserted result is a machine-comparable list.
+# 41 carry negations ("no layers/ directory present"), 30 are partial-list
+# hedges ("includes ..."), 33 use globs (`schema/**`), 36 append provenance
+# ("run 2026-08-27"). A strict comparator would fail ~79 true citations; a
+# lenient one would pass vacuously on every "includes" and could not evaluate a
+# negation at all. Neither earns a pass, so neither is offered.
+#
+# What IS checkable is whether the cited source still resolves, and that has
+# immediate teeth: 10 of the 14 distinct refs cited across the corpus name
+# task branches deleted after their PRs merged.
+_GIT_TOOL_NAMES = {"git_ls_tree", "git.ls_tree", "git_show"}
+
+# Refused before any process is spawned. Corpus prose is the input here, so a
+# citation is untrusted text; these never appear in a legitimate ref or path
+# (measured: 0 occurrences across all 80 citations).
+_GIT_ARG_SHELL_METACHARACTERS = (";", "$(", "`", "|", "&", "\n", "\r", ">", "<")
+
+_GIT_KWARG_RE = re.compile(r"(?:^|,)\s*(?P<key>ref|path|commit)\s*=\s*(?P<value>[^,]+)")
+
+
+def _strip_argument_quotes(value: str) -> str:
+    return value.strip().strip("'\"").strip()
+
+
+def _parse_git_tool_arguments(args: str) -> tuple[str, str] | None:
+    """Reduce a citation's argument text to a `(ref, path)` pair, or `None`.
+
+    Three shapes occur in the corpus and all three are accepted: keyword
+    (`ref=..., path=...`, quoted or not), `git_show`'s combined
+    `'<sha>:<path>'`, and bare positional. A third argument is ignored -- it is
+    always a human annotation ("run 2026-08-27"), never an argument git takes.
+    """
+    text = args.strip()
+    if not text:
+        return None
+
+    keywords = {
+        match.group("key"): _strip_argument_quotes(match.group("value"))
+        for match in _GIT_KWARG_RE.finditer(text)
+    }
+    if keywords:
+        ref = keywords.get("ref") or keywords.get("commit")
+        path = keywords.get("path")
+        if ref and path:
+            return (ref, path)
+        return None
+
+    fields = [_strip_argument_quotes(field) for field in text.split(",")]
+    fields = [field for field in fields if field]
+    if len(fields) == 1 and ":" in fields[0]:
+        ref, _, path = fields[0].partition(":")
+        if ref and path:
+            return (ref, path)
+        return None
+    if len(fields) >= 2 and fields[0] and fields[1]:
+        return (fields[0], fields[1])
+    return None
+
+
+def _git_object_exists(repo_root: Path, revision: str) -> bool:
+    """Resolve a revision through git plumbing, as an argument list.
+
+    Never a shell string, and never with the citation's text in command
+    position -- the value only ever lands in an argument slot after the
+    metacharacter and option-shape guards in `_verify_git_tool` have passed.
+    """
+    result = subprocess.run(
+        ["git", "rev-parse", "--verify", "--quiet", revision],
+        cwd=repo_root,
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+        check=False,
+    )
+    return result.returncode == 0
+
+
+def _verify_git_tool(parsed: ParsedCitation, repo_root: Path) -> VerificationResult:
+    assert parsed.tool_args is not None
+    if any(token in parsed.tool_args for token in _GIT_ARG_SHELL_METACHARACTERS):
+        return VerificationResult(
+            "unverified",
+            "names read-only git plumbing but its arguments contain a shell "
+            "metacharacter, so it was not replayed",
+        )
+    arguments = _parse_git_tool_arguments(parsed.tool_args)
+    if arguments is None:
+        return VerificationResult(
+            "unverified",
+            "names read-only git plumbing but its arguments could not be parsed "
+            "into a ref and a path, so it was not replayed",
+        )
+    ref, path = arguments
+    if ref.startswith("-") or path.startswith("-"):
+        return VerificationResult(
+            "unverified",
+            "names read-only git plumbing but an argument is option-shaped, so "
+            "it was not replayed",
+        )
+    if not _git_object_exists(repo_root, f"{ref}^{{commit}}"):
+        return VerificationResult(
+            "error",
+            "cites a git ref that no longer exists in this repository",
+        )
+    if not _git_object_exists(repo_root, f"{ref}:{path}"):
+        return VerificationResult(
+            "error",
+            "cites a path that does not exist at the cited ref",
+        )
+    return VerificationResult(
+        "unverified",
+        "source is reachable at the cited ref, but the asserted result is prose "
+        "and was not compared",
+    )
 
 
 # GitHub repository URLs. `verb` decides whether the URL names a FILE (ADR-0003's
@@ -316,8 +459,10 @@ def verify_citation(
     if parsed.kind in {EvidenceKind.EXTERNAL_URL, EvidenceKind.GITHUB_URL}:
         assert parsed.url is not None
         return _verify_url(parsed.url, check_links=check_links)
+    if parsed.kind is EvidenceKind.TOOL_RESULT and parsed.tool in _GIT_TOOL_NAMES:
+        return _verify_git_tool(parsed, repo_root)
     if parsed.kind in {EvidenceKind.GRAPH_EDGE, EvidenceKind.TOOL_RESULT}:
-        return VerificationResult("unverified", "no verifier exists for this evidence kind")
+        return VerificationResult("unverified", UNVERIFIABLE_KIND_DETAIL)
     return VerificationResult("error", "no verifier exists for this evidence kind")
 
 class ProhibitedPathError(Exception):

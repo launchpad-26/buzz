@@ -16,6 +16,7 @@ import importlib.util
 import sys
 import tempfile
 import unittest
+import unittest.mock
 from pathlib import Path
 
 _EVIDENCE_PATH = Path(__file__).resolve().parent.parent / "evidence.py"
@@ -115,7 +116,159 @@ class EvidenceVerifierTest(unittest.TestCase):
         parsed = evidence.parse_citation("grep_repo('needle') -> no matches")
         result = evidence.verify_citation(parsed, root)
         self.assertEqual(result.status, "unverified")
-        self.assertIn("no verifier", result.detail)
+        self.assertEqual(result.detail, evidence.UNVERIFIABLE_KIND_DETAIL)
+
+
+class GitToolCitationParseTest(unittest.TestCase):
+    """The argument half of a tool-result citation is tractable; the asserted
+    half is prose. Parsing must expose the first without pretending about the
+    second."""
+
+    def test_captures_tool_name_arguments_and_assertion(self) -> None:
+        parsed = evidence.parse_citation(
+            "git_ls_tree(ref='origin/launchpad', path='launchpad/docs/corpus') "
+            "-> AGENTS.md, README.md"
+        )
+        self.assertEqual(parsed.kind, evidence.EvidenceKind.TOOL_RESULT)
+        self.assertEqual(parsed.tool, "git_ls_tree")
+        self.assertEqual(parsed.tool_assertion, "AGENTS.md, README.md")
+
+    def test_parses_keyword_argument_form(self) -> None:
+        args = evidence._parse_git_tool_arguments(
+            "ref='origin/launchpad', path='launchpad/docs/corpus'"
+        )
+        self.assertEqual(args, ("origin/launchpad", "launchpad/docs/corpus"))
+
+    def test_parses_unquoted_keyword_argument_form(self) -> None:
+        args = evidence._parse_git_tool_arguments(
+            "ref=origin/launchpad, path=launchpad/docs/corpus"
+        )
+        self.assertEqual(args, ("origin/launchpad", "launchpad/docs/corpus"))
+
+    def test_parses_positional_form(self) -> None:
+        args = evidence._parse_git_tool_arguments(
+            "origin/launchpad, launchpad/docs/corpus"
+        )
+        self.assertEqual(args, ("origin/launchpad", "launchpad/docs/corpus"))
+
+    def test_parses_git_show_combined_ref_colon_path_form(self) -> None:
+        args = evidence._parse_git_tool_arguments(
+            "'68cbb95295d1c76809b5f1595411bbe87d5deede:launchpad/docs/corpus/x.md'"
+        )
+        self.assertEqual(
+            args,
+            (
+                "68cbb95295d1c76809b5f1595411bbe87d5deede",
+                "launchpad/docs/corpus/x.md",
+            ),
+        )
+
+    def test_ignores_a_trailing_annotation_argument(self) -> None:
+        args = evidence._parse_git_tool_arguments(
+            "origin/launchpad, 'launchpad/docs/corpus', run 2026-08-27"
+        )
+        self.assertEqual(args, ("origin/launchpad", "launchpad/docs/corpus"))
+
+    def test_unparseable_arguments_return_none(self) -> None:
+        self.assertIsNone(evidence._parse_git_tool_arguments(""))
+
+
+class GitToolCitationVerifierTest(unittest.TestCase):
+    """DECISION-1: this verifier is fail-only. It may report `error` when a
+    cited source is gone, and otherwise leaves the citation blocking. It never
+    returns `ok`, because the asserted result is prose nothing compared."""
+
+    REPO_ROOT = Path(__file__).resolve().parents[4]
+
+    def _verify(self, citation: str) -> evidence.VerificationResult:
+        return evidence.verify_citation(
+            evidence.parse_citation(citation), self.REPO_ROOT
+        )
+
+    def test_missing_ref_is_an_error(self) -> None:
+        result = self._verify(
+            "git_ls_tree(ref='origin/task/0000-branch-deleted-long-ago', "
+            "path='launchpad/docs/corpus') -> AGENTS.md"
+        )
+        self.assertEqual(result.status, "error")
+        self.assertIn("no longer exists", result.detail)
+
+    def test_missing_path_at_a_live_ref_is_an_error(self) -> None:
+        result = self._verify(
+            "git_ls_tree(ref='HEAD', path='launchpad/docs/corpus/no-such-dir') "
+            "-> something"
+        )
+        self.assertEqual(result.status, "error")
+        self.assertIn("does not exist at the cited ref", result.detail)
+
+    def test_reachable_source_stays_blocking_with_a_specific_detail(self) -> None:
+        result = self._verify(
+            "git_ls_tree(ref='HEAD', path='launchpad/docs/corpus') -> AGENTS.md"
+        )
+        self.assertEqual(result.status, "unverified")
+        self.assertIn("was not compared", result.detail)
+        self.assertNotIn("no verifier exists", result.detail)
+
+    def test_shell_metacharacters_are_refused_without_spawning_a_process(self) -> None:
+        for hostile in (
+            "git_ls_tree(ref='HEAD; rm -rf /', path='x') -> y",
+            "git_ls_tree(ref='$(whoami)', path='x') -> y",
+            "git_ls_tree(ref='`id`', path='x') -> y",
+            "git_ls_tree(ref='HEAD | cat', path='x') -> y",
+        ):
+            with self.subTest(citation=hostile):
+                with unittest.mock.patch.object(
+                    evidence.subprocess, "run", side_effect=AssertionError("spawned")
+                ):
+                    result = self._verify(hostile)
+                self.assertEqual(result.status, "unverified")
+                self.assertIn("shell metacharacter", result.detail)
+
+    def test_option_shaped_argument_is_refused_without_spawning_a_process(self) -> None:
+        with unittest.mock.patch.object(
+            evidence.subprocess, "run", side_effect=AssertionError("spawned")
+        ):
+            result = self._verify(
+                "git_ls_tree(ref='--upload-pack=payload', path='x') -> y"
+            )
+        self.assertEqual(result.status, "unverified")
+        self.assertIn("option", result.detail)
+
+    def test_unparseable_arguments_stay_blocking_without_spawning_a_process(self) -> None:
+        with unittest.mock.patch.object(
+            evidence.subprocess, "run", side_effect=AssertionError("spawned")
+        ):
+            result = self._verify("git_ls_tree() -> nothing in particular")
+        self.assertEqual(result.status, "unverified")
+        self.assertIn("could not be parsed", result.detail)
+
+    def test_no_input_ever_verifies_ok(self) -> None:
+        """The load-bearing guarantee of DECISION-1."""
+        for citation in (
+            "git_ls_tree(ref='HEAD', path='launchpad/docs/corpus') -> AGENTS.md",
+            "git_ls_tree(ref='HEAD', path='nope') -> AGENTS.md",
+            "git_ls_tree(ref='origin/task/0000-gone', path='x') -> y",
+            "git_show(ref='HEAD', path='launchpad/docs/corpus/AGENTS.md') -> heading",
+            "git_ls_tree(HEAD, launchpad/docs/corpus) -> AGENTS.md",
+            "git_ls_tree() -> nothing",
+            "git_ls_tree(ref='$(id)', path='x') -> y",
+        ):
+            with self.subTest(citation=citation):
+                self.assertNotEqual(self._verify(citation).status, "ok")
+
+    def test_a_true_assertion_and_a_false_one_are_indistinguishable(self) -> None:
+        """Not a gap — the documented consequence of not comparing prose. If
+        this ever starts failing, the verifier began judging assertions and
+        DECISION-1 needs revisiting."""
+        truthful = self._verify(
+            "git_ls_tree(ref='HEAD', path='launchpad/docs/corpus') -> AGENTS.md"
+        )
+        false = self._verify(
+            "git_ls_tree(ref='HEAD', path='launchpad/docs/corpus') "
+            "-> nothing whatsoever is present here"
+        )
+        self.assertEqual(truthful.status, false.status)
+        self.assertEqual(truthful.detail, false.detail)
 
 
 class CredentialLikePathTest(unittest.TestCase):
