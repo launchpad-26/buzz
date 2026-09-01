@@ -783,7 +783,6 @@ def _classify_citation(
         text = link.group("target")
 
     parsed = _EVIDENCE_PARSER.parse_citation(text)
-
     if parsed.kind in (
         _EVIDENCE_PARSER.EvidenceKind.GITHUB_URL,
         _EVIDENCE_PARSER.EvidenceKind.EXTERNAL_URL,
@@ -791,59 +790,44 @@ def _classify_citation(
         return _classify_url(text, check_links=check_links)
 
     if parsed.kind in (
+        _EVIDENCE_PARSER.EvidenceKind.LOCAL_FILE_LINE,
+        _EVIDENCE_PARSER.EvidenceKind.LOCAL_FILE_RANGE,
+    ):
+        if parsed.start_line is None or parsed.end_line is None:
+            return CitationVerdict("error", "carries an incomplete line position")
+        if parsed.start_line < 1 or parsed.end_line < parsed.start_line:
+            return CitationVerdict("error", "carries a malformed line position")
+
+    if parsed.kind in (
+        _EVIDENCE_PARSER.EvidenceKind.LOCAL_FILE,
+        _EVIDENCE_PARSER.EvidenceKind.LOCAL_FILE_LINE,
+        _EVIDENCE_PARSER.EvidenceKind.LOCAL_FILE_RANGE,
         _EVIDENCE_PARSER.EvidenceKind.COMMIT,
+    ):
+        result = _EVIDENCE_PARSER.verify_citation(parsed, repo_root_path)
+        return CitationVerdict(result.status, result.detail)
+
+    if parsed.kind in (
         _EVIDENCE_PARSER.EvidenceKind.GRAPH_EDGE,
         _EVIDENCE_PARSER.EvidenceKind.TOOL_RESULT,
     ):
-        # Defence in depth: the shape checks above are what stop a path being
-        # laundered into the non-fatal channel, and the blocklist is a second,
-        # independent reason the same laundering fails. Two review rounds have now
-        # found a way to satisfy one of these shapes with hostile content, so the
-        # cheaper check runs too rather than trusting the regex alone.
         if _contains_prohibited_reference(text):
             return CitationVerdict(
                 "error", "matches a prohibited credential-like pattern"
             )
-        if parsed.kind == _EVIDENCE_PARSER.EvidenceKind.COMMIT:
-            return _classify_commit_reference(text, repo_root_path)
         return CitationVerdict(
             "unverified",
             "is a graph-edge or tool-result citation, which names no openable file",
         )
 
-    position = _FILE_POSITION_RE.match(text)
-    if position:
-        start = int(position.group("start"))
-        end = position.group("end")
-        # A line citation that points beyond the file is no better than a missing
-        # file citation: the claimed evidence location does not exist.
-        if start < 1 or (end is not None and int(end) < start):
-            return CitationVerdict("error", "carries a malformed line position")
-        return _classify_repo_position(
-            position.group("path"), int(end) if end is not None else start, repo_root_path
-        )
-
-    if any(character.isspace() for character in text):
-        return CitationVerdict(
-            "error",
-            "matches none of CONTRACT.md's six supported citation forms",
-        )
-
-    return _classify_repo_path(text, repo_root_path)
-
-
+    return CitationVerdict(
+        "error",
+        "matches none of CONTRACT.md's six supported citation forms",
+    )
 def find_citation_problems(
     nodes: list[LoadedNode], repo_root_path: Path, *, check_links: bool = False
 ) -> tuple[list[str], list[str]]:
-    """Classify every evidence citation; return (errors, unverified).
-
-    Citations are located by position -- "evidence entry 2, citation 1" -- rather
-    than by quoting them, so an author can find the offender without this validator
-    ever printing a value it was asked to reject.
-
-    Nodes with `node.error` already set are skipped -- see
-    find_unresolved_relationship_targets's docstring for why.
-    """
+    """Classify every evidence citation; return (errors, unverified)."""
     errors: list[str] = []
     unverified: list[str] = []
     for node in nodes:
