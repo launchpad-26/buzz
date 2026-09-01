@@ -707,8 +707,11 @@ def _verify_url(url: str, *, check_links: bool) -> VerificationResult:
                 "error", "is pinned but names no file within the repository"
             )
     if not check_links:
+        # `deferred`, not `unverified`: this URL satisfied every syntax rule and the
+        # only thing left is a fetch this mode does not perform. Blocking on it made
+        # the offline stage impossible to pass while any URL citation existed.
         return VerificationResult(
-            "unverified", "requires --check-links to verify reachable content"
+            "deferred", "requires --check-links to verify reachable content"
         )
     if not _url_resolves(target):
         return VerificationResult("error", "does not resolve to reachable content")

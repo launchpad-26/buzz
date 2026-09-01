@@ -91,10 +91,20 @@ class ValidationReport:
     error, and so is a generated artifact whose provenance cannot be established
     (see find_ownership_violations) -- an earlier revision of that check routed it
     here, which a cross-model review-final pass correctly called a fail-open.
+
+    `deferred` is a third channel for a citation this MODE cannot check but another
+    one can: a syntactically valid URL on a run without `--check-links`. It is
+    reported and does not block. That distinction is load-bearing -- routing these
+    through `unverified` made the offline stage impossible to pass by construction,
+    since every URL citation in the corpus blocked it no matter how correct the
+    corpus was, and a check that cannot go green teaches everyone to ignore it.
+    Nothing escapes: CI runs the link stage too, and there these become `ok` or
+    `error`. Deferred is "not checked HERE", never "not checkable".
     """
 
     errors: list[str] = field(default_factory=list)
     unverified: list[str] = field(default_factory=list)
+    deferred: list[str] = field(default_factory=list)
 
 
 # Every message names its node through this helper, and the guarantee is about the
@@ -670,10 +680,11 @@ def _classify_citation(
     )
 def find_citation_problems(
     nodes: list[LoadedNode], repo_root_path: Path, *, check_links: bool = False
-) -> tuple[list[str], list[str]]:
-    """Classify every evidence citation; return (errors, unverified)."""
+) -> tuple[list[str], list[str], list[str]]:
+    """Classify every evidence citation; return (errors, unverified, deferred)."""
     errors: list[str] = []
     unverified: list[str] = []
+    deferred: list[str] = []
     for node in nodes:
         if node.error:
             continue
@@ -694,9 +705,11 @@ def find_citation_problems(
                 )
                 if verdict.status == "error":
                     errors.append(message)
+                elif verdict.status == "deferred":
+                    deferred.append(message)
                 else:
                     unverified.append(message)
-    return errors, unverified
+    return errors, unverified, deferred
 
 
 def find_non_finite_confidence(nodes: list[LoadedNode]) -> list[str]:
@@ -786,9 +799,12 @@ def validate_corpus(corpus_root: Path, *, check_links: bool = False) -> Validati
     report.errors.extend(find_unresolved_relationship_targets(nodes))
     report.errors.extend(find_non_finite_confidence(nodes))
 
-    citation_errors, citation_unverified = find_citation_problems(nodes, root, check_links=check_links)
+    citation_errors, citation_unverified, citation_deferred = find_citation_problems(
+        nodes, root, check_links=check_links
+    )
     report.errors.extend(citation_errors)
     report.unverified.extend(citation_unverified)
+    report.deferred.extend(citation_deferred)
 
     report.errors.extend(find_non_canonical_nodes(corpus_root))
     report.errors.extend(find_ownership_violations(corpus_root))
@@ -814,8 +830,20 @@ def main(argv: list[str] | None = None) -> int:
         print(f"FAIL  corpus root does not exist: {exc}", file=sys.stderr)
         return 1
 
+    for notice in report.deferred:
+        print(f"DEFERRED  {notice}", file=sys.stderr)
     for notice in report.unverified:
         print(f"UNVERIFIED  {notice}", file=sys.stderr)
+
+    # Deferred citations are announced even on a clean run, so nobody reads a
+    # structural PASS as "every citation was checked". They are decided by the
+    # link stage, which CI always runs.
+    if report.deferred:
+        print(
+            f"NOTE  {len(report.deferred)} citation(s) deferred to --check-links; "
+            "this run did not check them",
+            file=sys.stderr,
+        )
 
     if report.errors or report.unverified:
         for error in report.errors:

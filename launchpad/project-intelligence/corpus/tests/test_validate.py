@@ -223,7 +223,7 @@ class MalformedEntryDoesNotCrashTest(unittest.TestCase):
             data={"evidence": ["just a bare string, not an object"]},
             error="already reported by schema validation",
         )
-        errors, unverified = validate.find_citation_problems(
+        errors, unverified, deferred = validate.find_citation_problems(
             [node], validate.repo_root()
         )
         self.assertEqual(errors, [])
@@ -247,7 +247,7 @@ class AbsolutePathCitationTest(unittest.TestCase):
     pass found this by citing a path that genuinely exists on the host."""
 
     def test_absolute_path_citation_rejected(self) -> None:
-        errors, _ = _classify_one("/etc/passwd")
+        errors, _, _ = _classify_one("/etc/passwd")
         self.assertEqual(len(errors), 1)
         self.assertIn("citation-check", errors[0])
         self.assertIn("repo-relative", errors[0])
@@ -255,7 +255,7 @@ class AbsolutePathCitationTest(unittest.TestCase):
 
 def _classify_one(
     citation: str, *, check_links: bool = False
-) -> tuple[list[str], list[str]]:
+) -> tuple[list[str], list[str], list[str]]:
     """Run one citation through the real find_citation_problems path.
 
     Deliberately not calling _classify_citation directly: the message-building,
@@ -318,17 +318,21 @@ class UrlCitationTest(unittest.TestCase):
     request cannot tell a real primary-source citation from a typo.
     """
 
-    def test_external_url_is_unverified_without_check_links(self) -> None:
-        errors, unverified = _classify_one("https://example.com/spec")
+    def test_external_url_is_deferred_not_unverified_without_check_links(self) -> None:
+        """A syntactically valid URL is deferred to the link stage, not blocked
+        here. Routing it through `unverified` made the offline stage impossible
+        to pass while any URL citation existed."""
+        errors, unverified, deferred = _classify_one("https://example.com/spec")
         self.assertEqual(errors, [])
-        self.assertEqual(len(unverified), 1)
-        self.assertIn("requires --check-links", unverified[0])
+        self.assertEqual(unverified, [])
+        self.assertEqual(len(deferred), 1)
+        self.assertIn("requires --check-links", deferred[0])
 
     def test_external_url_accepted_when_it_resolves_even_if_path_looks_credential_like(self) -> None:
         # URL routing still runs before the credential blocklist: a public URL path
         # can contain credential-looking prose without being a local secret path.
         with _LocalCitationServer() as base_url:
-            errors, unverified = _classify_one(
+            errors, unverified, deferred = _classify_one(
                 f"{base_url}/posts/id_rsa-security-best-practices", check_links=True
             )
         self.assertEqual(errors, [])
@@ -336,29 +340,30 @@ class UrlCitationTest(unittest.TestCase):
 
     def test_external_url_that_does_not_resolve_is_rejected(self) -> None:
         with _LocalCitationServer() as base_url:
-            errors, unverified = _classify_one(f"{base_url}/missing", check_links=True)
+            errors, unverified, deferred = _classify_one(f"{base_url}/missing", check_links=True)
         self.assertEqual(len(errors), 1)
         self.assertEqual(unverified, [])
         self.assertIn("does not resolve", errors[0])
 
     def test_external_url_with_trailing_metadata_checks_url_target(self) -> None:
         with _LocalCitationServer() as base_url:
-            errors, unverified = _classify_one(
+            errors, unverified, deferred = _classify_one(
                 f"{base_url}/ok, ms.date 2026-01-01", check_links=True
             )
         self.assertEqual(errors, [])
         self.assertEqual(unverified, [])
 
     def test_commit_pinned_github_url_requires_check_links_to_verify_target(self) -> None:
-        errors, unverified = _classify_one(
+        errors, unverified, deferred = _classify_one(
             "https://github.com/launchpad-26/buzz/blob/"
             "69baedd197e5d35c9ae4736115789da59929e288/.env.example"
         )
         self.assertEqual(errors, [])
-        self.assertEqual(len(unverified), 1)
+        self.assertEqual(unverified, [])
+        self.assertEqual(len(deferred), 1)
 
     def test_commit_pinned_github_url_accepted_with_check_links(self) -> None:
-        errors, unverified = _classify_one(
+        errors, unverified, deferred = _classify_one(
             "https://github.com/launchpad-26/buzz/blob/"
             "69baedd197e5d35c9ae4736115789da59929e288/.env.example",
             check_links=True,
@@ -367,7 +372,7 @@ class UrlCitationTest(unittest.TestCase):
         self.assertEqual(unverified, [])
 
     def test_commit_pinned_raw_github_url_accepted_with_check_links(self) -> None:
-        errors, unverified = _classify_one(
+        errors, unverified, deferred = _classify_one(
             "https://raw.githubusercontent.com/launchpad-26/buzz/"
             "69baedd197e5d35c9ae4736115789da59929e288/Justfile",
             check_links=True,
@@ -376,7 +381,7 @@ class UrlCitationTest(unittest.TestCase):
         self.assertEqual(unverified, [])
 
     def test_blob_main_url_rejected(self) -> None:
-        errors, _ = _classify_one(
+        errors, _, _ = _classify_one(
             "https://github.com/launchpad-26/buzz/blob/main/.env.example"
         )
         self.assertEqual(len(errors), 1)
@@ -386,7 +391,7 @@ class UrlCitationTest(unittest.TestCase):
         # A tag is movable, and a short SHA is ambiguous. ADR-0003 says full SHA.
         for ref in ("v1.2.3", "69baedd"):
             with self.subTest(ref=ref):
-                errors, _ = _classify_one(
+                errors, _, _ = _classify_one(
                     f"https://github.com/launchpad-26/buzz/blob/{ref}/Justfile"
                 )
                 self.assertEqual(len(errors), 1)
@@ -398,7 +403,7 @@ class UrlCitationTest(unittest.TestCase):
         # mutable blob link reopened the whole finding under one changed character
         # -- it fell past both patterns and came back a non-fatal external URL. An
         # independent review-code pass found it.
-        errors, unverified = _classify_one(
+        errors, unverified, deferred = _classify_one(
             "http://github.com/launchpad-26/buzz/blob/main/.env.example"
         )
         self.assertEqual(len(errors), 1)
@@ -414,7 +419,7 @@ class UrlCitationTest(unittest.TestCase):
         sha = "69baedd197e5d35c9ae4736115789da59929e288"
         for verb in ("tree", "blame", "commits", "edit"):
             with self.subTest(verb=verb):
-                errors, unverified = _classify_one(
+                errors, unverified, deferred = _classify_one(
                     f"https://github.com/launchpad-26/buzz/{verb}/{sha}/Justfile"
                 )
                 self.assertEqual(len(errors), 1)
@@ -432,7 +437,7 @@ class UrlCitationTest(unittest.TestCase):
             "https://raw.githubusercontent.com/launchpad-26/buzz/main",
         ):
             with self.subTest(url=url):
-                errors, unverified = _classify_one(url)
+                errors, unverified, deferred = _classify_one(url)
                 self.assertEqual(len(errors), 1)
                 self.assertEqual(unverified, [])
                 self.assertIn("mutable ref", errors[0])
@@ -449,7 +454,7 @@ class UrlCitationTest(unittest.TestCase):
             f"https://raw.githubusercontent.com/launchpad-26/buzz/{sha}",
         ):
             with self.subTest(url=url):
-                errors, unverified = _classify_one(url)
+                errors, unverified, deferred = _classify_one(url)
                 self.assertEqual(len(errors), 1)
                 self.assertEqual(unverified, [])
                 self.assertIn("names no file", errors[0])
@@ -457,7 +462,7 @@ class UrlCitationTest(unittest.TestCase):
     def test_mutable_non_file_view_fails_on_the_pin_first(self) -> None:
         # `blame/main` is wrong twice over; it must not escape by being wrong in a
         # way the file-verb check alone would not catch.
-        errors, unverified = _classify_one(
+        errors, unverified, deferred = _classify_one(
             "https://github.com/launchpad-26/buzz/blame/main/Justfile"
         )
         self.assertEqual(len(errors), 1)
@@ -471,12 +476,12 @@ class UrlCitationTest(unittest.TestCase):
             "[.env.example](https://github.com/launchpad-26/buzz/blob/"
             "69baedd197e5d35c9ae4736115789da59929e288/.env.example)"
         )
-        errors, unverified = _classify_one(pinned, check_links=True)
+        errors, unverified, deferred = _classify_one(pinned, check_links=True)
         self.assertEqual(errors, [])
         self.assertEqual(unverified, [])
 
         mutable = "[.env.example](https://github.com/launchpad-26/buzz/blob/main/.env.example)"
-        errors, _ = _classify_one(mutable)
+        errors, _, _ = _classify_one(mutable)
         self.assertEqual(len(errors), 1)
         self.assertIn("mutable ref", errors[0])
 
@@ -491,14 +496,14 @@ class CitationFormTest(unittest.TestCase):
     """
 
     def test_file_range_citation_accepted(self) -> None:
-        errors, unverified = _classify_one(
+        errors, unverified, deferred = _classify_one(
             "launchpad/project-intelligence/corpus/validate.py:1-5"
         )
         self.assertEqual(errors, [])
         self.assertEqual(unverified, [])
 
     def test_file_line_citation_rejects_out_of_range_line(self) -> None:
-        errors, unverified = _classify_one(
+        errors, unverified, deferred = _classify_one(
             "launchpad/project-intelligence/corpus/validate.py:1077"
         )
         self.assertEqual(len(errors), 1)
@@ -506,19 +511,19 @@ class CitationFormTest(unittest.TestCase):
         self.assertIn("line position exceeds", errors[0])
 
     def test_file_line_citation_accepts_existing_line(self) -> None:
-        errors, unverified = _classify_one(
+        errors, unverified, deferred = _classify_one(
             "launchpad/project-intelligence/corpus/validate.py:1"
         )
         self.assertEqual(errors, [])
         self.assertEqual(unverified, [])
 
     def test_bare_path_citation_accepted(self) -> None:
-        errors, unverified = _classify_one("Justfile")
+        errors, unverified, deferred = _classify_one("Justfile")
         self.assertEqual(errors, [])
         self.assertEqual(unverified, [])
 
     def test_graph_edge_reported_unverified_not_missing(self) -> None:
-        errors, unverified = _classify_one(
+        errors, unverified, deferred = _classify_one(
             "is_shared_gated_kind -> is_unshared_gated_event (1 hop)"
         )
         self.assertEqual(errors, [])
@@ -526,21 +531,21 @@ class CitationFormTest(unittest.TestCase):
         self.assertIn("names no openable file", unverified[0])
 
     def test_tool_result_reported_unverified_not_missing(self) -> None:
-        errors, unverified = _classify_one(
+        errors, unverified, deferred = _classify_one(
             "find_references('x', crate='buzz-core') -> no callers in this crate"
         )
         self.assertEqual(errors, [])
         self.assertEqual(len(unverified), 1)
 
     def test_existing_commit_reference_is_verified_locally(self) -> None:
-        errors, unverified = _classify_one(
+        errors, unverified, deferred = _classify_one(
             "commit 69baedd197e5d35c9ae4736115789da59929e288 (2026-08-25) by Serina"
         )
         self.assertEqual(errors, [])
         self.assertEqual(unverified, [])
 
     def test_missing_commit_reference_is_rejected(self) -> None:
-        errors, unverified = _classify_one(
+        errors, unverified, deferred = _classify_one(
             "commit 0000000000000000000000000000000000000000 (2026-08-25) by Serina"
         )
         self.assertEqual(len(errors), 1)
@@ -551,7 +556,7 @@ class CitationFormTest(unittest.TestCase):
         # The unverified channel is for RECOGNISED-but-uncheckable forms only.
         # Free prose matching no form at all must fail, or the channel becomes a
         # way to launder anything past validation.
-        errors, unverified = _classify_one("I read this somewhere once, honest")
+        errors, unverified, deferred = _classify_one("I read this somewhere once, honest")
         self.assertEqual(len(errors), 1)
         self.assertEqual(unverified, [])
         self.assertIn("six supported citation forms", errors[0])
@@ -569,7 +574,7 @@ class CitationFormTest(unittest.TestCase):
             "not_a_call -> result",
         ):
             with self.subTest(citation=citation):
-                errors, unverified = _classify_one(citation)
+                errors, unverified, deferred = _classify_one(citation)
                 self.assertEqual(len(errors), 1)
                 self.assertEqual(unverified, [])
                 self.assertIn("six supported citation forms", errors[0])
@@ -586,7 +591,7 @@ class CitationFormTest(unittest.TestCase):
             "some/path -> other/path (2 hops)",
         ):
             with self.subTest(citation=citation):
-                errors, unverified = _classify_one(citation)
+                errors, unverified, deferred = _classify_one(citation)
                 self.assertEqual(len(errors), 1)
                 self.assertEqual(unverified, [])
                 self.assertNotIn("id_rsa", errors[0])
@@ -596,7 +601,7 @@ class CitationFormTest(unittest.TestCase):
         # a third cross-model review-final pass demonstrated: it MISSED a path
         # buried in a tool result's arguments, because the string's basename is the
         # trailing prose. The blocklist runs per token now.
-        errors, unverified = _classify_one(
+        errors, unverified, deferred = _classify_one(
             "find_references('private/path/.env', crate='buzz-core') -> no callers"
         )
         self.assertEqual(len(errors), 1)
@@ -609,7 +614,7 @@ class CitationFormTest(unittest.TestCase):
         # exempt, and testing the whole string rejected a legitimate tool result
         # that merely mentioned it, because the exemption depends on reading the
         # token as a filename rather than as the suffix of a sentence.
-        errors, unverified = _classify_one(
+        errors, unverified, deferred = _classify_one(
             "find_references('.env.example', crate='buzz-core') -> no callers"
         )
         self.assertEqual(errors, [])
@@ -620,14 +625,14 @@ class CitationFormTest(unittest.TestCase):
         # shapes with hostile content, so the blocklist runs as a second,
         # independent reason the same laundering fails -- `id_rsa` alone is a valid
         # identifier, so the shape check cannot catch this one.
-        errors, unverified = _classify_one("id_rsa -> target (1 hop)")
+        errors, unverified, deferred = _classify_one("id_rsa -> target (1 hop)")
         self.assertEqual(len(errors), 1)
         self.assertEqual(unverified, [])
         self.assertIn("prohibited", errors[0])
         self.assertNotIn("id_rsa", errors[0])
 
     def test_malformed_line_position_rejected(self) -> None:
-        errors, _ = _classify_one(
+        errors, _, _ = _classify_one(
             "launchpad/project-intelligence/corpus/validate.py:9-2"
         )
         self.assertEqual(len(errors), 1)
@@ -638,23 +643,23 @@ class CitationFormTest(unittest.TestCase):
         # review-tests pass found untested: dropping it, or weakening it to
         # `start < 0`, would have left every other test passing. Both sides of the
         # boundary are pinned so neither direction can drift.
-        errors, _ = _classify_one("Justfile:0")
+        errors, _, _ = _classify_one("Justfile:0")
         self.assertEqual(len(errors), 1)
         self.assertIn("malformed line position", errors[0])
 
-        errors, unverified = _classify_one("Justfile:1")
+        errors, unverified, deferred = _classify_one("Justfile:1")
         self.assertEqual(errors, [])
         self.assertEqual(unverified, [])
 
     def test_empty_citation_rejected(self) -> None:
-        errors, unverified = _classify_one("   ")
+        errors, unverified, deferred = _classify_one("   ")
         self.assertEqual(len(errors), 1)
         self.assertEqual(unverified, [])
 
     def test_positional_citation_still_runs_the_credential_blocklist(self) -> None:
         # Parsing the position off must not become a way to smuggle a prohibited
         # path past the blocklist -- the extracted path is what gets checked.
-        errors, _ = _classify_one("some/path/id_rsa:12")
+        errors, _, _ = _classify_one("some/path/id_rsa:12")
         self.assertEqual(len(errors), 1)
         self.assertIn("prohibited", errors[0])
         self.assertNotIn("id_rsa", errors[0])
@@ -681,12 +686,12 @@ class CitationContainmentTest(unittest.TestCase):
         # the existence check, so this test's outcome does not depend on that file
         # being present -- an independent review-tests pass flagged the earlier
         # wording here as overstating a host dependency the code does not have.
-        errors, _ = _classify_one("../../../../../../../../etc/passwd")
+        errors, _, _ = _classify_one("../../../../../../../../etc/passwd")
         self.assertEqual(len(errors), 1)
         self.assertIn("resolves outside the repository", errors[0])
 
     def test_directory_citation_rejected(self) -> None:
-        errors, _ = _classify_one("launchpad")
+        errors, _, _ = _classify_one("launchpad")
         self.assertEqual(len(errors), 1)
         self.assertIn("does not resolve to a real file", errors[0])
 
@@ -696,11 +701,11 @@ class CitationContainmentTest(unittest.TestCase):
         # so a regression adding the resolved path "for debuggability" would leak a
         # host-filesystem location and pass every other test. An independent
         # review-tests pass found the gap.
-        errors, _ = _classify_one("../../../../../../../../etc/passwd")
+        errors, _, _ = _classify_one("../../../../../../../../etc/passwd")
         self.assertNotIn("passwd", errors[0])
         self.assertNotIn("..", errors[0])
 
-        errors, _ = _classify_one("launchpad")
+        errors, _, _ = _classify_one("launchpad")
         self.assertNotIn("launchpad/", errors[0])
 
     def test_citation_naming_an_unresolvable_symlink_reports_not_crashes(self) -> None:
@@ -712,7 +717,7 @@ class CitationContainmentTest(unittest.TestCase):
         self.assertFalse(link.exists(), "probe path must not already exist")
         link.symlink_to(link)
         try:
-            errors, _ = _classify_one("citation-loop-probe.md")
+            errors, _, _ = _classify_one("citation-loop-probe.md")
             self.assertEqual(len(errors), 1)
             self.assertIn("cannot be resolved", errors[0])
         finally:
@@ -728,7 +733,7 @@ class CitationContainmentTest(unittest.TestCase):
         self.assertFalse(link.exists(), "probe path must not already exist")
         link.symlink_to("/etc/passwd")
         try:
-            errors, _ = _classify_one("citation-symlink-probe.md")
+            errors, _, _ = _classify_one("citation-symlink-probe.md")
             self.assertEqual(len(errors), 1)
             self.assertIn("resolves outside the repository", errors[0])
         finally:
@@ -1087,14 +1092,29 @@ class UnverifiedChannelTest(unittest.TestCase):
             "# Test node\n"
         )
 
-    def test_offline_mode_is_default_and_blocks_unverified_urls(self) -> None:
+    def test_offline_mode_defers_urls_and_announces_that_it_did_not_check_them(self) -> None:
+        """The offline stage must be able to pass, or it is a check nobody can
+        ever make green. It still says loudly what it skipped, so a structural
+        PASS is never read as "every citation was checked"."""
         with tempfile.TemporaryDirectory() as tmp, _LocalCitationServer() as base_url:
             root = Path(tmp)
             self._write_single_citation_root(root, f"{base_url}/ok")
             exit_code, stdout, stderr = self._run_main(root)
+        self.assertEqual(exit_code, 0)
+        self.assertIn("DEFERRED", stderr)
+        self.assertIn("requires --check-links", stderr)
+        self.assertIn("did not check them", stderr)
+        self.assertIn("PASS", stdout)
+
+    def test_offline_mode_still_blocks_a_genuinely_unverifiable_citation(self) -> None:
+        """Deferring URLs must not have loosened the fail-closed rule for forms
+        that no mode can check."""
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            self._write_single_citation_root(root, "some_novel_tool('x') -> y")
+            exit_code, stdout, stderr = self._run_main(root)
         self.assertEqual(exit_code, 1)
         self.assertIn("UNVERIFIED", stderr)
-        self.assertIn("requires --check-links", stderr)
         self.assertNotIn("PASS", stdout)
 
     def test_check_links_mode_verifies_reachable_url_and_allows_clean_pass(self) -> None:
