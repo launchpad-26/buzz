@@ -98,11 +98,17 @@ evidence:
     entry_class: FACT
     evidence:
       - "crates/buzz-dev-mcp/Cargo.toml:1-8"
-  - statement: "buzz-dev-mcp depends on `rmcp` (workspace-pinned to version 1.1.0 with the `server`, `transport-io` and `macros` features), the Rust SDK for the externally specified Model Context Protocol, and derives the tool's JSON Schema from `ShellParams` via the `schemars` crate rather than hand-authoring or checking in a separate schema document -- so the authoritative machine-readable representation of the tool's input contract is the `ShellParams` struct definition itself, read live by any MCP client via the protocol's own `tools/list` capability."
+  - statement: "buzz-dev-mcp depends on `rmcp` (workspace-pinned to version 1.1.0 with the `server`, `transport-io` and `macros` features), the Rust SDK for the externally specified Model Context Protocol, and derives the tool's JSON Schema from `ShellParams` via the `schemars` crate rather than hand-authoring or checking in a separate schema document -- so the authoritative machine-readable representation of the tool's input contract is the `ShellParams` struct definition itself, not a hand-maintained document."
     entry_class: FACT
     evidence:
       - "Cargo.toml:136"
       - "crates/buzz-dev-mcp/src/shell.rs:119-128"
+  - statement: "MCP's own protocol design (per the `rmcp` server/macros feature set this crate depends on) exposes a tool's JSON Schema to a connected client through the protocol's standard tool-discovery exchange, so `ShellParams`'s `schemars`-derived schema is what a real MCP client would see -- this claim rests on the `rmcp` dependency and macro usage in code, not on independently reading MCP's own specification text (see Scope and omissions)."
+    entry_class: INFERENCE
+    evidence:
+      - "Cargo.toml:136"
+      - "crates/buzz-dev-mcp/src/lib.rs:1-9"
+    confidence: 0.7
   - statement: "Each `shell` tool call spawns an entirely independent ephemeral process with its own fresh stdout/stderr/exit-code, and nothing in `run()` sequences one call against another (no shared working state beyond the `SharedState`'s fixed `cwd`, the shim, and the monotonically incrementing `next_call_id` used only to name artifact files) -- so the interface offers no ordering or idempotency guarantee across calls, only within a single call's own process lifetime."
     entry_class: INFERENCE
     evidence:
