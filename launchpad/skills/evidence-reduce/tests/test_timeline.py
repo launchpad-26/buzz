@@ -132,9 +132,55 @@ class TimezoneTests(unittest.TestCase):
         data = json.loads(result.stdout)
         self.assertTrue(data[0]['timestamp'].endswith('-07:00'))
 
+    def test_negative_offset_with_equals_form(self):
+        result = run([f"app={fixture('app.log')}", '--tz=-07:00', '--json'])
+        data = json.loads(result.stdout)
+        self.assertTrue(data[0]['timestamp'].endswith('-07:00'))
+
+    def test_positive_offset_tz(self):
+        result = run([f"app={fixture('app.log')}", '--tz', '+05:30', '--json'])
+        data = json.loads(result.stdout)
+        self.assertTrue(data[0]['timestamp'].endswith('+05:30'))
+
+    def test_compact_negative_offset_tz(self):
+        result = run([f"app={fixture('app.log')}", '--tz', '-0700', '--json'])
+        data = json.loads(result.stdout)
+        self.assertTrue(data[0]['timestamp'].endswith('-07:00'))
+
     def test_unknown_tz_is_bad_usage(self):
         result = run([f"app={fixture('app.log')}", '--tz', 'Not/AZone'])
         self.assertEqual(result.code, 2)
+
+
+class OffsetArgumentFusionTests(unittest.TestCase):
+    """fuse_offset_values only rewrites a --tz flag followed by an offset."""
+
+    def test_rewrites_negative_offset_after_tz(self):
+        self.assertEqual(
+            timeline.fuse_offset_values(['a.log', '--tz', '-07:00', '--json']),
+            ['a.log', '--tz=-07:00', '--json'],
+        )
+
+    def test_leaves_iana_name_alone(self):
+        self.assertEqual(
+            timeline.fuse_offset_values(['--tz', 'Pacific/Auckland']),
+            ['--tz', 'Pacific/Auckland'],
+        )
+
+    def test_leaves_other_flags_alone(self):
+        self.assertEqual(
+            timeline.fuse_offset_values(['--bucket', '5m', '-o', 'out.txt']),
+            ['--bucket', '5m', '-o', 'out.txt'],
+        )
+
+    def test_trailing_tz_without_value_is_untouched(self):
+        self.assertEqual(timeline.fuse_offset_values(['--tz']), ['--tz'])
+
+    def test_bare_double_dash_is_untouched(self):
+        self.assertEqual(
+            timeline.fuse_offset_values(['--', '-07:00']),
+            ['--', '-07:00'],
+        )
 
 
 class UsageAndReceiptTests(unittest.TestCase):

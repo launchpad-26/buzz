@@ -181,6 +181,34 @@ def parse_tz(raw):
     return None
 
 
+_TZ_OFFSET_ARG = re.compile(r'^[+-]\d{2}:?\d{2}$')
+
+
+def fuse_offset_values(argv):
+    """Rewrite `--tz -07:00` to `--tz=-07:00` before argparse sees it.
+
+    argparse treats any token starting with '-' as an option prefix unless it
+    matches its own negative-number pattern, which a colon-bearing UTC offset
+    does not. Without this, the standard space-separated form fails with
+    "expected one argument" and only `--tz=-07:00` works. Positive offsets and
+    IANA names are untouched, as is a bare `--tz` at the end of argv.
+    """
+    fused = []
+    i = 0
+    while i < len(argv):
+        arg = argv[i]
+        is_tz_flag = (len(arg) > 2 and arg.startswith('--')
+                      and '--tz'.startswith(arg))
+        if (is_tz_flag and i + 1 < len(argv)
+                and _TZ_OFFSET_ARG.match(argv[i + 1])):
+            fused.append(f'{arg}={argv[i + 1]}')
+            i += 2
+            continue
+        fused.append(arg)
+        i += 1
+    return fused
+
+
 def build_parser():
     p = argparse.ArgumentParser(
         prog='timeline',
@@ -232,7 +260,9 @@ def resolve_sources(raw_sources):
 
 
 def main(argv=None):
-    args = build_parser().parse_args(argv)
+    if argv is None:
+        argv = sys.argv[1:]
+    args = build_parser().parse_args(fuse_offset_values(list(argv)))
 
     bucket = None
     if args.bucket:
