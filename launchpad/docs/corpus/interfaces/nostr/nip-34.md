@@ -192,6 +192,37 @@ NIP-34 relay does not have.
   protection rules, including the `require_patch` NIP-34-patch-only mode).
   None of these three is defined by NIP-34 itself.
 
+## Examples
+
+**Valid: announce a repository, then observe its ref state.** A client signs
+and submits a `kind:30617` event built by `build_repo_announcement("myrepo",
+Some("My Repo"), None, &["https://relay/git/owner/myrepo"], None, &[])`
+(`builders.rs:845-956`) with tags `[["d","myrepo"], ["name","My Repo"],
+["clone","https://relay/git/owner/myrepo"]]`. The relay stores it, returns
+`{accepted: true, event_id: "<id>", message: ""}`, and its
+`handle_git_repo_announcement` side effect reserves the name `myrepo` for the
+submitter's pubkey and seeds an empty manifest pointer
+(`side_effects.rs:2595-2726`). The repository is now cloneable (once bound to
+a channel — see *Contract and stability*). After the first `git push`, the
+relay signs and stores its own `kind:30618` event via `build_ref_state_event`
+with tags `[["d","myrepo"], ["refs/heads/main","<oid>"], ["HEAD","ref:
+refs/heads/main"], ["p","<pusher-hex>"]]` (`manifest_event.rs:70-114`,
+pinned by its own test `emits_branches_and_tags`).
+
+**Failure: a name collision is accepted at the Nostr layer but not hosted.**
+A second client, a different pubkey, submits a `kind:30617` event with the
+same `d`-tag `myrepo`. Standard Nostr signature/scope checks pass (a valid
+signature, `Scope::ReposWrite` granted), so the relay stores the event and
+returns `{accepted: true, ...}` — but `handle_git_repo_announcement` finds
+`myrepo` already owned by the first pubkey and returns
+`Err("repo name 'myrepo' already taken by another owner")`
+(`side_effects.rs:2688-2694`), which `ingest.rs`'s side-effect dispatch only
+logs via `error!` (`ingest.rs:3200-3211`). The second client's announcement
+is a durable, valid Nostr event, but no name reservation or manifest was
+created for it — cloning `https://relay/git/other-owner/myrepo` 404s. This
+is the accepted-but-side-effect-failed seam named in *Contract and
+stability* above.
+
 ## Boundary
 
 This node does not describe:
