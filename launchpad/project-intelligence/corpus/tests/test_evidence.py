@@ -111,9 +111,9 @@ class EvidenceVerifierTest(unittest.TestCase):
         result = evidence.verify_citation(parsed, root)
         self.assertEqual(result.status, "ok")
 
-    def test_unsupported_tool_result_is_unverified(self) -> None:
+    def test_unrecognised_tool_result_is_unverified(self) -> None:
         root = Path(__file__).resolve().parents[4]
-        parsed = evidence.parse_citation("webfetch('https://example.com') -> 200 OK")
+        parsed = evidence.parse_citation("some_novel_tool('needle') -> no matches")
         result = evidence.verify_citation(parsed, root)
         self.assertEqual(result.status, "unverified")
         self.assertEqual(result.detail, evidence.UNVERIFIABLE_KIND_DETAIL)
@@ -289,6 +289,12 @@ class GrepReplayVerifierTest(unittest.TestCase):
 
     REPO_ROOT = Path(__file__).resolve().parents[4]
 
+    # Assembled at runtime so the literal never appears contiguously in this
+    # file. Written out, it would be committed into the very tree these tests
+    # grep, and every "absent pattern" case would start finding itself -- the
+    # same self-reference trap that made invariants.md cite a line that moved.
+    ABSENT = "nx" + "9f4c2" + "_absent_marker"
+
     @classmethod
     def setUpClass(cls) -> None:
         import subprocess
@@ -317,7 +323,7 @@ class GrepReplayVerifierTest(unittest.TestCase):
 
     def test_presence_claim_contradicted_by_replay_is_an_error(self) -> None:
         result = self._verify(
-            f"grep_recursive('zzz_no_such_symbol_anywhere_zzz', "
+            f"grep_recursive('{self.ABSENT}', "
             f"path='launchpad/project-intelligence/corpus', ref='{self.HEAD}') "
             f"-> 3 matches"
         )
@@ -326,7 +332,7 @@ class GrepReplayVerifierTest(unittest.TestCase):
 
     def test_agreeing_replay_still_blocks_and_never_passes(self) -> None:
         result = self._verify(
-            f"grep_recursive('zzz_no_such_symbol_anywhere_zzz', "
+            f"grep_recursive('{self.ABSENT}', "
             f"path='launchpad/project-intelligence/corpus', ref='{self.HEAD}') "
             f"-> zero matches"
         )
@@ -438,13 +444,90 @@ class GrepReplayVerifierTest(unittest.TestCase):
         """The load-bearing guarantee of DECISION-1."""
         for citation in (
             f"grep_recursive('EvidenceKind', path='launchpad', ref='{self.HEAD}') -> zero matches",
-            f"grep_recursive('zzz_absent_zzz', path='launchpad', ref='{self.HEAD}') -> zero matches",
+            f"grep_recursive('{self.ABSENT}', path='launchpad', ref='{self.HEAD}') -> zero matches",
             f"grep_recursive('x', path='no/such/dir', ref='{self.HEAD}') -> zero matches",
             "grep_recursive('x', path='launchpad') -> zero matches",
             "grep_repo('needle') -> no matches",
         ):
             with self.subTest(citation=citation):
                 self.assertNotEqual(self._verify(citation).status, "ok")
+
+
+class UnsupportedToolFamilyDetailTest(unittest.TestCase):
+    """Step 5: an unsupported family says which family it is and why, instead
+    of every tool result sharing one generic string."""
+
+    REPO_ROOT = Path(__file__).resolve().parents[4]
+
+    def _detail(self, citation: str) -> str:
+        return evidence.verify_citation(
+            evidence.parse_citation(citation), self.REPO_ROOT
+        ).detail
+
+    def test_families_are_named_distinctly(self) -> None:
+        details = {
+            self._detail("shell('ls -la') -> three entries"),
+            self._detail("webfetch('https://example.com/spec') -> 200 OK"),
+            self._detail("gh_pr_list('--state open') -> 4 open"),
+            self._detail("git_log_oneline('-n 5') -> five commits"),
+        }
+        self.assertEqual(len(details), 4, "each family needs its own reason")
+
+    def test_shell_refusal_says_why_it_is_permanent(self) -> None:
+        detail = self._detail("shell('cat /etc/passwd') -> some output")
+        self.assertIn("execute text", detail)
+        self.assertIn("none is planned", detail)
+
+    def test_a_detail_never_echoes_the_citation(self) -> None:
+        """Details print on passing runs. Citation text is untrusted document
+        prose, so a detail that interpolated it would put arbitrary content --
+        including anything credential-shaped -- into validator output."""
+        for citation, secret in (
+            ("shell('export TOKEN=hunter2seekrit') -> exported", "hunter2seekrit"),
+            ("webfetch('https://example.com/?key=abcd1234xyz') -> 200", "abcd1234xyz"),
+            ("gh_api('/repos/o/r?token=zzsecretzz') -> 200", "zzsecretzz"),
+            ("git_log('--author=nobody@example.com') -> none", "nobody@example.com"),
+            ("unknown_tool('payload_marker_9987') -> whatever", "payload_marker_9987"),
+        ):
+            with self.subTest(citation=citation):
+                self.assertNotIn(secret, self._detail(citation))
+
+    def test_every_detail_comes_from_the_fixed_constant_set(self) -> None:
+        known = {detail for _, detail in evidence._UNSUPPORTED_TOOL_FAMILIES}
+        known.add(evidence.UNVERIFIABLE_KIND_DETAIL)
+        for citation in (
+            "shell('x') -> y",
+            "webfetch('https://example.com') -> y",
+            "gh_issue_view('12') -> open",
+            "git_diff_name_only('a..b') -> two files",
+            "yaml.safe_load('config.yml') -> a mapping",
+            "path_exists('somewhere') -> true",
+        ):
+            with self.subTest(citation=citation):
+                self.assertIn(self._detail(citation), known)
+
+    def test_unrecognised_tool_keeps_the_shared_detail(self) -> None:
+        self.assertEqual(
+            self._detail("some_novel_tool('x') -> y"),
+            evidence.UNVERIFIABLE_KIND_DETAIL,
+        )
+
+    def test_naming_a_family_never_turns_it_into_a_pass(self) -> None:
+        """Step 5 improves reporting only. A better message must not become a
+        weaker verdict -- every one of these still blocks."""
+        for citation in (
+            "shell('x') -> y",
+            "webfetch('https://example.com') -> y",
+            "gh_pr_list('') -> y",
+            "git_log('') -> y",
+            "some_novel_tool('x') -> y",
+            "source_symbol -> target_symbol (1 hop)",
+        ):
+            with self.subTest(citation=citation):
+                result = evidence.verify_citation(
+                    evidence.parse_citation(citation), self.REPO_ROOT
+                )
+                self.assertEqual(result.status, "unverified")
 
 
 class CredentialLikePathTest(unittest.TestCase):

@@ -347,6 +347,53 @@ def _verify_git_tool(parsed: ParsedCitation, repo_root: Path) -> VerificationRes
     )
 
 
+# Why each remaining tool family has no verifier. Every string here is a fixed
+# constant: a detail is printed on a passing run, so it must never interpolate
+# citation text, which is untrusted document prose and could carry anything.
+# A test asserts no detail echoes its citation.
+_UNSUPPORTED_TOOL_FAMILIES = (
+    (
+        ("shell", "run_command", "run_python_check"),
+        "names an arbitrary shell command. Replaying it would execute text "
+        "taken from a corpus document, so no verifier exists and none is "
+        "planned -- cite the file or commit the command inspected instead",
+    ),
+    (
+        ("webfetch", "curl_fetch", "http_get", "fetch"),
+        "names a network fetch. Its result is remote content that changes "
+        "independently of this repository, so a replay could not confirm the "
+        "state cited -- cite the URL form instead, which --check-links checks",
+    ),
+    (
+        ("github_api", "gh"),
+        "names GitHub API state. Pull request and issue state is mutable and "
+        "needs authentication, so a replay would report today's state rather "
+        "than the state that was cited",
+    ),
+    (
+        ("git_log", "git_log_oneline", "git_log_last_commit", "git_diff_name_only",
+         "git_grep", "git_blame", "git_diff"),
+        "names read-only git plumbing that has no verifier yet. Its asserted "
+        "result is prose rather than a checkable verdict, so a replay would "
+        "produce nothing to compare against",
+    ),
+)
+
+
+def _unsupported_tool_detail(tool: str | None) -> str:
+    """The blocking detail for a tool family no verifier covers.
+
+    Matches on the family, never on the citation's arguments, so the returned
+    string is always one of the constants above.
+    """
+    if tool is None:
+        return UNVERIFIABLE_KIND_DETAIL
+    for names, detail in _UNSUPPORTED_TOOL_FAMILIES:
+        if tool in names or any(tool.startswith(f"{name}_") for name in names):
+            return detail
+    return UNVERIFIABLE_KIND_DETAIL
+
+
 # Tool-result citations naming a grep. Also fail-only, and additionally
 # restricted to citations that pin `ref=` to a full 40-hex SHA present locally
 # -- 8 of the corpus's 78 grep citations today. The other 70 name a branch or
@@ -642,7 +689,9 @@ def verify_citation(
         return _verify_git_tool(parsed, repo_root)
     if parsed.kind is EvidenceKind.TOOL_RESULT and parsed.tool in _GREP_TOOL_NAMES:
         return _verify_grep_tool(parsed, repo_root)
-    if parsed.kind in {EvidenceKind.GRAPH_EDGE, EvidenceKind.TOOL_RESULT}:
+    if parsed.kind is EvidenceKind.TOOL_RESULT:
+        return VerificationResult("unverified", _unsupported_tool_detail(parsed.tool))
+    if parsed.kind is EvidenceKind.GRAPH_EDGE:
         return VerificationResult("unverified", UNVERIFIABLE_KIND_DETAIL)
     return VerificationResult("error", "no verifier exists for this evidence kind")
 
