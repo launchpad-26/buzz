@@ -41,7 +41,7 @@ evidence:
   - statement: "The workspace root Cargo.toml pins tracing-opentelemetry 0.33, opentelemetry 0.32 (feature trace), opentelemetry_sdk 0.32 (features trace, rt-tokio) and opentelemetry-otlp 0.32 with default-features = false and features grpc-tonic, tls-ring — so the only exporter transport compiled into the workspace is gRPC via tonic; no HTTP/protobuf OTLP exporter is available."
     entry_class: FACT
     evidence:
-      - "Cargo.toml:87-91"
+      - "Cargo.toml:88-91"
   - statement: "Grepping every crate's Cargo.toml for the string opentelemetry finds matches in exactly two files, crates/buzz-datastore-tracing/Cargo.toml and crates/buzz-relay/Cargo.toml; only crates/buzz-relay/src/telemetry.rs and crates/buzz-relay/src/main.rs call try_init_tracer or otherwise register a global tracer provider, so buzz-relay is the only binary in this workspace that can export a trace via OTLP — buzz-datastore-tracing's dependency backs its own #[instrument]-generating proc macro (a separate, operator-invisible concern), not a second exporter."
     entry_class: FACT
     evidence:
