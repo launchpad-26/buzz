@@ -1,0 +1,3 @@
+Aug 18 09:00:00 host1 app[1]: startup complete
+Aug 18 09:10:00 host1 app[1]: error connection refused
+Aug 18 09:20:00 host1 app[1]: error connection refused

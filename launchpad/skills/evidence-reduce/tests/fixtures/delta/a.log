@@ -1,0 +1,10 @@
+2026-08-18T09:00:01Z host1 app[1234]: ERROR db connection failed request_id=a1b2c3d4e5f6 client=10.0.0.5:5432
+2026-08-18T09:00:05Z host1 app[1234]: ERROR db connection failed request_id=b2c3d4e5f6a7 client=10.0.0.6:5433
+2026-08-18T09:00:09Z host1 app[1234]: ERROR db connection failed request_id=c3d4e5f6a7b8 client=10.0.0.7:5434
+2026-08-18T09:00:13Z host1 app[1234]: ERROR db connection failed request_id=d4e5f6a7b8c9 client=10.0.0.8:5435
+2026-08-18T09:00:17Z host1 app[1234]: ERROR db connection failed request_id=e5f6a7b8c9d0 client=10.0.0.9:5436
+2026-08-18T09:01:00Z host3 app[9999]: INFO request completed client=192.168.1.10:8080 duration_us=123456
+2026-08-18T09:01:02Z host3 app[9999]: INFO request completed client=192.168.1.11:8081 duration_us=234567
+2026-08-18T09:01:04Z host3 app[9999]: INFO request completed client=192.168.1.12:8082 duration_us=345678
+2026-08-18T09:02:00Z host2 app[5678]: WARN cache miss key=9f8e7d6c
+2026-08-18T09:02:15Z host2 app[5678]: WARN cache miss key=8e7d6c9f

@@ -1,0 +1,312 @@
+#!/usr/bin/env python3
+"""Report the earliest line matching each of one or more patterns, with
+configurable leading and trailing context.
+
+Onset time is the single highest-value fact in an incident (parent issue #16
+§5); this script turns finding it into one command instead of a raw read.
+"""
+import argparse
+import collections
+import json
+import re
+import sys
+from datetime import datetime, timedelta, timezone
+
+_ISO_RE = re.compile(
+    r'^(\d{4}-\d{2}-\d{2}[T ]\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:Z|[+-]\d{2}:?\d{2})?)'
+)
+_SYSLOG_RE = re.compile(r'^([A-Z][a-z]{2}\s+\d{1,2}\s+\d{2}:\d{2}:\d{2})')
+_APACHE_RE = re.compile(
+    r'\[(\d{2}/[A-Za-z]{3}/\d{4}:\d{2}:\d{2}:\d{2}\s[+-]\d{4})\]'
+)
+_EPOCH_RE = re.compile(r'^(\d{13}|\d{10})(?:\.\d+)?\b')
+
+_MONTHS = {m: i for i, m in enumerate(
+    ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul',
+     'Aug', 'Sep', 'Oct', 'Nov', 'Dec'], start=1)}
+
+
+def _parse_iso(raw):
+    s = raw
+    if 'T' not in s:
+        s = s.replace(' ', 'T', 1)
+    if s.endswith('Z'):
+        s = s[:-1] + '+00:00'
+    try:
+        dt = datetime.fromisoformat(s)
+    except ValueError:
+        return None
+    if dt.tzinfo is None:
+        dt = dt.replace(tzinfo=timezone.utc)
+    return dt.astimezone(timezone.utc)
+
+
+def _parse_apache(raw):
+    m = re.match(
+        r'(\d{2})/([A-Za-z]{3})/(\d{4}):(\d{2}):(\d{2}):(\d{2})\s'
+        r'([+-])(\d{2})(\d{2})',
+        raw,
+    )
+    if not m:
+        return None
+    day, mon, year, hh, mm, ss, sign, tzh, tzm = m.groups()
+    month = _MONTHS.get(mon)
+    if not month:
+        return None
+    delta = timedelta(hours=int(tzh), minutes=int(tzm))
+    if sign == '-':
+        delta = -delta
+    dt = datetime(int(year), month, int(day), int(hh), int(mm), int(ss),
+                   tzinfo=timezone(delta))
+    return dt.astimezone(timezone.utc)
+
+
+def _parse_epoch(raw):
+    try:
+        value = float(raw)
+    except ValueError:
+        return None
+    whole = raw.split('.')[0]
+    if len(whole) >= 13:
+        value /= 1000.0
+    try:
+        return datetime.fromtimestamp(value, tz=timezone.utc)
+    except (OverflowError, OSError, ValueError):
+        return None
+
+
+class SyslogYearTracker:
+    """See window's copy of this class for the rationale: an arbitrary but
+    deterministic anchor year, advanced on a Dec->Jan wrap."""
+
+    def __init__(self, anchor_year):
+        self.year = anchor_year
+        self._last_month = None
+
+    def resolve(self, month, day, hh, mm, ss):
+        if self._last_month is not None and month < self._last_month:
+            self.year += 1
+        self._last_month = month
+        try:
+            return datetime(self.year, month, day, hh, mm, ss,
+                             tzinfo=timezone.utc)
+        except ValueError:
+            return None
+
+
+def parse_timestamp(line, syslog_tracker):
+    m = _ISO_RE.match(line)
+    if m:
+        dt = _parse_iso(m.group(1))
+        if dt:
+            return dt, m.group(1)
+    m = _SYSLOG_RE.match(line)
+    if m:
+        parts = re.match(
+            r'([A-Z][a-z]{2})\s+(\d{1,2})\s+(\d{2}):(\d{2}):(\d{2})',
+            m.group(1),
+        )
+        mon, day, hh, mm, ss = parts.groups()
+        month = _MONTHS.get(mon)
+        if month:
+            dt = syslog_tracker.resolve(month, int(day), int(hh), int(mm),
+                                         int(ss))
+            if dt:
+                return dt, m.group(1)
+    m = _EPOCH_RE.match(line)
+    if m:
+        dt = _parse_epoch(m.group(1))
+        if dt:
+            return dt, m.group(1)
+    m = _APACHE_RE.search(line)
+    if m:
+        dt = _parse_apache(m.group(1))
+        if dt:
+            return dt, m.group(1)
+    return None
+
+
+def emit_receipt(total, kept):
+    if total:
+        pct = (total - kept) / total * 100
+    else:
+        pct = 0.0
+    print(
+        f"read {total:,} lines -> {kept:,} lines ({pct:.2f}% reduction)",
+        file=sys.stderr,
+    )
+
+
+def build_parser():
+    p = argparse.ArgumentParser(
+        prog='first-occurrence',
+        description='Find the earliest line matching each pattern.',
+    )
+    p.add_argument('paths', nargs='*',
+                    help='input files; omit to read stdin')
+    p.add_argument('--pattern', dest='patterns', action='append',
+                    default=[], help='regex to search for; repeatable')
+    p.add_argument('--before', type=int, default=0,
+                    help='lines of leading context (default 0)')
+    p.add_argument('--after', type=int, default=0,
+                    help='lines of trailing context (default 0)')
+    p.add_argument('--json', action='store_true',
+                    help='emit JSON instead of a table')
+    p.add_argument('-o', dest='output',
+                    help='write result to this file instead of stdout')
+    p.add_argument('--year', type=int, default=1970,
+                    help='anchor year for year-less syslog timestamps '
+                         '(default: 1970)')
+    return p
+
+
+def _scan_source(fileobj, source, patterns, before, after, tracker):
+    """Return {pattern_index: candidate} for the first match of each
+    pattern found in this source, each candidate carrying its own context."""
+    before_buf = collections.deque(maxlen=before) if before > 0 else \
+        collections.deque(maxlen=0)
+    found = {}
+    pending = {}  # pattern_index -> candidate still collecting 'after' lines
+    line_no = 0
+    for raw_line in fileobj:
+        line_no += 1
+        line = raw_line.rstrip('\n')
+
+        for idx in list(pending):
+            cand = pending[idx]
+            cand['after'].append(line)
+            if len(cand['after']) >= after:
+                del pending[idx]
+
+        for idx, regex in enumerate(patterns):
+            if idx in found or idx in pending:
+                continue
+            if regex.search(line):
+                result = parse_timestamp(line, tracker)
+                dt = result[0] if result else None
+                cand = {
+                    'timestamp': dt,
+                    'source': source,
+                    'line_number': line_no,
+                    'before': list(before_buf),
+                    'match': line,
+                    'after': [],
+                }
+                found[idx] = cand
+                if after > 0:
+                    pending[idx] = cand
+
+        if before > 0:
+            before_buf.append(line)
+
+    return found, line_no
+
+
+def main(argv=None):
+    args = build_parser().parse_args(argv)
+
+    if not args.patterns:
+        print('first-occurrence: at least one --pattern is required',
+              file=sys.stderr)
+        return 2
+    if args.before < 0 or args.after < 0:
+        print('first-occurrence: --before/--after must be >= 0',
+              file=sys.stderr)
+        return 2
+
+    try:
+        regexes = [re.compile(p) for p in args.patterns]
+    except re.error as e:
+        print(f'first-occurrence: bad --pattern: {e}', file=sys.stderr)
+        return 2
+
+    tracker = SyslogYearTracker(args.year)
+    best = {}  # pattern_index -> candidate
+    total_lines = 0
+
+    def consider(candidates_by_idx):
+        for idx, cand in candidates_by_idx.items():
+            current = best.get(idx)
+            if current is None:
+                best[idx] = cand
+                continue
+            if cand['timestamp'] is None:
+                continue
+            if current['timestamp'] is None or \
+                    cand['timestamp'] < current['timestamp']:
+                best[idx] = cand
+
+    try:
+        if not args.paths:
+            found, count = _scan_source(
+                sys.stdin, 'stdin', regexes, args.before, args.after,
+                tracker,
+            )
+            total_lines += count
+            consider(found)
+        else:
+            for path in args.paths:
+                with open(path, 'r', errors='replace') as f:
+                    found, count = _scan_source(
+                        f, path, regexes, args.before, args.after, tracker,
+                    )
+                total_lines += count
+                consider(found)
+    except OSError as e:
+        print(f'first-occurrence: {e}', file=sys.stderr)
+        return 2
+
+    results = []
+    kept_lines = 0
+    for idx, pattern in enumerate(args.patterns):
+        cand = best.get(idx)
+        if cand is None:
+            results.append({'pattern': pattern, 'found': False})
+            continue
+        kept_lines += len(cand['before']) + 1 + len(cand['after'])
+        results.append({
+            'pattern': pattern,
+            'found': True,
+            'timestamp': cand['timestamp'].isoformat()
+            if cand['timestamp'] else None,
+            'source': cand['source'],
+            'line_number': cand['line_number'],
+            'before': cand['before'],
+            'match': cand['match'],
+            'after': cand['after'],
+        })
+
+    if args.json:
+        text = json.dumps(results, indent=2) + '\n'
+    else:
+        chunks = []
+        for r in results:
+            if not r['found']:
+                chunks.append(f"pattern: {r['pattern']}\n  no match found\n")
+                continue
+            header = (
+                f"pattern: {r['pattern']}\n"
+                f"  timestamp: {r['timestamp']}\n"
+                f"  source: {r['source']}:{r['line_number']}\n"
+            )
+            body = []
+            for line in r['before']:
+                body.append(f"    {line}")
+            body.append(f"  > {r['match']}")
+            for line in r['after']:
+                body.append(f"    {line}")
+            chunks.append(header + '\n'.join(body) + '\n')
+        text = '\n'.join(chunks)
+
+    if args.output:
+        with open(args.output, 'w') as f:
+            f.write(text)
+    else:
+        sys.stdout.write(text)
+
+    emit_receipt(total_lines, kept_lines)
+    return 0 if any(r['found'] for r in results) else 1
+
+
+if __name__ == '__main__':
+    sys.exit(main())

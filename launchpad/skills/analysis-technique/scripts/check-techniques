@@ -1,0 +1,223 @@
+#!/usr/bin/env python3
+"""
+check-techniques: Validate technique files against the RCA contract.
+
+Checks frontmatter presence and validity, required keys, heading presence,
+and contract compliance. Reports all failures, not just the first.
+"""
+
+import sys
+import re
+from pathlib import Path
+from typing import Dict, List, Tuple, Optional
+
+# Allowed values
+ALLOWED_COSTS = {'low', 'medium', 'high'}
+ALLOWED_REDUCES_WITH = {'window', 'first-occurrence', 'timeline', 'frequency', 'delta', 'correlate', 'none'}
+REQUIRED_HEADINGS = [
+    '## Reach for it when',
+    '## Evidence it needs',
+    '## How to run it',
+    '## Worked example',
+    '## Done when',
+    "## Don't use it for"
+]
+
+def get_techniques_dir() -> Path:
+    """Find the techniques directory relative to this script."""
+    script_dir = Path(__file__).parent
+    skill_dir = script_dir.parent
+    return skill_dir / 'techniques'
+
+def parse_simple_yaml(content: str) -> Dict:
+    """
+    Simple YAML parser for technique frontmatter.
+
+    Handles: simple key: value, and indented list items.
+    """
+    result = {}
+    lines = content.strip().split('\n')
+    current_list_key = None
+
+    for line in lines:
+        # Determine indentation before stripping
+        indent = len(line) - len(line.lstrip())
+        line_stripped = line.strip()
+
+        if not line_stripped or line_stripped.startswith('#'):
+            continue
+
+        # Check if it's a list item (indented and starts with - )
+        if line_stripped.startswith('- '):
+            if current_list_key is None:
+                raise ValueError(f"List item without parent key: {line_stripped}")
+            value = line_stripped[2:].strip()
+            result[current_list_key].append(value)
+            continue
+
+        # Check if it's a key: value line (should be at root indent)
+        if ':' in line_stripped and indent == 0:
+            key, _, value = line_stripped.partition(':')
+            key = key.strip()
+            value = value.strip()
+
+            current_list_key = None  # Reset list context
+            if value:
+                result[key] = value
+            else:
+                # Empty value might be start of a list
+                result[key] = []
+                current_list_key = key
+            continue
+
+        raise ValueError(f"Invalid YAML line: {line_stripped}")
+
+    return result
+
+def parse_frontmatter(content: str) -> Optional[Dict]:
+    """
+    Parse frontmatter from markdown file.
+
+    Returns dict with parsed frontmatter, or None if no frontmatter found.
+    """
+    match = re.match(r'^---\s*\n(.*?)\n---\s*\n', content, re.DOTALL)
+    if not match:
+        return None
+
+    yaml_content = match.group(1)
+    try:
+        return parse_simple_yaml(yaml_content)
+    except ValueError:
+        return None
+
+def extract_body(content: str) -> str:
+    """Extract the markdown body after frontmatter."""
+    match = re.match(r'^---\s*\n(.*?)\n---\s*\n(.*)', content, re.DOTALL)
+    if not match:
+        return content
+    return match.group(2)
+
+def check_file(filepath: Path) -> List[str]:
+    """
+    Check a single technique file for contract compliance.
+
+    Returns list of error messages (empty if file is valid).
+    """
+    errors = []
+    filename = filepath.name
+
+    # Read file
+    try:
+        content = filepath.read_text(encoding='utf-8')
+    except Exception as e:
+        return [f"{filename}: Cannot read file: {e}"]
+
+    # Check frontmatter presence
+    frontmatter = parse_frontmatter(content)
+    if frontmatter is None:
+        errors.append(f"{filename}: Missing or malformed frontmatter")
+        return errors
+
+    # Check required keys
+    required_keys = {'name', 'summary', 'reach-for-when', 'evidence-required', 'reduces-with', 'cost'}
+    for key in required_keys:
+        if key not in frontmatter:
+            errors.append(f"{filename}: Missing required key '{key}'")
+
+    # Check name matches filename (kebab-case)
+    if 'name' in frontmatter:
+        name = frontmatter['name']
+        expected_filename = name + '.md'
+        if filename != expected_filename:
+            errors.append(f"{filename}: name '{name}' does not match filename")
+
+    # Check cost value
+    if 'cost' in frontmatter:
+        cost = frontmatter['cost']
+        if cost not in ALLOWED_COSTS:
+            errors.append(f"{filename}: cost must be one of {ALLOWED_COSTS}, got '{cost}'")
+
+    # Check reduces-with value
+    if 'reduces-with' in frontmatter:
+        reduces_with = frontmatter['reduces-with']
+        if reduces_with not in ALLOWED_REDUCES_WITH:
+            errors.append(f"{filename}: reduces-with must be one of {ALLOWED_REDUCES_WITH}, got '{reduces_with}'")
+
+    # Check body headings
+    body = extract_body(content)
+
+    # Check all required headings are present
+    for heading in REQUIRED_HEADINGS:
+        if heading not in body:
+            errors.append(f"{filename}: Missing heading '{heading}'")
+
+    # Check headings are in order
+    if not errors:  # Only check order if headings are present
+        heading_positions = []
+        for heading in REQUIRED_HEADINGS:
+            pos = body.find(heading)
+            if pos >= 0:
+                heading_positions.append((heading, pos))
+
+        # Verify order (positions should be increasing)
+        for i in range(len(heading_positions) - 1):
+            if heading_positions[i][1] > heading_positions[i + 1][1]:
+                errors.append(f"{filename}: Headings are not in order")
+                break
+
+    # Check no heading is empty
+    for i, heading in enumerate(REQUIRED_HEADINGS):
+        if heading not in body:
+            continue
+
+        start_pos = body.find(heading) + len(heading)
+
+        # Find the next heading or end of file
+        next_heading_pos = len(body)
+        for next_heading in REQUIRED_HEADINGS[i + 1:]:
+            pos = body.find(next_heading, start_pos)
+            if pos >= 0:
+                next_heading_pos = min(next_heading_pos, pos)
+
+        # Extract content between this heading and the next
+        section_content = body[start_pos:next_heading_pos].strip()
+
+        if not section_content:
+            errors.append(f"{filename}: Heading '{heading}' is empty")
+
+    return errors
+
+def main():
+    if len(sys.argv) > 1:
+        sys.stderr.write(f"Usage: {sys.argv[0]}\n")
+        sys.exit(2)
+
+    techniques_dir = get_techniques_dir()
+
+    if not techniques_dir.exists():
+        sys.stderr.write(f"Error: Techniques directory not found at {techniques_dir}\n")
+        sys.exit(2)
+
+    # Collect all .md files except _TEMPLATE.md
+    technique_files = sorted([f for f in techniques_dir.glob('*.md') if f.name != '_TEMPLATE.md'])
+
+    all_errors = []
+    for filepath in technique_files:
+        errors = check_file(filepath)
+        all_errors.extend(errors)
+
+    # Also check _TEMPLATE.md
+    template_path = techniques_dir / '_TEMPLATE.md'
+    if template_path.exists():
+        template_errors = check_file(template_path)
+        all_errors.extend(template_errors)
+
+    if all_errors:
+        for error in all_errors:
+            sys.stderr.write(error + '\n')
+        sys.exit(1)
+
+    sys.exit(0)
+
+if __name__ == '__main__':
+    main()

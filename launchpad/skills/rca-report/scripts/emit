@@ -1,0 +1,252 @@
+#!/usr/bin/env python3
+"""Emit a finished RCA report to a destination.
+
+Supports two output modes:
+- --save: Write to a dated archive path and print the path
+- --raise: Create a GitHub issue and print the URL
+
+Path construction and slugification are deterministic, so report archives
+can be searched reliably. Refuses to overwrite without --force.
+"""
+import argparse
+import json
+import os
+import re
+import subprocess
+import sys
+from datetime import datetime, timezone
+
+try:
+    from pathlib import Path
+except ImportError:
+    # Fall back to manual path construction if pathlib is unavailable
+    # (it's in stdlib since Python 3.4, but being defensive)
+    class Path:
+        def __init__(self, path):
+            self.path = path
+        def __str__(self):
+            return self.path
+        def parent(self):
+            return Path(os.path.dirname(self.path))
+        def mkdir(self, parents=False, exist_ok=False):
+            if parents:
+                os.makedirs(self.path, exist_ok=exist_ok)
+            else:
+                os.mkdir(self.path)
+
+
+def _extract_iso_date(report_text):
+    """Extract incident date from report in ISO 8601 format.
+
+    Looks for patterns like "incident on 2026-08-18" or "2026-08-18T..."
+    Returns date string YYYY-MM-DD or None.
+    """
+    # Try ISO 8601 date
+    m = re.search(r'(\d{4}-\d{2}-\d{2})', report_text)
+    if m:
+        return m.group(1)
+    return None
+
+
+def _slugify(text):
+    """Convert text to a safe filename slug."""
+    # Lowercase, remove non-alphanumeric except hyphens, collapse runs
+    slug = re.sub(r'[^a-z0-9]+', '-', text.lower()).strip('-')
+    # Limit to 50 chars
+    return slug[:50]
+
+
+def _extract_title(report_text):
+    """Extract title from report (first non-empty line or "incident")."""
+    for line in report_text.split('\n'):
+        line = line.strip()
+        if line and not line.startswith('#'):
+            return line[:60]
+    return 'incident'
+
+
+def save_report(report_text, incident_date, archive_dir, force=False, dry_run=False):
+    """Save report to a dated path in archive_dir.
+
+    Path structure: archive_dir/YYYY/MM/DD/incident-slug.md
+    Returns the full path written, or None on error.
+    """
+    if not incident_date:
+        print('Error: could not extract incident date from report', file=sys.stderr)
+        return None
+
+    # Parse the date
+    try:
+        date_obj = datetime.strptime(incident_date, '%Y-%m-%d').date()
+    except ValueError:
+        print(f'Error: invalid date format: {incident_date}', file=sys.stderr)
+        return None
+
+    year = str(date_obj.year)
+    month = str(date_obj.month).zfill(2)
+    day = str(date_obj.day).zfill(2)
+
+    # Build the path
+    path_parts = [archive_dir, year, month, day]
+    dir_path = os.path.join(*path_parts)
+
+    # Create slug from title
+    title = _extract_title(report_text)
+    slug = _slugify(title)
+    if not slug:
+        slug = 'incident'
+
+    filename = f'{slug}.md'
+    full_path = os.path.join(dir_path, filename)
+
+    if dry_run:
+        print(f'Would save to: {full_path}')
+        return full_path
+
+    # Check for existing file
+    if os.path.exists(full_path) and not force:
+        print(f'Error: file exists: {full_path} (use --force to overwrite)', file=sys.stderr)
+        return None
+
+    # Create directories
+    try:
+        os.makedirs(dir_path, exist_ok=True)
+    except OSError as e:
+        print(f'Error creating directory: {e}', file=sys.stderr)
+        return None
+
+    # Write file
+    try:
+        with open(full_path, 'w') as f:
+            f.write(report_text)
+    except OSError as e:
+        print(f'Error writing file: {e}', file=sys.stderr)
+        return None
+
+    return full_path
+
+
+def raise_issue(report_text, incident_date, dry_run=False):
+    """Create a GitHub issue with the report as the body.
+
+    Title is extracted from the report; body is the full report.
+    Returns the issue URL, or None on error.
+    """
+    title = _extract_title(report_text)
+    if not title:
+        title = 'RCA Report'
+
+    if dry_run:
+        print(f'Would raise issue: "{title}"')
+        return 'https://github.com/<repo>/issues/<number>'
+
+    # Run gh issue create
+    try:
+        result = subprocess.run(
+            ['gh', 'issue', 'create', '--title', title, '--body', report_text],
+            capture_output=True,
+            text=True,
+            timeout=10
+        )
+    except FileNotFoundError:
+        print('Error: gh command not found', file=sys.stderr)
+        return None
+    except subprocess.TimeoutExpired:
+        print('Error: gh command timed out', file=sys.stderr)
+        return None
+
+    if result.returncode != 0:
+        print(f'Error creating issue: {result.stderr}', file=sys.stderr)
+        return None
+
+    # Extract URL from output (usually "https://github.com/...")
+    output = result.stdout.strip()
+    if output.startswith('https://'):
+        return output
+    # If no URL, try parsing from stderr or stdout
+    for line in (result.stderr + result.stdout).split('\n'):
+        if 'github.com' in line and '/issues/' in line:
+            m = re.search(r'(https://[^\s]+)', line)
+            if m:
+                return m.group(1)
+
+    # Fallback: assume success and return the line
+    return output if output else 'Issue created (URL not parsed)'
+
+
+def main(argv=None):
+    parser = argparse.ArgumentParser(
+        description='Emit a finished RCA report to save or raise as issue.'
+    )
+    parser.add_argument('report', nargs='?', help='Report file (stdin if omitted)')
+    parser.add_argument('--save', help='Save to dated archive directory')
+    parser.add_argument('--raise', dest='raise_issue', action='store_true',
+                        help='Create GitHub issue')
+    parser.add_argument('--date', help='Incident date (YYYY-MM-DD; extracted if omitted)')
+    parser.add_argument('--force', action='store_true', help='Overwrite existing files')
+    parser.add_argument('--dry-run', action='store_true', help='Show what would happen')
+    parser.add_argument('--json', action='store_true', help='JSON output')
+
+    try:
+        args = parser.parse_args(argv)
+    except SystemExit:
+        return 2
+
+    # Validate mode
+    if not args.save and not args.raise_issue:
+        print('Error: specify --save or --raise', file=sys.stderr)
+        return 2
+
+    # Read report
+    if args.report:
+        try:
+            with open(args.report, 'r') as f:
+                report_text = f.read()
+        except OSError as e:
+            print(f'Error reading file: {e}', file=sys.stderr)
+            return 2
+    else:
+        report_text = sys.stdin.read()
+
+    if not report_text.strip():
+        print('Error: empty report', file=sys.stderr)
+        return 2
+
+    # Extract or use provided date
+    incident_date = args.date or _extract_iso_date(report_text)
+
+    results = {}
+
+    # Save mode
+    if args.save:
+        path = save_report(report_text, incident_date, args.save,
+                          force=args.force, dry_run=args.dry_run)
+        if path:
+            results['saved'] = path
+        else:
+            return 2
+
+    # Raise mode
+    if args.raise_issue:
+        url = raise_issue(report_text, incident_date, dry_run=args.dry_run)
+        if url:
+            results['raised'] = url
+        else:
+            return 2
+
+    # Output results
+    if args.json:
+        print(json.dumps(results))
+    else:
+        # Print non-JSON output
+        if not args.dry_run:
+            if 'saved' in results:
+                print(results['saved'])
+            if 'raised' in results:
+                print(results['raised'])
+
+    return 0
+
+
+if __name__ == '__main__':
+    sys.exit(main())

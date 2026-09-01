@@ -1,0 +1,5 @@
+Dec 31 23:50:00 host1 sshd[100]: session opened
+Dec 31 23:55:00 host1 kernel: eth0 link up
+Dec 31 23:59:59 host1 cron[5]: job finished
+Jan 01 00:00:05 host1 sshd[101]: session opened
+Jan 01 00:05:00 host1 kernel: eth0 link down
