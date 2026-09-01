@@ -50,7 +50,7 @@ evidence:
   - statement: "Root repository AGENTS.md's own \"Common Gotchas\" list independently states the same p-gate consequence in prose: \"Relay queries must specify kinds — omitting kinds triggers the p-gate (403). Always include explicit kind filters,\" corroborating the code-level finding above as documented, intentional behavior rather than an incidental side effect."
     entry_class: FACT
     evidence:
-      - "AGENTS.md:242"
+      - "AGENTS.md:469"
   - statement: "Two further, independently-gated read restrictions apply the same way: `engram_filters_authorized` requires a filter that can match `KIND_AGENT_ENGRAM` (kind 30174) to carry either `authors=[self]` or `#p=[self]` (exempting explicit `ids` lookups), and `author_only_filters_authorized` requires author-only kinds to carry `authors=[self]`; either failing returns 403 with a gate-specific message (\"restricted: agent-engram reads require authors=[self] or #p=[self]\" / \"restricted: author-only kinds require authors=[self]\")."
     entry_class: FACT
     evidence:
@@ -90,12 +90,12 @@ evidence:
     evidence:
       - "crates/buzz-relay/src/api/bridge.rs:1421-1463"
       - "crates/buzz-relay/src/api/mod.rs:21-28"
-  - statement: "A successful response body, on both the search and non-search paths, is a bare JSON array of full signed Nostr events (`{id, pubkey, created_at, kind, tags, content, sig}` per event, produced by `serde_json::to_value(&stored_event.event)`), not wrapped in an envelope object and not sig-stripped — distinct from `buzz-cli`'s own documented normalized-read contract, which strips `sig` from its JSON output."
+  - statement: "A successful response body, on both the search and non-search paths, is a bare JSON array of full signed Nostr events (`{id, pubkey, created_at, kind, tags, content, sig}` per event, produced by `serde_json::to_value(&stored_event.event)`), not wrapped in an envelope object. This matches root AGENTS.md's own statement of `buzz-cli`'s read contract — 'the seven canonical signed Nostr event fields (id, pubkey, kind, content, created_at, tags, sig)' — the field set is consistent across both HTTP surfaces even though this endpoint returns a bare array with no CLI-style exit-code wrapper."
     entry_class: FACT
     evidence:
       - "crates/buzz-relay/src/api/bridge.rs:1463"
       - "crates/buzz-relay/src/api/bridge.rs:1239"
-      - "AGENTS.md:212-214"
+      - "AGENTS.md:231-235"
   - statement: "Raw filter extension fields recognized on this endpoint beyond the NIP-01/NIP-50 filter object are: `top_level` (routes to the channel-window read model), `feed_types` (routes to a named feed: mentions/needs_action/activity, capped by `BRIDGE_FEED_MAX_LIMIT`), `depth_limit` combined with a single `#e` tag (routes to threaded-reply fetching via `get_thread_replies`, optionally including auxiliary events with `include_aux`), `before_id`/`buzz-channel` (general-path extensions), and `page`/`search_page`/`searchPage`/`search_mode`/`searchMode` (search-path extensions) — none of these are part of NIP-01 or NIP-50 and none is documented anywhere outside this code."
     entry_class: FACT
     evidence:
@@ -105,7 +105,7 @@ evidence:
   - statement: "No versioning or backward-compatibility contract for `POST /query`'s request or response shape is stated anywhere in this repository's code, comments, or root AGENTS.md; the only stability statement found is the general HTTP-surface framing in root AGENTS.md that the HTTP surface is deliberately narrow and new feature work is directed toward Nostr event kinds rather than new HTTP endpoints."
     entry_class: INFERENCE
     evidence:
-      - "AGENTS.md:145-160"
+      - "AGENTS.md:158-169"
       - "crates/buzz-relay/src/api/bridge.rs:1-4"
     confidence: 0.7
   - statement: "Issue #986's Definition of Done requires this node to define inputs/messages, outputs/responses, error/rejection behavior, authentication/authorization, versioning/compatibility and ordering/idempotency where applicable, and to link the authoritative machine/spec representation with at least one valid and one failure example."
