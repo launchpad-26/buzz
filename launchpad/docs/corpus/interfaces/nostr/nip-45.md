@@ -160,6 +160,38 @@ use, carrying JSON-encoded Nostr protocol message arrays.
   as a fact about the relay's self-description, not as a defect to fix in
   this task (see *Scope and omissions*).
 
+## Examples
+
+**Valid: fully-pushable filter hits the fast SQL COUNT path.** An authenticated
+client counting its own kind:1 notes in one accessible channel:
+
+```json
+["COUNT", "sub1", {"kinds": [1], "authors": ["<hex-pubkey>"], "#h": ["<channel-id>"]}]
+```
+
+If the channel is accessible and the filter is fully pushable, `handle_count`
+returns:
+
+```json
+["COUNT", "sub1", {"count": 42}]
+```
+
+**Failure: fallback candidate limit exceeded.** A broad, non-pushable filter
+(for example, one matching an author-only kind across every accessible
+channel) that would require scanning more than 5,000 candidate rows is
+rejected rather than answered partially or approximately:
+
+```json
+["CLOSED", "sub1", "restricted: count filter requires narrower constraints"]
+```
+
+An unauthenticated `COUNT` on any filter is rejected the same way, before any
+filter is even inspected:
+
+```json
+["CLOSED", "sub1", "auth-required: not authenticated"]
+```
+
 ## Boundary
 
 This node does not describe:
