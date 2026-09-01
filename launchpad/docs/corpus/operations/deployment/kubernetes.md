@@ -115,6 +115,12 @@ evidence:
       - "deploy/charts/buzz/Chart.yaml"
       - "deploy/charts/buzz/templates/hpa.yaml"
       - "deploy/charts/buzz/templates/pdb.yaml"
+  - statement: "Because Kubernetes namespace deletion cascades to every object it contains (including Secrets and PersistentVolumeClaims) regardless of a resource's own Helm annotations, and because templates/secret-chart.yaml's helm.sh/resource-policy: keep annotation is a Helm-specific instruction that constrains only Helm's own uninstall/upgrade logic, `kubectl delete namespace` removes the chart-generated Secret along with everything else in the release's namespace, even though a `helm uninstall` of the same release would preserve it; whether the underlying PersistentVolume for the git PVC is also deleted, or only released, depends on the bound StorageClass's reclaim policy, which this chart does not set."
+    entry_class: INFERENCE
+    evidence:
+      - "deploy/charts/buzz/templates/secret-chart.yaml"
+      - "deploy/charts/buzz/templates/pvc-git.yaml"
+    confidence: 0.85
   - statement: "squareup/block-coder-tf-stacks is named in this repository's own root AGENTS.md ecosystem table as the private repository whose Terraform + ArgoCD deploy this chart to Block's staging Kubernetes cluster; that repository is not present in this checkout, so this node cannot verify its actual prerequisite choices (ingress vs. Gateway API, storage class, metrics adapter) beyond what the OSS chart it consumes declares."
     entry_class: FACT
     evidence:
@@ -228,6 +234,19 @@ per release, before or immediately after the chart itself is installed.
    Ready, check its logs against `/_readiness` — readiness fails closed on Postgres,
    Redis or a deletion-fence schema check, not only on the shutdown flag (see *See
    also*).
+9. To clean up or roll back at the cluster level, `kubectl delete namespace
+   <namespace>` removes every object the chart created in it — Deployments,
+   Services, the git PVC, and any Secret, including the chart's own generated one
+   despite its `helm.sh/resource-policy: keep` annotation, because that annotation
+   constrains only Helm's own uninstall/upgrade logic, not a direct `kubectl`
+   deletion. Whether the underlying `PersistentVolume` is also deleted or only
+   released depends on the bound StorageClass's reclaim policy, which this chart
+   does not set. Namespace deletion does not touch external Postgres, Redis or S3
+   endpoints in the production profile — only their in-cluster credentials and
+   connection strings go with the Secret. Rolling back a bad *chart release* itself
+   (as opposed to tearing down the namespace) is `helm rollback`, out of this node's
+   scope (see *Boundary*); either way, the chart's own Backups list — referenced
+   above, not restated here — names what no rollback or redeploy recovers.
 
 ## See also
 
