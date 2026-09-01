@@ -65,10 +65,11 @@ evidence:
     entry_class: FACT
     evidence:
       - "deploy/charts/buzz/README.md"
-  - statement: "At the recorded revision, deploy/charts/buzz/templates/ contains exactly sixteen files -- secret-chart.yaml, hpa.yaml, pdb.yaml, httproute.yaml, NOTES.txt, service.yaml, deployment.yaml, quickstart-minio-init.yaml, pvc-git.yaml, _validate.tpl, extramanifests.yaml, quickstart-minio.yaml, _helpers.tpl, ingress.yaml, serviceaccount.yaml, pairing-relay.yaml, and servicemonitor.yaml -- and none of them is a CronJob, a Job, or any other template shaped to run a backup, a pg_dump, or an object-store sync on a schedule."
+  - statement: "At the recorded revision, deploy/charts/buzz/templates/ contains seventeen files -- secret-chart.yaml, hpa.yaml, pdb.yaml, httproute.yaml, NOTES.txt, service.yaml, deployment.yaml, quickstart-minio-init.yaml, pvc-git.yaml, _validate.tpl, extramanifests.yaml, quickstart-minio.yaml, _helpers.tpl, ingress.yaml, serviceaccount.yaml, pairing-relay.yaml, and servicemonitor.yaml. Exactly one renders a batch workload -- quickstart-minio-init.yaml, a kind: Job that creates the quickstart MinIO bucket -- and it is a one-shot install-time bucket bootstrap, not a scheduled backup: no template in the chart is a CronJob, and none runs a pg_dump or an object-store sync on a schedule."
     entry_class: FACT
     evidence:
-      - "find(path='deploy/charts/buzz/templates', type=f) -> secret-chart.yaml, hpa.yaml, pdb.yaml, httproute.yaml, NOTES.txt, service.yaml, deployment.yaml, quickstart-minio-init.yaml, pvc-git.yaml, _validate.tpl, extramanifests.yaml, quickstart-minio.yaml, _helpers.tpl, ingress.yaml, serviceaccount.yaml, pairing-relay.yaml, servicemonitor.yaml, at commit 473205a7457b208455f188847bfb27b01aa83cac"
+      - "deploy/charts/buzz/templates/quickstart-minio-init.yaml"
+      - "deploy/charts/buzz/values.yaml"
   - statement: "deploy/charts/buzz/values.yaml's persistence-related keys for the bundled subcharts are capacity/storage-class settings only -- persistence.git.enabled/size (10Gi), postgresql.persistence.enabled/size (10Gi), redis.persistence.enabled/size (4Gi), and minio.persistence.enabled/size (10Gi) -- and no key anywhere in the file configures a backup schedule, a retention window, or a snapshot destination."
     entry_class: FACT
     evidence:

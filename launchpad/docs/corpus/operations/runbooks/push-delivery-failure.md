@@ -34,7 +34,7 @@ evidence:
     entry_class: FACT
     evidence:
       - "crates/buzz-relay/src/push_runtime.rs"
-  - statement: "The gateway exposes exactly six Prometheus series: push_gateway_apns_send_attempts_total (counter, no labels, recorded before every transport call), push_gateway_apns_deliveries_total (counter, label outcome in {accepted, invalid_endpoint, retry, configuration_fault, permanent_request_fault}), push_gateway_apns_delivery_seconds (histogram, APNs round-trip latency), push_gateway_admissions_total (counter, label result in {admitted, rejected, unavailable}), push_gateway_delivery_errors_total (counter, label class, a closed set of static exit-class strings), push_gateway_reaper_failures_total (counter, no labels), and push_gateway_readiness_failures_total (counter, label cause in {not_accepting, authority})."
+  - statement: "The gateway exposes exactly seven Prometheus series: push_gateway_apns_send_attempts_total (counter, no labels, recorded before every transport call), push_gateway_apns_deliveries_total (counter, label outcome in {accepted, invalid_endpoint, retry, configuration_fault, permanent_request_fault}), push_gateway_apns_delivery_seconds (histogram, APNs round-trip latency), push_gateway_admissions_total (counter, label result in {admitted, rejected, unavailable}), push_gateway_delivery_errors_total (counter, label class, a closed set of static exit-class strings), push_gateway_reaper_failures_total (counter, no labels), and push_gateway_readiness_failures_total (counter, label cause in {not_accepting, authority})."
     entry_class: FACT
     evidence:
       - "crates/buzz-push-gateway/src/metrics.rs"
@@ -86,9 +86,10 @@ evidence:
     evidence:
       - "deploy/charts/buzz-push-gateway/templates/prometheusrule.yaml"
   - statement: "No PrometheusRule, alert, or equivalent alerting configuration exists anywhere else in this repository for the relay-side buzz_push_* metrics (buzz_push_enabled, buzz_push_match_jobs_total, buzz_push_wakes_total, buzz_push_wake_enqueue_errors_total, buzz_push_gateway_requests_total, buzz_push_deliveries_total): the only PrometheusRule template in the repository is the gateway's own, and it defines rules over push_gateway_* series exclusively; deploy/charts/buzz's relay chart carries no PrometheusRule at all."
-    entry_class: FACT
+    entry_class: INFERENCE
     evidence:
       - "grep(alert:, deploy/) -> only deploy/charts/buzz-push-gateway/templates/prometheusrule.yaml; find(-iname *prometheusrule*) -> only that same file; deploy/charts/buzz has no templates/prometheusrule.yaml"
+    confidence: 0.85
   - statement: ".github/workflows/docker.yml gates both push-gateway-build and push-gateway-merge (the jobs that build and then publish ghcr.io/block/buzz-push-gateway) behind 'if: github.repository == ...block/buzz...', with an inline comment on the build job reading: 'Launchpad does not operate the separate APNs gateway. Preserve the inherited lane for upstream while preventing fork publication attempts.'"
     entry_class: FACT
     evidence:

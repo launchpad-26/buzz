@@ -35,10 +35,11 @@ evidence:
     evidence:
       - "launchpad/deploy/run.sh"
   - statement: "Running ./launchpad/deploy/run.sh check from the repository root, against a deploy/compose/.env built from .env.example with every CHANGE_ME value replaced by a non-secret placeholder, passed cleanly both without BUZZ_COMPOSE_TLS and with BUZZ_COMPOSE_TLS=true, printing 'Launchpad deployment configuration is valid.' in both cases."
-    entry_class: FACT
+    entry_class: INFERENCE
     evidence:
       - "run_command('./launchpad/deploy/run.sh check') -> Launchpad relay image: ghcr.io/launchpad-26/buzz:sha-0000...; Docker Compose version: 5.5.0; Launchpad deployment configuration is valid."
       - "run_command('BUZZ_COMPOSE_TLS=true BUZZ_DOMAIN=buzz.example.com ./launchpad/deploy/run.sh check') -> Launchpad deployment configuration is valid."
+    confidence: 0.9
   - statement: "The same guard rejects a BUZZ_IMAGE of ghcr.io/block/buzz:main with 'Upstream Block image ... is forbidden for Launchpad deployment', and separately rejects a floating ghcr.io/launchpad-26/buzz:launchpad tag with 'Floating images are rejected' unless BUZZ_ALLOW_FLOATING_IMAGE=true is set; both were confirmed by running the check command against each image value in turn."
     entry_class: FACT
     evidence:

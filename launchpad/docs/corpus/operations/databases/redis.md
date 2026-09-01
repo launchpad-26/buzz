@@ -66,11 +66,16 @@ evidence:
     entry_class: FACT
     evidence:
       - ".env.example"
-  - statement: "docker-compose.yml runs Redis as image redis:7-alpine, container name buzz-redis, published on 127.0.0.1:6379, health-checked via redis-cli ping, capped at 128m memory, with no volume mount configured, so the local dev container's data does not survive a container restart; docker-compose.harness.yml runs a second, independent redis:7-alpine instance for the isolated E2E test harness on host port 6471, also with no volume."
+  - statement: "docker-compose.yml runs Redis as image redis:7-alpine, container name buzz-redis, published on 127.0.0.1:6379, health-checked via redis-cli ping, capped at 128m memory, with no volume mount configured, so the local dev container's data lives only in its container filesystem and is lost when that container is removed and recreated (a plain restart of the same container is not itself a removal); docker-compose.harness.yml runs a second, independent redis:7-alpine instance for the isolated E2E test harness on host port 6471, also with no volume."
     entry_class: FACT
     evidence:
       - "docker-compose.yml"
       - "docker-compose.harness.yml"
+  - statement: "The self-hosted single-node bundle at deploy/compose/compose.yml runs Redis differently from local development: `redis-server --appendonly yes --requirepass ${REDIS_PASSWORD}` against the named volume buzz-redis-data mounted at /data, on the internal buzz-net network with no published host port, so this topology's Redis state is AOF-persistent and does survive a restart."
+    entry_class: FACT
+    evidence:
+      - "deploy/compose/compose.yml:70-85"
+      - "deploy/compose/compose.yml:124-130"
   - statement: "TESTING.md states \"just test\" runs integration tests against Postgres and Redis, starting them automatically if not already running, and its configuration table documents REDIS_URL's default as redis://localhost:6379; the Justfile's dev-services readiness check polls docker inspect for buzz-redis's health status alongside Postgres before reporting the local stack ready."
     entry_class: FACT
     evidence:
@@ -86,7 +91,7 @@ evidence:
     evidence:
       - "deploy/charts/buzz/templates/_validate.tpl"
       - "deploy/charts/buzz/templates/secret-chart.yaml"
-  - statement: "The chart's own README.md states plainly that replicaCount > 1 hard-requires Redis for buzz-pubsub fan-out and that the chart \"template-fails\" rather than silently degrading when that invariant is broken, lists Redis among the three external services (Postgres/Redis/S3) the production profile expects to be externally managed, and lists exactly four things an operator must back up (the relay private key, the PostgreSQL database, the S3 media bucket, and the git PVC) with Redis absent from that list."
+  - statement: "The chart's own README.md states plainly that replicaCount > 1 hard-requires Redis for buzz-pubsub fan-out and that the chart \"template-fails\" rather than silently degrading when that invariant is broken, lists Redis among the three external services (Postgres/Redis/S3) the production profile expects to be externally managed, and lists five things an operator must back up (the relay private key, the PostgreSQL database, the S3 media bucket, the git PVC, and an owner private key held outside the chart) with Redis absent from that list."
     entry_class: FACT
     evidence:
       - "deploy/charts/buzz/README.md"
@@ -194,8 +199,9 @@ so many words, as part of keeping the crate free of I/O dependencies.
 
 | Environment | Mechanism | Persistence | Source |
 |---|---|---|---|
-| Local development | `docker-compose.yml`'s `redis` service — `redis:7-alpine`, container `buzz-redis`, `127.0.0.1:6379`, `redis-cli ping` health check, 128m memory cap | **None** — no volume is mounted; data does not survive `docker compose down`/restart | `docker-compose.yml` |
+| Local development | `docker-compose.yml`'s `redis` service — `redis:7-alpine`, container `buzz-redis`, `127.0.0.1:6379`, `redis-cli ping` health check, 128m memory cap | **None** — no volume is mounted, so the data lives in the container filesystem and is lost whenever that container is removed and recreated (`docker compose down`, `up --force-recreate`, `scripts/dev-reset.sh`'s `down -v --remove-orphans`). A plain `docker compose restart`, which stops and starts the same container, does not by itself discard it | `docker-compose.yml` |
 | Isolated E2E test harness | `docker-compose.harness.yml`'s independent `redis` service, same image, host port 6471 | None — also no volume | `docker-compose.harness.yml` |
+| Self-hosted single node (`deploy/compose/`) | `deploy/compose/compose.yml`'s `redis` service — `redis:7-alpine` started as `redis-server --appendonly yes --requirepass ${REDIS_PASSWORD}`, reachable only on the internal `buzz-net` network with no published host port | **AOF-persistent** — `--appendonly yes` against the named `buzz-redis-data` volume, so this topology's Redis state does survive a restart, unlike local development's | `deploy/compose/compose.yml` |
 | Kubernetes, quickstart/eval profile | This repository's own Helm chart (`deploy/charts/buzz`) bundles an optional CloudPirates `redis` subchart (`redis.enabled=true`), single replica, no HA | Chart-managed; not evaluated further here | `deploy/charts/buzz/Chart.yaml`, `Chart.lock`, `README.md` |
 | Kubernetes, production profile | The chart expects `externalRedis.url` or `REDIS_URL` inside `secrets.existingSecret`; `replicaCount > 1` **hard-fails Helm template rendering** unless one of `redis.enabled`, `externalRedis.url` or `secrets.existingSecret` is set | Externally managed; out of this chart's scope | `deploy/charts/buzz/templates/_validate.tpl`, `README.md` |
 | Staging (this repository's actual deployment) | `squareup/block-coder-tf-stacks` deploys the relay's Helm chart per this repository's own `AGENTS.md`; whether it is this chart or a different one, and whether it also provisions Redis, is not established here | Unknown from this repository | `AGENTS.md` |

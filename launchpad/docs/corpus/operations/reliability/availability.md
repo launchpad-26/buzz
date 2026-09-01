@@ -86,9 +86,13 @@ evidence:
     evidence:
       - "launchpad/docs/corpus/architecture/deployment/single-relay.md"
   - statement: "No availability service-level objective, uptime target, or error-budget commitment for the relay was found anywhere in this repository: a case-insensitive search for SLA/SLO/uptime-target/availability-target/99.9-style language across every Markdown, Rust, and YAML file returned no hit that names an availability commitment for buzz-relay itself -- the closest matches concern an unrelated agent-compute-provider startup-timing question (docs/remote-agents.md), a Kubernetes patch-SLA for OS packages in this fork's own (unused-in-production) hardening spec, and a research note listing 'HA/multi-AZ' as explicitly safe to relax in dev, none of which state a target for the relay's own availability."
-    entry_class: FACT
+    entry_class: INFERENCE
     evidence:
       - "grep_no_availability_target(pattern='SLA|SLO|uptime (target|commitment)|availability (target|commitment)|99\\.9', scope='repository-wide, case-insensitive') -> matches only docs/remote-agents.md:1752 (unrelated compute-provider startup timing), launchpad/deploy/runbooks/hardening-spec.md:625 and launchpad/deploy/archived/runbooks/hardening-spec.md:747 (OS patch SLA, not availability), launchpad/Research/hardening-linux-servers-gap-analysis.md:462 (HA/multi-AZ named as 'safe to relax in dev'); no hit names an availability/uptime commitment for buzz-relay"
+      - "docs/remote-agents.md"
+      - "launchpad/deploy/runbooks/hardening-spec.md"
+      - "launchpad/Research/hardening-linux-servers-gap-analysis.md"
+    confidence: 0.85
   - statement: "Issue #1214's definition of done requires this node to be structured for lookup rather than narrative teaching, to contain only facts supported by current source with generated versus authored values labeled, to define scope and omissions so a reader knows what the reference covers, and to link authoritative source/schema/config rather than duplicate it."
     entry_class: TEAM_KNOWLEDGE
     provided_by: "launchpad-26/buzz#1214 definition of done"

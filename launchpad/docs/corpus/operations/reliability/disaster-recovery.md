@@ -25,12 +25,11 @@ evidence:
       - "crates/buzz-media/src/storage.rs"
       - "crates/buzz-relay/src/api/git/store.rs"
       - ".env.example"
-  - statement: "BUZZ_RELAY_PRIVATE_KEY is the relay's durable, stable signing identity: .env.example instructs operators to 'Preserve that value across restarts and backups,' and crates/buzz-relay/src/main.rs's relay_keypair_from_config / startup path hard-fails ('BUZZ_RELAY_PRIVATE_KEY must be set') whenever the key is required (BUZZ_REQUIRE_RELAY_MEMBERSHIP=true or BUZZ_REQUIRE_AUTH_TOKEN=true) and absent."
+  - statement: "BUZZ_RELAY_PRIVATE_KEY is the relay's durable, stable signing identity, and its loss is unrecoverable in the strongest sense: the environment template instructs operators to 'Preserve that value across restarts and backups,' and crates/buzz-relay/src/main.rs calls relay_keypair_from_config unconditionally at line 156 -- before any conditional branch -- so a relay with no key hard-fails at startup with 'BUZZ_RELAY_PRIVATE_KEY must be set' regardless of BUZZ_REQUIRE_RELAY_MEMBERSHIP or BUZZ_REQUIRE_AUTH_TOKEN."
     entry_class: FACT
     evidence:
-      - ".env.example"
-      - "crates/buzz-relay/src/main.rs"
-      - "crates/buzz-relay/src/config.rs"
+      - "crates/buzz-relay/src/main.rs:38-45"
+      - "crates/buzz-relay/src/main.rs:156"
   - statement: "Both this repository's Compose bundle and its Helm chart print an identical operator checklist naming the same five durable items to preserve: BUZZ_RELAY_PRIVATE_KEY, the Postgres database, the S3 bucket, the git on-disk path, and an owner private key that the chart states is 'held by the operator, not by this chart' and is restored only by re-installing with the same ownerPubkey."
     entry_class: FACT
     evidence:

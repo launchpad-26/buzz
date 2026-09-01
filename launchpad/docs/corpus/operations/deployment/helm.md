@@ -99,9 +99,10 @@ evidence:
       - "deploy/charts/buzz/README.md"
       - "deploy/charts/buzz/values.yaml"
   - statement: "40 forward-only, sequentially numbered .sql files exist under migrations/ at the recorded revision (0001_initial_schema.sql through 0040_push_message_kinds.sql), and no file or naming convention for a down/reverse migration was found there."
-    entry_class: FACT
+    entry_class: INFERENCE
     evidence:
       - "list_migrations(migrations/*.sql) -> 40 files, 0001_initial_schema.sql..0040_push_message_kinds.sql; list_migrations(migrations/, grep -i down) -> no matches, exit 1, at commit 473205a7457b208455f188847bfb27b01aa83cac"
+    confidence: 0.9
   - statement: "buzz-admin's CLI defines a Migrate subcommand (crates/buzz-admin/src/main.rs), which the README names as the command an operator runs against the database before every helm install / helm upgrade when migrate.autoMigrate is set to false; in that mode the chart does not run migrations itself, readiness probes verify only DB connectivity and not schema freshness, and the values knob migrate.preUpgradeJob.enabled is reserved but not yet implemented by any chart template ('on the chart roadmap' per the README)."
     entry_class: FACT
     evidence:
@@ -109,9 +110,10 @@ evidence:
       - "deploy/charts/buzz/README.md"
       - "deploy/charts/buzz/values.yaml"
   - statement: "No occurrence of the word 'rollback' was found in deploy/charts/buzz/README.md, RELEASING.md, CONTRIBUTING.md, ARCHITECTURE.md, or TESTING.md at the recorded revision; the chart defines no rollback-specific template, job, or documented procedure of its own."
-    entry_class: FACT
+    entry_class: INFERENCE
     evidence:
       - "grep_rollback(deploy/charts/buzz/README.md, RELEASING.md, CONTRIBUTING.md, ARCHITECTURE.md, TESTING.md) -> no matches, exit 1, at commit 473205a7457b208455f188847bfb27b01aa83cac"
+    confidence: 0.85
   - statement: "Because schema migrations run forward-only and automatically at every pod start with no down-migration mechanism found in this repository, a `helm rollback` to a chart/image revision that predates a since-applied migration reverts the Deployment's Pod template but not the database schema those older Pods expect -- the older relay code then runs against a newer schema, which this repository's own migration story gives no rollback path out of."
     entry_class: INFERENCE
     evidence:

@@ -92,9 +92,10 @@ evidence:
     evidence:
       - "Justfile"
   - statement: "No file under this repository's launchpad/ tree (searched for push-gateway, buzz-push-gateway, and push_gateway across *.tf, *.yaml, and *.yml, and separately for any file named like Terraform or ArgoCD material) provisions, deploys, or references a live push-gateway instance, and no launchpad-scoped push-gateway deployment manifest, Terraform stack, or ArgoCD application was found anywhere in the repository."
-    entry_class: FACT
+    entry_class: INFERENCE
     evidence:
       - "grep_recursive('push-gateway|buzz-push-gateway|push_gateway', paths='launchpad/', includes='*.tf,*.yaml,*.yml') -> matches only under launchpad/docs/corpus and launchpad/plans; find(launchpad, iname='*terraform*' or iname='*argocd*') -> no results"
+    confidence: 0.85
   - statement: "Given the chart's declared inputs (image.repository/tag/digest, existingSecret, migration.existingSecret, publicDeliveryUrl, profiles.dogfood, appAttestRoot, resources, networkPolicy, httpRoute) and Helm's own hook-ordering semantics for pre-install/pre-upgrade Jobs, the applicable operator command to install or upgrade a release is a standard `helm upgrade --install <release> deploy/charts/buzz-push-gateway -f deploy/charts/buzz-push-gateway/values-production.yaml -f <environment-overrides.yaml>` invocation; no literal command of this shape is written anywhere in this repository, so this is reasoned from the chart's structure rather than read from a documented example."
     entry_class: INFERENCE
     evidence:

@@ -58,8 +58,8 @@ evidence:
   - statement: "`readiness_handler` returns 503 immediately if the in-process `shutting_down` flag is set; otherwise it concurrently checks a Postgres ping, a Redis pool acquisition, and the deletion-serving catalog, and only reports ready when all three succeed. `liveness_handler` returns `200 ok` unconditionally with no dependency checks at all."
     entry_class: FACT
     evidence:
-      - "crates/buzz-relay/src/router.rs:397-424"
-      - "crates/buzz-relay/src/router.rs:400-403"
+      - "crates/buzz-relay/src/router.rs:410-449"
+      - "crates/buzz-relay/src/router.rs:405-407"
   - statement: "The relay's own graceful-shutdown contract, stated in `main.rs`'s doc comment on its restart handler: on `SIGTERM`, `shutting_down` flips true (readiness starts returning 503) and a fixed 5s grace period runs before listeners close and the hard drain begins; the hard drain (`GRACEFUL_DRAIN_TIMEOUT` = 30s) closes live WebSocket connections with up to `MAX_DRAIN_JITTER_MS` (20s) of per-connection jitter plus a close-frame acknowledgment wait, for a documented worst case of 5s + 30s = 35s from signal to forced exit."
     entry_class: FACT
     evidence:
@@ -97,11 +97,18 @@ evidence:
       - "crates/buzz-relay/src/router.rs:303-334"
       - "crates/buzz-relay/src/router.rs:380-387"
       - "crates/buzz-relay/src/nip11.rs:222-231"
-  - statement: "`crates/buzz-relay/src/config.rs`'s documented required/central runtime inputs include `DATABASE_URL`, `REDIS_URL`, `BUZZ_S3_*` (endpoint/access key/secret key/bucket), `RELAY_URL`, and an optional `BUZZ_RELAY_PRIVATE_KEY` (a fresh keypair is generated at startup if absent, which is explicitly not durable identity); `deploy/compose/.env.example` names the same set as production secrets that must be generated once and preserved, alongside `RELAY_OWNER_PUBKEY` and `BUZZ_GIT_HOOK_HMAC_SECRET`."
+  - statement: "`crates/buzz-relay/src/config.rs`'s documented required/central runtime inputs include `DATABASE_URL`, `REDIS_URL`, `BUZZ_S3_*` (endpoint/access key/secret key/bucket) and `RELAY_URL`; `deploy/compose/.env.example` names the same set as production secrets that must be generated once and preserved, alongside `RELAY_OWNER_PUBKEY` and `BUZZ_GIT_HOOK_HMAC_SECRET`."
     entry_class: FACT
     evidence:
       - "crates/buzz-relay/src/config.rs:144-190"
       - "deploy/compose/.env.example:16-36"
+  - statement: "`config.rs`'s doc comment on `relay_private_key` still describes `BUZZ_RELAY_PRIVATE_KEY` as optional -- \"If absent, a fresh keypair is generated at startup\" -- but `main.rs` no longer behaves that way: `relay_keypair_from_config` is called unconditionally at line 156 and returns \"BUZZ_RELAY_PRIVATE_KEY must be set\" whenever the value is absent, so the relay refuses to start rather than generating an ephemeral identity. Per ADR-0029, executable behaviour outranks documentation for a current-behaviour claim, so the key is required; the doc comment is stale."
+    entry_class: FACT
+    evidence:
+      - "crates/buzz-relay/src/config.rs:188-190"
+      - "crates/buzz-relay/src/main.rs:38-45"
+      - "crates/buzz-relay/src/main.rs:156"
+      - "launchpad/decisions/ADR-0029-corpus-evidence-precedence.md"
   - statement: "`deploy/compose/run.sh`'s `require_env` refuses to start the stack (`start`/`restart`/`pull`/`upgrade`/`config`) when `.env` is missing or still contains a `CHANGE_ME` placeholder, so an operator cannot boot the relay against unresolved secrets by accident on that platform."
     entry_class: FACT
     evidence:
@@ -176,9 +183,11 @@ subsequent release.
 2. **Supply the environment and secrets the relay needs to start.** At minimum:
    `DATABASE_URL` (Postgres), `REDIS_URL` (Redis), the `BUZZ_S3_*` family
    (endpoint, access key, secret key, bucket) for object storage, and a
-   durable `BUZZ_RELAY_PRIVATE_KEY` — if you leave it unset, the relay
-   generates a fresh keypair every boot, which is not stable identity and
-   should never be relied on past a single process lifetime. Set
+   durable `BUZZ_RELAY_PRIVATE_KEY` — if you leave it unset the relay does not
+   start at all, exiting with `BUZZ_RELAY_PRIVATE_KEY must be set`. (`config.rs`
+   still documents the variable as optional, with a fresh keypair generated at
+   startup when absent; that comment is stale — `main.rs` checks the key
+   unconditionally before any conditional branch runs.) Set
    `RELAY_OWNER_PUBKEY` if you already know who owns this deployment; it is
    bootstrapped into `relay_members` with the `owner` role on first startup.
    Whether these values live in a `.env` file, a Kubernetes `Secret`, or

@@ -119,11 +119,12 @@ evidence:
     evidence:
       - "crates/buzz-relay/src/handlers/req.rs"
     confidence: 0.8
-  - statement: "Because PostgreSQL cannot alter a generated column's expression in place -- the reason migrations 0014 and 0033 each drop and re-add events.search_tsv rather than issuing an ALTER ... ALTER COLUMN -- the same drop-and-re-add shape, applied with the prior CASE expression captured before a change, is the available way to reverse an allowlist rewrite; this repository does not document or script that reverse operation anywhere, so applying it correctly is the responder's to verify against the captured prior expression, not a tested, ready-made rollback command."
+  - statement: "Because PostgreSQL cannot alter a generated column's expression in place -- the reason migrations 0014 and 0033 each drop and re-add events.search_tsv rather than issuing an ALTER ... ALTER COLUMN -- the same drop-and-re-add shape, applied with the prior CASE expression captured before a change, is the available way to reverse an allowlist rewrite; this repository does not document or script that reverse operation anywhere, so applying it correctly is the responder's to verify against the captured prior expression, not a tested, ready-made rollback command. The maintenance script itself is three statements -- DROP COLUMN, ADD COLUMN ... GENERATED ... STORED, and CREATE INDEX idx_events_search_tsv ON events USING GIN (search_tsv) -- so a reversal that omits the index leaves search unindexed."
     entry_class: INFERENCE
     evidence:
       - "migrations/0014_push_lease_fts.sql"
       - "migrations/0033_private_managed_agent_fts.sql"
+      - "scripts/maintenance/nip_rs_search_allowlist.sql:11-19"
       - "scripts/maintenance/nip_rs_search_allowlist.sql"
     confidence: 0.75
   - statement: "Issue #1224 is the sibling runbook task in this same Feature for a Postgres-unavailable condition generally, titled 'task: document operations/runbooks/postgres-unavailable.md'."
@@ -409,11 +410,25 @@ preference:
    allowlist (see branch 3's resolution). **Rollback:** because PostgreSQL
    cannot alter a generated expression in place, the script's own
    `DROP COLUMN` / `ADD COLUMN ... GENERATED ALWAYS AS (...) STORED` shape is
-   also how to reverse it — re-run the same two statements with the prior
+   also how to reverse it — re-run the same statements with the prior
    `CASE` expression (captured from the `pg_get_expr` query in *Diagnosis*
    branch 3 before running the script) in place of the new one, under the
-   same maintenance-window and lock-timeout discipline. There is no cheaper
-   undo; treat the pre-change expression capture as mandatory, not optional.
+   same maintenance-window and lock-timeout discipline. **The script is three
+   statements, not two:** dropping `search_tsv` also drops the GIN index that
+   rides on it, so a reversal that re-adds only the column leaves search
+   unindexed and every query sequential-scanning the events heap. Re-run
+   `CREATE INDEX idx_events_search_tsv ON events USING GIN (search_tsv);` as
+   the third statement, exactly as the script does, and confirm the index
+   exists before declaring the rollback complete:
+
+   ```sql
+   SELECT indexname FROM pg_indexes
+   WHERE tablename = 'events' AND indexname = 'idx_events_search_tsv';
+   ```
+
+   There is no cheaper undo, and this reversal is hand-assembled rather than
+   repository-provided or tested: treat the pre-change expression capture as
+   mandatory, not optional.
 5. **Schema integrity (branch 3, missing expression) or Postgres
    availability (branch 1)** — do not attempt ad hoc DDL against
    `search_tsv`. Escalate immediately per *Escalation* below; this is

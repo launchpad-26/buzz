@@ -25,10 +25,12 @@ evidence:
     entry_class: FACT
     evidence:
       - ".env.example"
-  - statement: "`crates/buzz-relay/src/main.rs` requires `BUZZ_RELAY_PRIVATE_KEY` (`config.relay_private_key`) to be present only when `BUZZ_REQUIRE_RELAY_MEMBERSHIP=true`, returning a startup error stating \"NIP-43 events signed with an ephemeral key become unverifiable after restart\" when it is absent under that condition; when relay membership is not required, the relay does not error on a missing key at this check."
+  - statement: "`crates/buzz-relay/src/main.rs` requires `BUZZ_RELAY_PRIVATE_KEY` unconditionally: `relay_keypair_from_config` is called at line 156, immediately after `Config::from_env()` and before any conditional branch, and returns the error \"BUZZ_RELAY_PRIVATE_KEY must be set. Run `just bootstrap` for local development or configure a stable 32-byte hex private key.\" whenever the value is absent. A second check further down (line 260) returns \"BUZZ_RELAY_PRIVATE_KEY is required when BUZZ_REQUIRE_RELAY_MEMBERSHIP=true. NIP-43 events signed with an ephemeral key become unverifiable after restart.\" — but that branch can only be reached once the unconditional check has already passed, so it never fires in practice and the NIP-43 message is not the error an operator with no key actually sees."
     entry_class: FACT
     evidence:
-      - "crates/buzz-relay/src/main.rs"
+      - "crates/buzz-relay/src/main.rs:38-45"
+      - "crates/buzz-relay/src/main.rs:156"
+      - "crates/buzz-relay/src/main.rs:260-265"
   - statement: "`crates/buzz-relay/src/main.rs` calls `Config::from_env()` exactly once, at process startup, and contains no `SIGHUP` handler, admin reload endpoint, or other mechanism that re-reads `Config` after startup — confirmed by inspecting the file for both call sites and any reload-related code, finding none besides the one startup call."
     entry_class: FACT
     evidence:
@@ -158,17 +160,18 @@ restart.
    `BUZZ_RELAY_PRIVATE_KEY` in whatever configuration mechanism your
    deployment uses to reach the relay's process environment — this repository
    does not itself provide a production secret store; see *Boundary* below.
-4. Preserve that value across restarts and backups. If it is lost or changed,
-   the relay's previously published NIP-43 membership events and other
-   relay-signed addressable events remain on disk but can no longer be
-   verified as coming from the same relay identity, and `BUZZ_REQUIRE_RELAY_
-   MEMBERSHIP=true` deployments fail to start until a key is supplied again.
+4. Preserve that value across restarts and backups. If it is lost, **no relay
+   starts at all** — the key is required unconditionally, not only under
+   `BUZZ_REQUIRE_RELAY_MEMBERSHIP=true`. If it is *changed*, the relay starts,
+   but its previously published NIP-43 membership events and other relay-signed
+   addressable events remain on disk while no longer verifying as coming from
+   the same relay identity.
 5. Restart the relay process to pick up a newly set or changed value — the
    relay reads its full configuration exactly once, at startup, and has no
    mechanism to reload it while running.
 6. Verify: confirm `BUZZ_RELAY_PRIVATE_KEY=<64 hex chars>` is present in the
    file you set it in, then start the relay and confirm it does not exit with
-   the "BUZZ_RELAY_PRIVATE_KEY is required" startup error described above.
+   the "BUZZ_RELAY_PRIVATE_KEY must be set" startup error described above.
 
 ## Generate an agent or CLI identity key (`BUZZ_PRIVATE_KEY`)
 

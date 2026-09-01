@@ -100,10 +100,11 @@ evidence:
     entry_class: FACT
     evidence:
       - "crates/buzz-admin/src/main.rs:151-156"
-  - statement: "The Docker Compose bundle's admin wrapper commands (add-member, remove-member, list-members) all invoke docker compose exec relay /usr/local/bin/buzz-admin <subcommand>, establishing that /usr/local/bin/buzz-admin is the binary's path inside the running relay container; run.sh defines no dedicated migrate wrapper, so an operator runs buzz-admin migrate the same way, substituting the subcommand."
+  - statement: "The Docker Compose bundle's admin wrapper commands (add-member, remove-member, list-members) all invoke docker compose exec relay /usr/local/bin/buzz-admin <subcommand>, establishing that /usr/local/bin/buzz-admin is the binary's path inside the relay image; run.sh defines no dedicated migrate wrapper. Those wrappers assume a healthy relay, though, and compose.yml gives the relay service restart: unless-stopped -- so in this runbook's own failure state the container is crash-looping and docker compose exec, which attaches to a running container, is the wrong verb. docker compose run --rm --entrypoint /usr/local/bin/buzz-admin relay migrate starts a fresh one-shot container from the same image and environment instead."
     entry_class: FACT
     evidence:
       - "deploy/compose/run.sh:90-96"
+      - "deploy/compose/compose.yml:47"
   - statement: "deploy/compose/run.sh's backup_hint function lists what to back up before an upgrade and on a regular schedule: deploy/compose/.env (BUZZ_RELAY_PRIVATE_KEY, DB/Redis/S3 secrets, BUZZ_GIT_HOOK_HMAC_SECRET), the owner private key if bootstrap generated one, Postgres data (pg_dump or a quiesced volume snapshot), MinIO/S3 bucket contents, the buzz-git-data volume, and Caddy data/config volumes if used, and states plainly to keep the Postgres and object/git snapshots from the same maintenance window."
     entry_class: FACT
     evidence:
@@ -209,10 +210,16 @@ held.
   (`DATABASE_URL`), with a role that can run DDL and query
   `pg_stat_activity`/`pg_locks`/`_sqlx_migrations`.
 - For Docker Compose: shell access to the host and `docker compose` (or the
-  wrapper, `./launchpad/deploy/run.sh`); `docker compose exec relay
-  /usr/local/bin/buzz-admin migrate` is how `buzz-admin` is invoked inside the
-  running container — `run.sh` defines no dedicated `migrate` subcommand of
-  its own.
+  wrapper, `./launchpad/deploy/run.sh`). `run.sh` defines no `migrate`
+  subcommand of its own, and the admin wrappers it does define reach the binary
+  as `docker compose exec relay /usr/local/bin/buzz-admin <subcommand>`.
+  **`exec` needs a running container, and this runbook's failure state is a
+  relay that exited** — the service carries `restart: unless-stopped`, so it is
+  crash-looping, not sitting still, and `exec` will race the restart or fail
+  outright. Use `docker compose run --rm --entrypoint /usr/local/bin/buzz-admin
+  relay migrate` instead, which starts a fresh one-shot container from the same
+  image and environment, or run `buzz-admin` from outside the stack against the
+  same `DATABASE_URL`. Reserve `exec` for a relay that is actually up.
 - For Kubernetes: `kubectl` access to the namespace, and — if
   `migrate.autoMigrate=false` — the ability to run a `buzz-admin migrate`
   Pod/Job against the same database.
@@ -293,19 +300,34 @@ held.
 Try these in the order a responder would reasonably reach them; each names
 whether it mutates anything.
 
-1. **Ambiguous pre-0007 data (non-destructive, safe to inspect).** This guard
+1. **Ambiguous pre-0007 data (the guard is non-destructive; your repair is
+   not).** This guard
    runs *before* `sqlx`'s own migrator starts anything, so a block here has
    applied nothing and mutated nothing — confirmed by this repository's own
    test, which asserts the applied-migration set and the offending row's
    content are byte-for-byte unchanged after a blocked attempt. Query the
    `events` table for `kind = 30078` rows whose `tags` do not have exactly one
    `d` tag matching the row's own `d_tag` and exactly one `["t",
-   "read-state"]` tag — that is the shape the guard checks. Repair or remove
-   the nonconforming rows per your own data-correctness judgment (this
-   runbook does not prescribe the repair SQL, since the correct fix depends on
-   what produced the ambiguous tags), then restart the relay (or re-run
-   `buzz-admin migrate`) to retry. A retry after repair is exactly what this
-   repository's own test exercises and expects to succeed.
+   "read-state"]` tag — that is the shape the guard checks.
+
+   **Capture the offending rows before you change one of them.** The guard
+   detects nonconforming rows; nothing in this repository defines what their
+   correct replacement is, so the repair is your judgment call operating on
+   signed event history that cannot be regenerated. Preserve the full rows
+   first, outside the database:
+
+   ```sql
+   \copy (SELECT id, pubkey, kind, created_at, d_tag, tags, content, sig
+          FROM events WHERE kind = 30078 AND <the guard's shape predicate>)
+     TO 'pre-0007-ambiguous-rows.json'
+   ```
+
+   Then prefer repairing a row's `tags` over deleting the row: deletion
+   destroys a signed event permanently, and this repository's own test
+   exercises exactly the repair-then-retry path, not a delete-then-retry one.
+   If you cannot establish what the tags should have been, that is an
+   escalation, not a licence to delete — see *Escalation* below. Once the rows
+   conform, restart the relay (or re-run `buzz-admin migrate`) to retry.
 
 2. **Checksum or version mismatch (do not edit already-shipped migration
    files).** This repository's own migration comments treat every
@@ -343,9 +365,11 @@ whether it mutates anything.
    anything and creates a second incident.
 
 5. **Manual out-of-band migration.** Independent of which of the above
-   applies, `buzz-admin migrate` (Compose: `docker compose exec relay
-   /usr/local/bin/buzz-admin migrate`; Kubernetes: a one-shot Pod/Job running
-   the same binary) calls the identical `run_migrations` entry point the
+   applies, `buzz-admin migrate` (Compose: `docker compose run --rm
+   --entrypoint /usr/local/bin/buzz-admin relay migrate` — **not** `exec`,
+   which needs a running container and this relay is crash-looping;
+   Kubernetes: a one-shot Pod/Job running the same binary) calls the identical
+   `run_migrations` entry point the
    relay's own startup calls, under the same advisory lock. Running it
    separately from relay startup is the Helm chart's own recommended pattern
    for large installations, specifically so migration progress and Postgres
@@ -383,8 +407,9 @@ confirmed to be on the schema version it should be:
 
 ### Evidence to preserve
 
-Before touching anything that writes to the database (steps 2 and 4 under
-*Mitigation and resolution*, and certainly before any restore), capture:
+Before touching anything that writes to the database — step 1's row repair,
+step 2 and step 4 under *Mitigation and resolution*, and certainly before any
+restore — capture:
 
 - The full text of the failing log line (`Failed to run database migrations:
   {e}`) and, if reachable, the container/pod's complete startup log for that
@@ -398,6 +423,11 @@ Before touching anything that writes to the database (steps 2 and 4 under
   call.
 - For a suspected checksum/version mismatch: the deployed image's tag/digest
   and the exact set of files under its embedded `migrations/` directory.
+- For a pre-0007 ambiguous-data block (step 1): the complete offending rows —
+  `id`, `pubkey`, `kind`, `created_at`, `d_tag`, `tags`, `content` and `sig` —
+  exported to a file before any repair or deletion. These are signed events;
+  once altered or removed they cannot be reconstructed from anything else in
+  the deployment.
 - A fresh backup per the deployment's own checklist — Compose:
   `deploy/compose/run.sh`'s `backup_hint` (`.env` secrets, `pg_dump` or a
   quiesced Postgres volume snapshot, MinIO/S3 bucket contents, the

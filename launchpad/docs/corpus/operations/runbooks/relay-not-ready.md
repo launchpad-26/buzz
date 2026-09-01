@@ -39,6 +39,12 @@ evidence:
     evidence:
       - "crates/buzz-relay/src/main.rs"
       - "migrations/0032_channel_roster_snapshot_fence.sql"
+  - statement: "`relay_keypair_from_config` turns an absent `BUZZ_RELAY_PRIVATE_KEY` into the error \"BUZZ_RELAY_PRIVATE_KEY must be set. Run `just bootstrap` for local development or configure a stable 32-byte hex private key.\", and `main` calls it at line 156 -- immediately after `Config::from_env()` and before the Postgres pool is built -- so a relay with no signing key exits before it reaches any dependency check, unconditionally and regardless of `BUZZ_REQUIRE_RELAY_MEMBERSHIP`. The membership-conditional message at line 260 is therefore unreachable when the key is absent."
+    entry_class: FACT
+    evidence:
+      - "crates/buzz-relay/src/main.rs:38-45"
+      - "crates/buzz-relay/src/main.rs:156"
+      - "crates/buzz-relay/src/main.rs:260-265"
   - statement: "The git object-store A3 conformance probe runs at startup whenever `BUZZ_GIT_CONFORMANCE_PROBE` is unset or not the literal string `\"false\"`, and its error is likewise propagated with `?`, ending the process before the health-port listener binds."
     entry_class: FACT
     evidence:
@@ -213,44 +219,55 @@ the process restarts names the cause directly. In order of where they run:
 1. **`Invalid configuration: ...`** -- `Config::from_env()` rejected an
    environment variable. No health port was ever bound; probes see connection
    refused, not a slow or failing HTTP response.
-2. **`DB connection failed: ...`** or **`Failed to connect to Postgres:
+2. **`BUZZ_RELAY_PRIVATE_KEY must be set. Run `just bootstrap` for local
+   development or configure a stable 32-byte hex private key.`** -- the relay
+   requires its signing key unconditionally, and checks for it immediately
+   after configuration parsing and before it dials Postgres. A deployment
+   that has never set the variable never reaches any dependency check at all,
+   so this cause looks identical to case 3 from the outside and is
+   distinguished only by this log line.
+3. **`DB connection failed: ...`** or **`Failed to connect to Postgres:
    ...`** -- the writer Postgres pool could not be established. Hand off to
    the postgres-unavailable runbook (issue #1224 in this same corpus batch)
    for Postgres-side diagnosis and recovery; this node does not duplicate it.
-3. **`Failed to run database migrations: ...`** -- only possible when
+4. **`Failed to run database migrations: ...`** -- only possible when
    `BUZZ_AUTO_MIGRATE` is enabled; a pending migration failed to apply.
-4. **`Community deletion serving fence is unsafe: ...`** -- the same
+5. **`Community deletion serving fence is unsafe: ...`** -- the same
    schema-shape check `/_readiness` runs (`deletion_catalog`) also runs at
    startup and is fatal there. If this is the line, the fix is a schema
    migration, not a Postgres-reachability fix, even though the symptom
    (relay down) looks the same as case 2.
-5. **`Channel roster fence is unsafe; apply or repair migration 0032 before
+6. **`Channel roster fence is unsafe; apply or repair migration 0032 before
    starting this relay: ...`** -- names the exact migration file
    (`migrations/0032_channel_roster_snapshot_fence.sql`) to check.
-6. **`git conformance probe failed: ...`** -- the A3 object-store
+7. **`git conformance probe failed: ...`** -- the A3 object-store
    conformance probe rejected the configured git backend. Check
    `BUZZ_GIT_CONFORMANCE_PROBE`/`BUZZ_GIT_PROBE_WRITERS`/`BUZZ_GIT_PROBE_ROUNDS`
    and the backing object-store's support for conditional writes.
-7. **`BUZZ_REQUIRE_RELAY_MEMBERSHIP=true but RELAY_OWNER_PUBKEY is not set or
-   invalid`** or **`BUZZ_RELAY_PRIVATE_KEY is required when
-   BUZZ_REQUIRE_RELAY_MEMBERSHIP=true`** -- a configuration inconsistency
-   between two flags, not a dependency outage.
-8. **`Redis pool creation failed: ...`** or **`PubSub init failed: ...`** --
+8. **`BUZZ_REQUIRE_RELAY_MEMBERSHIP=true but RELAY_OWNER_PUBKEY is not set or
+   invalid`** -- a configuration inconsistency between two flags, not a
+   dependency outage. Its sibling message `BUZZ_RELAY_PRIVATE_KEY is required
+   when BUZZ_REQUIRE_RELAY_MEMBERSHIP=true` exists in the source but is
+   unreachable: `relay_keypair_from_config` rejects a missing key
+   unconditionally and much earlier, with **`BUZZ_RELAY_PRIVATE_KEY must be
+   set`**. That is the message a keyless relay actually prints, whatever the
+   membership flag says.
+9. **`Redis pool creation failed: ...`** or **`PubSub init failed: ...`** --
    rare in practice: pool construction and `PubSubManager` initialization do
    no real Redis I/O (see the evidence ledger), so this almost always means a
    malformed `REDIS_URL`, not an unreachable Redis host. An unreachable Redis
    host at boot does **not** stop the process from starting; if the process
    is crash-looping, this is not why.
-9. **`Search DB connection failed: ...`** or **`Audit DB connection failed:
+10. **`Search DB connection failed: ...`** or **`Audit DB connection failed:
    ...`** -- a second, separate Postgres connection (search replica or audit
    database) failed, distinct from the writer pool in case 2.
-10. **`invalid media config: ...`** or **`failed to initialize media
+11. **`invalid media config: ...`** or **`failed to initialize media
     storage: ...`** -- a configuration/construction failure for object
     storage, distinct from the object-storage-unavailable runbook's subject
     (issue #1223), which covers a reachable-but-failing store after startup.
 
 If none of these lines appear and the process is exiting anyway (for
-example, `Drain timeout exceeded -- forcing exit`), that is the graceful-shutdown
+example, `Drain timeout exceeded — forcing exit`), that is the graceful-shutdown
 hard-stop firing after a SIGTERM -- expected during a deploy or manual
 restart, not a fault; confirm a deploy or `docker compose restart relay` was
 in flight around the same timestamp.
@@ -268,7 +285,7 @@ overrides it.) Three shapes, three different next steps:
   and the relay is draining. Expected during a deploy or restart; wait for
   the rollout to finish. If this persists far longer than the configured
   termination grace period, the drain itself may be stuck -- check for the
-  `Drain timeout exceeded -- forcing exit` log line, which forces the process
+  `Drain timeout exceeded — forcing exit` log line, which forces the process
   to exit and should end this state.
 - **`{"status": "not_ready", "postgres": false, ...}`, HTTP 503** -- Postgres
   is unreachable or the `SELECT 1` ping is failing. Hand off to the
@@ -357,7 +374,7 @@ pod will **not** be restarted by kubelet on that basis alone -- it stays
 - **Postgres or Redis genuinely unreachable**: follow the postgres-unavailable
   (#1224) or redis-unavailable (#1226) runbook; not duplicated here.
 - **Stuck in `shutting_down` past the expected drain window**: check whether
-  the graceful-drain hard-stop (`Drain timeout exceeded -- forcing exit`) has
+  the graceful-drain hard-stop (`Drain timeout exceeded — forcing exit`) has
   fired; if the process has not exited and no such deploy/restart was
   intended, treat it as a hung process and escalate per *Escalation*.
 

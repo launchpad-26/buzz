@@ -75,7 +75,7 @@ evidence:
     entry_class: FACT
     evidence:
       - "crates/buzz-admin/src/main.rs"
-  - statement: "generate-key prints a freshly generated Nostr keypair's hex public key and displayed secret key to stdout, followed by a one-line instruction to set BUZZ_PRIVATE_KEY to the secret key; it touches no database, Redis connection, or relay, unlike every other buzz-admin subcommand except pack-free -- it is the one subcommand connect_db()/connect_member_services() are never called for."
+  - statement: "generate-key prints a freshly generated Nostr keypair's hex public key and displayed secret key to stdout, followed by a one-line instruction to set BUZZ_PRIVATE_KEY to the secret key; it touches no database, Redis connection, or relay, unlike every other buzz-admin subcommand -- it is the one subcommand connect_db()/connect_member_services() are never called for."
     entry_class: FACT
     evidence:
       - "crates/buzz-admin/src/main.rs"

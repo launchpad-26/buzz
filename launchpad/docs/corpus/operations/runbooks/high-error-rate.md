@@ -164,8 +164,14 @@ directly (see *Diagnosis*, step 1) regardless of what the counter shows.
   agent-initiated work is failing.
 - **Elevated `rate-limited:`, `restricted:`, or `auth-required:` responses** — these are
   the relay's admission control and authorization working as designed (see *Diagnosis*,
-  step 4), not necessarily a defect; they still count toward a raw error-rate number and
-  need to be separated from genuine failures before deciding this is an incident at all.
+  step 4), not necessarily a defect. Note where they do and do not surface: on the HTTP
+  bridge they carry an HTTP status and so land in `http_requests_total`, but on the
+  WebSocket path they are `NOTICE`/`CLOSED`/`OK`-with-`false` frames sent *after* the
+  101 upgrade, and `track_metrics` records only the status Axum itself produced — so a
+  WebSocket flood of rejections moves the logs and the admission counters but **not**
+  the HTTP error rate. Separate them from genuine failures before calling this an
+  incident, and do not read a flat `http_requests_total` as proof the WebSocket surface
+  is healthy.
 - **`/_readiness` reporting `not_ready`** — new connections and HTTP requests may still be
   accepted by the process (readiness gates orchestration, not admission), but the
   dependency it named (`postgres`, `redis`, or `deletion_catalog`) is degraded, which is

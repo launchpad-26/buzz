@@ -53,9 +53,10 @@ evidence:
       - "crates/buzz-relay/src/telemetry.rs:20-24"
       - "crates/buzz-relay/src/telemetry.rs:253-268"
   - statement: "Searching every .rs file under crates/ and desktop/src-tauri for traceparent, tracestate, TraceContextPropagator, inject_context, extract_context and Propagator returns zero matches, so no W3C trace-context header extraction or injection exists anywhere in this workspace; the WebSocket-to-HTTP and HTTP-to-WebSocket boundaries this repository exposes carry no propagated trace context across process or transport boundaries today."
-    entry_class: FACT
+    entry_class: INFERENCE
     evidence:
       - "grep_workspace(pattern='traceparent|tracestate|TraceContextPropagator|inject_context|extract_context|Propagator', scope='crates/**/*.rs;desktop/src-tauri/**/*.rs') -> zero matches"
+    confidence: 0.85
   - statement: "crates/buzz-relay/src/connection.rs's WebSocket message dispatcher creates a named tracing::info_span! per client-message type (ws.auth, ws.event, ...) and calls .instrument(span) on the future before tokio::spawn-ing it, with the ws.event span declaring conn_id, event_id and kind fields (the latter two as tracing::field::Empty, recorded later); crates/buzz-relay/src/handlers/event.rs's handle_event carries #[tracing::instrument(skip_all, fields(event_id, kind))] and records both fields via tracing::Span::current().record(...) once parsed from the incoming message — so a single WebSocket EVENT message's two nested spans both carry the same event_id/kind identifiers, independent of whether OTEL export is enabled."
     entry_class: FACT
     evidence:
