@@ -162,8 +162,9 @@ def _is_canonical_location(path: Path, root: Path) -> bool:
     forbids -- the same review-final pass found the crash by committing a
     self-referential link.
 
-    The sibling check for citation *targets* lives in _classify_repo_path; this one
-    governs which files are corpus content in the first place.
+    The sibling check for citation *targets* lives in evidence.py's
+    `_verify_local` (reached through `_EVIDENCE_PARSER.verify_citation`); this
+    one governs which files are corpus content in the first place.
     """
     try:
         return path.resolve().is_relative_to(root)
@@ -589,56 +590,6 @@ class CitationVerdict:
 
 
 
-def _resolved_repo_file(path_text: str, repo_root_path: Path) -> Path | CitationVerdict:
-    if _is_prohibited_citation(path_text):
-        return CitationVerdict(
-            "error", "matches a prohibited credential-like pattern"
-        )
-    if PurePosixPath(path_text).is_absolute():
-        return CitationVerdict(
-            "error", "must be a repo-relative path, not absolute"
-        )
-
-    root = repo_root_path.resolve()
-    try:
-        candidate = (root / path_text).resolve()
-    except (OSError, RuntimeError):
-        return CitationVerdict("error", "cannot be resolved to a path")
-    if not candidate.is_relative_to(root):
-        return CitationVerdict("error", "resolves outside the repository")
-    if not candidate.is_file():
-        return CitationVerdict(
-            "error", "does not resolve to a real file in the repository"
-        )
-    return candidate
-
-
-def _file_line_count(path: Path) -> int:
-    line_count = 0
-    saw_any_bytes = False
-    last_byte = b""
-    with path.open("rb") as handle:
-        for chunk in iter(lambda: handle.read(8192), b""):
-            saw_any_bytes = True
-            line_count += chunk.count(b"\n")
-            last_byte = chunk[-1:]
-    if saw_any_bytes and last_byte != b"\n":
-        line_count += 1
-    return line_count
-
-
-def _classify_repo_position(
-    path_text: str, end_line: int, repo_root_path: Path
-) -> CitationVerdict:
-    candidate = _resolved_repo_file(path_text, repo_root_path)
-    if isinstance(candidate, CitationVerdict):
-        return candidate
-    if end_line > _file_line_count(candidate):
-        return CitationVerdict(
-            "error", "line position exceeds the cited file's length"
-        )
-    return CitationVerdict("ok")
-
 def _classify_url(url: str, *, check_links: bool) -> CitationVerdict:
     """Delegate a URL citation to evidence.py's registered verifier.
 
@@ -651,28 +602,6 @@ def _classify_url(url: str, *, check_links: bool) -> CitationVerdict:
     parsed = _EVIDENCE_PARSER.parse_citation(url)
     result = _EVIDENCE_PARSER.verify_citation(parsed, repo_root(), check_links=check_links)
     return CitationVerdict(result.status, result.detail)
-
-def _classify_commit_reference(text: str, repo_root_path: Path) -> CitationVerdict:
-    sha = text.split()[1]
-    result = subprocess.run(
-        ["git", "cat-file", "-e", f"{sha}^{{commit}}"],
-        cwd=repo_root_path,
-        stdout=subprocess.DEVNULL,
-        stderr=subprocess.DEVNULL,
-        check=False,
-    )
-    if result.returncode == 0:
-        return CitationVerdict("ok")
-    return CitationVerdict("error", "names a commit that does not exist in this repository")
-
-
-def _classify_repo_path(path_text: str, repo_root_path: Path) -> CitationVerdict:
-    """A repo-relative citation must resolve to a real file INSIDE the repository."""
-    candidate = _resolved_repo_file(path_text, repo_root_path)
-    if isinstance(candidate, CitationVerdict):
-        return candidate
-    return CitationVerdict("ok")
-
 
 def _classify_citation(
     citation: str, repo_root_path: Path, *, check_links: bool = False
