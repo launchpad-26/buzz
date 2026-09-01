@@ -33,6 +33,10 @@ evidence:
     evidence:
       - "crates/buzz-relay/src/protocol.rs:14-18"
       - "crates/buzz-relay/src/protocol.rs:41-67"
+  - statement: "ClientMessage::parse's final match arm rejects any first-array-element other than EVENT/REQ/CLOSE/COUNT/AUTH as RelayError::InvalidMessage(\"unknown message type: {other}\") -- an unrecognized top-level WS message name is refused, not silently ignored, and no version-negotiation field or handshake for the EVENT message was found in protocol.rs."
+    entry_class: FACT
+    evidence:
+      - "crates/buzz-relay/src/protocol.rs:170-173"
   - statement: "RelayMessage::event(sub_id, event) formats the relay-to-client push frame as the JSON array [\"EVENT\", sub_id, event_json]; RelayMessage::ok(event_id, accepted, message) formats [\"OK\", event_id, accepted, message]; RelayMessage::notice(message) formats [\"NOTICE\", message]."
     entry_class: FACT
     evidence:
@@ -161,6 +165,44 @@ NIP-01 (REQ, CLOSE, AUTH, COUNT, NOTICE, OK) uses.
 | Relay → client: acknowledge a submission | NIP-01 `["OK", <event_id>, <accepted>, <message>]`; formatted by `RelayMessage::ok` (`protocol.rs:203-206`) | Reports whether the submitted event was accepted, with a standardized message prefix on rejection. |
 | Relay → client: report a transport/parse-level problem | NIP-01 `["NOTICE", <message>]`; formatted by `RelayMessage::notice` (`protocol.rs:193-196`) | Used for frames that never resolve to a parsed `ClientMessage::Event` at all (malformed JSON, unknown message type, semaphore exhaustion), so no `event_id` exists to acknowledge via OK. |
 
+## Examples
+
+**Valid: authenticated submission, acceptance, and push to a matching
+subscriber.** A client that has completed NIP-42 `AUTH` sends (client → relay,
+per `ClientMessage::parse`'s `"EVENT"` arm, `protocol.rs:58-67`):
+
+```json
+["EVENT", {"id":"<64-hex event id>","pubkey":"<64-hex author pubkey>","created_at":1735689600,"kind":40002,"tags":[["h","<channel-uuid>"]],"content":"hello","sig":"<128-hex signature>"}]
+```
+
+The relay replies on the same connection, formatted by `RelayMessage::ok`
+(`protocol.rs:203-206`):
+
+```json
+["OK", "<64-hex event id>", true, ""]
+```
+
+Any connection with an active `REQ` subscription matching the event — subject
+to `filter_fanout_by_access` (`event.rs:115-222`) — then receives, formatted
+by `RelayMessage::event` (`protocol.rs:186-191`):
+
+```json
+["EVENT", "<their subscription id>", {"id":"<same event JSON as above>", "...": "..."}]
+```
+
+**Failure: submission before authentication completes.** An `EVENT` frame
+arriving on a connection whose `auth_state` is not yet
+`AuthState::Authenticated` is rejected by `handle_event` before any other
+check runs (`event.rs:634-654`):
+
+```json
+["OK", "<64-hex event id>", false, "auth-required: not authenticated"]
+```
+
+No storage write, fan-out, or workflow trigger occurs for a rejected event —
+the client must complete `AUTH` (see `architecture-flows-websocket-authentication`)
+and resubmit.
+
 ## Contract and stability
 
 **OK response shape.** Every accepted parse of a `["EVENT", ...]` frame ends in
@@ -206,6 +248,18 @@ identity-binding mismatch, and insufficient scope for the event's kind
 `handle_ephemeral_event`'s own narrower verify-and-publish path
 (`event.rs:794-906`) and skip storage, deduplication and these bounds
 entirely.
+
+**Versioning and compatibility.** The relay does not tolerate unrecognized
+top-level message names: `ClientMessage::parse`'s final match arm rejects any
+first-array-element other than `EVENT`/`REQ`/`CLOSE`/`COUNT`/`AUTH` as
+`RelayError::InvalidMessage("unknown message type: {other}")`
+(`protocol.rs:170-173`), which surfaces to the client as a `NOTICE`
+(`connection.rs:548-554`), not a silently-ignored frame. A protocol
+extension therefore cannot introduce a new top-level WS message type against
+an unmodified relay without that relay rejecting it. No explicit
+version-negotiation field or handshake for the `EVENT` message itself was
+found in `protocol.rs` or NIP-01 — compatibility for this message rests on
+NIP-01's own stability as a spec, not on a runtime version check.
 
 **Delivery access control.** Every relay-to-client `EVENT` push, on every
 fan-out route (local, post-commit, cross-node), passes through
