@@ -1,0 +1,27 @@
+{
+  "_comment": [
+    "Which launchpad/skills/* suites CI runs, and the minimum number of test",
+    "CASES each must still contain. Read by skill_test_matrix.py; see that",
+    "module's docstring for why a floor exists at all.",
+    "",
+    "Every skill directory containing a tests/ folder MUST appear in exactly one",
+    "of the two maps below. skill_test_matrix.py check fails otherwise, so a new",
+    "skill cannot land with its suite quietly unrun -- which is the gap issue",
+    "#2018 was filed to close.",
+    "",
+    "Floors are set to the count observed when the skill was wired in. Raise one",
+    "when a suite grows and you want the growth protected. Never lower one to",
+    "turn a red run green: a shrinking suite is the thing being guarded against."
+  ],
+  "run_here": {
+    "analysis-technique": 25,
+    "evidence-reduce": 90,
+    "gh-admin": 7,
+    "rca-report": 63,
+    "root-cause-analysis": 12,
+    "software-change-impact-assessment": 4
+  },
+  "covered_elsewhere": {
+    "review-queue-automation": ".github/workflows/launchpad-rqa-tests.yml"
+  }
+}

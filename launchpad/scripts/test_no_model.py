@@ -117,6 +117,8 @@ NOT_OURS = {
     "same reason as security_audit.py",
     "security_audit_agent_surface_check.py": "the #68 agent-surface secret-scan check; "
     "same reason as security_audit.py",
+    "skill_test_matrix.py": "the #2018 skill-test coverage guard and CI matrix; a "
+    "separate task, not part of the pre-flight stage this allowlist covers",
 }
 
 
