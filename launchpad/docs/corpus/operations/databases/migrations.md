@@ -86,7 +86,7 @@ evidence:
     evidence:
       - "deploy/compose/.env.example:20"
       - "deploy/compose/compose.yml:21"
-  - statement: "schema/schema.sql is a hand-maintained, from-scratch desired-state rendering of the same multi-tenant schema the incremental migrations build up to; its own header states it is 'the source of truth for fresh database setup' and names docs/multi-tenant-conformance.md as its governing contract, and it is applied not by sqlx but by the third-party pgschema tool (bin/pgschema, Hermit-pinned) via `./bin/pgschema apply --file schema/schema.sql --auto-approve`."
+  - statement: "schema/schema.sql is a hand-maintained, from-scratch desired-state rendering of the same multi-tenant schema the incremental migrations build up to; its own header states 'Source of truth for fresh database setup' and names docs/multi-tenant-conformance.md as its governing contract, and it is applied not by sqlx but by the third-party pgschema tool (bin/pgschema, Hermit-pinned) via `./bin/pgschema apply --file schema/schema.sql --auto-approve`."
     entry_class: FACT
     evidence:
       - "schema/schema.sql:1-13"
