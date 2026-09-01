@@ -58,11 +58,11 @@ evidence:
     entry_class: FACT
     evidence:
       - "crates/buzz-relay/src/handlers/community_provisioning.rs:280-300"
-      - "crates/buzz-db/src/lib.rs:1490-1528"
+      - "crates/buzz-db/src/store/community.rs:317-363"
   - statement: "create_community_with_owner rolls back and returns LimitReached when the owner is already at the configured per-owner community limit (never inserting the community row's owner, though the host row itself was already inserted by the earlier ON CONFLICT DO NOTHING in the same transaction and is undone by the rollback), and rolls back and returns HostExists when the host already existed for a different owner or role -- both are surfaced by the HTTP handler as 409 Conflict, never 500, and never leave a partially-provisioned row behind because the whole sequence is one transaction."
     entry_class: FACT
     evidence:
-      - "crates/buzz-db/src/lib.rs:1529-1567"
+      - "crates/buzz-db/src/store/community.rs:360-394"
       - "crates/buzz-relay/src/api/operator.rs:181-183"
   - statement: "A live integration test (ignored by default, requiring Postgres) exercises exactly this limit path: it provisions communities up to buzz_db::relay_members::MAX_COMMUNITIES_PER_OWNER for one owner, then asserts the next provisioning attempt returns 409 Conflict with an error message starting 'limit_reached:', and separately asserts the rejected fresh host was never persisted (lookup_community_by_host returns None for it) -- the representative verification for the LimitReached failure/rollback path."
     entry_class: FACT
@@ -71,7 +71,7 @@ evidence:
   - statement: "When create_only is false (the legacy/convergence mode), the request calls Db::ensure_configured_community, whose INSERT ... ON CONFLICT (lower(host)) DO UPDATE SET host = communities.host is guarded by WHERE communities.deletion_state = 'active' AND communities.deleted_at IS NULL, so the statement is idempotent for a live host but returns no row (mapped to a DbError::AccessDenied 'is permanently tombstoned') for a host whose community was already deleted -- a tombstoned host cannot be silently resurrected by a provisioning retry."
     entry_class: FACT
     evidence:
-      - "crates/buzz-db/src/lib.rs:1450-1480"
+      - "crates/buzz-db/src/store/community.rs:277-310"
   - statement: "In convergence mode, when initial_owner_pubkey is present the handler always calls Db::bootstrap_owner for the resolved community, even if the community already existed -- the module's own doc comment states this explicitly rotates any previous owner to admin, the same semantics as rotating the deployment-wide RELAY_OWNER_PUBKEY env var, so an operator-signed convergence request is documented as deployment-root authority rather than create-only authority (the reason create_only exists as a separate, non-rotating code path for client-triggered self-serve creation)."
     entry_class: FACT
     evidence:
@@ -103,7 +103,7 @@ evidence:
   - statement: "The per-owner community limit and its advisory-lock serialization exist specifically so that two concurrent create_only requests from the same owner cannot both observe the count check before either commits, which would let one owner exceed the configured quota -- read from the function's own inline comment rather than from a separate design document."
     entry_class: INFERENCE
     evidence:
-      - "crates/buzz-db/src/lib.rs:1494-1497"
+      - "crates/buzz-db/src/store/community.rs:326-333"
     confidence: 0.85
   - statement: "Issue #735's own Definition of Done requires the document to state trigger/preconditions/termination-outcome, list ordered interactions and data/state movement, identify authentication/authorization/trust-boundary crossings, and document failure/abort/rollback behavior linked to representative verification -- this is the checklist this node's Sequence, Diagram, Outcome and Boundary sections are built to satisfy."
     entry_class: TEAM_KNOWLEDGE
@@ -180,7 +180,7 @@ node's own subject.
    if a row was actually inserted checks the owner's current community count
    against the configured limit before inserting the `relay_members` owner
    row. (`crates/buzz-relay/src/handlers/community_provisioning.rs:280-300`,
-   `crates/buzz-db/src/lib.rs:1490-1528`)
+   `crates/buzz-db/src/store/community.rs:317-363`)
 8. **If `create_only` is false** (legacy/convergence mode):
    `Db::ensure_configured_community` runs
    `INSERT ... ON CONFLICT (lower(host)) DO UPDATE ... WHERE deletion_state = 'active' AND deleted_at IS NULL`,
@@ -188,7 +188,7 @@ node's own subject.
    was already tombstoned). If `initial_owner_pubkey` is present, the handler
    *always* calls `Db::bootstrap_owner` for the resolved community -- even if
    it already existed -- rotating any previous owner to admin.
-   (`crates/buzz-db/src/lib.rs:1450-1480`,
+   (`crates/buzz-db/src/store/community.rs:277-310`,
    `crates/buzz-relay/src/handlers/community_provisioning.rs:318-334`)
 9. When `require_relay_membership` is enabled and an owner bootstrap/rotation
    ran, the handler best-effort publishes a NIP-43 membership-list snapshot
@@ -277,7 +277,7 @@ reflects that single owner
   returns 409 Conflict. A live integration test provisions communities up to
   the configured per-owner limit, asserts the next attempt returns 409 with an
   error starting `"limit_reached:"`, and asserts the rejected fresh host was
-  never persisted (`crates/buzz-db/src/lib.rs:1529-1567`,
+  never persisted (`crates/buzz-db/src/store/community.rs:360-394`,
   `crates/buzz-relay/src/api/operator.rs:1079-1109`).
 - **Database persistence failure** after all format/authorization checks
   passed → 500 Internal Server Error, logged server-side without leaking the

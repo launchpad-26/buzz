@@ -30,7 +30,7 @@ evidence:
     entry_class: FACT
     evidence:
       - "crates/buzz-relay/src/main.rs:166-186"
-      - "crates/buzz-db/src/lib.rs:677-696"
+      - "crates/buzz-db/src/runtime/mod.rs:488-517"
   - statement: "Database migrations only run when the BUZZ_AUTO_MIGRATE environment variable parses as a truthy value (true/1/yes/on, case-insensitive); otherwise startup logs that migrations were skipped and proceeds without applying schema changes."
     entry_class: FACT
     evidence:

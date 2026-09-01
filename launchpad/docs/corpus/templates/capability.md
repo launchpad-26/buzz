@@ -61,9 +61,8 @@ evidence:
     evidence:
       - "https://cdn.ymaws.com/www.businessarchitectureguild.org/resource/resmgr/bizbok_10/introduction_v10_final.pdf"
   - statement: "The Open Group's TOGAF Standard business-capabilities page (pubs.opengroup.org/togaf-standard/business-architecture/business-capabilities.html) redirects unauthenticated requests to an OAuth login at identity.opengroup.org, so TOGAF's own capability definition and its capability-mapping guidance were not read directly for this node -- a blocker of the same shape #1348 (specification template) hit and documented when iso.org blocked every fetch of ISO/IEC/IEEE 29148:2018."
-    entry_class: FACT
-    evidence:
-      - "https://pubs.opengroup.org/togaf-standard/business-architecture/business-capabilities.html"
+    entry_class: TEAM_KNOWLEDGE
+    provided_by: "batch-4 capability template authoring session; unauthenticated fetch attempt against The Open Group publication URL"
   - statement: "An unmerged research note (launchpad/Research/project-documentation-templates.md, PR #1466, branch docs/research-project-doc-templates) discusses Diataxis's four forms and The Good Docs Project's templates as its main subject matter, and a case-insensitive grep of that note's full text for 'capabilit' returns zero matches -- neither #1329 nor any capability-shaped topic is covered by it."
     entry_class: FACT
     evidence:

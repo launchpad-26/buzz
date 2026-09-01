@@ -56,8 +56,8 @@ evidence:
   - statement: "The capability is exercised by both unit and end-to-end tests: `crates/buzz-relay/src/handlers/imeta.rs`'s own unit tests cover accepted well-formed tags, a hash-mismatch rejection, generic-file attachments with a `filename`, an `application/octet-stream` file, a path-separator injection in `filename`, and a malformed-MIME rejection; `crates/buzz-test-client/tests/e2e_media_video.rs`'s `test_video_poster_imeta_accepted_via_ws` and `test_video_poster_imeta_rejects_video_as_poster` and `crates/buzz-test-client/tests/e2e_media_extended.rs`'s `test_ws_valid_imeta`, `test_ws_invalid_imeta_external_url` and `test_ws_invalid_imeta_missing_fields` exercise the same validation over a live WebSocket connection."
     entry_class: FACT
     evidence:
-      - "crates/buzz-relay/src/handlers/imeta.rs:468-643"
-      - "crates/buzz-test-client/tests/e2e_media_video.rs:499-679"
+      - "crates/buzz-relay/src/handlers/imeta.rs:468-642"
+      - "crates/buzz-test-client/tests/e2e_media_video.rs:502-678"
       - "crates/buzz-test-client/tests/e2e_media_extended.rs:598-802"
   - statement: "Mobile (`mobile/lib/features/channels/message_media.dart`, `message_content/media_carousel.dart`, `message_content/video_preview.dart`, `timeline_message.dart`, `message_content.dart` and `shared/relay/media_upload.dart`) references `imeta` in at least six files, indicating the capability is also implemented on the Flutter client, but none of those files were opened for this node — this is recorded as a gap in *Scope and omissions*, not as a verified claim about mobile's behavior."
     entry_class: FACT

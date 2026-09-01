@@ -110,7 +110,7 @@ evidence:
   - statement: "crates/buzz-test-client/tests/e2e_user_status.rs (all `#[ignore]`, requiring a running relay) exercises: acceptance of a kind:30315 event, retrievability via a kind+author REQ filter, NIP-33 replacement (a second event on the same d-tag replaces the first, confirmed by querying back exactly one surviving event), independent coexistence of two different d-tag coordinates (\"general\" and \"music\") under the same author, and NIP-33 stale-write protection (an older-timestamped event on the same d-tag does not replace a newer one already stored)."
     entry_class: FACT
     evidence:
-      - "crates/buzz-test-client/tests/e2e_user_status.rs:1-274"
+      - "crates/buzz-test-client/tests/e2e_user_status.rs:1-273"
   - statement: "desktop/tests/e2e/profile-custom-emoji-status.spec.ts contains a Playwright test, \"profile popover renders a custom emoji status as an image\", verifying StatusEmoji's shortcode-to-image resolution end to end in the mock-bridge desktop app."
     entry_class: FACT
     evidence:

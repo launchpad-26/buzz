@@ -61,7 +61,7 @@ evidence:
   - statement: "desktop/src-tauri/src/commands/agents.rs's delete_managed_agent refuses to delete a managed-agent record whose backend is not BackendKind::Local and which carries a backend_agent_id, unless the caller passes force_remote_delete: true, returning the error \"cannot delete a deployed remote agent without force_remote_delete: true\" -- this guard exists specifically so deleting the record cannot silently orphan a live remote deployment, and its comment states the frontend only sends the flag after the user confirms an orphan-warning dialog."
     entry_class: FACT
     evidence:
-      - "desktop/src-tauri/src/commands/agents.rs:1190-1234"
+      - "desktop/src-tauri/src/commands/agents.rs:1091-1136"
   - statement: "crates/buzz-backend-kubernetes/src/wire.rs's Request enum has exactly two variants, Info and Deploy, with no undeploy/destroy/stop operation in protocol version 1 -- the provider wire contract itself carries no way to ask a remote substrate to terminate an agent; termination is driven entirely through the relay, never through this protocol."
     entry_class: FACT
     evidence:

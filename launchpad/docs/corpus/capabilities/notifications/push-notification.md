@@ -64,7 +64,7 @@ evidence:
   - statement: "crates/buzz-relay/src/handlers/push_lease.rs contains unit tests (ten #[test] functions from line 612 onward) covering lease tag/plaintext/generation/quota validation, and crates/buzz-relay/src/push_runtime.rs contains gift_wrap_match_requires_self_p_filter_and_recipient and gateway_retries_send_the_same_request_id_over_http, exercising the gift-wrap authorization narrowing and delivery-retry idempotency this capability depends on."
     entry_class: FACT
     evidence:
-      - "crates/buzz-relay/src/handlers/push_lease.rs:612-763"
+      - "crates/buzz-relay/src/handlers/push_lease.rs:586-747"
       - "crates/buzz-relay/src/push_runtime.rs:619"
       - "crates/buzz-relay/src/push_runtime.rs:660"
   - statement: "docs/formal/nip-pl/ contains standalone formal models (acceptance.py, delivery.py, fixed_payload.py, and mutation-test counterparts mutation_test.py, delivery_mutation.py, fixed_payload_mutation.py) independent of the Rust test suite, bounded-exhaustively checking lease-acceptance ordering, gateway delivery authority, and the fixed-APNs-payload invariant."

@@ -41,7 +41,7 @@ evidence:
   - statement: "The desktop Tauri command delete_channel builds a kind:9008 event via the backend's own build_delete_channel, signs and submits it through the same relay-write path as every other channel-admin action; useDeleteChannelMutation optimistically removes the channel from the cached channel list and drops its detail-query cache on success."
     entry_class: FACT
     evidence:
-      - "desktop/src-tauri/src/commands/channels.rs:875-878"
+      - "desktop/src-tauri/src/commands/channels.rs:529-533"
       - "desktop/src/features/channels/hooks.ts:708-728"
   - statement: "The relay requires an h tag for kind:9008 (requires_h_channel_scope), gates it under Scope::AdminChannels in the auth-scope mapping, and exempts it from the generic membership/open-visibility gate so that only the kind's own per-kind validator decides authorization -- a deliberate 'OQ1 decision' documented inline to let a channel's owning human act on an owner-role agent's channel without being a member themselves."
     entry_class: FACT
