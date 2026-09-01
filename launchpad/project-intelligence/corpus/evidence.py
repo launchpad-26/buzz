@@ -155,6 +155,73 @@ def parse_citation(citation: str) -> ParsedCitation:
     return ParsedCitation(kind=EvidenceKind.UNKNOWN)
 
 
+
+@dataclass(frozen=True)
+class VerificationResult:
+    status: str  # "ok" | "error" | "unverified"
+    detail: str = ""
+
+
+def _verification_line_count(path: Path) -> int:
+    data = path.read_bytes()
+    return data.count(b"\n") + bool(data and not data.endswith(b"\n"))
+
+
+def _verify_local(parsed: ParsedCitation, repo_root: Path) -> VerificationResult:
+    assert parsed.path is not None
+    if _is_credential_like_path(parsed.path):
+        return VerificationResult("error", "matches a prohibited credential-like pattern")
+    if PurePosixPath(parsed.path).is_absolute():
+        return VerificationResult("error", "must be a repo-relative path, not absolute")
+    resolved_root = repo_root.resolve()
+    try:
+        candidate = (resolved_root / parsed.path).resolve()
+    except (OSError, RuntimeError):
+        return VerificationResult("error", "cannot be resolved to a path")
+    if not candidate.is_relative_to(resolved_root):
+        return VerificationResult("error", "resolves outside the repository")
+    if not candidate.is_file():
+        return VerificationResult("error", "does not resolve to a real file in the repository")
+    if parsed.end_line is not None and parsed.end_line > _verification_line_count(candidate):
+        return VerificationResult("error", "line position exceeds the cited file's length")
+    return VerificationResult("ok")
+
+
+def _verify_commit(parsed: ParsedCitation, repo_root: Path) -> VerificationResult:
+    assert parsed.commit is not None
+    result = subprocess.run(
+        ["git", "cat-file", "-e", f"{parsed.commit}^{{commit}}"],
+        cwd=repo_root,
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+        check=False,
+    )
+    if result.returncode == 0:
+        return VerificationResult("ok")
+    return VerificationResult("error", "names a commit that does not exist in this repository")
+
+
+def verify_citation(parsed: ParsedCitation, repo_root: Path) -> VerificationResult:
+    """Verify locally provable citation kinds without executing citation prose.
+
+    Network URL verification remains owned by `validate.py`'s explicit
+    `--check-links` mode. Graph edges, tool results, and unknown forms have no
+    replay implementation here and remain blocking `unverified` results.
+    """
+    if parsed.kind in {
+        EvidenceKind.LOCAL_FILE,
+        EvidenceKind.LOCAL_FILE_LINE,
+        EvidenceKind.LOCAL_FILE_RANGE,
+    }:
+        return _verify_local(parsed, repo_root)
+    if parsed.kind is EvidenceKind.COMMIT:
+        return _verify_commit(parsed, repo_root)
+    if parsed.kind in {EvidenceKind.EXTERNAL_URL, EvidenceKind.GITHUB_URL}:
+        return VerificationResult("unverified", "requires the URL verifier")
+    if parsed.kind in {EvidenceKind.GRAPH_EDGE, EvidenceKind.TOOL_RESULT}:
+        return VerificationResult("unverified", "no verifier exists for this evidence kind")
+    return VerificationResult("error", "no verifier exists for this evidence kind")
+
 class ProhibitedPathError(Exception):
     """A caller tried to bundle a credential-shaped path as evidence."""
 

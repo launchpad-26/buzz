@@ -83,6 +83,41 @@ class CitationParserTest(unittest.TestCase):
         self.assertEqual(parsed.kind, evidence.EvidenceKind.UNKNOWN)
 
 
+class EvidenceVerifierTest(unittest.TestCase):
+    def test_verifies_existing_local_file_and_line(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            path = root / "source.py"
+            path.write_text("one\ntwo\n")
+            parsed = evidence.parse_citation("source.py:2")
+            result = evidence.verify_citation(parsed, root)
+        self.assertEqual(result.status, "ok")
+
+    def test_rejects_local_line_past_end_of_file(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            (root / "source.py").write_text("one\n")
+            parsed = evidence.parse_citation("source.py:2")
+            result = evidence.verify_citation(parsed, root)
+        self.assertEqual(result.status, "error")
+        self.assertIn("line position exceeds", result.detail)
+
+    def test_verifies_existing_commit(self) -> None:
+        root = Path(__file__).resolve().parents[4]
+        parsed = evidence.parse_citation(
+            "commit 69baedd197e5d35c9ae4736115789da59929e288"
+        )
+        result = evidence.verify_citation(parsed, root)
+        self.assertEqual(result.status, "ok")
+
+    def test_unsupported_tool_result_is_unverified(self) -> None:
+        root = Path(__file__).resolve().parents[4]
+        parsed = evidence.parse_citation("grep_repo('needle') -> no matches")
+        result = evidence.verify_citation(parsed, root)
+        self.assertEqual(result.status, "unverified")
+        self.assertIn("no verifier", result.detail)
+
+
 class CredentialLikePathTest(unittest.TestCase):
     def test_env_local_is_prohibited(self) -> None:
         self.assertTrue(evidence._is_credential_like_path(".env.local"))
