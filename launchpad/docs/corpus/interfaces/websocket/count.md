@@ -73,6 +73,10 @@ evidence:
     entry_class: FACT
     evidence:
       - "crates/buzz-relay/src/nip11.rs:15"
+  - statement: "The upstream nostr-protocol/nips repository publishes NIP-45 ('Event Counts') as 45.md, confirmed present at the same pinned commit this corpus already cites elsewhere for NIP-01/NIP-29 (dabfcb2aaecf4fa374eda8b1232ab303a03f60ba) -- the authoritative machine/spec representation this WebSocket-transport framing implements."
+    entry_class: FACT
+    evidence:
+      - "https://github.com/nostr-protocol/nips/blob/dabfcb2aaecf4fa374eda8b1232ab303a03f60ba/45.md"
   - statement: "A valid round trip exists in the integration test suite: test_persona_count_excludes_foreign_unshared connects as a foreign user, sends [\"COUNT\", sid, {kinds:[30175], authors:[author]}] as a raw WS frame, and asserts it receives RelayMessage::Count{count,..} with the unshared persona event excluded from the total -- exercising the fallback (shared-gated) path end to end."
     entry_class: FACT
     evidence:
@@ -118,7 +122,7 @@ path once they merge.
 | Execute a COUNT | `crates/buzz-relay/src/handlers/count.rs:18` (`handle_count`) | Auth check, gate checks, channel-scope resolution, per-filter exact-or-fallback counting, single reply. |
 | Format a success reply | `crates/buzz-relay/src/protocol.rs:214-215` (`RelayMessage::count`) | `["COUNT", sub_id, {"count": n}]`. |
 | Format a rejection reply | `crates/buzz-relay/src/protocol.rs:209-210` (`RelayMessage::closed`) | `["CLOSED", sub_id, "<reason>: <detail>"]`. |
-| Protocol this message implements | NIP-45 (event count queries) | Not in `buzz-relay`'s advertised `SUPPORTED_NIPS` (see evidence ledger) despite being implemented. |
+| Protocol this message implements | [NIP-45](https://github.com/nostr-protocol/nips/blob/dabfcb2aaecf4fa374eda8b1232ab303a03f60ba/45.md) (event count queries) | Not in `buzz-relay`'s advertised `SUPPORTED_NIPS` (see evidence ledger) despite being implemented. |
 
 ## Contract and stability
 
