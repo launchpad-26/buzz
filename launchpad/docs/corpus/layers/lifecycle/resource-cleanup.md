@@ -112,7 +112,7 @@ evidence:
   - statement: "origin/launchpad's corpus tree carries no layers/ node at all as of this node's authoring commit (git ls-tree -r --name-only origin/launchpad -- launchpad/docs/corpus, re-run immediately before drafting) -- layers-lifecycle-graceful-shutdown (#1118) and layers-lifecycle-startup (#1120) exist only on their own local, unpushed worktree branches, so naming either as a relationships.target would be a hard validate.py error on the branch this commit is actually merged into."
     entry_class: FACT
     evidence:
-      - "git_ls_tree(ref='origin/launchpad', path='launchpad/docs/corpus') -> no layers/ subtree present, re-run 2026-08-31 against commit 338b4d0cf2dd76cc43964bb717ce9f0a94a9c7a5"
+      - "absent:launchpad/docs/corpus/layers@338b4d0cf2dd76cc43964bb717ce9f0a94a9c7a5"
   - statement: "Issue #1119's Definition of Done requires exactly one hand-authored canonical document, schema-valid front matter with typed relationships 'appropriate to the node,' one independently maintainable idea, FACT/INFERENCE/TEAM_KNOWLEDGE not conflated, links to neighboring corpus nodes without duplicating their content, and a passing local validate.py run."
     entry_class: TEAM_KNOWLEDGE
     provided_by: "launchpad-26/buzz#1119 definition of done"

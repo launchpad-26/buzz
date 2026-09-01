@@ -8,10 +8,10 @@ audiences:
   - developer
   - reviewer
 evidence:
-  - statement: "This node was authored and checked against repository revision e30f3c568fda9a0fc2c7c921563f9f8313e50ccf."
+  - statement: "This node was authored and checked against repository revision 919886b4192df6251de50c547548ecae5d85afce."
     entry_class: FACT
     evidence:
-      - "commit e30f3c568fda9a0fc2c7c921563f9f8313e50ccf"
+      - "commit 919886b4192df6251de50c547548ecae5d85afce"
   - statement: "A citation lives in a node's frontmatter evidence array, because the schema requires that array, defines no other field for citations, and rejects any field beyond the seven it names."
     entry_class: FACT
     evidence:

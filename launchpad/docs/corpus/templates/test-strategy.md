@@ -25,7 +25,7 @@ evidence:
   - statement: "The already-drafted templates/test-contract.md (issue #1349, unmerged PR #1540) states that a node built from it -- a single testable obligation paired with the specific test(s) that verify it -- carries type: verification, not type: governance; the template document describing that shape is itself governance, mirroring the same split this template makes for test-strategy instances."
     entry_class: FACT
     evidence:
-      - "git_show('origin/task/1349-corpus-template-test-contract:launchpad/docs/corpus/templates/test-contract.md') -> front matter type: governance, body states 'Nodes authored from this template carry type: verification ... not type: governance', read 2026-08-27"
+      - "launchpad/docs/corpus/templates/test-contract.md"
   - statement: "TESTING.md at the repository root documents just test-unit (no infrastructure) and just test (unit plus Postgres/Redis-backed integration, starting Docker if needed) as the two automated-test entry points, and states that neither runs the E2E suites in buzz-test-client, which are marked #[ignore] and require a running relay invoked as cargo test -p buzz-test-client -- --ignored."
     entry_class: FACT
     evidence:

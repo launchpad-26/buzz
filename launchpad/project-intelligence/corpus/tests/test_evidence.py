@@ -234,6 +234,86 @@ class SymbolAnchoredCitationTest(unittest.TestCase):
         self.assertEqual(result.status, "error")
 
 
+class AbsentPathCitationTest(unittest.TestCase):
+    """#2013: evidence that something is NOT there.
+
+    Absence claims were the single largest class of unverifiable corpus FACTs
+    (94 of 213) and had no citable form at all. Absence is verifiable — a path
+    either is or is not in a tree — so this form can genuinely fail.
+    """
+
+    REPO_ROOT = Path(__file__).resolve().parents[4]
+
+    @classmethod
+    def setUpClass(cls) -> None:
+        import subprocess
+
+        cls.HEAD = subprocess.run(
+            ["git", "rev-parse", "HEAD"],
+            cwd=cls.REPO_ROOT, capture_output=True, text=True, check=True,
+        ).stdout.strip()
+
+    def _verify(self, citation: str) -> evidence.VerificationResult:
+        return evidence.verify_citation(
+            evidence.parse_citation(citation), self.REPO_ROOT
+        )
+
+    def test_parses_path_and_commit(self) -> None:
+        parsed = evidence.parse_citation(f"absent:some/where@{self.HEAD}")
+        self.assertEqual(parsed.kind, evidence.EvidenceKind.ABSENT_PATH)
+        self.assertEqual(parsed.path, "some/where")
+        self.assertEqual(parsed.commit, self.HEAD)
+
+    def test_genuinely_absent_path_verifies_ok(self) -> None:
+        result = self._verify(
+            f"absent:launchpad/docs/corpus/no-such-subtree@{self.HEAD}"
+        )
+        self.assertEqual(result.status, "ok")
+
+    def test_present_path_makes_the_claim_an_error(self) -> None:
+        """The failure mode that makes this form worth having: a claim that
+        something is absent, when it is right there."""
+        result = self._verify(f"absent:launchpad/docs/corpus/AGENTS.md@{self.HEAD}")
+        self.assertEqual(result.status, "error")
+        self.assertIn("exists at the pinned commit", result.detail)
+
+    def test_unavailable_commit_is_not_treated_as_absence(self) -> None:
+        """The vacuity guard. A path is missing from a tree this checkout does
+        not have for reasons that have nothing to do with the claim, so absence
+        must not confirm itself against a tree nobody looked at."""
+        result = self._verify(
+            "absent:launchpad/docs/corpus/AGENTS.md"
+            "@0123456789abcdef0123456789abcdef01234567"
+        )
+        self.assertEqual(result.status, "unverified")
+        self.assertIn("does not have", result.detail)
+
+    def test_requires_a_full_sha_pin(self) -> None:
+        """Absence is only meaningful relative to a specific tree, so an
+        unpinned or branch-pinned form is not this citation at all."""
+        for unpinned in (
+            "absent:some/where@origin/launchpad",
+            "absent:some/where@338b4d0",
+            "absent:some/where",
+        ):
+            with self.subTest(citation=unpinned):
+                parsed = evidence.parse_citation(unpinned)
+                self.assertNotEqual(parsed.kind, evidence.EvidenceKind.ABSENT_PATH)
+
+    def test_credential_guard_applies(self) -> None:
+        result = self._verify(f"absent:.env.local@{self.HEAD}")
+        self.assertEqual(result.status, "error")
+        self.assertIn("prohibited credential-like pattern", result.detail)
+
+    def test_escaping_the_repository_is_refused(self) -> None:
+        result = self._verify(f"absent:../../etc/passwd@{self.HEAD}")
+        self.assertEqual(result.status, "error")
+
+    def test_absolute_path_is_refused(self) -> None:
+        result = self._verify(f"absent:/etc/passwd@{self.HEAD}")
+        self.assertEqual(result.status, "error")
+
+
 class GitToolCitationParseTest(unittest.TestCase):
     """The argument half of a tool-result citation is tractable; the asserted
     half is prose. Parsing must expose the first without pretending about the

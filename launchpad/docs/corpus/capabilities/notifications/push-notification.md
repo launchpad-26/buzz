@@ -79,7 +79,7 @@ evidence:
   - statement: "No corpus node under launchpad/docs/corpus/interfaces-events exists on origin/launchpad at the recorded revision -- the interfaces-events corpus surface is unpopulated, so this capability has no interface node it could reference for the kind:30350 event boundary."
     entry_class: FACT
     evidence:
-      - "git_ls_tree(ref='origin/launchpad', path='launchpad/docs/corpus') -> no interfaces-events subtree present at commit 338b4d0cf2dd76cc43964bb717ce9f0a94a9c7a5"
+      - "absent:launchpad/docs/corpus/interfaces-events@338b4d0cf2dd76cc43964bb717ce9f0a94a9c7a5"
   - statement: "launchpad/docs/corpus/architecture/flows/push-notification.md (id: architecture-flows-push-notification), launchpad/docs/corpus/architecture/containers/relay.md (id: architecture-containers-relay), and launchpad/docs/corpus/architecture/containers/push-gateway.md (id: architecture-containers-push-gateway) all exist on origin/launchpad at the recorded revision, each with status: draft, and are therefore valid relationship targets."
     entry_class: FACT
     evidence:

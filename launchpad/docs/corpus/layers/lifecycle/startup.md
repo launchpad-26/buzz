@@ -125,7 +125,7 @@ evidence:
     evidence:
       - "launchpad/docs/corpus/templates/flow.md"
       - "launchpad/docs/corpus/standards/taxonomy.md"
-      - "git_show(ref='origin/task/611-batch-1a-compute', path='launchpad/docs/corpus/layers/compute/lifecycle.md') -> 'A note on `type`' section"
+      - "launchpad/docs/corpus/layers/compute/lifecycle.md"
     confidence: 0.7
   - statement: "Issue #1120's Definition of Done requires this node to state trigger, preconditions and termination/outcome; list ordered interactions and data/state movement; identify authentication/authorization/trust-boundary crossings; and document failure/abort/rollback behavior linked to representative verification."
     entry_class: TEAM_KNOWLEDGE

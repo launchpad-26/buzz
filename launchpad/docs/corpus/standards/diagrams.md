@@ -7,10 +7,10 @@ audiences:
   - agent
   - reviewer
 evidence:
-  - statement: "This node was authored and checked against repository revision e30f3c568fda9a0fc2c7c921563f9f8313e50ccf."
+  - statement: "This node was authored and checked against repository revision ebe2daf721c7d7a96fdd84eba0a0a5d37eefa109."
     entry_class: FACT
     evidence:
-      - "commit e30f3c568fda9a0fc2c7c921563f9f8313e50ccf"
+      - "commit ebe2daf721c7d7a96fdd84eba0a0a5d37eefa109"
   - statement: "Markdown with YAML front matter is the one canonical authored representation of a corpus node, and every other serialization is a generated derived view that is never hand-authored."
     entry_class: FACT
     evidence:

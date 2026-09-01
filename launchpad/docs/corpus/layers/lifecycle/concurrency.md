@@ -91,10 +91,10 @@ evidence:
     entry_class: FACT
     evidence:
       - "launchpad/docs/corpus/architecture/containers/relay.md:1-2"
-  - statement: "No layers/lifecycle/* sibling node (background-workers #1115, cancellation #1116, graceful-shutdown #1118, resource-cleanup #1119, startup #1120) is present on origin/launchpad at the time this node was authored, confirmed by the same git ls-tree listing above, so none of them is a valid relationships target yet even though each is named as a prose boundary callout below."
+  - statement: "No layers/lifecycle/* sibling node (background-workers #1115, cancellation #1116, graceful-shutdown #1118, resource-cleanup #1119, startup #1120) is present on origin/launchpad at the time this node was authored, confirmed by a pinned absence citation against that commit, so none of them is a valid relationships target yet even though each is named as a prose boundary callout below."
     entry_class: FACT
     evidence:
-      - "git_ls_tree(ref='origin/launchpad', path='launchpad/docs/corpus') -> no layers/ directory present"
+      - "absent:launchpad/docs/corpus/layers@338b4d0cf2dd76cc43964bb717ce9f0a94a9c7a5"
   - statement: "Issue #1117's Definition of Done requires the document to define the term in one sentence before deeper explanation, state boundaries/non-goals or what the concept must not be confused with, link the concept to related concepts/implementation/verification, and use examples only to clarify the concept rather than introducing a second canonical concept."
     entry_class: TEAM_KNOWLEDGE
     provided_by: "launchpad-26/buzz#1117 definition of done"

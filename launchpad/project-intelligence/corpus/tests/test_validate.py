@@ -35,6 +35,7 @@ import tempfile
 import threading
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 import unittest
+import unittest.mock
 from pathlib import Path
 
 FIXTURES_DIR = Path(__file__).resolve().parent / "fixtures"
@@ -1105,6 +1106,56 @@ class UnverifiedChannelTest(unittest.TestCase):
         self.assertIn("requires --check-links", stderr)
         self.assertIn("did not check them", stderr)
         self.assertIn("PASS", stdout)
+
+    def test_baselined_citation_does_not_block(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            self._write_single_citation_root(root, "some_novel_tool('x') -> y")
+            key = "validator-single-citation: evidence entry 1, citation 1"
+            with unittest.mock.patch.object(
+                validate, "load_baseline", lambda _root, _corpus: {key}
+            ):
+                exit_code, stdout, stderr = self._run_main(root)
+        self.assertEqual(exit_code, 0)
+        self.assertIn("BASELINED", stderr)
+        self.assertIn("may only shrink", stderr)
+        self.assertIn("PASS", stdout)
+
+    def test_a_citation_absent_from_the_baseline_still_blocks(self) -> None:
+        """The baseline covers what was already there, never what arrives next."""
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            self._write_single_citation_root(root, "some_novel_tool('x') -> y")
+            with unittest.mock.patch.object(
+                validate, "load_baseline", lambda _root, _corpus: {"some-other-node: evidence entry 9, citation 9"}
+            ):
+                exit_code, stdout, stderr = self._run_main(root)
+        self.assertEqual(exit_code, 1)
+        self.assertIn("UNVERIFIED", stderr)
+
+    def test_stale_baseline_entry_is_a_hard_error(self) -> None:
+        """The ratchet's teeth. Without this the list never shrinks: entries
+        would linger after their citations were fixed, and the file would drift
+        into a permanent amnesty nobody rereads."""
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            self._write_single_citation_root(root, "launchpad/docs/corpus/AGENTS.md")
+            with unittest.mock.patch.object(
+                validate, "load_baseline", lambda _root, _corpus: {"validator-single-citation: evidence entry 1, citation 1"}
+            ):
+                exit_code, stdout, stderr = self._run_main(root)
+        self.assertEqual(exit_code, 1)
+        self.assertIn("no longer blocks validation", stderr)
+        self.assertIn("remove this line", stderr)
+
+    def test_baseline_key_ignores_the_detail_text(self) -> None:
+        """Rewording a verifier's message must not invalidate the baseline, and
+        the key must not carry citation prose into a tracked file."""
+        key = validate.baseline_key(
+            "some-node: evidence entry 3, citation 2: names a grep that is not "
+            "pinned to a full commit SHA: with a colon in it"
+        )
+        self.assertEqual(key, "some-node: evidence entry 3, citation 2")
 
     def test_offline_mode_still_blocks_a_genuinely_unverifiable_citation(self) -> None:
         """Deferring URLs must not have loosened the fail-closed rule for forms

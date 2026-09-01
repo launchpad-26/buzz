@@ -81,6 +81,7 @@ class EvidenceKind(enum.Enum):
     LOCAL_FILE_LINE = "local_file_line"
     LOCAL_FILE_RANGE = "local_file_range"
     LOCAL_FILE_SYMBOL = "local_file_symbol"
+    ABSENT_PATH = "absent_path"
     COMMIT = "commit"
     GITHUB_URL = "github_url"
     EXTERNAL_URL = "external_url"
@@ -118,6 +119,18 @@ _PARSE_FILE_POSITION_RE = re.compile(
 # lacked this and what its absence cost.
 _PARSE_FILE_SYMBOL_RE = re.compile(
     r"^(?P<path>\S+?)#symbol=(?P<symbol>[A-Za-z_][A-Za-z0-9_.]*)$"
+)
+# `absent:<path>@<40-hex>` -- evidence that something is NOT there.
+#
+# A large share of corpus FACTs are absence claims ("no layers/ directory
+# present", "zero matches in this crate"), and they had no citable form at all:
+# nothing exists to point at, so authors expressed them as tool-result prose
+# that no verifier could check. Absence is genuinely verifiable, though -- a
+# path either is or is not in a tree -- so it gets a real form rather than a
+# permanent excuse. The commit pin is mandatory: absence is only meaningful
+# relative to a specific tree.
+_PARSE_ABSENT_PATH_RE = re.compile(
+    r"^absent:(?P<path>[^@\s]+)@(?P<commit>[0-9a-f]{40})$"
 )
 _PARSE_SYMBOL = r"[A-Za-z_][A-Za-z0-9_.:]*"
 _PARSE_GRAPH_EDGE_RE = re.compile(
@@ -162,6 +175,13 @@ def parse_citation(citation: str) -> ParsedCitation:
             tool=tool_result.group("tool"),
             tool_args=tool_result.group("args"),
             tool_assertion=tool_result.group("assertion"),
+        )
+    absent = _PARSE_ABSENT_PATH_RE.match(text)
+    if absent:
+        return ParsedCitation(
+            kind=EvidenceKind.ABSENT_PATH,
+            path=absent.group("path"),
+            commit=absent.group("commit"),
         )
     symbol_anchor = _PARSE_FILE_SYMBOL_RE.match(text)
     if symbol_anchor:
@@ -265,6 +285,38 @@ def _verify_local_symbol(parsed: ParsedCitation, repo_root: Path) -> Verificatio
     return VerificationResult(
         "error", "names a symbol that does not appear in the cited file"
     )
+
+
+def _verify_absent_path(parsed: ParsedCitation, repo_root: Path) -> VerificationResult:
+    """Resolve `absent:<path>@<commit>`: the path must NOT be in that tree.
+
+    The order of the checks is the whole design. A missing path proves nothing
+    unless the tree it is missing from is actually present, so the commit is
+    resolved FIRST and a commit this checkout does not have yields `unverified`,
+    never `ok`. Without that, every absence claim pinned to an unfetched commit
+    would confirm itself against a tree nobody looked at -- the same vacuous pass
+    the grep verifier guards against by checking its paths exist.
+    """
+    assert parsed.path is not None
+    assert parsed.commit is not None
+    if _is_credential_like_path(parsed.path):
+        return VerificationResult("error", "matches a prohibited credential-like pattern")
+    if PurePosixPath(parsed.path).is_absolute() or parsed.path.startswith("-"):
+        return VerificationResult("error", "must be a repo-relative path, not absolute")
+    if ".." in PurePosixPath(parsed.path).parts:
+        return VerificationResult("error", "resolves outside the repository")
+    if not _git_object_exists(repo_root, f"{parsed.commit}^{{commit}}"):
+        return VerificationResult(
+            "unverified",
+            "pins absence to a commit this checkout does not have, so the "
+            "absence could not be established",
+        )
+    if _git_object_exists(repo_root, f"{parsed.commit}:{parsed.path}"):
+        return VerificationResult(
+            "error",
+            "claims a path is absent, but it exists at the pinned commit",
+        )
+    return VerificationResult("ok")
 
 
 def _verify_commit(parsed: ParsedCitation, repo_root: Path) -> VerificationResult:
@@ -790,6 +842,8 @@ def verify_citation(
         return _verify_local(parsed, repo_root)
     if parsed.kind is EvidenceKind.LOCAL_FILE_SYMBOL:
         return _verify_local_symbol(parsed, repo_root)
+    if parsed.kind is EvidenceKind.ABSENT_PATH:
+        return _verify_absent_path(parsed, repo_root)
     if parsed.kind is EvidenceKind.COMMIT:
         return _verify_commit(parsed, repo_root)
     if parsed.kind in {EvidenceKind.EXTERNAL_URL, EvidenceKind.GITHUB_URL}:

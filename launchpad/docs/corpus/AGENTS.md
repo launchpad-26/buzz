@@ -7,10 +7,10 @@ audiences:
   - agent
   - reviewer
 evidence:
-  - statement: "This node was authored and checked against repository revision e30f3c568fda9a0fc2c7c921563f9f8313e50ccf."
+  - statement: "This node was authored and checked against repository revision 0052f5a7820ca4ca261efa233feb8bb53858ade6."
     entry_class: FACT
     evidence:
-      - "commit e30f3c568fda9a0fc2c7c921563f9f8313e50ccf"
+      - "commit 0052f5a7820ca4ca261efa233feb8bb53858ade6"
   - statement: "Markdown with YAML front matter is the one canonical authored representation of a corpus node; every other serialization is a generated derived view."
     entry_class: FACT
     evidence:
@@ -288,6 +288,25 @@ seven line positions; reshaping `validate.py` moved all seven, and only the one 
 fell past the end of the file was caught. The other six passed while pointing at
 unrelated code. All seven are now bare paths. The missing symbol-anchored citation
 form — a position that would survive edits — is #2012.
+
+**4. Two forms exist for cases a bare path cannot express.**
+
+- `path/to/file.py#symbol=NAME` — a position that survives edits. Prefer it over
+  `path:line` for any claim about code. Verified by a word-boundary search of the
+  cited file, so a renamed or deleted symbol fails instead of drifting (#2012).
+- `absent:path/to/thing@<40-hex>` — evidence that something is **not** there,
+  pinned to a commit. Verified by resolving that path in that tree: present means
+  the claim is wrong and the citation is a hard error. Use it for "no such node
+  exists yet" claims instead of describing a `git ls-tree` run in prose (#2013).
+
+**5. Several hundred existing citations are carried in a baseline.** Fail-closed
+validation could not be applied retroactively to a corpus written under the old
+rule, so the citations that block are enumerated by name in
+`launchpad/project-intelligence/corpus/known-unverified.txt`. That list may only
+shrink — an entry that no longer names a blocking citation is a hard error, and a
+new blocking citation cannot join it without editing that file in a reviewed
+commit. **If your new node's citation blocks, migrate the citation; do not add a
+line to the baseline.**
 
 ### Pinning
 

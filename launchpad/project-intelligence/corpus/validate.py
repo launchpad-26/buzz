@@ -105,6 +105,7 @@ class ValidationReport:
     errors: list[str] = field(default_factory=list)
     unverified: list[str] = field(default_factory=list)
     deferred: list[str] = field(default_factory=list)
+    baselined: list[str] = field(default_factory=list)
 
 
 # Every message names its node through this helper, and the guarantee is about the
@@ -654,6 +655,7 @@ def _classify_citation(
         _EVIDENCE_PARSER.EvidenceKind.LOCAL_FILE_LINE,
         _EVIDENCE_PARSER.EvidenceKind.LOCAL_FILE_RANGE,
         _EVIDENCE_PARSER.EvidenceKind.LOCAL_FILE_SYMBOL,
+        _EVIDENCE_PARSER.EvidenceKind.ABSENT_PATH,
         _EVIDENCE_PARSER.EvidenceKind.COMMIT,
     ):
         result = _EVIDENCE_PARSER.verify_citation(parsed, repo_root_path)
@@ -679,6 +681,61 @@ def _classify_citation(
         "error",
         "matches none of CONTRACT.md's six supported citation forms",
     )
+# The known-unverified baseline -- a ratchet, not an amnesty.
+#
+# Fail-closed validation is correct going forward but cannot be applied
+# retroactively to a corpus written under the old rule: several hundred existing
+# citations are legitimate observations recorded in a form no verifier can check.
+# Deleting them would destroy real evidence; reclassifying them wholesale to
+# TEAM_KNOWLEDGE would misdescribe their provenance, since "told to the layer by
+# a person" is false for something an author observed.
+#
+# So they are enumerated here by name. Every entry is a citation someone must
+# eventually migrate, the list can only shrink, and nothing new may join it
+# without editing this file in a reviewed commit.
+#
+# An entry is keyed by node, evidence entry and citation index -- never by the
+# citation's text, which is untrusted document prose this tracked file should not
+# reproduce. A key that no longer names a blocking citation is a HARD ERROR, not
+# a silent no-op: without that, the list would only ever grow stale and the
+# ratchet would not turn.
+BASELINE_PATH = "launchpad/project-intelligence/corpus/known-unverified.txt"
+
+_BASELINE_KEY_RE = re.compile(r"^(.*?: evidence entry \d+, citation \d+):")
+
+
+def baseline_key(message: str) -> str:
+    """The stable part of a citation notice: node, entry index, citation index.
+
+    Deliberately excludes the detail, so rewording a verifier's message does not
+    invalidate the whole baseline -- and so the file records WHICH citation is
+    outstanding without quoting what it says.
+    """
+    match = _BASELINE_KEY_RE.match(message)
+    return match.group(1) if match else message
+
+
+def load_baseline(repo_root_path: Path, corpus_root: Path) -> set[str]:
+    """Load the baseline, but only for the corpus it was generated against.
+
+    The entries name citations in THIS corpus. Applied to any other tree -- a
+    test fixture, a `--root` pointed elsewhere -- every entry would look stale
+    and the run would fail with hundreds of spurious errors about a corpus it
+    was never about.
+    """
+    if corpus_root.resolve() != (repo_root_path / DEFAULT_ROOT).resolve():
+        return set()
+    path = repo_root_path / BASELINE_PATH
+    if not path.is_file():
+        return set()
+    entries = set()
+    for line in path.read_text().splitlines():
+        line = line.strip()
+        if line and not line.startswith("#"):
+            entries.add(line)
+    return entries
+
+
 def find_citation_problems(
     nodes: list[LoadedNode], repo_root_path: Path, *, check_links: bool = False
 ) -> tuple[list[str], list[str], list[str]]:
@@ -804,8 +861,22 @@ def validate_corpus(corpus_root: Path, *, check_links: bool = False) -> Validati
         nodes, root, check_links=check_links
     )
     report.errors.extend(citation_errors)
-    report.unverified.extend(citation_unverified)
     report.deferred.extend(citation_deferred)
+
+    baseline = load_baseline(root, corpus_root)
+    seen_keys = {baseline_key(message) for message in citation_unverified}
+    for message in citation_unverified:
+        if baseline_key(message) in baseline:
+            report.baselined.append(message)
+        else:
+            report.unverified.append(message)
+    # The ratchet's teeth. A baseline entry that no longer names a blocking
+    # citation must be removed, or the list silently stops shrinking.
+    for stale in sorted(baseline - seen_keys):
+        report.errors.append(
+            f"{stale}: is in {BASELINE_PATH} but no longer blocks validation "
+            "-- remove this line"
+        )
 
     report.errors.extend(find_non_canonical_nodes(corpus_root))
     report.errors.extend(find_ownership_violations(corpus_root))
@@ -831,6 +902,8 @@ def main(argv: list[str] | None = None) -> int:
         print(f"FAIL  corpus root does not exist: {exc}", file=sys.stderr)
         return 1
 
+    for notice in report.baselined:
+        print(f"BASELINED  {notice}", file=sys.stderr)
     for notice in report.deferred:
         print(f"DEFERRED  {notice}", file=sys.stderr)
     for notice in report.unverified:
@@ -839,6 +912,12 @@ def main(argv: list[str] | None = None) -> int:
     # Deferred citations are announced even on a clean run, so nobody reads a
     # structural PASS as "every citation was checked". They are decided by the
     # link stage, which CI always runs.
+    if report.baselined:
+        print(
+            f"NOTE  {len(report.baselined)} citation(s) carried in "
+            f"{BASELINE_PATH}; this list may only shrink",
+            file=sys.stderr,
+        )
     if report.deferred:
         print(
             f"NOTE  {len(report.deferred)} citation(s) deferred to --check-links; "

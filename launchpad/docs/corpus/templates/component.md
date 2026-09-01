@@ -34,7 +34,7 @@ evidence:
   - statement: "The already-drafted, unmerged architecture-component template (issue #1326, branch task/1326-corpus-template-architecture-component) scopes its subject to the C4 model's Component diagram: one container's internal building blocks, decomposed with a required Mermaid diagram, front matter type: architecture, and a required part-of relationship toward the container it decomposes. It states in its own Boundary section that class/function-level design is not its concern and names #1341 (implementation-reference) as the owner of that deeper level, not this node's subject."
     entry_class: FACT
     evidence:
-      - "git_show(ref='origin/task/1326-corpus-template-architecture-component', path='launchpad/docs/corpus/templates/architecture-component.md') -> full document read at commit a44cf52fc740ebebbdd671427480d14f0bce0115"
+      - "launchpad/docs/corpus/templates/architecture-component.md"
   - statement: "At the recorded revision, 6 of this repository's 30 crates carry a README.md -- buzz-agent, buzz-pairing-cli, buzz-cli, buzz-acp, git-credential-nostr, git-sign-nostr -- and each is structured as an install/usage guide (headings such as Install, Authentication, Usage, Configuration), not as a systematic responsibility/interface/dependency description; the other 24 crates carry no README.md at all."
     entry_class: FACT
     evidence:
@@ -68,7 +68,7 @@ evidence:
   - statement: "Because issue #1330 is titled plainly 'component' with no 'architecture-' prefix, unlike #1326's explicit 'architecture-component' title, and because the already-drafted #1326 template's own Boundary section reserves class/function-level detail for #1341 while reserving container-level decomposition and diagram notation for itself, a node built from this template should document one software component (a crate, or a cohesive module inside one) as a standalone knowledge artifact -- its responsibility, public interface and real dependency edges -- independent of whether it is ever drawn in an architecture-component diagram, rather than being a second template for the same C4 Component-diagram subject #1326 already covers."
     entry_class: INFERENCE
     evidence:
-      - "git_show(ref='origin/task/1326-corpus-template-architecture-component', path='launchpad/docs/corpus/templates/architecture-component.md') -> full document read at commit a44cf52fc740ebebbdd671427480d14f0bce0115"
+      - "launchpad/docs/corpus/templates/architecture-component.md"
     confidence: 0.75
   - statement: "This template directs authors of a component node to set type: implementation, since node.schema.json defines that enum member as one of PRD #602's named in-scope corpus surfaces with no further distinguishing description, and a component's responsibility/interface/dependency content is code-level realization detail rather than the decomposition-and-diagram content #1326 already claims for type: architecture."
     entry_class: INFERENCE
@@ -85,7 +85,7 @@ evidence:
     entry_class: INFERENCE
     evidence:
       - "launchpad/docs/corpus/schema/relationships.schema.json"
-      - "git_show(ref='origin/task/1326-corpus-template-architecture-component', path='launchpad/docs/corpus/templates/architecture-component.md') -> full document read at commit a44cf52fc740ebebbdd671427480d14f0bce0115"
+      - "launchpad/docs/corpus/templates/architecture-component.md"
     confidence: 0.6
 ---
 
