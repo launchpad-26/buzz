@@ -63,6 +63,11 @@ evidence:
       - "crates/buzz-test-client/tests/e2e_nostr_interop.rs:622-667"
       - "crates/buzz-test-client/tests/e2e_nostr_interop.rs:677-750"
       - "crates/buzz-test-client/tests/e2e_nostr_interop.rs:971-1044"
+  - statement: "buzz-db's store/event.rs states 'Deduplication is application-layer: ON CONFLICT DO NOTHING' and insert_event_on's INSERT statement carries that clause keyed on the event's id; this is the generic, kind-agnostic idempotency mechanism that also covers kind:1059 — resubmitting the identical signed gift wrap (same id) is a no-op rather than a duplicate row, with no gift-wrap-specific ordering or replay logic layered on top."
+    entry_class: FACT
+    evidence:
+      - "crates/buzz-db/src/store/event.rs:5"
+      - "crates/buzz-db/src/store/event.rs:295-327"
   - statement: "NIP-17 itself (upstream Nostr Implementation Possibility 17, 'Private Direct Messages') is not vendored, copied, or re-described anywhere in this repository; grepping the crates and docs trees for 'nip.?17' surfaces only this repository's own kind.rs doc comment, code comments, and test names referencing the number, never the specification's own encryption-construction prose (seal/rumor/gift-wrap layering)."
     entry_class: INFERENCE
     evidence:
@@ -123,6 +128,11 @@ layered on top of the ordinary event-submission and subscription surface.
 - **Push-delivery ownership.** A push lease can only be woken by a gift wrap
   addressed to that lease's own author, mirroring the `REQ`-time `#p` gate
   (`push_runtime.rs:317-334`).
+- **Ordering and idempotency.** No gift-wrap-specific ordering guarantee
+  exists; kind:1059 relies on the same generic, kind-agnostic mechanism every
+  stored event uses — `insert_event`'s `ON CONFLICT DO NOTHING` keyed on the
+  event id, so resubmitting an identical signed gift wrap is idempotent rather
+  than duplicated (`buzz-db/src/store/event.rs:5,295-327`).
 - **Versioning.** No version or compatibility note for this kind exists
   anywhere in the evidence gathered; the contract above is inferred from
   current code, not from a stated stability promise.
