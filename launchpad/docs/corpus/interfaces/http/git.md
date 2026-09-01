@@ -118,6 +118,11 @@ evidence:
     evidence:
       - "crates/buzz-relay/src/api/git/transport.rs"
       - "launchpad/docs/corpus/architecture/flows/git-push.md"
+  - statement: "`docs/git-on-object-storage.md` is a formal specification (`## Protocol` §Read, §Push; `## Safety Theorems`) for the read/push protocol this interface's `info_refs`/`upload_pack`/`receive_pack` handlers implement, and `receive_pack`'s own doc comment cites it directly by name (\"Push flow (spec §Push steps 1-8)\"), making it the authoritative machine/spec representation for this interface's read and push behavior — not this node's own restatement of the wire format."
+    entry_class: FACT
+    evidence:
+      - "docs/git-on-object-storage.md"
+      - "crates/buzz-relay/src/api/git/transport.rs"
 ---
 
 # Git smart-HTTP transport: interface
@@ -131,6 +136,13 @@ flow. The relay speaks git's wire protocol by hydrating an ephemeral
 workspace from an object-store-backed manifest and, on the dominant clone
 path, by serving the ref advertisement directly from that manifest with no
 subprocess involved at all.
+
+**Authoritative machine/spec representation:** `docs/git-on-object-storage.md`
+is a formal specification for the read and push protocol these handlers
+implement (`## Protocol` §Read, §Push, plus its `## Safety Theorems`);
+`receive_pack`'s own doc comment cites it directly by section number. This
+node points at that specification rather than re-deriving its protocol
+steps.
 
 ## Operations
 
