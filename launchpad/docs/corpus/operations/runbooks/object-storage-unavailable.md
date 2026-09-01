@@ -345,6 +345,28 @@ run without it.
   [block/buzz/issues](https://github.com/block/buzz/issues) rather than
   attempting a code fix from this runbook.
 
+## Evidence to preserve
+
+Before restarting the relay or the object store (either can overwrite the
+log lines and metric samples that show what actually happened), capture:
+
+- The relay's own log lines from the incident window — specifically the
+  conformance-probe failure line (startup) or the `push failed pre-response`
+  / `hydrate failed` / `media storage error` lines (live degradation), which
+  carry the underlying S3-client error string.
+- A snapshot of `buzz_storage_sweep_ok` and `buzz_storage_sweep_failures`
+  over the incident window, if this deployment scrapes the relay's
+  Prometheus endpoint — this is the only time-series evidence this
+  repository emits for object-storage health, with the staleness caveats
+  noted in *Diagnosis*.
+- Which of the six configuration variable **names** (never values) were
+  confirmed present and which addressing-style/region choice was in effect,
+  so a later reviewer does not have to re-derive the configuration from a
+  possibly-since-changed deployment.
+- For a managed bucket: the provider's own status-page incident reference or
+  timestamp, since this repository has no dashboard of its own for that
+  dependency to link instead.
+
 ## Scope and omissions
 
 **This node covers** recognizing that object storage is unreachable or
