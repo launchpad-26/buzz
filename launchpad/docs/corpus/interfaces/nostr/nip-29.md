@@ -17,8 +17,9 @@ evidence:
     evidence:
       - "launchpad/docs/corpus/schema/node.schema.json"
   - statement: "This repository's root AGENTS.md states: 'Channels use h tags (NIP-29 group tag), not e tags... Addressable events that describe a channel carry its id in their d tag instead: kind:39000 (metadata), kind:39001, kind:39002 (membership). get_channels resolves a user's channels from the d tag of their kind:39002 events, not from h.'"
-    entry_class: TEAM_KNOWLEDGE
-    provided_by: "AGENTS.md (repository root)"
+    entry_class: FACT
+    evidence:
+      - "AGENTS.md"
   - statement: "NIP-29, fetched directly at the pinned commit dabfcb2aaecf4fa374eda8b1232ab303a03f60ba, is marked with the stability badges 'draft optional relay', and states that events sent by users to groups (chat messages, text notes, moderation events etc) MUST have an h tag with the value set to the group id."
     entry_class: FACT
     evidence:
