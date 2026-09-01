@@ -71,10 +71,148 @@ _NONE_COLLECTED = re.compile(r"no tests collected")
 _ERRORS = re.compile(r"(\d+) errors?")
 
 
+#: A workflow must invoke a test runner before it can be claimed as coverage.
+_TEST_COMMAND = re.compile(r"\b(pytest|unittest)\b")
+
+
 def load_manifest(path=MANIFEST):
     """Return (run_here, covered_elsewhere) from the floors manifest."""
     data = json.loads(path.read_text(encoding="utf-8"))
     return data["run_here"], data["covered_elsewhere"]
+
+
+def load_floor_drops(path=MANIFEST):
+    """Declared, reasoned exceptions to the no-lowering rule. Usually empty."""
+    data = json.loads(path.read_text(encoding="utf-8"))
+    return data.get("floor_drops", {})
+
+
+def trigger_paths(text):
+    """Every entry under a `paths:` key, without importing a YAML parser.
+
+    PyYAML is not guaranteed on the runner that executes this module -- the
+    `scripts` job in launchpad-pr-check.yml uses the system python with no
+    pip install -- so the block is read structurally rather than parsed.
+    `paths-ignore` is deliberately not collected: it is the opposite claim.
+    """
+    found = []
+    in_block = False
+    block_indent = 0
+    for raw in text.splitlines():
+        stripped = raw.strip()
+        if not stripped or stripped.startswith("#"):
+            continue
+        indent = len(raw) - len(raw.lstrip())
+        if in_block:
+            if stripped.startswith("- ") and indent > block_indent:
+                found.append(stripped[2:].strip().strip("\"'"))
+                continue
+            in_block = False
+        if stripped in ("paths:", "paths-ignore:"):
+            in_block = stripped == "paths:"
+            block_indent = indent
+    return found
+
+
+def exclusion_problems(skill, workflow, repo_root=REPO_ROOT):
+    """Why `covered_elsewhere: {skill: workflow}` is not a believable claim.
+
+    An earlier version opened the named file and searched the whole text for
+    the skill's path. A cross-model review showed that accepts anything --
+    `{"alpha": "not-a-workflow.txt"}` passed with that file containing only
+    the comment `# launchpad/skills/alpha`. Reproduced, then narrowed to the
+    three properties that make the claim mean something.
+
+    What this still does NOT prove: that the named workflow's test step really
+    executes that skill's suite. It proves the file is a workflow, that a
+    change to the skill triggers it, and that it invokes a test runner. Stated
+    rather than glossed, because the gap is real.
+    """
+    problems = []
+    prefix = f"launchpad/skills/{skill}"
+
+    if not workflow.startswith(".github/workflows/"):
+        problems.append(
+            f"{skill} claims coverage by {workflow}, which is not under "
+            f".github/workflows/. Only a workflow can run a suite."
+        )
+        return problems
+    if not workflow.endswith((".yml", ".yaml")):
+        problems.append(
+            f"{skill} claims coverage by {workflow}, which is not a .yml or "
+            f".yaml file."
+        )
+        return problems
+
+    path = repo_root / workflow
+    if not path.is_file():
+        problems.append(
+            f"{skill} claims coverage by {workflow}, which does not exist. "
+            f"Either that workflow was deleted -- in which case the skill is "
+            f"now uncovered and belongs in 'run_here' -- or the path is wrong."
+        )
+        return problems
+
+    text = path.read_text(encoding="utf-8", errors="replace")
+    if not any(p.startswith(prefix) for p in trigger_paths(text)):
+        problems.append(
+            f"{skill} claims coverage by {workflow}, but that workflow has no "
+            f"trigger path under {prefix}. A change to this skill would not "
+            f"start it, so it does not cover the skill."
+        )
+    if not _TEST_COMMAND.search(text):
+        problems.append(
+            f"{skill} claims coverage by {workflow}, but that workflow invokes "
+            f"no test runner. Coverage means running the suite."
+        )
+    return problems
+
+
+def floor_drop_problems(base_run_here, run_here, floor_drops=None):
+    """Floors may rise or hold. Lowering one must be declared, with a reason.
+
+    Until a cross-model review pointed it out, the ONLY thing preventing a
+    lowered floor was the sentence "do not lower the floor" in an error
+    message. So a change could delete 89 of evidence-reduce's 90 cases, set
+    its floor to 1, and every check would pass -- precisely the shrinkage the
+    floors exist to catch. Prose is not a ratchet; this is.
+    """
+    drops = floor_drops or {}
+    problems = []
+
+    for skill, base_floor in sorted(base_run_here.items()):
+        if skill not in run_here:
+            continue  # a removed skill is coverage_problems' business
+        new_floor = run_here[skill]
+        if isinstance(new_floor, bool) or not isinstance(new_floor, int):
+            continue  # a malformed floor is coverage_problems' business
+        if not isinstance(base_floor, int) or isinstance(base_floor, bool):
+            continue
+        if new_floor < base_floor and not drops.get(skill):
+            problems.append(
+                f"{skill}'s floor drops from {base_floor} to {new_floor}. A "
+                f"floor may rise or hold, never fall on its own -- that is what "
+                f"makes it a ratchet. If tests were deliberately removed, add "
+                f'"{skill}": "<why>" to \'floor_drops\' in {MANIFEST.name} so '
+                f"the reason is visible in this diff."
+            )
+
+    for skill, reason in sorted(drops.items()):
+        base_floor = base_run_here.get(skill)
+        new_floor = run_here.get(skill)
+        falling = (
+            isinstance(base_floor, int)
+            and isinstance(new_floor, int)
+            and new_floor < base_floor
+        )
+        if not falling:
+            problems.append(
+                f"'floor_drops' still holds an entry for {skill} ({reason!r}) "
+                f"but its floor is not falling in this change. Remove it -- a "
+                f"stale exemption silently permits the next real drop."
+            )
+
+    return problems
 
 
 def discover_skills(skills_dir=SKILLS_DIR):
@@ -140,19 +278,7 @@ def coverage_problems(discovered, run_here, covered_elsewhere, repo_root=REPO_RO
             )
 
     for skill, workflow in sorted(covered_elsewhere.items()):
-        path = repo_root / workflow
-        if not path.is_file():
-            problems.append(
-                f"{skill} claims coverage by {workflow}, which does not exist. "
-                f"Either that workflow was deleted -- in which case the skill is "
-                f"now uncovered and belongs in 'run_here' -- or the path is wrong."
-            )
-            continue
-        if f"launchpad/skills/{skill}" not in path.read_text(encoding="utf-8"):
-            problems.append(
-                f"{skill} claims coverage by {workflow}, but that workflow never "
-                f"mentions launchpad/skills/{skill}. The exclusion is not true."
-            )
+        problems.extend(exclusion_problems(skill, workflow, repo_root))
 
     return problems
 
@@ -196,6 +322,28 @@ def parse_collected(output):
 def cmd_check(args):
     run_here, covered_elsewhere = load_manifest()
     problems = coverage_problems(discover_skills(), run_here, covered_elsewhere)
+
+    base = getattr(args, "base_manifest", None)
+    if base:
+        base_path = pathlib.Path(base)
+        if not base_path.is_file():
+            print(
+                f"::error::--base-manifest {base} does not exist. Without the "
+                f"base manifest the no-lowering rule cannot be checked, and a "
+                f"silently skipped ratchet is worse than none."
+            )
+            return 1
+        base_run_here, _ = load_manifest(base_path)
+        problems.extend(
+            floor_drop_problems(base_run_here, run_here, load_floor_drops())
+        )
+    else:
+        print(
+            "note: no --base-manifest given, so the no-lowering rule was not "
+            "checked. That is expected on a push to the trunk, where there is "
+            "no base to compare against."
+        )
+
     for problem in problems:
         print(f"::error::{problem}")
     if problems:
@@ -248,9 +396,15 @@ def build_parser():
     )
     sub = parser.add_subparsers(dest="command", required=True)
 
-    sub.add_parser(
+    check = sub.add_parser(
         "check", help="fail if any skill's suite is covered by nobody"
-    ).set_defaults(func=cmd_check)
+    )
+    check.add_argument(
+        "--base-manifest",
+        help="the base branch's copy of the manifest; enables the no-lowering "
+        "rule, which cannot be checked without something to compare against",
+    )
+    check.set_defaults(func=cmd_check)
 
     sub.add_parser(
         "matrix", help="emit the GitHub Actions matrix as JSON"

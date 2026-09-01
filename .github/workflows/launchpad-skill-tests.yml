@@ -53,12 +53,19 @@ on:
       - "launchpad/skills/**"
       - "launchpad/scripts/skill_test_floors.json"
       - "launchpad/scripts/skill_test_matrix.py"
+      # The workflow itself, matching the pull_request filter above. Without it
+      # a direct push that only edits this file — removing the test step, say —
+      # produces no run at all, so the change that disables the gate is the one
+      # change the gate never sees. Found in cross-model review.
+      - ".github/workflows/launchpad-skill-tests.yml"
 
-# Read-only. These are pure unit tests against temp-directory fixtures: they
-# reach no network, no relay and no GitHub API, so they need no token scope.
-# Deliberately NOT given a GITHUB_TOKEN — a suite that only passes because the
-# runner happened to hold a credential is a suite that is lying, and handing one
-# over would hide that rather than fix it.
+# `contents: read` is the least this can be given: both jobs check out the
+# repository, and checkout needs read. The suites themselves need nothing — they
+# are pure unit tests over temp-directory fixtures, reaching no network, no relay
+# and no GitHub API — so nothing above read is granted, and `persist-credentials:
+# false` keeps the token out of the checked-out git config. To be exact rather
+# than flattering: a GITHUB_TOKEN still exists in the job and `actions/checkout`
+# still receives one. What is claimed here is minimum scope, not absence.
 permissions:
   contents: read
 
@@ -76,8 +83,40 @@ jobs:
         with:
           persist-credentials: false
 
+      # The base branch's copy of the manifest, so `check` can enforce that a
+      # floor rises or holds and never falls. Without it the ratchet is only a
+      # sentence in an error message: a change could delete 89 of a suite's 90
+      # cases, set its floor to 1, and pass every gate. Fetched explicitly
+      # because checkout is shallow and has no other ref to compare against.
+      # On a push to the trunk there is no base and the rule is skipped, which
+      # `check` says out loud rather than passing silently.
+      - name: Fetch the base manifest
+        if: github.event_name == 'pull_request'
+        run: |
+          git fetch --no-tags --depth=1 origin "${{ github.base_ref }}"
+          if git show FETCH_HEAD:launchpad/scripts/skill_test_floors.json \
+               > "${RUNNER_TEMP}/base-floors.json" 2>/dev/null; then
+            echo "base manifest fetched from ${{ github.base_ref }}"
+          else
+            # The base branch has no manifest — true exactly once, on the pull
+            # request that first adds it. An empty base has no floors, so no
+            # floor can fall relative to it and the rule is vacuous rather than
+            # skipped. Written as a real file so `check` still runs the rule
+            # instead of taking the "no base given" branch, which would let a
+            # wiring mistake here look identical to a legitimate first landing.
+            echo '{"run_here": {}, "covered_elsewhere": {}}' \
+              > "${RUNNER_TEMP}/base-floors.json"
+            echo "::notice::${{ github.base_ref }} has no manifest yet; nothing to ratchet against"
+          fi
+
       - name: Every skill suite is accounted for
-        run: python3 launchpad/scripts/skill_test_matrix.py check
+        run: |
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            python3 launchpad/scripts/skill_test_matrix.py check \
+              --base-manifest "${RUNNER_TEMP}/base-floors.json"
+          else
+            python3 launchpad/scripts/skill_test_matrix.py check
+          fi
 
       - id: matrix
         name: Build the suite matrix
