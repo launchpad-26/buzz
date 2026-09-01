@@ -43,18 +43,17 @@ evidence:
     entry_class: FACT
     evidence:
       - "crates/buzz-relay/src/api/mod.rs:39-48"
-      - "crates/buzz-relay/src/api/mod.rs:63-112"
-      - "crates/buzz-relay/src/api/mod.rs:126-145"
+      - "crates/buzz-relay/src/api/mod.rs:63-113"
+      - "crates/buzz-relay/src/api/mod.rs:126-147"
   - statement: "On a MembershipDecision::ViaOwner outcome, enforce_relay_membership returns Ok(Some(owner_pubkey)) rather than inserting any row into the relay_members table -- the agent's access is derived at authentication time on every connection and no persistent relay-membership record is created for it, matching NIP-AA Step 6's 'MUST NOT create a persistent membership record for the agent.'"
     entry_class: FACT
     evidence:
-      - "crates/buzz-relay/src/api/mod.rs:126-145"
+      - "crates/buzz-relay/src/api/mod.rs:126-147"
   - statement: "Separately from relay-membership admission, handle_auth calls crate::api::relay_members::materialize_nip_oa_owner to persist a first-write-wins agent-to-owner pubkey mapping (ensuring both principals exist as users, then calling state.db.set_agent_owner) used for observer-frame auth and ban cascades -- this is a distinct, lower-level agent/owner identity mapping, not a relay-membership record, and runs even on open relays where no membership check occurs at all."
     entry_class: FACT
     evidence:
       - "crates/buzz-relay/src/handlers/auth.rs:240-275"
-      - "crates/buzz-relay/src/api/mod.rs:156-174"
-      - "crates/buzz-relay/src/api/mod.rs:176-215"
+      - "crates/buzz-relay/src/api/mod.rs:176-234"
   - statement: "buzz_sdk::nip_oa::verify_auth_tag implements NIP-AA/NIP-OA's tag-verification structure: it requires exactly 4 JSON array elements with the first equal to \"auth\", parses the owner pubkey and signature hex, calls validate_conditions on the conditions string, rejects self-attestation (owner_pubkey == agent_pubkey), reconstructs the preimage as \"nostr:agent-auth:<agent_pubkey_hex>:<conditions>\", hashes it with SHA-256, and verifies it as a BIP-340 Schnorr signature against the owner pubkey -- returning the owner PublicKey on success."
     entry_class: FACT
     evidence:
