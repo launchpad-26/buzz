@@ -25,9 +25,6 @@ import math
 import re
 import subprocess
 import sys
-import http.client
-import urllib.error
-import urllib.request
 from dataclasses import dataclass, field
 from pathlib import Path, PurePosixPath
 
@@ -556,35 +553,10 @@ def _is_prohibited_citation(citation: str) -> bool:
 # to Path.exists(), so the two positional forms and all three unopenable forms
 # were reported as missing files, while `startswith("http")` waved every URL
 # through unchecked. A cross-model review panel found both halves at once.
-_URL_PREFIXES = ("http://", "https://")
 _MARKDOWN_LINK_RE = re.compile(r"^\[[^\]]*\]\((?P<target>[^)\s]+)\)$")
-_FULL_SHA_RE = re.compile(r"^[0-9a-f]{40}$")
-# GitHub repository URLs. `verb` decides whether the URL names a FILE (ADR-0003's
-# subject) or some other repository view; `ref` is the branch, tag or commit it is
-# pinned to. Both schemes are matched: an earlier revision anchored these to
-# `https://` while routing on a prefix tuple that also contained `http://`, so the
-# same mutable blob link reopened the whole finding under the plain-http scheme --
-# it fell past both patterns and came back as a non-fatal "external URL". An
-# independent review-code pass found that one-character bypass.
-# The trailing path is optional: `.../blob/main` with no file after it matched
-# neither pattern in an earlier revision and fell through to the non-fatal
-# "external URL" branch, so a truncated mutable link evaded the pin check that a
-# complete one fails. A second cross-model review-final pass found that variant.
-_GITHUB_URL_RE = re.compile(
-    r"^https?://github\.com/[^/\s]+/[^/\s]+/"
-    r"(?P<verb>blob|raw|tree|blame|commits|edit)/(?P<ref>[^/\s]+)"
-    r"(?:/(?P<path>\S*))?$"
-)
-_RAW_GITHUB_URL_RE = re.compile(
-    r"^https?://raw\.githubusercontent\.com/[^/\s]+/[^/\s]+/(?P<ref>[^/\s]+)"
-    r"(?:/(?P<path>\S*))?$"
-)
-# Only these two name a file's contents. `tree` is a directory listing and `blame`,
-# `commits` and `edit` are views of a file rather than a citation of it -- an
-# independent review-final pass found `tree/<sha>/<dir>` being accepted as a
-# verified file citation, and `blame/main/...` slipping past the pin check
-# altogether by not matching the file-only pattern.
-_GITHUB_FILE_VERBS = {"blob", "raw"}
+# GitHub URL syntax (pin/verb/path rules) and the network probe now live in
+# evidence.py's `_verify_url` -- `_classify_url` below is a delegate. See that
+# module's git history for the review passes that shaped each rule.
 _COMMIT_CITATION_RE = re.compile(r"^commit\s+[0-9a-fA-F]{7,40}\b")
 _FILE_POSITION_RE = re.compile(r"^(?P<path>\S+?):(?P<start>\d+)(?:-(?P<end>\d+))?$")
 # CONTRACT.md's two unopenable non-commit forms, matched by SHAPE rather than by
@@ -615,43 +587,6 @@ class CitationVerdict:
     status: str  # "ok" | "error" | "unverified"
     detail: str = ""
 
-
-
-_URL_CHECK_TIMEOUT_SECONDS = 5
-_URL_CHECK_USER_AGENT = "buzz-corpus-validator/1.0"
-
-
-def _url_request_target(url_text: str) -> str:
-    """Return the URL portion of a citation that may carry trailing metadata."""
-    return url_text.split()[0].rstrip(",.;")
-
-
-def _url_resolves(url: str) -> bool:
-    """Return True only when an HTTP(S) citation resolves to content.
-
-    The citation value is deliberately kept out of diagnostics: callers report the
-    evidence entry and citation index instead, matching the rest of this module's
-    no-leak output contract.
-    """
-    headers = {"User-Agent": _URL_CHECK_USER_AGENT}
-    for method, extra_headers in (("HEAD", {}), ("GET", {"Range": "bytes=0-0"})):
-        request = urllib.request.Request(
-            url,
-            headers={**headers, **extra_headers},
-            method=method,
-        )
-        try:
-            with urllib.request.urlopen(
-                request, timeout=_URL_CHECK_TIMEOUT_SECONDS
-            ) as response:
-                return 200 <= response.status < 400
-        except urllib.error.HTTPError as exc:
-            if method == "HEAD" and exc.code in {405, 501}:
-                continue
-            return False
-        except (OSError, TimeoutError, ValueError, http.client.HTTPException):
-            return False
-    return False
 
 
 def _resolved_repo_file(path_text: str, repo_root_path: Path) -> Path | CitationVerdict:
@@ -705,40 +640,17 @@ def _classify_repo_position(
     return CitationVerdict("ok")
 
 def _classify_url(url: str, *, check_links: bool) -> CitationVerdict:
-    """A URL citation must satisfy syntax rules, then resolve in link-check mode.
+    """Delegate a URL citation to evidence.py's registered verifier.
 
-    Repository file links still have the strongest structural requirement: full
-    commit SHA, file-content verb, and a non-empty path. Other HTTP(S) URLs have
-    no commit pin, but they are not unverifiable by nature; --check-links can at
-    least establish that the referenced source exists at validation time.
+    The GitHub pin/verb/path syntax rules and the bounded HEAD-then-ranged-GET
+    network probe live in evidence.py now, alongside every other evidence kind
+    this module already routes through `_EVIDENCE_PARSER`. This function stays
+    as a distinct call site so `_classify_citation`'s routing table does not
+    need to change shape.
     """
-    target = _url_request_target(url)
-    match = _GITHUB_URL_RE.match(target) or _RAW_GITHUB_URL_RE.match(target)
-    if match:
-        if not _FULL_SHA_RE.match(match.group("ref")):
-            return CitationVerdict(
-                "error",
-                "is a repository link pinned to a mutable ref rather than a "
-                "full commit SHA (ADR-0003)",
-            )
-        verb = match.groupdict().get("verb") or "raw"
-        if verb not in _GITHUB_FILE_VERBS:
-            return CitationVerdict(
-                "error",
-                f"is a repository '{verb}' view rather than a link to the cited "
-                "file itself (ADR-0003)",
-            )
-        if not match.groupdict().get("path"):
-            return CitationVerdict(
-                "error", "is pinned but names no file within the repository"
-            )
-    if not check_links:
-        return CitationVerdict(
-            "unverified", "requires --check-links to verify reachable content"
-        )
-    if not _url_resolves(target):
-        return CitationVerdict("error", "does not resolve to reachable content")
-    return CitationVerdict("ok")
+    parsed = _EVIDENCE_PARSER.parse_citation(url)
+    result = _EVIDENCE_PARSER.verify_citation(parsed, repo_root(), check_links=check_links)
+    return CitationVerdict(result.status, result.detail)
 
 def _classify_commit_reference(text: str, repo_root_path: Path) -> CitationVerdict:
     sha = text.split()[1]

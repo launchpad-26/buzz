@@ -37,10 +37,13 @@ tests) construct entries with `collect_*` and assemble them with
 
 from __future__ import annotations
 
+import http.client
 import json
 import enum
 import re
 import subprocess
+import urllib.error
+import urllib.request
 from dataclasses import dataclass, field
 from pathlib import Path, PurePosixPath
 
@@ -201,12 +204,106 @@ def _verify_commit(parsed: ParsedCitation, repo_root: Path) -> VerificationResul
     return VerificationResult("error", "names a commit that does not exist in this repository")
 
 
-def verify_citation(parsed: ParsedCitation, repo_root: Path) -> VerificationResult:
+# GitHub repository URLs. `verb` decides whether the URL names a FILE (ADR-0003's
+# subject) or some other repository view; `ref` is the branch, tag or commit it is
+# pinned to. Both schemes are matched -- `http://` and `https://` -- so a mutable
+# blob link cannot dodge the pin check by dropping the `s`. The trailing path is
+# optional to MATCH (so a truncated `.../blob/main` still reaches the pin check)
+# and required to PASS (a pinned link naming no file cites a repository, not "the
+# cited file" ADR-0003 requires). Moved here from `validate.py` unchanged --
+# see that module's git history for the review passes that shaped each rule.
+_GITHUB_URL_RE = re.compile(
+    r"^https?://github\.com/[^/\s]+/[^/\s]+/"
+    r"(?P<verb>blob|raw|tree|blame|commits|edit)/(?P<ref>[^/\s]+)"
+    r"(?:/(?P<path>\S*))?$"
+)
+_RAW_GITHUB_URL_RE = re.compile(
+    r"^https?://raw\.githubusercontent\.com/[^/\s]+/[^/\s]+/(?P<ref>[^/\s]+)"
+    r"(?:/(?P<path>\S*))?$"
+)
+_FULL_SHA_RE = re.compile(r"^[0-9a-f]{40}$")
+# Only these two name a file's contents. `tree` is a directory listing and `blame`,
+# `commits` and `edit` are views of a file rather than a citation of it.
+_GITHUB_FILE_VERBS = {"blob", "raw"}
+
+_URL_CHECK_TIMEOUT_SECONDS = 5
+_URL_CHECK_USER_AGENT = "buzz-corpus-validator/1.0"
+
+
+def _url_resolves(url: str) -> bool:
+    """Return True only when an HTTP(S) citation resolves to content.
+
+    The citation value is deliberately kept out of diagnostics: callers report the
+    evidence entry and citation index instead, matching the rest of this module's
+    no-leak output contract.
+    """
+    headers = {"User-Agent": _URL_CHECK_USER_AGENT}
+    for method, extra_headers in (("HEAD", {}), ("GET", {"Range": "bytes=0-0"})):
+        request = urllib.request.Request(
+            url,
+            headers={**headers, **extra_headers},
+            method=method,
+        )
+        try:
+            with urllib.request.urlopen(
+                request, timeout=_URL_CHECK_TIMEOUT_SECONDS
+            ) as response:
+                return 200 <= response.status < 400
+        except urllib.error.HTTPError as exc:
+            if method == "HEAD" and exc.code in {405, 501}:
+                continue
+            return False
+        except (OSError, TimeoutError, ValueError, http.client.HTTPException):
+            return False
+    return False
+
+
+def _verify_url(url: str, *, check_links: bool) -> VerificationResult:
+    """A URL citation must satisfy syntax rules, then resolve in link-check mode.
+
+    Repository file links still have the strongest structural requirement: full
+    commit SHA, file-content verb, and a non-empty path. Other HTTP(S) URLs have
+    no commit pin, but they are not unverifiable by nature; check_links can at
+    least establish that the referenced source exists at validation time.
+    """
+    target = _parse_url_target(url)
+    match = _GITHUB_URL_RE.match(target) or _RAW_GITHUB_URL_RE.match(target)
+    if match:
+        if not _FULL_SHA_RE.match(match.group("ref")):
+            return VerificationResult(
+                "error",
+                "is a repository link pinned to a mutable ref rather than a "
+                "full commit SHA (ADR-0003)",
+            )
+        verb = match.groupdict().get("verb") or "raw"
+        if verb not in _GITHUB_FILE_VERBS:
+            return VerificationResult(
+                "error",
+                f"is a repository '{verb}' view rather than a link to the cited "
+                "file itself (ADR-0003)",
+            )
+        if not match.groupdict().get("path"):
+            return VerificationResult(
+                "error", "is pinned but names no file within the repository"
+            )
+    if not check_links:
+        return VerificationResult(
+            "unverified", "requires --check-links to verify reachable content"
+        )
+    if not _url_resolves(target):
+        return VerificationResult("error", "does not resolve to reachable content")
+    return VerificationResult("ok")
+
+
+def verify_citation(
+    parsed: ParsedCitation, repo_root: Path, *, check_links: bool = False
+) -> VerificationResult:
     """Verify locally provable citation kinds without executing citation prose.
 
-    Network URL verification remains owned by `validate.py`'s explicit
-    `--check-links` mode. Graph edges, tool results, and unknown forms have no
-    replay implementation here and remain blocking `unverified` results.
+    `check_links` gates the one kind that reaches the network: URL citations pass
+    their syntax rules unconditionally, then are only fetched when the caller
+    opts in. Graph edges, tool results, and unknown forms have no replay
+    implementation here and remain blocking `unverified` results.
     """
     if parsed.kind in {
         EvidenceKind.LOCAL_FILE,
@@ -217,7 +314,8 @@ def verify_citation(parsed: ParsedCitation, repo_root: Path) -> VerificationResu
     if parsed.kind is EvidenceKind.COMMIT:
         return _verify_commit(parsed, repo_root)
     if parsed.kind in {EvidenceKind.EXTERNAL_URL, EvidenceKind.GITHUB_URL}:
-        return VerificationResult("unverified", "requires the URL verifier")
+        assert parsed.url is not None
+        return _verify_url(parsed.url, check_links=check_links)
     if parsed.kind in {EvidenceKind.GRAPH_EDGE, EvidenceKind.TOOL_RESULT}:
         return VerificationResult("unverified", "no verifier exists for this evidence kind")
     return VerificationResult("error", "no verifier exists for this evidence kind")
