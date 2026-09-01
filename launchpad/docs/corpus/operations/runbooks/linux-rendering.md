@@ -106,6 +106,19 @@ the AppImage-specific `colrv1_configure_skpaint` assertion abort. It follows
 `launchpad/docs/corpus/templates/runbook.md`'s required sections and
 declares `implements` against it.
 
+**One trigger, several root causes, deliberately.** The template scopes a
+runbook to "one alert or failure condition," and the trigger here is one
+condition — Buzz Desktop fails to render on a Linux host — with several
+documented root causes (dmabuf incompatibility, an AppImage-only font ABI
+mismatch, an AMD RDNA4-specific case) rather than one. This mirrors
+`docs/linux-rendering-troubleshooting.md` itself, which treats all of them
+as one guide keyed to one user-visible symptom family, and a reader who
+hits a blank Linux window has no way to know which root cause applies until
+they diagnose it — splitting this into separate per-cause runbooks would
+force that same reader to guess which node to open first. If a root cause
+here grows enough independent detail to outweigh sharing one trigger, that
+is a reason to split it later, not a reason this node is wrong now.
+
 **This fork does not build or distribute a Linux desktop package.** Buzz
 Desktop is upstream's product; this fork's own CI (`.github/workflows/ci.yml`)
 builds and unit-tests the desktop app's Rust crates on `ubuntu-latest` for
