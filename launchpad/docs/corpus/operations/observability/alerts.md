@@ -142,9 +142,9 @@ overlay, `values-production.yaml`, does not set it either -- so an operator
 rendering the chart with the checked-in production values still gets no
 alert rules unless they add `--set prometheusRule.enabled=true` themselves.
 The chart's own render tests hold both directions of this: a default render
-carries no `PodMonitor` or `PrometheusRule` at all, and an
-`prometheusRule.enabled=true` render's `PrometheusRule.spec.groups` must be
-non-empty. A malformed override is also tested: setting
+carries no `PodMonitor` or `PrometheusRule` at all, and a render with
+`prometheusRule.enabled=true` set must produce a `PrometheusRule` whose
+`spec.groups` is non-empty. A malformed override is also tested: setting
 `apnsRetryRatioThreshold` to `2` -- outside the `0..1` fraction the alert
 expression assumes -- fails chart schema validation rather than rendering a
 rule that could never usefully fire.
@@ -186,8 +186,7 @@ This node does not describe:
   reference, and no concept/explanation node for it exists yet to link.
 - **How to install, upgrade, or operate the push-gateway or relay chart**
   step by step -- that is a how-to/procedure concern; `docs/push-gateway-deployment.md`
-  and `docs/push-gateway-deployment.md`'s own deployment steps carry that
-  content and are not restated here.
+  already carries that content and it is not restated here.
 - **An API Reference for a monitoring vendor's own alerting API** (Alertmanager's,
   Grafana's, or PagerDuty's) -- this node stays inside what this repository
   ships, not a third party's full surface.
