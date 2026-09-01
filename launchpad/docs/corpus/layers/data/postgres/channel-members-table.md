@@ -43,34 +43,34 @@ evidence:
     entry_class: FACT
     evidence:
       - "crates/buzz-core/src/channel.rs"
-  - statement: "crates/buzz-db/src/store/channel.rs's add_member function inserts or reactivates a row via INSERT ... ON CONFLICT (community_id, channel_id, pubkey) DO UPDATE SET removed_at = NULL, removed_by = NULL, role = EXCLUDED.role, so re-adding an already-removed member reuses the same primary-key row rather than creating a second one -- removal is a soft delete via removed_at/removed_by, not a row deletion."
+  - statement: "crates/buzz-db/src/store/channel_members.rs's add_member function inserts or reactivates a row via INSERT ... ON CONFLICT (community_id, channel_id, pubkey) DO UPDATE SET removed_at = NULL, removed_by = NULL, role = EXCLUDED.role, so re-adding an already-removed member reuses the same primary-key row rather than creating a second one -- removal is a soft delete via removed_at/removed_by, not a row deletion."
     entry_class: FACT
     evidence:
-      - "crates/buzz-db/src/store/channel.rs"
-  - statement: "crates/buzz-db/src/store/channel.rs's remove_member function sets removed_at = NOW(), removed_by = $1 (the actor's pubkey) on the matching row, guarded by a WHERE ... AND removed_at IS NULL clause, and returns DbError::MemberNotFound if no row matched -- confirming removal never deletes the row."
+      - "crates/buzz-db/src/store/channel_members.rs"
+  - statement: "crates/buzz-db/src/store/channel_members.rs's remove_member function sets removed_at = NOW(), removed_by = $1 (the actor's pubkey) on the matching row, guarded by a WHERE ... AND removed_at IS NULL clause, and returns DbError::MemberNotFound if no row matched -- confirming removal never deletes the row."
     entry_class: FACT
     evidence:
-      - "crates/buzz-db/src/store/channel.rs"
-  - statement: "crates/buzz-db/src/store/channel.rs's add_member doc comment states role-enforcement rules: on open channels invited_by is optional and role is forced to Member for self-join; on private channels an invite requires an invited_by who is an active member or the channel creator bootstrapping their own first membership; and elevated roles (Owner, Admin) may only be granted by an existing owner or admin, even on open channels. A code comment in the same function states that reactivating a soft-removed row is deliberately keyed on the CURRENT active role, not the removed row's stored role, because 'inferring current authority from a removed row would make soft-deleted ownership a resurrection token.'"
+      - "crates/buzz-db/src/store/channel_members.rs"
+  - statement: "crates/buzz-db/src/store/channel_members.rs's add_member doc comment states role-enforcement rules: on open channels invited_by is optional and role is forced to Member for self-join; on private channels an invite requires an invited_by who is an active member or the channel creator bootstrapping their own first membership; and elevated roles (Owner, Admin) may only be granted by an existing owner or admin, even on open channels. A code comment in the same function states that reactivating a soft-removed row is deliberately keyed on the CURRENT active role, not the removed row's stored role, because 'inferring current authority from a removed row would make soft-deleted ownership a resurrection token.'"
     entry_class: FACT
     evidence:
-      - "crates/buzz-db/src/store/channel.rs"
-  - statement: "crates/buzz-db/src/store/channel.rs's add_member and remove_member both guard against demoting or removing a channel's last owner: before a demotion or removal that would leave role = 'owner' AND removed_at IS NULL with a count of 1, both functions return DbError::AccessDenied rather than proceeding, and both acquire a per-channel advisory transaction lock (acquire_channel_membership_lock, via pg_advisory_xact_lock(hashtextextended(...))) as the first statement in their transaction specifically to serialize this check-then-write sequence against concurrent membership writes on the same channel."
+      - "crates/buzz-db/src/store/channel_members.rs"
+  - statement: "crates/buzz-db/src/store/channel_members.rs's add_member and remove_member both guard against demoting or removing a channel's last owner: before a demotion or removal that would leave role = 'owner' AND removed_at IS NULL with a count of 1, both functions return DbError::AccessDenied rather than proceeding, and both acquire a per-channel advisory transaction lock (acquire_channel_membership_lock, via pg_advisory_xact_lock(hashtextextended(...))) as the first statement in their transaction specifically to serialize this check-then-write sequence against concurrent membership writes on the same channel."
     entry_class: FACT
     evidence:
-      - "crates/buzz-db/src/store/channel.rs"
-  - statement: "crates/buzz-db/src/store/channel.rs's is_member and membership_pairs functions both define active membership as a row joined against channels ON channels.deleted_at IS NULL, filtered by channel_members.removed_at IS NULL -- an active membership additionally requires the parent channel to not itself be soft-deleted."
+      - "crates/buzz-db/src/store/channel_members.rs"
+  - statement: "crates/buzz-db/src/store/channel_members.rs's is_member and membership_pairs functions both define active membership as a row joined against channels ON channels.deleted_at IS NULL, filtered by channel_members.removed_at IS NULL -- an active membership additionally requires the parent channel to not itself be soft-deleted."
     entry_class: FACT
     evidence:
-      - "crates/buzz-db/src/store/channel.rs"
+      - "crates/buzz-db/src/store/channel_members.rs"
   - statement: "crates/buzz-db/src/store/dm.rs's hide_dm and unhide_dm functions are the only call sites in the repository that write channel_members.hidden_at, both guarded by AND removed_at IS NULL, and hide_dm's own doc comment states 'the DM is not deleted -- it can be restored by opening a new DM with the same participants (which clears hidden_at)'; hidden_at has no code path writing it for non-DM channel types at the recorded revision."
     entry_class: FACT
     evidence:
       - "crates/buzz-db/src/store/dm.rs"
-  - statement: "crates/buzz-db/src/store/channel.rs's get_accessible_channels query joins channel_members with the condition (c.channel_type != 'dm' OR cm.hidden_at IS NULL), confirming hidden_at is read as a visibility filter scoped specifically to the dm channel type, matching hide_dm/unhide_dm's own DM-only write path."
+  - statement: "crates/buzz-db/src/store/channel_members.rs's get_accessible_channels query joins channel_members with the condition (c.channel_type != 'dm' OR cm.hidden_at IS NULL), confirming hidden_at is read as a visibility filter scoped specifically to the dm channel type, matching hide_dm/unhide_dm's own DM-only write path."
     entry_class: FACT
     evidence:
-      - "crates/buzz-db/src/store/channel.rs"
+      - "crates/buzz-db/src/store/channel_members.rs"
   - statement: "migrations/0029_community_deletion.sql attaches a community_id-immutability write fence to channel_members via SELECT attach_community_write_fence('channel_members'), alongside every other community-scoped table in that migration."
     entry_class: FACT
     evidence:
@@ -79,25 +79,25 @@ evidence:
     entry_class: FACT
     evidence:
       - "crates/buzz-db/src/store/deletion.rs"
-  - statement: "crates/buzz-relay/src/handlers/side_effects.rs's group_members_tags function builds the Nostr tag list for a kind:39002 (NIP-29 group members) event directly from a Vec<MemberRecord> parameter, and every call site building that members list (for example the one immediately preceding the kind:39002 emission around line 1066) obtains it via state.db.get_members(tenant.community(), channel_id), which crates/buzz-db/src/store/channel.rs's get_members function implements as a SELECT ... FROM channel_members query -- channel_members rows are the source data for the relay-synthesized kind:39002 event, not a projection derived from a stored kind:39002 event."
+  - statement: "crates/buzz-relay/src/handlers/side_effects.rs's group_members_tags function builds the Nostr tag list for a kind:39002 (NIP-29 group members) event directly from a Vec<MemberRecord> parameter, and every call site building that members list (for example the one immediately preceding the kind:39002 emission around line 1066) obtains it via state.db.get_members(tenant.community(), channel_id), which crates/buzz-db/src/store/channel_members.rs's get_members function implements as a SELECT ... FROM channel_members query -- channel_members rows are the source data for the relay-synthesized kind:39002 event, not a projection derived from a stored kind:39002 event."
     entry_class: FACT
     evidence:
       - "crates/buzz-relay/src/handlers/side_effects.rs"
-      - "crates/buzz-db/src/store/channel.rs"
+      - "crates/buzz-db/src/store/channel_members.rs"
   - statement: "buzz_core::kind::KIND_NIP29_GROUP_MEMBERS is defined as 39002 under a comment 'NIP-29: Addressable group members list', in the module documented elsewhere in this repository as 'the authoritative source for Buzz kind numbers'."
     entry_class: FACT
     evidence:
       - "crates/buzz-core/src/kind.rs"
-  - statement: "The only INSERT/UPDATE statements against channel_members in the repository's non-test production code are in crates/buzz-db/src/store/channel.rs (add_member's INSERT ... ON CONFLICT ... DO UPDATE, remove_member's UPDATE ... SET removed_at) and crates/buzz-db/src/store/dm.rs (hide_dm/unhide_dm's UPDATE ... SET hidden_at); a repository-wide search for the literal string channel_members also found an INSERT INTO channel_members inside crates/buzz-db/src/store/thread.rs, but that statement sits inside a #[cfg(test)] mod tests block (a test-fixture helper, create_test_channel), not production code, and every other match (buzz-relay's conformance/mod.rs, event.rs, ingest.rs, moderation_authz.rs, buzz-cli's channels.rs, and buzz-test-client's integration tests) reads or references channel_members without writing it."
+  - statement: "The only INSERT/UPDATE statements against channel_members in the repository's non-test production code are in crates/buzz-db/src/store/channel_members.rs (add_member's INSERT ... ON CONFLICT ... DO UPDATE, remove_member's UPDATE ... SET removed_at) and crates/buzz-db/src/store/dm.rs (hide_dm/unhide_dm's UPDATE ... SET hidden_at); a repository-wide search for the literal string channel_members also found an INSERT INTO channel_members inside crates/buzz-db/src/store/thread.rs, but that statement sits inside a #[cfg(test)] mod tests block (a test-fixture helper, create_test_channel), not production code, and every other match (buzz-relay's conformance/mod.rs, event.rs, ingest.rs, moderation_authz.rs, buzz-cli's channels.rs, and buzz-test-client's integration tests) reads or references channel_members without writing it."
     entry_class: FACT
     evidence:
-      - "crates/buzz-db/src/store/channel.rs"
+      - "crates/buzz-db/src/store/channel_members.rs"
       - "crates/buzz-db/src/store/dm.rs"
       - "crates/buzz-db/src/store/thread.rs"
   - statement: "Membership state is server-derived from processed commands rather than being written from the generic event-ingestion path -- a code comment in add_member references 'the huddle bot-add and kind:9021 join paths' as the callers that reach it -- and channel_members is not itself an event-storage table the way events is."
     entry_class: INFERENCE
     evidence:
-      - "crates/buzz-db/src/store/channel.rs"
+      - "crates/buzz-db/src/store/channel_members.rs"
     confidence: 0.7
   - statement: "No merged corpus node documents the channels table, the Postgres datastore as a whole, or NIP-29 kind:39002/9021 as their own subject at the recorded revision, since origin/launchpad's launchpad/docs/corpus tree carries no layers/ or interfaces-events content nodes yet -- confirmed directly, not assumed."
     entry_class: FACT
@@ -247,7 +247,7 @@ Owner and Admin — is the authorization boundary `add_member`/`remove_member` e
 `channel_members` is a **purely server-derived table with no Nostr event of its own
 as its canonical form** — it is not the storage of an incoming client-signed event the
 way `events` is. It is written exclusively by relay-side command handling
-(`crates/buzz-db/src/store/channel.rs`'s `add_member`/`remove_member`, called in response to
+(`crates/buzz-db/src/store/channel_members.rs`'s `add_member`/`remove_member`, called in response to
 processed membership commands — a code comment in `add_member` references "the huddle
 bot-add and kind:9021 join paths" as callers — and `crates/buzz-db/src/store/dm.rs`'s
 `hide_dm`/`unhide_dm`), never by the generic event-ingestion path.
@@ -285,7 +285,7 @@ definition of done.
 | The `users` table's own identity and fields as an entity | A future data-entity node, not yet authored |
 | Postgres-instance-level operational characteristics (replication, backup posture, migration mechanism generally) | A future `layers/data/postgres` datastore-level node, not yet authored |
 | The full wire contract of kind:9021 (join request), kind:39001/39002/39003 (NIP-29 addressable group state) | A future `interfaces-events` node, not yet authored |
-| Whether a Redis or other cache ever mirrors membership state | Not checked in this session — no evidence of one was found while reading `crates/buzz-db/src/store/channel.rs`, but the search was not exhaustive |
+| Whether a Redis or other cache ever mirrors membership state | Not checked in this session — no evidence of one was found while reading `crates/buzz-db/src/store/channel_members.rs`, but the search was not exhaustive |
 
 **No `relationships` in this node's front matter.** At the recorded revision,
 `origin/launchpad`'s `launchpad/docs/corpus` tree carries no `layers/` subtree at all
@@ -299,7 +299,7 @@ to add it, per `AGENTS.md`'s own relationship-timing rule.
 - **Whether `channel_members` is ever written outside a generic event-ingestion
   path, versus always through explicit command handling, was not fully traced.** A
   repository-wide search for the literal string `channel_members` confirmed the only
-  production `INSERT`/`UPDATE` statements are in `crates/buzz-db/src/store/channel.rs`
+  production `INSERT`/`UPDATE` statements are in `crates/buzz-db/src/store/channel_members.rs`
   (`add_member`, `remove_member`) and `crates/buzz-db/src/store/dm.rs`
   (`hide_dm`/`unhide_dm`) — a test-fixture `INSERT` also exists in
   `crates/buzz-db/src/store/thread.rs`, but inside a `#[cfg(test)] mod tests` block, not

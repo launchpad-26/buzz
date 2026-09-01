@@ -33,7 +33,7 @@ evidence:
     entry_class: FACT
     evidence:
       - "crates/buzz-relay/src/handlers/side_effects.rs:1886-1901"
-      - "crates/buzz-db/src/store/channel.rs:609-650"
+      - "crates/buzz-db/src/store/channel.rs:695-708"
   - statement: "Ingest routes kind:5 and kind:9005/9008 events to this soft-delete side effect: handle_standard_deletion_event resolves each e-tagged target via get_event_by_id_including_deleted and calls soft_delete_event_and_update_thread per target, and the a-tag (addressable-event) deletion path is handled separately by handle_a_tag_deletion."
     entry_class: FACT
     evidence:

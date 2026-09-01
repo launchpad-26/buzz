@@ -60,10 +60,11 @@ evidence:
     entry_class: FACT
     evidence:
       - "crates/buzz-db/src/lib.rs"
-  - statement: "crates/buzz-db/src/store/channel.rs defines a CHANNEL_MEMBERSHIP_LOCK_NAMESPACE advisory-lock key and an acquire_channel_membership_lock helper whose doc comment requires it be 'the first statement in the transaction that then reads roles/owner counts and writes membership'; both add_member and remove_member call it immediately after pool.begin(), and the const's own comment explains an advisory key was chosen over SELECT ... FOR UPDATE on the channel row because 'membership is its own contention domain and must not serialize against unrelated channel metadata writers.'"
+  - statement: "crates/buzz-db/src/store/channel_members.rs defines a CHANNEL_MEMBERSHIP_LOCK_NAMESPACE advisory-lock key and an acquire_channel_membership_lock helper whose doc comment requires it be 'the first statement in the transaction that then reads roles/owner counts and writes membership'; both add_member and remove_member call it immediately after pool.begin(), and the const's own comment explains an advisory key was chosen over SELECT ... FOR UPDATE on the channel row because 'membership is its own contention domain and must not serialize against unrelated channel metadata writers.'"
     entry_class: FACT
     evidence:
-      - "crates/buzz-db/src/store/channel.rs"
+      - "crates/buzz-db/src/store/channel_members.rs:48"
+      - "crates/buzz-db/src/store/channel_members.rs:176-220"
   - statement: "crates/buzz-db/src/store/relay_members.rs's transfer_ownership opens one transaction, takes SELECT pg_advisory_xact_lock($1) keyed on the transferee pubkey, then SELECT pubkey FROM relay_members WHERE ... role = 'owner' FOR UPDATE to lock and read the current owner row(s), and calls tx.rollback() explicitly on each business-logic failure branch (NoOwner, OwnerConflict, AlreadyOwner, LimitReached) rather than relying on drop -- combining an advisory lock (serializing on the transferee) with a row lock (serializing on the current owner) inside the same transaction."
     entry_class: FACT
     evidence:

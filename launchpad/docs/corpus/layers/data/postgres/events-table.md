@@ -28,7 +28,7 @@ evidence:
     entry_class: FACT
     evidence:
       - "migrations/0001_initial_schema.sql:250-278"
-  - statement: "crates/buzz-db/src/event.rs's module doc states: 'AUTH events (kind 22242) are never stored — they carry bearer tokens. Ephemeral events (kinds 20000–29999) are never stored — Redis pub/sub only. Deduplication is application-layer: ON CONFLICT DO NOTHING.'"
+  - statement: "crates/buzz-db/src/store/event.rs's module doc states: 'AUTH events (kind 22242) are never stored — they carry bearer tokens. Ephemeral events (kinds 20000–29999) are never stored — Redis pub/sub only. Deduplication is application-layer: ON CONFLICT DO NOTHING.'"
     entry_class: FACT
     evidence:
       - "crates/buzz-db/src/store/event.rs:1-5"
@@ -46,12 +46,12 @@ evidence:
     evidence:
       - "crates/buzz-db/src/store/replaceable.rs:374"
       - "crates/buzz-db/src/store/replaceable.rs:552"
-  - statement: "soft_delete_event (crates/buzz-db/src/event.rs:788-807) sets deleted_at = NOW() by (community_id, id) and returns whether a live row was found; soft_delete_by_coordinate (838-862) does the same by the NIP-33 coordinate (community_id, kind, pubkey, d_tag), guarded by created_at <= the deletion event's own created_at so a tombstone cannot erase a version newer than itself; soft_delete_event_and_update_thread (869-919ish) wraps a delete with a thread reply-counter decrement in one transaction so a crash between the two cannot leave counters inflated."
+  - statement: "soft_delete_event (crates/buzz-db/src/store/event.rs:788-807) sets deleted_at = NOW() by (community_id, id) and returns whether a live row was found; soft_delete_by_coordinate (838-862) does the same by the NIP-33 coordinate (community_id, kind, pubkey, d_tag), guarded by created_at <= the deletion event's own created_at so a tombstone cannot erase a version newer than itself; soft_delete_event_and_update_thread (869-919ish) wraps a delete with a thread reply-counter decrement in one transaction so a crash between the two cannot leave counters inflated."
     entry_class: FACT
     evidence:
       - "crates/buzz-db/src/store/event.rs:821-896"
       - "crates/buzz-db/src/store/event.rs:897-946"
-  - statement: "Every live-row read in crates/buzz-db/src/event.rs (query_events, count_events, get_event_by_id, get_latest_global_replaceable, get_events_by_ids, get_last_message_at, and more) filters deleted_at IS NULL; get_event_by_id_including_deleted (line 1037) is the one function in the file documented as the exception to that filter."
+  - statement: "Every live-row read in crates/buzz-db/src/store/event.rs (query_events, count_events, get_event_by_id, get_latest_global_replaceable, get_events_by_ids, get_last_message_at, and more) filters deleted_at IS NULL; get_event_by_id_including_deleted (line 1037) is the one function in the file documented as the exception to that filter."
     entry_class: FACT
     evidence:
       - "crates/buzz-db/src/store/event.rs:357-420"
@@ -173,13 +173,13 @@ node's job and `buzz-core`'s own in-memory representation.
 ## Invariants
 
 - **A stored row's `(community_id, created_at, id)` triple is immutable once
-  written.** No code path in `crates/buzz-db/src/event.rs` updates `created_at` or
+  written.** No code path in `crates/buzz-db/src/store/event.rs` updates `created_at` or
   `id` after insert; `soft_delete_by_coordinate`'s own doc comment leans on this
   directly, reasoning that because "`events.created_at` is immutable per row," a
   deletion's `created_at <=` guard can never be defeated by a row's own timestamp
   changing out from under it.
 - **Deletion is soft, never a `DELETE`.** Every deletion path in
-  `crates/buzz-db/src/event.rs` (`soft_delete_event`,
+  `crates/buzz-db/src/store/event.rs` (`soft_delete_event`,
   `soft_delete_by_coordinate`, `soft_delete_event_and_update_thread`) is an
   `UPDATE ... SET deleted_at = NOW()`. No function in that file issues a `DELETE
   FROM events`. A "deleted" event therefore still occupies its partition and its
@@ -302,7 +302,7 @@ in a follow-up edit once #1872 merges.
 - **The partition-maintenance mechanism** (how new monthly partitions past
   `events_p_future` get created) was not located in this session's reading and
   is left to the future Postgres datastore node.
-- **Whether any code path outside `crates/buzz-db/src/event.rs` and
+- **Whether any code path outside `crates/buzz-db/src/store/event.rs` and
   `crates/buzz-db/src/lib.rs` also writes to this table directly** was not
   exhaustively checked; the functions cited here are the ones this session's
   evidence gathering located, not a claimed complete inventory of every

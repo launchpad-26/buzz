@@ -47,7 +47,7 @@ evidence:
     evidence:
       - "migrations/0001_initial_schema.sql:329-341"
       - "migrations/0001_initial_schema.sql:343-354"
-  - statement: "crates/buzz-db/src/partition.rs's PARTITIONED_TABLES constant names exactly events and delivery_log as the only tables the runtime partition manager will act on, and its own doc comment states this allowlist \"prevents DDL injection\" because partition DDL identifiers cannot be parameterized."
+  - statement: "crates/buzz-db/src/store/partition.rs's PARTITIONED_TABLES constant names exactly events and delivery_log as the only tables the runtime partition manager will act on, and its own doc comment states this allowlist \"prevents DDL injection\" because partition DDL identifiers cannot be parameterized."
     entry_class: FACT
     evidence:
       - "crates/buzz-db/src/store/partition.rs:13-14"
@@ -59,9 +59,9 @@ evidence:
   - statement: "crates/buzz-relay/src/main.rs calls db.ensure_future_partitions(3) once at relay startup (unconditionally, not gated on BUZZ_AUTO_MIGRATE), and the module's own doc comment states it is additionally intended to run monthly via cron, but no call site invokes ensure_future_partitions anywhere outside that one startup call; buzz-workflow's own \"cron loop\" (crates/buzz-workflow/src/lib.rs) is a separate, user-authored-workflow scheduling feature unrelated to partition management, and no workflow, script, or infrastructure config in this repository wires it (or anything else) to ensure_future_partitions."
     entry_class: FACT
     evidence:
-      - "crates/buzz-relay/src/main.rs:200-202"
+      - "crates/buzz-relay/src/main.rs:213-214"
       - "crates/buzz-db/src/store/partition.rs:3"
-      - "grep(pattern='ensure_future_partitions', paths=['**/*.rs']) -> crates/buzz-db/src/partition.rs (definition), crates/buzz-db/src/lib.rs (wrapper), crates/buzz-relay/src/main.rs:200 (sole call site)"
+      - "grep(pattern='ensure_future_partitions', paths=['**/*.rs']) -> crates/buzz-db/src/store/partition.rs (free-function definition and Db-impl wrapper), crates/buzz-relay/src/main.rs:213 (sole call site)"
   - statement: "A repository-wide search for partition retention or removal logic (grep for \"detach partition\", \"drop.*partition\", \"retention\" across .rs and .sql files) found no code path that ever drops, detaches, or archives an old partition; ensure_future_partitions only ever creates partitions for future months, never removes past ones."
     entry_class: FACT
     evidence:
@@ -81,11 +81,11 @@ evidence:
     entry_class: FACT
     evidence:
       - "migrations/0021_created_at_fence_floor.sql:38-42"
-  - statement: "crates/buzz-db/src/replica_fence.rs's verify_floor_guard_catalog function queries pg_inherits for every partition child of events (UNION ALL with the events parent itself) and asserts, per relation, that a correctly-shaped events_created_at_floor trigger (right function, DEFERRABLE, INITIALLY DEFERRED, row-level, AFTER not BEFORE, firing on both INSERT and UPDATE) exists; any relation missing it is collected and returned as an error."
+  - statement: "crates/buzz-db/src/runtime/replica_fence.rs's verify_floor_guard_catalog function queries pg_inherits for every partition child of events (UNION ALL with the events parent itself) and asserts, per relation, that a correctly-shaped events_created_at_floor trigger (right function, DEFERRABLE, INITIALLY DEFERRED, row-level, AFTER not BEFORE, firing on both INSERT and UPDATE) exists; any relation missing it is collected and returned as an error."
     entry_class: FACT
     evidence:
       - "crates/buzz-db/src/runtime/replica_fence.rs:324-343"
-  - statement: "crates/buzz-db/src/migration.rs's run_migrations_locked calls verify_floor_guard_catalog immediately after running the embedded SQLx migrator, and its own comment states migration \"fails closed if any is missing\" -- a partition attached by any path that escapes trigger inheritance (an ATTACH PARTITION or an older code path, per the comment) causes the whole migration run to return an error rather than complete."
+  - statement: "crates/buzz-db/src/runtime/migration.rs's run_migrations_locked calls verify_floor_guard_catalog immediately after running the embedded SQLx migrator, and its own comment states migration \"fails closed if any is missing\" -- a partition attached by any path that escapes trigger inheritance (an ATTACH PARTITION or an older code path, per the comment) causes the whole migration run to return an error rather than complete."
     entry_class: FACT
     evidence:
       - "crates/buzz-db/src/runtime/migration.rs:50-63"
@@ -96,7 +96,7 @@ evidence:
   - statement: "crates/buzz-relay/src/main.rs treats a failure of ensure_future_partitions itself (the monthly-partition-creation call, not the floor-guard verification) as non-fatal: the error is logged and relay startup continues, unlike auto-migration failure and deletion-serving-fence validation failure in the same function, both of which abort startup via `?`."
     entry_class: FACT
     evidence:
-      - "crates/buzz-relay/src/main.rs:190-202"
+      - "crates/buzz-relay/src/main.rs:200-223"
   - statement: "If ensure_future_partitions fails to create an upcoming month's partition and no partition covers a given INSERT's created_at (or delivered_at) value, Postgres itself rejects that INSERT with a \"no partition of relation ... found for row\" error at write time, rather than the write silently succeeding into the wrong partition or being dropped."
     entry_class: INFERENCE
     evidence:
@@ -137,7 +137,7 @@ evidence:
     entry_class: FACT
     evidence:
       - "migrations/0001_initial_schema.sql:356"
-  - statement: "crates/buzz-db/src/partition.rs's own unit test module asserts validate_partition_suffix and validate_date_str reject SQL-injection-shaped inputs (e.g. \"2026_03; DROP TABLE events--\", \"2026-03-01; DROP TABLE events--\") and that PARTITIONED_TABLES contains events and delivery_log but not api_tokens or users."
+  - statement: "crates/buzz-db/src/store/partition.rs's own unit test module asserts validate_partition_suffix and validate_date_str reject SQL-injection-shaped inputs (e.g. \"2026_03; DROP TABLE events--\", \"2026-03-01; DROP TABLE events--\") and that PARTITIONED_TABLES contains events and delivery_log but not api_tokens or users."
     entry_class: FACT
     evidence:
       - "crates/buzz-db/src/store/partition.rs:162-190"
@@ -210,7 +210,7 @@ for the authoritative `CREATE TABLE` statements for both tables.
 
 ## Partition creation mechanism
 
-New monthly partitions are created by `crates/buzz-db/src/partition.rs`'s
+New monthly partitions are created by `crates/buzz-db/src/store/partition.rs`'s
 `ensure_future_partitions(pool, months_ahead)`, which:
 
 1. Is restricted to an explicit allowlist, `PARTITIONED_TABLES = ["events",
@@ -283,7 +283,7 @@ a row that should have been visible.
 **Partition rotation must preserve this guard on every partition, and the codebase
 verifies that it does.** Because the trigger is declared on the partitioned parent,
 `CREATE TABLE .. PARTITION OF` clones it onto every partition automatically --
-migration 0021's own comment states this explicitly. `crates/buzz-db/src/replica_fence.rs`'s
+migration 0021's own comment states this explicitly. `crates/buzz-db/src/runtime/replica_fence.rs`'s
 `verify_floor_guard_catalog` independently re-checks this at runtime: it walks
 `pg_inherits` for every child of `events` and asserts a correctly shaped copy of the
 trigger exists on each one.
@@ -333,10 +333,10 @@ attach and rejects a same-named trigger already present on the child.
 
 ## Verification
 
-`crates/buzz-db/src/partition.rs`'s own unit tests (`suffix_validation`,
+`crates/buzz-db/src/store/partition.rs`'s own unit tests (`suffix_validation`,
 `date_str_validation`, `table_allowlist`) assert the injection-guard regexes reject
 SQL-injection-shaped inputs and that the allowlist contains exactly `events` and
-`delivery_log`. `crates/buzz-db/src/replica_fence.rs`'s `verify_floor_guard_catalog`
+`delivery_log`. `crates/buzz-db/src/runtime/replica_fence.rs`'s `verify_floor_guard_catalog`
 is itself a runtime verification of partition-guard coverage, re-run on every startup
 and every migration.
 

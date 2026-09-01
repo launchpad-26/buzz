@@ -24,7 +24,7 @@ evidence:
     entry_class: FACT
     evidence:
       - "crates/buzz-search/src/lib.rs:1-15"
-  - statement: "crates/buzz-db/src/event.rs's insert_event function's INSERT statement names exactly twelve columns (community_id, id, pubkey, created_at, kind, tags, content, sig, received_at, channel_id, d_tag, not_before); search_tsv does not appear in that column list, confirming the Rust write path never supplies a value for it — Postgres computes it from `content` and `kind` as part of the same statement."
+  - statement: "crates/buzz-db/src/store/event.rs's insert_event function's INSERT statement names exactly twelve columns (community_id, id, pubkey, created_at, kind, tags, content, sig, received_at, channel_id, d_tag, not_before); search_tsv does not appear in that column list, confirming the Rust write path never supplies a value for it — Postgres computes it from `content` and `kind` as part of the same statement."
     entry_class: FACT
     evidence:
       - "crates/buzz-db/src/store/event.rs:271-345"
@@ -53,7 +53,7 @@ evidence:
       - "migrations/0014_push_lease_fts.sql"
       - "scripts/maintenance/nip_rs_search_allowlist.sql"
     confidence: 0.85
-  - statement: "crates/buzz-db/src/migration.rs's run_migrations_applies_consolidated_initial_schema_on_fresh_database test reads the post-migration search_tsv generated expression back from pg_attrdef on a freshly migrated database and asserts it contains 'ARRAY[0, 9, 40002, 45001, 45003]' — confirming the fresh-install allowlist kinds directly against a running migration, not merely against the maintenance script's own text."
+  - statement: "crates/buzz-db/src/runtime/migration.rs's run_migrations_applies_consolidated_initial_schema_on_fresh_database test reads the post-migration search_tsv generated expression back from pg_attrdef on a freshly migrated database and asserts it contains 'ARRAY[0, 9, 40002, 45001, 45003]' — confirming the fresh-install allowlist kinds directly against a running migration, not merely against the maintenance script's own text."
     entry_class: FACT
     evidence:
       - "crates/buzz-db/src/runtime/migration.rs:2395-2450"
@@ -239,7 +239,7 @@ Both shapes are legitimate outcomes of applying the same, unmodified
 migration files in order — this is not documentation drift the way a stale
 `.env.example` entry would be; it is a real, currently-live divergence
 between deployments, closed only by an operator choosing to run the
-maintenance script. `crates/buzz-db/src/migration.rs`'s own test suite
+maintenance script. `crates/buzz-db/src/runtime/migration.rs`'s own test suite
 confirms the allowlist shape directly by reading `pg_attrdef` back off a
 freshly migrated database and asserting it contains
 `ARRAY[0, 9, 40002, 45001, 45003]`.
@@ -394,7 +394,7 @@ prose above and would be reasonable `references` targets once merged.
 - **How and when partition retention actually reclaims a soft-deleted row**
   (and therefore its `search_tsv` entry) was not located in this session's
   reading and is left to a future node.
-- **Whether any code path outside `crates/buzz-db/src/event.rs` writes to the
+- **Whether any code path outside `crates/buzz-db/src/store/event.rs` writes to the
   `events` table's other columns in a way that could indirectly affect
   `search_tsv`** (for example, an `UPDATE` to `content`, if one exists
   anywhere) was not exhaustively searched for; `content` appears immutable in

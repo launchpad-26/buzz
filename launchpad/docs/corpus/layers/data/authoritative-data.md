@@ -51,7 +51,7 @@ evidence:
     evidence:
       - "launchpad/docs/corpus/architecture/principles/relay-is-source-of-truth.md"
     confidence: 0.75
-  - statement: "crates/buzz-db/src/thread.rs's increment_reply_count runs an UPDATE against thread_metadata.reply_count keyed on the parent event's community_id and event_id -- the projection's count is recomputed by code reacting to an insert into events, not written independently of it."
+  - statement: "crates/buzz-db/src/store/thread.rs's increment_reply_count runs an UPDATE against thread_metadata.reply_count keyed on the parent event's community_id and event_id -- the projection's count is recomputed by code reacting to an insert into events, not written independently of it."
     entry_class: FACT
     evidence:
       - "crates/buzz-db/src/store/thread.rs:256-291"
