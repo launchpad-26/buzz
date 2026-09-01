@@ -92,10 +92,10 @@ evidence:
     evidence:
       - ".env.example"
       - "crates/buzz-db/src/lib.rs"
-  - statement: "crates/buzz-db/src/migration.rs embeds a static sqlx::migrate!(\"../../migrations\") MIGRATOR, and its run_migrations function's doc comment states the entire run holds an exclusive SCHEMA_DESTRUCTION_LOCK_KEY session lock, serializing schema changes against destructive-deletion transactions, and that 'a source lint (migration_execution_cannot_bypass_schema_destruction_lock) enforces that MIGRATOR.run has no other call site' — a single, guarded entry point for schema evolution, not an unenforced convention."
+  - statement: "crates/buzz-db/src/runtime/migration.rs embeds a static sqlx::migrate!(\"../../migrations\") MIGRATOR, and its run_migrations function's doc comment states the entire run holds an exclusive SCHEMA_DESTRUCTION_LOCK_KEY session lock, serializing schema changes against destructive-deletion transactions, and that 'a source lint (migration_execution_cannot_bypass_schema_destruction_lock) enforces that MIGRATOR.run has no other call site' — a single, guarded entry point for schema evolution, not an unenforced convention."
     entry_class: FACT
     evidence:
-      - "crates/buzz-db/src/migration.rs"
+      - "crates/buzz-db/src/runtime/migration.rs"
   - statement: "The migrations/ directory at the repository root contains 31 sequentially numbered SQL files at the recorded revision (0001_initial_schema.sql through 0031_workflow_run_error_codes.sql), applied in that numeric order by the embedded migrator above; root CLAUDE.md's Repo Structure table independently describes this directory as 'SQL migrations (auto-applied on relay startup).'"
     entry_class: FACT
     evidence:
@@ -111,7 +111,7 @@ evidence:
     entry_class: FACT
     evidence:
       - "crates/buzz-db/src/lib.rs"
-      - "crates/buzz-db/src/replica_fence.rs"
+      - "crates/buzz-db/src/runtime/replica_fence.rs"
       - "crates/buzz-audit/src/service.rs"
       - "crates/buzz-search/src/query.rs"
       - "crates/buzz-relay/src/handlers/command_executor.rs"
@@ -450,7 +450,7 @@ future work for whoever writes that instance node, not this template):
 
 | Datastore | Technology | Accessed by (component, not container) | Notes |
 |---|---|---|---|
-| The event/data store | Postgres 17 (`postgres:17-alpine` in `docker-compose.yml`) | `buzz-db` (event store, users, channels, moderation, and more), `buzz-search` (full-text search) | `DATABASE_URL` and optional `READ_DATABASE_URL` in `.env.example`; migrations under `migrations/`, applied by the embedded `sqlx::migrate!` in `crates/buzz-db/src/migration.rs`. |
+| The event/data store | Postgres 17 (`postgres:17-alpine` in `docker-compose.yml`) | `buzz-db` (event store, users, channels, moderation, and more), `buzz-search` (full-text search) | `DATABASE_URL` and optional `READ_DATABASE_URL` in `.env.example`; migrations under `migrations/`, applied by the embedded `sqlx::migrate!` in `crates/buzz-db/src/runtime/migration.rs`. |
 | The pub/sub and presence store | Redis 7 (`redis:7-alpine` in `docker-compose.yml`) | `buzz-pubsub` (fan-out, presence, typing indicators) | `REDIS_URL` and `BUZZ_REDIS_POOL_SIZE` in `.env.example`, via the `redis` and `deadpool-redis` crates. Not instrumented by `#[datastore_span]` at the recorded revision — see below. |
 | The media / Git-CAS object store | S3-compatible (MinIO locally, per `.env.example`'s `BUZZ_S3_ENDPOINT`) | `buzz-media` (media storage, validation, thumbnails); `buzz-relay` itself for the Git smart-HTTP/CAS path, per root `CLAUDE.md`'s crate map ("also hosts git + huddle audio") | `BUZZ_S3_ENDPOINT`, `BUZZ_S3_ACCESS_KEY`, `BUZZ_S3_BUCKET` and related variables in `.env.example`. |
 
@@ -494,7 +494,7 @@ to `FACT`:
   actually runs.
 - **The migration mechanism's behavior** (ordering, locking, guard rails) is a `FACT`
   when it cites the code that implements it, as this node's own evidence ledger does
-  for `crates/buzz-db/src/migration.rs` — not a comment elsewhere describing what the
+  for `crates/buzz-db/src/runtime/migration.rs` — not a comment elsewhere describing what the
   mechanism is believed to do.
 - **An access-pattern claim** (which component reads or writes this datastore, and
   how) is a `FACT` when it cites the client/driver code that makes the call — a

@@ -303,14 +303,19 @@ class RecordShape(unittest.TestCase):
         self.assertEqual(pr["base_ref"], "launchpad")
 
     def test_status_context_shape_does_not_invent_a_status(self):
-        """The old commit-status API has one state and no workflow. Say so."""
-        node = {"__typename": "StatusContext", "context": "ci/legacy", "state": "SUCCESS",
-                "targetUrl": "https://example.invalid/1", "isRequired": True}
+        """The old commit-status API has one state and no workflow. Say so.
+
+        #148: driven from a real StatusContext recorded from block/buzz#2 — a
+        Square internal security bot still posting via the legacy commit-status
+        API — rather than a hand-built node, per this fixture set's own doctrine.
+        """
+        contexts = rollup_contexts(fixture("upstream2-checks.json"))
+        node = next(c for c in contexts if c["__typename"] == "StatusContext")
         self.assertEqual(
             core._normalise_check(node),
-            {"name": "ci/legacy", "workflow": None, "status": None,
-             "conclusion": "SUCCESS", "required": True,
-             "details_url": "https://example.invalid/1"},
+            {"name": "github-security/two-human-approvals-needed", "workflow": None,
+             "status": None, "conclusion": "SUCCESS", "required": False,
+             "details_url": "https://dev-guides.sqprod.co/docs/tools/github/resources/security-help"},
         )
 
     def test_an_unenumerated_skip_reason_is_refused(self):
