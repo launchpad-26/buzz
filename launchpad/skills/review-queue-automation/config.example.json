@@ -175,5 +175,68 @@
     "transport": "none",
     "path": "/path/to/repo/pr review logs/notifications.jsonl",
     "timeout_seconds": 30
+  },
+  "budget": {
+    "per_pr_tokens": 2000000,
+    "per_repo_daily_tokens": 40000000,
+    "per_model_daily_tokens": 20000000,
+    "max_attempts_per_job": 6,
+    "max_concurrent_jobs": 1,
+    "rest_remaining_floor": 0,
+    "circuit_breaker": {
+      "failure_threshold": 3,
+      "cooldown_seconds": 900
+    }
+  },
+  "retention": {
+    "artifact_days": 30
+  },
+  "policy": {
+    "version": "v1",
+    "authority": {
+      "review": "disabled",
+      "comment": "disabled",
+      "approve": "disabled",
+      "request_changes": "disabled",
+      "triage": "disabled",
+      "fix": "disabled"
+    },
+    "approval": {
+      "mode": "disabled",
+      "live_canary_approved": false,
+      "effective_risk_max": 24,
+      "complexity_max": 2,
+      "file_limit": 50,
+      "line_limit": 1000,
+      "approval_rate_max": 0.5
+    },
+    "risk": {
+      "bands": {
+        "low": 24,
+        "medium": 99,
+        "high": 100
+      },
+      "protected_triggers": [
+        "(^|/)(security|auth|authentication|authorization|credentials?)(/|$)",
+        "(^|/)migrations?/",
+        "\\.(sql|prisma|graphql)$",
+        "(^|/)deploy/",
+        "(^|/)\\.github/workflows/",
+        "schema/",
+        "policy"
+      ]
+    },
+    "human_queue": {
+      "expiry_minutes": 1440
+    },
+    "assurance": {
+      "sensitive_paths": [
+        "(^|/)(security|migrations?|provisioning)(/|$)",
+        "^\\.github/workflows/",
+        "(^|/)deploy/"
+      ],
+      "large_diff_lines": 700,
+      "full_rereview_ratio": 0.5
+    }
   }
 }

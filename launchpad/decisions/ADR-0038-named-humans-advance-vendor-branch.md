@@ -1,5 +1,5 @@
 ---
-status: Proposed
+status: Accepted
 date: 2026-08-25
 issue: launchpad-26/buzz#298
 decided_in: launchpad-26/buzz#298
@@ -10,16 +10,9 @@ supersedes: none
 
 ## Decision
 
-**Not yet settled by a human.** This record is `Proposed`, not `Accepted`.
-`launchpad/AGENTS.md` §5.1 reserves the choice for a human — *"You may not decide an ADR
-outcome"* — and #298's *Decision outcome* is still blank. When a human states the
-outcome in #298, this record's `status` becomes `Accepted`. Everything below is a
-drafted proposal, not a settled rule.
-
-The proposed option: Option A. Add a small, named group of humans to the push
-restriction on `launchpad-26/main`, limited to the people who may take a vendor drop.
-The operation remains fast-forward-only; `allow_force_pushes` and `allow_deletions` stay
-false.
+Option A. Add a small, named group of humans to the push restriction on
+`launchpad-26/main`, limited to the people who may take a vendor drop. The operation
+remains fast-forward-only; `allow_force_pushes` and `allow_deletions` stay false.
 
 **Who is on the list — this record does not name it.** Only a repository admin can
 change the restriction list (#298: *"Only a repository admin can change the restriction
@@ -106,9 +99,12 @@ none
 
 ## Provenance
 
-Drafted by an agent from #298's options; the decision itself is pending a human, as
-stated at the top of *Decision*. Full alternatives and the measured branch-protection
-state remain in #298.
+Drafted by an agent from #298's options. Jeffrey (@tucktuck101) made the decision on
+2026-08-31 after reviewing options A–D with their positive and negative consequences and
+the agent's recommendation of Option A; he replied verbatim: **"A"**. The group's size
+and membership remain his to state in #298, and the branch-protection change remains a
+repository admin's to execute — this record grants nothing by itself. Full alternatives
+and the measured branch-protection state remain in #298.
 
 Verified while drafting: ADR-0015 does not contain the privileged-access pattern #298
 attributes to it (read in full on `launchpad`), and ADR-0008 does contain the

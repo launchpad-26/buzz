@@ -1,0 +1,5 @@
+pre-push:
+  commands:
+    file-size-check:
+      env:
+        CHECK_FILE_SIZES_BASE: origin/launchpad

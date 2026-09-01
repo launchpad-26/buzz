@@ -30,9 +30,11 @@ Read in this order before acting:
   requests a thread.
 - The operator approved both canaries (`canaries` table) before continuous
   dispatch. Until then, only the requested canary job may run end to end.
-- You never call GitHub directly. Every read goes through `scripts/github_rest.py`;
-  every mutation through `scripts/github_mutate.py`. Unknown operations become a
-  held job, never a hand-built `gh`, REST, GraphQL, curl, MCP, or browser call.
+- You never call GitHub directly. Per-PR reads go through `scripts/github_rest.py`;
+  bulk queue inventory through `scripts/github_query.py` (allowlisted read-only
+  GraphQL); every mutation through `scripts/github_mutate.py`. Unknown operations
+  become a held job, never a hand-built `gh`, REST, GraphQL, curl, MCP, or
+  browser call.
 
 ## Run the pipeline
 

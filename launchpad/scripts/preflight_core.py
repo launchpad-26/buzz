@@ -446,6 +446,13 @@ def _normalise_check(node: Mapping[str, Any]) -> dict[str, Any]:
     ``StatusContext`` — the older commit-status API — has a context and a single
     state and no workflow at all; its state is mapped onto ``conclusion`` because
     that is what it means, and ``status`` stays None rather than being invented.
+
+    That mapped value is not always a ``CheckConclusionState``. GraphQL's
+    ``StatusState`` includes ``PENDING`` and ``EXPECTED`` — values a
+    ``CheckConclusionState`` never carries — so an in-flight external status arrives
+    as ``conclusion: "PENDING"`` with ``status: None``. A caller that treats any
+    non-``SUCCESS`` conclusion as a failure will misread a running check as a failed
+    one; see ``INTERFACE.md``'s ``checks`` row for the consumer-facing warning.
     """
     if node.get("__typename") == "StatusContext":
         return {

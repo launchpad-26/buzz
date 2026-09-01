@@ -11,19 +11,19 @@ from __future__ import annotations
 
 import json
 import pathlib
-import subprocess
 import sys
 import tempfile
-import threading
 
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent.parent / "scripts"))
 
-from approval import RequestQueueError, enqueue  # noqa: E402
-from approval_evaluate import PRFacts, evaluate, policy_hash_of  # noqa: E402
-from common import State, job_id  # noqa: E402
+# Imports here are the ones this file actually calls. `subprocess`, `threading`,
+# `RequestQueueError`, `enqueue`, `policy_hash_of` and `ProtectedTriggerError`
+# were imported and never referenced — #1966's third criterion, and the same
+# smell as the tests that imported a symbol to look like they exercised it.
+from approval_evaluate import PRFacts, evaluate  # noqa: E402
+from common import State  # noqa: E402
 from risk import (  # noqa: E402
     FailureMode,
-    ProtectedTriggerError,
     effective_risk,
     protected_triggered,
     risk_band,
@@ -234,6 +234,15 @@ def test_approval_execute_requires_eligible() -> None:
 
 # ---------------- lease node-id (#19) --------------------------------
 def test_lease_uses_user_node_id_not_pr() -> None:
+    """`claim` must assign the USER node id, never the PR node id.
+
+    The previous version of this test called `lease._user_node_id(...)` behind
+    `if False else None` and then asserted `None is None or ...`, so it passed
+    without executing anything — and named a function that does not exist
+    anywhere in this tree (the real one is `user_node_id_from_rest`). It is
+    rewritten to drive `lease.claim` and assert the two node ids land in the
+    right GraphQL variables, which is the property the name claims.
+    """
     import lease
 
     state = fresh_state()
@@ -246,49 +255,90 @@ def test_lease_uses_user_node_id_not_pr() -> None:
         "INSERT INTO etags(url,etag,body,updated_at) VALUES(?,?,?,?)",
         ("https://api.github.com/users/tucktuck101", "e", json.dumps({"node_id": "USER_NODE_1"}), "2026-01-01T00:00:00Z"),
     )
+    # `leases.job_id` is a foreign key onto `jobs(id)`, so the job must exist
+    # before a lease can reference it.
+    state.db.execute(
+        "INSERT INTO jobs(id,repo,number,head_sha,lane,status,artifact_dir,created_at,updated_at) "
+        "VALUES(?,?,?,?,?,?,?,?,?)",
+        ("job-1", "o/r", 1, "h", "incoming_review", "detected", "/tmp/j",
+         "2026-01-01T00:00:00Z", "2026-01-01T00:00:00Z"),
+    )
     state.db.commit()
 
-    captured = {}
+    captured: dict = {}
 
     def fake_post(state, op, variables, job, **kw):
         captured["op"] = op
+        captured["assignableId"] = variables.get("assignableId")
         captured["assigneeIds"] = variables.get("assigneeIds")
         return {"ok": True}
 
+    # Unassigned when claimed, ours when re-read: `claim` REST-verifies the
+    # assignment before recording local lease state, so this returns twice.
+    logins = [[], ["tucktuck101"]]
+
+    def fake_current_logins(config, st, repo, number):
+        return logins.pop(0) if logins else ["tucktuck101"]
+
     import github_mutate
-    orig = github_mutate.post
+
+    orig_post = github_mutate.post
+    orig_logins = lease.current_logins
     github_mutate.post = fake_post
+    lease.current_logins = fake_current_logins
     try:
-        u = lease._user_node_id(state, "tucktuck101", 0) if False else None
-        # Directly test that user node id resolves, not the PR node id
-        assert u is None or u == "USER_NODE_1"
+        claimed = lease.claim(
+            {"login": "tucktuck101"}, state, "o/r", 1, "job-1", "tucktuck101"
+        )
+        assert claimed is True
+        assert captured["op"] == "add_assignee"
+        # The USER node id goes in assigneeIds. Passing the PR node id here is the
+        # defect this test exists to catch.
+        assert captured["assigneeIds"] == ["USER_NODE_1"], captured
+        assert captured["assignableId"] == "PR_NODE_1", captured
+        # The lease was recorded only after the REST re-read confirmed it.
+        row = state.db.execute(
+            "SELECT job_id FROM leases WHERE repo='o/r' AND number=1"
+        ).fetchone()
+        assert row["job_id"] == "job-1"
     finally:
-        github_mutate.post = orig
+        github_mutate.post = orig_post
+        lease.current_logins = orig_logins
         state.close()
 
 
 # ---------------- supersede (#5, #31-adjacent) ----------------------
-def test_new_head_supersedes_old_jobs() -> None:
-    from queue import reconcile as qreconcile
+# `test_new_head_supersedes_old_jobs` used to live here. It imported `reconcile`
+# and `can_transition`, called neither, wrote `status='superseded'` by hand and
+# then asserted the row it had just written — so deleting `queue.py` entirely
+# would have left it green (#1966). The behaviour is really covered by
+# `tests/test_queue.py::test_new_head_supersedes_old_job_and_pending_request`,
+# which drives `reconcile` and asserts both the superseded job and the
+# superseded pending human request. Deleted rather than duplicated.
+#
+# What that test does NOT cover, and #1966 called out, is the transition guard
+# itself — the imported-but-never-called `can_transition`. That is below.
+def test_can_transition_refuses_an_invalid_transition() -> None:
+    from states import can_transition
 
-    old = job_id("o/r", 1, "oldhead", "incoming_review")
-    state = fresh_state()
-    try:
-        state.db.execute(
-            "INSERT INTO jobs(id,repo,number,head_sha,lane,status,artifact_dir,created_at,updated_at) "
-            "VALUES(?,?,?,?,?,?,?,?,?)",
-            (old, "o/r", 1, "oldhead", "incoming_review", "detected", "/tmp/j", "2026-01-01T00:00:00Z", "2026-01-01T00:00:00Z"),
-        )
-        state.db.commit()
-        from states import can_transition
+    # A job that does not exist may only be created as `detected`.
+    assert can_transition(None, "detected") is True
+    assert can_transition(None, "action") is False
+    # A terminal state has no successors.
+    assert can_transition("completed", "action") is False
+    # An unknown state on either side is refused rather than assumed benign.
+    assert can_transition("detected", "not_a_state") is False
+    assert can_transition("not_a_state", "detected") is False
 
-        # simulate supersede of nonterminal old job when head changes
-        state.db.execute("UPDATE jobs SET status='superseded' WHERE id=?", (old,))
-        state.db.commit()
-        row = state.db.execute("SELECT status FROM jobs WHERE id=?", (old,)).fetchone()
-        assert row["status"] == "superseded"
-    finally:
-        state.close()
+
+def test_can_transition_allows_the_documented_path() -> None:
+    """The control: a guard that refuses everything would pass the test above."""
+    from states import can_transition, transition_entries
+
+    entries = transition_entries()
+    assert entries, "the transition table must not be empty"
+    for source, target in entries:
+        assert can_transition(source, target) is True, f"{source} -> {target}"
 
 
 # ---------------- verdict schema (#11) -------------------------------
@@ -323,32 +373,20 @@ def test_transition_on_unknown_job_fails() -> None:
 
 
 # ---------------- missing evidence no-loop (#14) ---------------------
-def test_missing_evidence_does_not_rerun_identically() -> None:
-    # The dispatcher's assess raises EvidenceIncompleteError instead of re-running.
-    import dispatcher
+# The behaviour this section was named for — that the dispatcher raises
+# EvidenceIncompleteError instead of re-running an identical panel — is NOT
+# covered here and never was. The test below used to carry that name while
+# faking `dispatcher.run_panel`, never triggering it, and then asserting an
+# unrelated mapping; its own body said `from panel import Profile  # not used`.
+# Renamed to what it actually checks rather than left claiming the other thing.
+# The real gap is filed separately.
+def test_missing_evidence_classifies_as_evidence_incomplete() -> None:
+    from errors import classify_disposition
 
-    state = fresh_state()
-
-    class FakePanel:
-        calls = 0
-
-    def fake_run_panel(cfg, state, r, n, lane, job, profile, logger=None):
-        return {"complete": True, "signals": ["MISSING_EVIDENCE"], "completed_reviewers": ["a"],
-                "required_reviewers": 1, "profile": {"a": 1}}
-
-    orig = dispatcher.run_panel
-    dispatcher.run_panel = fake_run_panel
-    try:
-        from errors import EvidenceIncompleteError
-        from panel import Profile  # not used
-
-        # invoke the assess closure logic is internal; instead assert EvidenceIncompleteError exists
-        # and classify_disposition maps missing evidence
-        from errors import classify_disposition
-        assert classify_disposition("missing evidence") == "evidence_incomplete"
-    finally:
-        dispatcher.run_panel = orig
-        state.close()
+    assert classify_disposition("missing evidence") == "evidence_incomplete"
+    # A disposition that is not about evidence must not map to it, or the
+    # assertion above would pass for any input.
+    assert classify_disposition("rate limited") != "evidence_incomplete"
 
 
 # ---------------- ETag pagination (#31-adjacent, defect 18) ---------

@@ -11,12 +11,36 @@ Properties under test:
 
 from __future__ import annotations
 
+import contextlib
 import json
+import os
 import pathlib
 import subprocess
 import sys
 
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent.parent / "scripts"))
+
+
+@contextlib.contextmanager
+def without_ambient_token():
+    """Remove `GITHUB_TOKEN`/`GH_TOKEN` for the duration of the block.
+
+    The tests below exercise the `gh` fallback path, which `resolve_token_source`
+    reaches only when neither environment variable is set. They previously relied
+    on the ambient environment happening to be empty, so their result depended on
+    the machine: they pass on a developer shell with no token exported and fail
+    wherever one is. The suite's `conftest.py` now sets a sentinel token
+    deliberately, so the dependency has to be made explicit rather than assumed.
+    """
+    saved = {name: os.environ.pop(name, None) for name in ("GITHUB_TOKEN", "GH_TOKEN")}
+    try:
+        yield
+    finally:
+        for name, value in saved.items():
+            if value is None:
+                os.environ.pop(name, None)
+            else:
+                os.environ[name] = value
 
 from github_auth import (  # noqa: E402
     FULL,
@@ -59,16 +83,34 @@ def _runner_fail(argv, capture_output=False, timeout=None, stdin=None):
 
 
 # -- token handling ------------------------------------------------------
-def test_token_presence_is_recorded_without_the_value(monkeypatch=None) -> None:
-    source = resolve_token_source(_runner=_runner_ok)
+def test_token_presence_is_recorded_without_the_value() -> None:
+    with without_ambient_token():
+        source = resolve_token_source(_runner=_runner_ok)
     assert source.present is True
     assert source.source == "gh"
     blob = json.dumps(source.as_dict())
     assert "ghp_secretvalue" not in blob, "the token value must never be recorded"
 
 
+def test_env_token_is_preferred_over_the_gh_fallback() -> None:
+    """The env branch these tests used to take by accident, asserted on purpose."""
+    saved = os.environ.get("GITHUB_TOKEN")
+    os.environ["GITHUB_TOKEN"] = "env-sentinel"
+    try:
+        source = resolve_token_source(_runner=_runner_fail)
+    finally:
+        if saved is None:
+            os.environ.pop("GITHUB_TOKEN", None)
+        else:
+            os.environ["GITHUB_TOKEN"] = saved
+    assert source.present is True
+    assert source.source == "env:GITHUB_TOKEN"
+    assert "env-sentinel" not in json.dumps(source.as_dict())
+
+
 def test_missing_token_degrades_instead_of_exiting() -> None:
-    source = resolve_token_source(_runner=_runner_fail)
+    with without_ambient_token():
+        source = resolve_token_source(_runner=_runner_fail)
     assert source.present is False
     assert "not logged in" in source.reason
 
@@ -77,7 +119,8 @@ def test_absent_gh_binary_degrades() -> None:
     def missing(argv, **kwargs):
         raise FileNotFoundError("gh not found")
 
-    source = resolve_token_source(_runner=missing)
+    with without_ambient_token():
+        source = resolve_token_source(_runner=missing)
     assert source.present is False
     assert "unavailable" in source.reason
 
@@ -86,7 +129,8 @@ def test_empty_token_output_is_not_present() -> None:
     def empty(argv, **kwargs):
         return subprocess.CompletedProcess(argv, 0, b"   \n", b"")
 
-    assert resolve_token_source(_runner=empty).present is False
+    with without_ambient_token():
+        assert resolve_token_source(_runner=empty).present is False
 
 
 # -- capability derivation ----------------------------------------------

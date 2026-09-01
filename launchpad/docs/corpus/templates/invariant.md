@@ -44,8 +44,8 @@ evidence:
   - statement: "buzz-db's thread.rs implements that gotcha as two functions, increment_reply_count and decrement_reply_count, each of which always bumps or decrements both the parent's reply_count and the root's descendant_count in one call (decrement floored at zero via GREATEST(count - 1, 0)); nothing in the type system stops a future call site for inserting or deleting a reply from skipping these functions -- the invariant holds only if every such call site actually calls them."
     entry_class: FACT
     evidence:
-      - "crates/buzz-db/src/store/thread.rs:250-287"
-      - "crates/buzz-db/src/store/thread.rs:289-327"
+      - "crates/buzz-db/src/store/thread.rs:256-291"
+      - "crates/buzz-db/src/store/thread.rs:297-331"
   - statement: "buzz-core's tenant.rs states, in its module doc under '## The fence': 'The whole multi-tenant safety story rests on one invariant from the formal model (conformance \"row zero\"): a request's community is resolved from the connection host by the server, never supplied or influenced by the client', and explicitly calls this 'a lint-and-review fence, not a compiler fence' because TenantContext::resolved and CommunityId::from_uuid are public and a determined caller elsewhere could call them; the type system removes only the accidental path (deserializing a client-chosen community), and a migration-lint harness plus review closes the deliberate one."
     entry_class: FACT
     evidence:
@@ -61,7 +61,7 @@ evidence:
   - statement: "buzz-db's push.rs documents disable_endpoint_generation with: 'Strict generation monotonicity is the underlying safety invariant. The current-generation predicate makes stale responses clean no-ops' -- enforced by a WHERE-clause predicate comparing the caller's generation against the stored one, not by a type or a test visible at this citation."
     entry_class: FACT
     evidence:
-      - "crates/buzz-db/src/store/push.rs:1195-1198"
+      - "crates/buzz-db/src/store/push.rs:1225-1228"
   - statement: "buzz-acp's pool.rs documents send_prompt_result with: 'Clearing steer_rx here -- rather than per-arm -- makes the install_steer_rx invariant (steer_rx.is_none() at dispatch) structurally unviolatable: a receiver installed for a turn that ends before the read loop's take() ... is always dropped before the agent re-enters the pool, so the next dispatch can never trigger the assert' -- an invariant enforced by concentrating the clearing logic in one shared return path rather than by the type system, backed by a runtime assert as a second line of defense."
     entry_class: FACT
     evidence:

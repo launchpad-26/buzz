@@ -27,7 +27,7 @@ evidence:
     evidence:
       - "migrations/0001_initial_schema.sql"
       - "crates/buzz-db/src/store/user.rs"
-      - "crates/buzz-db/src/store/channel.rs"
+      - "crates/buzz-db/src/store/channel_members.rs"
     confidence: 0.6
   - statement: "NIP-OA ('Owner Attestation') is a Buzz-defined protocol extension under which a human owner's Nostr key authorizes a separate agent Nostr key to publish events under the agent's own authorship, via a signed `auth` tag (`[\"auth\", \"<owner-pubkey-hex>\", \"<conditions>\", \"<sig-hex>\"]`) whose signature is a BIP-340 Schnorr signature computed by the owner over SHA256(\"nostr:agent-auth:\" || agent_pubkey_hex || \":\" || conditions)."
     entry_class: FACT

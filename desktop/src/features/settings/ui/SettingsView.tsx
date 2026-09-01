@@ -31,6 +31,7 @@ import {
 import { SidebarMenuLabel } from "@/shared/ui/sidebar-menu-label";
 import {
   renderSettingsSection,
+  settingsNavGroups,
   settingsSections,
   type SettingsPanelProps,
   type SettingsSection,
@@ -47,33 +48,6 @@ type SettingsViewProps = SettingsPanelProps & {
   onSectionChange: (section: SettingsSection) => void;
   section: SettingsSection;
 };
-
-const settingsNavGroups: Array<{
-  label: string;
-  sections: SettingsSection[];
-}> = [
-  {
-    label: "Personal",
-    sections: [
-      "profile",
-      "appearance",
-      "notifications",
-      "voice",
-      "shortcuts",
-      "custom-emoji",
-      "local-archive",
-      "channel-templates",
-    ],
-  },
-  {
-    label: "Communities",
-    sections: ["hosted-communities", "community-members"],
-  },
-  {
-    label: "App",
-    sections: ["agents", "compute", "experimental", "mobile", "updates"],
-  },
-];
 
 function SettingsSectionButton({
   active,

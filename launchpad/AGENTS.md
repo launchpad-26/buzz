@@ -105,12 +105,18 @@ The deliberate exceptions, all accepted knowingly:
   [`decisions/ADR-0045-cohort-crates-in-launchpad-workspace.md`](decisions/ADR-0045-cohort-crates-in-launchpad-workspace.md).
 - **Desktop Settings registration seam** — `desktop/src/features/settings/ui/SettingsPanels.tsx`
   carries a registration seam so cohort-authored Settings sections can be added from
-  `launchpad/` without further upstream edits. Scoped to that seam in that one file: the
-  section descriptors and their components stay under `launchpad/`, and **adding a cohort
-  panel must not touch any upstream file**. Editing the four per-section registration sites
-  directly is what this exception exists to avoid, not something it permits. Reasoning and
-  the rejected alternatives are in
-  [`decisions/ADR-0051-cohort-settings-registration-seam.md`](decisions/ADR-0051-cohort-settings-registration-seam.md).
+  `launchpad/` without further upstream edits. The seam owns section registration **and**
+  sidebar nav-group membership (`settingsNavGroups` is exported from that file). Scoped to
+  that one file: the section descriptors and their components stay under `launchpad/`, and
+  **adding a cohort panel must not touch any upstream file**. `SettingsView.tsx` consumes
+  the export; it is not a second exception. A one-time rewire to import
+  `settingsNavGroups` is the implementation of this seam, not a standing grant to keep
+  editing that file. Editing the upstream registration sites or the nav-group list
+  directly is what this exception exists to avoid, not something it permits. Reasoning
+  and the rejected alternatives are in
+  [`decisions/ADR-0051-cohort-settings-registration-seam.md`](decisions/ADR-0051-cohort-settings-registration-seam.md)
+  as amended by
+  [`decisions/ADR-0053-settings-seam-owns-nav-groups.md`](decisions/ADR-0053-settings-seam-owns-nav-groups.md).
 
 The list itself is closed; any further exception needs its own ADR.
 
@@ -374,21 +380,37 @@ gh pr create --base launchpad
 - **`git commit -s` every time.** The DCO check fails any commit without a
   `Signed-off-by` trailer.
 - **Conventional commit titles**: `feat(deploy): ...`, `fix(ci): ...`, `docs(...): ...`.
-  We squash-merge, so the **PR title** becomes the commit subject on `launchpad`.
-  - **Open, and not decided by ADR-0052:** squashing a batch of 10 Tasks into one commit
-    collapses per-Task history and makes `git bisect` coarser. Until it is settled, keep
-    one commit per child Task on the branch so the history exists to preserve if the
-    answer turns out to be a merge commit.
+  Every commit on the branch gets one, because every one of them survives the merge.
+- **A PR lands as a merge commit — never a squash, never a rebase.** ADR-0055 (#1960)
+  settles the question ADR-0052 left open, in the direction the platform already enforces:
+  `allow_squash_merge` and `allow_rebase_merge` are **off** on this repository, so `merge`
+  is the only method the button offers. Use `gh pr merge --merge`, and do not ask for the
+  others to be re-enabled.
+  - **Keep one commit per child Task.** Under ADR-0054 a whole Feature lands in one PR, so
+    those commits are the unit a reviewer walks and the granularity `git bisect` gets.
+    Merging preserves them; squashing would discard exactly what makes a large batch
+    reviewable.
+  - **The PR title is not the commit subject.** `merge_commit_title` is `MERGE_MESSAGE`, so
+    the subject on `launchpad` is `Merge pull request #N from <branch>`; the PR title lands
+    in the message body (`merge_commit_message: PR_TITLE`). Write conventional titles for
+    the branch commits and the PR, not on the assumption either becomes the trunk subject.
+  - **Do not rebase a pushed branch to tidy it.** Rewriting commits that a reviewer already
+    read, and that carry DCO sign-off, breaks the correspondence between what was approved
+    and what lands. Merge `launchpad` in instead when your branch falls behind.
 - **One Feature, one PR.** A Feature is the PR-worthy unit: the child Tasks of one
   Feature land in one batch PR, not one PR each. Name the Feature in the PR body's
   `### Feature` section, and carry one closing keyword per child — `Closes #12`, one per
   line. Every issue a batch closes must be a child of the Feature it names, or be that
   Feature; the PR body check enforces it.
-  - **The batch is capped: 1,500 added lines or 10 changed files, whichever binds
-    first.** A Feature above the cap splits into sequential batch PRs rather than one
-    oversized PR. Features here run 15–41 children, so an uncapped batch would be
-    ~16,000 additions across ~80 files — fewer PRs bought at the price of a review
-    nobody can actually perform.
+  - **One Feature's work is one PR, whatever its size.** ADR-0054 (#1956) withdrew
+    ADR-0052 part C's 1,500-line / 10-file cap: Features here run 15-41 children, so
+    every real batch exceeded it and the "split into sequential batch PRs" escape
+    cancelled the one-Feature-one-PR rule in every case — which is the micro-PR volume
+    batching existed to remove. Do not split a Feature because it is large. The PR body
+    check reports `+N lines across M files` on every batch without gating on it.
+  - **The per-child-Task commits are the review unit inside that PR.** A 16,000-line
+    batch is not read line by line, so keep one commit per child Task (the rule above) —
+    that is what a reviewer walks.
   - If a PR genuinely completes nothing — a plan, one step, a docs correction — use
     `Refs #12`. Both satisfy the PR body check; only `Closes` moves the board, so do not
     reach for it to make a check go green.

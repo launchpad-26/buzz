@@ -490,35 +490,32 @@ class PartEIsEnforced(unittest.TestCase):
         self.assertTrue(any("is empty" in e for e in errors), errors)
 
 
-class BatchCapIsEnforced(unittest.TestCase):
-    """ADR-0052 part C. Left in prose the cap reproduced what it was meant to prevent."""
+class BatchSizeIsReportedNotCapped(unittest.TestCase):
+    """ADR-0054 withdrew ADR-0052 part C's cap. Size is reported; it never rejects."""
 
     HEAD = "### Issue type\nFeature\n\n### Feature\n#587\n"
 
-    def test_a_batch_over_the_line_cap_is_rejected(self):
-        errors, _ = m.check(self.HEAD, [], [101, 102], [101, 102], 1501, 3)
-        self.assertTrue(any("exceeds the cap" in e for e in errors), errors)
-
-    def test_a_batch_over_the_file_cap_is_rejected(self):
-        errors, _ = m.check(self.HEAD, [], [101, 102], [101, 102], 10, 11)
-        self.assertTrue(any("exceeds the cap" in e for e in errors), errors)
-
-    def test_a_batch_within_both_caps_passes(self):
-        errors, notes = m.check(self.HEAD, [], [101, 102], [101, 102], 1500, 10)
+    def test_a_batch_far_past_the_old_cap_is_accepted(self):
+        # PR #1944's real numbers: the Feature this rule was changed for.
+        errors, notes = m.check(self.HEAD, [], [101, 102], [101, 102], 16113, 70)
         self.assertEqual(errors, [])
-        self.assertTrue(any("within 1500/10" in n for n in notes), notes)
+        self.assertTrue(any("+16113 lines across 70 files" in n for n in notes), notes)
 
-    def test_a_single_issue_pr_is_not_capped(self):
-        # Part C bounds batches. Capping focused single-issue work would block ordinary
-        # large changes the decision says nothing about.
+    def test_the_size_note_says_it_is_uncapped(self):
+        _, notes = m.check(self.HEAD, [], [101, 102], [101, 102], 1501, 11)
+        self.assertTrue(any("uncapped" in n for n in notes), notes)
+
+    def test_a_single_issue_pr_reports_no_size(self):
+        # A one-Feature PR closes one issue; there is no batch to describe.
         body = "### Issue type\nTask\n\n### Feature\nN/A - single-issue PR\n"
-        errors, _ = m.check(body, [], [101], [101], 99999, 500)
+        errors, notes = m.check(body, [], [101], [101], 99999, 500)
         self.assertEqual(errors, [])
+        self.assertFalse(any(n.startswith("size:") for n in notes), notes)
 
     def test_missing_size_numbers_degrade_visibly(self):
         errors, notes = m.check(self.HEAD, [], [101, 102], [101, 102], None, None)
         self.assertEqual(errors, [])
-        self.assertTrue(any("NOT verified" in n for n in notes), notes)
+        self.assertTrue(any("NOT reported" in n for n in notes), notes)
 
 
 class CheckActuallyCallsItsSubChecks(unittest.TestCase):
@@ -552,17 +549,17 @@ class CheckActuallyCallsItsSubChecks(unittest.TestCase):
             m.check(AGENT_BODY, ["by:agent"], [1])
         self.assertTrue(called.get("delegated"), "check() no longer calls check_delegated")
 
-    def test_check_invokes_check_cap(self):
+    def test_check_invokes_report_size(self):
         called = {}
-        real = m.check_cap
+        real = m.report_size
 
         def spy(*a, **k):
-            called["cap"] = True
+            called["size"] = True
             return real(*a, **k)
 
-        with mock.patch.object(m, "check_cap", spy):
+        with mock.patch.object(m, "report_size", spy):
             m.check(AGENT_BODY, ["by:agent"], [1, 2])
-        self.assertTrue(called.get("cap"), "check() no longer calls check_cap")
+        self.assertTrue(called.get("size"), "check() no longer calls report_size")
 
 
 class LabelStrippingDoesNotBypass(unittest.TestCase):

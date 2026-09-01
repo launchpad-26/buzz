@@ -241,6 +241,55 @@ def test_bad_protected_trigger_fails_closed() -> None:
     assert any("regex" in i or "trigger" in i for i in issues), issues
 
 
+
+# ---------------- the example config is what operators copy ----------------
+# `OPERATORS.md` §1 says to copy `config.example.json` and fill it in, so the
+# example IS a supported starting point, not decoration. It had drifted from
+# `onboarding_defaults`: the `policy`, `budget` and `retention` sections were
+# added to the defaults and never to the example, so a hand-built config produced
+# `SnapshotError: no policy configured`, every job ran unpinned, and
+# `policy_version` stayed blank in the ledger (#1776's B4). Nothing checked, so
+# nothing noticed.
+
+
+def _example() -> dict:
+    path = pathlib.Path(__file__).resolve().parent.parent / "config.example.json"
+    return json.loads(path.read_text(encoding="utf-8"))
+
+
+def test_the_example_config_produces_a_pinned_snapshot() -> None:
+    """The direct guard: copying the example must not silently disable pinning."""
+    import policy as policymod
+    import snapshot as snapmod
+
+    built = snapmod.build_snapshot(_example(), validate_policy=policymod.validate_policy)
+    assert built.policy_version, "policy_version must not be blank"
+    assert built.policy_version != "unversioned", built.policy_version
+    assert built.hash
+
+
+def test_the_example_carries_every_section_onboarding_writes() -> None:
+    """Catches the next drift, not just this one.
+
+    The example may carry extra illustrative sections — model pools, notification
+    routes — but it must not be MISSING anything onboarding produces, or the two
+    supported ways to get a config disagree about what a config is.
+    """
+    produced = set(cfgmod.onboarding_defaults(pathlib.Path(tempfile.mkdtemp())))
+    missing = sorted(produced - set(_example()))
+    assert not missing, f"config.example.json is missing sections onboarding writes: {missing}"
+
+
+def test_onboarding_defaults_also_pin() -> None:
+    """The control: both supported paths to a config must pin, not just one."""
+    import policy as policymod
+    import snapshot as snapmod
+
+    produced = cfgmod.onboarding_defaults(pathlib.Path(tempfile.mkdtemp()))
+    built = snapmod.build_snapshot(produced, validate_policy=policymod.validate_policy)
+    assert built.policy_version and built.policy_version != "unversioned"
+
+
 if __name__ == "__main__":
     failures = 0
     passed = 0

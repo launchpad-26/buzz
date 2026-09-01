@@ -1,0 +1,8 @@
+[package]
+name = "knowledge"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "Buzz's help surface: reads the committed documentation corpus for Settings"
