@@ -108,20 +108,32 @@ test("Help settings panel renders real corpus content as a static, non-interacti
   // Real content, not the #551 placeholder.
   await expect(panel.getByText("coming soon")).toHaveCount(0);
 
-  // Both groups the current corpus actually contains (per the packaging
-  // plan's OPEN item 1) render as h2 group headings.
+  // All three types the current corpus actually contains (verified against
+  // the committed corpus.json, not the two the packaging plan's OPEN item 1
+  // guessed at) render as h2 group headings, with a presentable label
+  // (Title Case), not the raw lowercase `type` field. Asserting each one by
+  // name -- not just a >= bound on the total -- means the singleton `agent`
+  // group disappearing would fail this test instead of hiding behind a
+  // loose count.
   await expect(
-    panel.getByRole("heading", { level: 2, name: "architecture" }),
+    panel.getByRole("heading", { level: 2, name: "Agent", exact: true }),
   ).toBeVisible();
   await expect(
-    panel.getByRole("heading", { level: 2, name: "governance" }),
+    panel.getByRole("heading", {
+      level: 2,
+      name: "Architecture",
+      exact: true,
+    }),
+  ).toBeVisible();
+  await expect(
+    panel.getByRole("heading", { level: 2, name: "Governance", exact: true }),
   ).toBeVisible();
 
   // Page title is the sole h1; group titles are h2; each node's own title is
-  // h3 -- no level is skipped.
+  // h3 -- no level is skipped. One h3 per group heading above.
   await expect(page.getByRole("heading", { level: 1 })).toHaveText("Help");
   const nodeHeadings = panel.getByRole("heading", { level: 3 });
-  expect(await nodeHeadings.count()).toBeGreaterThanOrEqual(2);
+  expect(await nodeHeadings.count()).toBe(3);
 
   // Each rendered node carries its id/origin provenance text, unmodified by
   // the packaging boundary -- the DoD's "provenance survives" claim, made
@@ -129,19 +141,18 @@ test("Help settings panel renders real corpus content as a static, non-interacti
   const provenanceRows = page.locator(
     '[data-testid$="-provenance"][data-testid^="settings-knowledge-node-"]',
   );
-  expect(await provenanceRows.count()).toBeGreaterThanOrEqual(2);
+  expect(await provenanceRows.count()).toBe(3);
   for (const row of await provenanceRows.all()) {
     await expect(row).toHaveText(/^id: \S+ · origin: \S+$/);
   }
 
-  // Nothing in this panel is a Tab stop: the sidebar/nav button remains the
-  // only focusable thing here, confirming the "static list" claim above
-  // rather than assuming it.
-  await knowledgeNav.focus();
-  await page.keyboard.press("Tab");
-  const afterTabTestId = await page.evaluate(
-    () => document.activeElement?.getAttribute("data-testid") ?? null,
+  // Nothing in this panel is a Tab stop. A single Tab hop from the nav
+  // button only proves the *next* element isn't panel content -- it can't
+  // rule out a focusable element added anywhere else in the panel, and it
+  // is blind to any testid that doesn't start with the one prefix it
+  // checks. Count every focusable element inside the panel directly instead.
+  const focusableInPanel = panel.locator(
+    'a[href], button, input, select, textarea, [tabindex]:not([tabindex="-1"])',
   );
-  expect(afterTabTestId).not.toBe(null);
-  expect(afterTabTestId?.startsWith("settings-knowledge-node-")).toBe(false);
+  expect(await focusableInPanel.count()).toBe(0);
 });

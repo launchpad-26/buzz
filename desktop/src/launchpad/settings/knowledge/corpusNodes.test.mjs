@@ -69,11 +69,49 @@ describe("deriveExcerpt", () => {
     );
     assert.ok(excerpt.endsWith("…"));
     assert.ok(!excerpt.slice(0, -1).endsWith(" "), "must not cut mid-word");
+    // Content fidelity, not just shape: the visible text (minus the
+    // trailing ellipsis) must actually be a prefix of the source body, so a
+    // slice-from-the-wrong-end (or otherwise-wrong-offset) regression can't
+    // pass by coincidentally matching length/ellipsis/no-mid-word-cut alone.
+    assert.ok(
+      longBody.startsWith(excerpt.slice(0, -1)),
+      "truncated text must be a genuine prefix of the source body",
+    );
   });
 
   it("does not truncate a body exactly at the character limit", () => {
     const exact = "a".repeat(50);
     assert.equal(deriveExcerpt(exact, 50), exact);
+  });
+
+  it("finds the heading line wherever deriveTitle finds it, not only at position 0", () => {
+    // deriveTitle searches the whole body for the first '# ' line; the
+    // excerpt must drop that same line, not just whatever sits at offset 0,
+    // or the heading renders twice (once as the <h3> title, once inside the
+    // excerpt body).
+    const body = "## Not this one\n# Real Heading\nBody text after.";
+    assert.equal(deriveTitle({ id: "x", body }), "Real Heading");
+    assert.equal(deriveExcerpt(body), "## Not this one\n\nBody text after.");
+  });
+
+  it("converts a Markdown table to readable prose instead of literal pipes", () => {
+    const body = [
+      "# Table node",
+      "",
+      "| For | Read |",
+      "|---|---|",
+      "| Config | `settings.json` |",
+    ].join("\n");
+    const excerpt = deriveExcerpt(body);
+    assert.ok(!excerpt.includes("|"), "no literal pipe characters remain");
+    assert.ok(excerpt.includes("For · Read"));
+    assert.ok(excerpt.includes("Config · settings.json"));
+  });
+
+  it("strips inline emphasis, code spans, and link syntax to plain text", () => {
+    const body =
+      "# Node\n\nSee **bold**, *italic*, `code`, and [a link](https://example.com).";
+    assert.equal(deriveExcerpt(body), "See bold, italic, code, and a link.");
   });
 });
 

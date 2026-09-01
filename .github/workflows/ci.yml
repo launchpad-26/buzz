@@ -39,6 +39,7 @@ jobs:
           filters: |
             rust:
               - 'crates/**'
+              - 'launchpad/crates/**'
               - 'migrations/**'
               - 'schema/**'
               - 'Cargo.toml'

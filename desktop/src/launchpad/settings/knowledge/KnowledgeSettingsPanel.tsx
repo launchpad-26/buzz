@@ -11,6 +11,7 @@ import {
   deriveExcerpt,
   deriveTitle,
   groupNodesByType,
+  humanizeCorpusType,
   type CorpusNode,
 } from "./corpusNodes";
 
@@ -47,7 +48,7 @@ function KnowledgeSettingsPanel() {
       />
       <SettingsOptionGroupList>
         {corpusTypeGroups.map(({ type, representative }) => (
-          <SettingsOptionGroup key={type} title={type}>
+          <SettingsOptionGroup key={type} title={humanizeCorpusType(type)}>
             <SettingsOptionRow
               className="flex-col items-start gap-2 py-4"
               data-testid={`settings-knowledge-node-${representative.id}`}
@@ -56,7 +57,7 @@ function KnowledgeSettingsPanel() {
                 {deriveTitle(representative)}
               </h3>
               <p
-                className="text-2xs text-muted-foreground/70"
+                className="text-2xs text-muted-foreground"
                 data-settings-subcopy
                 data-testid={`settings-knowledge-node-${representative.id}-provenance`}
               >
