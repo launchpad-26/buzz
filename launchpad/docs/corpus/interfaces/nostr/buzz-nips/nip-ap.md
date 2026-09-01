@@ -32,7 +32,7 @@ evidence:
     entry_class: FACT
     evidence:
       - "docs/nips/NIP-AP.md:93-109"
-  - statement: "buzz-acp/src/config.rs defines respond_to and respond_to_allowlist fields on its agent-configuration structs (ArgsAgentDefinitionInput-style struct at line 468/473 and the resolved config struct at line 569/571), matching the NIP's reserved instance-level default fields; no field literally named parallelism was found anywhere in that file."
+  - statement: "buzz-acp/src/config.rs defines respond_to and respond_to_allowlist fields on both its CLI-argument struct CliArgs (fields at lines 468/473) and its resolved runtime Config struct (fields at lines 569/571), matching the NIP's reserved instance-level default fields; no field literally named parallelism was found anywhere in that file."
     entry_class: FACT
     evidence:
       - "crates/buzz-acp/src/config.rs:468"
