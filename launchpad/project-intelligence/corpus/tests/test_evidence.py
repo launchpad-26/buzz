@@ -234,6 +234,63 @@ class SymbolAnchoredCitationTest(unittest.TestCase):
         self.assertEqual(result.status, "error")
 
 
+class UrlReachabilityTriStateTest(unittest.TestCase):
+    """A dead link and an unreachable network are different facts.
+
+    Conflating them made the link stage nondeterministic — the same commit
+    produced one failure and two passes within minutes. A required check that
+    flaps teaches people to ignore it.
+    """
+
+    def test_http_error_status_is_a_definitive_dead_link(self) -> None:
+        import urllib.error
+
+        def fail(*_a, **_k):
+            raise urllib.error.HTTPError("u", 404, "Not Found", {}, None)
+
+        with unittest.mock.patch.object(evidence.urllib.request, "urlopen", fail):
+            self.assertIs(evidence._url_resolves("https://example.com/gone"), False)
+
+    def test_transport_failure_is_indeterminate_not_dead(self) -> None:
+        with unittest.mock.patch.object(
+            evidence.urllib.request, "urlopen", side_effect=TimeoutError()
+        ), unittest.mock.patch.object(evidence.time, "sleep", lambda _s: None):
+            self.assertIsNone(evidence._url_resolves("https://example.com/slow"))
+
+    def test_transport_failure_is_retried_before_giving_up(self) -> None:
+        with unittest.mock.patch.object(
+            evidence.urllib.request, "urlopen", side_effect=TimeoutError()
+        ) as opener, unittest.mock.patch.object(
+            evidence.time, "sleep", lambda _s: None
+        ):
+            evidence._url_resolves("https://example.com/slow")
+        self.assertEqual(opener.call_count, evidence._URL_CHECK_ATTEMPTS)
+
+    def test_unreachable_url_does_not_become_a_hard_error(self) -> None:
+        with unittest.mock.patch.object(
+            evidence, "_url_resolves", return_value=None
+        ):
+            result = evidence.verify_citation(
+                evidence.parse_citation("https://example.com/spec"),
+                Path("."),
+                check_links=True,
+            )
+        self.assertEqual(result.status, "unverified")
+        self.assertIn("network failure", result.detail)
+
+    def test_a_genuinely_dead_link_still_fails_hard(self) -> None:
+        """The retry must not have turned the check into a no-op."""
+        with unittest.mock.patch.object(
+            evidence, "_url_resolves", return_value=False
+        ):
+            result = evidence.verify_citation(
+                evidence.parse_citation("https://example.com/gone"),
+                Path("."),
+                check_links=True,
+            )
+        self.assertEqual(result.status, "error")
+
+
 class AbsentPathCitationTest(unittest.TestCase):
     """#2013: evidence that something is NOT there.
 

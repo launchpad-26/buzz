@@ -42,6 +42,7 @@ import json
 import enum
 import re
 import subprocess
+import time
 import urllib.error
 import urllib.request
 from dataclasses import dataclass, field
@@ -756,32 +757,55 @@ _URL_CHECK_TIMEOUT_SECONDS = 5
 _URL_CHECK_USER_AGENT = "buzz-corpus-validator/1.0"
 
 
-def _url_resolves(url: str) -> bool:
-    """Return True only when an HTTP(S) citation resolves to content.
+_URL_CHECK_ATTEMPTS = 3
+_URL_CHECK_RETRY_DELAY_SECONDS = 0.5
+
+
+def _url_resolves(url: str) -> bool | None:
+    """Whether an HTTP(S) citation resolves. `None` means it could not be told.
+
+    Three states, not two, and the third is the point. An HTTP status is
+    evidence about the TARGET: 404 means the cited source is gone. A timeout,
+    reset or DNS failure is evidence about the NETWORK, and says nothing about
+    whether the target exists -- so it must not be reported as a dead link.
+
+    Conflating them made this stage nondeterministic: the same commit produced
+    one failure and two passes within minutes, which is how a required check
+    teaches people to ignore it. Transport failures are retried a bounded number
+    of times and then reported as indeterminate.
 
     The citation value is deliberately kept out of diagnostics: callers report the
     evidence entry and citation index instead, matching the rest of this module's
     no-leak output contract.
     """
     headers = {"User-Agent": _URL_CHECK_USER_AGENT}
-    for method, extra_headers in (("HEAD", {}), ("GET", {"Range": "bytes=0-0"})):
-        request = urllib.request.Request(
-            url,
-            headers={**headers, **extra_headers},
-            method=method,
-        )
-        try:
-            with urllib.request.urlopen(
-                request, timeout=_URL_CHECK_TIMEOUT_SECONDS
-            ) as response:
-                return 200 <= response.status < 400
-        except urllib.error.HTTPError as exc:
-            if method == "HEAD" and exc.code in {405, 501}:
-                continue
+    transport_failure = False
+    for attempt in range(_URL_CHECK_ATTEMPTS):
+        if attempt:
+            time.sleep(_URL_CHECK_RETRY_DELAY_SECONDS)
+        transport_failure = False
+        for method, extra_headers in (("HEAD", {}), ("GET", {"Range": "bytes=0-0"})):
+            request = urllib.request.Request(
+                url,
+                headers={**headers, **extra_headers},
+                method=method,
+            )
+            try:
+                with urllib.request.urlopen(
+                    request, timeout=_URL_CHECK_TIMEOUT_SECONDS
+                ) as response:
+                    return 200 <= response.status < 400
+            except urllib.error.HTTPError as exc:
+                if method == "HEAD" and exc.code in {405, 501}:
+                    continue
+                # A status came back. That IS an answer about the target.
+                return False
+            except (OSError, TimeoutError, ValueError, http.client.HTTPException):
+                transport_failure = True
+                break
+        if not transport_failure:
             return False
-        except (OSError, TimeoutError, ValueError, http.client.HTTPException):
-            return False
-    return False
+    return None if transport_failure else False
 
 
 def _verify_url(url: str, *, check_links: bool) -> VerificationResult:
@@ -819,7 +843,14 @@ def _verify_url(url: str, *, check_links: bool) -> VerificationResult:
         return VerificationResult(
             "deferred", "requires --check-links to verify reachable content"
         )
-    if not _url_resolves(target):
+    resolved = _url_resolves(target)
+    if resolved is None:
+        return VerificationResult(
+            "unverified",
+            "could not be reached after repeated attempts; that is a network "
+            "failure here, not evidence the cited target is gone",
+        )
+    if not resolved:
         return VerificationResult("error", "does not resolve to reachable content")
     return VerificationResult("ok")
 
