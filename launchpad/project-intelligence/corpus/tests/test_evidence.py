@@ -113,7 +113,14 @@ class EvidenceVerifierTest(unittest.TestCase):
 
     def test_unsupported_tool_result_is_unverified(self) -> None:
         root = Path(__file__).resolve().parents[4]
-        parsed = evidence.parse_citation("grep_repo('needle') -> no matches")
+        parsed = evidence.parse_citation("webfetch('https://example.com') -> 200 OK")
+        result = evidence.verify_citation(parsed, root)
+        self.assertEqual(result.status, "unverified")
+        self.assertEqual(result.detail, evidence.UNVERIFIABLE_KIND_DETAIL)
+
+    def test_graph_edge_keeps_the_shared_unverifiable_detail(self) -> None:
+        root = Path(__file__).resolve().parents[4]
+        parsed = evidence.parse_citation("source_symbol -> target_symbol (1 hop)")
         result = evidence.verify_citation(parsed, root)
         self.assertEqual(result.status, "unverified")
         self.assertEqual(result.detail, evidence.UNVERIFIABLE_KIND_DETAIL)
@@ -269,6 +276,175 @@ class GitToolCitationVerifierTest(unittest.TestCase):
         )
         self.assertEqual(truthful.status, false.status)
         self.assertEqual(truthful.detail, false.detail)
+
+
+class GrepReplayVerifierTest(unittest.TestCase):
+    """DECISION-1: replay only what is pinned, and only ever to fail.
+
+    A grep citation is replayed only when it pins `ref=` to a full 40-hex SHA
+    present locally. Everything else stays blocking without spawning anything.
+    A matching replay confirms the match count -- not the claim the count was
+    cited to support -- so it still returns `unverified`, never `ok`.
+    """
+
+    REPO_ROOT = Path(__file__).resolve().parents[4]
+
+    @classmethod
+    def setUpClass(cls) -> None:
+        import subprocess
+
+        cls.HEAD = subprocess.run(
+            ["git", "rev-parse", "HEAD"],
+            cwd=cls.REPO_ROOT,
+            capture_output=True,
+            text=True,
+            check=True,
+        ).stdout.strip()
+
+    def _verify(self, citation: str) -> evidence.VerificationResult:
+        return evidence.verify_citation(
+            evidence.parse_citation(citation), self.REPO_ROOT
+        )
+
+    def test_absence_claim_contradicted_by_replay_is_an_error(self) -> None:
+        result = self._verify(
+            f"grep_recursive('EvidenceKind', "
+            f"path='launchpad/project-intelligence/corpus', ref='{self.HEAD}') "
+            f"-> zero matches"
+        )
+        self.assertEqual(result.status, "error")
+        self.assertIn("finds matches", result.detail)
+
+    def test_presence_claim_contradicted_by_replay_is_an_error(self) -> None:
+        result = self._verify(
+            f"grep_recursive('zzz_no_such_symbol_anywhere_zzz', "
+            f"path='launchpad/project-intelligence/corpus', ref='{self.HEAD}') "
+            f"-> 3 matches"
+        )
+        self.assertEqual(result.status, "error")
+        self.assertIn("finds none", result.detail)
+
+    def test_agreeing_replay_still_blocks_and_never_passes(self) -> None:
+        result = self._verify(
+            f"grep_recursive('zzz_no_such_symbol_anywhere_zzz', "
+            f"path='launchpad/project-intelligence/corpus', ref='{self.HEAD}') "
+            f"-> zero matches"
+        )
+        self.assertEqual(result.status, "unverified")
+        self.assertIn("was not compared", result.detail)
+
+    def test_missing_path_at_pinned_commit_is_not_replayed(self) -> None:
+        """The vacuous-pass guard. Without it, a mistyped path makes every
+        absence claim trivially true -- git grep finds nothing in a directory
+        that is not there, and the citation would look confirmed."""
+        result = self._verify(
+            f"grep_recursive('anything', path='no/such/directory/at/all', "
+            f"ref='{self.HEAD}') -> zero matches"
+        )
+        self.assertEqual(result.status, "unverified")
+        self.assertIn("does not exist at the pinned commit", result.detail)
+
+    def test_regex_alternation_in_the_pattern_is_replayed_not_refused(self) -> None:
+        """`|` is legitimate in a grep pattern and must not trip the shell
+        guard -- the pattern reaches git as an argument, never a shell string.
+        If this starts failing, the guard has become over-broad and the
+        pinned citations silently stop being checked."""
+        result = self._verify(
+            f"grep_case_insensitive('EvidenceKind|ParsedCitation', "
+            f"path='launchpad/project-intelligence/corpus', ref='{self.HEAD}') "
+            f"-> zero matches"
+        )
+        self.assertEqual(result.status, "error")
+
+    def test_pattern_beginning_with_a_dash_is_not_read_as_an_option(self) -> None:
+        result = self._verify(
+            f"grep_recursive('--count', path='launchpad/project-intelligence', "
+            f"ref='{self.HEAD}') -> zero matches"
+        )
+        self.assertIn(result.status, {"error", "unverified"})
+
+    def test_unpinned_citation_is_not_replayed(self) -> None:
+        for unpinned in (
+            "grep_recursive('needle', path='launchpad', ref='origin/launchpad') -> zero matches",
+            "grep_recursive('needle', path='launchpad') -> zero matches",
+            "grep_recursive('needle', path='launchpad', ref='338b4d0') -> zero matches",
+        ):
+            with self.subTest(citation=unpinned):
+                with unittest.mock.patch.object(
+                    evidence.subprocess, "run", side_effect=AssertionError("spawned")
+                ):
+                    result = self._verify(unpinned)
+                self.assertEqual(result.status, "unverified")
+                self.assertIn("not pinned", result.detail)
+
+    def test_uncheckable_assertion_is_not_replayed(self) -> None:
+        with unittest.mock.patch.object(
+            evidence.subprocess, "run", side_effect=AssertionError("spawned")
+        ):
+            result = self._verify(
+                f"grep_recursive('needle', path='launchpad', ref='{self.HEAD}') "
+                f"-> see the discussion in the linked issue"
+            )
+        self.assertEqual(result.status, "unverified")
+        self.assertIn("no checkable match verdict", result.detail)
+
+    def test_shell_metacharacter_in_path_is_refused_without_spawning(self) -> None:
+        with unittest.mock.patch.object(
+            evidence.subprocess, "run", side_effect=AssertionError("spawned")
+        ):
+            result = self._verify(
+                f"grep_recursive('needle', path='launchpad; rm -rf /', "
+                f"ref='{self.HEAD}') -> zero matches"
+            )
+        self.assertEqual(result.status, "unverified")
+        self.assertIn("shell metacharacter", result.detail)
+
+    def test_bracketed_path_list_keeps_every_path(self) -> None:
+        """Regression: `[^,]+` stopped at the first comma inside `paths=[...]`,
+        so only the first path was searched. Searching less than was cited
+        makes an absence claim look true -- the one direction this verifier
+        must never fail in."""
+        parsed = evidence.parse_citation(
+            "grep_recursive(pattern='reply_count', "
+            "paths=['crates/buzz-db/src', 'crates/buzz-relay/src'], "
+            "ref='338b4d0cf2dd76cc43964bb717ce9f0a94a9c7a5') -> 2 matches"
+        )
+        citation = evidence._parse_grep_citation(parsed)
+        self.assertEqual(
+            citation["paths"], ["crates/buzz-db/src", "crates/buzz-relay/src"]
+        )
+
+    def test_space_separated_path_value_keeps_every_path(self) -> None:
+        parsed = evidence.parse_citation(
+            "grep_recursive_case_insensitive('30350|push_lease', "
+            "paths='mobile/lib desktop/src', ref='338b4d0cf2dd76cc43964bb717ce9f0a94a9c7a5') "
+            "-> no matches"
+        )
+        citation = evidence._parse_grep_citation(parsed)
+        self.assertEqual(citation["paths"], ["mobile/lib", "desktop/src"])
+
+    def test_glob_scoped_grep_is_reported_as_such_and_not_replayed(self) -> None:
+        with unittest.mock.patch.object(
+            evidence.subprocess, "run", side_effect=AssertionError("spawned")
+        ):
+            result = self._verify(
+                f"grep_recursive('ContentActioned', glob='**/*.rs', "
+                f"ref='{self.HEAD}') -> zero matches"
+            )
+        self.assertEqual(result.status, "unverified")
+        self.assertIn("scoped by a glob", result.detail)
+
+    def test_no_input_ever_verifies_ok(self) -> None:
+        """The load-bearing guarantee of DECISION-1."""
+        for citation in (
+            f"grep_recursive('EvidenceKind', path='launchpad', ref='{self.HEAD}') -> zero matches",
+            f"grep_recursive('zzz_absent_zzz', path='launchpad', ref='{self.HEAD}') -> zero matches",
+            f"grep_recursive('x', path='no/such/dir', ref='{self.HEAD}') -> zero matches",
+            "grep_recursive('x', path='launchpad') -> zero matches",
+            "grep_repo('needle') -> no matches",
+        ):
+            with self.subTest(citation=citation):
+                self.assertNotEqual(self._verify(citation).status, "ok")
 
 
 class CredentialLikePathTest(unittest.TestCase):

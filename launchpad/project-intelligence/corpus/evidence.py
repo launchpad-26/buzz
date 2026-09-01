@@ -347,6 +347,185 @@ def _verify_git_tool(parsed: ParsedCitation, repo_root: Path) -> VerificationRes
     )
 
 
+# Tool-result citations naming a grep. Also fail-only, and additionally
+# restricted to citations that pin `ref=` to a full 40-hex SHA present locally
+# -- 8 of the corpus's 78 grep citations today. The other 70 name a branch or
+# no ref at all, and replaying those against a moving tree cannot distinguish a
+# false citation from ordinary drift, so they are left blocking rather than
+# judged on evidence that does not support a judgement.
+_GREP_TOOL_NAMES = {
+    "grep",
+    "grep_repo",
+    "grep_recursive",
+    "grep_case_sensitive",
+    "grep_case_insensitive",
+    "grep_recursive_case_insensitive",
+    "grep_extended_regex",
+}
+_CASE_INSENSITIVE_GREP_TOOLS = {
+    "grep_case_insensitive",
+    "grep_recursive_case_insensitive",
+}
+
+# Only the ref and the paths are guarded this way. The PATTERN is deliberately
+# exempt: `|`, `(`, `$` and friends are ordinary regex there, it reaches git in
+# an argument slot behind `-e`, and no shell ever sees it. Guarding it would
+# silently stop checking the alternation patterns that make up most pinned
+# citations -- a test pins that distinction.
+_GREP_PATH_SHELL_METACHARACTERS = (";", "$(", "`", "|", "&", "\n", "\r", ">", "<")
+
+_FULL_SHA_CITATION_RE = re.compile(r"^[0-9a-f]{40}$")
+# The bracketed alternative must come first: `paths=['a', 'b']` contains commas
+# INSIDE its value, and a plain `[^,]+` stops at the first one. That silently
+# dropped every path after the first, which biases an absence claim toward
+# looking true -- searching less than was cited is the one error this verifier
+# must never make.
+_GREP_KWARG_RE = re.compile(
+    r"(?:^|,)\s*(?P<key>pattern|path|paths|ref|scope|glob)\s*=\s*"
+    r"(?P<value>\[[^\]]*\]|[^,]+)"
+)
+# `scope=` and `glob=` name a pathspec pattern (`crates/**/*.rs`), not a path.
+# They are recognised so the citation can be reported accurately, and
+# deliberately NOT replayed: a glob cannot be resolved by the path-existence
+# guard below, and letting one through would mean an absence claim could be
+# "confirmed" by a pattern that matched no files at all.
+_GREP_GLOB_SCOPE_KEYS = ("scope", "glob")
+_ASSERTED_NO_MATCHES_RE = re.compile(r"^\s*(?:zero|no)\s+(?:matches|results|hits)\b", re.I)
+_ASSERTED_SOME_MATCHES_RE = re.compile(r"^\s*(?P<count>\d+)\s+(?:matches|hits)\b", re.I)
+
+
+def _parse_grep_citation(parsed: ParsedCitation) -> dict | None:
+    """Reduce a grep citation to `{pattern, paths, ref}`, or `None`."""
+    assert parsed.tool_args is not None
+    text = parsed.tool_args.strip()
+    if not text:
+        return None
+    keywords = {
+        match.group("key"): _strip_argument_quotes(match.group("value"))
+        for match in _GREP_KWARG_RE.finditer(text)
+    }
+    pattern = keywords.get("pattern")
+    if pattern is None:
+        leading = text.split(",", 1)[0]
+        if "=" in leading:
+            return None
+        pattern = _strip_argument_quotes(leading)
+    raw_paths = keywords.get("paths") or keywords.get("path") or ""
+    # `paths='mobile/lib desktop/src'` packs several pathspecs into one value,
+    # and `paths=['a', 'b']` occurs too. Both split on whitespace once the list
+    # punctuation is stripped.
+    separated = raw_paths.strip("[]")
+    for punctuation in ("'", '"', ","):
+        separated = separated.replace(punctuation, " ")
+    paths = [_strip_argument_quotes(fragment) for fragment in separated.split()]
+    if not pattern or not paths:
+        return None
+    return {"pattern": pattern, "paths": paths, "ref": keywords.get("ref", "")}
+
+
+def _asserted_match_verdict(assertion: str) -> bool | None:
+    """`True` if the citation asserts matches exist, `False` if it asserts none,
+    `None` if it asserts something this verifier cannot check."""
+    if _ASSERTED_NO_MATCHES_RE.match(assertion):
+        return False
+    some = _ASSERTED_SOME_MATCHES_RE.match(assertion)
+    if some:
+        return int(some.group("count")) > 0
+    return None
+
+
+def _verify_grep_tool(parsed: ParsedCitation, repo_root: Path) -> VerificationResult:
+    assert parsed.tool_assertion is not None
+    blocked = lambda detail: VerificationResult("unverified", detail)  # noqa: E731
+
+    citation = _parse_grep_citation(parsed)
+    if citation is None:
+        if any(f"{key}=" in parsed.tool_args for key in _GREP_GLOB_SCOPE_KEYS):
+            return blocked(
+                "names a grep scoped by a glob rather than a path, which is not "
+                "replayed because a glob matching no files is indistinguishable "
+                "from a search that found nothing"
+            )
+        return blocked(
+            "names a grep but its arguments could not be parsed into a pattern "
+            "and a path, so it was not replayed"
+        )
+    if not _FULL_SHA_CITATION_RE.match(citation["ref"]):
+        return blocked(
+            "names a grep that is not pinned to a full commit SHA, so replaying "
+            "it would search a different tree than the one cited"
+        )
+    asserted = _asserted_match_verdict(parsed.tool_assertion)
+    if asserted is None:
+        return blocked(
+            "names a grep but its asserted result carries no checkable match "
+            "verdict, so it was not replayed"
+        )
+    if any(
+        token in value
+        for value in [citation["ref"], *citation["paths"]]
+        for token in _GREP_PATH_SHELL_METACHARACTERS
+    ):
+        return blocked(
+            "names a grep but its ref or path contains a shell metacharacter, "
+            "so it was not replayed"
+        )
+    if any(path.startswith("-") for path in citation["paths"]):
+        return blocked(
+            "names a grep but a path is option-shaped, so it was not replayed"
+        )
+    if not _git_object_exists(repo_root, f"{citation['ref']}^{{commit}}"):
+        return blocked(
+            "names a grep pinned to a commit that is not present in this "
+            "repository, so it was not replayed"
+        )
+    # The vacuous-pass guard, and the reason this verifier is worth having at
+    # all. `git grep` reports no matches for a path that does not exist, so
+    # without this check every absence claim carrying a typo would look
+    # confirmed by the very command that never searched anything.
+    for path in citation["paths"]:
+        if not _git_object_exists(repo_root, f"{citation['ref']}:{path}"):
+            return blocked(
+                "names a grep whose cited path does not exist at the pinned "
+                "commit, so a no-match result would prove nothing"
+            )
+
+    command = ["git", "grep", "-q", "-E"]
+    if parsed.tool in _CASE_INSENSITIVE_GREP_TOOLS:
+        command.append("-i")
+    # `-e` keeps a pattern that begins with `-` in the pattern slot instead of
+    # being read as an option; `--` separates pathspecs from revisions.
+    command += ["-e", citation["pattern"], citation["ref"], "--", *citation["paths"]]
+    result = subprocess.run(
+        command,
+        cwd=repo_root,
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+        check=False,
+    )
+    if result.returncode not in (0, 1):
+        return blocked(
+            "names a grep that could not be replayed at the pinned commit, so "
+            "its asserted result was not checked"
+        )
+    found = result.returncode == 0
+    if asserted and not found:
+        return VerificationResult(
+            "error",
+            "asserts matches, but replaying it at the pinned commit finds none",
+        )
+    if not asserted and found:
+        return VerificationResult(
+            "error",
+            "asserts no matches, but replaying it at the pinned commit finds matches",
+        )
+    return VerificationResult(
+        "unverified",
+        "replayed at the pinned commit and the match verdict agrees, but the "
+        "claim it was cited to support was not compared",
+    )
+
+
 # GitHub repository URLs. `verb` decides whether the URL names a FILE (ADR-0003's
 # subject) or some other repository view; `ref` is the branch, tag or commit it is
 # pinned to. Both schemes are matched -- `http://` and `https://` -- so a mutable
@@ -461,6 +640,8 @@ def verify_citation(
         return _verify_url(parsed.url, check_links=check_links)
     if parsed.kind is EvidenceKind.TOOL_RESULT and parsed.tool in _GIT_TOOL_NAMES:
         return _verify_git_tool(parsed, repo_root)
+    if parsed.kind is EvidenceKind.TOOL_RESULT and parsed.tool in _GREP_TOOL_NAMES:
+        return _verify_grep_tool(parsed, repo_root)
     if parsed.kind in {EvidenceKind.GRAPH_EDGE, EvidenceKind.TOOL_RESULT}:
         return VerificationResult("unverified", UNVERIFIABLE_KIND_DETAIL)
     return VerificationResult("error", "no verifier exists for this evidence kind")
