@@ -37,10 +37,11 @@ evidence:
     entry_class: FACT
     evidence:
       - "crates/buzz-relay/src/api/bridge.rs:866-888"
-  - statement: "After successful parse, relay membership is enforced (with a NIP-OA `x-auth-tag` header fallback for owner materialization) before the event reaches the shared ingest pipeline; a membership failure returns the error status/body that check produces."
+  - statement: "After successful parse, relay membership is enforced (with a NIP-OA `x-auth-tag` header fallback for owner materialization) before the event reaches the shared ingest pipeline; a membership failure returns 403 Forbidden, defined in `enforce_relay_membership` itself."
     entry_class: FACT
     evidence:
       - "crates/buzz-relay/src/api/bridge.rs:890-916"
+      - "crates/buzz-relay/src/api/mod.rs"
   - statement: "Both `submit_event` (via its `submit_event_authed` helper) and the WebSocket EVENT handler `handle_event` construct a transport-specific `IngestAuth` value and then call the identical `ingest_event()` function; this is the single shared validation/storage/fan-out pipeline for both transports, not two independent implementations."
     entry_class: FACT
     evidence:
