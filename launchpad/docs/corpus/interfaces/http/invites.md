@@ -113,6 +113,14 @@ evidence:
   - statement: "Root AGENTS.md documents the relay's HTTP surface as deliberately narrow and directs new feature work toward a Nostr event kind rather than a new HTTP endpoint; the invites surface predates that guidance's application here and is treated in this node as an existing exception rather than a template for future HTTP additions."
     entry_class: TEAM_KNOWLEDGE
     provided_by: "AGENTS.md (repository root), section 'Prefer Nostr events over new HTTP endpoints'"
+  - statement: "Integration test owner_mints_and_new_pubkey_claims exercises the full valid flow end to end: an owner mints a v2 code with an empty JSON body, a not-yet-a-member pubkey claims it and receives 200 {status: joined, role: member}, a repeat claim by the same pubkey returns 200 {status: already_member}, and the joining pubkey is confirmed as a persisted relay member with role member in between."
+    entry_class: FACT
+    evidence:
+      - "crates/buzz-relay/src/api/invites.rs:1103-1171"
+  - statement: "Integration test claim_rejects_invalid_code exercises the failure path: claiming the malformed code \"garbage.code\" returns 403 with {error: invite_invalid}, and the test additionally asserts the rejected pubkey was never inserted as a relay member -- an invalid code admits no one."
+    entry_class: FACT
+    evidence:
+      - "crates/buzz-relay/src/api/invites.rs:1411-1441"
 ---
 
 # HTTP invites: interface
@@ -180,6 +188,47 @@ node cites, but does not restate, their wire format.
   guessing which failure mode occurred); rate limiting is `429 TOO_MANY_REQUESTS`;
   unconfigured policy documents are `404 NOT_FOUND`; unexpected/database errors
   are `500`-class via `internal_error`.
+
+## Examples
+
+**Valid mint-then-claim flow**, drawn from the `owner_mints_and_new_pubkey_claims`
+test (`crates/buzz-relay/src/api/invites.rs:1103-1171`):
+
+```
+POST /api/invites          (NIP-98 signed by an owner/admin pubkey)
+{}
+
+200 OK
+{"code": "v2.<base64url secret>", "expires_at": 1767000000,
+ "max_uses": null, "uses_remaining": null,
+ "url": "https://<tenant-host>/invite/v2.<base64url secret>"}
+
+POST /api/invites/claim    (NIP-98 signed by the joining pubkey)
+{"code": "v2.<base64url secret>"}
+
+200 OK
+{"status": "joined", "community_id": "<uuid>", "host": "<tenant-host>",
+ "role": "member"}
+```
+
+A second claim of the same code by the same pubkey returns
+`{"status": "already_member", ...}` with the same `200 OK`, per the idempotency
+guarantee above.
+
+**Failure example**, drawn from the `claim_rejects_invalid_code` test
+(`crates/buzz-relay/src/api/invites.rs:1411-1441`):
+
+```
+POST /api/invites/claim    (NIP-98 signed by any pubkey)
+{"code": "garbage.code"}
+
+403 FORBIDDEN
+{"error": "invite_invalid"}
+```
+
+The test additionally asserts the rejected pubkey is never inserted as a relay
+member -- an invalid code admits no one, it does not merely fail to return a
+success body.
 
 ## Boundary
 
