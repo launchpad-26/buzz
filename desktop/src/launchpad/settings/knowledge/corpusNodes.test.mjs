@@ -5,6 +5,7 @@ import {
   deriveExcerpt,
   deriveTitle,
   groupNodesByType,
+  humanizeCorpusType,
   selectRepresentativeNode,
 } from "./corpusNodes.ts";
 
@@ -112,6 +113,28 @@ describe("deriveExcerpt", () => {
     const body =
       "# Node\n\nSee **bold**, *italic*, `code`, and [a link](https://example.com).";
     assert.equal(deriveExcerpt(body), "See bold, italic, code, and a link.");
+  });
+});
+
+// ── humanizeCorpusType ───────────────────────────────────────────────────────
+
+describe("humanizeCorpusType", () => {
+  it("capitalizes a raw corpus type value", () => {
+    assert.equal(humanizeCorpusType("architecture"), "Architecture");
+    assert.equal(humanizeCorpusType("governance"), "Governance");
+  });
+
+  it("capitalizes only the first character, leaving the rest as-is", () => {
+    assert.equal(humanizeCorpusType("agent"), "Agent");
+  });
+
+  it("is generic over a type not seen today, per this module's no-hardcoded-list rule", () => {
+    assert.equal(humanizeCorpusType("operations"), "Operations");
+    assert.equal(humanizeCorpusType("capabilities"), "Capabilities");
+  });
+
+  it("returns an empty string unchanged rather than throwing", () => {
+    assert.equal(humanizeCorpusType(""), "");
   });
 });
 

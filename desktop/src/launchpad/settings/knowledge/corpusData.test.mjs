@@ -68,4 +68,33 @@ describe("the desktop copy of generated/corpus.json", () => {
       );
     }
   });
+
+  it("every node carries status, audiences, and relationships with the packaged shape", () => {
+    // These three fields have no reader in the crate or the panel today --
+    // the Settings surface only renders id/type/origin/body, and #553's
+    // knowledge.* interface is the intended consumer. Nothing else on this
+    // branch would notice if package.py silently dropped one of them; this
+    // pins the packaging contract so a real regression fails loudly instead
+    // (#552 review-final).
+    for (const node of corpusJson) {
+      assert.ok(
+        typeof node.status === "string" && node.status.length > 0,
+        `${node.id}: status must be a non-empty string`,
+      );
+      assert.ok(
+        Array.isArray(node.audiences),
+        `${node.id}: audiences must be an array`,
+      );
+      assert.ok(
+        Array.isArray(node.relationships),
+        `${node.id}: relationships must be an array`,
+      );
+      for (const rel of node.relationships) {
+        assert.ok(
+          typeof rel.type === "string" && typeof rel.target === "string",
+          `${node.id}: each relationship needs a string type and target`,
+        );
+      }
+    }
+  });
 });

@@ -1,4 +1,5 @@
 import { BookOpen } from "lucide-react";
+import { useEffect, useState } from "react";
 import type { CohortSettingsSectionDescriptor } from "../registry";
 import {
   SettingsOptionGroup,
@@ -6,20 +7,14 @@ import {
   SettingsOptionRow,
 } from "@/features/settings/ui/SettingsOptionGroup";
 import { SettingsSectionHeader } from "@/features/settings/ui/SettingsSectionHeader";
-import corpusJson from "./generated/corpus.json";
 import {
   deriveExcerpt,
   deriveTitle,
   groupNodesByType,
   humanizeCorpusType,
   type CorpusNode,
+  type CorpusTypeGroup,
 } from "./corpusNodes";
-
-// The committed, packaged corpus (#552) -- produced out-of-band by
-// launchpad/project-intelligence/corpus/package.py, never re-derived here.
-// See launchpad/crates/knowledge/AGENTS.md's "one rule".
-const corpusNodes = corpusJson as CorpusNode[];
-const corpusTypeGroups = groupNodesByType(corpusNodes);
 
 /**
  * Renders one representative node per corpus `type` present in the packaged
@@ -38,8 +33,36 @@ const corpusTypeGroups = groupNodesByType(corpusNodes);
  * representative past ten thousand rendered pixels -- an unreadable wall of
  * markdown syntax rather than a help surface. The full body stays on the
  * underlying `CorpusNode`; only this display is truncated.
+ *
+ * The committed, packaged corpus (#552) -- produced out-of-band by
+ * launchpad/project-intelligence/corpus/package.py, never re-derived here.
+ * See launchpad/crates/knowledge/AGENTS.md's "one rule". Loaded via a
+ * dynamic `import()` on mount, not a top-level static import: the artefact
+ * is multiple megabytes (204 nodes as of this writing, and growing with the
+ * corpus), and a static import inlines it into whatever chunk eagerly loads
+ * this module -- shipped to every user on cold start whether or not they
+ * ever open Settings. A dynamic import puts it in its own chunk, fetched
+ * only when this panel actually mounts (review-final finding on #552).
  */
 function KnowledgeSettingsPanel() {
+  const [corpusTypeGroups, setCorpusTypeGroups] = useState<
+    CorpusTypeGroup[] | null
+  >(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    import("./generated/corpus.json").then((module) => {
+      if (cancelled) {
+        return;
+      }
+      const nodes = module.default as CorpusNode[];
+      setCorpusTypeGroups(groupNodesByType(nodes));
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
   return (
     <section data-testid="settings-knowledge">
       <SettingsSectionHeader
@@ -47,7 +70,7 @@ function KnowledgeSettingsPanel() {
         description="Buzz's built-in documentation, packaged from the canonical corpus."
       />
       <SettingsOptionGroupList>
-        {corpusTypeGroups.map(({ type, representative }) => (
+        {(corpusTypeGroups ?? []).map(({ type, representative }) => (
           <SettingsOptionGroup key={type} title={humanizeCorpusType(type)}>
             <SettingsOptionRow
               className="flex-col items-start gap-2 py-4"

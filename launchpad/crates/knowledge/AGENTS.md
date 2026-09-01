@@ -65,12 +65,24 @@ matches what regeneration would produce — see `just corpus-validate` and
 No `knowledge.*` query interface (`#553`, `F22`) exists in this crate yet —
 that is separate, later work.
 
-**Not yet wired to the desktop app, and that path is an open question.** This
-crate is a root-workspace member (`Cargo.toml`'s `members` list), but root
-`Cargo.toml` excludes `desktop/src-tauri` from that workspace. Root-workspace
-membership alone does not make this crate reachable from the Tauri backend —
-depending on it from `desktop/src-tauri` would mean editing
-`desktop/src-tauri/Cargo.toml`, a third upstream file ADR-0045's granted
-exception (the root `Cargo.toml` members list) does not cover. Whoever wires
-the crate into the desktop build (`#552` or later) needs to resolve that, not
-assume it falls out of this scaffold.
+**The Rust crate itself is not yet reachable from the Tauri backend, and that
+path is an open question.** This crate is a root-workspace member
+(`Cargo.toml`'s `members` list), but root `Cargo.toml` excludes
+`desktop/src-tauri` from that workspace. Root-workspace membership alone does
+not make this crate reachable from the Tauri backend — depending on it from
+`desktop/src-tauri` would mean editing `desktop/src-tauri/Cargo.toml`, a third
+upstream file ADR-0045's granted exception (the root `Cargo.toml` members
+list) does not cover. Whoever wires the crate itself into the desktop build
+needs to resolve that, not assume it falls out of this scaffold.
+
+This is narrower than it used to read. `#552` already gave the **desktop
+Settings surface** a real answer, deliberately bypassing this open question
+rather than waiting on it: the Settings panel reads the identical generated
+`corpus.json` as a plain static asset
+(`desktop/src/launchpad/settings/knowledge/generated/corpus.json`), not
+through this crate or Tauri IPC — see "Seeded content and regeneration"
+above and plan `OPEN` item 2 in
+`launchpad/plans/2026-08-28-issue-552-knowledge-crate-corpus.md`. So: the
+human-facing help surface ships today; only this crate's own Tauri
+reachability (needed for a future agent-facing `knowledge.*` query interface,
+`#553`) remains unresolved.

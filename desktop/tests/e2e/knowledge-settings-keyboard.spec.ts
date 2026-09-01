@@ -2,6 +2,20 @@ import { expect, test } from "@playwright/test";
 
 import { installMockBridge } from "../helpers/bridge";
 import { openSettings } from "../helpers/settings";
+import corpusJson from "../../src/launchpad/settings/knowledge/generated/corpus.json" with {
+  type: "json",
+};
+import { humanizeCorpusType } from "../../src/launchpad/settings/knowledge/corpusNodes";
+
+// Derived from the real committed corpus, not a hardcoded list -- this
+// module's own design rule (corpusNodes.ts's groupNodesByType) is that the
+// panel groups over whatever `type` values are actually present, never a
+// fixed set. A test that hardcoded an expected count would break the
+// instant the corpus grows a new type, on a spec unrelated to whoever's
+// change added it (review-final finding 3 on #552).
+const expectedTypes = [...new Set(corpusJson.map((node) => node.type))].sort(
+  (a, b) => a.localeCompare(b),
+);
 
 /**
  * Keyboard/focus verification for the cohort-registered "Help" (knowledge)
@@ -108,32 +122,26 @@ test("Help settings panel renders real corpus content as a static, non-interacti
   // Real content, not the #551 placeholder.
   await expect(panel.getByText("coming soon")).toHaveCount(0);
 
-  // All three types the current corpus actually contains (verified against
-  // the committed corpus.json, not the two the packaging plan's OPEN item 1
-  // guessed at) render as h2 group headings, with a presentable label
-  // (Title Case), not the raw lowercase `type` field. Asserting each one by
-  // name -- not just a >= bound on the total -- means the singleton `agent`
-  // group disappearing would fail this test instead of hiding behind a
-  // loose count.
-  await expect(
-    panel.getByRole("heading", { level: 2, name: "Agent", exact: true }),
-  ).toBeVisible();
-  await expect(
-    panel.getByRole("heading", {
-      level: 2,
-      name: "Architecture",
-      exact: true,
-    }),
-  ).toBeVisible();
-  await expect(
-    panel.getByRole("heading", { level: 2, name: "Governance", exact: true }),
-  ).toBeVisible();
+  // Every type the current corpus actually contains renders as an h2 group
+  // heading, with a presentable label (Title Case), not the raw lowercase
+  // `type` field. Asserting each one by name -- not just a >= bound on the
+  // total -- means any one group disappearing fails this test instead of
+  // hiding behind a loose count.
+  for (const type of expectedTypes) {
+    await expect(
+      panel.getByRole("heading", {
+        level: 2,
+        name: humanizeCorpusType(type),
+        exact: true,
+      }),
+    ).toBeVisible();
+  }
 
   // Page title is the sole h1; group titles are h2; each node's own title is
   // h3 -- no level is skipped. One h3 per group heading above.
   await expect(page.getByRole("heading", { level: 1 })).toHaveText("Help");
   const nodeHeadings = panel.getByRole("heading", { level: 3 });
-  expect(await nodeHeadings.count()).toBe(3);
+  expect(await nodeHeadings.count()).toBe(expectedTypes.length);
 
   // Each rendered node carries its id/origin provenance text, unmodified by
   // the packaging boundary -- the DoD's "provenance survives" claim, made
@@ -141,7 +149,7 @@ test("Help settings panel renders real corpus content as a static, non-interacti
   const provenanceRows = page.locator(
     '[data-testid$="-provenance"][data-testid^="settings-knowledge-node-"]',
   );
-  expect(await provenanceRows.count()).toBe(3);
+  expect(await provenanceRows.count()).toBe(expectedTypes.length);
   for (const row of await provenanceRows.all()) {
     await expect(row).toHaveText(/^id: \S+ · origin: \S+$/);
   }

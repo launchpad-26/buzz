@@ -93,7 +93,7 @@ build-release:
     cargo build --workspace --release
 
 # Run repo lint, formatting, and repository policy checks
-check: fmt-check clippy desktop-check desktop-tauri-fmt-check desktop-tauri-clippy web-check mobile-check security-review-check file-size-check
+check: fmt-check clippy desktop-check desktop-tauri-fmt-check desktop-tauri-clippy web-check mobile-check security-review-check corpus-validate file-size-check
 
 # Validate the trusted security-review workflow support and renderer contract.
 security-review-check:
@@ -1098,7 +1098,17 @@ benchmark-down:
 # citation form/containment/pinning/prohibited-content, and generated/manual
 # ownership. Citations that name nothing openable (commit refs, graph edges, tool
 # results, external URLs) print as UNVERIFIED without failing the run.
+#
+# Also runs the corpus/tests suite -- including DriftGuardTest, which fails if
+# the committed generated/corpus.json artifacts have drifted from what
+# `just knowledge-package` would produce. Previously this recipe ran only
+# validate.py, so a maintainer following AGENTS.md's "see just corpus-validate
+# and DriftGuardTest" pointer would run this locally, see a clean pass, and
+# still push a stale artifact -- the drift guard only ran in CI's separate
+# unittest-discovery step. Both steps now run wherever this recipe runs
+# (#552 review-final).
 corpus-validate:
+    python3 -m unittest discover -s launchpad/project-intelligence/corpus/tests -p "test_*.py"
     python3 launchpad/project-intelligence/corpus/validate.py
 
 # Regenerate the packaged corpus artifact the `knowledge` crate embeds
