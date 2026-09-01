@@ -104,11 +104,19 @@ class EvidenceVerifierTest(unittest.TestCase):
         self.assertIn("line position exceeds", result.detail)
 
     def test_verifies_existing_commit(self) -> None:
+        """Resolves a commit at run time. The previous hardcoded SHA was an
+        unpushed local commit, so this passed on one machine and failed in CI
+        once commit citations became verifiable."""
+        import subprocess
+
         root = Path(__file__).resolve().parents[4]
-        parsed = evidence.parse_citation(
-            "commit 69baedd197e5d35c9ae4736115789da59929e288"
+        head = subprocess.run(
+            ["git", "rev-parse", "HEAD"],
+            cwd=root, capture_output=True, text=True, check=True,
+        ).stdout.strip()
+        result = evidence.verify_citation(
+            evidence.parse_citation(f"commit {head}"), root
         )
-        result = evidence.verify_citation(parsed, root)
         self.assertEqual(result.status, "ok")
 
     def test_unrecognised_tool_result_is_unverified(self) -> None:

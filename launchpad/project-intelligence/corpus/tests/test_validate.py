@@ -52,10 +52,42 @@ sys.modules["corpus_validate"] = validate
 _spec.loader.exec_module(validate)
 
 
+
+@contextlib.contextmanager
+def materialised_valid_dir():
+    """Copy the valid fixture into a temp tree with `{{COMMIT}}` resolved.
+
+    Commit citations became verifiable on this branch, which turned the
+    fixture's hardcoded SHA into a dependency on THIS clone's history: it was
+    an unpushed local commit, so the suite passed here and failed in CI. A
+    fixture must not depend on repository history at all, so the commit is
+    substituted at run time.
+    """
+    import shutil
+    import subprocess
+
+    head = subprocess.run(
+        ["git", "rev-parse", "HEAD"],
+        cwd=validate.repo_root(), capture_output=True, text=True, check=True,
+    ).stdout.strip()
+    with tempfile.TemporaryDirectory() as tmp:
+        target = Path(tmp) / "valid"
+        shutil.copytree(VALID_DIR, target)
+        for path in target.rglob("*.md"):
+            text = path.read_text()
+            if "{{COMMIT}}" in text:
+                path.write_text(text.replace("{{COMMIT}}", head))
+        yield target
+
+
 class ValidFixtureTest(unittest.TestCase):
     def test_valid_fixture_passes(self) -> None:
-        report = validate.validate_corpus(VALID_DIR)
+        with materialised_valid_dir() as valid:
+            report = validate.validate_corpus(valid)
         self.assertEqual(report.errors, [])
+        # `unverified` is NOT asserted empty: node-e exercises all citation
+        # forms, including the graph-edge and tool-result shapes that are
+        # unverifiable by nature. Errors are the fixture's contract.
 
     def test_valid_fixture_actually_discovers_its_nodes(self) -> None:
         # errors == [] alone can't distinguish "genuinely clean" from "discovery
@@ -539,8 +571,14 @@ class CitationFormTest(unittest.TestCase):
         self.assertEqual(len(unverified), 1)
 
     def test_existing_commit_reference_is_verified_locally(self) -> None:
+        import subprocess
+
+        head = subprocess.run(
+            ["git", "rev-parse", "HEAD"],
+            cwd=validate.repo_root(), capture_output=True, text=True, check=True,
+        ).stdout.strip()
         errors, unverified, deferred = _classify_one(
-            "commit 69baedd197e5d35c9ae4736115789da59929e288 (2026-08-25) by Serina"
+            f"commit {head} (2026-08-25) by Serina"
         )
         self.assertEqual(errors, [])
         self.assertEqual(unverified, [])
@@ -1194,7 +1232,8 @@ class UnverifiedChannelTest(unittest.TestCase):
         self.assertIn("PASS  corpus validation clean", stdout)
 
     def test_unverified_items_print_and_fail_the_run(self) -> None:
-        exit_code, stdout, stderr = self._run_main(VALID_DIR)
+        with materialised_valid_dir() as valid:
+            exit_code, stdout, stderr = self._run_main(valid)
         self.assertEqual(exit_code, 1)
         self.assertIn("UNVERIFIED", stderr)
         self.assertIn("FAIL", stderr)
