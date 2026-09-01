@@ -263,8 +263,14 @@ def _verify_local_symbol(parsed: ParsedCitation, repo_root: Path) -> Verificatio
     the file as it was, and an edit above it silently repoints the citation at
     unrelated code while the bounds check still passes. A symbol names the thing
     the claim is about, so it still resolves after the code above it moves --
-    and when the symbol is renamed or deleted the citation FAILS instead of
-    quietly pointing somewhere wrong.
+    and when the symbol's name disappears from the file the citation FAILS
+    instead of quietly pointing somewhere wrong.
+
+    The match is LEXICAL, not semantic, and the limit is worth stating plainly:
+    a name that survives in a comment or a string literal still satisfies this
+    check after the definition is gone. It detects a name vanishing from a file,
+    never that a definition still exists. Making it semantic would mean a parser
+    per language, which is not on offer here.
 
     The path guards are the shared ones: this form must not become a way around
     the credential blocklist or the repository-containment rule.
@@ -306,6 +312,20 @@ def _verify_absent_path(parsed: ParsedCitation, repo_root: Path) -> Verification
         return VerificationResult("error", "must be a repo-relative path, not absolute")
     if ".." in PurePosixPath(parsed.path).parts:
         return VerificationResult("error", "resolves outside the repository")
+    # The path must be CANONICAL, not merely safe. `git rev-parse <sha>:<path>`
+    # fails for a non-canonical spelling of a path that exists -- `Justfile/`,
+    # `launchpad//README.md`, `launchpad/./README.md`, `.` -- and this verifier
+    # reads any such failure as proven absence. Without this check each of those
+    # returned `ok` against a file that is right there: a vacuous pass in the
+    # one form built to make absence provable. Reject the spelling instead of
+    # normalising it, so the citation says exactly what was checked.
+    parts = parsed.path.split("/")
+    if any(part in ("", ".") for part in parts):
+        return VerificationResult(
+            "error",
+            "is not a canonical repository path, so its absence would not be "
+            "distinguishable from a spelling git cannot resolve",
+        )
     if not _git_object_exists(repo_root, f"{parsed.commit}^{{commit}}"):
         return VerificationResult(
             "unverified",
@@ -757,6 +777,13 @@ _URL_CHECK_TIMEOUT_SECONDS = 5
 _URL_CHECK_USER_AGENT = "buzz-corpus-validator/1.0"
 
 
+# Statuses that describe the service rather than the target. Retried, then
+# reported as indeterminate -- never as a dead link.
+_TRANSIENT_STATUSES = frozenset({408, 425, 429, 500, 502, 503, 504})
+# Statuses that mean "this server dislikes HEAD", not "no such page". A server
+# answering 403 to HEAD and 200 to GET was being called dead.
+_HEAD_UNSUPPORTED_STATUSES = frozenset({403, 405, 501})
+
 _URL_CHECK_ATTEMPTS = 3
 _URL_CHECK_RETRY_DELAY_SECONDS = 0.5
 
@@ -796,9 +823,17 @@ def _url_resolves(url: str) -> bool | None:
                 ) as response:
                     return 200 <= response.status < 400
             except urllib.error.HTTPError as exc:
-                if method == "HEAD" and exc.code in {405, 501}:
+                if method == "HEAD" and exc.code in _HEAD_UNSUPPORTED_STATUSES:
                     continue
-                # A status came back. That IS an answer about the target.
+                if exc.code in _TRANSIENT_STATUSES:
+                    # A status came back, but not one that says anything about
+                    # the TARGET: 429 and 5xx describe the service's mood.
+                    # Treating them as dead links is the same flap this
+                    # tri-state exists to remove, just arriving over HTTP
+                    # instead of over the socket.
+                    transport_failure = True
+                    break
+                # A status came back that IS an answer about the target.
                 return False
             except (OSError, TimeoutError, ValueError, http.client.HTTPException):
                 transport_failure = True

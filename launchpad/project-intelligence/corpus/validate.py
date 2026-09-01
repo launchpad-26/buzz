@@ -22,6 +22,7 @@ import importlib.util
 import argparse
 import json
 import math
+import hashlib
 import re
 import subprocess
 import sys
@@ -703,16 +704,39 @@ BASELINE_PATH = "launchpad/project-intelligence/corpus/known-unverified.txt"
 
 _BASELINE_KEY_RE = re.compile(r"^(.*?: evidence entry \d+, citation \d+):")
 
+# How many hex characters of the citation digest go in the key. Enough that two
+# citations do not collide; short enough that the key stays readable.
+_BASELINE_DIGEST_LENGTH = 12
 
-def baseline_key(message: str) -> str:
-    """The stable part of a citation notice: node, entry index, citation index.
 
-    Deliberately excludes the detail, so rewording a verifier's message does not
-    invalidate the whole baseline -- and so the file records WHICH citation is
-    outstanding without quoting what it says.
+def citation_digest(citation: str) -> str:
+    """A short, stable fingerprint of a citation's text.
+
+    A DIGEST, never the text. The baseline is a tracked file and citations are
+    untrusted document prose, so the file must record WHICH citation is
+    outstanding without reproducing what it says.
+    """
+    return hashlib.sha256(citation.encode("utf-8")).hexdigest()[:_BASELINE_DIGEST_LENGTH]
+
+
+def baseline_key(message: str, citation: str | None = None) -> str:
+    """Node, evidence entry index, citation index, and the citation's digest.
+
+    The position alone is not an identity. Keyed on position only, replacing a
+    baselined citation in place with a COMPLETELY DIFFERENT blocking citation
+    left it covered by the old entry -- validation stayed green and
+    `known-unverified.txt` never changed, so "a new blocking citation cannot
+    join without editing this file" was not actually enforced. The digest binds
+    the amnesty to the exact citation that earned it.
+
+    The detail is still excluded, so rewording a verifier's message does not
+    invalidate the whole baseline.
     """
     match = _BASELINE_KEY_RE.match(message)
-    return match.group(1) if match else message
+    position = match.group(1) if match else message
+    if citation is None:
+        return position
+    return f"{position} [{citation_digest(citation)}]"
 
 
 def load_baseline(repo_root_path: Path, corpus_root: Path) -> set[str]:
@@ -737,9 +761,19 @@ def load_baseline(repo_root_path: Path, corpus_root: Path) -> set[str]:
 
 
 def find_citation_problems(
-    nodes: list[LoadedNode], repo_root_path: Path, *, check_links: bool = False
+    nodes: list[LoadedNode],
+    repo_root_path: Path,
+    *,
+    check_links: bool = False,
+    keys: dict[str, str] | None = None,
 ) -> tuple[list[str], list[str], list[str]]:
-    """Classify every evidence citation; return (errors, unverified, deferred)."""
+    """Classify every evidence citation; return (errors, unverified, deferred).
+
+    `keys`, when given, is filled with message -> baseline key. It is an
+    optional out-parameter rather than a fourth return value so the many
+    existing callers keep working unchanged; only the baseline needs it, and it
+    needs the citation TEXT, which does not survive into the message.
+    """
     errors: list[str] = []
     unverified: list[str] = []
     deferred: list[str] = []
@@ -761,6 +795,8 @@ def find_citation_problems(
                     f"{label}: evidence entry {entry_index}, citation "
                     f"{citation_index}: {verdict.detail}"
                 )
+                if keys is not None:
+                    keys[message] = baseline_key(message, citation)
                 if verdict.status == "error":
                     errors.append(message)
                 elif verdict.status == "deferred":
@@ -857,8 +893,9 @@ def validate_corpus(corpus_root: Path, *, check_links: bool = False) -> Validati
     report.errors.extend(find_unresolved_relationship_targets(nodes))
     report.errors.extend(find_non_finite_confidence(nodes))
 
+    citation_keys: dict[str, str] = {}
     citation_errors, citation_unverified, citation_deferred = find_citation_problems(
-        nodes, root, check_links=check_links
+        nodes, root, check_links=check_links, keys=citation_keys
     )
     report.errors.extend(citation_errors)
     report.deferred.extend(citation_deferred)
@@ -870,11 +907,11 @@ def validate_corpus(corpus_root: Path, *, check_links: bool = False) -> Validati
     # was the opposite of true and told the reader to delete the line tracking a
     # citation that had just started failing harder.
     seen_keys = {
-        baseline_key(message)
+        citation_keys.get(message, baseline_key(message))
         for message in (*citation_unverified, *citation_errors)
     }
     for message in citation_unverified:
-        if baseline_key(message) in baseline:
+        if citation_keys.get(message, baseline_key(message)) in baseline:
             report.baselined.append(message)
         else:
             report.unverified.append(message)

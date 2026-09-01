@@ -176,7 +176,9 @@ end of a file fails, a missing commit fails, a renamed symbol fails, and a dead 
 **Prefer the symbol anchor for a claim about code.** A line number names a place in the file
 as it was; a symbol names the thing the claim is about. When code above it moves, the line
 citation keeps passing while naming unrelated code, and the symbol citation still resolves.
-When the symbol itself is renamed or deleted, the citation fails — which is the point.
+When the symbol's name disappears from the file, the citation fails — which is the point. The
+match is lexical, so a name still mentioned in a comment or a string literal keeps passing; this
+detects a name vanishing, not a definition being removed.
 
 ## MUST
 

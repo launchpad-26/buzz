@@ -309,6 +309,21 @@ def _classify_one(
         [node], validate.repo_root(), check_links=check_links
     )
 
+
+def _reachable():
+    """Pin URL reachability to True.
+
+    These tests are about the PINNING rules -- full SHA, file verb, non-empty
+    path -- not about whether github.com is up. Calling the real host made the
+    unit-test stage depend on external networking, which the link stage exists
+    to isolate, and made three tests fail offline for a reason unrelated to what
+    they assert. Reachability itself is covered against a local server.
+    """
+    return unittest.mock.patch.object(
+        validate._EVIDENCE_PARSER, "_url_resolves", lambda _url: True
+    )
+
+
 class _CitationUrlHandler(BaseHTTPRequestHandler):
     def do_HEAD(self) -> None:
         self._respond()
@@ -396,20 +411,22 @@ class UrlCitationTest(unittest.TestCase):
         self.assertEqual(len(deferred), 1)
 
     def test_commit_pinned_github_url_accepted_with_check_links(self) -> None:
-        errors, unverified, deferred = _classify_one(
-            "https://github.com/launchpad-26/buzz/blob/"
-            "69baedd197e5d35c9ae4736115789da59929e288/.env.example",
-            check_links=True,
-        )
+        with _reachable():
+            errors, unverified, deferred = _classify_one(
+                "https://github.com/launchpad-26/buzz/blob/"
+                "69baedd197e5d35c9ae4736115789da59929e288/.env.example",
+                check_links=True,
+            )
         self.assertEqual(errors, [])
         self.assertEqual(unverified, [])
 
     def test_commit_pinned_raw_github_url_accepted_with_check_links(self) -> None:
-        errors, unverified, deferred = _classify_one(
-            "https://raw.githubusercontent.com/launchpad-26/buzz/"
-            "69baedd197e5d35c9ae4736115789da59929e288/Justfile",
-            check_links=True,
-        )
+        with _reachable():
+            errors, unverified, deferred = _classify_one(
+                "https://raw.githubusercontent.com/launchpad-26/buzz/"
+                "69baedd197e5d35c9ae4736115789da59929e288/Justfile",
+                check_links=True,
+            )
         self.assertEqual(errors, [])
         self.assertEqual(unverified, [])
 
@@ -509,7 +526,8 @@ class UrlCitationTest(unittest.TestCase):
             "[.env.example](https://github.com/launchpad-26/buzz/blob/"
             "69baedd197e5d35c9ae4736115789da59929e288/.env.example)"
         )
-        errors, unverified, deferred = _classify_one(pinned, check_links=True)
+        with _reachable():
+            errors, unverified, deferred = _classify_one(pinned, check_links=True)
         self.assertEqual(errors, [])
         self.assertEqual(unverified, [])
 
@@ -1149,7 +1167,10 @@ class UnverifiedChannelTest(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
             self._write_single_citation_root(root, "some_novel_tool('x') -> y")
-            key = "validator-single-citation: evidence entry 1, citation 1"
+            key = validate.baseline_key(
+                "validator-single-citation: evidence entry 1, citation 1:",
+                "some_novel_tool('x') -> y",
+            )
             with unittest.mock.patch.object(
                 validate, "load_baseline", lambda _root, _corpus: {key}
             ):
@@ -1179,7 +1200,11 @@ class UnverifiedChannelTest(unittest.TestCase):
             root = Path(tmp)
             self._write_single_citation_root(root, "launchpad/docs/corpus/AGENTS.md")
             with unittest.mock.patch.object(
-                validate, "load_baseline", lambda _root, _corpus: {"validator-single-citation: evidence entry 1, citation 1"}
+                validate, "load_baseline",
+                lambda _root, _corpus: {validate.baseline_key(
+                    "validator-single-citation: evidence entry 1, citation 1:",
+                    "launchpad/docs/corpus/AGENTS.md",
+                )}
             ):
                 exit_code, stdout, stderr = self._run_main(root)
         self.assertEqual(exit_code, 1)
@@ -1194,13 +1219,53 @@ class UnverifiedChannelTest(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
             self._write_single_citation_root(root, "launchpad/nope/missing.md")
-            key = "validator-single-citation: evidence entry 1, citation 1"
+            key = validate.baseline_key(
+                "validator-single-citation: evidence entry 1, citation 1:",
+                "launchpad/nope/missing.md",
+            )
             with unittest.mock.patch.object(
                 validate, "load_baseline", lambda _root, _corpus: {key}
             ):
                 exit_code, stdout, stderr = self._run_main(root)
         self.assertEqual(exit_code, 1)
         self.assertNotIn("no longer blocks validation", stderr)
+
+    def test_a_replacement_citation_does_not_inherit_the_baseline_slot(self) -> None:
+        """Found by cross-model review. Keyed on position alone, swapping a
+        baselined citation for a COMPLETELY DIFFERENT blocking one left it
+        covered by the old entry: validation stayed green and the file never
+        changed, so "a new blocking citation cannot join without editing this
+        file" was not enforced at all."""
+        original = "old_tool('x') -> y"
+        replacement = "brand_new_tool('totally different') -> z"
+        baseline = {validate.baseline_key(
+            "validator-single-citation: evidence entry 1, citation 1:", original
+        )}
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            self._write_single_citation_root(root, replacement)
+            with unittest.mock.patch.object(
+                validate, "load_baseline", lambda _root, _corpus: baseline
+            ):
+                exit_code, stdout, stderr = self._run_main(root)
+        self.assertEqual(exit_code, 1)
+        self.assertIn("UNVERIFIED", stderr)
+
+    def test_the_exact_baselined_citation_is_still_covered(self) -> None:
+        """Guards the fix from over-correcting into "nothing is ever covered"."""
+        citation = "old_tool('x') -> y"
+        baseline = {validate.baseline_key(
+            "validator-single-citation: evidence entry 1, citation 1:", citation
+        )}
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            self._write_single_citation_root(root, citation)
+            with unittest.mock.patch.object(
+                validate, "load_baseline", lambda _root, _corpus: baseline
+            ):
+                exit_code, stdout, stderr = self._run_main(root)
+        self.assertEqual(exit_code, 0)
+        self.assertIn("BASELINED", stderr)
 
     def test_baseline_key_ignores_the_detail_text(self) -> None:
         """Rewording a verifier's message must not invalidate the baseline, and

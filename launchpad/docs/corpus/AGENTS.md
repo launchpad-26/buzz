@@ -293,7 +293,8 @@ form — a position that would survive edits — is #2012.
 
 - `path/to/file.py#symbol=NAME` — a position that survives edits. Prefer it over
   `path:line` for any claim about code. Verified by a word-boundary search of the
-  cited file, so a renamed or deleted symbol fails instead of drifting (#2012).
+  cited file, so a symbol whose name disappears fails instead of drifting. The
+  match is lexical: a name left behind in a comment or string still passes (#2012).
 - `absent:path/to/thing@<40-hex>` — evidence that something is **not** there,
   pinned to a commit. Verified by resolving that path in that tree: present means
   the claim is wrong and the citation is a hard error. Use it for "no such node

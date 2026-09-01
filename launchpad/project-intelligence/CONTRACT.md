@@ -96,8 +96,9 @@ seven shapes:
 file as it was: an edit above it repoints the citation at unrelated code, and because a
 bounds check is not a meaning check, the citation keeps passing while being wrong. A symbol
 anchor names the thing the claim is about, so it still resolves after the code above it
-moves — and when the symbol is renamed or deleted the citation *fails* instead of silently
-drifting. It is the only precise code citation that can fail for the right reason.
+moves — and when the symbol's name disappears from the file the citation *fails* instead of
+silently drifting. The check is lexical, not semantic: a name that survives in a comment or a
+string literal still satisfies it, so it detects a name vanishing, not a definition being removed. It is the only precise code citation that can fail for the right reason.
 
 The symbol must match `[A-Za-z_][A-Za-z0-9_.]*`; the dotted form (`ClassName.method_name`)
 is accepted. Verification is a word-boundary search of the cited file — `#symbol=Foo` is not

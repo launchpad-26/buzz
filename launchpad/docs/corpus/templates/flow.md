@@ -441,7 +441,8 @@ shape:
   place in the file as it was: an edit above it repoints the citation at unrelated
   code, and because a bounds check is not a meaning check, the step keeps passing
   while being wrong. A symbol anchor still resolves after the code above it moves,
-  and fails honestly when the symbol is renamed or deleted (#1726, #2012).
+  and fails when the symbol's name disappears from the file. The match is
+  lexical, so a name left in a comment still passes (#1726, #2012).
 
 ## Note on Definition of Done
 
