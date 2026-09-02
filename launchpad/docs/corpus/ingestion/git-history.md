@@ -100,13 +100,10 @@ design rationale or intent, a `git log`/`git log --follow`/`--diff-filter=R` res
 for a count or a rename history, or a `git blame` result cited for attribution or age.
 
 **Its authority comes from** `launchpad/decisions/ADR-0029-corpus-evidence-precedence.md`,
-the accepted decision that ranks evidence contextually by claim type, grants executable
-evidence authority over history for current-behavior claims, grants accepted decisions
-authority over drifted code for intent/authorization claims, rejects recency as a
-tiebreaker, and requires escalation (the `flagged` status) on an unresolved same-claim-type
-conflict. **Where this node and ADR-0029 disagree, ADR-0029 wins** -- this document applies
-ADR-0029's existing rule to one evidence type it does not itself name, and adds nothing
-ADR-0029 would not already license.
+the accepted decision that ranks evidence contextually by claim type and escalates rather
+than resolves a same-claim-type conflict. **Where this node and ADR-0029 disagree, ADR-0029
+wins** -- this document applies ADR-0029's existing rule to one evidence type it does not
+itself name, and adds nothing ADR-0029 would not already license.
 
 **It does not cover** locating a commit, a symbol, or a rename in the repository
 (`agents/repository-navigation.md`, #650, unmerged); the how-to procedure for citing one
@@ -199,6 +196,25 @@ parent Feature (#620) or PRD (#605) describing what could not be settled here.
 **`status: flagged` is not a substitute for meeting G1-G5.** It names an unresolved
 conflict ADR-0029 defines; it is not a way to publish a claim this node's requirements
 would otherwise block.
+
+## Relationships
+
+**Declared:** `depends-on: corpus-agents` -- this node's FACT/INFERENCE/TEAM_KNOWLEDGE
+contract and its citation-shape table (a commit reference is always `UNVERIFIED`) are
+`AGENTS.md`'s, not original to this node; G1-G5 apply that contract to one evidence type
+rather than restating it. `implements: corpus-template-policy` -- this node is built from
+that template's six-section shape. `references: corpus-standard-decision-references` --
+the merged sibling already applying ADR-0029's same current-behavior/intent split to a
+different evidence type (decision records versus code), read for conceptual grounding
+without this node depending on its specific content. `references:
+corpus-standard-provenance` -- the merged sibling this node's own Scope and authority
+distinguishes itself from (the one mandatory recorded-revision commit citation, versus
+this node's ordinary git-history-derived claims).
+
+**Checked and not declared:** none of Feature #620's 32 sibling `agents/*.md` /
+`ingestion/*.md` tasks, including #650 and #954, are merged on `origin/launchpad` at this
+node's recorded revision (confirmed by `git ls-tree -r --name-only origin/launchpad --
+launchpad/docs/corpus`), so none is a valid `relationships[].target`.
 
 ## Scope and omissions
 
