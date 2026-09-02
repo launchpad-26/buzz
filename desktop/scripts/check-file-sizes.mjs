@@ -52,6 +52,17 @@ const rules = [
     extensions: new Set([".css"]),
     maxLines: MAX_LINES,
   },
+  // The cohort's own desktop-side tree (#552 review-final): without this,
+  // `src/launchpad/**` sits outside every ratchet root, the same
+  // silently-ungoverned gap `src-tauri/crates` closed above. `.json` is
+  // deliberately excluded -- this tree also carries the committed, generated
+  // corpus.json artifact (#552), which is expected to be large and is not
+  // hand-authored source this ratchet exists to bound.
+  {
+    root: "src/launchpad",
+    extensions: new Set([".ts", ".tsx"]),
+    maxLines: MAX_LINES,
+  },
 ];
 
 await runFileSizeCheck({
