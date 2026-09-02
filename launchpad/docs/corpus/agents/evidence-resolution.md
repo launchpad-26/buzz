@@ -43,7 +43,7 @@ evidence:
     entry_class: FACT
     evidence:
       - "launchpad/docs/corpus/AGENTS.md"
-  - statement: "standards/evidence.md states that its 'forms that name no openable file' half (commit, graph edge, tool result, and every URL form) is the node's own authoritative subject, while the forms that name code -- a bare repository path, a path:line position, and a pinned GitHub link -- are allocated to the not-yet-merged code-references standard (#1308), so a node written today still reads AGENTS.md's own table for that code-naming half until #1308 lands."
+  - statement: "standards/evidence.md states that its 'forms that name no openable file' half -- commit, graph edge, tool result, and any URL its repository-link pattern cannot open -- is the node's own authoritative subject, while the forms that name code -- a bare repository path, a path:line position, and a well-formed pinned GitHub link (itself a URL, but one the pattern can open) -- are allocated to the not-yet-merged code-references standard (#1308), so a node written today still reads AGENTS.md's own table for that code-naming half until #1308 lands."
     entry_class: FACT
     evidence:
       - "launchpad/docs/corpus/standards/evidence.md"
@@ -141,25 +141,19 @@ unchecked `FACT`.
      the call while writing -> **withdraw the claim.** Move it to the node's Scope and
      omissions section as a named gap instead of forcing a label onto it. A gap sends a
      reader to find out; a misclassified claim invites them to rely on it.
-5. **Cite the source in a shape the validator recognizes.** `CONTRACT.md` §3 enumerates
-   six shapes -- file range, file line, bare path, graph edge, tool result, commit --
-   and `AGENTS.md`'s own table adds two more the validator also accepts: a GitHub file
-   link pinned to a full 40-character commit SHA, and an external (non-GitHub) URL.
-   Only three of these eight are ever checked against the repository at all -- file
-   range, file line and bare path -- and even among those, a line position is checked
-   for the file only, never for whether the line number is within it. A pinned GitHub
-   link is checked for shape alone, with nothing fetched.
-6. **Recognize the `UNVERIFIED` trap before you finish.** A commit reference, a graph
-   edge, a tool result, and any URL the validator's repository-link pattern does not
-   match (every non-GitHub URL, and every GitHub issue or pull-request URL) are all
-   reported `UNVERIFIED` -- printed, never fatal, and establishing nothing at all, not
-   even that a cited commit id has ever existed. If every citation behind a `FACT` is
-   one of these, the entry has been checked by nothing wearing the strongest available
-   label. Two exits: open a source that resolves (return to step 2), or reclassify
-   honestly per step 4. The one standing exception is the ledger's own provenance
-   entry recording the node's revision, which cites a commit and stays a `FACT`
-   because there the citation *is* the claim -- see `corpus-standard-evidence` for why
-   that one case differs.
+5. **Cite the source in a shape the validator recognizes.** `CONTRACT.md` §3 names six
+   shapes; `AGENTS.md`'s own table adds two URL forms the validator also accepts. Which
+   of the eight are checked against the repository at all, and what each verdict does
+   and does not establish, is `corpus-standard-evidence`'s canonical table -- read it
+   there rather than from a copy here, since a copy is exactly what goes stale first.
+6. **Recognize the `UNVERIFIED` trap before you finish.** Several of the eight shapes
+   -- notably a commit reference, a graph edge, and a tool result -- are reported
+   `UNVERIFIED`: printed, never fatal, and establishing nothing the checker can stand
+   behind. If every citation behind a `FACT` resolves this way, the entry has been
+   checked by nothing wearing the strongest available label. Two exits: open a source
+   that resolves (return to step 2), or reclassify honestly per step 4. One narrow,
+   named exception exists for the ledger's own provenance entry recording the node's
+   revision -- see `corpus-standard-evidence` for exactly which case that is and why.
 7. **When the only available source is an issue, a pull request, or a conversation**,
    do not force it into a `FACT` on a tool-result or URL citation to make it look
    checked. Use `TEAM_KNOWLEDGE` with `provided_by` naming the issue or pull request
@@ -273,6 +267,8 @@ keeping the ledger and body in sync.
   above warns about, but for a claim type (a tool observation the author performed
   directly) the "one permitted exception" in `corpus-standard-evidence` names only for
   the revision-recording entry specifically. This node follows the same precedent
-  already set by `agents-invariants` and `corpus-template-procedure`, which classify an
-  identical `git_ls_tree`-only claim as `FACT`, rather than resolving the tension
-  itself.
+  already set by `corpus-template-procedure`, whose own ledger classifies an identical
+  `git_ls_tree`-only claim as `FACT`, rather than resolving the tension itself.
+  `agents-invariants` was checked for the same pattern and does not carry one -- its
+  merge-target claim (I5) cites `AGENTS.md` directly rather than a tool result -- so
+  this precedent rests on one sibling node, not two.
