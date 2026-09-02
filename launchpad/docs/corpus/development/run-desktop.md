@@ -73,7 +73,7 @@ evidence:
     entry_class: FACT
     evidence:
       - "Justfile"
-  - statement: "desktop-standalone builds six crates in debug mode, copies each resulting binary over the zero-byte stub at desktop/src-tauri/binaries/<bin>-<host-target> and chmods it executable, unsets BUZZ_PRIVATE_KEY and BUZZ_SHARE_IDENTITY, and sets BUZZ_DEV_KEYRING_SERVICE to buzz-desktop-dev.<instance-slug>."
+  - statement: "desktop-standalone builds six crates in debug mode, copies each resulting binary over the sidecar placeholder path at desktop/src-tauri/binaries/<bin>-<host-target> and chmods it executable, unsets BUZZ_PRIVATE_KEY and BUZZ_SHARE_IDENTITY, and sets BUZZ_DEV_KEYRING_SERVICE to buzz-desktop-dev.<instance-slug>. The path holds a zero-byte placeholder only if this is the first path A/B/C run on this worktree; a prior desktop-standalone, staging or production run left a real binary there instead, which this copy then overwrites with a fresh one -- either way, desktop-standalone's own copy step is what makes the path real."
     entry_class: FACT
     evidence:
       - "Justfile"
@@ -87,7 +87,7 @@ evidence:
     evidence:
       - "scripts/instance-env.sh"
       - "desktop/src/main.tsx"
-  - statement: "The staging recipe exports BUZZ_RELAY_URL=wss://sprout-oss.stage.blox.sqprod.co and the production recipe exports BUZZ_RELAY_URL=wss://buzz.block.builderlab.xyz; both run an unconditional `pnpm install` (commented 'must always start with a clean dep tree'), build their sidecar crates with `cargo build --release`, and copy the release binaries over the stubs."
+  - statement: "The staging recipe exports BUZZ_RELAY_URL=wss://sprout-oss.stage.blox.sqprod.co and the production recipe exports BUZZ_RELAY_URL=wss://buzz.block.builderlab.xyz; both run an unconditional `pnpm install` (commented 'must always start with a clean dep tree'), build their sidecar crates with `cargo build --release`, and copy the release binaries over the sidecar placeholder paths (real or still zero-byte, whichever a prior path A/B/C run left there)."
     entry_class: FACT
     evidence:
       - "Justfile"
@@ -509,9 +509,9 @@ actually running, and how to stop or reset it.
 | Compiling the workspace and frontends from source | `corpus-development-build` (`development/build.md`, merged) |
 | Installing and activating the toolchain | `development-prerequisites`, `development-hermit` |
 | Diagnosing a running app that misbehaves | `debugging` (`development/debugging.md`) |
-| Running the mobile app | `#865` (`development/run-mobile.md`), open and unmerged |
-| Running the relay on its own | `#866` (`development/run-relay.md`), open and unmerged |
-| Running the web client | `#867` (`development/run-web.md`), open and unmerged |
+| Running the mobile app | `development/run-mobile.md` |
+| Running the relay on its own | `development/run-relay.md` |
+| Running the web client | `development/run-web.md` |
 | The full `BUZZ_*` configuration surface | `layers-configuration-desktop-configuration` |
 | The local Docker topology itself | `architecture-deployment-local-development` |
 | Writing or running desktop E2E tests and screenshot specs | no corpus node found at this revision; `AGENTS.md` is the current source |

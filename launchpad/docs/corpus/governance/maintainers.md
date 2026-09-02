@@ -164,8 +164,8 @@ exists. This node is last in every one of those orderings, by design.
 
 | For | Read |
 |---|---|
-| Which reviewer a path pulls in, and the `CODEOWNERS` mechanism | #907 (`governance/codeowners.md`), unmerged |
-| Who holds authority to decide a given question | #910 (`governance/decision-authority.md`), unmerged |
+| Which reviewer a path pulls in, and the `CODEOWNERS` mechanism | `governance/codeowners.md` |
+| Who holds authority to decide a given question | `governance/decision-authority.md` |
 | The conditions under which an agent may approve or merge | `launchpad/decisions/ADR-0052-delegated-authority-and-feature-batching.md` |
 | Who may advance `main` to a vendor point, and why no accounts are named | `launchpad/decisions/ADR-0038-named-humans-advance-vendor-branch.md` |
 | Divergence review on the upstream boundary | `launchpad/decisions/ADR-0033-divergence-review-and-drift-assurance.md` |
@@ -434,9 +434,13 @@ this worktree, per `launchpad/docs/corpus/AGENTS.md` step 9:
 - `references: corpus-standard-normative-language` — the MUST/SHOULD keywords above mean
   what that standard says they mean, and it is cited rather than restated.
 
-No edge to #907 or #910: both are open and unmerged, and a `relationships[].target`
-naming an id no loaded node carries is a hard validation error. Those two are linked in
-prose above and should be revisited as typed edges once they merge.
+No edge declared to `governance-codeowners` or `governance-decision-authority`: at the
+revision this node was authored, neither existed and a `relationships[].target` naming
+an id no loaded node carries is a hard validation error. Both have since landed in this
+same integration. Wiring them in now, under the pressure of a pre-merge fix pass, risks
+the same kind of error this fix pass exists to catch; adding them belongs to a
+dedicated pass across the whole `development`/`governance`/`releases` shelf once all 37
+nodes are stable. Both are linked in prose above in the meantime.
 
 **Expected but not verified when this node was written:**
 

@@ -240,11 +240,10 @@ This node does not describe:
   build.md` (merged) owns `cargo build --workspace` / `--release`; this node
   assumes that step already succeeds.
 - **The desktop or mobile release lanes** -- RELEASING.md documents both
-  separately; `releases/desktop-release.md` is issue #1293, a distinct task.
+  separately; `releases/desktop-release.md` is a distinct node.
 - **Detailed tag-naming or version-source conventions beyond what this flow
-  needs** -- `releases/release-tags.md` (#1299) and `releases/versioning.md`
-  (#1301) are open, unmerged tasks for that depth; both were checked and
-  confirmed not yet corpus nodes, so no relationship targets them.
+  needs** -- `releases/release-tags.md` and `releases/versioning.md` cover
+  that depth.
 - **What happens after the image reaches GHCR** -- `squareup/sprout-oss`
   (building the relay Docker image for internal ECR) and
   `squareup/block-coder-tf-stacks` (Terraform/ArgoCD deployment to the
@@ -263,11 +262,14 @@ This node does not describe:
   instance of that merged template.
 - `references: corpus-development-build` -- the compile-from-source
   procedure this release flow assumes as a precondition, per the Boundary
-  above. Checked against `git ls-tree -r --name-only origin/launchpad --
-  launchpad/docs/corpus` before finalizing: no `releases/`-typed sibling node
-  exists yet to relate to, and `releases-relay-release`'s two possible
-  DoD-adjacent siblings (`releases/release-tags.md` #1299,
-  `releases/versioning.md` #1301) are both unmerged, so neither is declared.
+  above. No edge to `releases/release-tags.md` or `releases/versioning.md` is
+  declared here: at the revision this node was authored, neither existed yet
+  and `git ls-tree` confirmed it. Both have since landed in this same
+  integration. Wiring the two edges in now, under the pressure of a
+  pre-merge fix pass, risks the same kind of error this fix pass exists to
+  catch; adding them belongs to a dedicated pass across the whole
+  `development`/`governance`/`releases` shelf once all 37 nodes are stable,
+  not to a piecemeal edit here.
 
 ## Scope and omissions
 

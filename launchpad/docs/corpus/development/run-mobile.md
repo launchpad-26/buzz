@@ -404,10 +404,14 @@ cited directly in the ledger by path (`Justfile`, the two `scripts/mobile-worktr
 scripts, the iOS xcconfigs and the Android Gradle build file) rather than through a
 corpus node, because no implementation-reference node covers them.
 
-No edge to any `run-*` sibling: the corpus's `development/` directory on
-`origin/launchpad` contains exactly `build.md`, `debugging.md`, `hermit.md` and
-`prerequisites.md` at the recorded revision, and the full listing contains no
-`run-desktop.md`, `run-relay.md` or `run-web.md` to target.
+At the recorded revision, no edge was declared to any `run-*` sibling: the corpus's
+`development/` directory on `origin/launchpad` contained exactly `build.md`,
+`debugging.md`, `hermit.md` and `prerequisites.md`, with no `run-desktop.md`,
+`run-relay.md` or `run-web.md` to target. All three have since landed in this same
+integration, so the natural edges now resolve; they are not added here, since wiring
+them in under the pressure of a pre-merge fix pass risks the same kind of error this
+fix pass exists to catch. Adding them belongs to a dedicated pass across the whole
+`development`/`governance`/`releases` shelf once all 37 nodes are stable.
 
 ## Scope and omissions
 

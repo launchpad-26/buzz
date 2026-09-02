@@ -188,16 +188,14 @@ This node does not describe:
 
 Declared: none. `git ls-tree -r --name-only origin/launchpad --
 launchpad/docs/corpus`, run while writing this node, lists no `releases/`
-directory at all -- the corpus has no `release`-typed node yet for this
-node to relate to. The natural `references` edge to the candidate procedure
-(`releases-mobile-candidate`, issue #1294) cannot be declared: that node
-exists only as an unpushed commit on a local branch
-(`task/1294-release-mobile-candidate`), with no open PR, and issue #1294
-itself is still OPEN -- it is not present on `origin/launchpad`, and a
-relationship targeting it would be a hard validation error there. The same
-applies to `releases-versioning` (issue #1301, also OPEN, unmerged). Both
-edges belong in this node's `relationships` the moment either sibling
-merges.
+directory at all -- the corpus had no `release`-typed node yet for this
+node to relate to at that time. Both `releases-mobile-candidate` and
+`releases-versioning` have since landed in this same integration, so the
+natural `references` edges to them now resolve. They are not added here:
+wiring them in now, under the pressure of a pre-merge fix pass, risks the
+same kind of error this fix pass exists to catch. Adding them belongs to a
+dedicated pass across the whole `development`/`governance`/`releases` shelf
+once all 37 nodes are stable.
 
 ## Scope and omissions
 
@@ -211,9 +209,9 @@ Mobile, Internal Releases, and What Gets Published sections.
 
 | Not covered here | Owned by |
 |---|---|
-| Cutting the `mobile-vX.Y.Z-rc.N` candidate tag | Issue #1294 (`releases/mobile-candidate.md`), open, not yet merged |
-| Mobile version-source semantics across lanes | Issue #1301 (`releases/versioning.md`), open, not yet merged |
-| Desktop and relay release lanes | `RELEASING.md`'s own Desktop and Relay sections; no corpus node found for either at this revision |
+| Cutting the `mobile-vX.Y.Z-rc.N` candidate tag | `releases/mobile-candidate.md` |
+| Mobile version-source semantics across lanes | `releases/versioning.md` |
+| Desktop and relay release lanes | `releases/desktop-candidate.md`, `releases/desktop-release.md`, `releases/relay-release.md` |
 | The private Buildkite pipeline's internal build steps | `squareup/buzz-releases` (per `CLAUDE.md`'s ecosystem table) -- not inspectable from this OSS repository |
 | App Store Connect / Google Play Console's own publishing and review steps | Same private-pipeline boundary -- not inspectable from this OSS repository |
 | Push-notification / APNs App Store profile configuration | `mobile/README.md` -- a different concern (runtime push config, not release publishing) |

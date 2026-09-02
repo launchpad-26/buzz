@@ -225,9 +225,9 @@ this repository's own pointer to it.
 - `RELEASING.md` — the authoritative source this node summarizes into
   ordered steps; read it directly for the relay and mobile lanes, which this
   node does not cover.
-- The sibling full-release node for what happens after the `desktop-v<version>`
-  tag exists (`release.yml`'s build, publish, and auto-update promotion) —
-  not yet merged; see Boundary.
+- `releases/desktop-release.md` — the sibling full-release node for what happens
+  after the `desktop-v<version>` tag exists (`release.yml`'s build, publish, and
+  auto-update promotion); see Boundary.
 
 ## Boundary
 
@@ -237,8 +237,8 @@ review, squash merge, and the tag being created. It does not cover:
 - **What happens once the tag exists** — `release.yml`'s builds, the
   versioned GitHub release, or the separate manual **Promote OSS Desktop
   Auto-Update** workflow that updates `buzz-desktop-latest`/`latest.json`.
-  That is issue #1293's `releases/desktop-release.md` node, unmerged as of
-  this writing (see the provenance ledger).
+  That is `releases/desktop-release.md`'s subject (see the provenance
+  ledger for this node's own authoring-time state).
 - **The relay and mobile release lanes.** Both are documented in
   `RELEASING.md` alongside desktop but are structurally different (a
   metadata PR for relay; immutable tags cut directly from `main` with no PR
@@ -276,8 +276,9 @@ internally inspected) handoff to Block's private Buildkite pipeline.
 
 | Not covered here | Owned by |
 |---|---|
-| `release.yml`'s build/publish/promotion behavior after the tag exists | issue #1293 (`releases/desktop-release.md`), unmerged |
-| The relay and mobile release lanes | `RELEASING.md` directly; no corpus node yet |
+| `release.yml`'s build/publish/promotion behavior after the tag exists | `releases/desktop-release.md` |
+| The relay release lane | `releases/relay-release.md` |
+| The mobile candidate and release lanes | `releases/mobile-candidate.md`, `releases/mobile-release.md` |
 | The Signed macOS Canary workflow | `RELEASING.md` directly; no corpus node yet |
 | The private `buzz-releases` Buildkite pipeline's internal contract | the `buzz-releases` repository's own README (external, per this repository's own ecosystem table) |
 

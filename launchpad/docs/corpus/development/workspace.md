@@ -473,10 +473,14 @@ origin/launchpad:<path>` before being written:
 
 Not declared, and why:
 
-- **No edge to a repository-layout node.** It is not on `origin/launchpad` at this
-  revision, and `AGENTS.md` is explicit that a target must resolve on the branch
-  being merged into, not on the author's own branch. A target that resolves locally
-  and not in CI is a hard validation error there.
+- **No edge to `development-repository-layout`.** At the recorded revision it was
+  not on `origin/launchpad`, and `AGENTS.md` is explicit that a target must
+  resolve on the branch being merged into, not on the author's own branch. That
+  node has since landed in this same integration, so the natural edge now
+  resolves; it is not added here, since wiring it in under the pressure of a
+  pre-merge fix pass risks the same kind of error this fix pass exists to catch.
+  Adding it belongs to a dedicated pass across the whole
+  `development`/`governance`/`releases` shelf once all 37 nodes are stable.
 - **No edge to `development-hermit`, `development-prerequisites` or `debugging`.**
   All three are merged and would resolve, but each is a neighbouring *procedure*
   rather than context this reference material rests on; naming them here would

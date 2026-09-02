@@ -556,9 +556,13 @@ Every target declared in this node's front matter was read out of `origin/launch
 with `git show`, not out of the authoring worktree. Two edges were considered and deliberately not declared:
 `architecture-flows-event-ingestion` resolves but describes what happens *after* a
 frame is parsed, which is the kind pipeline rather than the wire surface; and
-`development/event-kind-changes.md` (#858) is the node this one most needs to point
-at and does not exist yet, so the boundary against it is prose. Adding that edge is
-the natural first update to this node.
+`development/event-kind-changes.md` is the node this one most needs to point at, and
+at the recorded revision it did not exist yet, so the boundary against it was prose
+only. It has since landed in this same integration, so the natural edge now resolves;
+it is not added here, since wiring it in under the pressure of a pre-merge fix pass
+risks the same kind of error this fix pass exists to catch. Adding it belongs to a
+dedicated pass across the whole `development`/`governance`/`releases` shelf once all
+37 nodes are stable.
 
 ## Scope and omissions
 

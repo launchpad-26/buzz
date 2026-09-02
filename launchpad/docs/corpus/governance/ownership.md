@@ -414,8 +414,8 @@ checked and what is not, and two measured divergences between §3 and the tree.
 | Not covered here | Owned by |
 |---|---|
 | The exception list itself — which files are sanctioned, and their contents | `launchpad/AGENTS.md` §3 and the ADR behind each bullet. Restating it here would violate O5 |
-| Who reviews and approves a change, and with what authority | `launchpad/AGENTS.md` §5 and `ADR-0052`; and #913, which owns maintainers |
-| Which reviewers GitHub requests automatically for a path | #907, which owns CODEOWNERS. No `CODEOWNERS` claim is made here |
+| Who reviews and approves a change, and with what authority | `launchpad/AGENTS.md` §5 and `ADR-0052`; and `governance/maintainers.md` |
+| Which reviewers GitHub requests automatically for a path | `governance/codeowners.md`. No `CODEOWNERS` claim is made here |
 | The divergence ledger's contract and format | `ADR-0047` (#294), open at the recorded revision |
 | Making the boundary check a required status check | #153, with #146 |
 | A mechanical check for the location rule, or for exceptions other than `ADR-0005`'s | Unowned at the recorded revision. `ADR-0051` names #1499 as carrying the wider gap |
@@ -441,9 +441,13 @@ recorded revision rather than against this worktree:
 - `references: corpus-standard-decision-references` — this node cites seven decision
   records, and that standard governs how a corpus node does so.
 
-No edge to `#913`'s maintainers node or `#907`'s CODEOWNERS node: both are open,
-unmerged tasks at the recorded revision, and a `relationships[].target` naming an id no
-loaded node carries is a hard validation error.
+No edge declared to `governance-maintainers` or `governance-codeowners`: at the
+recorded revision neither existed, and a `relationships[].target` naming an id no
+loaded node carries is a hard validation error. Both have since landed in this same
+integration. Wiring them in now, under the pressure of a pre-merge fix pass, risks the
+same kind of error this fix pass exists to catch; adding them belongs to a dedicated
+pass across the whole `development`/`governance`/`releases` shelf once all 37 nodes are
+stable.
 
 **Expected but not verified when this node was written:**
 

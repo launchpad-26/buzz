@@ -439,7 +439,7 @@ each surface actually needs, and the repository-specific hazards a generic
 | Not covered here | Owned by |
 |---|---|
 | The catalogue of configuration values themselves | `launchpad/docs/corpus/layers/configuration/` |
-| The default-precedence mechanism across the four surfaces | `launchpad/docs/corpus/layers/configuration/defaults.md` |
+| The default-precedence mechanism across configuration surfaces | `launchpad/docs/corpus/layers/configuration/defaults.md` |
 | Secret handling rules and the secret-shaped surface | `launchpad/docs/corpus/layers/configuration/secrets.md` |
 | Development prerequisites and Hermit activation | `launchpad/docs/corpus/development/prerequisites.md`, `launchpad/docs/corpus/development/hermit.md` |
 | Deployment-time configuration of a running relay | the operations surface, outside this node; the authorized shape is `launchpad/decisions/ADR-0013-config-management-ubuntu-baseline-runtime-shape.md` |

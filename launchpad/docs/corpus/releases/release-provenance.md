@@ -259,12 +259,14 @@ This node does not describe:
 
 ## Relationships
 
-None declared. No release-surface sibling node (`releases-desktop-candidate`,
-`releases-mobile-candidate`, `releases-release-artifacts`, `releases-release-tags`) is
-merged on `origin/launchpad` at the recorded revision — all four are still open issues
-(#1292, #1294, #1297, #1299) — so there is no valid `references` or `part-of` target
-yet. The first of those siblings to merge is the natural moment to add a `references`
-edge back and forth with this node.
+None declared. At the recorded revision, no release-surface sibling node
+(`releases-desktop-candidate`, `releases-mobile-candidate`, `releases-release-artifacts`,
+`releases-release-tags`) was merged on `origin/launchpad`, so none was a valid
+`references` or `part-of` target. All four have since landed in this same
+integration, so the natural edges now resolve. They are not added here: wiring
+them in under the pressure of a pre-merge fix pass risks the same kind of error
+this fix pass exists to catch. Adding them belongs to a dedicated pass across the
+whole `development`/`governance`/`releases` shelf once all 37 nodes are stable.
 
 ## Scope and omissions
 
@@ -282,8 +284,8 @@ that signing happens outside this repository's reach.
 
 | Not covered here | Owned by |
 |---|---|
-| The release tag format and versioning rules | `#1299`, open, not yet merged |
-| The full published-artifact/location inventory per lane | `#1297`, open, not yet merged |
+| The release tag format and versioning rules | `releases/release-tags.md` |
+| The full published-artifact/location inventory per lane | `releases/release-artifacts.md` |
 | How to run a release end-to-end (a tutorial) | no corpus template for this Diátaxis form exists; tracked as `#1538` |
 | Why the three lanes differ structurally (an explanation) | no corpus concept/explanation template merged yet (`#1331`) |
 | Whether the private `buzz-releases` pipeline adds its own provenance mechanism | unverifiable from this repository; see the TEAM_KNOWLEDGE evidence entry above |

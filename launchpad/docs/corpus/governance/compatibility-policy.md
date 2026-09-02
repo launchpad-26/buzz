@@ -626,7 +626,7 @@ surface.
 
 | Not covered here | Owned by |
 |---|---|
-| How a surface is deprecated and removed — windows, migration paths, sunset notices | `governance/deprecation-policy.md` (#911), unmerged at this node's authoring time |
+| How a surface is deprecated and removed — windows, migration paths, sunset notices | `governance/deprecation-policy.md` |
 | The additive-kinds design principle itself, and why the architecture is shaped that way | `architecture-principles-event-driven-extension` |
 | The CLI container's full description, including its error mapping in context | `architecture-containers-cli` |
 | Retiring a **corpus node**, which is a different subject from product compatibility | `corpus-standard-deprecation` |

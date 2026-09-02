@@ -475,9 +475,13 @@ worktree.
 
 Not declared: no edge to `development-hermit`, `development-prerequisites` or
 `debugging` — they are named in prose above where relevant but this node neither
-depends on nor supersedes them. No edge to `#854` or `#868`'s nodes: they do not
-exist on `origin/launchpad`, and a target naming an id no loaded node carries is
-a hard validation error.
+depends on nor supersedes them. At the recorded revision, no edge was declared to
+`development-dart-style` or `development-rust-style` either, since neither existed
+on `origin/launchpad` yet. Both have since landed in this same integration, so the
+natural edges now resolve; they are not added here, since wiring them in under the
+pressure of a pre-merge fix pass risks the same kind of error this fix pass exists
+to catch. Adding them belongs to a dedicated pass across the whole
+`development`/`governance`/`releases` shelf once all 37 nodes are stable.
 
 ## Scope and omissions
 

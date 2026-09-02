@@ -94,7 +94,7 @@ evidence:
     entry_class: FACT
     evidence:
       - "lefthook.yml"
-  - statement: "Only two pre-push lanes are unglobbed and therefore run on every push regardless of what changed: branch-skew, which runs launchpad/scripts/check-branch-skew.sh, and file-size-check, which runs just file-size-check; push-head-scope is also unglobbed but is warn-only and never fails a push."
+  - statement: "Three pre-push lanes are unglobbed and therefore run on every push regardless of what changed: branch-skew, which runs launchpad/scripts/check-branch-skew.sh, file-size-check, which runs just file-size-check, and push-head-scope, which runs scripts/check-push-head-scope.sh -- but only the first two can fail a push; push-head-scope is warn-only and never fails one."
     entry_class: FACT
     evidence:
       - "lefthook.yml"
@@ -549,7 +549,7 @@ requirement marked as machine-enforced or convention.
 
 | Not covered here | Owned by |
 |---|---|
-| **Who decides** — approval authority, ADR outcome authority, the five conditions of delegated authority, who may merge | Sibling node `governance/decision-authority.md` (issue #910, unmerged at this node's authoring time) and `launchpad/decisions/ADR-0052-delegated-authority-and-feature-batching.md` |
+| **Who decides** — approval authority, ADR outcome authority, the five conditions of delegated authority, who may merge | `governance/decision-authority.md` and `launchpad/decisions/ADR-0052-delegated-authority-and-feature-batching.md` |
 | The additional checklist a reviewer of a corpus change works to | `launchpad/docs/corpus/standards/review-requirements.md` |
 | How to create, update or retire a corpus node | `launchpad/docs/corpus/AGENTS.md` |
 | The upstream-boundary rules of `launchpad/AGENTS.md` section 3 beyond ADR-0005's deployment list | `launchpad/AGENTS.md` section 3 and `launchpad/decisions/ADR-0043-prefer-fork-owned-overrides.md` |
@@ -578,10 +578,13 @@ nothing here would notice.
   not checked**, so the practical effect of `.github/CODEOWNERS` on this fork is
   unknown.
 - **No `governance/` node existed in the corpus before this one**, so the
-  boundary against sibling #910 (`governance/decision-authority.md`) is drawn
-  from that issue's stated subject rather than from a merged document. No
-  relationship is declared toward it: an unmerged target is a hard validation
-  error.
+  boundary against `governance/decision-authority.md` was originally drawn from
+  that issue's stated subject rather than from a merged document. That sibling
+  has since landed in this same integration, so the natural edge to it now
+  resolves; it is not added here, since wiring it in under the pressure of a
+  pre-merge fix pass risks the same kind of error this fix pass exists to catch.
+  Adding it belongs to a dedicated pass across the whole
+  `development`/`governance`/`releases` shelf once all 37 nodes are stable.
 - **Local hook behaviour was read from `lefthook.yml`, not executed.** No push
   was made from this worktree, so which lanes fire for a `launchpad/`-only change
   is inferred from the globs rather than observed.

@@ -174,7 +174,7 @@ How a thing that exists in this repository stops existing — an environment var
 the relay no longer reads, an API surface withdrawn from clients, a database
 structure dropped, a decision replaced. This node is about **removal**: retirement,
 sunset, supersession. What a consumer is guaranteed *while* a thing still exists is
-the compatibility question and belongs to a different node (#908, unmerged).
+the compatibility question and belongs to `governance/compatibility-policy.md`.
 
 **Read the first line of *Scope and authority* before treating any MUST below as
 established.** Roughly half of this node's rules restate a mechanism that already
@@ -232,7 +232,7 @@ the relay's settings, `corpus-standard-deprecation` owns corpus nodes.
 | Creating, updating and retiring a node procedurally | `launchpad/docs/corpus/AGENTS.md` |
 | The `status` field across all five values | `launchpad/docs/corpus/standards/status.md` |
 | How a decision is superseded | `launchpad/decisions/README.md` |
-| What is guaranteed while a thing still exists | #908 (`governance/compatibility-policy.md`, unmerged) |
+| What is guaranteed while a thing still exists | `governance/compatibility-policy.md` |
 
 ## What removal actually looks like here
 
@@ -485,7 +485,7 @@ anywhere else.
 
 | Not covered here | Owner |
 |---|---|
-| What is guaranteed while a thing still exists — the compatibility half of the subject | #908 (`governance/compatibility-policy.md`, unmerged) |
+| What is guaranteed while a thing still exists — the compatibility half of the subject | `governance/compatibility-policy.md` |
 | Deprecating and retiring a **corpus node** | `corpus-standard-deprecation` |
 | The two relay environment-variable cases, setting by setting | `layers-configuration-relay-configuration` |
 | The `status` field across all five corpus values | `corpus-standard-status` |

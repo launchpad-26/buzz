@@ -100,10 +100,9 @@ different question. It complements `RELEASING.md`, which this node does not
 duplicate: `RELEASING.md` describes *how to cut a release* per lane; this node
 describes *where each lane's version number actually lives* and *what currently
 disagrees or is left unexplained* between surfaces. The step-by-step release
-procedures for each lane are separate, not-yet-merged corpus tasks (`releases/desktop-
-release.md`, `releases/mobile-release.md`, `releases/relay-release.md` — issues
-#1293, #1295, #1296) and are out of scope here; so is the git tag-naming scheme in
-its own right (`releases/release-tags.md`, issue #1299, also not yet merged).
+procedures for each lane are separate corpus nodes (`releases/desktop-release.md`,
+`releases/mobile-release.md`, `releases/relay-release.md`) and are out of scope
+here; so is the git tag-naming scheme in its own right (`releases/release-tags.md`).
 
 ## Version authority by surface
 
@@ -196,19 +195,15 @@ This node does not describe:
 
 - **How to actually execute a release for any lane** — the ordered steps
   (branch, PR, merge, tag, build) belong to `releases/desktop-release.md`,
-  `releases/mobile-release.md`, and `releases/relay-release.md` (issues #1293,
-  #1295, #1296), none of which is merged as of this writing.
+  `releases/mobile-release.md`, and `releases/relay-release.md`.
 - **The git tag-naming scheme in its own right** (`desktop-v*`, `relay-v*`,
   `mobile-v*`, `chart-v*`, `push-chart-v*`, and their protection rules) —
-  that is `releases/release-tags.md` (issue #1299), also not yet merged. This
-  node names the prefixes only where they are inseparable from a version
-  authority claim (for example, the mobile tag *is* mobile's version
-  authority).
-- **What happens on rollback** — `releases/rollback.md` (issue #1300), not
-  yet merged.
+  that is `releases/release-tags.md`'s subject. This node names the prefixes
+  only where they are inseparable from a version authority claim (for
+  example, the mobile tag *is* mobile's version authority).
+- **What happens on rollback** — `releases/rollback.md`'s subject.
 - **Release artifact or provenance attestation** — `releases/release-
-  artifacts.md` and `releases/release-provenance.md` (issues #1297, #1298),
-  not yet merged.
+  artifacts.md` and `releases/release-provenance.md`.
 - **The exact mechanics of the `-block` desktop version suffix** — root
   `AGENTS.md` states it exists; the private `squareup/buzz-releases` repository
   that implements it is not accessible from this checkout, so this node
@@ -218,14 +213,17 @@ This node does not describe:
 
 ## Relationships
 
-None declared. `releases/` does not exist anywhere on `origin/launchpad` at the
-recorded revision — this node is the first document in that directory — and no
-other merged corpus node (checked via `git ls-tree -r --name-only origin/launchpad
--- launchpad/docs/corpus`) documents release-versioning subject matter that this
-node would `references`, `depends-on`, or sit `part-of`. The sibling `releases/*`
-tasks named throughout this node (#1291-#1300) are unmerged local work on other
-branches, per this task's own instructions, and are therefore not valid
-relationship targets even though they are named in prose above.
+None declared. `releases/` did not exist anywhere on `origin/launchpad` at the
+recorded revision — this node was the first document in that directory to be
+authored — and no other merged corpus node (checked via `git ls-tree -r
+--name-only origin/launchpad -- launchpad/docs/corpus`) documented
+release-versioning subject matter that this node would `references`, `depends-on`,
+or sit `part-of`. The sibling `releases/*` nodes named throughout this node have
+since landed in this same integration, so the natural edges to them now resolve.
+They are not added here: wiring them in now, under the pressure of a pre-merge fix
+pass, risks the same kind of error this fix pass exists to catch. Adding them
+belongs to a dedicated pass across the whole `development`/`governance`/`releases`
+shelf once all 37 nodes are stable.
 
 ## Scope and omissions
 
@@ -241,10 +239,10 @@ enforcement tool.
 
 | Not covered here | Owned by |
 |---|---|
-| Step-by-step release execution for desktop, mobile, relay | #1293, #1295, #1296 (not yet merged) |
-| The git tag-naming scheme in its own right | #1299 (not yet merged) |
-| Rollback procedure | #1300 (not yet merged) |
-| Release artifacts and provenance attestation | #1297, #1298 (not yet merged) |
+| Step-by-step release execution for desktop, mobile, relay | `releases/desktop-release.md`, `releases/mobile-release.md`, `releases/relay-release.md` |
+| The git tag-naming scheme in its own right | `releases/release-tags.md` |
+| Rollback procedure | `releases/rollback.md` |
+| Release artifacts and provenance attestation | `releases/release-artifacts.md`, `releases/release-provenance.md` |
 | Chart/push-gateway chart versioning (`chart-v*`, `push-chart-v*`) | Not investigated by this node; named only in the auto-tag workflow's own comment |
 | The private `squareup/buzz-releases` `-block` suffix mechanism | Cross-repo, not accessible from this checkout |
 
@@ -253,11 +251,13 @@ enforcement tool.
 - **Whether the MSRV floor (`1.88.0`) has ever actually been built against** —
   no CI job pins to it; this node reports the absence of such a job, not a
   test that the floor is genuinely still accurate.
-- **Whether `releases/release-tags.md` (#1299) has since merged** — at the
-  recorded revision it had not, and `releases/` did not exist on
-  `origin/launchpad`. A future reader should check `git ls-tree -r --name-only
-  origin/launchpad -- launchpad/docs/corpus/releases` before assuming this
-  node's *Boundary* section's "not yet merged" claims still hold.
+- **This node was authored before any sibling `releases/` node had merged** —
+  at the recorded revision `releases/` did not exist on `origin/launchpad` at
+  all. All of the siblings this node's Boundary section names landed in the
+  same integration as this node, so the Boundary table above points at real
+  files rather than open issues; a future reader whose corpus has since
+  drifted further should re-run `git ls-tree -r --name-only origin/launchpad
+  -- launchpad/docs/corpus/releases` rather than trust this note indefinitely.
 - **The exact `-block` suffix mechanism** — reported as an `AGENTS.md` claim
   above, not independently confirmed against the private pipeline that
   implements it.

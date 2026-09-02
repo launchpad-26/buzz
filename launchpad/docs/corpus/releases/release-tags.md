@@ -197,12 +197,16 @@ This node does not describe:
 Each target already states, as one fact among several about its own
 container, the tag format this node catalogues in full; the edge points a
 reader from this catalogue to the architectural context for *why* that
-lane's artifact exists, without this node repeating that context. No edge is
-declared toward `desktop-candidate.md`, `desktop-release.md` or
-`mobile-candidate.md` (issues #1292–#1294): none of the three exists yet on
-`origin/launchpad`, and a `relationships[].target` naming an id no node
-carries is a hard validation error. `ls launchpad/docs/corpus/releases/` was
-the check, not an assumption; add those edges in a follow-up once they land.
+lane's artifact exists, without this node repeating that context. At the
+recorded revision, no edge was declared toward `desktop-candidate.md`,
+`desktop-release.md` or `mobile-candidate.md`: none of the three existed yet
+on `origin/launchpad`, confirmed by `ls launchpad/docs/corpus/releases/`
+rather than assumed. All three have since landed in this same integration,
+so the natural edges now resolve. They are not added here: wiring them in
+under the pressure of a pre-merge fix pass risks the same kind of error this
+fix pass exists to catch. Adding them belongs to a dedicated pass across the
+whole `development`/`governance`/`releases` shelf once all 37 nodes are
+stable.
 
 ## Note on Definition of Done
 
@@ -236,8 +240,8 @@ ruleset, including two historical schemes and the drift found between
 
 | Not covered here | Owned by |
 |---|---|
-| The desktop release procedure end to end | `RELEASING.md`; `releases/desktop-candidate.md` and `releases/desktop-release.md` (#1292, #1293), not yet merged |
-| The mobile candidate procedure end to end | `RELEASING.md`; `releases/mobile-candidate.md` (#1294), not yet merged |
+| The desktop release procedure end to end | `releases/desktop-candidate.md`, `releases/desktop-release.md` |
+| The mobile candidate procedure end to end | `releases/mobile-candidate.md` |
 | The relay, chart and push-chart release procedures end to end | `RELEASING.md` |
 | Container-level architectural context for each lane | `architecture-containers-desktop`, `architecture-containers-mobile`, `architecture-containers-relay`, `layers-compute-sprig-runtime` |
 | Whether `RELEASING.md`'s ruleset-prerequisites text should be corrected to match the measured `~ALL`-plus-five-named-patterns configuration | Not filed by this node; a documentation-accuracy fix, not a corpus-content gap |

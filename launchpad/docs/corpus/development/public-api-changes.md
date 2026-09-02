@@ -391,24 +391,21 @@ four is.
 This node does not describe:
 
 - **How to change the wire protocol or the event format.** That is
-  `development/protocol-changes.md`, owned by `#861`, which was reported OPEN and had
-  not merged into the corpus at the recorded revision.
-- **How to add or change an event kind.** That is `development/event-kind-changes.md`,
-  owned by `#858`, likewise reported OPEN and unmerged. The boundary is worth stating
-  plainly because `CONTRIBUTING.md` routes most new capability *away* from this node:
-  its "How to Add a New API Endpoint" section opens by preferring a signed Nostr event
-  over an HTTP endpoint, and its Architecture Overview states "Event kinds are the only
-  switch ... Adding a new feature means defining a new kind." So the common case for
-  adding capability is `#858`'s procedure, and this node is for the cases where an
+  `development/protocol-changes.md`'s subject.
+- **How to add or change an event kind.** That is `development/event-kind-changes.md`'s
+  subject. The boundary is worth stating plainly because `CONTRIBUTING.md` routes most
+  new capability *away* from this node: its "How to Add a New API Endpoint" section
+  opens by preferring a signed Nostr event over an HTTP endpoint, and its Architecture
+  Overview states "Event kinds are the only switch ... Adding a new feature means
+  defining a new kind." So the common case for adding capability is
+  `event-kind-changes.md`'s procedure, and this node is for the cases where an
   existing Rust, CLI or HTTP surface genuinely has to move.
 - **What compatibility guarantees the project offers, or when a break is permitted.**
-  That is compatibility *policy*, owned by `#908`
-  (`governance/compatibility-policy.md`), reported OPEN and unmerged. This node's steps
-  say what a change must carry, not whether it is allowed.
+  That is compatibility *policy*, owned by `governance/compatibility-policy.md`. This
+  node's steps say what a change must carry, not whether it is allowed.
 - **How to sequence a deprecation, or how long a deprecated surface must survive.**
-  That is deprecation *policy*, owned by `#911`
-  (`governance/deprecation-policy.md`), reported OPEN and unmerged. The rollback section
-  above stops at the boundary deliberately.
+  That is deprecation *policy*, owned by `governance/deprecation-policy.md`. The
+  rollback section above stops at the boundary deliberately.
 - **Facts about the CLI's surface that you want to look up rather than act on** --
   the full subcommand list, the exit-code semantics, the stderr JSON shape. Those are
   reference content; `architecture/containers/cli.md` and `crates/buzz-cli/README.md`
@@ -436,9 +433,15 @@ worktree: `git show origin/launchpad:launchpad/docs/corpus/templates/procedure.m
 `.../architecture/containers/cli.md`, `.../development/build.md` and
 `.../architecture/principles/nostr-first.md` report `corpus-template-procedure`,
 `architecture-containers-cli`, `corpus-development-build` and
-`architecture-principles-nostr-first` respectively. No edge is declared toward `#861`,
-`#858`, `#908` or `#911`, because none of those nodes exists on `origin/launchpad` and a
-`relationships[].target` naming an unloaded id is a hard validation error.
+`architecture-principles-nostr-first` respectively. At the recorded revision, no edge
+was declared toward `development-protocol-changes`, `development-event-kind-changes`,
+`governance-compatibility-policy` or `governance-deprecation-policy`, because none of
+those nodes existed on `origin/launchpad` yet and a `relationships[].target` naming an
+unloaded id is a hard validation error. All four have since landed in this same
+integration, so the natural edges now resolve; they are not added here, since wiring
+them in under the pressure of a pre-merge fix pass risks the same kind of error this
+fix pass exists to catch. Adding them belongs to a dedicated pass across the whole
+`development`/`governance`/`releases` shelf once all 37 nodes are stable.
 
 ## Scope and omissions
 
@@ -451,10 +454,10 @@ cleanup available at each stage.
 
 | Not covered here | Owned by |
 |---|---|
-| Wire-protocol and event-format changes | `#861`, reported OPEN, unmerged |
-| Event-kind additions and changes | `#858`, reported OPEN, unmerged |
-| Compatibility guarantees and when a break is permitted | `#908`, reported OPEN, unmerged |
-| Deprecation sequencing and support windows | `#911`, reported OPEN, unmerged |
+| Wire-protocol and event-format changes | `development/protocol-changes.md` |
+| Event-kind additions and changes | `development/event-kind-changes.md` |
+| Compatibility guarantees and when a break is permitted | `governance/compatibility-policy.md` |
+| Deprecation sequencing and support windows | `governance/deprecation-policy.md` |
 | The `buzz-cli` surface as lookup reference | `launchpad/docs/corpus/architecture/containers/cli.md` |
 | Building and testing the workspace | `launchpad/docs/corpus/development/build.md` |
 | The desktop, web and mobile clients' own API surfaces | `architecture/containers/{desktop,web,mobile}.md` exist as container nodes; whether any owns a change procedure for those surfaces was not checked |

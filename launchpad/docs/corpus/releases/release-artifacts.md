@@ -194,11 +194,15 @@ This node does not describe:
 
 ## Relationships
 
-None declared. `launchpad/docs/corpus/releases/` does not exist on
-`origin/launchpad` at this node's recorded revision -- this is the first node
-in that directory, so there is no sibling release node yet to point `part-of`
-or `references` toward, and no procedure node for #1292/#1293 yet exists to
-receive a `references` edge from this node's *Boundary* section above.
+None declared. At this node's recorded revision, `launchpad/docs/corpus/releases/`
+did not exist on `origin/launchpad` -- this was the first node authored in that
+directory, so there was no sibling release node yet to point `part-of` or
+`references` toward. `releases/desktop-candidate.md` and `releases/desktop-release.md`
+have since landed in this same integration, so the natural edges now resolve;
+they are not added here, since wiring them in under the pressure of a pre-merge
+fix pass risks the same kind of error this fix pass exists to catch. Adding them
+belongs to a dedicated pass across the whole `development`/`governance`/`releases`
+shelf once all 37 nodes are stable.
 
 ## Scope and omissions
 
@@ -212,7 +216,7 @@ repository gate) from ones gated to `block/buzz` only.
 
 | Not covered here | Owned by |
 |---|---|
-| Release process: branch naming, PR flow, review gates | #1292 / #1293 (not yet merged at this revision) |
+| Release process: branch naming, PR flow, review gates | `releases/desktop-candidate.md`, `releases/desktop-release.md` |
 | Tag format semantics | `release-tags.md` (#1299) |
 | Version-bump / semver policy | `versioning.md` (#1301) |
 | Attestation verification procedure | `release-provenance.md` (#1298) |
