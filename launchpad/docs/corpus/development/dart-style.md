@@ -251,7 +251,7 @@ above instead. The rest of the list is genuinely held by reviewers.
 |---|---|---|
 | Never `StatefulWidget`; use `HookConsumerWidget` or `ConsumerWidget` with `flutter_hooks` for local state | `AGENTS.md` | 0 direct `StatefulWidget` subclasses. Census: 244 `StatelessWidget`, 70 `HookConsumerWidget`, 47 `ConsumerWidget`, 2 `ConsumerStatefulWidget` |
 | Prefer `context.colors` / `context.textTheme` over raw `Theme.of(context)` | `AGENTS.md` | Getters supplied by `AppThemeExtension` in `mobile/lib/shared/theme/theme_extensions.dart` |
-| Use `Grid` tokens for spacing, `Radii` for border radius | `AGENTS.md`, `mobile/README.md` | `Grid` in `mobile/lib/shared/theme/grid.dart`; `Radii` in `mobile/lib/shared/theme/app_theme.dart` |
+| Use `Grid` tokens for spacing, `Radii` for border radius | `AGENTS.md` for both; `mobile/README.md` names `Grid` only | `Grid` in `mobile/lib/shared/theme/grid.dart`; `Radii` in `mobile/lib/shared/theme/app_theme.dart` |
 | One public widget per file; private sub-widgets into sibling `part` files under a `<page>/` folder | `AGENTS.md` | 98 of 376 Dart files carry a `part of` directive |
 | Feature modules import only from `shared/`, never from another feature | `AGENTS.md`, `mobile/README.md` | 0 cross-feature imports |
 
