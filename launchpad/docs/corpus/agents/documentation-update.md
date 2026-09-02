@@ -70,9 +70,11 @@ evidence:
   - statement: "Issue #646's own Definition of Done requires a how-to-shaped document: states goal, prerequisites and allowed environment/scope; provides ordered, executable, project-specific steps; defines success verification and rollback/cleanup where relevant; links authoritative commands/config rather than giving generic advice -- in addition to the standards-track boilerplate (schema-valid front matter, one independently maintainable idea, honest evidence classification, validate.py passing) shared with every other task under Feature #620."
     entry_class: TEAM_KNOWLEDGE
     provided_by: "launchpad-26/buzz#646 definition of done"
-  - statement: "Sibling issue #645 is titled 'task: document agents/documentation-creation.md' and sibling issue #647 is titled 'task: document agents/documentation-validation.md'; neither issue's body content was read, and neither node exists on origin/launchpad at this node's authoring time, so this node's Boundary section names both by title only rather than by their (unwritten, unmerged) content."
-    entry_class: TEAM_KNOWLEDGE
-    provided_by: "launchpad-26/buzz#645, launchpad-26/buzz#647 (issue titles only)"
+  - statement: "gh_issue_view(repo='launchpad-26/buzz', issue=645, field='title') -> 'task: document agents/documentation-creation.md'; gh_issue_view(repo='launchpad-26/buzz', issue=647, field='title') -> 'task: document agents/documentation-validation.md'. Neither issue's body content was read, and neither node exists on origin/launchpad at this node's authoring time, so this node's Boundary section names both by title only rather than by their (unwritten, unmerged) content."
+    entry_class: FACT
+    evidence:
+      - "gh_issue_view(repo='launchpad-26/buzz', issue=645, field='title') -> 'task: document agents/documentation-creation.md'"
+      - "gh_issue_view(repo='launchpad-26/buzz', issue=647, field='title') -> 'task: document agents/documentation-validation.md'"
 relationships:
   - type: implements
     target: corpus-template-procedure
@@ -125,25 +127,15 @@ a node that already exists, not when you are authoring a brand-new one.
    `#1321` is closed, and `standards/provenance.md` is its output, stating of itself
    that it is what `AGENTS.md` "currently defers to" and that "where the rule stated
    here differs from AGENTS.md's current text, AGENTS.md is the one that has
-   drifted." Apply `standards/provenance.md`'s MUST 1/3/4 directly:
-   - Every claim in the ledger -- not only the ones this edit touched -- known to
-     hold at `HEAD` → move the recorded-revision entry.
-   - Some claims known to hold, and the rest independently confirmed to hold too →
-     move it. Confirm, do not assume.
-   - Nothing beyond the touched claims re-verified, and no independent confirmation
-     for the rest → leave it.
-   - For any *untouched* claim, "known to hold" is established only by
-     re-verification (opening the source again) or, when every one of that claim's
-     citations is a bare path, file line, or file range, a clean
-     `git diff --name-only <recorded-sha> -- <normalized-path>` for each citation on
-     it, once any `:line` or `:start-end` suffix is stripped before the path is
-     passed. A claim carrying even one citation that is a commit reference, a graph
-     edge, a tool result, or either URL form `validate.py` recognises cannot use the
-     diff route at all for that claim.
-   - If any claim in the ledger satisfies neither route, **the recorded-revision
-     entry does not move.** This is always the safe default -- an unmoved entry
-     under-claims currency the ledger may actually have; a moved one, done wrong,
-     over-claims a check that was never made.
+   drifted." Read `standards/provenance.md`'s MUST 1/3/4 before making this call --
+   the short version: the entry moves only when *every* claim in the ledger, not
+   only the ones this edit touched, is known to hold at `HEAD`, where "known to
+   hold" for an untouched claim means either re-opening its source or (only for
+   claims whose citations are entirely bare paths/file lines/file ranges) a clean,
+   normalized `git diff --name-only` against the recorded revision. If any claim
+   can clear neither bar, the entry does not move -- that is always the safe
+   default. Do not substitute this summary for reading the rule itself; MUST 3's
+   exact route restrictions decide real cases this paragraph does not spell out.
 5. **Leave the `id` alone.** Always, with no exception. (AGENTS.md step 5;
    `agents-invariants` I3.)
 6. **Run the deterministic check** from the repository root:
