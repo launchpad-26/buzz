@@ -309,7 +309,7 @@ maintainership in this fork. Identifiers M1–M8 are this node's own.
 | # | Guidance |
 |---|---|
 | **S1** | A document needing to identify maintainers SHOULD name the **mechanism and where it is administered** — organization team membership, in the `launchpad-26` organization's settings — rather than reproducing a member list into a public repository. A list copied into a file goes stale the moment the team changes, and no check will notice. |
-| **S2** | A reader trying to establish whether a control is in effect SHOULD query the platform rather than read a document asserting it. Twelve documentation claims about enforcement have been falsified in this corpus's authoring runs; `CODEOWNERS` here is a thirteenth. |
+| **S2** | A reader trying to establish whether a control is in effect SHOULD query the platform rather than read a document asserting it. `.github/CODEOWNERS` is this node's own worked example: a tracked file, named by an accepted ADR as a live control, that the platform rejects outright. |
 | **S3** | Where the fork has no policy, a node SHOULD record the absence and name who owns filling it, rather than composing a plausible policy. An invented rule that nobody adopted is worse than a named gap, because it reads as settled. |
 | **S4** | A change that would alter who effectively maintains the fork — a new team, a permission grant, a change to a restriction list — SHOULD be recorded in an ADR, per the fork's own rule that a decision still being argued is an ADR issue and a decision made is a record. ADR-0038 is the worked example: it decided the *shape* of the restriction list and deliberately left its contents to an admin acting on the issue. |
 
