@@ -92,7 +92,7 @@ def package_corpus(corpus_root: Path) -> list[dict]:
     for node in nodes:
         entry = {field: node.data[field] for field in _PACKAGED_FIELDS}
         entry["relationships"] = node.data.get("relationships", [])
-        entry["body"] = _extract_body(node.path.read_text())
+        entry["body"] = _extract_body(node.path.read_text(encoding="utf-8"))
         packaged.append(entry)
 
     packaged.sort(key=lambda entry: entry["id"])
@@ -138,7 +138,7 @@ def main(argv: list[str] | None = None) -> int:
         if not out_path.is_absolute():
             out_path = repo_root / out_path
         out_path.parent.mkdir(parents=True, exist_ok=True)
-        out_path.write_text(content)
+        out_path.write_text(content, encoding="utf-8")
         print(f"wrote {node_count} node(s) to {out_path}")
 
     return 0

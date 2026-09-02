@@ -43,21 +43,36 @@ import {
  * this module -- shipped to every user on cold start whether or not they
  * ever open Settings. A dynamic import puts it in its own chunk, fetched
  * only when this panel actually mounts (review-final finding on #552).
+ *
+ * A rejected chunk load (real after a desktop update replaces the on-disk
+ * chunk files a still-open window has already resolved import specifiers
+ * against) surfaces as an explicit error message rather than an unhandled
+ * rejection plus a permanently empty panel with no explanation.
  */
 function KnowledgeSettingsPanel() {
   const [corpusTypeGroups, setCorpusTypeGroups] = useState<
     CorpusTypeGroup[] | null
   >(null);
+  const [loadError, setLoadError] = useState<string | null>(null);
 
   useEffect(() => {
     let cancelled = false;
-    import("./generated/corpus.json").then((module) => {
-      if (cancelled) {
-        return;
-      }
-      const nodes = module.default as CorpusNode[];
-      setCorpusTypeGroups(groupNodesByType(nodes));
-    });
+    import("./generated/corpus.json")
+      .then((module) => {
+        if (cancelled) {
+          return;
+        }
+        const nodes = module.default as CorpusNode[];
+        setCorpusTypeGroups(groupNodesByType(nodes));
+      })
+      .catch(() => {
+        if (cancelled) {
+          return;
+        }
+        setLoadError(
+          "Couldn't load Help content. Try restarting Buzz, or check for an update.",
+        );
+      });
     return () => {
       cancelled = true;
     };
@@ -69,30 +84,48 @@ function KnowledgeSettingsPanel() {
         title="Help"
         description="Buzz's built-in documentation, packaged from the canonical corpus."
       />
-      <SettingsOptionGroupList>
-        {(corpusTypeGroups ?? []).map(({ type, representative }) => (
-          <SettingsOptionGroup key={type} title={humanizeCorpusType(type)}>
-            <SettingsOptionRow
-              className="flex-col items-start gap-2 py-4"
-              data-testid={`settings-knowledge-node-${representative.id}`}
-            >
-              <h3 className="text-sm font-medium text-foreground">
-                {deriveTitle(representative)}
-              </h3>
-              <p
-                className="text-2xs text-muted-foreground"
-                data-settings-subcopy
-                data-testid={`settings-knowledge-node-${representative.id}-provenance`}
+      {loadError ? (
+        <p
+          className="text-sm text-muted-foreground"
+          data-testid="settings-knowledge-error"
+          role="status"
+        >
+          {loadError}
+        </p>
+      ) : corpusTypeGroups === null ? (
+        <p
+          className="text-sm text-muted-foreground"
+          data-testid="settings-knowledge-loading"
+          role="status"
+        >
+          Loading Help content…
+        </p>
+      ) : (
+        <SettingsOptionGroupList>
+          {corpusTypeGroups.map(({ type, representative }) => (
+            <SettingsOptionGroup key={type} title={humanizeCorpusType(type)}>
+              <SettingsOptionRow
+                className="flex-col items-start gap-2 py-4"
+                data-testid={`settings-knowledge-node-${representative.id}`}
               >
-                id: {representative.id} · origin: {representative.origin}
-              </p>
-              <p className="whitespace-pre-wrap text-sm text-muted-foreground">
-                {deriveExcerpt(representative.body)}
-              </p>
-            </SettingsOptionRow>
-          </SettingsOptionGroup>
-        ))}
-      </SettingsOptionGroupList>
+                <h3 className="text-sm font-medium text-foreground">
+                  {deriveTitle(representative)}
+                </h3>
+                <p
+                  className="text-2xs text-muted-foreground"
+                  data-settings-subcopy
+                  data-testid={`settings-knowledge-node-${representative.id}-provenance`}
+                >
+                  id: {representative.id} · origin: {representative.origin}
+                </p>
+                <p className="whitespace-pre-wrap text-sm text-muted-foreground">
+                  {deriveExcerpt(representative.body)}
+                </p>
+              </SettingsOptionRow>
+            </SettingsOptionGroup>
+          ))}
+        </SettingsOptionGroupList>
+      )}
     </section>
   );
 }

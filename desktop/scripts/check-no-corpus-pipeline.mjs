@@ -26,7 +26,7 @@
 
 import { readFileSync } from "node:fs";
 import path from "node:path";
-import { fileURLToPath } from "node:url";
+import { fileURLToPath, pathToFileURL } from "node:url";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const desktopRoot = path.resolve(__dirname, "..");
@@ -89,6 +89,9 @@ function main() {
 }
 
 // Only run as a CLI when invoked directly, not when imported by the test.
-if (import.meta.url === `file://${process.argv[1]}`) {
+// Compares as a URL (via pathToFileURL), not a raw `file://${...}` string --
+// on Windows process.argv[1] is backslash-separated, so a naive template
+// string never matches and this guard would silently no-op there.
+if (import.meta.url === pathToFileURL(process.argv[1]).href) {
   main();
 }
