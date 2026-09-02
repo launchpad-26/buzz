@@ -19,6 +19,8 @@ No model is called by any of them.
 
 from __future__ import annotations
 
+from dataclasses import replace
+
 import investigator
 from answer import Answer, Claim
 from graph import reachable
@@ -173,6 +175,18 @@ def _find_claims(result) -> tuple[Claim, ...]:
 
 
 def explain(agent: KnowledgeAgent, symbol: str, depth: Depth | None = None) -> Answer:
+    """The full four-stage pipeline, at the requested depth -- #571.
+
+    IMPACT is the one depth the pipeline itself cannot answer: locate/read/
+    callers/tests/history has no notion of a SECONDARY (2-hop) dependent, and
+    #571 is explicit that depth must not change what gets investigated -- so
+    rather than approximate with direct-only data, IMPACT delegates whole to
+    impact(), which already reads the graph for exactly this (direct and
+    secondary, "never merged" -- see impact()'s own docstring). Every other
+    depth still runs the one investigation and only renders differently.
+    """
+    if depth == "IMPACT":
+        return replace(impact(agent, symbol), depth="IMPACT")
     return agent.answer(f"how does `{symbol}` work?", depth=depth)
 
 
@@ -409,12 +423,17 @@ def ask(agent: KnowledgeAgent, text: str) -> Answer:
                 f"This reads as a {question.intent} question, which needs a named symbol. "
                 "Use knowledge.find() for a concept whose name you do not know yet."
             ),
+            depth=question.depth,
         )
 
     if question.intent == "DEPENDENCIES":
         return dependencies(agent, question.target)
     if question.intent == "IMPACT":
-        return impact(agent, question.target)
+        # Stamped explicitly, matching explain()'s own IMPACT delegation
+        # (line ~189 above): impact() never sets depth itself, and
+        # classify_depth() always classifies an IMPACT-intent question's
+        # depth as "IMPACT", so this is never overwriting a different value.
+        return replace(impact(agent, question.target), depth=question.depth)
     if question.intent == "HISTORY":
         return history(agent, question.target)
     return explain(agent, question.target, question.depth)

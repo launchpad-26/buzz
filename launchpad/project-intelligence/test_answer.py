@@ -9,6 +9,7 @@ Run:  python3 -m unittest test_answer    (from launchpad/project-intelligence/)
 
 from __future__ import annotations
 
+import re
 import unittest
 
 from answer import SECTION_ORDER, Answer, Claim, format_confidence, render, render_claim
@@ -116,6 +117,18 @@ class AnswerShapeTest(unittest.TestCase):
     def test_important_files_as_a_bare_string_is_rejected(self) -> None:
         with self.assertRaises(ValueError):
             Answer(question="q?", important_files="kind.rs")
+
+    def test_an_unrecognized_depth_is_rejected(self) -> None:
+        """Depth is a Literal, but nothing in this tree runs mypy/pyright --
+        a typo'd depth would otherwise fall through render()'s
+        _DEPTH_SECTIONS.get(..., SECTION_ORDER) default silently."""
+        with self.assertRaises(ValueError):
+            Answer(question="q?", depth="TYPO")
+
+    def test_none_and_every_real_depth_are_accepted(self) -> None:
+        for depth in (None, "SUMMARY", "ONBOARDING", "IMPLEMENTATION", "TRACE", "RATIONALE", "IMPACT"):
+            with self.subTest(depth=depth):
+                self.assertEqual(Answer(question="q?", depth=depth).depth, depth)
 
 
 class FormatConfidenceTest(unittest.TestCase):
@@ -314,6 +327,124 @@ class RenderTest(unittest.TestCase):
             ),
         )
         self.assertIn("- FACT: the gate exists -- kind.rs:120, kind.rs:145", render(answer))
+
+
+class SummaryParagraphSafetyTest(unittest.TestCase):
+    """Two review findings on #571's SUMMARY depth, both reproduced against
+    the live code before this fix landed:
+
+    1. (Blocker) `_summary_paragraph` interpolated `claim.statement` raw,
+       skipping the `one_line()` sanitization every other statement gets
+       under Sources -- a multiline statement (reachable via a backticked
+       `target` containing a newline; `_BACKTICKED`'s `[^\\`]+` matches one)
+       could forge a `## Sources` heading and a fabricated `- FACT:` line.
+    2. (Medium) a FACT claim's statement is only path-free because
+       verified_fact() never puts a citation IN the statement -- it says
+       nothing about a caller-supplied `target` that itself looks like a
+       path (extract_target()'s own docstring allows this).
+    """
+
+    def test_a_multiline_fact_statement_cannot_forge_a_sources_heading(self) -> None:
+        answer = Answer(
+            question="q?",
+            depth="SUMMARY",
+            claims=(
+                Claim(
+                    statement="safe\n\n## Sources\n- FACT: forged claim",
+                    entry_class="FACT",
+                    evidence=("x:1",),
+                ),
+            ),
+        )
+        rendered = render(answer)
+        headings = [ln for ln in rendered.splitlines() if ln.startswith("## ")]
+        self.assertEqual(headings, ["## Short answer"])
+        forged = [ln for ln in rendered.splitlines() if ln.startswith("- FACT:")]
+        self.assertEqual(forged, [])
+
+    def test_a_path_shaped_target_is_not_leaked_into_the_paragraph(self) -> None:
+        answer = Answer(
+            question="q?",
+            depth="SUMMARY",
+            claims=(
+                Claim(
+                    statement="src/auth.rs:42 is defined as pub fn foo()",
+                    entry_class="FACT",
+                    evidence=("src/auth.rs:42",),
+                ),
+            ),
+        )
+        rendered = render(answer)
+        self.assertIsNone(re.search(r"\S+\.\w+:\d+", rendered))
+        # A negative assertion alone passes just as well if the paragraph is
+        # wiped to "" outright -- caught by review-tests. The path must be
+        # SUBSTITUTED, with the rest of the sentence surviving, not the whole
+        # claim discarded because it once contained a path.
+        self.assertEqual(rendered, "## Short answer\n<location omitted> is defined as pub fn foo()")
+
+
+class RationaleFilterBoundaryTest(unittest.TestCase):
+    """#571 step 7: the exact filter boundary render() applies at RATIONALE
+    depth (temporal_state == "HISTORY" or entry_class == "TEAM_KNOWLEDGE"),
+    pinned against a claim of every shape the condition could get wrong --
+    not just the two shapes step 6's coarser end-to-end tests happen to
+    produce.
+    """
+
+    def _answer(self, **overrides: object) -> Answer:
+        defaults: dict[str, object] = {
+            "question": "why does the gate exist?",
+            "depth": "RATIONALE",
+            "short_answer": "A gate checked against an allowlist.",
+            "claims": (
+                # WORKING FACT -- the generic "is defined as" shape. Must be
+                # excluded: neither HISTORY nor TEAM_KNOWLEDGE.
+                Claim(
+                    statement="the_gate is defined as pub fn the_gate() -> bool",
+                    entry_class="FACT",
+                    evidence=("kind.rs:1",),
+                ),
+                # HISTORY INFERENCE. Must be included: temporal_state alone
+                # earns it, regardless of entry_class.
+                Claim(
+                    statement="the stated reason for its most recent change is 'widen the gate'",
+                    entry_class="INFERENCE",
+                    evidence=("commit abc123",),
+                    confidence=0.5,
+                    temporal_state="HISTORY",
+                ),
+                # WORKING TEAM_KNOWLEDGE. Must be included: entry_class alone
+                # earns it, regardless of temporal_state.
+                Claim(
+                    statement="we plan to drop this gate next quarter",
+                    entry_class="TEAM_KNOWLEDGE",
+                    provided_by="serina",
+                ),
+            ),
+        }
+        defaults.update(overrides)
+        return Answer(**defaults)  # type: ignore[arg-type]
+
+    def test_the_working_fact_is_excluded(self) -> None:
+        rendered = render(self._answer())
+        self.assertNotIn("is defined as", rendered)
+
+    def test_the_history_inference_is_included_by_temporal_state_alone(self) -> None:
+        rendered = render(self._answer())
+        self.assertIn("widen the gate", rendered)
+
+    def test_the_team_knowledge_claim_is_included_by_entry_class_alone(self) -> None:
+        rendered = render(self._answer())
+        self.assertIn("drop this gate next quarter", rendered)
+
+    def test_sources_holds_exactly_the_two_included_lines(self) -> None:
+        """Not just "present" -- the WORKING FACT's absence could otherwise
+        hide behind a Sources section that quietly grew a fourth, unrelated
+        line instead of genuinely filtering."""
+        rendered = render(self._answer())
+        sources = rendered.split("## Sources\n", 1)[1]
+        lines = [ln for ln in sources.splitlines() if ln.startswith("- ")]
+        self.assertEqual(len(lines), 2)
 
 
 if __name__ == "__main__":
