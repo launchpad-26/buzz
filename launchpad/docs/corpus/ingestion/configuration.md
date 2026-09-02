@@ -150,8 +150,8 @@ they win** -- this one has drifted and should be fixed.
 
 | # | Requirement |
 |---|---|
-| **CE1** | A claim about a configuration artifact's **effective** value MUST cite the source that determines that value when the process or tool actually runs, not merely a source that states an intended, minimum, or example value, whenever the two could diverge. `rust-toolchain.toml`'s pinned `channel` -- not `Cargo.toml`'s `rust-version` floor alone -- is what a build actually invokes; `bin/.lefthookrc`'s pinning behavior -- not a bare `which <tool>` run on an unactivated shell -- is what a pre-push hook subprocess actually resolves. |
-| **CE2** | A claim MUST NOT cite a locally-created or gitignored configuration artifact (a developer's own `.env`, an ad hoc local override) as though it were repository content available to every reader and to `validate.py`, because it resolves to nothing in the tree a reviewer or the validator can open. Cite the checked-in template or pin instead (`.env.example`, `bin/hermit.hcl`, `rust-toolchain.toml`, `bin/.lefthookrc`), and where the claim is genuinely about a live runtime value rather than the template, say plainly that the runtime value itself was not opened. |
+| **CE1** | A claim about a configuration artifact's **effective** value MUST cite the source that determines that value when the process or tool actually runs, not merely a source that states an intended, minimum, or example value, whenever the two could diverge. `rust-toolchain.toml`'s pinned `channel` -- not `Cargo.toml`'s `rust-version` floor alone -- is what a build actually invokes; `bin/.lefthookrc`'s pinning behavior -- not a bare `which <tool>` run on an unactivated shell -- is what a pre-push hook subprocess actually resolves. This generalizes, beyond a settings-table row, a rule `templates/configuration.md`'s own Evidence expectations already states narrowly for a node built from that template ("a default-value claim needs the code, not the example file, when the two could disagree"): CE1 binds the same distinction for a configuration citation appearing in **any** corpus node, not only one cataloguing a settings surface. |
+| **CE2** | A claim MUST NOT cite a locally-created or gitignored configuration artifact (a developer's own `.env`, an ad hoc local override) as though it were repository content available to every reader and to `validate.py`, because it resolves to nothing in the tree a reviewer or the validator can open. Cite the checked-in template or pin instead (`.env.example`, `bin/hermit.hcl`, `rust-toolchain.toml`, `bin/.lefthookrc`), and where the claim is genuinely about a live runtime value rather than the template, say plainly that the runtime value itself was not opened. The shape half of this -- a citation naming `.env` fails to resolve and is a hard error -- is already `code-references.md`'s MUST 2; the half CE2 adds is the case that check cannot catch: a citation that resolves cleanly (`.env.example`, which exists) while the claim it supports is actually about the different, non-checked-in runtime value -- the specific configuration-domain instance of the gap `code-references.md`'s own Enforcement section already names ("that a citation supports its claim" is never mechanically established). |
 | **CE3** | A `FACT` that a configuration file or variable has some effect MUST cite the code path, hook, or mechanism that actually reads and acts on it -- never merely the file's presence or a name's appearance in a documented list. `layers-configuration-secrets.md`'s own finding that `.env.example` documents `TYPESENSE_API_KEY`/`TYPESENSE_URL` variables no Rust source in this repository reads is the worked counterexample: presence in a config file is never, on its own, evidence of effect. |
 | **CE4** | A claim about a specific community's configured workflow (its trigger, steps, or enabled state) MUST NOT cite a repository path, because a workflow definition is authored as YAML and exists as event content once submitted -- never as a file in this repository's tree, per `crates/buzz-workflow/src/schema.rs`'s own module documentation. Cite the parsing/schema code for what the format permits in general; classify a claim about one community's actual configured instance as `TEAM_KNOWLEDGE` naming the query or person that supplied it, never as a `FACT` resting on a repository citation that does not exist. |
 | **CE5** | An author gathering configuration evidence MUST NOT quote a live secret, key, token, or hostname value even when it is found in a locally-created file open for this purpose alone. This is the same discipline `templates/configuration.md`'s own secrets requirement holds a settings-table row to, extended here to citation practice during authoring generally, per `AGENT_PR_TEMPLATE.md`'s verification checklist, which binds a corpus node like any other tracked file. |
@@ -168,15 +168,23 @@ they win** -- this one has drifted and should be fixed.
 
 ## Enforcement
 
-**Nothing automated enforces CE1-CE5.** Per `code-references.md`'s own Enforcement
-section, `validate.py` discards a node's Markdown body before any check runs; nothing about
-whether an effective value was actually verified, whether a cited artifact is genuinely
-checked in, or whether a workflow claim was honestly classified is ever inspected
-mechanically.
+**Nothing automated enforces CE1, CE3, CE4 or CE5.** Per `code-references.md`'s own
+Enforcement section, `validate.py` discards a node's Markdown body before any check runs;
+nothing about whether an effective value was actually verified, whether a file's effect
+was actually traced to reading code, whether a workflow claim was honestly classified, or
+whether a secret value was quoted is ever inspected mechanically.
 
-**What IS mechanically enforced** is inherited, not invented here: citation shape (CE6) is
-`code-references.md`'s validator rules, unchanged; the `FACT`/`INFERENCE`/`TEAM_KNOWLEDGE`
-field-shape rules an evidence entry above must satisfy are `node.schema.json`'s conditional
+**CE2 is split.** Its shape half -- a citation naming a file that is not actually checked
+into the repository (an author's own `.env`) fails to resolve -- is mechanically enforced
+today, by `code-references.md`'s own MUST 2 as run through `validate.py`. Its substance
+half -- that a citation which *does* resolve (`.env.example`) is not then treated as if it
+established the different, non-checked-in runtime value -- is enforced by review only, for
+the same reason CE1, CE3, CE4 and CE5 are: nothing reads a node's body.
+
+**What IS mechanically enforced** is inherited, not invented here: citation shape (CE6, and
+CE2's shape half) is `code-references.md`'s validator rules, unchanged; the
+`FACT`/`INFERENCE`/`TEAM_KNOWLEDGE` field-shape rules an evidence entry above must satisfy
+are `node.schema.json`'s conditional
 rules, run on every node regardless of subject.
 
 **What a green `validate.py` run does NOT establish about this node's subject:**
