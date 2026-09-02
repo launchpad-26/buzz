@@ -38,7 +38,7 @@ evidence:
   - statement: "crates/buzz-db/src/store/thread.rs's increment_reply_count doc comment states a MUST-shaped relationship between two columns as fact -- 'This is correct because reply_count tracks direct children only, while descendant_count tracks ALL descendants at every nesting level' -- but the function itself carries #[allow(dead_code)] and its own doc comment admits the primary path is a separate, inlined copy elsewhere ('The primary increment path is inlined inside insert_thread_metadata's transaction'): the constraint is stated once in prose but actually held, if at all, by more than one independently-maintained call site, with nothing in the type system stopping a future one from omitting it."
     entry_class: FACT
     evidence:
-      - "crates/buzz-db/src/store/thread.rs:245-254"
+      - "crates/buzz-db/src/store/thread.rs:246-255"
   - statement: "launchpad/docs/corpus/templates/invariant.md states the test for whether a sentence is genuinely invariant-shaped rather than descriptive prose or policy guidance: 'If the sentence cannot be falsified by inspecting the system directly, it has drifted into Boundary's policy territory,' and separately, distinguishing an invariant from a policy, 'is the claim falsified by inspecting the system's state or behavior directly (an invariant), or only by inspecting whether someone complied with a rule (a policy)?'"
     entry_class: FACT
     evidence:
