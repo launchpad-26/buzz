@@ -25,6 +25,7 @@ APPROACH NOTE. Prose is assembled from structural facts.
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from typing import get_args
 
 from answer import Answer
 from assemble import assemble
@@ -128,6 +129,12 @@ class KnowledgeAgent:
         """
         question = decompose(text)
         if depth is not None:
+            # Validated where the override ENTERS, not left to Answer's own
+            # check inside assemble() -- a caller passing "Summary" (wrong
+            # case) would otherwise run all four investigation stages, real
+            # tool reads included, before finding out the argument was bad.
+            if depth not in get_args(Depth):
+                raise ValueError(f"depth must be one of {get_args(Depth)} or None, got {depth!r}")
             question = type(question)(
                 raw=question.raw,
                 intent=question.intent,

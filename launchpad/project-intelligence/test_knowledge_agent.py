@@ -303,6 +303,19 @@ class RunShapeTest(unittest.TestCase):
         agent.run(f"how does `{TARGET}` work?", depth="RATIONALE")
         self.assertEqual(counting.counts.get("inspect_git_history", 0), 1)
 
+    def test_an_invalid_depth_override_is_rejected_before_investigating(self) -> None:
+        """#571 follow-up (review-final): Answer.__post_init__ already
+        rejects an unknown depth, but only after the full four-stage
+        investigation ran to build one -- a caller passing "Summary" (wrong
+        case) paid for real tool reads before finding out the argument was
+        bad. Validated at the boundary instead: no investigation stage runs
+        at all."""
+        counting = _CountingTools()
+        agent = _agent(counting.as_tools())
+        with self.assertRaises(ValueError):
+            agent.run(f"how does `{TARGET}` work?", depth="Summary")
+        self.assertEqual(counting.counts, {})
+
 
 class FindSymbolTest(unittest.TestCase):
     def test_returns_the_exact_qualified_name_match(self) -> None:
