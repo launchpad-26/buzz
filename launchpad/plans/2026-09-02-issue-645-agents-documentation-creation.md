@@ -8,10 +8,14 @@
   all resolvable on `origin/launchpad` (confirmed via
   `git ls-tree -r --name-only origin/launchpad -- launchpad/docs/corpus`). The chosen
   template, `corpus-template-procedure` (`templates/procedure.md`), is one of them.
-- `AGENTS.md`'s "Creating a node" step 4/5 caveat ("Until the standards land there is
-  no per-type template to follow ... expect a later task to reshape it") is stale —
-  the templates catalog it anticipated is now complete. That staleness, and how to
-  supersede it without duplicating AGENTS.md's 10 steps, is this node's reason to exist.
+- `AGENTS.md`'s "Scope and omissions" section carries a caveat ("Until the standards
+  land there is no per-type template to follow ... expect a later task to reshape
+  it", `AGENTS.md:447`) that is stale — the templates catalog it anticipated is now
+  complete. It is distinct from the numbered "Creating a node" step 4 ("Choose the
+  id") and step 5 ("Create the file"), which say nothing about templates — an
+  attribution this plan and the node's first draft both got wrong before a
+  review-code pass caught it. That staleness, and how to supersede it without
+  duplicating AGENTS.md's 10 steps, is this node's reason to exist.
 - Issue #645's own DoD (`gh issue view 645`) is a how-to-shaped checklist: goal,
   prerequisites, ordered executable steps, success verification/rollback, links to
   authoritative commands — this matches `templates/procedure.md`'s Required sections

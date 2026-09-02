@@ -11,11 +11,11 @@ evidence:
     entry_class: FACT
     evidence:
       - "commit aef93f2c2acfe9dfe66d22d33f5abb4ac12baa90"
-  - statement: "AGENTS.md's own 'Creating a node' step 4/5 states 'Until the standards land there is no per-type template to follow: write the node against node.schema.json and the rules above, and expect a later task to reshape it' -- a caveat written before the templates/ catalog existed."
+  - statement: "AGENTS.md's own 'Scope and omissions' section states, in the paragraph immediately after its 'not covered here' table, 'Until the standards land there is no per-type template to follow: write the node against node.schema.json and the rules above, and expect a later task to reshape it' -- a caveat written before the templates/ catalog existed, and distinct from the numbered 'Creating a node' step 4 ('Choose the id') and step 5 ('Create the file'), which say nothing about templates."
     entry_class: FACT
     evidence:
-      - "launchpad/docs/corpus/AGENTS.md"
-  - statement: "At this node's recorded revision, launchpad/docs/corpus/templates/ contains 26 template files, every one carrying status: active and origin: launchpad, and every one of the 26 ids resolves as a real node on origin/launchpad -- the per-type template catalog AGENTS.md's own step 4/5 anticipated as a future task is now complete."
+      - "launchpad/docs/corpus/AGENTS.md:447"
+  - statement: "At this node's recorded revision, launchpad/docs/corpus/templates/ contains 26 template files, every one carrying status: active and origin: launchpad, and every one of the 26 ids resolves as a real node on origin/launchpad -- the per-type template catalog AGENTS.md's own 'Scope and omissions' section anticipated as a future task is now complete."
     entry_class: FACT
     evidence:
       - "git_ls_tree(origin/launchpad, launchpad/docs/corpus/templates) -> architecture-component.md, architecture-container.md, architecture-context.md, capability.md, component.md, concept.md, configuration.md, data-entity.md, datastore.md, decision-reference.md, deployment.md, event-kind.md, flow.md, generated-index.md, glossary-term.md, implementation-reference.md, interface.md, invariant.md, policy.md, procedure.md, reference.md, runbook.md, specification.md, test-contract.md, test-strategy.md, threat-model.md (26 files, all status: active per each file's own front matter)"
@@ -83,14 +83,19 @@ How to create a new `launchpad/docs/corpus/` node today, now that the templates/
 catalog is complete: choosing the node's `type` from the corpus-surface enum,
 separately choosing which of the 26 templates fits the content's *form*, and
 reconciling a task issue's Definition of Done when it does not perfectly match the
-chosen template's required sections. This node supersedes the stale part of
-`AGENTS.md`'s own "Creating a node" step 4/5 -- written when "there is no per-type
-template to follow" was still true -- without restating the rest of that procedure.
+chosen template's required sections. This node supersedes the stale caveat in
+`AGENTS.md`'s own "Scope and omissions" section -- written when "there is no
+per-type template to follow" was still true -- without restating the rest of that
+procedure, including its numbered "Creating a node" steps, which this node cites
+by number instead.
 
 ## Before you start
 
-- Read `AGENTS.md` once, in full. This node cites its numbered steps and does not
-  reproduce their text; skipping it means missing what step 1-3, 6-7, 9-10 require.
+- Read `AGENTS.md` once, in full. This node cites nine of its ten numbered
+  "Creating a node" steps by number rather than reproducing their text (this
+  node's steps 1, 2, 5, 6, 7, 8, 9 each cite one or more of AGENTS.md's steps
+  1-2, 3, 4-5, 6-7, 8, 9, 10 respectively); skipping `AGENTS.md` means missing
+  what those citations point to.
 - Have `git` access to the branch you are merging into (usually `origin/launchpad`),
   so template ids and any relationship target can be confirmed to resolve there
   rather than only in your own worktree.
@@ -155,12 +160,14 @@ template to follow" was still true -- without restating the rest of that procedu
    `FACT` only for sources actually opened, `INFERENCE` with `confidence` for
    reasoned claims, `TEAM_KNOWLEDGE` with `provided_by` for uncorroborated
    attribution.
-7. **Write the body to the chosen template's required sections**, reconciling any
-   mismatch between your task issue's Definition of Done and what the template
-   actually requires. See *Note on Definition of Done* below for how this node
-   itself resolved that question, and for the general principle: build against the
-   real acceptance criteria, not a checklist copied from an unrelated document
-   shape.
+7. **Write the body to the chosen template's required sections**, which subsumes
+   `AGENTS.md`'s step 8 requirement to structure the body for lookup with a scope
+   section -- every template's own "Scope and omissions" section satisfies it.
+   Reconcile any mismatch between your task issue's Definition of Done and what
+   the template actually requires. See *Note on Definition of Done* below for how
+   this node itself resolved that question, and for the general principle: build
+   against the real acceptance criteria, not a checklist copied from an unrelated
+   document shape.
 8. **Add relationships only to nodes that already exist on the branch you are
    merging into**, per `AGENTS.md`'s step 9 -- check with `git ls-tree -r
    --name-only origin/launchpad -- launchpad/docs/corpus`, not your own worktree.
@@ -178,7 +185,8 @@ template to follow" was still true -- without restating the rest of that procedu
 ## See also
 
 - `launchpad/docs/corpus/AGENTS.md` -- the full create/update/retire procedure this
-  node's steps 1-2, 3, 5-6, 8-9 cite by number rather than restate.
+  node's steps 1, 2, 5, 6, 7, 8, 9 cite by number rather than restate (this node's
+  own steps 3-4 are new content, not citations -- see *Boundary* below).
 - `launchpad/docs/corpus/agents/invariants.md` -- the binding invariants (I1-I10)
   a node created via this procedure must still satisfy; this node states *how* to
   create one, that node states what must hold true of the result.
@@ -202,10 +210,13 @@ This node does not describe:
   merged at this node's authoring time), and this node defers to it rather than
   restating `AGENTS.md`'s own "Three things a passing run does not mean" section a
   third time.
-- **`AGENTS.md`'s full authoring procedure**, which this node cites by step number
-  throughout rather than reproduces -- `AGENTS.md` remains the authority for steps
-  1-3, 5-10; this node's only new content is `type`-versus-template reasoning (step
-  3-4 above) and DoD reconciliation (see below).
+- **`AGENTS.md`'s full authoring procedure**, which this node cites by number
+  rather than reproduces -- `AGENTS.md` remains the sole authority for all ten of
+  its own numbered "Creating a node" steps. This node's steps 1, 2, 5, 6, 7, 8, 9
+  each cite one or more of them (AGENTS.md steps 1-2, 3, 4-5, 6-7, 8, 9, 10
+  respectively); this node's only genuinely new content is `type`-versus-template
+  reasoning (this node's own steps 3-4) and the Definition-of-Done reconciliation
+  folded into this node's step 7 (see below).
 - **A newcomer's introduction to the corpus** -- this is Diátaxis's how-to form for
   a reader who already knows what a corpus node is and wants to create one
   correctly, not a tutorial teaching the concept from scratch.
@@ -218,8 +229,9 @@ This node does not describe:
 
 ## Relationships
 
-Declared: `depends-on: corpus-agents` -- this node's own authority for steps 1-3,
-5-10 above is derived from `AGENTS.md`, not original to itself. `implements:
+Declared: `depends-on: corpus-agents` -- this node's own authority for its steps
+1, 2, 5, 6, 7, 8, 9 above (each citing AGENTS.md's own numbered steps, per
+*Boundary* above) is derived from `AGENTS.md`, not original to itself. `implements:
 corpus-template-procedure` -- this node is a how-to-shaped instance of that
 template, per `relationships.schema.json`'s own worked example for `implements`.
 `references: corpus-template-concept` and `references: corpus-template-reference` --
