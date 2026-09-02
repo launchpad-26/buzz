@@ -40,10 +40,11 @@ evidence:
     entry_class: FACT
     evidence:
       - "launchpad/project-intelligence/corpus/validate.py"
-  - statement: "standards/decision-references.md's MUST 4 requires opening a cited decision record and reading its front-matter status before citing it for an intent claim; its 'When the only source is an issue, a PR or a discussion' passage extends the same discipline to an issue thread generally, directing TEAM_KNOWLEDGE with provided_by naming the issue rather than forcing a FACT onto an UNVERIFIED citation -- both written at the level of the issue as a whole, and neither one states how to identify which specific comment on a multi-comment issue a claim rests on."
+  - statement: "standards/decision-references.md's MUST 4 requires opening a cited decision record and reading its front-matter status before citing it for an intent claim; AGENTS.md's 'When the only source is an issue, a PR or a discussion' passage extends the same discipline to an issue thread generally, directing TEAM_KNOWLEDGE with provided_by naming the issue rather than forcing a FACT onto an UNVERIFIED citation -- both written at the level of the issue as a whole, and neither one states how to identify which specific comment on a multi-comment issue a claim rests on."
     entry_class: FACT
     evidence:
       - "launchpad/docs/corpus/standards/decision-references.md"
+      - "launchpad/docs/corpus/AGENTS.md"
   - statement: "launchpad/AGENTS.md §5.1 reserves choosing between decision options for a human, and requires an agent recording someone else's decision to quote them verbatim and link where they said it, never resting on the agent's own judgement -- the bar the second #307 comment meets and the first, automated-selection comment does not, even though both are headed as decision records."
     entry_class: TEAM_KNOWLEDGE
     provided_by: "launchpad/AGENTS.md §5.1, as applied to the launchpad-26/buzz#307 comment thread"
@@ -86,11 +87,11 @@ comment that retracts or supersedes an earlier one on the same issue, and the fl
 below which a comment carries nothing worth citing at all.
 
 **Its authority is derived, not original.** `standards/decision-references.md`'s
-MUST 4 (open a cited record and read its status before citing it) and its "When the
-only source is an issue, a PR or a discussion" passage already establish that an
-issue-sourced claim takes `TEAM_KNOWLEDGE`, attributed via `provided_by`, never a
-`FACT` resting on an `UNVERIFIED` citation. Both are written at the level of an issue
-as a whole. This node narrows that same discipline to the case where the citable unit
+MUST 4 (open a cited record and read its status before citing it) and `AGENTS.md`'s
+"When the only source is an issue, a PR or a discussion" passage already establish
+that an issue-sourced claim takes `TEAM_KNOWLEDGE`, attributed via `provided_by`,
+never a `FACT` resting on an `UNVERIFIED` citation. Both are written at the level of
+an issue as a whole. This node narrows that same discipline to the case where the citable unit
 is one comment among several — it does not re-derive the FACT/TEAM_KNOWLEDGE choice,
 it applies it to a smaller, harder-to-disambiguate target. **Where this node and
 `standards/decision-references.md`, `AGENTS.md`, or `node.schema.json` disagree, they
@@ -119,7 +120,7 @@ win** — this node has drifted and should be fixed.
 | # | Guidance |
 |---|---|
 | **D1** | The `statement` SHOULD quote the load-bearing sentence from the comment directly, the same way `standards/decision-references.md`'s own SHOULD list prefers a quotation to a line position — a comment permalink survives the thread being reflowed or the comment being edited, but a quotation is what a later reader actually needs to confirm the claim without re-fetching the issue. |
-| **D2** | Where a decision is being recorded from a comment specifically (not merely a fact about repository history), the author SHOULD also check whether a decision record now exists that names the issue in its own `issue`/`decided_in` front matter, per `standards/decision-references.md`'s own "confirm the decision actually landed" step — a settled comment is not the last word if a record has since superseded it as the citable source. |
+| **D2** | Where a decision is being recorded from a comment specifically (not merely a fact about repository history), the author SHOULD also check `launchpad/decisions/` for an accepted record that now names the issue in its own `issue`/`decided_in` front matter (for example `ADR-0043-prefer-fork-owned-overrides.md`'s `issue: launchpad-26/buzz#307`) — `standards/decision-references.md`'s MUST 1 requires an intent claim governed by an accepted decision to cite that decision, not the comment it was first recorded in, so a settled comment is not the last word once a record exists to supersede it as the citable source. |
 | **D3** | An author SHOULD prefer the comment's permalink URL over a bare mention of "a comment on #NNN" in the `statement`, even though both land on the same `UNVERIFIED` checker outcome (see Enforcement) — the permalink is what lets a later reader jump directly to the comment instead of re-reading the whole thread to find it. |
 
 ## Enforcement
