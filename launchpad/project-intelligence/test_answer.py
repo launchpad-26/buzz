@@ -9,6 +9,7 @@ Run:  python3 -m unittest test_answer    (from launchpad/project-intelligence/)
 
 from __future__ import annotations
 
+import re
 import unittest
 
 from answer import SECTION_ORDER, Answer, Claim, format_confidence, render, render_claim
@@ -116,6 +117,18 @@ class AnswerShapeTest(unittest.TestCase):
     def test_important_files_as_a_bare_string_is_rejected(self) -> None:
         with self.assertRaises(ValueError):
             Answer(question="q?", important_files="kind.rs")
+
+    def test_an_unrecognized_depth_is_rejected(self) -> None:
+        """Depth is a Literal, but nothing in this tree runs mypy/pyright --
+        a typo'd depth would otherwise fall through render()'s
+        _DEPTH_SECTIONS.get(..., SECTION_ORDER) default silently."""
+        with self.assertRaises(ValueError):
+            Answer(question="q?", depth="TYPO")
+
+    def test_none_and_every_real_depth_are_accepted(self) -> None:
+        for depth in (None, "SUMMARY", "ONBOARDING", "IMPLEMENTATION", "TRACE", "RATIONALE", "IMPACT"):
+            with self.subTest(depth=depth):
+                self.assertEqual(Answer(question="q?", depth=depth).depth, depth)
 
 
 class FormatConfidenceTest(unittest.TestCase):
@@ -314,6 +327,55 @@ class RenderTest(unittest.TestCase):
             ),
         )
         self.assertIn("- FACT: the gate exists -- kind.rs:120, kind.rs:145", render(answer))
+
+
+class SummaryParagraphSafetyTest(unittest.TestCase):
+    """Two review findings on #571's SUMMARY depth, both reproduced against
+    the live code before this fix landed:
+
+    1. (Blocker) `_summary_paragraph` interpolated `claim.statement` raw,
+       skipping the `one_line()` sanitization every other statement gets
+       under Sources -- a multiline statement (reachable via a backticked
+       `target` containing a newline; `_BACKTICKED`'s `[^\\`]+` matches one)
+       could forge a `## Sources` heading and a fabricated `- FACT:` line.
+    2. (Medium) a FACT claim's statement is only path-free because
+       verified_fact() never puts a citation IN the statement -- it says
+       nothing about a caller-supplied `target` that itself looks like a
+       path (extract_target()'s own docstring allows this).
+    """
+
+    def test_a_multiline_fact_statement_cannot_forge_a_sources_heading(self) -> None:
+        answer = Answer(
+            question="q?",
+            depth="SUMMARY",
+            claims=(
+                Claim(
+                    statement="safe\n\n## Sources\n- FACT: forged claim",
+                    entry_class="FACT",
+                    evidence=("x:1",),
+                ),
+            ),
+        )
+        rendered = render(answer)
+        headings = [ln for ln in rendered.splitlines() if ln.startswith("## ")]
+        self.assertEqual(headings, ["## Short answer"])
+        forged = [ln for ln in rendered.splitlines() if ln.startswith("- FACT:")]
+        self.assertEqual(forged, [])
+
+    def test_a_path_shaped_target_is_not_leaked_into_the_paragraph(self) -> None:
+        answer = Answer(
+            question="q?",
+            depth="SUMMARY",
+            claims=(
+                Claim(
+                    statement="src/auth.rs:42 is defined as pub fn foo()",
+                    entry_class="FACT",
+                    evidence=("src/auth.rs:42",),
+                ),
+            ),
+        )
+        rendered = render(answer)
+        self.assertIsNone(re.search(r"\S+\.\w+:\d+", rendered))
 
 
 class RationaleFilterBoundaryTest(unittest.TestCase):

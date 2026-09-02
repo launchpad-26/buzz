@@ -15,10 +15,20 @@ memory store rejects, which is precisely the conflation the design doc's
 
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass, field
+from typing import get_args
 
 from memory import EntryClass, MemoryEntry, TemporalState
 from question import Depth
+
+# Runtime-checkable form of the Depth Literal -- memory.py validates
+# entry_class/temporal_state the same way (_VALID_CLASSES/_VALID_TEMPORAL_STATES)
+# rather than trusting the type hint alone, since nothing in this tree runs
+# mypy/pyright. A typo'd depth would otherwise fall through render()'s
+# _DEPTH_SECTIONS.get(..., SECTION_ORDER) default silently, rendering
+# everything unfiltered instead of failing loudly on the actual mistake.
+_VALID_DEPTHS = get_args(Depth)
 
 # The design doc's § Data Model item 7 section list, in the order it gives them.
 # `## Sources` is derived from claims rather than authored, so it is not a
@@ -101,6 +111,8 @@ class Answer:
             raise ValueError(f"important_files must be a list or tuple, got {self.important_files!r}")
         if any(not isinstance(c, Claim) for c in self.claims):
             raise ValueError("every item in claims must be a Claim")
+        if self.depth is not None and self.depth not in _VALID_DEPTHS:
+            raise ValueError(f"depth must be one of {_VALID_DEPTHS} or None, got {self.depth!r}")
         object.__setattr__(self, "important_files", tuple(self.important_files))
         object.__setattr__(self, "claims", tuple(self.claims))
 
@@ -204,20 +216,40 @@ _DEPTH_SECTIONS: dict[str, tuple[str, ...]] = {
 }
 
 
-def _summary_paragraph(answer: Answer) -> str:
-    """The one claim a SUMMARY can show without a file path.
+# A path-shaped citation, e.g. "src/auth.rs:42" -- the same shape verify.py's
+# citations use. SUMMARY's path-free guarantee holds for what assemble() ADDS
+# (verified_fact() puts a citation only in `evidence`, never in `statement`),
+# but a `target` supplied by the caller can itself look like a path
+# (extract_target()'s own docstring: "a marked-up target may legitimately not
+# look like an identifier at all -- a file path, a config key"), and that
+# target is interpolated straight into the FACT statement. Found by an
+# independent review's reproduction: explain(agent, "src/auth.rs:42",
+# "SUMMARY") otherwise renders the path it was asked never to.
+_PATH_CITATION = re.compile(r"\S+\.\w+:\d+")
 
-    verified_fact() (verify.py) puts a claim's citation only in `evidence`,
-    never in `statement` -- so the first FACT claim's statement is always the
-    path-free "X is defined as Y" sentence assemble() builds first. Falling
-    back to `short_answer` covers an Answer with no FACT claims at all (find()
-    or impact()'s answers, or a not-located explain()), which is not
-    guaranteed path-free but is the best available one-paragraph summary.
+
+def _summary_paragraph(answer: Answer) -> str:
+    """The one claim a SUMMARY can show, sanitized and path-free.
+
+    `one_line()` is the same structural sanitization every other statement
+    goes through under Sources (render_claim) -- without it, a multiline
+    claim.statement (from a caller-controlled `target` containing backticks
+    and newlines; `_BACKTICKED`'s `[^\\`]+` matches newlines) could forge a
+    `## Sources` heading and a fabricated FACT line into what SUMMARY promises
+    is a single, harmless paragraph. Found the same way as the path leak
+    above: an independent review demonstrated it via `agent.answer()`, not a
+    hand-built object.
+
+    Falling back to `short_answer` covers an Answer with no FACT claims at all
+    (find() or impact()'s answers, or a not-located explain()).
     """
     for claim in answer.claims:
         if claim.entry_class == "FACT":
-            return claim.statement.strip()
-    return answer.short_answer.strip()
+            paragraph = one_line(claim.statement)
+            break
+    else:
+        paragraph = one_line(answer.short_answer)
+    return _PATH_CITATION.sub("<location omitted>", paragraph)
 
 
 def _rationale_claims(answer: Answer) -> tuple[Claim, ...]:
