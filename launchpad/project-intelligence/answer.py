@@ -18,6 +18,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 
 from memory import EntryClass, MemoryEntry, TemporalState
+from question import Depth
 
 # The design doc's § Data Model item 7 section list, in the order it gives them.
 # `## Sources` is derived from claims rather than authored, so it is not a
@@ -76,6 +77,12 @@ class Answer:
     an authored sources section could disagree with the claims it is meant to
     account for, and a provenance layer whose sources list is hand-maintained
     is a provenance layer that can lie.
+
+    `depth` is the resolution `render()` should present this same data at --
+    issue #571. `None` means unspecified, and `render()` treats it as the
+    original unrestricted rendering (every populated section, nothing
+    filtered) so every Answer built before #571 keeps rendering exactly as it
+    did.
     """
 
     question: str
@@ -85,6 +92,7 @@ class Answer:
     important_files: tuple[str, ...] = ()
     things_to_be_aware_of: str = ""
     claims: tuple[Claim, ...] = field(default_factory=tuple)
+    depth: Depth | None = None
 
     def __post_init__(self) -> None:
         if not isinstance(self.question, str) or not self.question.strip():
