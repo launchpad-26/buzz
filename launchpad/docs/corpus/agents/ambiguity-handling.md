@@ -102,6 +102,8 @@ relationships:
   - type: references
     target: corpus-standard-decision-references
   - type: references
+    target: corpus-standard-review-requirements
+  - type: references
     target: agents-invariants
   - type: implements
     target: corpus-template-procedure
@@ -280,6 +282,11 @@ records, just a genuine gap. Do not invent an answer to fill it.
 
 This node does not describe:
 
+- **Facts to look up rather than actions to perform.** There is no dedicated
+  reference-shaped corpus node for corpus-authoring lookup content as of this writing;
+  where one exists for a specific field or enum (for example `node.schema.json` for the
+  front-matter contract itself), this node points to it inline rather than inlining the
+  lookup content here.
 - **The full `type`-choice test itself.** `standards/taxonomy.md` owns the five-step
   procedure branch B applies; this node only states when to invoke it and what to do
   if it still leaves the fit imperfect.
@@ -308,24 +315,30 @@ This node does not describe:
   itself, the same relationship `agents/invariants.md` already declares toward the same
   target for the same reason.
 - **`references: corpus-standard-taxonomy`, `corpus-standard-atomicity`,
-  `corpus-standard-decision-references`.** Each is the full substantive procedure one
-  branch above hands off to, cited as supporting context per
-  `relationships.schema.json`'s own directionality for `references` — this node's
-  claims do not depend on any of the three staying byte-identical, only on their
-  existing and covering the subject named.
+  `corpus-standard-decision-references`, `corpus-standard-review-requirements`.** Each
+  is a substantive procedure this node's branches or *See also* section cite and hand
+  off to rather than restate — the fourth is MUST 8, the reviewer-side counterpart to
+  branch C's escalation steps — cited as supporting context per
+  `relationships.schema.json`'s own directionality for `references`: this node's claims
+  do not depend on any of the four staying byte-identical, only on their existing and
+  covering the subject named.
 - **`references: agents-invariants`.** The sibling `agents/*.md` node whose I2, I7 and
   Q4 state the MUST/SHOULD obligations this node's branches carry out as ordered steps;
-  a loose coupling for the same reason as the three standards above, not a
-  currency dependency.
+  a loose coupling for the same reason as the standards above, not a currency
+  dependency. This is also the one sibling task under parent Feature #620 that is
+  merged at this node's authoring time (issue #649) — the point made explicitly here
+  because it is easy to misstate as "no Feature #620 sibling is merged yet," which
+  would be false the moment this edge exists.
 - **`implements: corpus-template-procedure`.** This node is a how-to-shaped instance of
   that template, per `relationships.schema.json`'s own worked example for `implements`
   — "source is the concrete realization of target (e.g. a template instance of a
   standard)."
-- **All six targets were checked against `origin/launchpad`**
+- **All seven targets were checked against `origin/launchpad`**
   (`git ls-tree -r --name-only origin/launchpad -- launchpad/docs/corpus`), not this
-  worktree, per `AGENTS.md`'s own node-creation step 9 — all six resolve there. No edge
-  was declared toward any other sibling task under parent Feature #620 (`agents/*.md` or
-  `ingestion/*.md`), because none of them is merged at this node's authoring time.
+  worktree, per `AGENTS.md`'s own node-creation step 9 — all seven resolve there. No
+  edge was declared toward any *unmerged* task under parent Feature #620 — the other 30
+  `agents/*.md`/`ingestion/*.md` siblings besides `agents-invariants` — because none of
+  those 30 is merged at this node's authoring time.
 
 ## Scope and omissions
 
@@ -363,10 +376,11 @@ note on `type`" section states for any node built from it.
   from this task's own authoring experience choosing `type: agent` and the procedure
   template (documented in the evidence ledger above as the two INFERENCE entries), not
   from having been the resolution path for a separate, later ambiguity.
-- **Whether any sibling `agents/*.md` or `ingestion/*.md` node, once drafted, will
-  declare a relationship toward this node** is that sibling's own edit to make, not
-  something decided here — none of the 31 siblings under parent Feature #620 is merged
-  at this node's authoring time.
+- **Whether any *unmerged* sibling `agents/*.md` or `ingestion/*.md` node, once drafted,
+  will declare a relationship toward this node** is that sibling's own edit to make, not
+  something decided here — 30 of the 31 siblings under parent Feature #620 are unmerged
+  at this node's authoring time. The 31st, `agents-invariants` (#649), is already merged
+  and already targeted by this node's own `references` edge above.
 - **Whether the three branches (A, B, C) exhaust every kind of authoring-time ambiguity
   a corpus author can hit**, or whether a fourth kind exists that this node's three
   named examples did not anticipate, was not audited against a corpus of real
