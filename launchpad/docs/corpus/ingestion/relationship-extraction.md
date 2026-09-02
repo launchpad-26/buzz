@@ -40,9 +40,10 @@ evidence:
     evidence:
       - "launchpad/docs/corpus/layers/configuration/relay-configuration.md"
       - "launchpad/docs/corpus/layers/compute/sprig-runtime.md"
-  - statement: "A search across the merged corpus (grep -rn \"type: (depends-on|supersedes|implements|references|part-of)\" launchpad/docs/corpus, excluding schema/fixtures) returns implements declared by dozens of capability, layer and configuration nodes toward their own template's id (for example moderation-authorization.md, push-capability.md, huddle.md, community-discovery.md, media.md, workflow-channel.md, and every layers/configuration/*.md node), and returns references as the large majority of all declared edges corpus-wide -- both far more numerous than depends-on, part-of or supersedes."
+  - statement: "A search across the merged corpus (grep -rc \"^  - type: implements\" launchpad/docs/corpus, excluding schema/) returns implements declared by 17 capability, layer, agent and configuration nodes toward their own template's id (for example moderation-authorization.md, push-capability.md, huddle.md, community-discovery.md, media.md, workflow-channel.md, agents/invariants.md, and every layers/configuration/*.md node), and a parallel search for references (grep -rn \"type: (depends-on|supersedes|implements|references|part-of)\" launchpad/docs/corpus, excluding schema/fixtures) shows it as the large majority of all declared edges corpus-wide -- both far more numerous than depends-on, part-of or supersedes."
     entry_class: FACT
     evidence:
+      - "grep(pattern='^  - type: implements', scope='launchpad/docs/corpus/**/*.md', excluding='schema/') -> 17 matches, at commit aef93f2c2acfe9dfe66d22d33f5abb4ac12baa90"
       - "grep(pattern='type: (depends-on|supersedes|implements|references|part-of)', scope='launchpad/docs/corpus/**/*.md', excluding='schema/fixtures') -> references and implements are the two most frequent types by a wide margin, at commit aef93f2c2acfe9dfe66d22d33f5abb4ac12baa90"
   - statement: "agents-invariants (the one merged sibling in this node's own Feature #620 family) declares depends-on: corpus-agents, reasoning in its own evidence ledger that 'this node's own authority is derived from AGENTS.md, not original to itself'; standards/evidence.md, standards/documentation-standard.md and templates/decision-reference.md each declare the same type toward a target their own body restates or is built directly on."
     entry_class: FACT
@@ -108,7 +109,7 @@ evidence:
 relationships:
   - type: references
     target: corpus-agents
-  - type: references
+  - type: depends-on
     target: corpus-standard-atomicity
   - type: references
     target: corpus-standard-linking
@@ -158,6 +159,18 @@ directionality text. Stop at the first one that clearly fits. Do not force a fit
 if none does — declaring no relationship is always valid once the enumeration
 above has actually happened.
 
+Each test below quotes `relationshipMeta`'s directionality and inverse text
+verbatim rather than only linking to it. This is a deliberate, narrow
+exception to `standards/linking.md`'s MUST 5 (no duplicated enumerations):
+the operative sentence is exactly what each test applies, is one line long,
+and this procedure's value is letting an author run all five tests without
+switching files mid-decision — the same self-containment carve-out
+`standards/linking.md` itself describes for a MUST that cannot omit a
+target's own exact rule. It is not exempt from drift for being justified: if
+`relationships.schema.json`'s `relationshipMeta` wording ever changes, every
+quoted line below must be re-checked against it before this node is trusted
+again.
+
 1. **Does the source specifically exist to replace the target, so the target's
    own claims should be read as historical from this point on?** This is
    `supersedes` — schema text: "source replaces target; target becomes
@@ -191,7 +204,7 @@ above has actually happened.
    `implements` — schema text: "source is the concrete realization of target
    (e.g. a template instance of a standard)" (inverse `implemented-by`,
    generated). This is the most common non-`references` edge in the corpus by a
-   wide margin — dozens of capability, layer and configuration nodes each
+   wide margin — 17 capability, layer, agent and configuration nodes each
    declare `implements` toward the template they were drafted from — and
    `templates/procedure.md` states the rule for its own family directly: a node
    built from it "should declare `implements` targeting
@@ -303,11 +316,18 @@ This node also does not describe:
   assumes, and directly quotes, `AGENTS.md`'s own documented enumeration trap —
   supporting context, not a claim whose currency this node's own tests depend
   on.
-- **references: `corpus-standard-atomicity`.** Cited in *Boundary* as the
-  adjacent node-count question this node's edge-type question is not;
-  `standards/atomicity.md`'s boundary case F (`part-of` is "never a licence to
-  create" structure) is used directly in test 2 above, not merely mentioned in
-  passing.
+- **depends-on: `corpus-standard-atomicity`.** Test 2 above states
+  `standards/atomicity.md`'s boundary case F — `part-of` "is a description of
+  a structure that already exists, never a licence to create one" — as this
+  node's own operative warning against misusing `part-of`, not as background
+  colour. Applying this node's own test 4 criterion to this edge: if case F
+  were retired or materially changed, test 2's stated warning above would stop
+  holding — which is `depends-on`'s own directionality ("source requires
+  target to be true/current for source's own claims to hold"), not
+  `references`'s ("no ownership or currency dependency implied"). This edge
+  was typed `references` in an earlier draft and retyped to `depends-on` on
+  review, on exactly this reasoning. It is also cited in *Boundary* as the
+  adjacent node-count question this node's own edge-type question is not.
 - **references: `corpus-standard-linking`.** Cited in *Boundary* and *See
   also* as the next step once a type is chosen here — the body-prose syntax
   and the `relationships[]`-versus-prose question this node's own five tests do
