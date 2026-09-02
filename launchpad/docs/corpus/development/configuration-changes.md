@@ -75,6 +75,14 @@ evidence:
     entry_class: FACT
     evidence:
       - ".gitleaks.toml"
+  - statement: "The fork's authorized secret-scanning arrangement, per accepted ADR-0006's Decision section, is gitleaks with detection rules and allowlist living together in a single root `.gitleaks.toml`, where the allowlist is hand-maintained TOML `[allowlist]` and per-rule `allowlist` blocks each carrying a `#` comment stating why the entry is safe; gitleaks' auto-generated `--baseline-path` snapshot is explicitly rejected as a footgun that accepts a real finding without a human typing a reason."
+    entry_class: FACT
+    evidence:
+      - "launchpad/decisions/ADR-0006-secret-scanning-engine-and-allowlist-location.md"
+  - statement: "Deployment-time host configuration is a separately decided surface: accepted ADR-0013's Decision section names Ansible as the configuration-management tool, Ubuntu 24.04 LTS as the supported starting state, and containers via the existing `deploy/compose/` bundle as the runtime shape -- which is why this node's boundary excludes it rather than merely omitting it."
+    entry_class: FACT
+    evidence:
+      - "launchpad/decisions/ADR-0013-config-management-ubuntu-baseline-runtime-shape.md"
   - statement: "The `dead-token-guard` job in `.github/workflows/ci.yml` greps `.env.example` alongside `desktop/src/`, `desktop/tests/`, `mobile/test/` and `mobile/lib/` for the dead API token patterns `TokenScope|MintTokenResponse|hasApiToken|spr_tok_` and fails the build on a match."
     entry_class: FACT
     evidence:
@@ -173,7 +181,10 @@ the node that owns the catalogue for its surface.
 - **Scope.** This procedure covers configuration read by code in *this*
   repository. It does not cover deployment-time configuration of a running
   relay — Helm values, Terraform, `deploy/compose/` — which belongs to the
-  operations surface, not to a development change.
+  operations surface, not to a development change. That surface is separately
+  decided: ADR-0013 (accepted) names Ansible, Ubuntu 24.04 LTS and the existing
+  `deploy/compose/` bundle as the authorized shape for host configuration
+  management.
 - **A secrets rule that has no exceptions.** Never put a live credential in
   `.env.example` or in any tracked file. One gitleaks rule — `buzz-s3-minio-key`
   — carries a per-rule allowlist exempting paths matching `.*\.env\.example$`,
@@ -181,7 +192,9 @@ the node that owns the catalogue for its surface.
   exemption is narrow, not blanket: other rules still scan the file. But it does
   mean a real S3 access or secret key committed there would *not* be reported.
   Treat the allowlist as a statement about what the file is for, not as a safe
-  place to put a key.
+  place to put a key. If a change genuinely needs a new allowlist entry, ADR-0006
+  (accepted) is the authority for how: a hand-written TOML block carrying a `#`
+  comment stating why the entry is safe, never a regenerated baseline snapshot.
 
 ## Task 1 — add or change a relay environment variable
 
@@ -374,6 +387,11 @@ Prose links, so that this node does not depend on nodes it has not confirmed:
   assumes.
 - `CONTRIBUTING.md` — the pull-request checklist item that requires new config
   variables to be documented.
+- `launchpad/decisions/ADR-0006-secret-scanning-engine-and-allowlist-location.md`
+  — the accepted decision governing how a secret-scanning allowlist entry is
+  written, if your change needs one.
+- `launchpad/decisions/ADR-0013-config-management-ubuntu-baseline-runtime-shape.md`
+  — the accepted decision for the deployment-time surface this node excludes.
 
 ## Boundary
 
@@ -424,7 +442,8 @@ each surface actually needs, and the repository-specific hazards a generic
 | The default-precedence mechanism across the four surfaces | `launchpad/docs/corpus/layers/configuration/defaults.md` |
 | Secret handling rules and the secret-shaped surface | `launchpad/docs/corpus/layers/configuration/secrets.md` |
 | Development prerequisites and Hermit activation | `launchpad/docs/corpus/development/prerequisites.md`, `launchpad/docs/corpus/development/hermit.md` |
-| Deployment-time configuration of a running relay | the operations surface, outside this node |
+| Deployment-time configuration of a running relay | the operations surface, outside this node; the authorized shape is `launchpad/decisions/ADR-0013-config-management-ubuntu-baseline-runtime-shape.md` |
+| Which secret-scanning engine the fork uses and where its allowlist lives | `launchpad/decisions/ADR-0006-secret-scanning-engine-and-allowlist-location.md` |
 | The corpus front-matter contract | `launchpad/docs/corpus/schema/node.schema.json` |
 
 **Known gap, stated because a reader will otherwise assume a gate exists.**
