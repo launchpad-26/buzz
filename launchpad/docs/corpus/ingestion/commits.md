@@ -35,6 +35,7 @@ evidence:
     entry_class: FACT
     evidence:
       - "commit 6d45f98665004d314468d98e50084996f4046cdf"
+      - "git_merge_base_is_ancestor(commit='6d45f98665004d314468d98e50084996f4046cdf', ref='origin/launchpad') -> exit 0 (is an ancestor)"
   - statement: "A commit whose message states only what changed, with no rationale sentence, still carries intent recoverable from its diff (which lines moved, what a surrounding comment or test already says, what the commit's own diff removes as well as adds) -- but a claim built that way is the agent's own reasoning about the diff, not a quotation from the commit, so it takes entry_class INFERENCE with a stated confidence rather than FACT, per AGENTS.md's own FACT/INFERENCE distinction ('INFERENCE -- you reasoned to it from evidence. Reasoning is not fact, however good it is.')."
     entry_class: INFERENCE
     evidence:
@@ -153,6 +154,21 @@ subject, not this one).
 
 This node does not describe:
 
+- **A lookup catalogue of commit-citation facts** (the six citation shapes, which
+  ones a checker opens) -- that is information-oriented reference content, and
+  `AGENTS.md`'s own citation-shape table already is that catalogue. This node is
+  sequenced technique (find the commit, read it, classify the claim, cite it), not
+  a table to consult mid-task.
+- **Acquiring the underlying skill of reading a commit message or a diff from
+  scratch**, for someone who has never done either -- that is a tutorial, a
+  Diátaxis form no corpus template currently covers; this node assumes an
+  already-competent reader, the same assumption `agents/repository-navigation.md`
+  states for itself.
+- **Why commit-message rationale matters as a concept**, or a discursive treatment
+  of provenance and evidence in the abstract -- that is understanding-oriented
+  explanation, and this node's own evidence ledger already cites `AGENTS.md` and
+  `standards/provenance.md` for the concepts it depends on rather than re-arguing
+  them here.
 - **The mandatory recorded-revision commit citation every node carries.** That is
   `standards/provenance.md`'s subject in full -- what it asserts, when it may move,
   what a partial re-verification owes it. This node's subject is a different,
