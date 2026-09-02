@@ -241,6 +241,11 @@ This node does not describe:
   it.
 - **How to acquire this skill from scratch, for a newcomer** -- a tutorial,
   which has no corpus template as of this writing.
+- **Why the corpus's relationship model is shaped this way, or how its pieces
+  relate conceptually** -- an understanding-oriented concept/explanation node
+  (`templates/concept.md`'s form), if one on this subject exists. This node
+  states the checks to run and why they matter to the reader taking the
+  action, not a discursive treatment of the design.
 - **Automated impact-analysis tooling.** Parent Feature #620 explicitly
   excludes "implementation of the knowledge-crate runtime." Every step above
   uses `grep` and manual reasoning about declared relationship types; none of
