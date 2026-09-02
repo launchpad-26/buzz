@@ -55,7 +55,7 @@ evidence:
   - statement: "Issue #964's own Definition of Done requires this node to state scope and authority/source of the policy, separate MUST requirements from SHOULD guidance, define enforcement/checks and an exception/escalation process, and link decisions or higher-order policy instead of duplicating them."
     entry_class: TEAM_KNOWLEDGE
     provided_by: "launchpad-26/buzz#964 definition of done"
-  - statement: "Parent Feature #620 lists ingestion/migrations.md among 32 child document tasks under an agents/ and ingestion/ path family; none of #964's ingestion/*.md or agents/*.md siblings were merged on origin/launchpad at this node's authoring time."
+  - statement: "Parent Feature #620 lists ingestion/migrations.md among 32 child document tasks under an agents/ and ingestion/ path family; of those, only agents/invariants.md (#649, checked off in #620's own child-issue list) was merged on origin/launchpad at this node's authoring time -- every other ingestion/*.md and agents/*.md sibling, including this node's own #964, was not."
     entry_class: TEAM_KNOWLEDGE
     provided_by: "launchpad-26/buzz#620 body"
   - statement: "This node treats the fact that a migration file, once applied by any database, is never edited again (only ever superseded by a later additive migration) as sufficient reason to forbid citing it alone for a present-tense schema claim -- a citation to a frozen point-in-time file cannot become stale in the way a citation to a live, evolving file can, but it also never updates to reflect what changed after it, so a present-tense reader needs the cumulative file instead."
@@ -112,8 +112,8 @@ this node has drifted and should be fixed.
 | **M1** | A citation to a file under `migrations/` MUST support only a point-in-time claim ("this changed, as of migration NNNN"), never a present-tense "the schema currently has X" claim standing alone. A migration is checksum-frozen the instant any database has applied it -- editing one after the fact aborts every already-migrated deployment's startup with a `VersionMismatch` (`migrations/0002_git_repo_names.sql`'s own header states this consequence; migration 0007's checksum-frozen status in `crates/buzz-db/src/runtime/migration.rs` is a second, independent instance of the same convention) -- so a migration file can never be edited to reflect what changed after it. Enforced by review only: `validate.py` discards a node's body before any check runs, so nothing mechanical can tell a historical claim from a present-tense one wearing the same citation. |
 | **M2** | A present-tense claim about the schema's current shape MUST cite `schema/schema.sql` -- the fresh-install desired-state file which states of itself, "Source of truth for fresh database setup" and explicitly "NOT additive over the single-community schema" -- not a migration file alone. Enforced by review only. |
 | **M3** | A present-tense claim about a database bootstrapped via `./bin/pgschema apply` MUST additionally account for `scripts/reconcile-schema-after-pgschema.sql`, because pgschema "does not execute seed DML or preserve every table storage parameter from `schema/schema.sql`" (the reconcile script's own header). Citing `schema.sql` alone does not establish that a pgschema-bootstrapped database actually has the seed rows or storage parameters `schema.sql` describes. Enforced partially: the test `every_pgschema_apply_runs_post_apply_reconciliation` (`crates/buzz-db/src/runtime/migration.rs`) mechanically checks that every `./bin/pgschema apply` call site in `scripts/` and `.github/workflows/` is followed by the reconcile script within six lines -- but nothing mechanical checks that a corpus node's own present-tense prose actually accounts for the gap. |
-| **M4** | A migration citation's *form* MUST follow `standards/code-references.md` unchanged -- this node adds no second citation-form contract. A bare repository path is preferred over `path:line` for the same reason that standard already states: a migration's line numbers are not checked against the file's length either. |
-| **M5** | A claim about how migrations are embedded (`sqlx::migrate!`), applied (the single `MIGRATOR.run` call site and its advisory lock), or gated at startup (`BUZZ_AUTO_MIGRATE`) MUST NOT be restated in this node or any node citing this one -- `architecture/containers/postgres.md` already carries that content in full; cite it instead of duplicating it. |
+| **M4** | A migration citation's *form* MUST follow `standards/code-references.md` unchanged -- this node adds no second citation-form contract. A bare repository path is preferred over `path:line` for the same reason that standard already states in its own SHOULD 1: a migration's line numbers are not checked against the file's length either. Enforced by review only, per that standard's own Enforcement section. |
+| **M5** | A claim about how migrations are embedded (`sqlx::migrate!`), applied (the single `MIGRATOR.run` call site and its advisory lock), or gated at startup (`BUZZ_AUTO_MIGRATE`) MUST NOT be restated in this node or any node citing this one -- `architecture/containers/postgres.md` already carries that content in full; cite it instead of duplicating it. Enforced by review only: nothing mechanical compares this node's prose against that one's. |
 
 ## SHOULD
 
@@ -190,7 +190,7 @@ checked about that distinction today.
 | The multi-tenant schema's table-by-table contents and conformance contract | `migrations/0001_initial_schema.sql`, `docs/multi-tenant-conformance.md` |
 | Whether staging/production deployment pipelines actually run `./bin/pgschema apply` or the embedded migrator, and in which order | `squareup/block-coder-tf-stacks`, `squareup/sprout-oss` (private, not opened by this task) |
 | General corpus evidence classification (FACT/INFERENCE/TEAM_KNOWLEDGE) and precedence between conflicting sources | `launchpad/docs/corpus/AGENTS.md`, `ADR-0029` |
-| Concrete agent procedures for evidence-gathering, ambiguity handling, and the rest of the `ingestion/`/`agents/` family | sibling tasks under parent Feature #620, none merged at this node's authoring time |
+| Concrete agent procedures for evidence-gathering, ambiguity handling, and the rest of the `ingestion/`/`agents/` family | sibling tasks under parent Feature #620 -- `agents/invariants.md` (#649) merged at this node's authoring time; the remaining siblings did not |
 
 **No `migrations/README.md` exists in this repository at the recorded revision** --
 checked directly (`ls migrations/`) rather than assumed; each migration's own header
@@ -207,8 +207,14 @@ currency dependency implied, per that relationship type's own directionality. De
 `references: architecture-containers-postgres` -- supporting context for the runner
 mechanics this node explicitly declines to restate (M5); same non-owning
 directionality. No edge to any other sibling `ingestion/*.md` or `agents/*.md` task
-under Feature #620: none are merged at this node's authoring time, so none is a valid
-relationship target.
+under Feature #620: `agents/invariants.md` (id `agents-invariants`) is the one exception
+that is merged at this node's authoring time and so is a valid target, but its subject
+is generic agent-authored-node invariants, not this node's migration-citation-specific
+policy, and this node's authority for how corpus evidence works at all already runs
+through the `depends-on: corpus-agents` edge above -- a second edge to a parallel,
+non-narrower policy would not add a dependency this node actually has. Every other
+sibling is unmerged at this node's authoring time and so is not a valid relationship
+target regardless.
 
 **Expected but not verified when this node was written:**
 
