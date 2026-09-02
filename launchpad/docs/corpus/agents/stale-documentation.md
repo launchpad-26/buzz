@@ -36,6 +36,10 @@ evidence:
     entry_class: FACT
     evidence:
       - "launchpad/docs/corpus/standards/deprecation.md"
+  - statement: "standards/deprecation.md's own SHOULD list states, verbatim: 'Re-verify a deprecated node's claims, or say plainly that they were not re-verified. Deprecation is not permission for the ledger to go quietly stale.'"
+    entry_class: FACT
+    evidence:
+      - "launchpad/docs/corpus/standards/deprecation.md"
   - statement: "templates/policy.md's P1 requires a policy-shaped node to carry six sections -- Scope and authority, MUST, SHOULD, Enforcement, Exceptions and escalation, Scope and omissions -- in that relative order, none reordered among themselves or silently empty, with additional sections permitted between them; P10 requires the H1 to be `# Policy: <subject>` unless a narrower family template states its own convention."
     entry_class: FACT
     evidence:
@@ -124,7 +128,7 @@ Conflating them would misdirect exactly the response each situation calls for.
 | # | Requirement |
 |---|---|
 | **MUST 1** | Before relying on an existing node's claim as still current -- declaring a new `depends-on`/`references` edge toward it, citing it as supporting evidence in another node, or re-touching it for an unrelated reason -- the relying party MUST run `AGENTS.md`'s check against every file-naming citation (bare path, file line, file range) the relied-on claim carries: `git diff --name-only <recorded-sha> -- <normalized path>`. This is the same command `standards/provenance.md` already documents for a different purpose (deciding whether an in-progress edit may move the recorded revision); this MUST is what names it as an obligation at the *moment of reliance* on an unedited node, not only at the moment of editing it. |
-| **MUST 2** | A node is **stale-suspect** the moment either condition holds: (a) MUST 1's check returns nonempty output for any reachable citation on a claim being relied on -- the cited file changed since the recorded revision; or (b) a claim being relied on rests entirely on one or more of the four citation shapes the check cannot reach (commit reference, graph edge, tool result, either URL form validate.py recognises) and nobody has re-opened that claim's source since the recorded revision. Condition (a) is mechanically detectable today, by a human running the command; condition (b) is not detectable by any diff at all -- its currency is simply unknown, and unknown MUST NOT be read as fresh. |
+| **MUST 2** | A node is **stale-suspect** the moment either condition holds: (a) MUST 1's check returns nonempty output for any reachable citation on a claim being relied on -- the cited file changed since the recorded revision; or (b) a claim being relied on carries **any** citation of the four shapes the check cannot reach (commit reference, graph edge, tool result, either URL form validate.py recognises) -- alone or alongside file citations -- and nobody has re-opened that specific citation's source since the recorded revision. Condition (b) is deliberately not narrowed to claims resting *entirely* on unreachable shapes: `standards/provenance.md`'s MUST 3 disqualifies its diff route for a claim carrying even one such citation "alone or alongside file citations," and a claim with one clean file citation plus one never-reopened commit reference is exactly the shape that rule was written to catch -- a clean diff on the reachable half says nothing about the other half. Condition (a) is mechanically detectable today, by a human running the command; condition (b) is not detectable by any diff at all -- its currency is simply unknown, and unknown MUST NOT be read as fresh. |
 | **MUST 3** | A stale-suspect finding MUST NOT be silently passed over by whoever produces it under MUST 1/2 -- a reviewer reading the node, an author about to cite it, or an agent about to depend on one of its claims. "Silently passed over" means neither of the two acceptable responses in MUST 5 happened: the finder neither fixed it in the same edit nor recorded it anywhere a future reader can find it. |
 | **MUST 4** | A recorded stale-suspect finding MUST name: the node's `id`; which citation(s) triggered the finding (the changed path, under MUST 2(a), or the unreachable-shape claim's statement, under MUST 2(b)); the recorded revision the node claims to be checked against; and current `HEAD` at the time of finding. This is the same four-fact shape issue #556's own Definition of Done already requires of its (currently unbuilt) automated equivalent -- a manual finding is held to no lower a bar than the tooling one is designed to meet. |
 | **MUST 5** | The two acceptable responses to a stale-suspect finding are: (a) re-verify the affected claim's source at current `HEAD` and correct the node in the same edit, following `standards/provenance.md`'s MUST 1-4 for whether the recorded-revision entry moves; or (b) record the finding per MUST 4, without touching the node's claims, when the finder is not the one positioned to fix it in that session. Finding staleness is not, by itself, authorization to edit the node's claims without following (a)'s re-verification rule -- "detect" and "fix" are not the same act, and MUST 3 is satisfied by either response alone. |
@@ -175,11 +179,13 @@ one line; skipping it is a choice to rely on a claim without checking it, not an
 edge case this document carves out.
 
 **MUST 2(b)'s unreachable-shape claims are not an exception -- they are the harder
-case MUST 2 is written to name.** A claim entirely on a commit reference, graph edge,
-tool result, or URL has no diff to run at all. That is not a gap in this policy; it is
-`standards/provenance.md`'s own MUST 3 boundary, reused here rather than relitigated,
+case MUST 2 is written to name.** A claim carrying even one commit reference, graph
+edge, tool result, or URL citation -- whether or not it also carries file citations --
+has no diff to run for that part of it at all. That is not a gap in this policy; it is
+`standards/provenance.md`'s own MUST 3 boundary (a route closed by even one such
+citation, "alone or alongside file citations"), reused here rather than relitigated,
 and the correct response is MUST 5's route (a) (re-verify) precisely because route (b)
-(diff) was never available for that claim.
+(diff) was never available for that part of the claim.
 
 **A disputed call about whether a citation was "the claim being relied on" under
 MUST 1** is a judgement, not an exception: the relying party records the tension in
