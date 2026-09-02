@@ -32,7 +32,7 @@ evidence:
     entry_class: FACT
     evidence:
       - ".github/workflows/release.yml"
-  - statement: "release.yml's \"Generate unified latest.json\" step builds a manifest via desktop/scripts/generate-oss-latest-json.sh from each successful platform job's signature and archive download URL, refuses to proceed with fewer than three of the four platforms, and copies the resulting file into the versioned draft release as updater-manifest.json; generate-oss-latest-json.sh itself emits the shape {version, notes, pub_date, platforms: {<platform-key>: {signature, url}}}."
+  - statement: "release.yml's assemble-manifest job runs only when needs.setup, needs.release, needs.release-macos-x64, needs.release-linux and needs.release-windows all report result == 'success' -- all four platform jobs, not a partial-success threshold. Its \"Generate unified latest.json\" step then builds a manifest via desktop/scripts/generate-oss-latest-json.sh from each platform job's signature and archive download URL, and copies the resulting file into the versioned draft release as updater-manifest.json; generate-oss-latest-json.sh itself emits the shape {version, notes, pub_date, platforms: {<platform-key>: {signature, url}}} and contains no platform-count tolerance of its own."
     entry_class: FACT
     evidence:
       - ".github/workflows/release.yml"
@@ -180,11 +180,14 @@ reached clients.
    `https://github.com/block/buzz/releases/download/buzz-desktop-latest/latest.json`
    and confirm its `version` is the one just promoted and that `platforms`
    still has all four keys (`darwin-aarch64`, `darwin-x86_64`,
-   `linux-x86_64`, `windows-x86_64`). A missing key means that platform's
-   `release.yml` job failed at build time — `release.yml` only requires three
-   of four platforms to succeed before it will generate a manifest at all, so
-   a manifest can reach this promotion step already missing one platform;
-   check that platform's build run rather than re-running the promotion.
+   `linux-x86_64`, `windows-x86_64`). `assemble-manifest` is gated on all
+   four platform jobs reporting `success` (`needs.release`,
+   `needs.release-macos-x64`, `needs.release-linux`,
+   `needs.release-windows`), so a manifest missing a key should not be
+   reachable through the normal flow — if one is found missing anyway, that
+   points at a manual manifest edit or a bug in the gate itself, not an
+   expected partial-success path; investigate rather than assuming a platform
+   was allowed to fail.
 7. An installed client on an older version picks the update up on its own:
    `useUpdater` checks in the background on launch and again every six
    hours, or immediately via the app's manual "Check for Update" action. On

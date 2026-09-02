@@ -1,5 +1,5 @@
 ---
-id: release-desktop-release
+id: releases-desktop-release
 type: release
 status: draft
 origin: launchpad
@@ -144,6 +144,14 @@ evidence:
 relationships:
   - type: implements
     target: corpus-template-procedure
+  - type: references
+    target: releases-desktop-candidate
+  - type: references
+    target: releases-auto-update
+  - type: references
+    target: releases-release-tags
+  - type: references
+    target: releases-versioning
 ---
 
 # Desktop release: candidate merge to published, promoted build
@@ -171,34 +179,25 @@ a different task (see *Boundary*, below).
 
 ## Merge, tag, build, and publish
 
-1. **Review the candidate PR.** Confirm the exact candidate SHA, the complete
-   changelog block, and that CI is green on the protected-branch checks. Regenerating
-   or pushing the candidate branch again creates a new candidate and requires checks
-   to run again from scratch.
-2. **Squash-merge the PR** once every required check passes. This merge is the human
-   authorization event; an authorized owner/admin bypass counts the same way. Unrelated
-   commits that later reach `main` do not invalidate this reviewed candidate, because
-   the next release's ledger boundary is computed from validated prior-candidate
-   metadata, not from `main`'s tip at merge time.
-3. **Let `auto-tag-on-release-pr-merge.yml` verify and tag automatically** — no manual
-   action here, but understand what it checks, because a failure here is diagnosed by
-   reading its output, not by retrying blindly. It fires on the PR's `closed` event,
-   confirms `merged == true` and that the head repository is internal, then — because
-   the branch matches `version-bump/<v>` — runs `scripts/verify-desktop-release-merge.sh`.
-   That script re-fetches the PR from the GitHub API and checks its `merged`,
-   `head.sha`, `head.ref`, `base.ref`, `merge_commit_sha`, and `merged_at` fields
-   against the webhook event; reads its own trusted verifier code from the candidate's
-   frozen parent commit (never from the candidate itself); confirms the candidate has
-   exactly one parent and that parent is an ancestor of protected `main`; and requires
-   a fixed list of required checks, each pinned to a specific GitHub App producer
-   `integration_id`, to have succeeded *at merge time*. Because GitHub exposes no
-   per-rerun creation timestamp, an ordinary check rerun after merge makes this
-   verification fail closed by design — see *Release Retry* in `RELEASING.md` and the
-   troubleshooting note below for what to do instead of retrying it. Once verified,
-   the workflow creates `desktop-v<version>` through a dedicated `buzz-release-bot`
-   GitHub App token, at the exact reviewed PR head commit — never the squash commit on
-   `main`.
-4. **`release.yml` builds and publishes automatically** once the tag exists — again no
+Steps 1-3 below — reviewing and merging the candidate PR, and the automatic
+verify-and-tag step — are `releases/desktop-candidate.md`'s canonical subject; that
+node covers each in full detail (the exact fields `verify-desktop-release-merge.sh`
+checks, why a post-merge check rerun fails closed, the frozen-parent-commit trust
+model). They are summarized here only so this node's own numbered sequence reads
+start to finish; if the two accounts ever diverge, `desktop-candidate.md` wins.
+
+1. **Review and squash-merge the candidate PR** once every required check passes.
+   This merge is the human authorization event; an authorized owner/admin bypass
+   counts the same way.
+2. **`auto-tag-on-release-pr-merge.yml` verifies the merge and creates the tag
+   automatically** — no manual action here. It runs `scripts/verify-desktop-release-merge.sh`,
+   which independently re-reads the PR from the GitHub API rather than trusting the
+   workflow's own event payload, and only on success creates `desktop-v<version>`
+   through a dedicated `buzz-release-bot` GitHub App token, at the exact reviewed PR
+   head commit — never the later squash commit on `main`. A failure here is diagnosed
+   by reading the verifier's own output, not by retrying blindly — see *Release Retry*
+   below and `desktop-candidate.md` for what the check actually does.
+3. **`release.yml` builds and publishes automatically** once the tag exists — again no
    manual action, but understand the gate. The workflow triggers only on a
    `desktop-v[0-9]*` tag push and only in `block/buzz`; its `setup` job derives the
    version from the tag name, validates it as semver, and every subsequent job
@@ -214,7 +213,7 @@ a different task (see *Boundary*, below).
    a draft `desktop-v<version>` GitHub Release targeted at the exact tag commit,
    uploads every staged artifact, and only then flips the release from draft to
    published.
-5. **Verify what got published.** Desktop now has two GitHub releases: the versioned,
+4. **Verify what got published.** Desktop now has two GitHub releases: the versioned,
    user-facing `desktop-v<version>` (installers plus the `updater-manifest.json`
    promotion candidate) and the separate rolling `buzz-desktop-latest`, whose
    `latest.json` is what auto-update clients actually read. Publishing the versioned
@@ -223,26 +222,16 @@ a different task (see *Boundary*, below).
 
 ## Promote to auto-update
 
-A separate, deliberate action — not a continuation of the pipeline above.
-
-1. Install and test the published `desktop-v<version>` artifacts.
-2. Run the **Promote OSS Desktop Auto-Update** workflow from `main`, entering the
-   exact stable `X.Y.Z` version (the workflow itself refuses to dispatch from anything
-   other than `refs/heads/main`).
-3. The workflow validates the release is neither a draft nor a prerelease, confirms
-   the tag and its release target resolve to the same commit, downloads and validates
-   `updater-manifest.json`'s version, exact platform set, per-platform signatures, and
-   canonical download URLs, then compares against the currently promoted
-   `buzz-desktop-latest/latest.json`: a same-version retry succeeds only if the
-   manifest is byte-identical to what's live; any other version is rejected unless it
-   is strictly newer. Immediately before its one write it re-reads the live manifest's
-   digest to catch a concurrent promotion, and immediately after the write it
-   downloads the manifest again and compares digests to confirm the upload actually
-   served what was intended.
-4. If a promoted release turns out to be bad, ship and promote a higher patch version.
-   The manifest is never downgraded to an older version, so existing auto-updated
-   clients would otherwise stay on the bad build with no path back except a new,
-   higher release.
+A separate, deliberate action — not a continuation of the pipeline above. Publishing
+`desktop-v<version>` does not put it in front of existing users; a human must run the
+**Promote OSS Desktop Auto-Update** workflow from `main` with the exact stable
+version, which validates the release, verifies the manifest against what's currently
+live, and only then flips `buzz-desktop-latest`. `releases/auto-update.md` is this
+procedure's canonical owner and covers each check in full detail (the digest
+re-verification before and after the write, the byte-identical same-version-retry
+rule, and what a bad promotion actually requires — a new, higher release, since the
+manifest is never downgraded). Follow that node to run this step; it is summarized
+here only so a reader of this node knows the step exists and where it leads.
 
 ## Release retry (when a platform build fails)
 
@@ -267,9 +256,14 @@ pipeline's internal steps — see *Scope and omissions*.
 
 ## See also
 
-No other corpus node exists yet under `launchpad/docs/corpus/releases/` to link to.
-Once #1292 (candidate-cutting), #1301 (versioning policy), and #1299 (tag format) each
-land, this section is where their nodes belong.
+- `releases/desktop-candidate.md` — how a candidate is cut, reviewed, and merged
+  through to the `desktop-v<version>` tag. This node's *Merge, tag, build, and
+  publish* section summarizes that node's canonical steps; consult it for the full
+  detail.
+- `releases/auto-update.md` — the full promotion-to-`buzz-desktop-latest` procedure
+  this node's *Promote to auto-update* section only summarizes.
+- `releases/release-tags.md` — the tag naming/format contract in general.
+- `releases/versioning.md` — the semver policy this pipeline consumes.
 
 ## Boundary
 
@@ -277,14 +271,19 @@ This node does not describe:
 
 - **How a candidate is cut.** `just release-desktop <version>` and
   `scripts/prepare-desktop-release.sh` producing the `version-bump/<version>` PR,
-  including how the candidate's frozen base and prior-release ledger are computed, is
-  #1292's subject (`releases/desktop-candidate.md`), not this one.
+  including how the candidate's frozen base and prior-release ledger are computed, and
+  the exact fields `verify-desktop-release-merge.sh` checks, is
+  `releases/desktop-candidate.md`'s subject, not this one — this node summarizes it
+  only enough to read start to finish.
+- **The auto-update promotion procedure in full.** The manifest verification,
+  digest re-checks, and same-version-retry rule are `releases/auto-update.md`'s
+  subject; this node names the step and its outcome, not its mechanics.
 - **The semver policy itself** — what qualifies as a patch vs. minor vs. major bump,
-  and how `just get-next-patch-version` fits a broader versioning policy — is #1301's
-  subject (`releases/versioning.md`).
+  and how `just get-next-patch-version` fits a broader versioning policy — is
+  `releases/versioning.md`'s subject.
 - **The tag naming/format contract in general** (why `desktop-v<version>` rather than
   a bare `v<version>`, and how that generalizes across the desktop/relay/mobile/chart
-  lanes) is #1299's subject (`releases/release-tags.md`).
+  lanes) is `releases/release-tags.md`'s subject.
 - **The relay and mobile release lanes.** `RELEASING.md` documents all three lanes;
   this node is scoped to desktop only, per corpus's "one node, one idea" rule.
 - **The private `squareup/buzz-releases` Buildkite pipeline's internal steps** —
@@ -307,27 +306,29 @@ This node does not describe:
   steps with a permitted fork for the retry/promotion branches, boundary, scope and
   omissions) and its own worked example for the procedure shape names cutting a
   release directly.
-- **Checked, not declared:** #1292/#1301/#1299 are the natural `references` targets
-  once their nodes exist — confirmed via `gh issue view` that none of the three has
-  landed yet, and via `grep`/`ls-tree` against `origin/launchpad` that no `release-*`
-  id exists in the merged corpus tree. No edge is declared to an id that does not yet
-  exist.
+- **Declared:** `references` → `releases-desktop-candidate`, `releases-auto-update`,
+  `releases-release-tags`, `releases-versioning` — all four confirmed present in this
+  same corpus tree (`grep -m1 '^id:'` against each file) before being declared. These
+  were originally left as "checked, not declared" pending those siblings' own PRs;
+  all four have since landed in the same integration as this node, so the edges are
+  now real rather than aspirational.
 
 ## Scope and omissions
 
 **This node covers** the desktop release process from a reviewed, merged candidate PR
-through automatic tagging, verification, the four-platform build, publication of both
-GitHub releases, the separate manual promotion to auto-update, and the release-retry
-path for a failed platform build — plus the documented hand-off to the private,
-Block-signed internal build.
+through automatic tagging, verification, the four-platform build, and publication of
+both GitHub releases, plus the release-retry path for a failed platform build and the
+documented hand-off to the private, Block-signed internal build. It names, but does
+not fully describe, the manual promotion to auto-update.
 
 **It does not cover, and these are gaps rather than silence:**
 
 | Not covered here | Owned by |
 |---|---|
-| Cutting the release candidate itself | #1292, open, not yet drafted |
-| The versioning/semver policy | #1301, open, not yet drafted |
-| The tag-format contract across all lanes | #1299, open, not yet drafted |
+| Cutting the release candidate itself | `releases/desktop-candidate.md` |
+| The auto-update promotion procedure in full | `releases/auto-update.md` |
+| The versioning/semver policy | `releases/versioning.md` |
+| The tag-format contract across all lanes | `releases/release-tags.md` |
 | The relay and mobile release lanes | Not this node — `RELEASING.md` covers all three; no corpus task for relay/mobile release process was found in this session's search |
 | The private `squareup/buzz-releases` Buildkite pipeline's internal signing/publishing steps | Outside this repository; not inspectable from this session |
 | The front-matter contract itself | `launchpad/docs/corpus/schema/node.schema.json` |

@@ -277,9 +277,13 @@ Use this when you need real relay behaviour: messages, channels, agents, persist
 
 1. Run `just dev` from the repository root. Its declared prerequisites --
    `bootstrap _ensure-sidecar-stubs _ensure-migrations` -- run first, so a bare `just dev`
-   also provisions the toolchain and `.env`, writes zero-byte sidecar stubs under
-   `desktop/src-tauri/binaries/`, brings Docker services up, runs
-   `cargo run -p buzz-admin -- migrate`, and runs `scripts/seed-local-community.sh`.
+   also provisions the toolchain and `.env`, `touch`es each sidecar placeholder path under
+   `desktop/src-tauri/binaries/` (creating it zero-byte if the path does not already
+   exist -- `touch` only updates the modified time of a file that is already there, it
+   does not truncate it, so a real binary previously copied in by `desktop-standalone`,
+   `staging` or `production` on this same worktree survives untouched), brings Docker
+   services up, runs `cargo run -p buzz-admin -- migrate`, and runs
+   `scripts/seed-local-community.sh`.
 2. Let the port preflight run. The recipe resolves the relay port from `BUZZ_BIND_ADDR`
    (default `0.0.0.0:3000`), the health port from `BUZZ_HEALTH_PORT` (default `8080`) and
    the metrics port from `BUZZ_METRICS_PORT` (default `9102`). Where `lsof` is available,
@@ -313,11 +317,15 @@ normally and asks for a community before making a relay connection."* Its only
 prerequisite is `_ensure-sidecar-stubs`.
 
 1. Run `just desktop-standalone`.
-2. Let it build six crates in debug mode and **copy the real binaries over the zero-byte
-   stubs** at `desktop/src-tauri/binaries/<bin>-<host-target>`, chmod-ing each executable.
-   This is the step that distinguishes it from path A: `just dev` builds the same crates
-   but never copies them over the stubs, running only `./target/debug/buzz-relay`
-   directly, so all six sidecar stubs stay zero-byte there.
+2. Let it build six crates in debug mode and **copy the real binaries over the sidecar
+   placeholder paths** at `desktop/src-tauri/binaries/<bin>-<host-target>`, chmod-ing each
+   executable. This is the step that distinguishes it from path A: `just dev` builds the
+   same crates but never copies them over the placeholders, running only
+   `./target/debug/buzz-relay` directly, so the six paths are left exactly as `_ensure-
+   sidecar-stubs`'s `touch` left them -- zero-byte if this is the first path A or B run on
+   this worktree, or still holding whatever real binary an earlier `desktop-standalone`,
+   `staging` or `production` run copied in, since `touch` does not truncate an existing
+   file.
 3. Note that the recipe unsets `BUZZ_PRIVATE_KEY` and `BUZZ_SHARE_IDENTITY` and sets
    `BUZZ_DEV_KEYRING_SERVICE` to `buzz-desktop-dev.<instance-slug>`, so this instance gets
    its own identity rather than inheriting a shared dev key.

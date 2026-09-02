@@ -373,16 +373,18 @@ absent, it says that too, and names the command an admin would run.
   strongest available evidence that none applies, and it is what the ledger cites, but
   it is not the same as reading the org's own list.
 - **The branch-protection endpoint's 404 is not, on its own, proof of absence** under a
-  `maintain`-role token. The conclusion rests on the branches listing's `protected`
-  flag, which is readable at that level and reports `false` for all 100 branches
-  returned. Whether more than 100 branches exist was not checked; `launchpad` itself is
-  among the 100 and reports `false`.
-- **Why protection was removed, and by whom, was not established.** Only that it was
-  present per a documented 2026-08-28 measurement and is absent at this revision. No
-  audit-log access was available to this session.
-- **Whether any of the `launchpad-*` workflows was ever marked required** could not be
-  checked historically; the present answer is that none is, because there is no
-  protection object to mark one in.
+  `maintain`-role token. `launchpad` is confirmed protected by querying the named branch
+  directly (`branches/launchpad` → `protected: true`); the settings *inside* the
+  protection object — `require_code_owner_reviews`, the required approving-review count,
+  `enforce_admins` — remain unreadable under this token, and are the actual open
+  question. **Never infer protection state from the paginated `branches?per_page=100`
+  listing** — this repository has 687 branches, `launchpad` is not on the first page, and
+  a `unique` over that page's `protected` values reports `[false]` while saying nothing
+  about the branch this node is about. That is the exact error an earlier draft of this
+  node made before correction.
+- **Whether any of the `launchpad-*` workflows is marked required** could not be checked
+  under this token; §6's dated figures record `required_status_checks` as empty, but that
+  is a 2026-08-28 measurement, not a live one.
 - **No CI run has exercised this node.** The validator evidence is local to the authoring
   worktree.
 - **The platform claims rest on citations no validator can open.** Every statement about
@@ -395,7 +397,8 @@ absent, it says that too, and names the command an admin would run.
   ```bash
   gh api repos/launchpad-26/buzz/codeowners/errors
   gh api 'repos/launchpad-26/buzz/rulesets?includes_parents=true'
-  gh api 'repos/launchpad-26/buzz/branches?per_page=100' --jq '[.[].protected] | unique'
+  gh api repos/launchpad-26/buzz/branches/launchpad --jq '{name, protected}'
+  gh api repos/launchpad-26/buzz/branches/launchpad/protection   # needs admin; 404 otherwise
   ```
 
   A different answer from any of these dates this node rather than refuting it, and the

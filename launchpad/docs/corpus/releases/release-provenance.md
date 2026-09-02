@@ -78,7 +78,7 @@ evidence:
     evidence:
       - ".github/workflows/mobile-release-candidate.yml"
       - "RELEASING.md"
-  - statement: "Android release builds sign with a CI-vended \"upload keystore\" (Google Play App Signing model: Play re-signs with its own retained app-signing key before distribution to devices) by default, or — when `BUZZ_ANDROID_RELEASE_SIGNING=external` — produce a deliberately unsigned bundle for Block's internal Cashkite APK Signer service; no keystore material is permitted inside the repository in either mode."
+  - statement: "Android release builds sign with a CI-vended \"upload keystore\" by default, or — when `BUZZ_ANDROID_RELEASE_SIGNING=external` — produce a deliberately unsigned bundle for Block's internal Cashkite APK Signer service; no keystore material is permitted inside the repository in either mode. Whether the store distribution channel re-signs an upload-keystore build with its own retained key (as Google Play App Signing does when enrolled) is not established by this repository's own files and is not asserted here."
     entry_class: FACT
     evidence:
       - "mobile/android/app/build.gradle.kts"

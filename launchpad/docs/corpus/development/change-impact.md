@@ -16,7 +16,7 @@ evidence:
     entry_class: FACT
     evidence:
       - ".github/workflows/ci.yml"
-  - statement: "The `rust` filter matches crates/**, migrations/**, schema/**, Cargo.toml, Cargo.lock, rust-toolchain.toml, deny.toml, .github/workflows/ci.yml, scripts/run-tests.sh, scripts/model-capabilities.json, scripts/normative-corpus.json and justfile; `desktop` matches scripts/model-capabilities.json, scripts/normative-corpus.json, desktop/** and pnpm-lock.yaml; `desktop-rust` matches desktop/src-tauri/** alone; `web` matches web/** and pnpm-lock.yaml; `mobile` matches mobile/**, seven named scripts/ files, .github/workflows/mobile-release-candidate.yml and .github/workflows/ci.yml."
+  - statement: "The `rust` filter matches crates/**, migrations/**, schema/**, Cargo.toml, Cargo.lock, rust-toolchain.toml, deny.toml, .github/workflows/ci.yml, scripts/run-tests.sh, scripts/model-capabilities.json, scripts/normative-corpus.json and justfile; `desktop` matches scripts/model-capabilities.json, scripts/normative-corpus.json, desktop/** and pnpm-lock.yaml; `desktop-rust` matches desktop/src-tauri/** alone; `web` matches web/** and pnpm-lock.yaml; `mobile` matches mobile/**, eight named scripts/ files, .github/workflows/mobile-release-candidate.yml and .github/workflows/ci.yml."
     entry_class: FACT
     evidence:
       - ".github/workflows/ci.yml"
@@ -45,7 +45,7 @@ evidence:
     entry_class: FACT
     evidence:
       - "lefthook.yml"
-  - statement: "lefthook's pre-push stage runs three unfiltered lanes -- branch-skew (launchpad/scripts/check-branch-skew.sh), push-head-scope (scripts/check-push-head-scope.sh, warn-only, reads pushed refs from stdin) and file-size-check (just file-size-check) -- alongside five globbed lanes: rust-tests, desktop-check, desktop-typecheck, desktop-test, desktop-tauri-checks and mobile-checks."
+  - statement: "lefthook's pre-push stage runs three unfiltered lanes -- branch-skew (launchpad/scripts/check-branch-skew.sh), push-head-scope (scripts/check-push-head-scope.sh, warn-only, reads pushed refs from stdin) and file-size-check (just file-size-check) -- alongside six globbed lanes: rust-tests, desktop-check, desktop-typecheck, desktop-test, desktop-tauri-checks and mobile-checks."
     entry_class: FACT
     evidence:
       - "lefthook.yml"
