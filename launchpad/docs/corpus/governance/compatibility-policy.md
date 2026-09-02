@@ -159,6 +159,10 @@ evidence:
     entry_class: FACT
     evidence:
       - "crates/buzz-conformance/src/lib.rs"
+  - statement: "Nothing automated checks a corpus node's prose: validate.py's _load_frontmatter splits a node's text on the frontmatter delimiter into a variable named _body that appears exactly once in the whole module -- at that split -- and the function returns only the parsed frontmatter, so the body is discarded before any check runs."
+    entry_class: FACT
+    evidence:
+      - "launchpad/project-intelligence/corpus/validate.py"
   - statement: "The corpus already carries a node for the additive-kinds principle, architecture-principles-event-driven-extension, citing the same CONTRIBUTING.md sentence, so this node links to it rather than restating the principle."
     entry_class: FACT
     evidence:
