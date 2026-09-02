@@ -316,5 +316,69 @@ class RenderTest(unittest.TestCase):
         self.assertIn("- FACT: the gate exists -- kind.rs:120, kind.rs:145", render(answer))
 
 
+class RationaleFilterBoundaryTest(unittest.TestCase):
+    """#571 step 7: the exact filter boundary render() applies at RATIONALE
+    depth (temporal_state == "HISTORY" or entry_class == "TEAM_KNOWLEDGE"),
+    pinned against a claim of every shape the condition could get wrong --
+    not just the two shapes step 6's coarser end-to-end tests happen to
+    produce.
+    """
+
+    def _answer(self, **overrides: object) -> Answer:
+        defaults: dict[str, object] = {
+            "question": "why does the gate exist?",
+            "depth": "RATIONALE",
+            "short_answer": "A gate checked against an allowlist.",
+            "claims": (
+                # WORKING FACT -- the generic "is defined as" shape. Must be
+                # excluded: neither HISTORY nor TEAM_KNOWLEDGE.
+                Claim(
+                    statement="the_gate is defined as pub fn the_gate() -> bool",
+                    entry_class="FACT",
+                    evidence=("kind.rs:1",),
+                ),
+                # HISTORY INFERENCE. Must be included: temporal_state alone
+                # earns it, regardless of entry_class.
+                Claim(
+                    statement="the stated reason for its most recent change is 'widen the gate'",
+                    entry_class="INFERENCE",
+                    evidence=("commit abc123",),
+                    confidence=0.5,
+                    temporal_state="HISTORY",
+                ),
+                # WORKING TEAM_KNOWLEDGE. Must be included: entry_class alone
+                # earns it, regardless of temporal_state.
+                Claim(
+                    statement="we plan to drop this gate next quarter",
+                    entry_class="TEAM_KNOWLEDGE",
+                    provided_by="serina",
+                ),
+            ),
+        }
+        defaults.update(overrides)
+        return Answer(**defaults)  # type: ignore[arg-type]
+
+    def test_the_working_fact_is_excluded(self) -> None:
+        rendered = render(self._answer())
+        self.assertNotIn("is defined as", rendered)
+
+    def test_the_history_inference_is_included_by_temporal_state_alone(self) -> None:
+        rendered = render(self._answer())
+        self.assertIn("widen the gate", rendered)
+
+    def test_the_team_knowledge_claim_is_included_by_entry_class_alone(self) -> None:
+        rendered = render(self._answer())
+        self.assertIn("drop this gate next quarter", rendered)
+
+    def test_sources_holds_exactly_the_two_included_lines(self) -> None:
+        """Not just "present" -- the WORKING FACT's absence could otherwise
+        hide behind a Sources section that quietly grew a fourth, unrelated
+        line instead of genuinely filtering."""
+        rendered = render(self._answer())
+        sources = rendered.split("## Sources\n", 1)[1]
+        lines = [ln for ln in sources.splitlines() if ln.startswith("- ")]
+        self.assertEqual(len(lines), 2)
+
+
 if __name__ == "__main__":
     unittest.main()
