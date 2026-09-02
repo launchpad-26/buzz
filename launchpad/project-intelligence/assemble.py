@@ -134,6 +134,7 @@ def assemble(
                     or ("no investigation was recorded for this target",),
                 ),
             ),
+            depth=question.depth,
         )
 
     match = findings.match
@@ -244,6 +245,7 @@ def assemble(
         important_files=tuple(dict.fromkeys(files)),
         things_to_be_aware_of=_caveats(findings, claims, trace, question),
         claims=tuple(claims),
+        depth=question.depth,
     )
 
 
