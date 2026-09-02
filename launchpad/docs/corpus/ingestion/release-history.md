@@ -31,7 +31,8 @@ evidence:
     entry_class: FACT
     evidence:
       - "launchpad/project-intelligence/corpus/validate.py:566"
-      - "launchpad/project-intelligence/corpus/validate.py:701-755"
+      - "launchpad/project-intelligence/corpus/validate.py:653-698"
+      - "launchpad/project-intelligence/corpus/validate.py:762"
   - statement: "validate.py's `_GITHUB_URL_RE` requires the URL's verb segment to be one of `blob|raw|tree|blame|commits|edit`; a GitHub Releases page (`.../releases/tag/<name>`) does not match any of them, so `_classify_url` falls through to its final branch and reports the link `unverified` as a generic external URL, the identical verdict a non-GitHub URL receives -- a Release page proves nothing more, to this checker, than any other external link."
     entry_class: FACT
     evidence:
