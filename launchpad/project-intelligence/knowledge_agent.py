@@ -147,6 +147,7 @@ class KnowledgeAgent:
                     question=text,
                     short_answer="No symbol named in the question.",
                     things_to_be_aware_of="Use knowledge.find() for a concept with no known name.",
+                    depth=question.depth,
                 ),
                 assessment=None,
                 findings=None,

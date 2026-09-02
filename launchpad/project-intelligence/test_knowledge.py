@@ -196,14 +196,14 @@ class ExplainDepthTest(unittest.TestCase):
 
     def test_implementation_has_line_referenced_sources_and_no_relevant_flow(self) -> None:
         rendered = render(knowledge.explain(self.agent, TARGET, "IMPLEMENTATION"))
-        self.assertIn("## Sources", rendered)
+        headings = [ln[3:] for ln in rendered.splitlines() if ln.startswith("## ")]
+        self.assertEqual(headings, ["Short answer", "How it works", "Important files", "Sources"])
         self.assertRegex(rendered, r"\S+\.\w+:\d+")
-        self.assertNotIn("## Relevant flow", rendered)
 
     def test_trace_has_relevant_flow_and_no_how_it_works(self) -> None:
         rendered = render(knowledge.explain(self.agent, TARGET, "TRACE"))
-        self.assertIn("## Relevant flow", rendered)
-        self.assertNotIn("## How it works", rendered)
+        headings = [ln[3:] for ln in rendered.splitlines() if ln.startswith("## ")]
+        self.assertEqual(headings, ["Short answer", "Relevant flow", "Sources"])
 
     def test_rationale_excludes_the_generic_fact_and_keeps_team_knowledge(self) -> None:
         # A separate agent, with a TEAM_KNOWLEDGE entry mentioning TARGET --
@@ -234,6 +234,19 @@ class ExplainDepthTest(unittest.TestCase):
         answer = knowledge.explain(self.agent, TARGET, "IMPACT")
         self.assertRegex(answer.short_answer, r"\d+ direct and \d+ secondary")
         self.assertEqual(answer.depth, "IMPACT")
+
+    def test_target_less_question_still_renders_at_the_requested_depth(self) -> None:
+        """Review finding (High): KnowledgeAgent.run()'s target-less early
+        return (question.target is None) built its Answer directly, never
+        through assemble() -- so it never got STEP 2's depth stamp. A blank
+        or unresolvable backticked target (extract_target() returns None for
+        one) reaches this path through the public agent.answer() /
+        knowledge.explain() surface with no hand-built object needed."""
+        answer = self.agent.answer("how does `` work?", depth="SUMMARY")
+        self.assertEqual(answer.depth, "SUMMARY")
+        rendered = render(answer)
+        headings = [ln for ln in rendered.splitlines() if ln.startswith("## ")]
+        self.assertEqual(headings, ["## Short answer"])
 
 
 class AskRoutingTest(unittest.TestCase):
