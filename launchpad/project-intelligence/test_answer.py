@@ -376,6 +376,11 @@ class SummaryParagraphSafetyTest(unittest.TestCase):
         )
         rendered = render(answer)
         self.assertIsNone(re.search(r"\S+\.\w+:\d+", rendered))
+        # A negative assertion alone passes just as well if the paragraph is
+        # wiped to "" outright -- caught by review-tests. The path must be
+        # SUBSTITUTED, with the rest of the sentence surviving, not the whole
+        # claim discarded because it once contained a path.
+        self.assertEqual(rendered, "## Short answer\n<location omitted> is defined as pub fn foo()")
 
 
 class RationaleFilterBoundaryTest(unittest.TestCase):
