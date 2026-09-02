@@ -102,6 +102,12 @@ evidence:
     evidence:
       - "scripts/check-px-text-core.mjs"
       - "desktop/scripts/check-px-text.mjs"
+  - statement: "The px-text guard, its shared core, the desktop rem-token additions to tailwind.config.js and the AGENTS.md 'Text sizing & zoom' section were all introduced by one upstream commit, c22c54e7ae4318f9648dc9441a152732cb29d6d5 ('fix(desktop): restore timeline zoom via rem tokens + chat-as-base type scale (#1052)'); the guard's own comment attributes the regression it prevents to a different, earlier PR (#891)."
+    entry_class: FACT
+    evidence:
+      - "git_show(commit='c22c54e7ae4318f9648dc9441a152732cb29d6d5', stat=true) -> adds AGENTS.md +34, desktop/scripts/check-px-text.mjs +36, scripts/check-px-text-core.mjs +126, desktop/tailwind.config.js +9"
+      - "desktop/scripts/check-px-text.mjs"
+      - "scripts/check-px-text-core.mjs"
   - statement: "AGENTS.md states that decorative glyphs 'are allowlisted by `path:line`' in desktop/scripts/check-px-text.mjs; that statement is false -- the script's overrides set contains path-plus-literal entries and the core composes its lookup key from the matched literal, never from a line number."
     entry_class: FACT
     evidence:
@@ -319,6 +325,12 @@ against zoom.
 
 Arbitrary `rem` literals are rejected as well as `px` ones — not because they
 break zoom, but because they re-fragment the consolidated scale.
+
+**Origin.** One upstream commit — `c22c54e7a`, "fix(desktop): restore timeline
+zoom via rem tokens + chat-as-base type scale (#1052)" — added the guard, its
+shared core, the `tailwind.config.js` rem tokens and the `AGENTS.md` "Text
+sizing & zoom" section together. The guard's comment attributes the regression
+it prevents to an earlier PR, #891.
 
 **Scope.** `desktop/scripts/check-px-text.mjs` scans `desktop/src` recursively
 for `.ts`, `.tsx` and `.css`. It is the **only** importer of the shared core in
