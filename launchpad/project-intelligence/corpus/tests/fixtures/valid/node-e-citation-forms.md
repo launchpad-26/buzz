@@ -23,7 +23,7 @@ evidence:
     evidence:
       - "is_shared_gated_kind -> is_unshared_gated_event (1 hop)"
       - "find_references('x', crate='buzz-core') -> no callers in this crate"
-      - "commit 69baedd197e5d35c9ae4736115789da59929e288 (2026-08-25) by Serina"
+      - "commit {{COMMIT}} (2026-08-25) by Serina"
 ---
 
 # Validator fixture E: all six citation forms

@@ -80,10 +80,11 @@ absent one as "not established", and the second is the honest signal.
 ## 3. Citation forms
 
 `evidence` entries are not all file references, and a consumer parsing them must handle all
-six shapes:
+seven shapes:
 
 | Shape | Example | Openable? |
 |---|---|---|
+| Symbol anchor | `crates/buzz-core/src/kind.rs#symbol=is_shared_gated_kind` | yes, and the position survives edits |
 | File range | `crates/buzz-core/src/kind.rs:219-221` | yes |
 | File line | `crates/buzz-core/src/kind.rs:1077` | yes |
 | Bare path | `Justfile` | yes, but carries no position |
@@ -91,9 +92,22 @@ six shapes:
 | Tool result | `find_references('x', crate='buzz-core') -> no callers in this crate` | no |
 | Commit | `commit 067c085f… (2026-08-05…) by Wes` | no |
 
-A consumer that treats every citation as a path will mis-handle three of six, and one of the
-three it *can* open — the bare path — resolves to a whole file rather than to the lines the
-claim is about. Bare paths come from `setup()`'s not-found branch, which cites the manifests
+**Prefer the symbol anchor for any claim about code.** A line number names a place in the
+file as it was: an edit above it repoints the citation at unrelated code, and because a
+bounds check is not a meaning check, the citation keeps passing while being wrong. A symbol
+anchor names the thing the claim is about, so it still resolves after the code above it
+moves — and when the symbol's name disappears from the file the citation *fails* instead of
+silently drifting. The check is lexical, not semantic: a name that survives in a comment or a
+string literal still satisfies it, so it detects a name vanishing, not a definition being removed. It is the only precise code citation that can fail for the right reason.
+
+The symbol must match `[A-Za-z_][A-Za-z0-9_.]*`; the dotted form (`ClassName.method_name`)
+is accepted. Verification is a word-boundary search of the cited file — `#symbol=Foo` is not
+satisfied by `FooBarBaz`. Like every other citation form, it establishes that you cited
+something real, never that the source supports the statement above it.
+
+A consumer that treats every citation as a path will mis-handle three of seven, and one of
+the four it *can* open — the bare path — resolves to a whole file rather than to the lines
+the claim is about. Bare paths come from `setup()`'s not-found branch, which cites the manifests
 it searched (`evidence=tuple(SETUP_SOURCES)`) rather than a location inside one.
 
 `worked_trace.audit_citations()` shows the intended discipline: parse what is parseable, and

@@ -48,7 +48,7 @@ evidence:
     entry_class: FACT
     evidence:
       - "launchpad/project-intelligence/corpus/validate.py"
-  - statement: "A citation naming a line or line range is checked for the path and for the position's internal consistency only; the line number is never compared against the file's length."
+  - statement: "A citation naming a line or line range is checked for the path, for the position's internal consistency, and against the cited file's length: a position past the end of the file is a hard error (#1459). The file's contents are still never read, so a position that has drifted to a different line that still exists passes while naming the wrong code."
     entry_class: FACT
     evidence:
       - "launchpad/project-intelligence/corpus/validate.py"

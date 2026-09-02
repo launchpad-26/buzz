@@ -32,7 +32,7 @@ evidence:
     entry_class: FACT
     evidence:
       - "crates/buzz-relay/src/handlers/community_provisioning.rs:280-316"
-      - "crates/buzz-db/src/lib.rs:1490-1574"
+      - "crates/buzz-db/src/store/community.rs:317-405"
   - statement: "The per-owner limit defaults to 5 (`MAX_COMMUNITIES_PER_OWNER`) and can be raised deployment-wide via `BUZZ_MAX_COMMUNITIES_PER_OWNER` (a missing, unparsable, or non-positive value falls back to the default); `create_community_with_owner` enforces it inside the same transaction as the owner insert, so two concurrent creates for the same owner cannot both pass the count check."
     entry_class: FACT
     evidence:
@@ -40,13 +40,13 @@ evidence:
   - statement: "`create_community_with_owner` distinguishes three non-error outcomes: `Created` (a new host row and owner, or an identical retried create that found the same host+owner pairing already present), `HostExists` (the host row already belongs to a different owner, or belongs to no still-active owner match — the transaction is rolled back and no owner row is touched), and `LimitReached` (the host row's own insert would-be-committed community is discarded by rollback because the intended owner is already at the cap)."
     entry_class: FACT
     evidence:
-      - "crates/buzz-db/src/lib.rs:588-616"
-      - "crates/buzz-db/src/lib.rs:1490-1574"
+      - "crates/buzz-db/src/store/community.rs:42-49"
+      - "crates/buzz-db/src/store/community.rs:317-405"
   - statement: "When `create_only` is false (the legacy convergence mode, still used by deployment operators and startup tooling), the handler instead calls `Db::ensure_configured_community`, an idempotent upsert keyed on `lower(host)` that only converges into an existing row still `deletion_state = 'active'` and `deleted_at IS NULL` (a permanently tombstoned host is rejected as `AccessDenied` rather than silently resurrected), and separately calls `Db::bootstrap_owner` if `initial_owner_pubkey` was supplied — which upserts that pubkey as `owner` in `relay_members` and demotes any other existing owner row for that community to `admin`, without checking the per-owner community limit at all, because this path is deployment-root authority (startup seeding, operator convergence), not the end-user create path the limit exists to bound."
     entry_class: FACT
     evidence:
       - "crates/buzz-relay/src/handlers/community_provisioning.rs:318-334"
-      - "crates/buzz-db/src/lib.rs:1449-1482"
+      - "crates/buzz-db/src/store/community.rs:277-310"
       - "crates/buzz-db/src/store/relay_members.rs:343-381"
   - statement: "The same `ensure_configured_community` function seeds the relay's own deployment community at process startup, before any relay-membership backfill or owner bootstrap runs, from a host derived by normalizing `BUZZ_RELAY_URL`'s authority (`relay_url_authority` then `normalize_host` — the same normalization request-time host resolution uses); an empty derived host is a fatal misconfiguration only when `BUZZ_REQUIRE_RELAY_MEMBERSHIP=true`, otherwise it is logged and membership backfill/bootstrap is skipped non-fatally."
     entry_class: FACT
@@ -82,13 +82,13 @@ evidence:
     entry_class: FACT
     evidence:
       - "crates/buzz-relay/src/api/operator.rs:1043-1109"
-      - "crates/buzz-db/src/lib.rs:6413-6470"
-      - "crates/buzz-db/src/lib.rs:6547"
+      - "crates/buzz-db/src/store/community.rs:712-771"
+      - "crates/buzz-db/src/store/community.rs:846-875"
   - statement: "All of the tests cited above carry `#[ignore = \"requires Postgres\"]` and are excluded from a plain `cargo test`/`just test-unit` run; they run only under `just test`, which provisions Postgres and Redis first."
     entry_class: FACT
     evidence:
       - "crates/buzz-relay/src/api/operator.rs:1041-1042"
-      - "crates/buzz-db/src/lib.rs:6411-6412"
+      - "crates/buzz-db/src/store/community.rs:710-711"
   - statement: "architecture-deployment-multi-community's own evidence ledger already states that community creation is authorized above the tenant boundary via the NIP-98-authenticated, `RELAY_OPERATOR_PUBKEYS`-gated `POST /operator/communities` endpoint, deliberately outside the Nostr event ingest data plane -- the same endpoint and the same gate this node narrates the internal mechanics of."
     entry_class: FACT
     evidence:
@@ -208,7 +208,7 @@ seeding and operator convergence):
    converges the host row idempotently; a permanently tombstoned host (the
    `WHERE` guard excludes it, so the conflicting row is never touched) fails
    the whole call with `AccessDenied` rather than resurrecting it.
-   (`crates/buzz-db/src/lib.rs:1449-1482`)
+   (`crates/buzz-db/src/store/community.rs:277-310`)
 3. **`bootstrap_owner`, if an owner was supplied.** Upserts that pubkey as
    `role = 'owner'` and demotes any *other* existing owner row for this
    community to `admin` — no per-owner limit is enforced on this path.

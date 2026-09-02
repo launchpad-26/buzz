@@ -7,20 +7,22 @@ cannot express on its own: duplicate ids, unresolved relationship targets,
 unverifiable/prohibited evidence citations, and stray non-canonical files.
 
 Citations are parsed against CONTRACT.md section 3's six forms before anything is
-checked, and reported in two channels -- hard errors, and an `UNVERIFIED` channel
-for the forms that name nothing openable (see ValidationReport). Exit status is 1
-for any error, 0 otherwise; unverified notices never fail a run, but they always
-print, so a PASS never claims more than was actually checked.
+checked. Offline mode performs deterministic local checks only; URL citations are
+reported as UNVERIFIED and still block the run. --check-links additionally opens
+HTTP(S) citations so reachable links can pass and unreachable links fail.
 
 Run:  python3 launchpad/project-intelligence/corpus/validate.py [--root PATH]
+  or: python3 launchpad/project-intelligence/corpus/validate.py --check-links
   or: just corpus-validate
 """
 
 from __future__ import annotations
 
+import importlib.util
 import argparse
 import json
 import math
+import hashlib
 import re
 import subprocess
 import sys
@@ -30,6 +32,24 @@ from pathlib import Path, PurePosixPath
 import jsonschema
 import yaml
 
+
+
+def _load_evidence_parser():
+    module_name = "_corpus_evidence_parser"
+    existing = sys.modules.get(module_name)
+    if existing is not None:
+        return existing
+    parser_path = Path(__file__).with_name("evidence.py")
+    spec = importlib.util.spec_from_file_location(module_name, parser_path)
+    if spec is None or spec.loader is None:
+        raise ImportError(f"cannot load evidence parser from {parser_path}")
+    module = importlib.util.module_from_spec(spec)
+    sys.modules[module_name] = module
+    spec.loader.exec_module(module)
+    return module
+
+
+_EVIDENCE_PARSER = _load_evidence_parser()
 DEFAULT_ROOT = "launchpad/docs/corpus"
 
 # `schema/` is #622's own schema-testing infrastructure (node.schema.json,
@@ -72,10 +92,21 @@ class ValidationReport:
     error, and so is a generated artifact whose provenance cannot be established
     (see find_ownership_violations) -- an earlier revision of that check routed it
     here, which a cross-model review-final pass correctly called a fail-open.
+
+    `deferred` is a third channel for a citation this MODE cannot check but another
+    one can: a syntactically valid URL on a run without `--check-links`. It is
+    reported and does not block. That distinction is load-bearing -- routing these
+    through `unverified` made the offline stage impossible to pass by construction,
+    since every URL citation in the corpus blocked it no matter how correct the
+    corpus was, and a check that cannot go green teaches everyone to ignore it.
+    Nothing escapes: CI runs the link stage too, and there these become `ok` or
+    `error`. Deferred is "not checked HERE", never "not checkable".
     """
 
     errors: list[str] = field(default_factory=list)
     unverified: list[str] = field(default_factory=list)
+    deferred: list[str] = field(default_factory=list)
+    baselined: list[str] = field(default_factory=list)
 
 
 # Every message names its node through this helper, and the guarantee is about the
@@ -143,8 +174,9 @@ def _is_canonical_location(path: Path, root: Path) -> bool:
     forbids -- the same review-final pass found the crash by committing a
     self-referential link.
 
-    The sibling check for citation *targets* lives in _classify_repo_path; this one
-    governs which files are corpus content in the first place.
+    The sibling check for citation *targets* lives in evidence.py's
+    `_verify_local` (reached through `_EVIDENCE_PARSER.verify_citation`); this
+    one governs which files are corpus content in the first place.
     """
     try:
         return path.resolve().is_relative_to(root)
@@ -534,35 +566,10 @@ def _is_prohibited_citation(citation: str) -> bool:
 # to Path.exists(), so the two positional forms and all three unopenable forms
 # were reported as missing files, while `startswith("http")` waved every URL
 # through unchecked. A cross-model review panel found both halves at once.
-_URL_PREFIXES = ("http://", "https://")
 _MARKDOWN_LINK_RE = re.compile(r"^\[[^\]]*\]\((?P<target>[^)\s]+)\)$")
-_FULL_SHA_RE = re.compile(r"^[0-9a-f]{40}$")
-# GitHub repository URLs. `verb` decides whether the URL names a FILE (ADR-0003's
-# subject) or some other repository view; `ref` is the branch, tag or commit it is
-# pinned to. Both schemes are matched: an earlier revision anchored these to
-# `https://` while routing on a prefix tuple that also contained `http://`, so the
-# same mutable blob link reopened the whole finding under the plain-http scheme --
-# it fell past both patterns and came back as a non-fatal "external URL". An
-# independent review-code pass found that one-character bypass.
-# The trailing path is optional: `.../blob/main` with no file after it matched
-# neither pattern in an earlier revision and fell through to the non-fatal
-# "external URL" branch, so a truncated mutable link evaded the pin check that a
-# complete one fails. A second cross-model review-final pass found that variant.
-_GITHUB_URL_RE = re.compile(
-    r"^https?://github\.com/[^/\s]+/[^/\s]+/"
-    r"(?P<verb>blob|raw|tree|blame|commits|edit)/(?P<ref>[^/\s]+)"
-    r"(?:/(?P<path>\S*))?$"
-)
-_RAW_GITHUB_URL_RE = re.compile(
-    r"^https?://raw\.githubusercontent\.com/[^/\s]+/[^/\s]+/(?P<ref>[^/\s]+)"
-    r"(?:/(?P<path>\S*))?$"
-)
-# Only these two name a file's contents. `tree` is a directory listing and `blame`,
-# `commits` and `edit` are views of a file rather than a citation of it -- an
-# independent review-final pass found `tree/<sha>/<dir>` being accepted as a
-# verified file citation, and `blame/main/...` slipping past the pin check
-# altogether by not matching the file-only pattern.
-_GITHUB_FILE_VERBS = {"blob", "raw"}
+# GitHub URL syntax (pin/verb/path rules) and the network probe now live in
+# evidence.py's `_verify_url` -- `_classify_url` below is a delegate. See that
+# module's git history for the review passes that shaped each rule.
 _COMMIT_CITATION_RE = re.compile(r"^commit\s+[0-9a-fA-F]{7,40}\b")
 _FILE_POSITION_RE = re.compile(r"^(?P<path>\S+?):(?P<start>\d+)(?:-(?P<end>\d+))?$")
 # CONTRACT.md's two unopenable non-commit forms, matched by SHAPE rather than by
@@ -594,111 +601,23 @@ class CitationVerdict:
     detail: str = ""
 
 
-def _classify_url(url: str) -> CitationVerdict:
-    """A repository file link must be pinned to a full commit SHA; other URLs can't be.
 
-    ADR-0003 fixes the reference format as "a markdown link to the cited file at the
-    pinned commit, using the full SHA. Never `blob/main`", and the schema README
-    repeats it. A `blob/main` link is evidence that can change underneath a green
-    validation run, which is the whole failure mode provenance exists to prevent.
+def _classify_url(url: str, *, check_links: bool) -> CitationVerdict:
+    """Delegate a URL citation to evidence.py's registered verifier.
 
-    A URL that is not a repository file link (a spec, a blog post, an upstream
-    issue) has no commit to pin to and no offline way to check it, so it is
-    reported unverified rather than either failed or silently passed.
-
-    DELIBERATELY NOT ENFORCED: ADR-0003's format is "a markdown link to the cited
-    file at the pinned commit", and a bare pinned URL is accepted here anyway. Two
-    review-final passes have now flagged that as unfinished, so the reasoning
-    belongs in the code rather than in a review thread. ADR-0003 governs handbook
-    PAGE provenance, where the link is rendered prose; this validator governs
-    corpus evidence, and the corpus schema's own description of the field
-    (schema/README.md: "Citations (paths, commit-pinned links)") asks for pinning
-    without prescribing a presentation. Pinning is the property staleness detection
-    depends on and is enforced; requiring the markdown wrapper on corpus evidence
-    would extend a handbook page-format rule to a surface that has not adopted it,
-    which is #605's contract to decide and this issue's out-of-scope list to
-    refuse. If #605 does adopt it, the check is a one-line addition here.
+    The GitHub pin/verb/path syntax rules and the bounded HEAD-then-ranged-GET
+    network probe live in evidence.py now, alongside every other evidence kind
+    this module already routes through `_EVIDENCE_PARSER`. This function stays
+    as a distinct call site so `_classify_citation`'s routing table does not
+    need to change shape.
     """
-    match = _GITHUB_URL_RE.match(url) or _RAW_GITHUB_URL_RE.match(url)
-    if match:
-        if not _FULL_SHA_RE.match(match.group("ref")):
-            return CitationVerdict(
-                "error",
-                "is a repository link pinned to a mutable ref rather than a "
-                "full commit SHA (ADR-0003)",
-            )
-        # raw.githubusercontent.com has no verb segment; it is always file content.
-        verb = match.groupdict().get("verb") or "raw"
-        if verb not in _GITHUB_FILE_VERBS:
-            return CitationVerdict(
-                "error",
-                f"is a repository '{verb}' view rather than a link to the cited "
-                "file itself (ADR-0003)",
-            )
-        # Making the trailing path optional closed one hole and opened another: a
-        # pinned link with nothing after the ref names a repository at a commit,
-        # not the cited file, and came back "ok". A third cross-model review-final
-        # pass found it. The path is optional to MATCH -- so the pin check runs on
-        # truncated links -- and required to PASS.
-        if not match.groupdict().get("path"):
-            return CitationVerdict(
-                "error", "is pinned but names no file within the repository"
-            )
-        return CitationVerdict("ok")
-    return CitationVerdict(
-        "unverified", "is an external URL this validator can neither pin nor open"
-    )
+    parsed = _EVIDENCE_PARSER.parse_citation(url)
+    result = _EVIDENCE_PARSER.verify_citation(parsed, repo_root(), check_links=check_links)
+    return CitationVerdict(result.status, result.detail)
 
-
-def _classify_repo_path(path_text: str, repo_root_path: Path) -> CitationVerdict:
-    """A repo-relative citation must resolve to a real file INSIDE the repository.
-
-    Three distinct rejections, in order:
-
-    Prohibited credential-like names are rejected first and without echoing the
-    value -- the DoD's "without leaking private source content".
-
-    An absolute path (e.g. /etc/passwd) is rejected explicitly rather than
-    existence-checked: pathlib's `/` operator silently discards the left operand
-    when the right is absolute, so `repo_root_path / "/etc/passwd"` would otherwise
-    evaluate to `/etc/passwd` itself and "validate" against the host filesystem.
-
-    Containment is then enforced on the RESOLVED path, not the literal one. An
-    earlier revision checked only `(repo_root_path / citation).exists()`, so
-    `../../../../etc/passwd` escaped the repository entirely and a bare directory
-    name like `launchpad` passed as though it were a file. Resolving first also
-    means a symlink pointing out of the tree is caught, not followed.
-    """
-    if _is_prohibited_citation(path_text):
-        return CitationVerdict(
-            "error", "matches a prohibited credential-like pattern"
-        )
-    if PurePosixPath(path_text).is_absolute():
-        return CitationVerdict(
-            "error", "must be a repo-relative path, not absolute"
-        )
-
-    root = repo_root_path.resolve()
-    try:
-        candidate = (root / path_text).resolve()
-    except (OSError, RuntimeError):
-        # A citation naming a self-referential symlink inside the repository made
-        # .resolve() raise, and it escaped as a traceback. Same class of defect as
-        # the one _is_canonical_location catches for discovery; a third cross-model
-        # review-final pass found this second, unguarded site.
-        return CitationVerdict("error", "cannot be resolved to a path")
-    if not candidate.is_relative_to(root):
-        return CitationVerdict(
-            "error", "resolves outside the repository"
-        )
-    if not candidate.is_file():
-        return CitationVerdict(
-            "error", "does not resolve to a real file in the repository"
-        )
-    return CitationVerdict("ok")
-
-
-def _classify_citation(citation: str, repo_root_path: Path) -> CitationVerdict:
+def _classify_citation(
+    citation: str, repo_root_path: Path, *, check_links: bool = False
+) -> CitationVerdict:
     """Route one citation to the rule for its form (CONTRACT.md section 3).
 
     Order matters. Markdown links unwrap first, because ADR-0003's own reference
@@ -716,66 +635,148 @@ def _classify_citation(citation: str, repo_root_path: Path) -> CitationVerdict:
     if link:
         text = link.group("target")
 
-    if text.startswith(_URL_PREFIXES):
-        return _classify_url(text)
-
-    if (
-        _COMMIT_CITATION_RE.match(text)
-        or _GRAPH_EDGE_RE.match(text)
-        or _TOOL_RESULT_RE.match(text)
+    parsed = _EVIDENCE_PARSER.parse_citation(text)
+    if parsed.kind in (
+        _EVIDENCE_PARSER.EvidenceKind.GITHUB_URL,
+        _EVIDENCE_PARSER.EvidenceKind.EXTERNAL_URL,
     ):
-        # Defence in depth: the shape checks above are what stop a path being
-        # laundered into the non-fatal channel, and the blocklist is a second,
-        # independent reason the same laundering fails. Two review rounds have now
-        # found a way to satisfy one of these shapes with hostile content, so the
-        # cheaper check runs too rather than trusting the regex alone.
+        return _classify_url(text, check_links=check_links)
+
+    if parsed.kind in (
+        _EVIDENCE_PARSER.EvidenceKind.LOCAL_FILE_LINE,
+        _EVIDENCE_PARSER.EvidenceKind.LOCAL_FILE_RANGE,
+    ):
+        if parsed.start_line is None or parsed.end_line is None:
+            return CitationVerdict("error", "carries an incomplete line position")
+        if parsed.start_line < 1 or parsed.end_line < parsed.start_line:
+            return CitationVerdict("error", "carries a malformed line position")
+
+    if parsed.kind in (
+        _EVIDENCE_PARSER.EvidenceKind.LOCAL_FILE,
+        _EVIDENCE_PARSER.EvidenceKind.LOCAL_FILE_LINE,
+        _EVIDENCE_PARSER.EvidenceKind.LOCAL_FILE_RANGE,
+        _EVIDENCE_PARSER.EvidenceKind.LOCAL_FILE_SYMBOL,
+        _EVIDENCE_PARSER.EvidenceKind.ABSENT_PATH,
+        _EVIDENCE_PARSER.EvidenceKind.COMMIT,
+    ):
+        result = _EVIDENCE_PARSER.verify_citation(parsed, repo_root_path)
+        return CitationVerdict(result.status, result.detail)
+
+    if parsed.kind in (
+        _EVIDENCE_PARSER.EvidenceKind.GRAPH_EDGE,
+        _EVIDENCE_PARSER.EvidenceKind.TOOL_RESULT,
+    ):
         if _contains_prohibited_reference(text):
             return CitationVerdict(
                 "error", "matches a prohibited credential-like pattern"
             )
-        if _COMMIT_CITATION_RE.match(text):
-            return CitationVerdict(
-                "unverified", "is a commit reference, which names no openable file"
-            )
-        return CitationVerdict(
-            "unverified",
-            "is a graph-edge or tool-result citation, which names no openable file",
-        )
+        # The credential guard runs first and stays first: it decides whether
+        # this text may be looked at, before any verifier decides what it means.
+        # Past that, the registry owns the verdict. Kinds it has no verifier for
+        # come back carrying `UNVERIFIABLE_KIND_DETAIL`, so the wording nodes
+        # quote as a FACT is unchanged for them.
+        result = _EVIDENCE_PARSER.verify_citation(parsed, repo_root_path)
+        return CitationVerdict(result.status, result.detail)
 
-    position = _FILE_POSITION_RE.match(text)
-    if position:
-        start = int(position.group("start"))
-        end = position.group("end")
-        # Only the position's internal consistency is checked, not whether the file
-        # is actually that long. Bounds-checking line numbers against file contents
-        # is real staleness detection and belongs with the staleness work, not here.
-        if start < 1 or (end is not None and int(end) < start):
-            return CitationVerdict("error", "carries a malformed line position")
-        return _classify_repo_path(position.group("path"), repo_root_path)
+    return CitationVerdict(
+        "error",
+        "matches none of CONTRACT.md's six supported citation forms",
+    )
+# The known-unverified baseline -- a ratchet, not an amnesty.
+#
+# Fail-closed validation is correct going forward but cannot be applied
+# retroactively to a corpus written under the old rule: several hundred existing
+# citations are legitimate observations recorded in a form no verifier can check.
+# Deleting them would destroy real evidence; reclassifying them wholesale to
+# TEAM_KNOWLEDGE would misdescribe their provenance, since "told to the layer by
+# a person" is false for something an author observed.
+#
+# So they are enumerated here by name. Every entry is a citation someone must
+# eventually migrate, the list can only shrink, and nothing new may join it
+# without editing this file in a reviewed commit.
+#
+# An entry is keyed by node, evidence entry and citation index -- never by the
+# citation's text, which is untrusted document prose this tracked file should not
+# reproduce. A key that no longer names a blocking citation is a HARD ERROR, not
+# a silent no-op: without that, the list would only ever grow stale and the
+# ratchet would not turn.
+BASELINE_PATH = "launchpad/project-intelligence/corpus/known-unverified.txt"
 
-    if any(character.isspace() for character in text):
-        return CitationVerdict(
-            "error",
-            "matches none of CONTRACT.md's six supported citation forms",
-        )
+_BASELINE_KEY_RE = re.compile(r"^(.*?: evidence entry \d+, citation \d+):")
 
-    return _classify_repo_path(text, repo_root_path)
+# How many hex characters of the citation digest go in the key. Enough that two
+# citations do not collide; short enough that the key stays readable.
+_BASELINE_DIGEST_LENGTH = 12
+
+
+def citation_digest(citation: str) -> str:
+    """A short, stable fingerprint of a citation's text.
+
+    A DIGEST, never the text. The baseline is a tracked file and citations are
+    untrusted document prose, so the file must record WHICH citation is
+    outstanding without reproducing what it says.
+    """
+    return hashlib.sha256(citation.encode("utf-8")).hexdigest()[:_BASELINE_DIGEST_LENGTH]
+
+
+def baseline_key(message: str, citation: str | None = None) -> str:
+    """Node, evidence entry index, citation index, and the citation's digest.
+
+    The position alone is not an identity. Keyed on position only, replacing a
+    baselined citation in place with a COMPLETELY DIFFERENT blocking citation
+    left it covered by the old entry -- validation stayed green and
+    `known-unverified.txt` never changed, so "a new blocking citation cannot
+    join without editing this file" was not actually enforced. The digest binds
+    the amnesty to the exact citation that earned it.
+
+    The detail is still excluded, so rewording a verifier's message does not
+    invalidate the whole baseline.
+    """
+    match = _BASELINE_KEY_RE.match(message)
+    position = match.group(1) if match else message
+    if citation is None:
+        return position
+    return f"{position} [{citation_digest(citation)}]"
+
+
+def load_baseline(repo_root_path: Path, corpus_root: Path) -> set[str]:
+    """Load the baseline, but only for the corpus it was generated against.
+
+    The entries name citations in THIS corpus. Applied to any other tree -- a
+    test fixture, a `--root` pointed elsewhere -- every entry would look stale
+    and the run would fail with hundreds of spurious errors about a corpus it
+    was never about.
+    """
+    if corpus_root.resolve() != (repo_root_path / DEFAULT_ROOT).resolve():
+        return set()
+    path = repo_root_path / BASELINE_PATH
+    if not path.is_file():
+        return set()
+    entries = set()
+    for line in path.read_text().splitlines():
+        line = line.strip()
+        if line and not line.startswith("#"):
+            entries.add(line)
+    return entries
 
 
 def find_citation_problems(
-    nodes: list[LoadedNode], repo_root_path: Path
-) -> tuple[list[str], list[str]]:
-    """Classify every evidence citation; return (errors, unverified).
+    nodes: list[LoadedNode],
+    repo_root_path: Path,
+    *,
+    check_links: bool = False,
+    keys: dict[str, str] | None = None,
+) -> tuple[list[str], list[str], list[str]]:
+    """Classify every evidence citation; return (errors, unverified, deferred).
 
-    Citations are located by position -- "evidence entry 2, citation 1" -- rather
-    than by quoting them, so an author can find the offender without this validator
-    ever printing a value it was asked to reject.
-
-    Nodes with `node.error` already set are skipped -- see
-    find_unresolved_relationship_targets's docstring for why.
+    `keys`, when given, is filled with message -> baseline key. It is an
+    optional out-parameter rather than a fourth return value so the many
+    existing callers keep working unchanged; only the baseline needs it, and it
+    needs the citation TEXT, which does not survive into the message.
     """
     errors: list[str] = []
     unverified: list[str] = []
+    deferred: list[str] = []
     for node in nodes:
         if node.error:
             continue
@@ -787,18 +788,22 @@ def find_citation_problems(
             for citation_index, citation in enumerate(citations, start=1):
                 if not isinstance(citation, str):
                     continue
-                verdict = _classify_citation(citation, repo_root_path)
+                verdict = _classify_citation(citation, repo_root_path, check_links=check_links)
                 if verdict.status == "ok":
                     continue
                 message = (
                     f"{label}: evidence entry {entry_index}, citation "
                     f"{citation_index}: {verdict.detail}"
                 )
+                if keys is not None:
+                    keys[message] = baseline_key(message, citation)
                 if verdict.status == "error":
                     errors.append(message)
+                elif verdict.status == "deferred":
+                    deferred.append(message)
                 else:
                     unverified.append(message)
-    return errors, unverified
+    return errors, unverified, deferred
 
 
 def find_non_finite_confidence(nodes: list[LoadedNode]) -> list[str]:
@@ -878,7 +883,7 @@ def find_ownership_violations(corpus_root: Path) -> list[str]:
     return errors
 
 
-def validate_corpus(corpus_root: Path) -> ValidationReport:
+def validate_corpus(corpus_root: Path, *, check_links: bool = False) -> ValidationReport:
     """Validate the corpus at `corpus_root`, returning errors and unverified notices."""
     root = repo_root()
     nodes = load_nodes(corpus_root)
@@ -888,9 +893,35 @@ def validate_corpus(corpus_root: Path) -> ValidationReport:
     report.errors.extend(find_unresolved_relationship_targets(nodes))
     report.errors.extend(find_non_finite_confidence(nodes))
 
-    citation_errors, citation_unverified = find_citation_problems(nodes, root)
+    citation_keys: dict[str, str] = {}
+    citation_errors, citation_unverified, citation_deferred = find_citation_problems(
+        nodes, root, check_links=check_links, keys=citation_keys
+    )
     report.errors.extend(citation_errors)
-    report.unverified.extend(citation_unverified)
+    report.deferred.extend(citation_deferred)
+
+    baseline = load_baseline(root, corpus_root)
+    # A citation that turned into a hard ERROR is still outstanding, so its
+    # baseline line is not stale. Counting only the unverified ones reported it
+    # twice -- once as the error, once as "no longer blocks validation", which
+    # was the opposite of true and told the reader to delete the line tracking a
+    # citation that had just started failing harder.
+    seen_keys = {
+        citation_keys.get(message, baseline_key(message))
+        for message in (*citation_unverified, *citation_errors)
+    }
+    for message in citation_unverified:
+        if citation_keys.get(message, baseline_key(message)) in baseline:
+            report.baselined.append(message)
+        else:
+            report.unverified.append(message)
+    # The ratchet's teeth. A baseline entry that no longer names a blocking
+    # citation must be removed, or the list silently stops shrinking.
+    for stale in sorted(baseline - seen_keys):
+        report.errors.append(
+            f"{stale}: is in {BASELINE_PATH} but no longer blocks validation "
+            "-- remove this line"
+        )
 
     report.errors.extend(find_non_canonical_nodes(corpus_root))
     report.errors.extend(find_ownership_violations(corpus_root))
@@ -901,34 +932,57 @@ def validate_corpus(corpus_root: Path) -> ValidationReport:
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--root", default=None, help=f"corpus root (default: {DEFAULT_ROOT})")
+    parser.add_argument(
+        "--check-links",
+        action="store_true",
+        help="open HTTP(S) citations and fail unreachable targets",
+    )
     args = parser.parse_args(argv)
 
     root = Path(args.root) if args.root else repo_root() / DEFAULT_ROOT
 
     try:
-        report = validate_corpus(root)
+        report = validate_corpus(root, check_links=args.check_links)
     except CorpusRootMissing as exc:
         print(f"FAIL  corpus root does not exist: {exc}", file=sys.stderr)
         return 1
 
-    # Printed whether or not the run fails: an unverified citation is not a defect,
-    # but a run that hid them would let "PASS" claim more than it checked.
+    for notice in report.baselined:
+        print(f"BASELINED  {notice}", file=sys.stderr)
+    for notice in report.deferred:
+        print(f"DEFERRED  {notice}", file=sys.stderr)
     for notice in report.unverified:
         print(f"UNVERIFIED  {notice}", file=sys.stderr)
 
-    if report.errors:
+    # Deferred citations are announced even on a clean run, so nobody reads a
+    # structural PASS as "every citation was checked". They are decided by the
+    # link stage, which CI always runs.
+    if report.baselined:
+        print(
+            f"NOTE  {len(report.baselined)} citation(s) carried in "
+            f"{BASELINE_PATH}; this list may only shrink",
+            file=sys.stderr,
+        )
+    if report.deferred:
+        print(
+            f"NOTE  {len(report.deferred)} citation(s) deferred to --check-links; "
+            "this run did not check them",
+            file=sys.stderr,
+        )
+
+    if report.errors or report.unverified:
         for error in report.errors:
             print(f"FAIL  {error}", file=sys.stderr)
-        print(f"FAIL  {len(report.errors)} corpus validation error(s)", file=sys.stderr)
+        if report.unverified:
+            print(
+                f"FAIL  {len(report.unverified)} unverified citation(s) block validation",
+                file=sys.stderr,
+            )
+        if report.errors:
+            print(f"FAIL  {len(report.errors)} corpus validation error(s)", file=sys.stderr)
         return 1
 
-    if report.unverified:
-        print(
-            f"PASS  corpus validation found no errors; {len(report.unverified)} "
-            "item(s) reported unverified"
-        )
-    else:
-        print("PASS  corpus validation clean")
+    print("PASS  corpus validation clean")
     return 0
 
 

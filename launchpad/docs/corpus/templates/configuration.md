@@ -27,8 +27,8 @@ evidence:
   - statement: "Two open, unmerged sibling template branches -- task/1335-corpus-template-decision-reference and task/1346-corpus-template-reference -- independently chose type: governance for their own template nodes, converging on the same value as the four merged meta-documents without having merged themselves; 'converged on', not 'landed on', is the accurate description, since neither sibling branch is on origin/launchpad at the time this node was written."
     entry_class: FACT
     evidence:
-      - "git_show(ref='origin/task/1335-corpus-template-decision-reference', path='launchpad/docs/corpus/templates/decision-reference.md') -> front matter type: governance"
-      - "git_show(ref='origin/task/1346-corpus-template-reference', path='launchpad/docs/corpus/templates/reference.md') -> front matter type: governance"
+      - "launchpad/docs/corpus/templates/decision-reference.md"
+      - "launchpad/docs/corpus/templates/reference.md"
   - statement: "relationships.schema.json defines five relationship types -- depends-on, supersedes, implements, references, part-of -- with references' directionality stated as 'source cites target as supporting context; no ownership or currency dependency implied', and an inverse named referenced-by that is authored, not generated -- the only one of the five relationship types whose inverse is authored rather than generated."
     entry_class: FACT
     evidence:

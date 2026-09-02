@@ -62,7 +62,7 @@ evidence:
     entry_class: FACT
     evidence:
       - ".github/workflows/launchpad-corpus-validate.yml"
-  - statement: "UNVERIFIED notices are printed on every run and are never fatal; a run that reports them still exits 0."
+  - statement: "UNVERIFIED notices are printed on every run and block it: under fail-closed validation a run that reports any UNVERIFIED citation exits non-zero, because a citation nothing could check is not a passing state."
     entry_class: FACT
     evidence:
       - "launchpad/project-intelligence/corpus/validate.py"

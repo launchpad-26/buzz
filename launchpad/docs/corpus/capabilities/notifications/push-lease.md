@@ -44,7 +44,7 @@ evidence:
   - statement: "Representative automated verification for this capability's acceptance and delivery path includes push_lease.rs's own #[test] functions (mod tests, starting crates/buzz-relay/src/handlers/push_lease.rs:600) covering envelope/plaintext/generation/quota validation, and push_runtime.rs's gift_wrap_match_requires_self_p_filter_and_recipient (line 619) and gateway_retries_send_the_same_request_id_over_http (line 660) tests covering gift-wrap match authorization and delivery-retry idempotency."
     entry_class: FACT
     evidence:
-      - "crates/buzz-relay/src/handlers/push_lease.rs:600-763"
+      - "crates/buzz-relay/src/handlers/push_lease.rs:586-747"
       - "crates/buzz-relay/src/push_runtime.rs:619"
       - "crates/buzz-relay/src/push_runtime.rs:660"
   - statement: "A directory of standalone formal models (docs/formal/nip-pl/: acceptance.py, delivery.py, fixed_payload.py, and mutation-test counterparts mutation_test.py, delivery_mutation.py, fixed_payload_mutation.py) exists alongside the Rust implementation, independently bounded-exhaustively checking lease-acceptance ordering, gateway delivery authority, and the fixed-APNs-payload invariant."

@@ -82,7 +82,7 @@ evidence:
     evidence:
       - "crates/buzz-db/src/runtime/replica_fence.rs:91"
       - "crates/buzz-db/src/runtime/replica_fence.rs:774-789"
-      - "crates/buzz-db/src/lib.rs:852-874"
+      - "crates/buzz-db/src/runtime/replica_fence.rs:774-788"
       - "crates/buzz-relay/src/main.rs:200-228"
   - statement: "buzz-workflow's WorkflowEngine::run is a 60-second, fixed (not env-configurable) tick loop, spawned once from buzz-relay's boot sequence, that evaluates every enabled Schedule-triggered (cron or interval) workflow definition on every relay pod; architecture-flows-workflow-execution already narrates this cron/interval trigger path -- including its deterministic per-pod scheduled_for computation, its durable per-fire claim row, and its documented non-replay of fires missed during downtime -- in full, so this node names it as one instance of the background-worker shape rather than re-describing that behavior."
     entry_class: FACT
@@ -95,7 +95,7 @@ evidence:
     evidence:
       - "crates/buzz-relay/src/main.rs:541-1099"
       - "crates/buzz-relay/src/storage_sweep.rs:248"
-      - "crates/buzz-db/src/lib.rs:868-874"
+      - "crates/buzz-db/src/runtime/mod.rs:679-688"
   - statement: "crates/buzz-backend-kubernetes's gc.rs and reconcile.rs are not background workers despite their names: gc.rs's own module doc states 'GC runs on every deploy, after identity derivation and before the state transition,' and reconcile.rs's own module doc describes 'the deploy loop: executes classify's actions against a substrate and re-enters' -- both execute synchronously inside one deploy() call, bounded by a 600-second OPERATION_DEADLINE_SECS, not on a standing process-lifetime timer independent of any caller."
     entry_class: FACT
     evidence:

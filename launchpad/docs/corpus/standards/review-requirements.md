@@ -76,7 +76,7 @@ evidence:
     entry_class: FACT
     evidence:
       - "launchpad/docs/corpus/AGENTS.md"
-  - statement: "AGENTS.md states that nothing enforces a limit on repeated commit-only FACT entries -- the checker treats every commit citation identically and a second, third or tenth such entry produces only non-fatal UNVERIFIED notices -- so more than one commit-only FACT in a ledger is a convention a reviewer has to hold, not a rule the tooling holds."
+  - statement: "AGENTS.md states that nothing enforces a limit on repeated commit-only FACT entries -- the checker now resolves each commit citation against the object store, so an existing commit verifies ok and a missing one is a hard error, but it counts nothing -- so more than one commit-only FACT in a ledger remains a convention a reviewer has to hold, not a rule the tooling holds."
     entry_class: FACT
     evidence:
       - "launchpad/docs/corpus/AGENTS.md"

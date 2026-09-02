@@ -64,7 +64,7 @@ evidence:
   - statement: "crates/buzz-relay/src/handlers/push_lease.rs contains unit tests (ten #[test] functions from line 612 onward) covering lease tag/plaintext/generation/quota validation, and crates/buzz-relay/src/push_runtime.rs contains gift_wrap_match_requires_self_p_filter_and_recipient and gateway_retries_send_the_same_request_id_over_http, exercising the gift-wrap authorization narrowing and delivery-retry idempotency this capability depends on."
     entry_class: FACT
     evidence:
-      - "crates/buzz-relay/src/handlers/push_lease.rs:612-763"
+      - "crates/buzz-relay/src/handlers/push_lease.rs:586-747"
       - "crates/buzz-relay/src/push_runtime.rs:619"
       - "crates/buzz-relay/src/push_runtime.rs:660"
   - statement: "docs/formal/nip-pl/ contains standalone formal models (acceptance.py, delivery.py, fixed_payload.py, and mutation-test counterparts mutation_test.py, delivery_mutation.py, fixed_payload_mutation.py) independent of the Rust test suite, bounded-exhaustively checking lease-acceptance ordering, gateway delivery authority, and the fixed-APNs-payload invariant."
@@ -79,7 +79,7 @@ evidence:
   - statement: "No corpus node under launchpad/docs/corpus/interfaces-events exists on origin/launchpad at the recorded revision -- the interfaces-events corpus surface is unpopulated, so this capability has no interface node it could reference for the kind:30350 event boundary."
     entry_class: FACT
     evidence:
-      - "git_ls_tree(ref='origin/launchpad', path='launchpad/docs/corpus') -> no interfaces-events subtree present at commit 338b4d0cf2dd76cc43964bb717ce9f0a94a9c7a5"
+      - "absent:launchpad/docs/corpus/interfaces-events@338b4d0cf2dd76cc43964bb717ce9f0a94a9c7a5"
   - statement: "launchpad/docs/corpus/architecture/flows/push-notification.md (id: architecture-flows-push-notification), launchpad/docs/corpus/architecture/containers/relay.md (id: architecture-containers-relay), and launchpad/docs/corpus/architecture/containers/push-gateway.md (id: architecture-containers-push-gateway) all exist on origin/launchpad at the recorded revision, each with status: draft, and are therefore valid relationship targets."
     entry_class: FACT
     evidence:

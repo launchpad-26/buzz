@@ -37,8 +37,14 @@ tests) construct entries with `collect_*` and assemble them with
 
 from __future__ import annotations
 
+import http.client
 import json
+import enum
+import re
 import subprocess
+import time
+import urllib.error
+import urllib.request
 from dataclasses import dataclass, field
 from pathlib import Path, PurePosixPath
 
@@ -70,6 +76,883 @@ _VALID_CLASSES = {
     "adr",
 }
 
+
+class EvidenceKind(enum.Enum):
+    LOCAL_FILE = "local_file"
+    LOCAL_FILE_LINE = "local_file_line"
+    LOCAL_FILE_RANGE = "local_file_range"
+    LOCAL_FILE_SYMBOL = "local_file_symbol"
+    ABSENT_PATH = "absent_path"
+    COMMIT = "commit"
+    GITHUB_URL = "github_url"
+    EXTERNAL_URL = "external_url"
+    GRAPH_EDGE = "graph_edge"
+    TOOL_RESULT = "tool_result"
+    UNKNOWN = "unknown"
+
+
+@dataclass(frozen=True)
+class ParsedCitation:
+    kind: EvidenceKind
+    path: str | None = None
+    start_line: int | None = None
+    end_line: int | None = None
+    commit: str | None = None
+    url: str | None = None
+    symbol: str | None = None
+    # Tool-result citations only. `tool_assertion` is captured so a detail can
+    # say it went uncompared -- never so a verifier can judge it. See
+    # `_verify_git_tool` for why comparing it is not on offer.
+    tool: str | None = None
+    tool_args: str | None = None
+    tool_assertion: str | None = None
+
+
+_PARSE_URL_PREFIXES = ("http://", "https://")
+_PARSE_MARKDOWN_LINK_RE = re.compile(r"^\[[^\]]*\]\((?P<target>[^)\s]+)\)$")
+_PARSE_COMMIT_RE = re.compile(r"^commit\s+(?P<sha>[0-9a-fA-F]{7,40})\b")
+_PARSE_FILE_POSITION_RE = re.compile(
+    r"^(?P<path>\S+?):(?P<start>\d+)(?:-(?P<end>\d+))?$"
+)
+# `path#symbol=NAME` -- a position that survives edits. A line number names a
+# place in a file as it was; a symbol names the thing the claim is about, and
+# still finds it after the code above it moves. See #2012 for why the vocabulary
+# lacked this and what its absence cost.
+_PARSE_FILE_SYMBOL_RE = re.compile(
+    r"^(?P<path>\S+?)#symbol=(?P<symbol>[A-Za-z_][A-Za-z0-9_.]*)$"
+)
+# `absent:<path>@<40-hex>` -- evidence that something is NOT there.
+#
+# A large share of corpus FACTs are absence claims ("no layers/ directory
+# present", "zero matches in this crate"), and they had no citable form at all:
+# nothing exists to point at, so authors expressed them as tool-result prose
+# that no verifier could check. Absence is genuinely verifiable, though -- a
+# path either is or is not in a tree -- so it gets a real form rather than a
+# permanent excuse. The commit pin is mandatory: absence is only meaningful
+# relative to a specific tree.
+_PARSE_ABSENT_PATH_RE = re.compile(
+    r"^absent:(?P<path>[^@\s]+)@(?P<commit>[0-9a-f]{40})$"
+)
+_PARSE_SYMBOL = r"[A-Za-z_][A-Za-z0-9_.:]*"
+_PARSE_GRAPH_EDGE_RE = re.compile(
+    rf"^{_PARSE_SYMBOL} -> {_PARSE_SYMBOL} \(\d+ hops?\)$"
+)
+_PARSE_TOOL_RESULT_RE = re.compile(
+    rf"^(?P<tool>{_PARSE_SYMBOL})\((?P<args>.*)\) -> (?P<assertion>.+)$"
+)
+
+
+def _parse_url_target(text: str) -> str:
+    return text.split()[0].rstrip(",.;")
+
+
+def parse_citation(citation: str) -> ParsedCitation:
+    """Parse one citation into a typed, normalized evidence reference.
+
+    Parsing identifies the evidence kind only. It does not claim the source is
+    valid or reachable; that is the verifier layer's responsibility.
+    """
+    text = citation.strip()
+    link = _PARSE_MARKDOWN_LINK_RE.match(text)
+    if link:
+        text = link.group("target")
+    if text.startswith(_PARSE_URL_PREFIXES):
+        target = _parse_url_target(text)
+        kind = (
+            EvidenceKind.GITHUB_URL
+            if "github.com/" in target or "raw.githubusercontent.com/" in target
+            else EvidenceKind.EXTERNAL_URL
+        )
+        return ParsedCitation(kind=kind, url=target)
+    commit = _PARSE_COMMIT_RE.match(text)
+    if commit:
+        return ParsedCitation(kind=EvidenceKind.COMMIT, commit=commit.group("sha"))
+    if _PARSE_GRAPH_EDGE_RE.match(text):
+        return ParsedCitation(kind=EvidenceKind.GRAPH_EDGE)
+    tool_result = _PARSE_TOOL_RESULT_RE.match(text)
+    if tool_result:
+        return ParsedCitation(
+            kind=EvidenceKind.TOOL_RESULT,
+            tool=tool_result.group("tool"),
+            tool_args=tool_result.group("args"),
+            tool_assertion=tool_result.group("assertion"),
+        )
+    absent = _PARSE_ABSENT_PATH_RE.match(text)
+    if absent:
+        return ParsedCitation(
+            kind=EvidenceKind.ABSENT_PATH,
+            path=absent.group("path"),
+            commit=absent.group("commit"),
+        )
+    symbol_anchor = _PARSE_FILE_SYMBOL_RE.match(text)
+    if symbol_anchor:
+        return ParsedCitation(
+            kind=EvidenceKind.LOCAL_FILE_SYMBOL,
+            path=symbol_anchor.group("path"),
+            symbol=symbol_anchor.group("symbol"),
+        )
+    position = _PARSE_FILE_POSITION_RE.match(text)
+    if position:
+        end = position.group("end")
+        return ParsedCitation(
+            kind=(
+                EvidenceKind.LOCAL_FILE_RANGE
+                if end is not None
+                else EvidenceKind.LOCAL_FILE_LINE
+            ),
+            path=position.group("path"),
+            start_line=int(position.group("start")),
+            end_line=int(end) if end is not None else int(position.group("start")),
+        )
+    if text and not any(character.isspace() for character in text):
+        return ParsedCitation(kind=EvidenceKind.LOCAL_FILE, path=text)
+    return ParsedCitation(kind=EvidenceKind.UNKNOWN)
+
+
+
+@dataclass(frozen=True)
+class VerificationResult:
+    status: str  # "ok" | "error" | "unverified"
+    detail: str = ""
+
+
+# The verdict for an evidence kind no verifier covers. Shared with `validate.py`
+# so the two modules cannot drift apart on the wording, which corpus nodes quote
+# verbatim as a FACT about checker behaviour
+# (`standards/test-references.md`). Change it in one place or not at all.
+UNVERIFIABLE_KIND_DETAIL = (
+    "is a graph-edge or tool-result citation, which names no openable file"
+)
+
+
+def _verification_line_count(path: Path) -> int:
+    data = path.read_bytes()
+    return data.count(b"\n") + bool(data and not data.endswith(b"\n"))
+
+
+def _verify_local(parsed: ParsedCitation, repo_root: Path) -> VerificationResult:
+    assert parsed.path is not None
+    if _is_credential_like_path(parsed.path):
+        return VerificationResult("error", "matches a prohibited credential-like pattern")
+    if PurePosixPath(parsed.path).is_absolute():
+        return VerificationResult("error", "must be a repo-relative path, not absolute")
+    resolved_root = repo_root.resolve()
+    try:
+        candidate = (resolved_root / parsed.path).resolve()
+    except (OSError, RuntimeError):
+        return VerificationResult("error", "cannot be resolved to a path")
+    if not candidate.is_relative_to(resolved_root):
+        return VerificationResult("error", "resolves outside the repository")
+    if not candidate.is_file():
+        return VerificationResult("error", "does not resolve to a real file in the repository")
+    if parsed.end_line is not None and parsed.end_line > _verification_line_count(candidate):
+        return VerificationResult("error", "line position exceeds the cited file's length")
+    return VerificationResult("ok")
+
+
+def _verify_local_symbol(parsed: ParsedCitation, repo_root: Path) -> VerificationResult:
+    """Resolve `path#symbol=NAME`: the file must exist and must name the symbol.
+
+    What this establishes is deliberately the same as every other citation form:
+    that you cited something real. It confirms the symbol APPEARS in the cited
+    file, never that the file supports the statement above it -- `standards/
+    evidence.md` is explicit that only a person reading the source establishes a
+    FACT.
+
+    What it adds over `path:line` is durability. A line number names a place in
+    the file as it was, and an edit above it silently repoints the citation at
+    unrelated code while the bounds check still passes. A symbol names the thing
+    the claim is about, so it still resolves after the code above it moves --
+    and when the symbol's name disappears from the file the citation FAILS
+    instead of quietly pointing somewhere wrong.
+
+    The match is LEXICAL, not semantic, and the limit is worth stating plainly:
+    a name that survives in a comment or a string literal still satisfies this
+    check after the definition is gone. It detects a name vanishing from a file,
+    never that a definition still exists. Making it semantic would mean a parser
+    per language, which is not on offer here.
+
+    The path guards are the shared ones: this form must not become a way around
+    the credential blocklist or the repository-containment rule.
+    """
+    assert parsed.path is not None
+    assert parsed.symbol is not None
+    location = _verify_local(
+        ParsedCitation(kind=EvidenceKind.LOCAL_FILE, path=parsed.path), repo_root
+    )
+    if location.status != "ok":
+        return location
+    candidate = (repo_root.resolve() / parsed.path).resolve()
+    try:
+        content = candidate.read_text(errors="replace")
+    except OSError:
+        return VerificationResult("error", "names a file that could not be read")
+    if re.search(rf"(?<![A-Za-z0-9_]){re.escape(parsed.symbol)}(?![A-Za-z0-9_])", content):
+        return VerificationResult("ok")
+    return VerificationResult(
+        "error", "names a symbol that does not appear in the cited file"
+    )
+
+
+def _verify_absent_path(parsed: ParsedCitation, repo_root: Path) -> VerificationResult:
+    """Resolve `absent:<path>@<commit>`: the path must NOT be in that tree.
+
+    The order of the checks is the whole design. A missing path proves nothing
+    unless the tree it is missing from is actually present, so the commit is
+    resolved FIRST and a commit this checkout does not have yields `unverified`,
+    never `ok`. Without that, every absence claim pinned to an unfetched commit
+    would confirm itself against a tree nobody looked at -- the same vacuous pass
+    the grep verifier guards against by checking its paths exist.
+    """
+    assert parsed.path is not None
+    assert parsed.commit is not None
+    if _is_credential_like_path(parsed.path):
+        return VerificationResult("error", "matches a prohibited credential-like pattern")
+    if PurePosixPath(parsed.path).is_absolute() or parsed.path.startswith("-"):
+        return VerificationResult("error", "must be a repo-relative path, not absolute")
+    if ".." in PurePosixPath(parsed.path).parts:
+        return VerificationResult("error", "resolves outside the repository")
+    # The path must be CANONICAL, not merely safe. `git rev-parse <sha>:<path>`
+    # fails for a non-canonical spelling of a path that exists -- `Justfile/`,
+    # `launchpad//README.md`, `launchpad/./README.md`, `.` -- and this verifier
+    # reads any such failure as proven absence. Without this check each of those
+    # returned `ok` against a file that is right there: a vacuous pass in the
+    # one form built to make absence provable. Reject the spelling instead of
+    # normalising it, so the citation says exactly what was checked.
+    if len(parsed.path) > _MAX_CITATION_PATH_LENGTH:
+        # `git` rejects an over-long argument with OSError E2BIG, which escaped
+        # as a traceback and took the whole run down. It is also not a real
+        # path, so refuse it here rather than letting the subprocess decide.
+        return VerificationResult(
+            "error", "is longer than any real repository path"
+        )
+    # A backslash is not a path separator to git, so `launchpad\\README.md` is
+    # simply a filename git cannot resolve -- and this verifier reads any
+    # failure to resolve as proven absence. That made every Windows-style
+    # spelling of an EXISTING file verify `ok`, which is the same vacuous pass
+    # the check below was added to close, entered through a different door.
+    if "\\" in parsed.path:
+        return VerificationResult(
+            "error",
+            "uses a backslash, which git does not treat as a path separator, so "
+            "its absence would only mean git could not resolve the spelling",
+        )
+    if any(part in ("", ".") for part in parsed.path.split("/")):
+        return VerificationResult(
+            "error",
+            "is not a canonical repository path, so its absence would not be "
+            "distinguishable from a spelling git cannot resolve",
+        )
+    if not _git_object_exists(repo_root, f"{parsed.commit}^{{commit}}"):
+        return VerificationResult(
+            "unverified",
+            "pins absence to a commit this checkout does not have, so the "
+            "absence could not be established",
+        )
+    if _git_object_exists(repo_root, f"{parsed.commit}:{parsed.path}"):
+        return VerificationResult(
+            "error",
+            "claims a path is absent, but it exists at the pinned commit",
+        )
+    return VerificationResult("ok")
+
+
+def _verify_commit(parsed: ParsedCitation, repo_root: Path) -> VerificationResult:
+    assert parsed.commit is not None
+    result = subprocess.run(
+        ["git", "cat-file", "-e", f"{parsed.commit}^{{commit}}"],
+        cwd=repo_root,
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+        check=False,
+    )
+    if result.returncode == 0:
+        return VerificationResult("ok")
+    return VerificationResult("error", "names a commit that does not exist in this repository")
+
+
+# Tool-result citations naming read-only git plumbing. This verifier is
+# deliberately FAIL-ONLY: it can report `error` when a cited source is gone, and
+# otherwise leaves the citation blocking as `unverified`. It never returns `ok`.
+#
+# The reason is measured, not stylistic. Across the corpus's 80 `git_ls_tree` /
+# `git_show` citations, only ONE asserted result is a machine-comparable list.
+# 41 carry negations ("no layers/ directory present"), 30 are partial-list
+# hedges ("includes ..."), 33 use globs (`schema/**`), 36 append provenance
+# ("run 2026-08-27"). A strict comparator would fail ~79 true citations; a
+# lenient one would pass vacuously on every "includes" and could not evaluate a
+# negation at all. Neither earns a pass, so neither is offered.
+#
+# What IS checkable is whether the cited source still resolves, and that has
+# immediate teeth: 10 of the 14 distinct refs cited across the corpus name
+# task branches deleted after their PRs merged.
+_GIT_TOOL_NAMES = {"git_ls_tree", "git.ls_tree", "git_show"}
+
+# Refused before any process is spawned. Corpus prose is the input here, so a
+# citation is untrusted text; these never appear in a legitimate ref or path
+# (measured: 0 occurrences across all 80 citations).
+_GIT_ARG_SHELL_METACHARACTERS = (";", "$(", "`", "|", "&", "\n", "\r", ">", "<")
+
+_GIT_KWARG_RE = re.compile(r"(?:^|,)\s*(?P<key>ref|path|commit)\s*=\s*(?P<value>[^,]+)")
+
+
+def _strip_argument_quotes(value: str) -> str:
+    return value.strip().strip("'\"").strip()
+
+
+def _parse_git_tool_arguments(args: str) -> tuple[str, str] | None:
+    """Reduce a citation's argument text to a `(ref, path)` pair, or `None`.
+
+    Three shapes occur in the corpus and all three are accepted: keyword
+    (`ref=..., path=...`, quoted or not), `git_show`'s combined
+    `'<sha>:<path>'`, and bare positional. A third argument is ignored -- it is
+    always a human annotation ("run 2026-08-27"), never an argument git takes.
+    """
+    text = args.strip()
+    if not text:
+        return None
+
+    keywords = {
+        match.group("key"): _strip_argument_quotes(match.group("value"))
+        for match in _GIT_KWARG_RE.finditer(text)
+    }
+    if keywords:
+        ref = keywords.get("ref") or keywords.get("commit")
+        path = keywords.get("path")
+        if ref and path:
+            return (ref, path)
+        return None
+
+    fields = [_strip_argument_quotes(field) for field in text.split(",")]
+    fields = [field for field in fields if field]
+    if len(fields) == 1 and ":" in fields[0]:
+        ref, _, path = fields[0].partition(":")
+        if ref and path:
+            return (ref, path)
+        return None
+    if len(fields) >= 2 and fields[0] and fields[1]:
+        return (fields[0], fields[1])
+    return None
+
+
+def _git_object_exists(repo_root: Path, revision: str) -> bool:
+    """Resolve a revision through git plumbing, as an argument list.
+
+    Never a shell string, and never with the citation's text in command
+    position -- the value only ever lands in an argument slot after the
+    metacharacter and option-shape guards in `_verify_git_tool` have passed.
+    """
+    result = subprocess.run(
+        ["git", "rev-parse", "--verify", "--quiet", revision],
+        cwd=repo_root,
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+        check=False,
+    )
+    return result.returncode == 0
+
+
+def _is_shallow_repository(repo_root: Path) -> bool:
+    result = subprocess.run(
+        ["git", "rev-parse", "--is-shallow-repository"],
+        cwd=repo_root,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    return result.stdout.strip() == "true"
+
+
+def _remote_tracking_refs_present(repo_root: Path, remote: str) -> bool:
+    result = subprocess.run(
+        ["git", "for-each-ref", "--format=%(refname)", f"refs/remotes/{remote}/"],
+        cwd=repo_root,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    return bool(result.stdout.strip())
+
+
+def _missing_ref_is_conclusive(repo_root: Path, ref: str) -> bool:
+    """Whether this checkout has standing to call a missing ref an error.
+
+    Shallowness truncates history DEPTH, not the ref LIST -- a `--depth 1`
+    clone of one branch has neither, but a clone that fetched every branch and
+    shortened their history has a complete ref list. So the two cases split:
+
+    - a remote-tracking NAME (`origin/task/...`): conclusive whenever this
+      checkout holds any refs for that remote, because then the branch list was
+      fetched and this name is not in it.
+    - a bare SHA: conclusive only in a full clone, since a shortened history is
+      exactly what makes an old commit unreachable here but real upstream.
+
+    Without this split the verifier either accuses citations a shallow CI
+    checkout cannot judge, or -- worse -- silently stops reporting genuine rot
+    to anyone whose clone happens to be shallow.
+    """
+    remote, _, branch = ref.partition("/")
+    if branch and _remote_tracking_refs_present(repo_root, remote):
+        return True
+    return not _is_shallow_repository(repo_root)
+
+
+def _verify_git_tool(parsed: ParsedCitation, repo_root: Path) -> VerificationResult:
+    assert parsed.tool_args is not None
+    if any(token in parsed.tool_args for token in _GIT_ARG_SHELL_METACHARACTERS):
+        return VerificationResult(
+            "unverified",
+            "names read-only git plumbing but its arguments contain a shell "
+            "metacharacter, so it was not replayed",
+        )
+    arguments = _parse_git_tool_arguments(parsed.tool_args)
+    if arguments is None:
+        return VerificationResult(
+            "unverified",
+            "names read-only git plumbing but its arguments could not be parsed "
+            "into a ref and a path, so it was not replayed",
+        )
+    ref, path = arguments
+    if ref.startswith("-") or path.startswith("-"):
+        return VerificationResult(
+            "unverified",
+            "names read-only git plumbing but an argument is option-shaped, so "
+            "it was not replayed",
+        )
+    if not _git_object_exists(repo_root, f"{ref}^{{commit}}"):
+        if not _missing_ref_is_conclusive(repo_root, ref):
+            return VerificationResult(
+                "unverified",
+                "cites a git ref this checkout cannot resolve and cannot rule "
+                "out either, because its history is shallow",
+            )
+        return VerificationResult(
+            "error",
+            "cites a git ref that no longer exists in this repository",
+        )
+    if not _git_object_exists(repo_root, f"{ref}:{path}"):
+        return VerificationResult(
+            "error",
+            "cites a path that does not exist at the cited ref",
+        )
+    return VerificationResult(
+        "unverified",
+        "source is reachable at the cited ref, but the asserted result is prose "
+        "and was not compared",
+    )
+
+
+# Why each remaining tool family has no verifier. Every string here is a fixed
+# constant: a detail is printed on a passing run, so it must never interpolate
+# citation text, which is untrusted document prose and could carry anything.
+# A test asserts no detail echoes its citation.
+_UNSUPPORTED_TOOL_FAMILIES = (
+    (
+        ("shell", "run_command", "run_python_check"),
+        "names an arbitrary shell command. Replaying it would execute text "
+        "taken from a corpus document, so no verifier exists and none is "
+        "planned -- cite the file or commit the command inspected instead",
+    ),
+    (
+        ("webfetch", "curl_fetch", "http_get", "fetch"),
+        "names a network fetch. Its result is remote content that changes "
+        "independently of this repository, so a replay could not confirm the "
+        "state cited -- cite the URL form instead, which --check-links checks",
+    ),
+    (
+        ("github_api", "gh"),
+        "names GitHub API state. Pull request and issue state is mutable and "
+        "needs authentication, so a replay would report today's state rather "
+        "than the state that was cited",
+    ),
+    (
+        ("git_log", "git_log_oneline", "git_log_last_commit", "git_diff_name_only",
+         "git_grep", "git_blame", "git_diff"),
+        "names read-only git plumbing that has no verifier yet. Its asserted "
+        "result is prose rather than a checkable verdict, so a replay would "
+        "produce nothing to compare against",
+    ),
+)
+
+
+def _unsupported_tool_detail(tool: str | None) -> str:
+    """The blocking detail for a tool family no verifier covers.
+
+    Matches on the family, never on the citation's arguments, so the returned
+    string is always one of the constants above.
+    """
+    if tool is None:
+        return UNVERIFIABLE_KIND_DETAIL
+    for names, detail in _UNSUPPORTED_TOOL_FAMILIES:
+        if tool in names or any(tool.startswith(f"{name}_") for name in names):
+            return detail
+    return UNVERIFIABLE_KIND_DETAIL
+
+
+# Tool-result citations naming a grep. Also fail-only, and additionally
+# restricted to citations that pin `ref=` to a full 40-hex SHA present locally
+# -- 8 of the corpus's 78 grep citations today. The other 70 name a branch or
+# no ref at all, and replaying those against a moving tree cannot distinguish a
+# false citation from ordinary drift, so they are left blocking rather than
+# judged on evidence that does not support a judgement.
+_GREP_TOOL_NAMES = {
+    "grep",
+    "grep_repo",
+    "grep_recursive",
+    "grep_case_sensitive",
+    "grep_case_insensitive",
+    "grep_recursive_case_insensitive",
+    "grep_extended_regex",
+}
+_CASE_INSENSITIVE_GREP_TOOLS = {
+    "grep_case_insensitive",
+    "grep_recursive_case_insensitive",
+}
+
+# Only the ref and the paths are guarded this way. The PATTERN is deliberately
+# exempt: `|`, `(`, `$` and friends are ordinary regex there, it reaches git in
+# an argument slot behind `-e`, and no shell ever sees it. Guarding it would
+# silently stop checking the alternation patterns that make up most pinned
+# citations -- a test pins that distinction.
+_GREP_PATH_SHELL_METACHARACTERS = (";", "$(", "`", "|", "&", "\n", "\r", ">", "<")
+
+_FULL_SHA_CITATION_RE = re.compile(r"^[0-9a-f]{40}$")
+# The bracketed alternative must come first: `paths=['a', 'b']` contains commas
+# INSIDE its value, and a plain `[^,]+` stops at the first one. That silently
+# dropped every path after the first, which biases an absence claim toward
+# looking true -- searching less than was cited is the one error this verifier
+# must never make.
+_GREP_KWARG_RE = re.compile(
+    r"(?:^|,)\s*(?P<key>pattern|path|paths|ref|scope|glob)\s*=\s*"
+    r"(?P<value>\[[^\]]*\]|[^,]+)"
+)
+# `scope=` and `glob=` name a pathspec pattern (`crates/**/*.rs`), not a path.
+# They are recognised so the citation can be reported accurately, and
+# deliberately NOT replayed: a glob cannot be resolved by the path-existence
+# guard below, and letting one through would mean an absence claim could be
+# "confirmed" by a pattern that matched no files at all.
+_GREP_GLOB_SCOPE_KEYS = ("scope", "glob")
+_ASSERTED_NO_MATCHES_RE = re.compile(r"^\s*(?:zero|no)\s+(?:matches|results|hits)\b", re.I)
+_ASSERTED_SOME_MATCHES_RE = re.compile(r"^\s*(?P<count>\d+)\s+(?:matches|hits)\b", re.I)
+
+
+def _parse_grep_citation(parsed: ParsedCitation) -> dict | None:
+    """Reduce a grep citation to `{pattern, paths, ref}`, or `None`."""
+    assert parsed.tool_args is not None
+    text = parsed.tool_args.strip()
+    if not text:
+        return None
+    keywords = {
+        match.group("key"): _strip_argument_quotes(match.group("value"))
+        for match in _GREP_KWARG_RE.finditer(text)
+    }
+    pattern = keywords.get("pattern")
+    if pattern is None:
+        leading = text.split(",", 1)[0]
+        if "=" in leading:
+            return None
+        pattern = _strip_argument_quotes(leading)
+    raw_paths = keywords.get("paths") or keywords.get("path") or ""
+    # `paths='mobile/lib desktop/src'` packs several pathspecs into one value,
+    # and `paths=['a', 'b']` occurs too. Both split on whitespace once the list
+    # punctuation is stripped.
+    separated = raw_paths.strip("[]")
+    for punctuation in ("'", '"', ","):
+        separated = separated.replace(punctuation, " ")
+    paths = [_strip_argument_quotes(fragment) for fragment in separated.split()]
+    if not pattern or not paths:
+        return None
+    return {"pattern": pattern, "paths": paths, "ref": keywords.get("ref", "")}
+
+
+def _asserted_match_verdict(assertion: str) -> bool | None:
+    """`True` if the citation asserts matches exist, `False` if it asserts none,
+    `None` if it asserts something this verifier cannot check."""
+    if _ASSERTED_NO_MATCHES_RE.match(assertion):
+        return False
+    some = _ASSERTED_SOME_MATCHES_RE.match(assertion)
+    if some:
+        return int(some.group("count")) > 0
+    return None
+
+
+def _verify_grep_tool(parsed: ParsedCitation, repo_root: Path) -> VerificationResult:
+    assert parsed.tool_assertion is not None
+    blocked = lambda detail: VerificationResult("unverified", detail)  # noqa: E731
+
+    citation = _parse_grep_citation(parsed)
+    if citation is None:
+        if any(f"{key}=" in parsed.tool_args for key in _GREP_GLOB_SCOPE_KEYS):
+            return blocked(
+                "names a grep scoped by a glob rather than a path, which is not "
+                "replayed because a glob matching no files is indistinguishable "
+                "from a search that found nothing"
+            )
+        return blocked(
+            "names a grep but its arguments could not be parsed into a pattern "
+            "and a path, so it was not replayed"
+        )
+    if not _FULL_SHA_CITATION_RE.match(citation["ref"]):
+        return blocked(
+            "names a grep that is not pinned to a full commit SHA, so replaying "
+            "it would search a different tree than the one cited"
+        )
+    asserted = _asserted_match_verdict(parsed.tool_assertion)
+    if asserted is None:
+        return blocked(
+            "names a grep but its asserted result carries no checkable match "
+            "verdict, so it was not replayed"
+        )
+    if any(
+        token in value
+        for value in [citation["ref"], *citation["paths"]]
+        for token in _GREP_PATH_SHELL_METACHARACTERS
+    ):
+        return blocked(
+            "names a grep but its ref or path contains a shell metacharacter, "
+            "so it was not replayed"
+        )
+    if any(path.startswith("-") for path in citation["paths"]):
+        return blocked(
+            "names a grep but a path is option-shaped, so it was not replayed"
+        )
+    if not _git_object_exists(repo_root, f"{citation['ref']}^{{commit}}"):
+        return blocked(
+            "names a grep pinned to a commit that is not present in this "
+            "repository, so it was not replayed"
+        )
+    # The vacuous-pass guard, and the reason this verifier is worth having at
+    # all. `git grep` reports no matches for a path that does not exist, so
+    # without this check every absence claim carrying a typo would look
+    # confirmed by the very command that never searched anything.
+    for path in citation["paths"]:
+        if not _git_object_exists(repo_root, f"{citation['ref']}:{path}"):
+            return blocked(
+                "names a grep whose cited path does not exist at the pinned "
+                "commit, so a no-match result would prove nothing"
+            )
+
+    command = ["git", "grep", "-q", "-E"]
+    if parsed.tool in _CASE_INSENSITIVE_GREP_TOOLS:
+        command.append("-i")
+    # `-e` keeps a pattern that begins with `-` in the pattern slot instead of
+    # being read as an option; `--` separates pathspecs from revisions.
+    command += ["-e", citation["pattern"], citation["ref"], "--", *citation["paths"]]
+    result = subprocess.run(
+        command,
+        cwd=repo_root,
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+        check=False,
+    )
+    if result.returncode not in (0, 1):
+        return blocked(
+            "names a grep that could not be replayed at the pinned commit, so "
+            "its asserted result was not checked"
+        )
+    found = result.returncode == 0
+    if asserted and not found:
+        return VerificationResult(
+            "error",
+            "asserts matches, but replaying it at the pinned commit finds none",
+        )
+    if not asserted and found:
+        return VerificationResult(
+            "error",
+            "asserts no matches, but replaying it at the pinned commit finds matches",
+        )
+    return VerificationResult(
+        "unverified",
+        "replayed at the pinned commit and the match verdict agrees, but the "
+        "claim it was cited to support was not compared",
+    )
+
+
+# GitHub repository URLs. `verb` decides whether the URL names a FILE (ADR-0003's
+# subject) or some other repository view; `ref` is the branch, tag or commit it is
+# pinned to. Both schemes are matched -- `http://` and `https://` -- so a mutable
+# blob link cannot dodge the pin check by dropping the `s`. The trailing path is
+# optional to MATCH (so a truncated `.../blob/main` still reaches the pin check)
+# and required to PASS (a pinned link naming no file cites a repository, not "the
+# cited file" ADR-0003 requires). Moved here from `validate.py` unchanged --
+# see that module's git history for the review passes that shaped each rule.
+_GITHUB_URL_RE = re.compile(
+    r"^https?://github\.com/[^/\s]+/[^/\s]+/"
+    r"(?P<verb>blob|raw|tree|blame|commits|edit)/(?P<ref>[^/\s]+)"
+    r"(?:/(?P<path>\S*))?$"
+)
+_RAW_GITHUB_URL_RE = re.compile(
+    r"^https?://raw\.githubusercontent\.com/[^/\s]+/[^/\s]+/(?P<ref>[^/\s]+)"
+    r"(?:/(?P<path>\S*))?$"
+)
+_FULL_SHA_RE = re.compile(r"^[0-9a-f]{40}$")
+# Only these two name a file's contents. `tree` is a directory listing and `blame`,
+# `commits` and `edit` are views of a file rather than a citation of it.
+_GITHUB_FILE_VERBS = {"blob", "raw"}
+
+_URL_CHECK_TIMEOUT_SECONDS = 5
+_URL_CHECK_USER_AGENT = "buzz-corpus-validator/1.0"
+
+
+# Statuses that describe the service rather than the target. Retried, then
+# reported as indeterminate -- never as a dead link. Enumerating 5xx individually
+# missed 505 and the 52x range Cloudflare uses, so those were still reported as
+# dead links; NO 5xx says anything about whether the cited page exists, so the
+# rule is the whole class rather than a list to keep extending.
+_TRANSIENT_CLIENT_STATUSES = frozenset({408, 425, 429})
+
+
+def _is_transient_status(code: int) -> bool:
+    return code >= 500 or code in _TRANSIENT_CLIENT_STATUSES
+
+
+# Longest path this validator will hand to git. Well past any real repository
+# path, and short enough that an argument never trips E2BIG.
+_MAX_CITATION_PATH_LENGTH = 4096
+# Statuses that mean "this server dislikes HEAD", not "no such page". A server
+# answering 403 to HEAD and 200 to GET was being called dead.
+_HEAD_UNSUPPORTED_STATUSES = frozenset({403, 405, 501})
+
+_URL_CHECK_ATTEMPTS = 3
+_URL_CHECK_RETRY_DELAY_SECONDS = 0.5
+
+
+def _url_resolves(url: str) -> bool | None:
+    """Whether an HTTP(S) citation resolves. `None` means it could not be told.
+
+    Three states, not two, and the third is the point. An HTTP status is
+    evidence about the TARGET: 404 means the cited source is gone. A timeout,
+    reset or DNS failure is evidence about the NETWORK, and says nothing about
+    whether the target exists -- so it must not be reported as a dead link.
+
+    Conflating them made this stage nondeterministic: the same commit produced
+    one failure and two passes within minutes, which is how a required check
+    teaches people to ignore it. Transport failures are retried a bounded number
+    of times and then reported as indeterminate.
+
+    The citation value is deliberately kept out of diagnostics: callers report the
+    evidence entry and citation index instead, matching the rest of this module's
+    no-leak output contract.
+    """
+    headers = {"User-Agent": _URL_CHECK_USER_AGENT}
+    transport_failure = False
+    for attempt in range(_URL_CHECK_ATTEMPTS):
+        if attempt:
+            time.sleep(_URL_CHECK_RETRY_DELAY_SECONDS)
+        transport_failure = False
+        for method, extra_headers in (("HEAD", {}), ("GET", {"Range": "bytes=0-0"})):
+            request = urllib.request.Request(
+                url,
+                headers={**headers, **extra_headers},
+                method=method,
+            )
+            try:
+                with urllib.request.urlopen(
+                    request, timeout=_URL_CHECK_TIMEOUT_SECONDS
+                ) as response:
+                    return 200 <= response.status < 400
+            except urllib.error.HTTPError as exc:
+                if method == "HEAD" and exc.code in _HEAD_UNSUPPORTED_STATUSES:
+                    continue
+                if _is_transient_status(exc.code):
+                    # A status came back, but not one that says anything about
+                    # the TARGET: 429 and 5xx describe the service's mood.
+                    # Treating them as dead links is the same flap this
+                    # tri-state exists to remove, just arriving over HTTP
+                    # instead of over the socket.
+                    transport_failure = True
+                    break
+                # A status came back that IS an answer about the target.
+                return False
+            except (OSError, TimeoutError, ValueError, http.client.HTTPException):
+                transport_failure = True
+                break
+        if not transport_failure:
+            return False
+    return None if transport_failure else False
+
+
+def _verify_url(url: str, *, check_links: bool) -> VerificationResult:
+    """A URL citation must satisfy syntax rules, then resolve in link-check mode.
+
+    Repository file links still have the strongest structural requirement: full
+    commit SHA, file-content verb, and a non-empty path. Other HTTP(S) URLs have
+    no commit pin, but they are not unverifiable by nature; check_links can at
+    least establish that the referenced source exists at validation time.
+    """
+    target = _parse_url_target(url)
+    match = _GITHUB_URL_RE.match(target) or _RAW_GITHUB_URL_RE.match(target)
+    if match:
+        if not _FULL_SHA_RE.match(match.group("ref")):
+            return VerificationResult(
+                "error",
+                "is a repository link pinned to a mutable ref rather than a "
+                "full commit SHA (ADR-0003)",
+            )
+        verb = match.groupdict().get("verb") or "raw"
+        if verb not in _GITHUB_FILE_VERBS:
+            return VerificationResult(
+                "error",
+                f"is a repository '{verb}' view rather than a link to the cited "
+                "file itself (ADR-0003)",
+            )
+        if not match.groupdict().get("path"):
+            return VerificationResult(
+                "error", "is pinned but names no file within the repository"
+            )
+    if not check_links:
+        # `deferred`, not `unverified`: this URL satisfied every syntax rule and the
+        # only thing left is a fetch this mode does not perform. Blocking on it made
+        # the offline stage impossible to pass while any URL citation existed.
+        return VerificationResult(
+            "deferred", "requires --check-links to verify reachable content"
+        )
+    resolved = _url_resolves(target)
+    if resolved is None:
+        return VerificationResult(
+            "unverified",
+            "could not be reached after repeated attempts; that is a network "
+            "failure here, not evidence the cited target is gone",
+        )
+    if not resolved:
+        return VerificationResult("error", "does not resolve to reachable content")
+    return VerificationResult("ok")
+
+
+def verify_citation(
+    parsed: ParsedCitation, repo_root: Path, *, check_links: bool = False
+) -> VerificationResult:
+    """Verify locally provable citation kinds without executing citation prose.
+
+    `check_links` gates the one kind that reaches the network: URL citations pass
+    their syntax rules unconditionally, then are only fetched when the caller
+    opts in. Graph edges, tool results, and unknown forms have no replay
+    implementation here and remain blocking `unverified` results.
+    """
+    if parsed.kind in {
+        EvidenceKind.LOCAL_FILE,
+        EvidenceKind.LOCAL_FILE_LINE,
+        EvidenceKind.LOCAL_FILE_RANGE,
+    }:
+        return _verify_local(parsed, repo_root)
+    if parsed.kind is EvidenceKind.LOCAL_FILE_SYMBOL:
+        return _verify_local_symbol(parsed, repo_root)
+    if parsed.kind is EvidenceKind.ABSENT_PATH:
+        return _verify_absent_path(parsed, repo_root)
+    if parsed.kind is EvidenceKind.COMMIT:
+        return _verify_commit(parsed, repo_root)
+    if parsed.kind in {EvidenceKind.EXTERNAL_URL, EvidenceKind.GITHUB_URL}:
+        assert parsed.url is not None
+        return _verify_url(parsed.url, check_links=check_links)
+    if parsed.kind is EvidenceKind.TOOL_RESULT and parsed.tool in _GIT_TOOL_NAMES:
+        return _verify_git_tool(parsed, repo_root)
+    if parsed.kind is EvidenceKind.TOOL_RESULT and parsed.tool in _GREP_TOOL_NAMES:
+        return _verify_grep_tool(parsed, repo_root)
+    if parsed.kind is EvidenceKind.TOOL_RESULT:
+        return VerificationResult("unverified", _unsupported_tool_detail(parsed.tool))
+    if parsed.kind is EvidenceKind.GRAPH_EDGE:
+        return VerificationResult("unverified", UNVERIFIABLE_KIND_DETAIL)
+    return VerificationResult("error", "no verifier exists for this evidence kind")
 
 class ProhibitedPathError(Exception):
     """A caller tried to bundle a credential-shaped path as evidence."""

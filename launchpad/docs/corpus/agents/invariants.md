@@ -38,11 +38,11 @@ evidence:
   - statement: "validate.py's find_duplicate_ids reports a hard error whenever two loaded nodes share the same id string."
     entry_class: FACT
     evidence:
-      - "launchpad/project-intelligence/corpus/validate.py:408"
+      - "launchpad/project-intelligence/corpus/validate.py#symbol=find_duplicate_ids"
   - statement: "validate.py's find_unresolved_relationship_targets reports a hard error whenever a relationships[].target names an id that matches no loaded node."
     entry_class: FACT
     evidence:
-      - "launchpad/project-intelligence/corpus/validate.py:437"
+      - "launchpad/project-intelligence/corpus/validate.py#symbol=find_unresolved_relationship_targets"
   - statement: "AGENTS.md's own creating-a-node step 9 requires relationship targets to be checked against the merge-target branch (e.g. git ls-tree -r --name-only origin/launchpad -- launchpad/docs/corpus), not the author's own worktree, because the checker only loads whatever is present where it runs."
     entry_class: FACT
     evidence:
@@ -50,23 +50,23 @@ evidence:
   - statement: "validate.py's _classify_url rejects a GitHub repository file link that is not pinned to a full 40-character commit SHA, and separately rejects a pinned link that names no file within the repository."
     entry_class: FACT
     evidence:
-      - "launchpad/project-intelligence/corpus/validate.py:597"
+      - "launchpad/project-intelligence/corpus/validate.py#symbol=_classify_url"
   - statement: "validate.py's find_ownership_violations rejects every non-.md file under the corpus root that does not live in a generated/ directory, and rejects a hand-authored file placed inside generated/ too, because no generator yet exists to reproduce it from canonical Markdown."
     entry_class: FACT
     evidence:
-      - "launchpad/project-intelligence/corpus/validate.py:836"
+      - "launchpad/project-intelligence/corpus/validate.py#symbol=find_ownership_violations"
   - statement: "validate.py's _load_frontmatter splits a node's text on the frontmatter delimiter and assigns the remainder to a variable named _body, which no other function in the module reads -- the body is discarded before any check runs, for every node in every directory."
     entry_class: FACT
     evidence:
-      - "launchpad/project-intelligence/corpus/validate.py:200"
+      - "launchpad/project-intelligence/corpus/validate.py#symbol=_load_frontmatter"
   - statement: "validate.py defines EXCLUDED_TOP_LEVEL_DIRS = {\"schema\"} as its one directory-keyed rule that stops a subtree from being validated at all; no other directory (including templates/ or standards/) is excluded or treated specially."
     entry_class: FACT
     evidence:
-      - "launchpad/project-intelligence/corpus/validate.py:43"
+      - "launchpad/project-intelligence/corpus/validate.py#symbol=EXCLUDED_TOP_LEVEL_DIRS"
   - statement: "validate.py's find_non_finite_confidence rejects a NaN or Infinity confidence value even though node.schema.json's minimum/maximum keywords cannot catch it, because every numeric comparison against NaN evaluates false and so silently passes the schema's own range check."
     entry_class: FACT
     evidence:
-      - "launchpad/project-intelligence/corpus/validate.py:804"
+      - "launchpad/project-intelligence/corpus/validate.py#symbol=find_non_finite_confidence"
   - statement: "Retiring a node is a status change, not a deletion: the file stays, the checker keeps loading it, and inbound relationships keep resolving; the id is never reused or renamed once retired."
     entry_class: FACT
     evidence:

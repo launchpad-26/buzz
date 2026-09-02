@@ -17,12 +17,12 @@ evidence:
     evidence:
       - "launchpad/docs/corpus/schema/node.schema.json"
       - "launchpad/docs/corpus/schema/README.md"
-  - statement: "This node uses type: layers rather than flow.md's own worked-skeleton default of type: architecture, for the same reason siblings layers/lifecycle/graceful-shutdown.md (#1118) and layers/lifecycle/startup.md (#1120) each give in their own 'A note on type' sections: Feature #611 (this node's parent) organizes its whole task set under a layers/lifecycle/ directory naming convention -- a cross-cutting technical-behavior grouping distinct from the architecture/ subtree's C4 static-diagram family -- and layers is node.schema.json's own dedicated enum member for that surface. Both sibling files were opened directly from their own local, unpushed worktree branches (task/1118-graceful-shutdown at commit d00a82b5b, task/1120-startup at commit 55feadf0a) rather than assumed from memory."
+  - statement: "This node uses type: layers rather than flow.md's own worked-skeleton default of type: architecture, for the same reason siblings layers/lifecycle/graceful-shutdown.md (#1118) and layers/lifecycle/startup.md (#1120) each give in their own 'A note on type' sections: Feature #611 (this node's parent) organizes its whole task set under a layers/lifecycle/ directory naming convention -- a cross-cutting technical-behavior grouping distinct from the architecture/ subtree's C4 static-diagram family -- and layers is node.schema.json's own dedicated enum member for that surface. Both sibling files were opened directly rather than assumed from memory; at authoring time they existed only on their own unpushed worktree branches, and both have since merged to origin/launchpad, so they are cited here by path."
     entry_class: INFERENCE
     evidence:
       - "launchpad/docs/corpus/schema/node.schema.json"
-      - "git_show(ref='d00a82b5b', path='launchpad/docs/corpus/layers/lifecycle/graceful-shutdown.md') -> 'A note on `type`' section"
-      - "git_show(ref='55feadf0a', path='launchpad/docs/corpus/layers/lifecycle/startup.md') -> 'A note on `type`' section"
+      - "launchpad/docs/corpus/layers/lifecycle/graceful-shutdown.md"
+      - "launchpad/docs/corpus/layers/lifecycle/startup.md"
     confidence: 0.75
   - statement: "hydrate.rs's own module doc comment states: 'The returned HydratedRepo owns a tempfile::TempDir; dropping it cleans up. Cached pack/index pairs are immutable performance state; object storage remains authoritative.'"
     entry_class: FACT
@@ -84,26 +84,26 @@ evidence:
       - "crates/buzz-relay/src/api/media.rs:33-40"
       - "crates/buzz-relay/src/api/media.rs:68-72"
       - "crates/buzz-relay/src/api/media.rs:74-85"
-  - statement: "Production call sites in buzz-db (for example, Db::execute_in_transaction acquiring a connection at crates/buzz-db/src/lib.rs:1107) obtain a Postgres connection via self.pool.acquire(), which returns an sqlx::pool::PoolConnection<Postgres> -- sqlx's own RAII guard type around one pooled connection, which is not itself defined in this repository but whose acquisition and use this repository's own code depends on for returning connections to the pool without an explicit release call at each call site."
+  - statement: "Production call sites in buzz-db (for example, Db::execute_in_transaction acquiring a connection at crates/buzz-db/src/store/event.rs:276-278) obtain a Postgres connection via self.pool.acquire(), which returns an sqlx::pool::PoolConnection<Postgres> -- sqlx's own RAII guard type around one pooled connection, which is not itself defined in this repository but whose acquisition and use this repository's own code depends on for returning connections to the pool without an explicit release call at each call site."
     entry_class: FACT
     evidence:
-      - "crates/buzz-db/src/lib.rs:1107"
-      - "crates/buzz-db/src/lib.rs:64-65"
+      - "crates/buzz-db/src/store/event.rs:276-278"
+      - "crates/buzz-db/src/runtime/observability.rs:137-140"
   - statement: "A single PgPool connection's return to the pool when its PoolConnection guard drops is sqlx's own documented RAII behavior, not code this repository defines or could re-verify by reading sqlx's source from within this repository; this node treats that specific mechanic as INFERENCE rather than FACT for that reason, while treating buzz-db's own call sites that rely on it (acquire() without a matching explicit release) as directly observed FACT above."
     entry_class: INFERENCE
     evidence:
-      - "crates/buzz-db/src/lib.rs:1107"
+      - "crates/buzz-db/src/store/event.rs:276-278"
     confidence: 0.75
-  - statement: "buzz-db's own test suite calls pool.close().await explicitly and repeatedly (for example at crates/buzz-db/src/lib.rs:6944, 7999, 8324, 8779, 8904, 8920-8921, 8997-8999) -- an eager, whole-pool teardown distinct from a single connection's per-use release, used to tear down scratch/seed databases between tests rather than relied on anywhere in this repository's own production request-handling code paths."
+  - statement: "buzz-db's own test suite calls pool.close().await explicitly and repeatedly (for example at crates/buzz-db/src/runtime/tests.rs:388-389, 7999, 8324, 8779, 8904, 8920-8921, 8997-8999) -- an eager, whole-pool teardown distinct from a single connection's per-use release, used to tear down scratch/seed databases between tests rather than relied on anywhere in this repository's own production request-handling code paths."
     entry_class: FACT
     evidence:
-      - "crates/buzz-db/src/lib.rs:6944"
-      - "crates/buzz-db/src/lib.rs:7999"
-      - "crates/buzz-db/src/lib.rs:8324"
-      - "crates/buzz-db/src/lib.rs:8779"
-      - "crates/buzz-db/src/lib.rs:8904"
-      - "crates/buzz-db/src/lib.rs:8920-8921"
-      - "crates/buzz-db/src/lib.rs:8997-8999"
+      - "crates/buzz-db/src/runtime/tests.rs:388-389"
+      - "crates/buzz-db/src/runtime/tests.rs:2220-2221"
+      - "crates/buzz-db/src/runtime/tests.rs:2345-2346"
+      - "crates/buzz-db/src/runtime/tests.rs:2361-2363"
+      - "crates/buzz-db/src/runtime/tests.rs:2438-2443"
+      - "crates/buzz-db/src/store/deletion.rs:4788-4789"
+      - "crates/buzz-db/src/store/deletion.rs:4913-4914"
   - statement: "architecture-containers-relay and architecture-containers-agent-runtime are both present as node ids on origin/launchpad at the time this node was authored (git ls-tree -r --name-only origin/launchpad -- launchpad/docs/corpus, re-run immediately before drafting), but neither is the standing-structure node for the specific crate (buzz-relay's git-hosting subsystem) every example in this node's Sequence lives in; no more specific relationships target exists on origin/launchpad today, so this node declares none rather than pointing at a container-level node whose content this document does not narrate."
     entry_class: FACT
     evidence:
@@ -112,7 +112,7 @@ evidence:
   - statement: "origin/launchpad's corpus tree carries no layers/ node at all as of this node's authoring commit (git ls-tree -r --name-only origin/launchpad -- launchpad/docs/corpus, re-run immediately before drafting) -- layers-lifecycle-graceful-shutdown (#1118) and layers-lifecycle-startup (#1120) exist only on their own local, unpushed worktree branches, so naming either as a relationships.target would be a hard validate.py error on the branch this commit is actually merged into."
     entry_class: FACT
     evidence:
-      - "git_ls_tree(ref='origin/launchpad', path='launchpad/docs/corpus') -> no layers/ subtree present, re-run 2026-08-31 against commit 338b4d0cf2dd76cc43964bb717ce9f0a94a9c7a5"
+      - "absent:launchpad/docs/corpus/layers@338b4d0cf2dd76cc43964bb717ce9f0a94a9c7a5"
   - statement: "Issue #1119's Definition of Done requires exactly one hand-authored canonical document, schema-valid front matter with typed relationships 'appropriate to the node,' one independently maintainable idea, FACT/INFERENCE/TEAM_KNOWLEDGE not conflated, links to neighboring corpus nodes without duplicating their content, and a passing local validate.py run."
     entry_class: TEAM_KNOWLEDGE
     provided_by: "launchpad-26/buzz#1119 definition of done"
@@ -216,11 +216,11 @@ permit), then close with the one path `Drop` cannot reach.
    failed or completed upload never leaves a stale counter entry.
    (`crates/buzz-relay/src/api/media.rs:33-40,68-85`)
 8. **A pooled database connection.** Production code (e.g.
-   `crates/buzz-db/src/lib.rs:1107`) acquires a Postgres connection via
+   `crates/buzz-db/src/store/event.rs:276-278`) acquires a Postgres connection via
    `self.pool.acquire()`, returning an `sqlx::pool::PoolConnection` — sqlx's own
    RAII guard around a pooled connection — which this repository's call sites
    rely on to return the connection to the pool without an explicit release call.
-   (`crates/buzz-db/src/lib.rs:1107,64-65`)
+   (`crates/buzz-db/src/store/event.rs:276-278,64-65`)
 9. **The one path `Drop` cannot reach.** If the process is killed (`SIGKILL`) or
    otherwise aborts without unwinding, no `Drop` in steps 1-8 runs, and any
    session directory step 3 owns is orphaned on disk with a `.heartbeat` file

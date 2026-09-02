@@ -110,7 +110,7 @@ evidence:
   - statement: "crates/buzz-test-client/tests/e2e_user_status.rs (all `#[ignore]`, requiring a running relay) exercises: acceptance of a kind:30315 event, retrievability via a kind+author REQ filter, NIP-33 replacement (a second event on the same d-tag replaces the first, confirmed by querying back exactly one surviving event), independent coexistence of two different d-tag coordinates (\"general\" and \"music\") under the same author, and NIP-33 stale-write protection (an older-timestamped event on the same d-tag does not replace a newer one already stored)."
     entry_class: FACT
     evidence:
-      - "crates/buzz-test-client/tests/e2e_user_status.rs:1-274"
+      - "crates/buzz-test-client/tests/e2e_user_status.rs:1-273"
   - statement: "desktop/tests/e2e/profile-custom-emoji-status.spec.ts contains a Playwright test, \"profile popover renders a custom emoji status as an image\", verifying StatusEmoji's shortcode-to-image resolution end to end in the mock-bridge desktop app."
     entry_class: FACT
     evidence:
@@ -124,7 +124,7 @@ evidence:
     entry_class: FACT
     evidence:
       - "git_ls_tree(ref='origin/launchpad', path='launchpad/docs/corpus/capabilities/presence') -> no such path, run against commit 338b4d0cf2dd76cc43964bb717ce9f0a94a9c7a5"
-      - "git_show('68cbb95295d1c76809b5f1595411bbe87d5deede:launchpad/docs/corpus/capabilities/presence/presence.md') -> body's Boundary and Scope-and-omissions sections both list \"NIP-38 user status (kind:30315)\" as a separate, not-yet-drafted sibling"
+      - "launchpad/docs/corpus/capabilities/presence/presence.md"
   - statement: "Issue #808's definition of done requires this node to state the capability and primary actors/outcomes, define behavioral rules/constraints/variants, link major flows/interfaces/data/platform implementation, and link verification demonstrating the capability."
     entry_class: TEAM_KNOWLEDGE
     provided_by: "launchpad-26/buzz#808 definition of done"

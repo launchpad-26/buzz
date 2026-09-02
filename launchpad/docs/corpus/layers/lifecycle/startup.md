@@ -30,7 +30,7 @@ evidence:
     entry_class: FACT
     evidence:
       - "crates/buzz-relay/src/main.rs:166-186"
-      - "crates/buzz-db/src/lib.rs:677-696"
+      - "crates/buzz-db/src/runtime/mod.rs:488-517"
   - statement: "Database migrations only run when the BUZZ_AUTO_MIGRATE environment variable parses as a truthy value (true/1/yes/on, case-insensitive); otherwise startup logs that migrations were skipped and proceeds without applying schema changes."
     entry_class: FACT
     evidence:
@@ -125,7 +125,7 @@ evidence:
     evidence:
       - "launchpad/docs/corpus/templates/flow.md"
       - "launchpad/docs/corpus/standards/taxonomy.md"
-      - "git_show(ref='origin/task/611-batch-1a-compute', path='launchpad/docs/corpus/layers/compute/lifecycle.md') -> 'A note on `type`' section"
+      - "launchpad/docs/corpus/layers/compute/lifecycle.md"
     confidence: 0.7
   - statement: "Issue #1120's Definition of Done requires this node to state trigger, preconditions and termination/outcome; list ordered interactions and data/state movement; identify authentication/authorization/trust-boundary crossings; and document failure/abort/rollback behavior linked to representative verification."
     entry_class: TEAM_KNOWLEDGE

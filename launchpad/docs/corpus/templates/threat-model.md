@@ -62,7 +62,7 @@ evidence:
   - statement: "NIST Special Publication 800-154, 'Guide to Data-Centric System Threat Modeling,' has remained an Initial Public Draft since it was first published on 2016-03-14, and a planning note on its own publication page dated 2025-01-23 states NIST 'plans to finalize this publication' -- meaning it had still not been finalized as of that date, nearly nine years after its initial draft -- so it is not cited here as an adopted standard the way STRIDE and the OWASP cheat sheet are."
     entry_class: FACT
     evidence:
-      - "https://csrc.nist.gov/pubs/sp/800/154/ipd"
+      - "https://csrc.nist.gov/publications/detail/sp/800-154/draft"
   - statement: "Mermaid's own current syntax-reference page lists its supported diagram types (flowchart, sequence, class, state, entity relationship, C4, and others) and none of them is named Data Flow Diagram or DFD; a mermaid-js/mermaid community issue titled 'Data Flow Diagram (a la STRIDE Threat Model)' explicitly requested one, stating 'Data Flow Diagrams are common in software Threat Modelling, especially the STRIDE threat model methodology,' and is closed (linked to pull request #2389) -- regardless of that PR's contents, Mermaid's current official diagram-type list carries no entry named Data Flow Diagram or DFD as of this writing."
     entry_class: FACT
     evidence:

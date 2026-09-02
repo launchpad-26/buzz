@@ -64,16 +64,16 @@ evidence:
   - statement: "The already-drafted, unmerged capability template (PR #1546, branch task/1329-corpus-template-capability) states that a capability node 'states that the product can do the thing; it does not narrate the sequence of steps a user or agent takes to do it', naming flow as covering 'how a capability plays out step-by-step -- the path one interaction through it takes', and explicitly marks that boundary as read from this batch's own dispatch brief rather than from opening issue #1338 directly."
     entry_class: FACT
     evidence:
-      - "git_show(ref='origin/task/1329-corpus-template-capability', path='launchpad/docs/corpus/templates/capability.md') -> 'Not flow (#1338, not in this batch). Per the batch dispatch brief for this task set, a flow node documents how a capability plays out step-by-step -- the path one interaction through it takes. A capability node states that the product can do the thing; it does not narrate the sequence of steps a user or agent takes to do it.'"
+      - "launchpad/docs/corpus/templates/capability.md"
   - statement: "The already-drafted, unmerged procedure template (branch task/1345-corpus-template-procedure) scopes itself to Diátaxis's How-to guide form -- goal-oriented instructions a human follows -- and the runbook template (branch task/1347-corpus-template-runbook) scopes itself to what an operator does when a running system alerts; neither claims to narrate a system's own internal runtime interaction the way this node's worked example does, and both are distinct from a flow node on that basis."
     entry_class: FACT
     evidence:
-      - "git_show(ref='origin/task/1345-corpus-template-procedure', path='launchpad/docs/corpus/templates/procedure.md') -> heading 'Template: procedure', opening line 'How to write a corpus node whose body takes Diátaxis's How-to guide form...'"
-      - "git_show(ref='origin/task/1347-corpus-template-runbook', path='launchpad/docs/corpus/templates/runbook.md') -> heading 'Template: runbook', opening line 'What a runbook corpus node is for...'"
+      - "launchpad/docs/corpus/templates/procedure.md"
+      - "launchpad/docs/corpus/templates/runbook.md"
   - statement: "The already-drafted, unmerged event-kind template (branch task/1337-corpus-template-event-kind) scopes itself to 'one Nostr kind integer that Buzz defines or adopts, together with the wire contract that makes an event of that kind meaningful' -- one kind's own definition, not the ordered sequence of multiple kinds and messages a flow narrates across a scenario."
     entry_class: FACT
     evidence:
-      - "git_show(ref='origin/task/1337-corpus-template-event-kind', path='launchpad/docs/corpus/templates/event-kind.md') -> heading 'Template: event-kind', opening line 'How to write a corpus node whose subject is an event kind...'"
+      - "launchpad/docs/corpus/templates/event-kind.md"
   - statement: "This repository's own crates/buzz-auth/src/nip42.rs opens with a three-step module comment -- '1. Relay sends [\"AUTH\", \"<challenge>\"] ... 2. Client signs a kind:22242 event with challenge + relay tags. 3. Relay validates via verify_nip42_event.' -- naming a real, currently-wired, multi-actor interaction this node uses as its worked example rather than inventing one."
     entry_class: FACT
     evidence:
@@ -93,9 +93,9 @@ evidence:
   - statement: "The C4 architecture triad's own already-drafted, unmerged templates (branches task/1326-corpus-template-architecture-component, task/1327-corpus-template-architecture-container, task/1328-corpus-template-architecture-context) each carry type: governance for the template node itself, and architecture-context's worked skeleton shows an instance node of that template carrying type: architecture -- the precedent this node's own 'note on type' section below extends to a fourth, dynamic member of the same C4 family."
     entry_class: FACT
     evidence:
-      - "git_show(ref='origin/task/1326-corpus-template-architecture-component', path='launchpad/docs/corpus/templates/architecture-component.md') -> 'type: governance' (front matter, line 3)"
-      - "git_show(ref='origin/task/1327-corpus-template-architecture-container', path='launchpad/docs/corpus/templates/architecture-container.md') -> 'type: governance' (front matter, line 3)"
-      - "git_show(ref='origin/task/1328-corpus-template-architecture-context', path='launchpad/docs/corpus/templates/architecture-context.md') -> 'type: governance' (front matter, line 3) and 'type: architecture' (worked skeleton, line 298)"
+      - "launchpad/docs/corpus/templates/architecture-component.md"
+      - "launchpad/docs/corpus/templates/architecture-container.md"
+      - "launchpad/docs/corpus/templates/architecture-context.md"
   - statement: "A flow instance node's closest node.schema.json type fit is architecture, extending the precedent the C4 architecture triad set for the diagram's other three C4 members, because the C4 model's own documentation presents the Dynamic diagram as part of the same model and the same 'static model' vocabulary the context/container/component diagrams already use -- not because PRD #602's surface list names 'dynamic' or 'flow' as its own item, which it does not."
     entry_class: INFERENCE
     evidence:
@@ -368,8 +368,8 @@ relationships:
 
 ## Sequence
 
-1. [Actor A does X.] (`path/to/file.rs:NN`)
-2. [Actor B receives X and does Y.] (`path/to/other_file.rs:NN`)
+1. [Actor A does X.] (`path/to/file.rs#symbol=handler_name`)
+2. [Actor B receives X and does Y.] (`path/to/other_file.rs#symbol=OtherType.method`)
 3. ...
 
 ## Diagram
@@ -432,12 +432,17 @@ shape:
   cited to nothing, or cited to a source the author did not open, is not a step this
   template's *Sequence* section accepts -- reclassify as `INFERENCE` with reasoning
   and confidence, or remove the step until it can be checked.
-- **A step citing a line number is checked structurally, not semantically.**
-  `AGENTS.md` states plainly that the validator opens a cited file but never checks
-  a cited line number against the file's actual length, and never confirms a
-  citation supports the claim it sits under. A flow node's line-numbered steps carry
-  the same limit as any other corpus citation -- a green `validate.py` run does not
-  mean a human reviewer has confirmed each step happens where it says it does.
+- **A step citation is checked structurally, not semantically.** The validator
+  confirms a cited symbol appears in the cited file, or that a cited line is within
+  it, but never that the source supports the claim the step makes. A green
+  `validate.py` run does not mean a human reviewer has confirmed each step happens
+  where it says it does.
+- **Prefer `#symbol=` over a line number for every step.** A line number names a
+  place in the file as it was: an edit above it repoints the citation at unrelated
+  code, and because a bounds check is not a meaning check, the step keeps passing
+  while being wrong. A symbol anchor still resolves after the code above it moves,
+  and fails when the symbol's name disappears from the file. The match is
+  lexical, so a name left in a comment still passes (#1726, #2012).
 
 ## Note on Definition of Done
 
