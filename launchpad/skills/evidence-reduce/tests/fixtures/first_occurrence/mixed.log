@@ -1,0 +1,7 @@
+2026-08-18T09:00:00Z info: startup complete
+2026-08-18T09:05:00Z info: healthcheck ok
+2026-08-18T09:10:00Z error: connection refused to db-primary
+2026-08-18T09:15:00Z info: retry ok
+2026-08-18T09:20:00Z error: connection refused to db-primary
+2026-08-18T09:25:00Z warn: latency above threshold
+2026-08-18T09:30:00Z error: connection refused to db-primary

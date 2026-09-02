@@ -1,0 +1,204 @@
+#!/usr/bin/env python3
+"""Compute Time to Detect, Mitigate, and Resolve from incident timestamps.
+
+Accepts ISO 8601, syslog, Apache, and epoch formats. Normalises to UTC,
+computes intervals, and renders human-readable or JSON output.
+Date arithmetic across timezones and DST is a known model failure mode;
+this script makes it deterministic and testable.
+"""
+import argparse
+import json
+import re
+import sys
+from datetime import datetime, timedelta, timezone
+
+_ISO_RE = re.compile(
+    r'^(\d{4}-\d{2}-\d{2}[T ]\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:Z|[+-]\d{2}:?\d{2})?)'
+)
+_SYSLOG_RE = re.compile(r'^([A-Z][a-z]{2}\s+\d{1,2}\s+\d{2}:\d{2}:\d{2})')
+_APACHE_RE = re.compile(
+    r'\[(\d{2}/[A-Za-z]{3}/\d{4}:\d{2}:\d{2}:\d{2}\s[+-]\d{4})\]'
+)
+_EPOCH_RE = re.compile(r'^(\d{13}|\d{10})(?:\.\d+)?\b')
+
+_MONTHS = {m: i for i, m in enumerate(
+    ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul',
+     'Aug', 'Sep', 'Oct', 'Nov', 'Dec'], start=1)}
+
+
+def _parse_iso(raw):
+    s = raw
+    if 'T' not in s:
+        s = s.replace(' ', 'T', 1)
+    if s.endswith('Z'):
+        s = s[:-1] + '+00:00'
+    try:
+        dt = datetime.fromisoformat(s)
+    except ValueError:
+        return None
+    if dt.tzinfo is None:
+        dt = dt.replace(tzinfo=timezone.utc)
+    return dt.astimezone(timezone.utc)
+
+
+def _parse_apache(raw):
+    m = re.match(
+        r'(\d{2})/([A-Za-z]{3})/(\d{4}):(\d{2}):(\d{2}):(\d{2})\s'
+        r'([+-])(\d{2})(\d{2})',
+        raw,
+    )
+    if not m:
+        return None
+    day, mon, year, hh, mm, ss, sign, tzh, tzm = m.groups()
+    month = _MONTHS.get(mon)
+    if not month:
+        return None
+    delta = timedelta(hours=int(tzh), minutes=int(tzm))
+    if sign == '-':
+        delta = -delta
+    dt = datetime(int(year), month, int(day), int(hh), int(mm), int(ss),
+                   tzinfo=timezone(delta))
+    return dt.astimezone(timezone.utc)
+
+
+def _parse_epoch(raw):
+    try:
+        value = float(raw)
+    except ValueError:
+        return None
+    whole = raw.split('.')[0]
+    if len(whole) >= 13:
+        value /= 1000.0
+    try:
+        return datetime.fromtimestamp(value, tz=timezone.utc)
+    except (OverflowError, OSError, ValueError):
+        return None
+
+
+def _parse_syslog(raw, syslog_year):
+    m = re.match(r'([A-Z][a-z]{2})\s+(\d{1,2})\s+(\d{2}):(\d{2}):(\d{2})', raw)
+    if not m:
+        return None
+    mon_str, day, hh, mm, ss = m.groups()
+    month = _MONTHS.get(mon_str)
+    if not month:
+        return None
+    try:
+        return datetime(syslog_year, month, int(day), int(hh), int(mm), int(ss),
+                        tzinfo=timezone.utc)
+    except ValueError:
+        return None
+
+
+def parse_timestamp(raw, syslog_year=1970):
+    """Parse timestamp in any supported format, return UTC datetime or None."""
+    if not raw or not isinstance(raw, str):
+        return None
+    raw = raw.strip()
+
+    # Try ISO 8601
+    m = _ISO_RE.match(raw)
+    if m:
+        return _parse_iso(m.group(1))
+
+    # Try Apache
+    m = _APACHE_RE.search(raw)
+    if m:
+        return _parse_apache(m.group(1))
+
+    # Try epoch (seconds or millis)
+    m = _EPOCH_RE.match(raw)
+    if m:
+        return _parse_epoch(m.group(1))
+
+    # Try syslog
+    m = _SYSLOG_RE.match(raw)
+    if m:
+        return _parse_syslog(m.group(1), syslog_year)
+
+    return None
+
+
+def format_duration(td):
+    """Format timedelta as human-readable string."""
+    if td is None:
+        return 'unknown'
+    total_seconds = int(td.total_seconds())
+    hours = total_seconds // 3600
+    minutes = (total_seconds % 3600) // 60
+    seconds = total_seconds % 60
+    parts = []
+    if hours:
+        parts.append(f'{hours}h')
+    if minutes:
+        parts.append(f'{minutes}m')
+    if seconds or not parts:
+        parts.append(f'{seconds}s')
+    return ' '.join(parts)
+
+
+def compute_intervals(start, detection, mitigation, resolution):
+    """Compute TTD, TTM, TTR from timestamps.
+
+    Returns dict with three durations (as timedeltas) and None for missing times.
+    """
+    ttd = None
+    ttm = None
+    ttr = None
+
+    if start and detection:
+        ttd = detection - start
+    if detection and mitigation:
+        ttm = mitigation - detection
+    if start and resolution:
+        ttr = resolution - start
+
+    return {'ttd': ttd, 'ttm': ttm, 'ttr': ttr}
+
+
+def main(argv=None):
+    parser = argparse.ArgumentParser(
+        description='Compute Time to Detect, Mitigate, Resolve from timestamps.'
+    )
+    parser.add_argument('--start', required=True, help='Incident start time')
+    parser.add_argument('--detection', help='Detection time')
+    parser.add_argument('--mitigation', help='Mitigation time')
+    parser.add_argument('--resolution', help='Resolution time')
+    parser.add_argument('--syslog-year', type=int, default=1970,
+                        help='Year anchor for syslog timestamps (default 1970)')
+    parser.add_argument('--json', action='store_true', help='JSON output')
+
+    try:
+        args = parser.parse_args(argv)
+    except SystemExit:
+        return 2
+
+    # Parse all timestamps
+    start = parse_timestamp(args.start, args.syslog_year)
+    if not start:
+        print(f'Error: invalid start time: {args.start}', file=sys.stderr)
+        return 2
+
+    detection = parse_timestamp(args.detection, args.syslog_year) if args.detection else None
+    mitigation = parse_timestamp(args.mitigation, args.syslog_year) if args.mitigation else None
+    resolution = parse_timestamp(args.resolution, args.syslog_year) if args.resolution else None
+
+    intervals = compute_intervals(start, detection, mitigation, resolution)
+
+    if args.json:
+        output = {
+            'ttd': intervals['ttd'].total_seconds() if intervals['ttd'] else None,
+            'ttm': intervals['ttm'].total_seconds() if intervals['ttm'] else None,
+            'ttr': intervals['ttr'].total_seconds() if intervals['ttr'] else None,
+        }
+        print(json.dumps(output))
+    else:
+        print(f"Time to Detect:  {format_duration(intervals['ttd'])}")
+        print(f"Time to Mitigate: {format_duration(intervals['ttm'])}")
+        print(f"Time to Resolve:  {format_duration(intervals['ttr'])}")
+
+    return 0
+
+
+if __name__ == '__main__':
+    sys.exit(main())

@@ -1,0 +1,181 @@
+#!/usr/bin/env python3
+"""Validate domain files against the schema."""
+
+import sys
+import os
+import re
+from pathlib import Path
+
+
+def parse_frontmatter(content):
+    """Extract and parse YAML frontmatter from markdown file.
+
+    Returns (frontmatter_dict, body) or (None, None) if parsing fails.
+    """
+    if not content.startswith('---'):
+        return None, None
+
+    lines = content.split('\n')
+    if len(lines) < 2:
+        return None, None
+
+    # Find closing ---
+    end_idx = None
+    for i in range(1, len(lines)):
+        if lines[i].strip() == '---':
+            end_idx = i
+            break
+
+    if end_idx is None:
+        return None, None
+
+    frontmatter_lines = lines[1:end_idx]
+    body = '\n'.join(lines[end_idx+1:])
+
+    # Parse YAML manually (no external dependencies)
+    fm = {}
+    for line in frontmatter_lines:
+        if not line.strip():
+            continue
+        if ':' not in line:
+            return None, None
+        key, value = line.split(':', 1)
+        fm[key.strip()] = value.strip()
+
+    return fm, body
+
+
+def check_file(filepath):
+    """Check a single domain file. Return list of errors (empty if valid)."""
+    errors = []
+    filename = os.path.basename(filepath)
+
+    try:
+        with open(filepath, 'r') as f:
+            content = f.read()
+    except Exception as e:
+        return [f"{filename}: Could not read file: {e}"]
+
+    # Parse frontmatter
+    fm, body = parse_frontmatter(content)
+    if fm is None:
+        errors.append(f"{filename}: Frontmatter not parseable (must start with --- and have closing ---)")
+        return errors
+
+    # Check required keys
+    required_keys = {'name', 'summary', 'layer'}
+    for key in required_keys:
+        if key not in fm:
+            errors.append(f"{filename}: Missing frontmatter key '{key}'")
+
+    # Check name matches filename
+    if 'name' in fm:
+        expected_name = filename[:-3] if filename.endswith('.md') else filename
+        if fm['name'] != expected_name:
+            errors.append(f"{filename}: name '{fm['name']}' does not match filename '{expected_name}'")
+
+    # Check for required sections in order
+    sections = [
+        '## First five checks',
+        '## Evidence sources',
+        '## Common root causes in this layer',
+        '## Diagnostic commands and queries',
+        '## Escalation signals'
+    ]
+
+    body_lines = body.split('\n')
+    section_positions = {}
+    for section in sections:
+        found = False
+        for i, line in enumerate(body_lines):
+            if line.strip() == section:
+                section_positions[section] = i
+                found = True
+                break
+        if not found:
+            errors.append(f"{filename}: Missing section '{section}'")
+
+    # Check sections are in order
+    if len(section_positions) == len(sections):
+        positions = [section_positions[s] for s in sections]
+        if positions != sorted(positions):
+            errors.append(f"{filename}: Sections are not in required order")
+
+    # Check sections are non-empty
+    for section in sections:
+        if section in section_positions:
+            pos = section_positions[section]
+            # Find next section or end of body
+            next_pos = len(body_lines)
+            for other_section in sections:
+                if other_section != section and other_section in section_positions:
+                    other_pos = section_positions[other_section]
+                    if other_pos > pos:
+                        next_pos = min(next_pos, other_pos)
+
+            # Content is between this section header and next section/end
+            section_content = '\n'.join(body_lines[pos+1:next_pos]).strip()
+            if not section_content:
+                errors.append(f"{filename}: Section '{section}' is empty")
+
+    # Special check: First five checks must have exactly 5 numbered items
+    if '## First five checks' in section_positions:
+        pos = section_positions['## First five checks']
+        next_pos = len(body_lines)
+        for other_section in sections:
+            if other_section != '## First five checks' and other_section in section_positions:
+                other_pos = section_positions[other_section]
+                if other_pos > pos:
+                    next_pos = min(next_pos, other_pos)
+
+        section_content = '\n'.join(body_lines[pos+1:next_pos]).strip()
+
+        # Count numbered items: lines starting with digit followed by dot
+        numbered_items = []
+        for line in section_content.split('\n'):
+            stripped = line.strip()
+            if stripped and re.match(r'^\d+\.', stripped):
+                numbered_items.append(stripped)
+
+        if len(numbered_items) != 5:
+            errors.append(f"{filename}: '## First five checks' must contain exactly 5 numbered items, found {len(numbered_items)}")
+
+    return errors
+
+
+def main():
+    """Check all domain files in domains/ directory."""
+    # Prefer current directory for testing, then fall back to script location
+    domains_dir = Path.cwd() / 'domains'
+
+    if not domains_dir.exists():
+        domains_dir = Path(__file__).parent.parent / 'domains'
+
+    if not domains_dir.exists():
+        print(f"Error: domains directory not found", file=sys.stderr)
+        sys.exit(2)
+
+    all_errors = []
+
+    # Find all .md files (skip _TEMPLATE.md for now if we want, but spec says validate every file)
+    md_files = sorted(domains_dir.glob('*.md'))
+
+    if not md_files:
+        print(f"Warning: no domain files found in {domains_dir}", file=sys.stderr)
+        return 0
+
+    for filepath in md_files:
+        errors = check_file(str(filepath))
+        all_errors.extend(errors)
+
+    # Report all errors
+    if all_errors:
+        for error in all_errors:
+            print(error, file=sys.stderr)
+        return 1
+
+    return 0
+
+
+if __name__ == '__main__':
+    sys.exit(main())

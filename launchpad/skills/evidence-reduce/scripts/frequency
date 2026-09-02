@@ -1,0 +1,155 @@
+#!/usr/bin/env python3
+"""Rank distinct log-line signatures after normalizing out volatile fields.
+
+Two million log lines become thirty ranked signatures: every line is stripped
+of timestamps, UUIDs, IPs, ports, and hex/numeric IDs, then grouped by what is
+left. A representative raw line is kept for each signature.
+
+Usage:
+  frequency [FILE...] [--top N] [--json] [-o OUT]
+  cat access.log | frequency --top 20
+
+Reads the given files in order, or stdin if none are given ('-' also means
+stdin). Never mutates input. Table on stdout by default, --json for
+structured output. Writes to OUT only when -o is given, otherwise prints to
+stdout. Exit 0 on success, 1 if no input lines were read, 2 on bad usage.
+"""
+import argparse
+import json
+import re
+import sys
+
+# Order matters: timestamps first (so their internal colons/digits are gone
+# before the port/number patterns run), then structured tokens (UUID, IP,
+# 0x-hex), then the generic catch-alls (hex run, digit run).
+_TS_PATTERNS = [
+    re.compile(r'\d{4}-\d{2}-\d{2}[T ]\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:Z|[+-]\d{2}:?\d{2})?'),
+    re.compile(r'\[\d{2}/[A-Za-z]{3}/\d{4}:\d{2}:\d{2}:\d{2}\s[+-]\d{4}\]'),
+    re.compile(r'\b[A-Z][a-z]{2}\s+\d{1,2}\s+\d{2}:\d{2}:\d{2}\b'),
+]
+
+NORMALIZERS = (
+    [(p, '<TS>') for p in _TS_PATTERNS]
+    + [
+        (re.compile(r'\b[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}\b'), '<UUID>'),
+        (re.compile(r'\b(?:\d{1,3}\.){3}\d{1,3}\b'), '<IP>'),
+        (re.compile(r'0x[0-9a-fA-F]+\b'), '<HEX>'),
+        # A short letter prefix joined by '-'/'_' to an alphanumeric suffix
+        # that contains at least one digit is a request/trace/correlation ID
+        # in disguise (req-abc123, trace_9f8e), whatever its length. The
+        # digit-in-suffix requirement keeps ordinary hyphenated words
+        # (multi-tenant, well-known) untouched.
+        (re.compile(r'\b[A-Za-z]{2,12}[-_](?=[0-9A-Za-z]*\d)[0-9A-Za-z]{4,}\b'), '<ID>'),
+        (re.compile(r':(\d{2,5})\b'), ':<PORT>'),
+        # A hex-looking run must contain at least one a-f letter, otherwise a
+        # plain decimal number (e.g. a duration or epoch stamp) would be
+        # swallowed here instead of by the digit-run rule below.
+        (re.compile(r'\b(?=[0-9a-fA-F]*[a-fA-F])[0-9a-fA-F]{8,}\b'), '<HEX>'),
+        (re.compile(r'\b\d{5,}\b'), '<NUM>'),
+    ]
+)
+
+
+def normalize(line):
+    for pattern, repl in NORMALIZERS:
+        line = pattern.sub(repl, line)
+    return line
+
+
+def iter_lines(paths):
+    if not paths:
+        for line in sys.stdin:
+            yield line.rstrip('\n')
+        return
+    for path in paths:
+        if path == '-':
+            for line in sys.stdin:
+                yield line.rstrip('\n')
+            continue
+        with open(path, 'r', errors='replace') as f:
+            for line in f:
+                yield line.rstrip('\n')
+
+
+def build_frequency(paths):
+    """Stream lines one at a time; only distinct signatures are retained."""
+    signatures = {}
+    total = 0
+    for line in iter_lines(paths):
+        if line == '':
+            continue
+        total += 1
+        sig = normalize(line)
+        entry = signatures.get(sig)
+        if entry is None:
+            signatures[sig] = [1, line]
+        else:
+            entry[0] += 1
+    return total, signatures
+
+
+def render_receipt(total, signature_count):
+    reduction = (1 - (signature_count / total)) * 100 if total else 0.0
+    return f"read {total:,} lines -> {signature_count:,} signatures ({reduction:.3f}% reduction)"
+
+
+def render_table(ranked):
+    lines = [f"{'COUNT':>8}  SIGNATURE"]
+    for sig, (count, example) in ranked:
+        lines.append(f"{count:>8}  {sig}")
+        lines.append(f"{'':>8}    example: {example}")
+    return "\n".join(lines)
+
+
+def render_json(ranked):
+    payload = [
+        {"signature": sig, "count": count, "example": example}
+        for sig, (count, example) in ranked
+    ]
+    return json.dumps(payload, indent=2)
+
+
+def main(argv):
+    parser = argparse.ArgumentParser(prog='frequency', description=__doc__)
+    parser.add_argument('files', nargs='*')
+    parser.add_argument('--top', type=int, default=None)
+    parser.add_argument('--json', action='store_true')
+    parser.add_argument('-o', dest='output')
+    try:
+        args = parser.parse_args(argv)
+    except SystemExit:
+        return 2
+
+    if args.top is not None and args.top < 0:
+        print("frequency: --top must be non-negative", file=sys.stderr)
+        return 2
+
+    try:
+        total, signatures = build_frequency(args.files)
+    except OSError as e:
+        print(f"frequency: {e}", file=sys.stderr)
+        return 2
+
+    if total == 0:
+        print("frequency: no input lines", file=sys.stderr)
+        return 1
+
+    ranked = sorted(signatures.items(), key=lambda kv: kv[1][0], reverse=True)
+    if args.top is not None:
+        ranked = ranked[: args.top]
+
+    print(render_receipt(total, len(signatures)), file=sys.stderr)
+
+    out = render_json(ranked) if args.json else render_table(ranked)
+
+    if args.output:
+        with open(args.output, 'w') as f:
+            f.write(out + "\n")
+    else:
+        print(out)
+
+    return 0
+
+
+if __name__ == '__main__':
+    sys.exit(main(sys.argv[1:]))
