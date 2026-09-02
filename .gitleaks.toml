@@ -113,23 +113,15 @@ paths = [
     # present in both Cargo.lock files in this repo (root and
     # desktop/src-tauri/) — one finding each, both checksum data.
     '''(^|/)Cargo\.lock$''',
-    # The generated documentation corpus explains Nostr protocol wire shapes
-    # (event ids, sigs, pubkeys, NIP-42 auth challenges) and inline error
-    # prose, both of which are made of arbitrary-looking hex/word strings
-    # gitleaks' generic-api-key rule keeps mistaking for credentials. Verified
-    # on PR #1981 (media-api.md:148 — the plain-English phrase
-    # "revoked/mismatched" following the word "auth") and PR #2002 (six
-    # findings across five files: two reuses of the same made-up NIP-42
-    # example challenge hex, the well-known secp256k1 generator-point
-    # constant quoted while explaining NIP-OA key derivation, an example
-    # webhook UUID, and another plain-English phrase). None were real
-    # secrets — every corpus doc is authored prose/examples, never a
-    # deploy-time credential, so future corpus PRs inventing new example
-    # hex/UUIDs would keep tripping this the same way.
-    '''(^|/)launchpad/docs/corpus/.*''',
 ]
 regexes = [
     '''<[A-Za-z0-9 ]+>''',
+    # nip-oa.md's worked example tags a synthetic event with a public key
+    # derived from the deliberately public test scalar 1 — the secp256k1
+    # generator point itself, an immutable public constant, not anyone's
+    # private material. Matched literally (not by shape) so this entry
+    # cannot accidentally swallow any other 64-hex string.
+    '''79be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798''',
     # dev-deployment-SOP.md:1079's worked-example "Public key:" value — a
     # fixed, literal walkthrough value, explicitly labelled public (not the
     # $6$/secret-key output on adjacent lines, which stay placeholder text
