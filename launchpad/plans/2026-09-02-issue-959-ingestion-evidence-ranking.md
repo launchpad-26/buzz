@@ -9,7 +9,7 @@ explicitly claims "how conflicting evidence is ranked" as part of "the canonical
 those subjects for the corpus," and its SHOULD 2 already states "cite the narrowest source
 that actually supports the claim, and only that." `git ls-tree -r --name-only origin/launchpad
 -- launchpad/docs/corpus` confirms no `ingestion/` directory exists yet on the merge target —
-none of Feature #620's 32 sibling tasks (including #958, `ingestion/evidence-conflicts.md`) are
+none of Feature #620's other 31 sibling tasks (including #958, `ingestion/evidence-conflicts.md`) are
 merged. `launchpad/docs/corpus/templates/policy.md` (id `corpus-template-policy`) and
 `launchpad/docs/corpus/agents/invariants.md` (a landed policy-shaped instance) are both merged
 and give the required six-section shape and precedent. Issue #959's own DoD literally
@@ -28,7 +28,7 @@ statement of when *not* narrowing (i.e., splitting into separate entries) is its
 This node states that ingestion-time narrowing procedure as binding MUST/SHOULD rules, scoped
 explicitly against both sources by name, and explicitly hands off actual disagreement between
 sources to ADR-0029's escalation rule and to #958's future conflict-handling node (not yet
-merged, so no relationship target declared) rather than restating either. Issue #620's stated
+merged, so no relationship target declared) rather than restating either. Issue #959's own stated
 objective text ("the single canonical policy node for evidence ranking") is addressed head-on
 in the node's own Scope and authority section as an overstatement to correct: this node is
 explicitly *not* canonical over ranking generally — `corpus-standard-evidence` already holds

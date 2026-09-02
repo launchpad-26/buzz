@@ -40,10 +40,6 @@ evidence:
     entry_class: FACT
     evidence:
       - "launchpad/docs/corpus/templates/policy.md"
-  - statement: "At the recorded revision, git ls-tree of origin/launchpad's corpus root contains no ingestion/ directory and no node for any of Feature #620's other 31 sibling tasks; corpus-agents (AGENTS.md), corpus-standard-evidence (standards/evidence.md), and corpus-template-policy (templates/policy.md) are all present and validated, and corpus-standard-atomicity, corpus-standard-provenance and corpus-standard-confidence are present but govern different questions (one-node-vs-many, the recorded-revision entry, and the confidence number, respectively -- none of the three claims the redundancy-narrowing question this node states)."
-    entry_class: FACT
-    evidence:
-      - "git_ls_tree(ref='origin/launchpad', path='launchpad/docs/corpus') -> AGENTS.md, README.md, agents/invariants.md, architecture/**, capabilities/**, development/**, layers/**, schema/**, standards/atomicity.md, standards/code-references.md, standards/confidence.md, standards/decision-references.md, standards/deprecation.md, standards/diagrams.md, standards/documentation-standard.md, standards/evidence.md, standards/front-matter.md, standards/generated-content.md, standards/identifiers.md, standards/linking.md, standards/naming.md, standards/normative-language.md, standards/provenance.md, standards/review-requirements.md, standards/status.md, standards/taxonomy.md, standards/test-references.md, templates/**, no ingestion/ directory -- at commit aef93f2c2acfe9dfe66d22d33f5abb4ac12baa90"
   - statement: "standards/atomicity.md's Scope and authority states it 'governs one question: given a subject you are about to document, is it one node or more than one?' -- a granularity question distinct from ranking or narrowing citations within one already-chosen claim."
     entry_class: FACT
     evidence:
