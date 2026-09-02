@@ -52,10 +52,10 @@ evidence:
     entry_class: FACT
     evidence:
       - "git_log(pathspec='crates/buzz-db/src/store/thread.rs', diff_filter='R', follow=true) -> d99ad131f, a3730784f"
-  - statement: "git blame -L 275,282 -- crates/buzz-db/src/store/thread.rs attributes that line range to commit 3e7c9d900, and blame's own output names the file at that commit as crates/sprout-db/src/thread.rs -- the pre-rename path -- even though the file's current path is crates/buzz-db/src/store/thread.rs; blame surfaces the historical location directly, without needing --follow on log first."
+  - statement: "git blame -L 275,282 -- crates/buzz-db/src/store/thread.rs attributes seven of those eight lines to commit 3e7c9d900, naming the file at that commit as crates/sprout-db/src/thread.rs, and the eighth (line 282) to a later commit, 14fba21e57, naming the file at that point as crates/buzz-db/src/thread.rs -- a third, intermediate path, distinct from both the original crates/sprout-db/src/thread.rs and the file's current crates/buzz-db/src/store/thread.rs; a single blame call can therefore surface more than one historical path in one range, not just the oldest one, without needing --follow on log first."
     entry_class: FACT
     evidence:
-      - "git_blame(pathspec='crates/buzz-db/src/store/thread.rs', range='275,282') -> 3e7c9d900 crates/sprout-db/src/thread.rs"
+      - "git_blame(pathspec='crates/buzz-db/src/store/thread.rs', range='275,282') -> lines 275-281: 3e7c9d900 crates/sprout-db/src/thread.rs; line 282: 14fba21e57 crates/buzz-db/src/thread.rs"
   - statement: "The doc comment at crates/buzz-core/src/kind.rs:432 points a reader to docs/bridge-channel-window.md for further detail on channel-window overlays; that file exists in the repository (confirmed by test -f), but the pointer itself is unchecked prose -- nothing but reading the comment and then independently confirming the file establishes that the pointer is live."
     entry_class: FACT
     evidence:
@@ -116,7 +116,7 @@ described abstractly. It is not about searching `launchpad/docs/corpus/` itself;
 - Know the crate/directory map. `CLAUDE.md`'s "Repo Structure" section names every
   `crates/*` workspace member with a one-line purpose, plus the `desktop/`, `web/`, `mobile/`,
   `migrations/`, and `scripts/` top-level trees. Start there rather than guessing which of the
-  repository's 31 top-level `crates/*` directories owns a subject.
+  repository's 30 top-level `crates/*` directories owns a subject.
 - Know `AGENTS.md`'s "Creating a node" step 3: a source you inspect must end up cited on the
   claim it supports. A path you read but cite nowhere is either a missing claim in your draft or
   a note you no longer need.
@@ -170,10 +170,13 @@ described abstractly. It is not about searching `launchpad/docs/corpus/` itself;
    database runtime", #6987). This names *when* and under *which PR* the file moved, which the
    full `--follow` log alone does not make obvious among fifteen entries.
 4. Use `git blame -L <range> -- <path>` for line-level attribution once the current logic is
-   located. Blame's own output can still name a historical path: attributing
-   `crates/buzz-db/src/store/thread.rs:275-282` surfaces commit `3e7c9d900`, and that commit's
-   path in blame's output is `crates/sprout-db/src/thread.rs` -- the pre-rename name -- confirming
-   the rename independently of running `git log --follow` first.
+   located. Blame's own output can still name a historical path, and more than one within the
+   same range: attributing `crates/buzz-db/src/store/thread.rs:275-282` shows seven of those
+   eight lines as commit `3e7c9d900`, naming the file at that point as
+   `crates/sprout-db/src/thread.rs` -- the original, pre-rename path -- while the eighth line
+   attributes to a later commit naming a third, intermediate path,
+   `crates/buzz-db/src/thread.rs`. Read the whole range's output, not just its first line, before
+   concluding a chunk has one uniform history.
 
 ## Task 3: Prefer RepoQL when it is reachable; fall back to `git` when it is not
 
