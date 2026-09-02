@@ -12,7 +12,7 @@ evidence:
     entry_class: FACT
     evidence:
       - "commit aef93f2c2acfe9dfe66d22d33f5abb4ac12baa90"
-  - statement: "corpus-standard-code-references states its own authority as citation format and pinning mechanics only -- which forms are permitted, how they are pinned and positioned, what a passing validation run does and does not establish -- and states explicitly in its own Enforcement section that a passing run 'does not mean a citation supports its claim' because checking is structural."
+  - statement: "corpus-standard-code-references states its own authority as citation format and pinning mechanics only -- which forms are permitted, how they are pinned and positioned, what a passing validation run does and does not establish -- and its own Enforcement section states that a green run does not establish 'that a citation supports its claim', because checking is structural."
     entry_class: FACT
     evidence:
       - "launchpad/docs/corpus/standards/code-references.md"
@@ -49,9 +49,9 @@ evidence:
     entry_class: TEAM_KNOWLEDGE
     provided_by: "launchpad-26/buzz#620 outcome"
 relationships:
-  - type: references
+  - type: depends-on
     target: corpus-standard-code-references
-  - type: references
+  - type: depends-on
     target: corpus-standard-test-references
 ---
 
@@ -123,7 +123,7 @@ should be fixed.
 
 | # | Guidance |
 |---|---|
-| **SQ1** | Cite the narrowest function or symbol actually read, with a line or range, rather than a bare file path -- the same preference `corpus-standard-code-references` states generally, restated here because a source-code behavior claim specifically benefits from a reader being able to compare the cited span against the `statement`. |
+| **SQ1** | For citation shape and positioning, follow `corpus-standard-code-references`' own SHOULD guidance without restating it here; the one thing specific to a *behavior* claim is that the payoff for precision is larger than usual, because SC1-SC5 already limit what a source-code citation can prove -- a precise span is the difference between a reader being able to check the claim at all and not. |
 | **SQ2** | For a current-behavior claim, prefer corroborating source code with a passing test or an observed runtime result over source code alone, per ADR-0029's ranking of code, config, schema and passing tests together as executable evidence -- source code shows what would happen if reached; a test or observation shows it was. |
 | **SQ3** | When the cited code's behavior depends on a build-time environment variable, a feature flag, or which binary target compiles it, name that dependency in the `statement` rather than leaving the claim unscoped -- see SC2 and SC3. |
 | **SQ4** | Prefer the innermost function that actually implements the behavior over a thin wrapper or re-export. A wrapper's own text does not show what it delegates to, and a reader comparing the citation against the `statement` needs the implementation, not the forwarding call. |
@@ -183,21 +183,27 @@ than hypothetical.
 | Finding the right source file or symbol to read before it is cited | `launchpad/docs/corpus/agents/repository-navigation.md` (#650), unmerged at this node's authoring time |
 | Naming, identifiers, taxonomy, status, diagrams, and the remaining per-type templates | somewhere in #1307-#1351 |
 
-**Relationships.** This node declares two `references` edges: to
-`corpus-standard-code-references` and to `corpus-standard-test-references`. Checked
-against the merge target immediately before finalizing this front matter, not this
-worktree:
+**Relationships.** This node declares two `depends-on` edges: to
+`corpus-standard-code-references` and to `corpus-standard-test-references`. `depends-on`
+is deliberately the stronger type here, not `references` ("no ownership or currency
+dependency implied," per `relationships.schema.json`): this node's entire *Scope and
+authority* section is built on those two documents' own stated scope boundaries -- the
+citation-mechanics-only authority `corpus-standard-code-references` claims for itself,
+and the delegation `corpus-standard-test-references` names toward issue #1308. If either
+document's stated scope moves -- for example if `corpus-standard-code-references` is
+later amended to cover claim-shape itself -- this node's premise stops holding and needs
+re-checking, which is exactly `depends-on`'s directionality: "source requires target to
+be true/current for source's own claims to hold." Checked against the merge target
+immediately before finalizing this front matter, not this worktree:
 
 ```
 git fetch origin launchpad
 git ls-tree -r --name-only origin/launchpad -- launchpad/docs/corpus
 ```
 
-Both ids are present on `origin/launchpad` at this node's recorded revision. Both edges
-are genuine: this node's entire *Scope and authority* section is built on the boundary
-those two documents state about themselves, not merely adjacent to them. No edge to any
-other `ingestion/*` sibling in this same dispatch batch -- none are merged, and an edge
-to an unmerged sibling would validate in this worktree and become a hard error on
+Both ids are present on `origin/launchpad` at this node's recorded revision. No edge to
+any other `ingestion/*` sibling in this same dispatch batch -- none are merged, and an
+edge to an unmerged sibling would validate in this worktree and become a hard error on
 `origin/launchpad` the moment this node reached it first, per `AGENTS.md` step 9's
 warning.
 
