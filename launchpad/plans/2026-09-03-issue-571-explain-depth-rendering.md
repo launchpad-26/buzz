@@ -68,6 +68,23 @@ STEP 3  render() (answer.py) branches on `answer.depth`                [needs 1]
                            Sources is filtered to claims with temporal_state == "HISTORY"
                            or entry_class == "TEAM_KNOWLEDGE" only -- the generic
                            "X is defined as Y" WORKING/FACT claim is excluded.
+
+        CORRECTION (mid-build, caught by test_worked_answer.py going red, and
+        independently flagged by both post-build reviews as a stale plan): the
+        ONBOARDING row above was never shipped. ONBOARDING is
+        classify_depth()'s own fallback for a question with no depth-signalling
+        phrase -- WORKED_QUESTION ("how does `X` work?") hits exactly that
+        fallback, and test_worked_answer.py's pre-existing
+        test_all_six_sections_are_present already pinned that default question
+        to a full six-section render, before #571 existed. Restricting
+        ONBOARDING as planned above would have silently changed today's DEFAULT
+        answer shape (stripping `## Sources` -- the provenance section -- from
+        every unqualified `explain(agent, symbol)`), not just added new depth
+        behaviour. Shipped instead: ONBOARDING renders every populated section,
+        identically to unspecified depth -- still a real, distinguishable member
+        of the six (the only one with every section present), just not
+        additionally restricted. See answer.py's `_DEPTH_SECTIONS` comment and
+        CONTRACT.md's explain() entry for the shipped version of this row.
         done when: `render(Answer(question="q", depth="SUMMARY", short_answer="x",
         important_files=("a.rs",), claims=(Claim(statement="sym is defined as fn foo()",
         entry_class="FACT", evidence=("a.rs:1",)),)))` contains no match for
@@ -120,10 +137,20 @@ STEP 7  A hermetic RATIONALE-filter boundary test in test_answer.py            [
         assertions could miss.
 
 STEP 8  Full-suite regression                                             [needs 2, 3, 4]
-        `python3 -m unittest discover -s launchpad/project-intelligence -p
-        "test_*.py"` (the whole existing suite, not just the new files) green
-        -- confirms nothing in worked_answer.py, worked_trace.py, or
-        knowledge.py's own `__main__` demo block (all three call
+        Run from inside `launchpad/project-intelligence/` (as every test
+        file's own docstring already documents), not from the repo root:
+        `python3 -m unittest discover -s . -p "test_*.py"`. CORRECTION: the
+        original wording here (`-s launchpad/project-intelligence` from the
+        repo root) was never actually run that way during the build, and an
+        independent review caught that it can't be -- test_confidence.py:202's
+        `test_every_memory_consumer_filters_superseded_entries` globs
+        `Path(".").glob("*.py")`, which is cwd-relative and finds nothing from
+        the repo root. That failure is pre-existing (reproduced identically
+        against the pre-#571 base commit) and unrelated to this issue; it just
+        means the done-when below only holds for the cwd-scoped invocation.
+        The whole existing suite (not just the new files) green -- confirms
+        nothing in worked_answer.py, worked_trace.py, or knowledge.py's own
+        `__main__` demo block (all three call
         `render(answer)` with one argument) broke now that Answer carries an
         extra defaulted field.
         done when: the discover run reports 0 failures, 0 errors.
