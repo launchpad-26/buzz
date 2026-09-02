@@ -315,8 +315,9 @@ prerequisite is `_ensure-sidecar-stubs`.
 1. Run `just desktop-standalone`.
 2. Let it build six crates in debug mode and **copy the real binaries over the zero-byte
    stubs** at `desktop/src-tauri/binaries/<bin>-<host-target>`, chmod-ing each executable.
-   This is the step that distinguishes it from path A, which leaves the stubs in place for
-   everything but the relay.
+   This is the step that distinguishes it from path A: `just dev` builds the same crates
+   but never copies them over the stubs, running only `./target/debug/buzz-relay`
+   directly, so all six sidecar stubs stay zero-byte there.
 3. Note that the recipe unsets `BUZZ_PRIVATE_KEY` and `BUZZ_SHARE_IDENTITY` and sets
    `BUZZ_DEV_KEYRING_SERVICE` to `buzz-desktop-dev.<instance-slug>`, so this instance gets
    its own identity rather than inheriting a shared dev key.
