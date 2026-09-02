@@ -29,10 +29,22 @@ evidence:
     evidence:
       - "git_log(path='.github/CODEOWNERS', ref='aef93f2c2acfe9dfe66d22d33f5abb4ac12baa90') -> 94b92b55d 2026-05-20 Will Pfleger, d99ad131f 2026-06-10 Will Pfleger, 9af3a61bb 2026-07-09 Will Pfleger; and gh_api(endpoint='repos/block/buzz/contents/.github/CODEOWNERS') -> the single line '* @block/buzz-oss-team'"
       - ".github/CODEOWNERS"
-  - statement: "No branch in this repository is protected and no repository ruleset exists. All 100 branches returned by the branches listing report `protected: false`, the unique set of that field across them being `[false]`; the rulesets endpoint returns an empty array even with includes_parents=true, which would surface an inherited organization-level ruleset if one applied."
+  - statement: "The launchpad branch IS protected. Queried directly, repos/launchpad-26/buzz/branches/launchpad reports `protected: true`. Across all 687 branches in the repository, exactly two are protected: launchpad and main."
     entry_class: FACT
     evidence:
-      - "gh_api(endpoint='repos/launchpad-26/buzz/branches?per_page=100', jq='[.[].protected] | unique', at='2026-09-02') -> [false]; and gh_api(endpoint='repos/launchpad-26/buzz/rulesets?includes_parents=true', at='2026-09-02') -> []"
+      - "gh_api(endpoint='repos/launchpad-26/buzz/branches/launchpad', jq='{name, protected}', at='2026-09-02') -> {name: 'launchpad', protected: true}; and gh_api(endpoint='repos/launchpad-26/buzz/branches?per_page=100', paginate=true, jq='.[] | select(.protected==true) | .name', at='2026-09-02') -> launchpad, main out of 687 branches total"
+  - statement: "The repository has no ruleset: the rulesets endpoint returns an empty array even with includes_parents=true, which would surface an inherited organization-level ruleset if one applied. This establishes only that protection here is classic branch protection rather than ruleset-based; it is not evidence that protection is absent."
+    entry_class: FACT
+    evidence:
+      - "gh_api(endpoint='repos/launchpad-26/buzz/rulesets?includes_parents=true', at='2026-09-02') -> []"
+  - statement: "The branch-protection object itself is not readable under this session's token. repos/launchpad-26/buzz/branches/launchpad/protection returns HTTP 404, while the token's repository permissions are admin=false, maintain=true, push=true, triage=true, pull=true. Reading the protection object requires admin, so the 404 is a permissions artefact and carries no information about whether protection exists -- the branch's own `protected: true` flag settles that question in the opposite direction."
+    entry_class: FACT
+    evidence:
+      - "gh_api(endpoint='repos/launchpad-26/buzz/branches/launchpad/protection', at='2026-09-02') -> HTTP 404 Not Found; and gh_api(endpoint='repos/launchpad-26/buzz', jq='{permissions}') -> {admin: false, maintain: true, push: true, triage: true, pull: true}"
+  - statement: "The paginated branches listing is not a substitute for querying a branch directly. This repository has 687 branches; `repos/launchpad-26/buzz/branches?per_page=100` returns only the first 100, and launchpad is not among them -- indexing the returned names for 'launchpad' yields null. A `unique` aggregation of the protected flag over that first page therefore describes 100 branches that exclude the one being reasoned about."
+    entry_class: FACT
+    evidence:
+      - "gh_api(endpoint='repos/launchpad-26/buzz/branches?per_page=100', jq='[.[].name] | index(\"launchpad\")', at='2026-09-02') -> null; and the same endpoint with paginate=true yields 687 branch names"
   - statement: "launchpad/AGENTS.md section 6 states that the launchpad branch is protected and that one approving review is required, attributing the figures to a measurement taken on 2026-08-28 via repos/launchpad-26/buzz/branches/launchpad/protection, and additionally states that required_status_checks is empty, enforce_admins is off, and push is restricted to 11 users."
     entry_class: FACT
     evidence:
@@ -69,18 +81,19 @@ evidence:
     entry_class: FACT
     evidence:
       - ".github/workflows/launchpad-corpus-validate.yml"
-  - statement: "Because the sole CODEOWNERS rule names an owner GitHub cannot resolve in this fork, and because no branch protection or ruleset exists to carry a require_code_owner_reviews setting, the CODEOWNERS file currently routes no review request to anyone in launchpad-26/buzz and would route none even if protection were enabled without first fixing the owner."
+  - statement: "The CODEOWNERS file routes no review request to any resolvable owner in launchpad-26/buzz, independently of how branch protection is configured. An owner GitHub reports as 'Unknown owner' cannot be sent a request, so the question of whether require_code_owner_reviews is on does not arise for the current file: turning it on would gate on a review from an owner set that resolves to nobody."
     entry_class: INFERENCE
     evidence:
       - ".github/CODEOWNERS"
-      - "gh_api(endpoints=['repos/launchpad-26/buzz/codeowners/errors', 'repos/launchpad-26/buzz/rulesets?includes_parents=true', 'repos/launchpad-26/buzz/branches?per_page=100'], at='2026-09-02') -> Unknown owner on line 1; []; and [false] as the unique set of the protected flag"
-    confidence: 0.9
-  - statement: "launchpad/AGENTS.md section 6's protection figures no longer describe the repository. Between its 2026-08-28 measurement and this node's revision, protection on launchpad was removed or lapsed rather than merely becoming unreadable, because the branches listing's protected flag is readable without admin permission and reports false."
+      - "gh_api(endpoint='repos/launchpad-26/buzz/codeowners/errors', at='2026-09-02') -> errors[0].kind = 'Unknown owner', line 1"
+    confidence: 0.85
+  - statement: "Whether code-owner review is REQUIRED on launchpad cannot be determined from this session. require_code_owner_reviews lives inside the branch-protection object, which this token cannot read; the branch's protected flag establishes that protection exists but exposes none of its settings. Research #369 recorded the value as false at its own writing, but that is a dated reading rather than the current one, and launchpad/AGENTS.md section 6's own 2026-08-28 measurement does not report the field at all."
     entry_class: INFERENCE
     evidence:
+      - "gh_api(endpoint='repos/launchpad-26/buzz/branches/launchpad/protection', at='2026-09-02') -> HTTP 404 under a token with admin=false"
+      - "launchpad/Research/369-enforcing-the-upstream-boundary.md"
       - "launchpad/AGENTS.md"
-      - "gh_api(endpoint='repos/launchpad-26/buzz/branches?per_page=100', jq='[.[].protected] | unique', at='2026-09-02', token_permissions='admin=false maintain=true push=true triage=true pull=true') -> [false]"
-    confidence: 0.8
+    confidence: 0.9
   - statement: "Issue #907's Definition of Done requires this node to state the scope and authority/source of the policy, separate MUST requirements from SHOULD guidance, define enforcement/checks and an exception/escalation process, and link decisions or higher-order policy instead of duplicating them."
     entry_class: TEAM_KNOWLEDGE
     provided_by: "launchpad-26/buzz#907 definition of done"
@@ -98,11 +111,11 @@ relationships:
 
 This node states what governs who is asked to review a change in `launchpad-26/buzz`,
 and what a contributor or agent may rely on when routing one. Its central finding is
-negative and it is stated here rather than buried: **a `CODEOWNERS` file exists in this
-repository and routes nothing.** Its only rule names a team GitHub cannot resolve in
-this fork, and no branch protection or ruleset exists that could require code-owner
-review even if the rule resolved. Review routing here is convention held by people and
-agents, not a gate held by a machine.
+stated here rather than buried: **a `CODEOWNERS` file exists in this repository and
+routes nothing**, because its only rule names a team GitHub cannot resolve in this fork.
+Ordinary pull-request review *is* gated — `launchpad` is a protected branch — but that
+gate is not a code-ownership gate, and nothing about it makes the broken rule work.
+Ownership routing is convention here; approval is not.
 
 ## Scope and authority
 
@@ -117,15 +130,17 @@ cohort versus upstream files is settled by `launchpad/AGENTS.md` §3 and its clo
 exception list; the decision that `CODEOWNERS` should request review on the upstream
 boundary is `ADR-0033`'s, already Accepted; the rules an agent follows when opening and
 approving a pull request are `launchpad/AGENTS.md` §5-§6's and `ADR-0052`'s. What this
-node adds is a single verified account of the *current* state, because the documents
-above describe a configuration that is not the one the platform is currently in.
+node adds is a verified account of what those documents' review routing actually rests
+on today, and of the one place — `.github/CODEOWNERS` — where the mechanism they name
+does not work.
 
 **Where this node and any of those sources disagree, they win** and this node has
 drifted. One exception is stated plainly rather than left implicit: where this node and
 a *document* disagree about a live platform setting, the platform's own API response
 governs, per `ADR-0029`'s rule that executable evidence outranks documentation for how
-the system currently behaves. That rule is why this node contradicts
-`launchpad/AGENTS.md` §6 below rather than repeating it.
+the system currently behaves. That rule cuts both ways, and here it cut against an
+earlier draft of this node rather than against the documents — see *A measurement this
+node got wrong* below.
 
 | For | Read |
 |---|---|
@@ -167,20 +182,68 @@ The same endpoint against `block/buzz` returns `{"errors":[]}`. The file is corr
 upstream and broken here, for the ordinary reason: `buzz-oss-team` is a team in the
 `block` organization. This organization's teams are `maintainers` and `students`.
 
-**Nothing could enforce it even if it resolved.** No branch in this repository is
-protected — the unique set of the `protected` field across all 100 branches returned by
-the branches listing is `[false]` — and the rulesets endpoint returns `[]` even with
-`includes_parents=true`, which is the query that would surface an inherited
-organization-level ruleset. `require_code_owner_reviews` is a branch-protection setting;
-with no protection object, there is nowhere for it to be set.
+**`launchpad` is a protected branch.** Queried directly:
 
-**This contradicts `launchpad/AGENTS.md` §6, and the contradiction is the point.** That
-section states `launchpad` is protected, that one approving review is required, and
-attributes the figures to a measurement on 2026-08-28. Five days later the branch is not
-protected. The `protected` flag used here is readable without admin permission — the
-token that measured it holds `maintain`, not `admin` — so this is not a permissions
-artefact masquerading as an absence. **Do not restate §6's protection figures.** Re-run
-the query.
+```
+gh api repos/launchpad-26/buzz/branches/launchpad --jq '{name, protected}'
+-> {"name":"launchpad","protected":true}
+```
+
+Exactly two of the repository's 687 branches are protected: `launchpad` and `main`. So
+`launchpad/AGENTS.md` §6's account — protected, one approving review required, empty
+required-status-checks, `enforce_admins` off, push restricted — is **corroborated** on
+the one part this token can see, and there is no reason to doubt the rest. Read §6 for
+the figures; this node does not restate them.
+
+**No ruleset exists**, but that is a narrower fact than it looks:
+`rulesets?includes_parents=true` returns `[]`, which establishes that protection here is
+*classic branch protection* rather than ruleset-based. It is not evidence that protection
+is absent, and reading it that way is the error described below.
+
+**Whether code-owner review is *required* is unknown, and this node does not guess.**
+`require_code_owner_reviews` lives inside the protection object, which this token cannot
+read — `branches/launchpad/protection` returns 404 under `admin: false, maintain: true`.
+Research #369 recorded the value as `false`, but that is a dated reading. An admin can
+settle it:
+
+```
+gh api repos/launchpad-26/buzz/branches/launchpad/protection \
+  --jq '.required_pull_request_reviews.require_code_owner_reviews'
+```
+
+**It does not change the CODEOWNERS finding either way.** An owner GitHub reports as
+`Unknown owner` cannot be sent a review request, so turning `require_code_owner_reviews`
+on against the current file would gate on approval from an owner set that resolves to
+nobody. Fixing the owner comes first; the setting is a second question.
+
+### A measurement this node got wrong
+
+Recorded because this node's own `CO1` is about exactly this failure, and a policy that
+hid its own instance of the error would not be worth following.
+
+An earlier draft asserted that no branch was protected, and built findings on it: that
+§6 was stale, that `ADR-0019`'s always-required human approval was unenforced, and that
+readers should disregard §6's figures. **All of that was false.** The measurement behind
+it was:
+
+```
+gh api "repos/launchpad-26/buzz/branches?per_page=100" --jq '[.[].protected] | unique'
+-> [false]
+```
+
+The listing is paginated and this repository has 687 branches. `launchpad` is not on
+page 1:
+
+```
+gh api "repos/launchpad-26/buzz/branches?per_page=100" --jq '[.[].name] | index("launchpad")'
+-> null
+```
+
+So `[false]` was the unique set over 100 branches that excluded the one being reasoned
+about. Compounding it, the 404 from `/protection` was read as absence when it was a
+permissions artefact — the possibility was raised in the draft's own not-verified list
+and then dismissed on the strength of the flawed aggregate. **An aggregate over a
+truncated collection is not a fact about a member you did not confirm was in it.**
 
 ## MUST
 
@@ -189,11 +252,11 @@ nothing does.
 
 | # | Requirement |
 |---|---|
-| **CO1** | A claim that a review, an approval, or a code-owner assignment is *enforced* in this repository MUST be checked against the platform before it is written or repeated. Query both `repos/launchpad-26/buzz/rulesets?includes_parents=true` and the branch-protection endpoint, and treat the branches listing's `protected` flag as the reading that survives a non-admin token. *Enforced by: nothing mechanical. Review only.* |
+| **CO1** | A claim that a review, an approval, or a code-owner assignment is *enforced* in this repository MUST be checked against the platform before it is written or repeated, and MUST be checked by querying the **specific branch** — `repos/<owner>/<repo>/branches/<branch>` — never by aggregating the paginated branches listing, which truncates at 100 of this repository's 687 branches. A 404 from `.../protection` MUST be treated as ambiguous under a non-admin token, never as absence. Query `rulesets?includes_parents=true` as well, but read an empty result as "protection is classic, not ruleset-based", not as "there is no protection". *Enforced by: nothing mechanical. Review only.* |
 | **CO2** | `.github/CODEOWNERS` MUST NOT be edited as an ordinary change. It is an upstream file, and `launchpad/AGENTS.md` §3's exception list — which is closed — does not name it. Editing it requires the ADR that §3 demands, or an explicit amendment to `ADR-0033`'s scope naming the file. *Enforced by: nothing mechanical; §3 compliance is review-held.* |
 | **CO3** | A contributor or agent MUST NOT rely on CODEOWNERS to bring a reviewer to a change. It routes nothing here. Request review explicitly, by naming a person. *Enforced by: nothing. This is the gap this node exists to record.* |
-| **CO4** | An agent MUST NOT approve or merge a pull request on its own judgement, and MUST NOT reach for a stronger credential when a merge is blocked. This restates no rule: it is `launchpad/AGENTS.md` §5 rule 1 and its delegated-authority conditions, which govern unchanged, and is named here only because the absence of branch protection removes the platform backstop that made ignoring them visible. *Enforced by: nothing mechanical, and now less than before — with no protection object, `enforce_admins` is not merely off, it does not exist.* |
-| **CO5** | A change touching the upstream boundary MUST carry a human review request obtained by some means, because `ADR-0033` requires one and its CODEOWNERS mechanism is not in service. Name the reviewer in the pull request rather than assuming routing occurred. *Enforced by: nothing mechanical; `ADR-0033`'s implementing Task #1428 is open.* |
+| **CO4** | An agent MUST NOT approve or merge a pull request on its own judgement, and MUST NOT reach for a stronger credential when a merge is blocked. This restates no rule: it is `launchpad/AGENTS.md` §5 rule 1 and its delegated-authority conditions, which govern unchanged. It is named here because §5 records that `enforce_admins` is off, so an admin token *can* bypass the approval gate that protection otherwise holds. *Enforced by: the protected branch's approving-review requirement, which is a real gate — but one §5 states an admin can step around, which is why the rule is written as a prohibition rather than left to the platform.* |
+| **CO5** | A change touching the upstream boundary MUST carry a human review request obtained by some means, because `ADR-0033` requires one and its CODEOWNERS mechanism is not in service. Name the reviewer in the pull request rather than assuming routing occurred. Branch protection requires *an* approving review; it does not require the *right* reviewer, which is the whole of what `ADR-0033` asked CODEOWNERS to supply. *Enforced by: nothing mechanical for reviewer identity; `ADR-0033`'s implementing Task #1428 is open.* |
 | **CO6** | A statement in this repository's documents about who owns a file MUST distinguish `launchpad-26/buzz` from `block/buzz`. The same path can be cohort-owned in one and upstream-owned in the other, and `.github/CODEOWNERS` is the case that proves it: one file, valid upstream, invalid here. *Enforced by: nothing mechanical. Review only.* |
 
 ## SHOULD
@@ -201,50 +264,49 @@ nothing does.
 | # | Guidance |
 |---|---|
 | **CS1** | A pull request touching files under `launchpad/` SHOULD name a cohort reviewer explicitly; one touching upstream paths SHOULD say so in its body and name who is being asked to judge the divergence, since `ADR-0033`'s automatic request does not fire. |
-| **CS2** | A document asserting a platform setting SHOULD carry the date and the exact command that measured it, as `launchpad/AGENTS.md` §6 does. That discipline is why this node could detect the drift rather than inherit it — a claim with no measurement attached cannot be falsified, only believed. |
+| **CS2** | A document asserting a platform setting SHOULD carry the date and the exact command that measured it, as `launchpad/AGENTS.md` §6 does. That discipline is what let §6 survive a challenge from this node's own first draft: because §6 named its endpoint, the disagreement could be re-run and resolved against the platform instead of argued. A claim with no command attached cannot be checked, only believed or doubted. |
 | **CS3** | Work that would fix the CODEOWNERS gap SHOULD go through Task #1428 rather than being done incidentally in an unrelated pull request. `ADR-0033` assigns that task the path scope and the notification surface; a partial fix landed elsewhere leaves those undecided. |
 | **CS4** | A reviewer SHOULD treat the review-agent's published comment as input, never as an approval. Its workflow holds `pull-requests: write` and posts a comment; its own header records that submitting an APPROVE under the bot's identity would violate `launchpad/AGENTS.md` rule 1. |
 
 ## Enforcement
 
-**Nothing mechanical enforces any requirement on this page.** That is the honest answer
-and it is the same answer for every row in the MUST table above.
+**One gate is real: the protected branch's approving review.** `launchpad` is protected,
+and per `launchpad/AGENTS.md` §6 that protection requires one approving review with
+`dismiss_stale_reviews` on. `ADR-0019`'s second ruling — **"a human approval remains
+required, always"** — is therefore honoured by the platform, not merely asserted. A
+change does not reach `launchpad` without someone approving it.
 
-What *does* run on a pull request is a set of GitHub Actions workflows —
-`launchpad-pr-check` on the body, `launchpad-corpus-validate` on corpus changes,
-`launchpad-adr-check`, and the review-agent controls and publish pair, among others in
-the `launchpad-*` family. (`launchpad-issue-check` is not among them: it carries no
-`pull_request` trigger.) They run. **They do not gate**, because no branch protection
-exists to mark any of them required, and `ADR-0033` had already recorded that
-`launchpad` has no required status checks even while protection did exist. A red check
-on a pull request here is information for a reviewer, not an obstacle to merging.
+**No requirement on *this page* is mechanically enforced, and the distinction matters.**
+The gate above checks *that* a review happened. Nothing checks *who* gave it, whether
+they own the affected paths, or whether a code owner was ever asked — which is precisely
+the layer `CODEOWNERS` was supposed to supply and, here, does not.
 
-**What a green pull request does not establish**, stated because a policy node that
-names only what is checked overstates the check:
+What runs on a pull request is a set of GitHub Actions workflows — `launchpad-pr-check`
+on the body, `launchpad-corpus-validate` on corpus changes, `launchpad-adr-check`, and
+the review-agent controls and publish pair, among others in the `launchpad-*` family.
+(`launchpad-issue-check` is not among them: it carries no `pull_request` trigger.) They
+run. **They do not gate**, because `required_status_checks` is empty per §6 and
+`ADR-0033` records the same. A red check here is information for a reviewer, not an
+obstacle to merging.
+
+**What a green, approved pull request does not establish**, stated because a policy node
+that names only what is checked overstates the check:
 
 | Not established | Consequence |
 |---|---|
-| That a code owner saw the change | No CODEOWNERS rule resolves; no request is sent |
-| That anyone with write access approved it | No protection object requires an approving review |
-| That the author did not approve their own change | The self-approval bar lives in branch protection, which is absent |
-| That every required check passed | There are no required checks; all of them are advisory |
-| That an upstream-boundary change was reviewed as a divergence | `ADR-0033`'s mechanism is unimplemented (#1428 open) |
+| That a code owner saw the change | No CODEOWNERS rule resolves; no request is sent to anyone |
+| That the approver owns, or knows, the affected paths | Protection counts approvals; it does not weigh them |
+| That code-owner review was required | `require_code_owner_reviews` is unreadable under a non-admin token; unknown either way |
+| That every check passed | `required_status_checks` is empty per §6's dated figures, not re-readable here; all checks are advisory |
+| That an upstream-boundary change was reviewed *as a divergence* | `ADR-0033`'s mechanism is unimplemented (#1428 open) |
+| That the merge did not bypass the gate | §6 records `enforce_admins` as off, so an admin token can merge past it |
 | That an agent-authored merge was authorised | `ADR-0052`'s conditions are quoted into artefacts by convention; nothing verifies the quote |
 
-**Enforcement here is review and self-discipline, by circumstance rather than by
-design.** `ADR-0019` (Superseded by `ADR-0052`) settled that only a deterministic script
-may gate a merge, and — its second ruling — that **"a human approval remains required,
-always"**, noting that a status check can never substitute for one because GitHub treats
-required approvals and required checks as independent gates. `ADR-0033` then accepted an
-advisory control knowingly, while expecting required checks to land later.
-
-**Neither anticipated the state measured here.** With no protection object, the
-independent gate `ADR-0019` relied on is not merely unsatisfied — it is not configured,
-so the approving review it called always-required is not required by anything. That is a
-gap between an accepted decision and the live platform, and under `ADR-0029` an accepted
-decision governs *intended* behaviour even where configuration has drifted from it. So
-the requirement stands as policy and is simply unenforced. This node reports that; it
-does not decide what to do about it.
+**So enforcement here is layered, not absent.** The platform holds the approval gate;
+`ADR-0033`'s ownership-routing layer above it was accepted but never built, and the file
+it depends on is broken. That is one specific missing layer, not a general absence of
+control — and stating it as a general absence, as an earlier draft of this node did, both
+misleads a reader and understates how narrow the actual gap is.
 
 ## Exceptions and escalation
 
@@ -258,9 +320,12 @@ say which, and why, in the pull request body — not silently.
 **Where a case this node does not reach goes.** A question about *who* should own a
 given path, or about the reviewer set a fixed CODEOWNERS file should name, is Task
 #1428's under `ADR-0033`, together with the path scope and the notification surface. A
-question about whether branch protection should be restored, and with what settings, is
-a decision no agent may take: it is an ADR question, raised as an issue with
-`type:adr` and `needs-decision`, per `launchpad/AGENTS.md` §4.
+question about what `launchpad`'s protection settings should be — the required approving
+review count, whether `require_code_owner_reviews` is on, whether `enforce_admins` is set
+— is a decision no agent may take: it is an ADR question, raised as an issue with
+`type:adr` and `needs-decision`, per `launchpad/AGENTS.md` §4. Note that an agent holding
+a non-admin token cannot even *read* those settings to check them (see *Expected but not
+verified*), so the question cannot be answered from this side, only raised.
 
 **A drift between a document's stated platform configuration and the platform's own
 response is reported, not reconciled.** `ADR-0029` governs: executable evidence outranks
@@ -276,15 +341,16 @@ one act that is never delegable.
 
 **This node covers** the current state of code ownership and review routing in
 `launchpad-26/buzz`: what `.github/CODEOWNERS` contains, whose file it is, why its rule
-does not resolve here, what platform mechanism could enforce it and does not exist, and
-which review obligations are consequently convention rather than gate.
+does not resolve here, which platform mechanism would have to carry it and whether that
+mechanism is readable from here, and which review obligations are consequently convention
+rather than confirmed gate.
 
 **It does not cover, and these are gaps rather than silence:**
 
 | Not covered here | Owned by |
 |---|---|
 | What a fixed CODEOWNERS file should say, and which team owns which path | Task #1428, under `ADR-0033` |
-| Whether branch protection should be restored, and with what settings | Undecided; needs an ADR — no record found at this revision |
+| What `launchpad`'s protection settings actually are, and what they should be | Unreadable under a non-admin token; changing them needs an ADR — no record found at this revision |
 | Which status checks should become required | `ADR-0033` names #154; `launchpad/AGENTS.md` §6 names #153 and #146 |
 | What a reviewer of a *corpus node* must verify in its content | `launchpad/docs/corpus/standards/review-requirements.md` |
 | The upstream-file boundary itself, and its closed exception list | `launchpad/AGENTS.md` §3 |
@@ -293,10 +359,11 @@ which review obligations are consequently convention rather than gate.
 | Review routing inside `block/buzz` upstream | Upstream; its CODEOWNERS is valid there and is not this fork's to describe |
 
 **This node names a gap; it does not propose a policy.** `CO1`-`CO6` restate obligations
-that already exist in `AGENTS.md` and the accepted ADRs, applied to a configuration that
-has changed underneath them. Where no rule exists — most sharply, whether protection
-should be restored — this node says no rule exists and points at the decision route,
-rather than inventing one.
+that already exist in `AGENTS.md` and the accepted ADRs, applied to a configuration this
+node could only partly read. Where no rule exists — most sharply, what `launchpad`'s
+protection settings should require — this node says so and points at the decision route,
+rather than inventing one. Where the platform's own answer was unreadable rather than
+absent, it says that too, and names the command an admin would run.
 
 **Expected but not verified when this node was written:**
 
