@@ -145,7 +145,7 @@ BUD-02 shape returned by both upload routes:
 **Errors — `MediaError`** (`crates/buzz-media/src/error.rs`) is one enum
 spanning both authentication/authorization failures (bad signature, wrong
 auth kind/verb, missing tag, hash/server mismatch, expired/out-of-window
-timestamp, missing/malformed auth header, revoked/mismatched token,
+timestamp, missing or malformed auth header, a revoked or mismatched token,
 insufficient scope, not a relay member, community writes fenced) and
 content/operational failures (unknown/disallowed content type, file/image too
 large, invalid image, storage error, internal error, not found, service
