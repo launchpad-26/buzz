@@ -16,7 +16,7 @@ evidence:
     entry_class: FACT
     evidence:
       - "launchpad/decisions/ADR-0028-corpus-canonical-representation.md"
-  - statement: "ADR-0028's Security implications section states plainly that 'Generated views must not silently drop whatever security-relevant provenance their source node carries,' immediately after stating that provenance and claim classification (FACT/INFERENCE/TEAM KNOWLEDGE) must stay structurally encoded and validator-checkable rather than asserted only in free-form body prose."
+  - statement: "ADR-0028's Security implications section states plainly that 'Generated views must not silently drop whatever security-relevant provenance their source node carries,' in the same section that requires provenance and claim classification (FACT/INFERENCE/TEAM KNOWLEDGE) to stay structurally encoded and validator-checkable rather than asserted only in free-form body prose."
     entry_class: FACT
     evidence:
       - "launchpad/decisions/ADR-0028-corpus-canonical-representation.md"
@@ -40,16 +40,16 @@ evidence:
     entry_class: FACT
     evidence:
       - "launchpad/docs/corpus/AGENTS.md"
-  - statement: "At repository revision aef93f2c2acfe9dfe66d22d33f5abb4ac12baa90, the corpus tree on origin/launchpad contains corpus-agents, corpus-standard-generated-content and corpus-template-policy among its merged nodes, and contains no node anywhere under an ingestion/ path; agents-invariants (id of agents/invariants.md) is the only Feature #620 sibling document merged."
+  - statement: "At repository revision aef93f2c2acfe9dfe66d22d33f5abb4ac12baa90, the three relationship targets this node declares -- agents/invariants.md, standards/generated-content.md and templates/policy.md -- are each present on origin/launchpad's corpus tree, and no path under launchpad/docs/corpus/ingestion/ exists there at all."
     entry_class: FACT
     evidence:
-      - "git_ls_tree(ref='origin/launchpad', path='launchpad/docs/corpus') -> AGENTS.md, README.md, agents/invariants.md, standards/generated-content.md, standards/provenance.md, templates/policy.md, templates/procedure.md, and every other file listed under standards/ and templates/, with no path matching ingestion/*.md"
+      - "git_ls_tree(ref='origin/launchpad', path='launchpad/docs/corpus', filter='agents/invariants.md|standards/generated-content.md|templates/policy.md|ingestion/') -> launchpad/docs/corpus/agents/invariants.md, launchpad/docs/corpus/standards/generated-content.md, launchpad/docs/corpus/templates/policy.md (no ingestion/ path present)"
   - statement: "That a canonical node's committed change is what must trigger regeneration of any generated view derived from it follows from ADR-0028's requirement that a generated view be 'always reproducible from the canonical Markdown': a view that has not been regenerated since its source's last committed change is no longer the reproduction of current canonical content ADR-0028 requires, whether or not anyone has noticed the drift. No source states this trigger as a rule in those words -- it is this node's own reasoning from ADR-0028's reproducibility requirement, not a restatement of an explicit rule found elsewhere."
     entry_class: INFERENCE
     evidence:
       - "launchpad/decisions/ADR-0028-corpus-canonical-representation.md"
     confidence: 0.8
-  - statement: "Feature #620 lists issue #967 among 32 child document tasks under an agents/ and ingestion/ path family, with a stated outcome that 'Agents can deterministically navigate, evidence, draft, validate and maintain corpus nodes using documented procedures,' and Feature #620's own out-of-scope list excludes 'implementation of the knowledge-crate runtime,' recording that no corpus generator currently exists."
+  - statement: "Feature #620 lists issue #967 among 32 child document tasks under an agents/ and ingestion/ path family, with a stated outcome that 'Agents can deterministically navigate, evidence, draft, validate and maintain corpus nodes using documented procedures,' and Feature #620's own out-of-scope list excludes 'implementation of the knowledge-crate runtime.' #620's body does not itself state that no corpus generator currently exists -- that fact is established separately above, from AGENTS.md and validate.py."
     entry_class: TEAM_KNOWLEDGE
     provided_by: "launchpad-26/buzz#620 body"
   - statement: "Issue #967's own definition of done requires this node to have schema-valid front matter with a stable node ID, type, status, origin, audiences, provenance/evidence and typed relationships appropriate to the node, to represent one independently maintainable knowledge node rather than folding in a second concept, and to be checked against the repository revision recorded in its provenance."
@@ -114,7 +114,7 @@ win** -- this node has drifted and should be fixed.
 | **R1** | Once a corpus generator exists, regenerating a generated derived view MUST reproduce it from the current canonical Markdown of every node it derives from, replacing the artifact wholesale rather than patching it incrementally. This is `ADR-0028`'s reproducibility requirement stated as a rule for the regeneration act; enforced by nobody today, because no generator exists to run it against. |
 | **R2** | Regeneration MUST NOT silently drop any security-relevant provenance a source node's evidence ledger carries into its generated view -- an entry's `entry_class` (`FACT`/`INFERENCE`/`TEAM_KNOWLEDGE`), its citations, and its `confidence` or `provided_by` fields where present. Dropping the classification while keeping the prose is exactly the failure `ADR-0028`'s Security implications section names. Enforced by nobody today; there is no generated view to inspect. |
 | **R3** | Regeneration of a generated view MUST be triggered whenever any canonical node it derives from is created, updated, or retired. A view that has not been regenerated since its source's last committed change has stopped being the reproduction of current canonical content `ADR-0028` requires, whether or not the drift has been noticed. Enforced by nobody today -- stated here as this node's own reasoning (see the `INFERENCE` entry in the ledger), for a future generator to be built against. |
-| **R4** | Until the generator required by `#1316`/`#633` exists, nobody MUST hand-author a file that a future generator would own -- including placing a hand-written file inside `generated/` to make it resemble a real projection. This is real, checkable behavior **today**: `validate.py`'s `find_ownership_violations` rejects both a stray non-`.md` file outside `generated/` and one correctly placed inside it, with a distinct message for each, and both are hard errors. The underlying placement and ownership rules are `corpus-standard-generated-content`'s MUST 1-6; this node states the regeneration-specific consequence -- don't hand-produce what regeneration will one day own -- and does not restate those rules. |
+| **R4** | Until the generator required by `#1316`/`#633` exists, nobody MUST hand-author a file that a future generator would own -- including placing a hand-written file inside `generated/` to make it resemble a real projection. `corpus-standard-generated-content`'s MUST 1-6 already state and enforce the underlying placement and ownership rules (`validate.py`'s `find_ownership_violations`) in full; this node adds only the regeneration-specific consequence -- don't hand-produce what regeneration will one day own -- and points there rather than re-describing what that check does. |
 
 ## SHOULD
 
@@ -132,11 +132,11 @@ generator has ever run against this corpus," and that remains true at this node'
 recorded revision. R1-R3 exist to be enforced against the generator `#633`/`#1316`
 eventually build, not against anything running today.
 
-**R4 is enforced mechanically today**, by `validate.py`'s `find_ownership_violations`,
-run locally by `just corpus-validate` and in CI on every pull request and push to
-`launchpad` touching the corpus. Both failure modes it names -- a stray non-`.md` file
-outside `generated/`, and one correctly placed inside it -- are hard errors, not the
-non-fatal `UNVERIFIED` channel.
+**R4 is enforced mechanically today**, by the same check `corpus-standard-generated-content`
+names as its own enforcement mechanism (`validate.py`'s `find_ownership_violations`, run
+locally by `just corpus-validate` and in CI on every pull request and push to `launchpad`
+touching the corpus) -- what that check actually rejects, and how, is stated there and is
+not repeated here.
 
 **What a green `validate.py` run does NOT establish about this node's subject:** that
 any generated view exists, that one reflects current canonical content, that
