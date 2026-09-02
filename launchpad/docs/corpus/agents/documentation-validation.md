@@ -83,11 +83,14 @@ evidence:
     entry_class: FACT
     evidence:
       - "git_ls_tree(ref='origin/launchpad', path='launchpad/docs/corpus') -> includes templates/procedure.md and agents/invariants.md, at commit aef93f2c2acfe9dfe66d22d33f5abb4ac12baa90"
-  - statement: "Every merged corpus node's id observed at this revision follows '<path-below-corpus-root-with-slashes-as-hyphens>-<filename-stem>', e.g. architecture-containers-mobile for architecture/containers/mobile.md and agents-invariants for agents/invariants.md -- the pattern this node's own id (agents-documentation-validation) follows."
+  - statement: "Two distinct id conventions coexist in the merged corpus: every observed node under a content-type directory (architecture/, capabilities/, layers/, development/, and agents/) follows '<path-below-corpus-root-with-slashes-as-hyphens>-<filename-stem>' with no 'corpus-' prefix -- e.g. architecture-containers-mobile, capabilities-media-blossom, agents-invariants -- while AGENTS.md, README.md, and every node under standards/ or templates/ instead take standards/naming.md's own stated 'corpus-' plus a singular category word -- e.g. corpus-agents, corpus-standard-confidence, corpus-template-procedure. This node's id (agents-documentation-validation) follows the first, content-tree convention, matching its sibling agents-invariants.md rather than the meta-document convention, since agents/ is a content-type directory alongside architecture/ and capabilities/, not a corpus-root meta-document."
     entry_class: FACT
     evidence:
       - "launchpad/docs/corpus/agents/invariants.md"
       - "launchpad/docs/corpus/architecture/containers/mobile.md"
+      - "launchpad/docs/corpus/capabilities/media/blossom.md"
+      - "launchpad/docs/corpus/standards/naming.md"
+      - "launchpad/docs/corpus/templates/procedure.md"
   - statement: "Parent Feature #620 lists #645 (agents/documentation-creation.md) and #646 (agents/documentation-update.md) among its 32 child document tasks, neither merged at this node's authoring time; this node's own issue #647 is a sibling task in the same family, none of the three able to read the others' actual drafted content."
     entry_class: TEAM_KNOWLEDGE
     provided_by: "launchpad-26/buzz#620 body, batch dispatch brief for issues #645-#647"
