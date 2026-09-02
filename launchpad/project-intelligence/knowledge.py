@@ -423,12 +423,17 @@ def ask(agent: KnowledgeAgent, text: str) -> Answer:
                 f"This reads as a {question.intent} question, which needs a named symbol. "
                 "Use knowledge.find() for a concept whose name you do not know yet."
             ),
+            depth=question.depth,
         )
 
     if question.intent == "DEPENDENCIES":
         return dependencies(agent, question.target)
     if question.intent == "IMPACT":
-        return impact(agent, question.target)
+        # Stamped explicitly, matching explain()'s own IMPACT delegation
+        # (line ~189 above): impact() never sets depth itself, and
+        # classify_depth() always classifies an IMPACT-intent question's
+        # depth as "IMPACT", so this is never overwriting a different value.
+        return replace(impact(agent, question.target), depth=question.depth)
     if question.intent == "HISTORY":
         return history(agent, question.target)
     return explain(agent, question.target, question.depth)

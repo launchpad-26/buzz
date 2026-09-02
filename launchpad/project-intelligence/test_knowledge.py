@@ -315,6 +315,23 @@ class AskRoutingTest(unittest.TestCase):
         self.assertIn("No symbol named", answer.short_answer)
         self.assertIn("IMPACT", answer.things_to_be_aware_of)
 
+    def test_the_target_less_route_still_stamps_the_classified_depth(self) -> None:
+        """#571 follow-up (review-final): ask()'s target-less early return is
+        the twin of the one already fixed in knowledge_agent.py's run() --
+        same guard, same short_answer text, and it was still missing the
+        depth stamp. A SUMMARY-classified question with no nameable target
+        must render one section, not the two a dropped depth produces."""
+        answer = knowledge.ask(_agent(), "briefly, how does the gating thing work?")
+        self.assertEqual(answer.depth, "SUMMARY")
+
+    def test_the_impact_route_stamps_depth_like_explains_impact_delegation_does(self) -> None:
+        """#571 follow-up (review-final): explain(agent, symbol, "IMPACT")
+        stamps depth="IMPACT" on impact()'s answer; ask() routing the same
+        IMPACT intent to the same impact() call must not silently return
+        depth=None for what is otherwise an identical answer."""
+        answer = knowledge.ask(_agent(), f"what happens if I change `{TARGET}`?")
+        self.assertEqual(answer.depth, "IMPACT")
+
 
 class ImpactTest(unittest.TestCase):
     def test_direct_and_secondary_are_separate_claims(self) -> None:
