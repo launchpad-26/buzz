@@ -25,10 +25,11 @@ evidence:
     evidence:
       - "launchpad/docs/corpus/AGENTS.md"
       - "launchpad/project-intelligence/corpus/validate.py"
+      - "grep_repo(pattern='workflow_run|check_run|ci_result|actions/runs|github actions', scope='launchpad/project-intelligence/corpus/validate.py') -> 0 matches"
   - statement: "A GitHub Actions run URL (https://github.com/<owner>/<repo>/actions/runs/<id>) does not match validate.py's repository-file-link pattern -- which requires a blob, raw, tree, blame, commits or edit view segment naming a file -- so it falls through to the generic external-URL branch and is reported UNVERIFIED, identically to a non-GitHub URL or an issue/pull-request link."
     entry_class: FACT
     evidence:
-      - "launchpad/project-intelligence/corpus/validate.py"
+      - "launchpad/project-intelligence/corpus/validate.py:553-565"
   - statement: "This repository sets an explicit, short, and varying retention-days on every uploaded GitHub Actions artifact found: .github/workflows/ci.yml's desktop-e2e-relay artifact is 1 day, .github/workflows/linux-canary.yml, windows-canary.yml and signed-macos-canary.yml's canary packages are each 7 days, and .github/workflows/sprig.yml's workflow artifact is 30 days -- none is left at GitHub's own longer default, and none is unlimited."
     entry_class: FACT
     evidence:
