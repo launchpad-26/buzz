@@ -25,17 +25,20 @@ evidence:
     evidence:
       - "git_ls_tree(ref='origin/launchpad', path='launchpad/docs/corpus') -> no ingestion/ path present; run at commit aef93f2c2acfe9dfe66d22d33f5abb4ac12baa90"
   - statement: "gh api repos/block/buzz/pulls/7187/comments returns exactly four diff-anchored review comments on merged upstream PR #7187 (merge commit b270437a62bc1049b27745799dc44268d0c23489), each carrying its own numeric id (e.g. 3906293393), a path, a line and a separate original_line, a diff_hunk, a position and a separate original_position, and a permalink of the form https://github.com/block/buzz/pull/7187#discussion_r<id> -- a distinct URL-fragment shape (#discussion_r<id>) from an issue comment's #issuecomment-<id> fragment, so the two are not interchangeable citations even though both are GitHub comments on the same numbered thread."
-    entry_class: FACT
+    entry_class: TEAM_KNOWLEDGE
+    provided_by: "block/buzz#7187, read via gh api repos/block/buzz/pulls/7187/comments at this node's authoring time"
     evidence:
       - "gh_api(repos/block/buzz/pulls/7187/comments) -> 4 comments; ids 3906293393, 3906552022, 3906817552, 3906817676; paths mobile/ios/Runner.xcodeproj/project.pbxproj and .github/workflows/ci.yml"
   - statement: "On the same PR #7187, three distinct GitHub comment surfaces coexist and return different counts for the identical thread: gh api repos/block/buzz/issues/7187/comments (general conversation, no diff anchor) returns 12 comments; gh api repos/block/buzz/pulls/7187/comments (diff-anchored review comments) returns 4; and gh api repos/block/buzz/pulls/7187/reviews (a review's own top-level verdict/summary, e.g. state: APPROVED with a body, not anchored to any file or line) returns 4 separate top-level reviews -- three different endpoints, three different objects, on one PR."
-    entry_class: FACT
+    entry_class: TEAM_KNOWLEDGE
+    provided_by: "block/buzz#7187, read via gh api against its issues/comments, pulls/comments and pulls/reviews endpoints at this node's authoring time"
     evidence:
       - "gh_api(repos/block/buzz/issues/7187/comments) -> 12 entries"
       - "gh_api(repos/block/buzz/pulls/7187/comments) -> 4 entries"
       - "gh_api(repos/block/buzz/pulls/7187/reviews) -> 4 entries, including one state: APPROVED review from user jedwards27 with an unanchored body"
-  - statement: "A GraphQL reviewThreads query against PR #7187 shows two threads in different anchor states at the same point in time: one (path mobile/ios/Runner.xcodeproj/project.pbxproj, line 941) has isOutdated: false, its line unchanged since authoring; the other (path .github/workflows/ci.yml, originalLine 1015) has isOutdated: true and line: null -- the diff moved after the comment was posted and GitHub can no longer place it on the current diff. Both threads are separately isResolved: true, each resolved by a reply comment in the same thread ('Addressed with the broader production-seam guard in f0a3c7b32' / 'the implementation-specific linker script was removed in f0a3c7b32 ... no longer exists') rather than by any edit to the original comment's own body."
-    entry_class: FACT
+  - statement: "A GraphQL reviewThreads query against PR #7187 shows two threads in different anchor states at the same point in time: one (path mobile/ios/Runner.xcodeproj/project.pbxproj, line 941) has isOutdated: false, its line unchanged since authoring; the other (path .github/workflows/ci.yml, originalLine 1015) has isOutdated: true and line: null -- the diff moved after the comment was posted and GitHub can no longer place it on the current diff. Both threads are separately isResolved: true, each resolved by a reply comment in the same thread ('Addressed with the broader production-seam guard in f0a3c7b32' / 'the implementation-specific linker script was removed in f0a3c7b32 ... so the script-only coverage gap no longer exists') rather than by any edit to the original comment's own body."
+    entry_class: TEAM_KNOWLEDGE
+    provided_by: "block/buzz#7187, read via gh api graphql reviewThreads at this node's authoring time"
     evidence:
       - "gh_api_graphql(pullRequest(number: 7187) { reviewThreads }) -> two threads: isResolved true/isOutdated false (line 941, unchanged); isResolved true/isOutdated true (line null, originalLine 1015)"
   - statement: "validate.py's _GITHUB_URL_RE matches only the blob, raw, tree, blame, commits and edit verbs immediately after a github.com owner/repo path; a pull-request review-comment permalink's corresponding path segment is pull/<n>, which matches none of them, so _classify_url falls through to its final branch and returns CitationVerdict('unverified', 'is an external URL this validator can neither pin nor open') -- the identical non-fatal outcome ingestion/issue-comments.md (#962) documents for an issue-comment permalink and ingestion/pull-requests.md (#966) documents for a plain PR URL."
@@ -259,3 +262,9 @@ not worth citing at all.
 - **No author or harness has applied V1–V7 outside this session.** Whether the
   reply-thread-reading and resolution/staleness discipline (V3–V5) is followable in
   practice on a review with many more than two threads is untested.
+- **This node's `TEAM_KNOWLEDGE` entries attributing specific rule numbers and quoted
+  passages to `ingestion/issue-comments.md` (#962) and `ingestion/pull-requests.md`
+  (#966) can go stale silently.** Both are unmerged drafts read directly in their own
+  worktrees at this node's authoring time, not files present in this branch that
+  `validate.py` can re-check; if either is renamed, renumbered, or reworded before
+  merging, nothing here will detect the drift.
