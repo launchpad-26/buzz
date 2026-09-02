@@ -123,27 +123,23 @@ node's evidence ledger.
      `TEAM_KNOWLEDGE` attribution that contradicts a `FACT` about the same intent
      claim). This is the general case, and `corpus-standard-evidence`'s MUST 10
      governs it. Continue to step 3.
-3. **For the general case (2c): write one evidence entry per contradicting source.**
-   Each entry cites its own source and states only what that source says. Do not write
-   a third entry stating a resolution -- there is none yet, and inventing one is the
-   act ADR-0029 forbids.
-4. **State the contradiction explicitly in the node's body**, naming both sources and
-   the claim they disagree about, so a reader does not have to reconstruct it from the
-   ledger alone.
-5. **Set the node's `status` to `flagged`.** This is the schema's dedicated value for
-   exactly this state -- an unresolved conflict between authorities -- not a stand-in
-   for low confidence or "still drafting."
-6. **Before escalating, check whether either source is private or cannot be
-   published.** If so, per `ADR-0029`'s security clause, do not copy it into the
-   public corpus to settle the conflict. The claim stays unestablished, and that fact
-   is itself part of what gets recorded and escalated -- it is not a reason to quietly
-   prefer the source you happen to be able to show.
-7. **Escalate the way this repository turns an open question into a decision.** Raise
-   it, or point to an existing one, as a `type:adr` issue parented to the PRD that
-   governs the subject, with the decision outcome left blank. Agents draft decisions;
-   they do not make them -- choosing between two same-claim-type authorities is making
-   one.
-8. **Finish authoring the rest of the node normally.** A `flagged` status on one
+3. **For the general case (2c), apply the same core moves as step 2b's recipe**,
+   generalized beyond decision records to any same-claim-type source pairing, per
+   `corpus-standard-evidence`'s MUST 10: write one evidence entry per contradicting
+   source (any source, not only a decision record), state the contradiction in the
+   node's body naming both, and set `status: flagged`. Do not write a third entry
+   stating a resolution -- there is none yet, and inventing one is the act `ADR-0029`
+   forbids.
+4. **Before escalating, check whether either source is private or cannot be
+   published** -- this check has no counterpart in step 2b's recipe. If either source
+   cannot be shown, per `ADR-0029`'s security clause, do not copy it into the public
+   corpus to settle the conflict. The claim stays unestablished, and that fact is
+   itself part of what gets recorded and escalated -- it is not a reason to quietly
+   prefer the source you happen to be able to show. Then escalate exactly as step 2b's
+   recipe does: a `type:adr` issue parented to the PRD that governs the subject, with
+   the decision outcome left blank. Agents draft decisions; they do not make them --
+   choosing between two same-claim-type authorities is making one.
+5. **Finish authoring the rest of the node normally.** A `flagged` status on one
    contested claim does not block the rest of the ledger or body from being completed.
    Only the contested claim itself stays unestablished until a human resolves it.
 
