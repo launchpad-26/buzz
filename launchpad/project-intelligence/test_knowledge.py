@@ -10,11 +10,12 @@ Run:  python3 -m unittest test_knowledge
 
 from __future__ import annotations
 
+import re
 import unittest
 from dataclasses import dataclass
 
 import knowledge
-from answer import Answer
+from answer import SECTION_ORDER, Answer, render
 from graph import ProjectGraph
 from investigation import Tools
 from knowledge_agent import KnowledgeAgent
@@ -35,6 +36,13 @@ class _Match:
     kind: str
     file: str
     signature: str
+
+
+@dataclass(frozen=True)
+class _Ref:
+    caller_qualified_name: str
+    file: str
+    line: int
 
 
 def _symbol(name: str, calls: tuple[str, ...] = (), tests: tuple[str, ...] = ()) -> Symbol:
@@ -124,6 +132,108 @@ class SurfaceTest(unittest.TestCase):
                         self.assertIsNotNone(claim.provided_by)
                     else:
                         self.assertTrue(claim.evidence)
+
+
+class ExplainDepthTest(unittest.TestCase):
+    """#571's done-when: explain(symbol, depth) actually renders differently."""
+
+    def setUp(self) -> None:
+        # A dedicated agent, not the shared _agent() helper: TRACE needs a
+        # populated Relevant flow section, which needs find_references to
+        # return a real caller -- _agent()'s stub always returns []. No
+        # ProjectMemory entry here (see RATIONALE's own agent below): assess()
+        # treats any ProjectMemory hit as `confident`, which skips the
+        # find_references/search_text corroboration stages entirely -- the
+        # same defect this repo's confidence.py docstring already documents
+        # being found the hard way once. A memory entry here would silently
+        # empty out Relevant flow again.
+        symbols = [_symbol(TARGET, tests=("tests::membership",)), _symbol(CALLER, calls=(TARGET,))]
+        tools = Tools(
+            search_symbols=lambda name, crate: [_Match(TARGET, "function", FILE, SIGNATURE)],
+            read_file=lambda path, *a, **k: FILE_TEXT,
+            find_references=lambda qn, crate: [_Ref(CALLER, FILE, 220)],
+            search_text=lambda pattern, **k: [],
+            inspect_git_history=lambda f, s, e: [],
+        )
+        self.agent = KnowledgeAgent(
+            crate="buzz-core",
+            symbols=symbols,
+            graph=ProjectGraph.from_symbols(symbols),
+            index=SemanticIndex.from_symbols(symbols),
+            memory=ProjectMemory(),
+            tools=tools,
+        )
+
+    def test_four_depths_share_one_claim_set_and_differ_only_in_rendering(self) -> None:
+        """STEP 5: SUMMARY/ONBOARDING/IMPLEMENTATION/TRACE run the identical
+        investigation -- only RATIONALE (extra history stage) and IMPACT
+        (delegates to impact() entirely) are allowed to differ, and both are
+        pre-existing, documented exceptions rather than new ones."""
+        answers = {
+            depth: knowledge.explain(self.agent, TARGET, depth)
+            for depth in ("SUMMARY", "ONBOARDING", "IMPLEMENTATION", "TRACE")
+        }
+        claim_sets = {depth: a.claims for depth, a in answers.items()}
+        first = next(iter(claim_sets.values()))
+        for depth, claims in claim_sets.items():
+            with self.subTest(depth=depth):
+                self.assertEqual(claims, first)
+        # And they really are differently rendered, not vacuously equal because
+        # nothing renders differently either.
+        rendered = {depth: render(a) for depth, a in answers.items()}
+        self.assertEqual(len(set(rendered.values())), len(rendered))
+
+    def test_summary_is_one_paragraph_with_no_file_path(self) -> None:
+        rendered = render(knowledge.explain(self.agent, TARGET, "SUMMARY"))
+        self.assertIsNone(re.search(r"\S+\.\w+:\d+", rendered))
+        headings = [ln for ln in rendered.splitlines() if ln.startswith("## ")]
+        self.assertEqual(headings, ["## Short answer"])
+
+    def test_onboarding_is_the_only_depth_with_every_section_present(self) -> None:
+        rendered = render(knowledge.explain(self.agent, TARGET, "ONBOARDING"))
+        headings = [ln[3:] for ln in rendered.splitlines() if ln.startswith("## ")]
+        self.assertEqual(headings, list(SECTION_ORDER))
+
+    def test_implementation_has_line_referenced_sources_and_no_relevant_flow(self) -> None:
+        rendered = render(knowledge.explain(self.agent, TARGET, "IMPLEMENTATION"))
+        self.assertIn("## Sources", rendered)
+        self.assertRegex(rendered, r"\S+\.\w+:\d+")
+        self.assertNotIn("## Relevant flow", rendered)
+
+    def test_trace_has_relevant_flow_and_no_how_it_works(self) -> None:
+        rendered = render(knowledge.explain(self.agent, TARGET, "TRACE"))
+        self.assertIn("## Relevant flow", rendered)
+        self.assertNotIn("## How it works", rendered)
+
+    def test_rationale_excludes_the_generic_fact_and_keeps_team_knowledge(self) -> None:
+        # A separate agent, with a TEAM_KNOWLEDGE entry mentioning TARGET --
+        # not self.agent, whose whole point is an EMPTY memory (see setUp).
+        memory = ProjectMemory()
+        memory.add(
+            MemoryEntry(
+                id="tk-rationale",
+                entry_class="TEAM_KNOWLEDGE",
+                statement=f"we are not adding kind variants near {TARGET} this milestone",
+                provided_by="serina",
+            )
+        )
+        agent = KnowledgeAgent(
+            crate="buzz-core",
+            symbols=self.agent.symbols,
+            graph=self.agent.graph,
+            index=self.agent.index,
+            memory=memory,
+            tools=self.agent.tools,
+        )
+        rendered = render(knowledge.explain(agent, TARGET, "RATIONALE"))
+        self.assertIn("## Sources", rendered)
+        self.assertNotIn(f"{TARGET} is defined as", rendered)
+        self.assertIn("TEAM KNOWLEDGE", rendered)
+
+    def test_impact_states_direct_and_secondary_separately(self) -> None:
+        answer = knowledge.explain(self.agent, TARGET, "IMPACT")
+        self.assertRegex(answer.short_answer, r"\d+ direct and \d+ secondary")
+        self.assertEqual(answer.depth, "IMPACT")
 
 
 class AskRoutingTest(unittest.TestCase):
