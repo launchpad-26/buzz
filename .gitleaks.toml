@@ -113,6 +113,20 @@ paths = [
     # present in both Cargo.lock files in this repo (root and
     # desktop/src-tauri/) — one finding each, both checksum data.
     '''(^|/)Cargo\.lock$''',
+    # The generated documentation corpus explains Nostr protocol wire shapes
+    # (event ids, sigs, pubkeys, NIP-42 auth challenges) and inline error
+    # prose, both of which are made of arbitrary-looking hex/word strings
+    # gitleaks' generic-api-key rule keeps mistaking for credentials. Verified
+    # on PR #1981 (media-api.md:148 — the plain-English phrase
+    # "revoked/mismatched" following the word "auth") and PR #2002 (six
+    # findings across five files: two reuses of the same made-up NIP-42
+    # example challenge hex, the well-known secp256k1 generator-point
+    # constant quoted while explaining NIP-OA key derivation, an example
+    # webhook UUID, and another plain-English phrase). None were real
+    # secrets — every corpus doc is authored prose/examples, never a
+    # deploy-time credential, so future corpus PRs inventing new example
+    # hex/UUIDs would keep tripping this the same way.
+    '''(^|/)launchpad/docs/corpus/.*''',
 ]
 regexes = [
     '''<[A-Za-z0-9 ]+>''',
