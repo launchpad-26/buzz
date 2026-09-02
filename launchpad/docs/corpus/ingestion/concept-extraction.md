@@ -41,6 +41,12 @@ evidence:
     entry_class: FACT
     evidence:
       - "launchpad/docs/corpus/templates/procedure.md"
+  - statement: "templates/procedure.md's own Boundary section requires a how-to-shaped instance node to state, as an explicit checklist, that it is not reference (`templates/reference.md`, information-oriented lookup content), not a tutorial (acquisition-of-skill for a newcomer), and not concept/explanation (`templates/concept.md`, understanding-oriented discussion of why a design exists), plus any node-specific exclusion the author found."
+    entry_class: FACT
+    evidence:
+      - "launchpad/docs/corpus/templates/procedure.md"
+      - "launchpad/docs/corpus/templates/reference.md"
+      - "launchpad/docs/corpus/templates/concept.md"
   - statement: "The sibling agents/concept-resolution.md (local unmerged commit, worktree __worktrees/task-642-agents-concept-resolution, not present on origin/launchpad) states its own subject as: deciding, for a candidate subject already identified, whether it is genuinely new or an existing corpus node in different clothes, and names AGENTS.md's 'Creating a node' step 2 as the procedure it makes concrete -- a step that itself presupposes a candidate has already been named. It does not address how the candidate is first noticed."
     entry_class: TEAM_KNOWLEDGE
     provided_by: "launchpad-26/buzz#642 (local unmerged commit, worktree task-642-agents-concept-resolution)"
@@ -49,11 +55,12 @@ evidence:
     evidence:
       - "crates/buzz-db/src/store/thread.rs:256"
       - "crates/buzz-db/src/store/thread.rs:297"
-  - statement: "crates/buzz-db/src/store/event.rs independently reimplements the identical reply_count/descendant_count UPDATE idiom twice more: once inside soft_delete_event_and_update_thread (function starts line 897; the UPDATE statements are at lines 919-931) and once inside the reply-insert branch of a large event-insertion function (the UPDATE statements are at lines 1296 and 1309) -- a third and fourth independent occurrence of the same two-column maintenance idiom already seen in thread.rs."
+  - statement: "crates/buzz-db/src/store/event.rs independently reimplements the identical reply_count/descendant_count UPDATE idiom twice more: once inside soft_delete_event_and_update_thread (function starts line 897; the two SET clauses are at lines 920 and 931) and once inside the reply-insert branch of a large event-insertion function (the UPDATE statements are at lines 1296 and 1309) -- a third and fourth independent occurrence of the same two-column maintenance idiom already seen in thread.rs."
     entry_class: FACT
     evidence:
       - "crates/buzz-db/src/store/event.rs:897"
-      - "crates/buzz-db/src/store/event.rs:919"
+      - "crates/buzz-db/src/store/event.rs:920"
+      - "crates/buzz-db/src/store/event.rs:931"
       - "crates/buzz-db/src/store/event.rs:1296"
       - "crates/buzz-db/src/store/event.rs:1309"
   - statement: "crates/buzz-db/src/store/relay_admin_actions.rs's execute_delete_with_marker (line 698) attempts a fifth occurrence of the same maintenance idiom at lines 747-748 ('UPDATE events SET reply_count = GREATEST(reply_count - 1, 0) ... WHERE community_id = $1 AND id = $2'), but targets the events table rather than thread_metadata, and never updates descendant_count at all (its root_event_id parameter is prefixed _root_event_id, unused)."
@@ -62,12 +69,12 @@ evidence:
       - "crates/buzz-db/src/store/relay_admin_actions.rs:698"
       - "crates/buzz-db/src/store/relay_admin_actions.rs:747"
       - "crates/buzz-db/src/store/relay_admin_actions.rs:748"
-  - statement: "schema/schema.sql's events table definition (CREATE TABLE events, starting line 203) has no reply_count or descendant_count column; those two columns exist only on the separate thread_metadata table (CREATE TABLE thread_metadata, starting line 514, with reply_count and descendant_count declared at lines 522-523). Running relay_admin_actions.rs's query against a real database would fail with an undefined-column error."
+  - statement: "schema/schema.sql's events table definition (CREATE TABLE events, starting line 203) has no reply_count or descendant_count column; those two columns exist only on the separate thread_metadata table (CREATE TABLE thread_metadata, starting line 514, with reply_count and descendant_count declared at lines 524-525). Running relay_admin_actions.rs's query against a real database would fail with an undefined-column error."
     entry_class: FACT
     evidence:
       - "schema/schema.sql:203"
       - "schema/schema.sql:514"
-      - "schema/schema.sql:522"
+      - "schema/schema.sql:524"
   - statement: "The only test exercising execute_delete_with_marker (crates/buzz-relay/src/api/admin/mod.rs, the call at line 5002) passes None for the parent_event_id argument ('// no parent'), which skips the entire 'if let Some(parent) = parent_event_id' branch containing the broken query -- so the bug has never actually executed in any test run, and CI passing is not evidence the query works."
     entry_class: FACT
     evidence:
@@ -232,6 +239,14 @@ This node does not decide:
   corpus template currently covers that form; this node assumes a reader who already
   knows how to read code, a decision record, and a GitHub issue, and needs only the
   procedure for noticing a concept while doing so.
+- **A catalog of every existing corpus node, source-material shape, or evidence
+  citation form for lookup.** That is reference material (`templates/reference.md`
+  governs that form); this node instructs one action — noticing — rather than
+  serving as a table an author consults mid-task for a fact.
+- **Why an extraction step needs to exist at all, or the theory behind Diátaxis's
+  four documentation forms.** That is a concept/explanation node's territory
+  (`templates/concept.md`); this node's steps stop at instructing the action, not
+  discussing the idea of concept extraction for its own sake.
 
 ## Relationships
 
