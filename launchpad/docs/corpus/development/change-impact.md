@@ -153,6 +153,11 @@ evidence:
     entry_class: FACT
     evidence:
       - "launchpad/AGENTS.md"
+  - statement: "Two accepted decisions govern the fork-boundary half of this node's subject: ADR-0043 states that the default for a standing disagreement with upstream is a fork-owned file that overrides, wraps or delegates to upstream's, that copies are prohibited, and that the rule governs the form a divergence takes rather than whether one is permitted; ADR-0017 records the Hermit lefthook pin (bin/lefthook and bin/.lefthook-*.pkg, bumped to 2.1.10) as a scoped exception to the never-rename rule, because lefthook 2.1.3's @{push}-unavailable fallback crashes every pre-push command on this fork, whose branch name collides with the top-level launchpad/ directory."
+    entry_class: FACT
+    evidence:
+      - "launchpad/decisions/ADR-0043-prefer-fork-owned-overrides.md"
+      - "launchpad/decisions/ADR-0017-lefthook-pin-upstream-boundary-exception.md"
   - statement: "At the recorded revision origin/launchpad's corpus tree contains four nodes under development/ -- build.md, debugging.md, hermit.md and prerequisites.md -- and no node under a verification/, operations/ or release/ directory, so no merged node covers CI gating or hook lanes as its own subject."
     entry_class: FACT
     evidence:
@@ -202,6 +207,8 @@ This node duplicates none of them. If it and any of these disagree, **they win**
 | Companion sites for a new event kind or HTTP endpoint | `CONTRIBUTING.md` |
 | Cross-file coupling contracts no filter expresses | `AGENTS.md` |
 | The fork's upstream-file boundary and workflow naming rule | `launchpad/AGENTS.md` §3 |
+| Why a permitted divergence takes the form of an override, not a copy | `launchpad/decisions/ADR-0043-prefer-fork-owned-overrides.md` |
+| Why the local hook toolchain's lefthook pin diverges from upstream's | `launchpad/decisions/ADR-0017-lefthook-pin-upstream-boundary-exception.md` |
 
 ## CI path-filter groups
 
@@ -395,7 +402,12 @@ upstream files are never moved or renamed because the fork merges regularly from
 an approximately 3,800-file upstream, that the list of permitted divergences is
 closed with each entry naming its own ADR, that a permitted divergence should take
 the form of a fork-owned override rather than an in-place edit, and that any new
-workflow must be named `launchpad-*.yml`.
+workflow must be named `launchpad-*.yml`. ADR-0043 is the accepted decision behind
+the override-first rule; ADR-0017 is the accepted exception behind the local hook
+toolchain itself, recording why this fork's Hermit lefthook pin diverges from
+upstream's — lefthook 2.1.3's `@{push}`-unavailable fallback crashes every
+pre-push command here, because the fork's branch name collides with the top-level
+`launchpad/` directory.
 
 ## Guards on the wiring itself
 
