@@ -44,7 +44,7 @@ evidence:
     entry_class: FACT
     evidence:
       - "launchpad/docs/corpus/agents/invariants.md"
-  - statement: "standards/linking.md MUST 3 requires a pointer to a section within a document to name the target heading in prose (conventionally italicized) and MUST NOT rely on a Markdown anchor fragment, and states that across the corpus's merged nodes a body-prose mention of a sibling file or decision record is written as a bare repository-relative path or filename in backticks, not a Markdown hyperlink, when the node's primary purpose is being followed as instructions rather than browsed for navigation."
+  - statement: "standards/linking.md MUST 3 requires a pointer to a section within a document to name the target heading in prose (conventionally italicized) and MUST NOT rely on a Markdown anchor fragment. Separately, its SHOULD guidance (not MUST 3) recommends a Markdown hyperlink for a file pointer when a node's primary purpose is navigation, and a bare backtick path when the node's primary purpose is being followed as instructions -- two distinct rules from two different sections, not one rule."
     entry_class: FACT
     evidence:
       - "launchpad/docs/corpus/standards/linking.md"
@@ -63,11 +63,11 @@ evidence:
       - "mcp__repoql__read(uri='file:///launchpad/docs/corpus/agents/invariants.md#symbol=* => structure') -> Out of Memory Error: failed to pin block of size 256.0 KiB"
       - "mcp__repoql__read(uri='file:///launchpad/docs/corpus/AGENTS.md#line=128,140') -> Out of Memory Error: failed to pin block of size 256.0 KiB"
       - "mcp__repoql__query(sql=\"SELECT uri, score FROM search(...)\") -> DuckDB failed during read-only query ... database was invalidated by an earlier fatal failure"
-  - statement: ".repoql/concepts/README.md, the entry point for this same repository's own RepoQL concept:/// memory, states 'read(\"concept:///... => structure\") if you have RepoQL, else .repoql/concepts/ on disk' and lists its capsules under category headings (Rule) with CamelCase filenames such as concept:///rule/PrGateBlocksCdChainBeforeGhPrCreate.md -- a different location, naming convention, and governing mechanism than a launchpad/docs/corpus node's kebab-case id and node.schema.json contract. The .repoql/ directory itself is not part of this repository's tracked content at all: git check-ignore confirms it is excluded by a global gitignore rule, so a fresh clone or worktree (this one included) starts with no .repoql/ directory present until RepoQL's host creates it locally -- a further, structural difference from launchpad/docs/corpus, which is tracked, reviewed, and merged like any other repository content."
+  - statement: ".repoql/concepts/README.md, the entry point for this same repository's own RepoQL concept:/// memory, states 'read(\"concept:///... => structure\") if you have RepoQL, else .repoql/concepts/ on disk' and lists its capsules under category headings (Rule) with CamelCase filenames such as concept:///rule/PrGateBlocksCdChainBeforeGhPrCreate.md -- a different location, naming convention, and governing mechanism than a launchpad/docs/corpus node's kebab-case id and node.schema.json contract. The .repoql/ directory itself is not part of this repository's tracked content at all -- `git ls-files -- .repoql` returns nothing -- so a fresh clone or worktree (this one included) starts with no .repoql/ directory present until RepoQL's host creates it locally -- a further, structural difference from launchpad/docs/corpus, which is tracked, reviewed, and merged like any other repository content."
     entry_class: FACT
     evidence:
       - "read(uri='.repoql/concepts/README.md') -> local file present in the main checkout, contents quoted above; not present in this worktree"
-      - "git_check_ignore(path='.repoql/concepts/README.md') -> matched by /home/serina/.config/git/ignore:14:'**/.repoql/'"
+      - "git_ls_files(pathspec='.repoql') -> empty output, confirming the directory is untracked"
       - "launchpad/docs/corpus/schema/node.schema.json"
   - statement: "Whether this node's own type should be agent (the reasoning above, mirroring agents-invariants) or whether a future corpus-wide decision reclassifies reader-facing usage guidance differently, is a judgment call, not a settled rule -- no source states a rule specific to 'usage' versus 'invariants' documents within the agent surface."
     entry_class: INFERENCE
