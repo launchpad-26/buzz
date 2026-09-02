@@ -58,7 +58,7 @@ evidence:
     evidence:
       - "launchpad/decisions/ADR-0055-merge-commit-is-the-merge-strategy.md"
       - "launchpad/README.md"
-  - statement: "ADR-0054 withdrew ADR-0052's 1,500-line/10-file batch-PR cap and established one-Feature-one-PR regardless of size, on the reasoning that every real Feature batch had exceeded the cap and that squashing per-child-Task commits (which merge, not squash, preserves) would discard the granularity a reviewer and git bisect need."
+  - statement: "ADR-0054 withdrew ADR-0052's 1,500-line/10-file batch-PR cap and established one-Feature-one-PR regardless of size, on the reasoning that every real Feature batch had already exceeded the cap and that the cap bound the small, compliant per-batch PRs while exempting the large one-Feature PR it existed to bound. ADR-0054 explicitly states it does not itself decide the separate squash-versus-merge question -- that is ADR-0055's -- only that withdrawing the cap raises the cost of leaving it open."
     entry_class: FACT
     evidence:
       - "launchpad/decisions/ADR-0054-one-feature-one-pr-no-size-cap.md"
@@ -139,7 +139,7 @@ drifted and should be fixed.
 | The citation forms that name code, and how each is pinned and resolved | `launchpad/docs/corpus/standards/code-references.md` |
 | Citing an accepted decision record | `launchpad/docs/corpus/standards/decision-references.md` |
 | Creating, updating and retiring a node | `launchpad/docs/corpus/AGENTS.md` |
-| This fork's PR conventions in full | `launchpad/README.md` §6, `.github/PULL_REQUEST_TEMPLATE.md`, `launchpad/AGENT_PR_TEMPLATE.md` |
+| This fork's PR conventions in full | `launchpad/README.md`, "Opening a PR" section, `.github/PULL_REQUEST_TEMPLATE.md`, `launchpad/AGENT_PR_TEMPLATE.md` |
 | Merge strategy and batch-PR sizing | `launchpad/decisions/ADR-0055-merge-commit-is-the-merge-strategy.md`, `launchpad/decisions/ADR-0054-one-feature-one-pr-no-size-cap.md` |
 
 ## Which kind of GitHub entity are you citing?
@@ -166,7 +166,7 @@ node states only that the boundary exists and where it falls, not what #970 will
 | # | Requirement |
 |---|---|
 | **PR1** | A claim about what a pull request's description, body, or diff says or does **MUST** be classified `TEAM_KNOWLEDGE`, with `provided_by` naming the pull request (`owner/repo#NNN`), **never `FACT`**. No citation shape makes a pull request's content an openable file to the checker; forcing it into `FACT` on a URL citation produces exactly the `UNVERIFIED FACT` the evidence standard names as dishonest. Enforced by review only -- `validate.py` accepts an `UNVERIFIED`-routed `FACT` and prints a notice, it does not reject one. |
-| **PR2** | A claim resting on an **OPEN** (unmerged) pull request **MUST** state that it is open in the claim's `statement`, and **MUST NOT** be worded as if its description or diff is settled. An open PR's content can still change before merge -- worked example #2055 (see evidence ledger) shows a real PR whose own commit history rewrote its approach three times before any merge occurred. |
+| **PR2** | A claim resting on an **OPEN** (unmerged) pull request **MUST** state that it is open in the claim's `statement`, and **MUST NOT** be worded as if its description or diff is settled. An open PR's content can still change before merge -- worked example #2055 (see evidence ledger) shows a real PR whose own commit history rewrote its approach twice before any merge occurred. |
 | **PR3** | A claim that a **merged** pull request changed specific code **MUST** cite the merge commit SHA as a commit reference for the fact of the merge, and **separately** cite the changed file at that SHA (a repository path or a pinned GitHub file link, per `code-references.md`) to make the code-change claim itself `FACT`-eligible. Merging a PR does not turn the PR citation into a `FACT`-conferring one -- a commit reference is `UNVERIFIED` per `code-references.md` and `evidence.md` alike, merged or not; only the file at that revision is openable. |
 | **PR4** | A claim about what a **merged** pull request's description currently says **MUST NOT** be treated as permanent. GitHub permits editing a pull request's body at any time, including long after merge; only the diff, pinned to the merge commit, is locked by history. `TEAM_KNOWLEDGE` naming the PR is the honest class regardless of merge state, and re-reading before relying on it again is the citing author's responsibility. |
 | **PR5** | A claim that a pull request closes or implements a specific issue **MUST** cite the PR body's own `Closes #NNN` (or `Refs #NNN`) text as the evidence, not an assumed relationship inferred from the diff or from the issue and PR merely discussing the same subject. This fork's own convention requires that text to be written as plain text, never inside backticks or a code fence, because GitHub creates no link and closes nothing from a reference written in code -- so a corpus author checking whether a PR closes a given issue must read the raw closing-keyword line, not infer it from a fenced mention. |
