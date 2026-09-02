@@ -170,8 +170,70 @@ def render_claim(claim: Claim) -> str:
     return line
 
 
+# The design doc's § Data Model item 6 depths, restricted to which of
+# SECTION_ORDER's names each one shows -- issue #571. `None`, `"ONBOARDING"`
+# and `"IMPACT"` are deliberately absent: all three fall through to
+# SECTION_ORDER unchanged (see render()).
+#
+# ONBOARDING is classify_depth()'s own fallback (question.py:138) for a
+# question with no depth-signalling phrase -- "how does `X` work?", the
+# worked example's own WORKED_QUESTION, has always rendered all six sections,
+# and test_worked_answer.py's test_all_six_sections_are_present already
+# pinned that as correct before #571 existed. Restricting ONBOARDING would
+# not just add a new depth behaviour, it would silently change what today's
+# DEFAULT, unqualified question renders -- found by running that pre-existing
+# test red against an earlier version of this dict that did restrict it.
+# ONBOARDING is still a real, distinguishable member of the six (it is the
+# only one of the six with every section populated), it simply does not
+# additionally restrict beyond what assemble() already scopes.
+#
+# `None` means "unspecified, render everything populated as always", and an
+# IMPACT-depth Answer (built by knowledge.impact(), see knowledge.explain()'s
+# delegation) already only ever populates the fields that path needs --
+# nothing left to restrict.
+_DEPTH_SECTIONS: dict[str, tuple[str, ...]] = {
+    # "Precise walk with line references" -- Sources is where every citation
+    # lives; Relevant flow and the caveats are not part of that walk.
+    "IMPLEMENTATION": ("Short answer", "How it works", "Important files", "Sources"),
+    # "Complete graph traversal, Flow-format" -- Relevant flow already IS that
+    # traversal (assemble() builds it as "caller -> target" chains).
+    "TRACE": ("Short answer", "Relevant flow", "Sources"),
+    # "HISTORY evidence and TEAM_KNOWLEDGE" -- Sources is filtered further,
+    # below, to only those two provenance shapes.
+    "RATIONALE": ("Short answer", "Things to be aware of", "Sources"),
+}
+
+
+def _summary_paragraph(answer: Answer) -> str:
+    """The one claim a SUMMARY can show without a file path.
+
+    verified_fact() (verify.py) puts a claim's citation only in `evidence`,
+    never in `statement` -- so the first FACT claim's statement is always the
+    path-free "X is defined as Y" sentence assemble() builds first. Falling
+    back to `short_answer` covers an Answer with no FACT claims at all (find()
+    or impact()'s answers, or a not-located explain()), which is not
+    guaranteed path-free but is the best available one-paragraph summary.
+    """
+    for claim in answer.claims:
+        if claim.entry_class == "FACT":
+            return claim.statement.strip()
+    return answer.short_answer.strip()
+
+
+def _rationale_claims(answer: Answer) -> tuple[Claim, ...]:
+    """RATIONALE's Sources: HISTORY evidence and TEAM_KNOWLEDGE only.
+
+    Excludes the generic WORKING-state FACT/INFERENCE claims (the symbol's
+    definition, its callers, its test-side mentions) that every other depth
+    can show -- a design rationale is about why, not what.
+    """
+    return tuple(
+        c for c in answer.claims if c.temporal_state == "HISTORY" or c.entry_class == "TEAM_KNOWLEDGE"
+    )
+
+
 def render(answer: Answer) -> str:
-    """Render the six-section format, omitting every section with no content.
+    """Render at `answer.depth`'s resolution -- issue #571.
 
     Omission is uniform, including `## Sources`: an answer citing nothing emits
     no Sources heading rather than an empty one. That is deliberate but worth
@@ -179,7 +241,16 @@ def render(answer: Answer) -> str:
     absent one reads as "not established", and the second is the honest signal.
     A claimless answer is a defect for the assembly stage to prevent, not for
     the renderer to paper over.
+
+    Depth changes only which sections render and, for SUMMARY and RATIONALE,
+    how much of a section's own content shows -- never which claims were
+    established. `None` (unspecified) and `"IMPACT"` render every populated
+    section, exactly as before #571.
     """
+    if answer.depth == "SUMMARY":
+        paragraph = _summary_paragraph(answer)
+        return f"## Short answer\n{paragraph}" if paragraph else ""
+
     bodies = {
         "Short answer": answer.short_answer.strip(),
         "How it works": answer.how_it_works.strip(),
@@ -188,11 +259,15 @@ def render(answer: Answer) -> str:
         "Things to be aware of": answer.things_to_be_aware_of.strip(),
         "Sources": "\n".join(render_claim(c) for c in answer.claims),
     }
+    if answer.depth == "RATIONALE":
+        bodies["Sources"] = "\n".join(render_claim(c) for c in _rationale_claims(answer))
+
+    allowed = _DEPTH_SECTIONS.get(answer.depth, SECTION_ORDER)
 
     # Iterating SECTION_ORDER is what fixes the order -- a section added to
     # `bodies` and not to SECTION_ORDER simply never renders, rather than
     # rendering in dict order and silently disagreeing with the design doc.
     # KeyError here is the right failure: a missing body is a coding error,
     # not a runtime condition to swallow.
-    blocks = [f"## {name}\n{bodies[name]}" for name in SECTION_ORDER if bodies[name]]
+    blocks = [f"## {name}\n{bodies[name]}" for name in SECTION_ORDER if name in allowed and bodies[name]]
     return "\n\n".join(blocks)
