@@ -199,7 +199,7 @@ the route registration (`router.rs:132`) and the handler function
 ```
 POST /hooks/3fa85f64-5717-4562-b3fc-2c963f66afa6 HTTP/1.1
 Host: community.example.com
-X-Webhook-Secret: 8b1b9e2c-7b0a-4e3a-9d2f-6c4a1e0f5b3d
+X-Webhook-Secret: <webhook secret>
 Content-Type: application/json
 
 {"reason": "build finished", "status": "green"}

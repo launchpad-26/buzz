@@ -319,7 +319,7 @@ NIP-25 kind number, with no Buzz-specific predecessor.
 ## Scope and omissions
 
 **This document covers** kind 7's wire contract as implemented by this relay: tag shape, content validation,
-access control, persistence/dedup/fanout behavior, and its producers (`buzz-sdk`, `buzz-cli`) and consumers
+access control, persistence, dedup, and fanout behavior, and its producers (`buzz-sdk`, `buzz-cli`) and consumers
 (read access, workflow triggers, the channel-window bridge). It does not describe any UI feature built on top of
 reactions (e.g. desktop/mobile reaction-picker components) — per the event-kind/interface boundary the template
 for this node type draws, that belongs to a future interface-typed node, which should reach this one with a

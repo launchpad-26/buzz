@@ -158,10 +158,10 @@ Relay sends the challenge, client responds with a correctly signed and
 correctly tagged event, relay accepts:
 
 ```
--> ["AUTH", "b6e0e6f8a1c2d3e4f5061728394a5b6c7d8e9f0a1b2c3d4e5f60718293a4b5c6"]
+-> ["AUTH", "<challenge>"]
 <- ["AUTH", {"kind":22242,"pubkey":"...","created_at":1735689600,
              "tags":[["relay","wss://relay.example.com"],
-                     ["challenge","b6e0e6f8a1c2d3e4f5061728394a5b6c7d8e9f0a1b2c3d4e5f60718293a4b5c6"]],
+                     ["challenge","<challenge>"]],
              "content":"","id":"...","sig":"..."}]
 -> ["OK", "<event id>", true, ""]
 ```
@@ -177,7 +177,7 @@ and `handle_auth` reports it as a generic verification failure without
 distinguishing the specific `AuthError` variant to the client:
 
 ```
--> ["AUTH", "b6e0e6f8a1c2d3e4f5061728394a5b6c7d8e9f0a1b2c3d4e5f60718293a4b5c6"]
+-> ["AUTH", "<challenge>"]
 <- ["AUTH", {"kind":22242, ..., "created_at": <now - 300>, ...}]
 -> ["OK", "<event id>", false, "auth-required: verification failed"]
 ```

@@ -147,7 +147,7 @@ per connection, generated fresh at connection start).
 **Valid exchange.**
 
 ```json
-["AUTH", "b0635d6a9851d3aed0cd6c495b061d3406b3ae6b6b5cec98be36ecd3025c0866"]
+["AUTH", "<challenge>"]
 ```
 ```json
 ["AUTH", {
