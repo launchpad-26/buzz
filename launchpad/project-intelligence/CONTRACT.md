@@ -124,9 +124,14 @@ reporting that as a find is true evidence about the wrong subject.
 
 ### `explain(agent, symbol: str, depth: Depth | None = None) -> Answer`
 
-The full four-stage pipeline. **`depth` is accepted, and only `RATIONALE` changes the answer**
-— it triggers the history stage, which can add history claims and their caveat. `SUMMARY` and
-`TRACE` return identical answers. See §7 and #571.
+The full four-stage pipeline, rendered at `depth`'s resolution (#571). `RATIONALE` is still
+the only depth that changes *what was investigated* — it alone triggers the history stage.
+Every other depth runs the identical investigation and renders it differently: `SUMMARY` to
+one path-free paragraph, `ONBOARDING` to every populated section (`classify_depth()`'s own
+fallback, matching the pre-#571 default), `IMPLEMENTATION` and `TRACE` to a narrower section
+set apiece, `RATIONALE` additionally filtering `Sources` to `HISTORY`/`TEAM_KNOWLEDGE` claims
+only. `IMPACT` is the one exception to "identical investigation": it has no notion of a
+secondary (2-hop) dependent, so it delegates whole to `impact()`. See §7.
 
 ### `dependencies(agent, symbol: str) -> Answer`
 
@@ -279,7 +284,7 @@ DoD item 2. Every place this contract, the design doc, and the merged code diver
 
 | # | Divergence | Status |
 |---|---|---|
-| 1 | Design doc says `knowledge.explain(symbol, depth?)` is "depth-tunable". Implementation accepts `depth` and returns identical answers for `SUMMARY` and `TRACE`; the only effect is that `RATIONALE` triggers the history stage. | **Open — #571.** Contract documents the real behaviour. |
+| 1 | Design doc says `knowledge.explain(symbol, depth?)` is "depth-tunable". | **Resolved — #571.** All six depths render distinguishably (§4). `RATIONALE` remains the only one that changes what was investigated; `IMPACT` delegates whole to `impact()`; the other four render one shared investigation differently. |
 | 2 | Design doc says `setup(task)` returns "cited operational steps". Implementation returns the recipe *header* (`Justfile defines 'test': test:`), with no runnable command. | **Open — #572.** |
 | 3 | Design doc treats `BASE` as first-class and separately queryable. Implementation classifies `BASE` and reads `WORKING`, disclosing it in a caveat. | **Open — #588.** BASE reads need `git show HEAD:<path>`. `ask()` also discards the classified state when it routes, so the §5 caveat does not appear for routed questions. |
 | 4 | Design doc's step 1 queries three components "for an existing answer". Implementation's `confident` is a `ProjectMemory` hit **only** — a graph or semantic hit proves the symbol exists, which is not an answer. | **Intentional.** The doc's own worked example agrees: `search_symbols` finds `UserRepository` and it still records "confidence: none yet". |
