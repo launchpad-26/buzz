@@ -57,7 +57,7 @@ If #2006 is amended after this pin, its `updated_at` and body hash change and th
 below that traces to it — becomes detectably stale rather than silently so. Re-deriving this specification against
 an amended #2006 is a new authoring pass over a new extract, not an edit to this one.
 
-**Freezing commit.** This specification was frozen for #2069 at commit `FREEZE-COMMIT`.
+**Freezing commit.** This specification was frozen for #2069 at commit `be77edee5`.
 
 **Interim publication location.** This specification publishes under `launchpad/skills/review-queue-automation/`
 because [#2067](https://github.com/launchpad-26/buzz/issues/2067) is the feature that produced it and no other
