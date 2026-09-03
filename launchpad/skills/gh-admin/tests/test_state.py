@@ -15,6 +15,7 @@ import tempfile
 
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent.parent / "scripts"))
 
+import state  # noqa: E402
 from state import EXPECTED_TABLES, State, StatePersistenceError  # noqa: E402
 
 
@@ -98,6 +99,71 @@ def test_named_baseline_first_writer_wins_is_caught_not_silent() -> None:
         assert "don't match this suite's expected shape" in str(exc)
 
 
+def test_fingerprint_mismatch_closes_the_connection() -> None:
+    """Issue #1947, precisely: the failure path this file's own objective
+    demonstrates (the fingerprint-mismatch collider above) must not leak the
+    connection. Lock-contention on a second connection can't prove this
+    deterministically -- _assert_fingerprint() only ever runs read-only
+    PRAGMA/SELECT queries, so a second connection can open and write
+    whether or not the first was closed. Instead, wrap sqlite3.connect for
+    the duration of this test to track close() on the exact connection
+    object State opens, so the assertion is about what State actually did,
+    not an inference from lock behaviour.
+
+    This is the scenario a naive `except (sqlite3.Error, OSError)` clause
+    misses: _assert_fingerprint() raises StatePersistenceError directly,
+    which is neither of those types, so a fix that only closes on
+    sqlite3.Error/OSError never runs for this exact path."""
+    import sqlite3
+
+    tmp_dir = pathlib.Path(tempfile.mkdtemp())
+    db_path = tmp_dir / "gh-admin-state.sqlite3"
+    collider = sqlite3.connect(db_path)
+    collider.executescript(
+        """
+        CREATE TABLE IF NOT EXISTS jobs (id TEXT PRIMARY KEY);
+        CREATE TABLE IF NOT EXISTS leases (
+          repo TEXT NOT NULL,
+          number INTEGER NOT NULL,
+          job_id TEXT NOT NULL,
+          claimed_at TEXT NOT NULL,
+          PRIMARY KEY (repo, number),
+          FOREIGN KEY (job_id) REFERENCES jobs(id)
+        );
+        """
+    )
+    collider.commit()
+    collider.close()
+
+    closed: list[bool] = []
+
+    class TrackingConnection(sqlite3.Connection):
+        def close(self) -> None:
+            closed.append(True)
+            super().close()
+
+    real_connect = state.sqlite3.connect
+
+    def tracking_connect(*args, **kwargs):
+        kwargs["factory"] = TrackingConnection
+        return real_connect(*args, **kwargs)
+
+    state.sqlite3.connect = tracking_connect
+    try:
+        try:
+            State(str(tmp_dir))
+            raise AssertionError("expected StatePersistenceError")
+        except StatePersistenceError:
+            pass
+    finally:
+        state.sqlite3.connect = real_connect
+
+    assert closed == [True], (
+        "the connection State opened before _assert_fingerprint() raised "
+        "must be closed exactly once"
+    )
+
+
 def test_reopen_is_idempotent() -> None:
     tmp_dir = tempfile.mkdtemp()
     first = State(tmp_dir)
@@ -136,6 +202,52 @@ def test_runtime_lock_excludes_a_second_holder_until_released() -> None:
         third_lock.release()
     finally:
         state.close()
+
+
+def test_add_column_if_missing_adds_idempotently_to_on_disk_schema() -> None:
+    """Issue #1946: `_migrate()` had no additive-column path -- `CREATE TABLE
+    IF NOT EXISTS` cannot add a column to a table that already exists on
+    disk. Reproduce that exact scenario: an on-disk `gh-admin-state.sqlite3`
+    already carrying the pre-addition schema (created by a first State
+    instance and closed, matching how a real prior run left the file), then
+    reopen it and add a column the original schema never had. The column
+    must appear after the first call and the call must be idempotent -- a
+    second call must not raise and must report nothing was added."""
+    tmp_dir = tempfile.mkdtemp()
+
+    first = State(tmp_dir)
+    first.close()
+
+    second = State(tmp_dir)
+    try:
+        before = {row["name"] for row in second.execute("PRAGMA table_info(sessions)")}
+        assert "example_new_column" not in before
+
+        added = second._add_column_if_missing("sessions", "example_new_column", "TEXT")
+        assert added is True
+        second.commit()
+
+        after = {row["name"] for row in second.execute("PRAGMA table_info(sessions)")}
+        assert "example_new_column" in after
+
+        added_again = second._add_column_if_missing("sessions", "example_new_column", "TEXT")
+        assert added_again is False, "a second call must be a no-op, not an error"
+    finally:
+        second.close()
+
+    # Confirm the column survived on disk, not just in the connection that
+    # added it -- via a raw connection, not another State(...), since
+    # State's own _assert_fingerprint() rejects any table whose columns
+    # don't exactly match EXPECTED_COLUMNS, and this test's added column is
+    # deliberately not in that fixed set.
+    import sqlite3
+
+    raw = sqlite3.connect(pathlib.Path(tmp_dir) / "gh-admin-state.sqlite3")
+    try:
+        columns = {row[1] for row in raw.execute("PRAGMA table_info(sessions)")}
+        assert "example_new_column" in columns
+    finally:
+        raw.close()
 
 
 def test_execute_wraps_sqlite_errors() -> None:
