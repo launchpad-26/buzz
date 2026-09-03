@@ -14,7 +14,7 @@ from __future__ import annotations
 import unittest
 from dataclasses import dataclass
 
-from investigation import HISTORY_LINE_WINDOW, PROGRESSION, Tools, investigate
+from investigation import PROGRESSION, Tools, investigate
 from question import decompose
 from trace import Trace
 
@@ -159,11 +159,13 @@ class StopRuleTest(unittest.TestCase):
         self.assertTrue(findings.corroborated)
         self.assertIn("inspect_git_history", trace.tools)
 
-    def test_history_is_queried_over_a_window_never_a_single_line(self) -> None:
-        """Measured against the real tool: inspect_git_history returns 0 commits
-        for (850, 850) and 4 for (840, 860) on kind.rs, while `git log -L
-        850,850` names a real commit. A degenerate range comes back empty, so a
-        single-line query made this stage silently useless."""
+    def test_history_is_queried_over_the_exact_definition_line(self) -> None:
+        """#569 fixed: inspect_git_history now returns the real commits for a
+        single-line range (previously measured returning 0 commits for
+        (850, 850) and 4 for (840, 860) on kind.rs, while `git log -L 850,850`
+        named a real commit -- see investigator.py's inspect_git_history()).
+        The history stage no longer needs to widen past the definition line to
+        get a real answer."""
         seen: list[tuple[int, int]] = []
         tools = _tools()
         tools = Tools(
@@ -177,15 +179,15 @@ class StopRuleTest(unittest.TestCase):
         investigate(decompose("how did `is_shared_gated_kind` evolve?"), "buzz-core", trace, tools)
         self.assertEqual(len(seen), 1)
         start, end = seen[0]
-        self.assertGreater(end, start, "a degenerate start == end range returns nothing")
-        self.assertEqual(end - start, HISTORY_LINE_WINDOW)
+        self.assertEqual(start, end, "the history stage should query the exact definition line")
+        self.assertEqual(start, 6)
 
-    def test_the_history_citation_reports_the_range_actually_queried(self) -> None:
-        """A claim must cite what was really asked, not the line it was about."""
+    def test_the_history_citation_reports_the_line_actually_queried(self) -> None:
+        """A claim must cite what was really asked."""
         trace = Trace()
         investigate(decompose("how did `is_shared_gated_kind` evolve?"), "buzz-core", trace, _tools())
         call = next(c for c in trace.calls if c.tool == "inspect_git_history")
-        self.assertIn(f"{6}-{6 + HISTORY_LINE_WINDOW}", call.args)
+        self.assertIn("6-6", call.args)
 
     def test_a_symbol_that_does_not_exist_stops_after_locating(self) -> None:
         """Nothing downstream has a subject, so continuing would query for a

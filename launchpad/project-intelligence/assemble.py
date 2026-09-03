@@ -271,11 +271,13 @@ def _caveats(findings: Findings, claims: list[Claim], trace: Trace, question: Qu
         if c.entry_class == "INFERENCE"
     ]
     if findings.history:
-        # "the range queried", not "its definition line" -- the history stage
-        # asks over a window (see investigation.HISTORY_LINE_WINDOW), and saying
-        # "line" would describe a narrower query than the one that produced
-        # these commits.
-        lines.append(f"{len(findings.history)} commit(s) touch the range queried around it.")
+        # #569: the history stage used to ask over a HISTORY_LINE_WINDOW-wide
+        # range, so this said "the range queried around it" to avoid claiming
+        # a narrower query than the one that actually produced these commits.
+        # Now that inspect_git_history() handles a single line correctly, the
+        # history stage asks about the definition line itself (see
+        # investigation._history()), so the citation says exactly that.
+        lines.append(f"{len(findings.history)} commit(s) touch that line.")
     if not findings.corroborated and _looked_for_corroboration(trace):
         # Gated on having actually looked. Since stage 1's confidence can now
         # skip the corroboration stages entirely, `not corroborated` alone no

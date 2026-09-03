@@ -269,34 +269,29 @@ def _tests(target: str, findings: Findings, trace: Trace, tools: Tools) -> None:
     )
 
 
-# The history stage queries a window, not the single definition line.
+# The history stage queries the exact definition line.
 #
-# Measured, not assumed: investigator.inspect_git_history on
-# crates/buzz-core/src/kind.rs returns 0 commits for the range (850, 850) and 4
-# commits for (840, 860), while `git log -L 850,850:...` names a real commit for
-# that exact line. A degenerate start == end range comes back empty from #208's
-# tool. That is #208's defect and is filed rather than patched here -- the plan's
-# LEFT OUT reserves #206-#210's own logic to their own issues.
-#
-# What IS this task's to fix is the call site: asking with start == end meant the
-# history stage was silently returning nothing every time. The citation reports
-# the window actually queried, never the single line, because a claim must cite
-# what was really asked.
-HISTORY_LINE_WINDOW = 10
-
-
+# Was a 10-line window instead, worked around here rather than fixed here: #569
+# measured investigator.inspect_git_history on crates/buzz-core/src/kind.rs
+# returning 0 commits for the degenerate range (850, 850) and 4 for (840, 860),
+# while `git log -L 850,850:...` names a real commit for that exact line. #208's
+# tool has since been fixed to call `git log -L` directly instead of RepoQL's
+# `=> history` modifier, and a single-line range now returns the same commits
+# `git log -L N,N:file` reports -- see investigator.py's inspect_git_history()
+# and its InspectGitHistoryTest coverage. The workaround is removed rather than
+# widened, per #569's own instruction: querying a window wider than the claim it
+# supports made every history citation broader than what was actually asked.
 def _history(findings: Findings, trace: Trace, tools: Tools) -> None:
     match = findings.match
     line = findings.definition_line or 1
-    start, end = line, line + HISTORY_LINE_WINDOW
-    commits = tools.inspect_git_history(match.file, start, end)  # type: ignore[union-attr]
+    commits = tools.inspect_git_history(match.file, line, line)  # type: ignore[union-attr]
     findings.history = list(commits)
     trace.record(
         "inspect_git_history",
-        f"{match.file}:{start}-{end}",  # type: ignore[union-attr]
+        f"{match.file}:{line}-{line}",  # type: ignore[union-attr]
         found=bool(commits),
         detail=(
-            f"{len(commits)} commit(s)" if commits else "no commits touching that range"
+            f"{len(commits)} commit(s)" if commits else "no commits touching that line"
         ),
     )
 
