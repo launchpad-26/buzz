@@ -9,9 +9,10 @@ allowed-tools:
 
 # corpus-maintain — update the nodes a change actually touched, provenance intact
 
-Consumes three already-built, already-tested tools —
+Consumes four already-built, already-tested tools —
 `launchpad/project-intelligence/corpus/impact.py` (issue #635),
-`launchpad/project-intelligence/corpus/stale.py` (issue #556), and
+`launchpad/project-intelligence/corpus/stale.py` (issue #556),
+`launchpad/project-intelligence/corpus/regenerate.py` (issue #559), and
 `launchpad/project-intelligence/corpus/validate.py` — and orchestrates them
 into one procedure for keeping `launchpad/docs/corpus/` current after a real
 change lands. This skill does not decide what the corpus needs to say next;
@@ -69,6 +70,7 @@ node** — never hand-pick nodes from intuition:
 ```
 python3 launchpad/project-intelligence/corpus/impact.py --base <base> --head <head>
 python3 launchpad/project-intelligence/corpus/stale.py --head <head>
+python3 launchpad/project-intelligence/corpus/regenerate.py --base <base> --head <head> --format text
 ```
 
 `impact.py` answers "which nodes cite something this change touched, directly
@@ -80,7 +82,13 @@ revision" — and is run alongside `impact.py`, not instead of it: a node
 `impact.py` did not name can still turn up `STALE` against its own recorded
 revision, and a node `impact.py` did name is not automatically stale (its
 citation could be unrelated to what actually changed in the cited file).
-Both reports feed Phase 2's decision; neither replaces the other.
+`regenerate.py` joins both of those (neither re-implemented) and adds the one
+thing neither alone answers: for every node `impact.py` named, whether EVERY
+claim in its full evidence ledger — not only the claims this change's diff
+touched — is route-2 clean, producing a per-node `may-move` /
+`must-not-move (MUST 4)` disposition plus, on `must-not-move`, the exact
+blocking claim numbers. All three reports feed Phase 2's decision; none
+replaces another.
 
 **A large impacted set is a normal result to triage, never a signal the tool
 misfired.** `crates/buzz-core/src/kind.rs` is cited by 62 of 205 nodes;
@@ -219,6 +227,17 @@ by number, to every node this skill edits:
   Phase 2; restated here because moving a revision and renaming an id are
   unrelated operations that should never be confused).
 
+**Do not hand-compute route 2 by running `git diff --name-only` per citation
+yourself.** `regenerate.py` (Phase 1) already does exactly this — per
+evidence-entry route-2 classification against the node's own recorded
+revision, normalization trap included — and rolls every claim in a node's
+full ledger up into the same `may-move` / `must-not-move (MUST 4)`
+disposition MUST 1 and MUST 4 describe above, naming the blocking claim
+numbers on `must-not-move`. Read its report for the node instead of
+re-deriving MUST 3 route 2 claim-by-claim; only route 1 (opening the source
+and re-reading it) is left for a human or agent under this skill to do by
+hand.
+
 **`stale.py`'s `unestablished` verdict means "route 2 could not run," never
 "verified fresh."** Phase 1's worked example showed a summary dominated by
 `unestablished` findings — under a shallow checkout (this repository's own
@@ -287,6 +306,18 @@ explicit list of any node the impacted set named that was examined and
 correctly left unchanged. Listing those separately from nodes never opened
 at all is the difference between "not affected" and "not looked at" — a
 reviewer needs to tell them apart, and the impacted-set count alone does not.
+
+**`regenerate.py --format text` already emits this format — run it, don't
+hand-assemble it.** One line per triggering (node id, path, evidence entry)
+ending `revision: unmoved (MUST 4) -- blocking claim(s): <n, n, …>` or,
+once `--apply` has run, `moved to <sha>`, followed by a `COVERAGE GAPS
+<n> path(s), <n> redacted` section grouped exactly the way
+`coverage_gaps.by_area` groups it (one count line per area) and, when
+non-empty, an `UNREADABLE NODES` section. It is not a line-for-line
+identical rendering of the format above — it also names the blocking claim
+numbers per node, which the format sketch omits — but it is the same
+underlying data, already assembled, and satisfies this section's DoD without
+hand-formatting `impact.py`'s and `stale.py`'s raw output yourself.
 
 ## Phase 5 — branch safety
 

@@ -643,6 +643,19 @@ def main(argv: list[str] | None = None) -> int:
     repo_dir = validate.repo_root()
     root = Path(args.root) if args.root else repo_dir / DEFAULT_ROOT
 
+    # Fail closed on `--head` itself, mirroring `regenerate.py`'s own
+    # up-front `--base`/`--head` validation (`resolve_full_sha`, checked in
+    # `main()` before `build_report` runs). Without this, an unresolvable or
+    # unfetched `--head` makes every node evaluate against a ref `git` cannot
+    # see, producing a full report where every verdict is `unestablished` --
+    # indistinguishable from the legitimate depth-1-checkout case this
+    # module's own docstring and `corpus-maintain`'s SKILL.md both say not to
+    # treat as failure. That silent conflation is exactly what this guard
+    # closes: a bad `--head` is an input error, not a shallow checkout.
+    if not commit_exists(args.head, repo_dir):
+        sys.stderr.write(f"--head does not resolve to a commit: {args.head}\n")
+        return 1
+
     report = run(root, args.head, repo_dir)
     sys.stdout.write(report.render())
     return 0

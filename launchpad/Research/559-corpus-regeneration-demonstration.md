@@ -263,6 +263,12 @@ since a single blocking claim already forces it.
 
 ## The three re-anchored citations, before and after
 
+Three citation slots were touched (moderation's two citations on entry 2,
+channel-templates' one citation on entry 8); one of them —
+channel-templates' single wide range — was split into two precise anchors
+rather than merely moved, so the four resulting anchor strings ("four new
+anchors" below) come from re-anchoring three original citations, not four.
+
 Re-verified against `desktop/src/features/settings/ui/SettingsPanels.tsx` at
 `HEAD` (982 lines, identical to `origin/launchpad` on this file — `git diff
 HEAD origin/launchpad -- <path>` is empty) before writing any new anchor.

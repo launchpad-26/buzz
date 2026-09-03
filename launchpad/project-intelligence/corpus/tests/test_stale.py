@@ -37,12 +37,15 @@ breaks the test.
 
 from __future__ import annotations
 
+import contextlib
 import importlib.util
+import io
 import os
 import subprocess
 import sys
 import tempfile
 import unittest
+import unittest.mock
 from pathlib import Path
 
 _CORPUS_DIR = Path(__file__).resolve().parent.parent
@@ -925,6 +928,48 @@ class DeterminismTest(unittest.TestCase):
             first = stale.run(root, head_sha, root).render()
             second = stale.run(root, head_sha, root).render()
             self.assertEqual(first, second)
+
+
+# ---------------------------------------------------------------------------
+# main() -- up-front `--head` validation, fail closed on an unresolvable ref
+# ---------------------------------------------------------------------------
+
+
+class MainHeadValidationTest(unittest.TestCase):
+    """`main()` must refuse a `--head` that cannot be resolved to a commit,
+    rather than running every node against an invisible ref and printing a
+    full report where every verdict happens to be `unestablished` --
+    indistinguishable from the legitimate shallow-checkout case this module's
+    own docstring, and `corpus-maintain`'s SKILL.md, both say not to treat as
+    failure. Mirrors `regenerate.py`'s existing up-front `--base`/`--head`
+    validation in its own `main()`.
+
+    `main()` resolves `repo_dir` from `validate.repo_root()` unconditionally
+    -- unlike `regenerate.py`, it takes no `--repo-dir` override -- so this
+    is the one test in this file that patches that single call, to point it
+    at a hermetic fixture repo rather than reading this repository's own
+    history. Everything about the fixture itself still follows this file's
+    hermetic-git-repo rule; only the module-level `repo_root()` lookup is
+    substituted, so `main()` is driven end-to-end rather than `run()` called
+    directly.
+    """
+
+    def test_unresolvable_head_exits_non_zero_and_prints_no_report(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            init_repo(root)
+            commit_all(root, "commit A", "2020-01-01T00:00:00")
+
+            bogus_head = "0" * 40  # well-formed SHA shape, resolves to nothing
+            out, err = io.StringIO(), io.StringIO()
+            with unittest.mock.patch.object(stale.validate, "repo_root", return_value=root):
+                with contextlib.redirect_stdout(out), contextlib.redirect_stderr(err):
+                    exit_code = stale.main(["--head", bogus_head])
+
+            self.assertNotEqual(exit_code, 0)
+            self.assertIn(bogus_head, err.getvalue())
+            self.assertIn("does not resolve to a commit", err.getvalue())
+            self.assertEqual(out.getvalue(), "")
 
 
 # ---------------------------------------------------------------------------

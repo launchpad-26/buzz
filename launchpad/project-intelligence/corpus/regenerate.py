@@ -537,8 +537,13 @@ def build_report(root: Path, base: str, head: str, repo_dir: Path) -> Regenerate
         if node is None:
             # Named as impacted, but not resolvable via a fresh discover_nodes
             # walk of `root` -- schema-invalid or removed since impact.py's
-            # own load. Reported the same way impact.py reports it: as an
-            # unreadable node, not silently dropped.
+            # own load. Defensive: today's call sites feed `impact_report`
+            # and `all_nodes` from the same `root` in the same run, so this
+            # branch is currently unreachable in practice. It is NOT reported
+            # as an unreadable node -- nothing here appends to
+            # `report.unreadable_nodes`, which only ever carries what
+            # impact.py's own separate load already produced -- it is a
+            # silent drop if this branch is ever actually reached.
             continue
         nodes.append(evaluate_node(node, head, repo_dir, triggering_by_node[node_id]))
 
