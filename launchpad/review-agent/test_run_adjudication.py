@@ -348,6 +348,54 @@ class ReplayJudgeTests(unittest.TestCase):
         result = judge(finding, {})
         self.assertEqual(result["verdict"], "UNPROVEN")
 
+    def test_reserved_underscore_key_is_never_returned_for_any_finding_id(self):
+        """#1413: `make_replay_judge` reserves top-level keys prefixed with
+        `_` (``_provenance``, ``_dedupe_groups``) and excludes them from the
+        `finding_id -> judge output` lookup it builds
+        (``recordings.update({k: v for k, v in data.items() if not
+        k.startswith("_")})``). Nothing exercised this directly before: no
+        real fixture's `finding_id` starts with `_`, so a mutation deleting
+        the guard entirely (``recordings.update(data)``) would still pass
+        every other test -- the reserved value would merge into the lookup,
+        but nothing would ever look it up.
+
+        This builds a recording carrying both an ordinary finding and a
+        reserved ``_provenance`` key holding a DISTINCT, recognizable dict,
+        then proves two things: the ordinary finding still resolves to its
+        own recorded verdict (the lookup was not broken by the presence of a
+        reserved key), and a lookup for ``finding_id="_provenance"`` --
+        genuinely attempting to read the reserved key back out through the
+        judge's own public interface -- fails closed to UNPROVEN exactly
+        like any other unrecognised finding_id, proving the reserved value
+        was never merged into the lookup at all rather than merely being
+        unused by coincidence.
+        """
+        finding = make_raw_finding()
+        reserved_payload = {"model": "reserved-value-should-never-surface", "date": "2026-01-01"}
+        with tempfile.TemporaryDirectory() as tmp:
+            recording_path = Path(tmp) / "recorded.json"
+            recording_path.write_text(
+                json.dumps(
+                    {
+                        finding["finding_id"]: {
+                            "verdict": "CONFIRMED",
+                            "verdict_evidence": "replay: read the file at head_sha, credential present.",
+                        },
+                        "_provenance": reserved_payload,
+                    }
+                )
+            )
+            judge = run_adjudication.make_replay_judge(Path(tmp))
+
+            ordinary_result = judge(finding, {})
+            reserved_lookup_finding = make_raw_finding(finding_id="_provenance")
+            reserved_result = judge(reserved_lookup_finding, {})
+
+        self.assertEqual(ordinary_result["verdict"], "CONFIRMED")
+        self.assertEqual(reserved_result["verdict"], "UNPROVEN")
+        self.assertIn("_provenance", reserved_result["verdict_evidence"])
+        self.assertNotIn("reserved-value-should-never-surface", json.dumps(reserved_result))
+
 
 class JudgeFailsClosedTests(unittest.TestCase):
     def test_judge_exception_fails_closed_to_unproven(self):
