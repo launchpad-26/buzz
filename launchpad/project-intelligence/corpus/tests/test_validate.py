@@ -119,6 +119,67 @@ class UnresolvedRelationshipTargetTest(unittest.TestCase):
         self.assertIn("no-such-node-anywhere", report.errors[0])
 
 
+class StrayFrontmatterDelimiterTest(unittest.TestCase):
+    """A stray '---\\n' line partway through the intended frontmatter block used to
+    close it early via `text.split("---\\n", 2)`'s unconditional maxsplit=2, silently
+    dropping everything after -- including a `relationships` block naming an
+    unresolvable target, which is otherwise a hard error -- into unread body text
+    (#1482). Confirmed against the pre-fix code directly: this fixture reported
+    `PASS  corpus validation clean` / exit 0 there, instead of failing on the bad
+    relationship target.
+    """
+
+    def test_stray_delimiter_rejected_and_named(self) -> None:
+        report = validate.validate_corpus(INVALID_DIR / "stray-frontmatter-delimiter")
+        self.assertEqual(len(report.errors), 1)
+        # Parsing fails before `id` is ever read (the frontmatter is what's broken),
+        # so the message names the file by path -- the same fallback `_label` uses
+        # whenever a node's id is unknown.
+        self.assertIn("stray-frontmatter-delimiter", report.errors[0])
+        self.assertIn("stray '---' delimiter", report.errors[0])
+        # The old behaviour silently dropped the relationships block rather than
+        # ever reaching find_unresolved_relationship_targets -- confirm the new
+        # failure is the frontmatter parse itself, not a relationship-target error
+        # that would only appear if the block had (incorrectly) been parsed.
+        self.assertNotIn("relationship target", report.errors[0])
+
+    def test_looks_like_more_frontmatter_accepts_a_mapping(self) -> None:
+        self.assertTrue(
+            validate._looks_like_more_frontmatter(
+                "relationships:\n  - type: references\n    target: x\n"
+            )
+        )
+
+    def test_looks_like_more_frontmatter_rejects_prose(self) -> None:
+        # A markdown body legitimately containing a further '---' line (a horizontal
+        # rule, or a fenced code-block example quoting a frontmatter block -- both
+        # confirmed present in the real corpus) must not trip this check: only
+        # genuine held-back frontmatter parses as a YAML *mapping*.
+        self.assertFalse(
+            validate._looks_like_more_frontmatter("# Heading\n\nSome prose.\n")
+        )
+        self.assertFalse(validate._looks_like_more_frontmatter("plain scalar text"))
+
+
+class MissingClosingDelimiterTest(unittest.TestCase):
+    """A node that opens with '---' and never closes it used to crash the same split
+    call with Python's own `ValueError: not enough values to unpack (expected 3, got
+    2)` instead of a message naming the problem (#1483). Confirmed against the pre-fix
+    code directly: this fixture reproduced that exact message there.
+    """
+
+    def test_missing_closing_delimiter_reported_clearly(self) -> None:
+        report = validate.validate_corpus(INVALID_DIR / "missing-closing-delimiter")
+        self.assertEqual(len(report.errors), 1)
+        # Parsing fails before `id` is ever read, so the message names the file by
+        # path (the same fallback `_label` uses whenever a node's id is unknown).
+        self.assertIn("missing-closing-delimiter", report.errors[0])
+        self.assertIn("no closing '---' frontmatter delimiter", report.errors[0])
+        # Pins the old failure mode is gone, not just that a message exists.
+        self.assertNotIn("unpack", report.errors[0])
+        self.assertNotIn("expected 3, got 2", report.errors[0])
+
+
 class MissingCitationTest(unittest.TestCase):
     def test_missing_citation_rejected_and_named(self) -> None:
         report = validate.validate_corpus(INVALID_DIR / "missing-citation")
@@ -430,17 +491,49 @@ class CitationFormTest(unittest.TestCase):
         self.assertEqual(unverified, [])
 
     def test_file_line_citation_accepted(self) -> None:
-        # The line number is deliberately past the end of the file. Positional
-        # citations are checked for their internal consistency and for the file
-        # they name, NOT against the file's length -- bounds-checking a cited line
-        # is staleness detection, which belongs with the staleness work rather than
-        # here (see _classify_citation). Do not "fix" this to an in-range number:
-        # that would silently drop the only coverage of that documented boundary.
-        # A cross-model review-final pass raised the out-of-range line as a
-        # separate, deferred finding; it is tracked, not forgotten.
+        # An in-range line is accepted. (This citation form used to accept ANY line
+        # number, in-range or not -- see the out-of-range tests below, which pin the
+        # #1459 fix that closes that gap.)
         errors, unverified = _classify_one(
-            "launchpad/project-intelligence/corpus/validate.py:1077"
+            "launchpad/project-intelligence/corpus/validate.py:1"
         )
+        self.assertEqual(errors, [])
+        self.assertEqual(unverified, [])
+
+    def test_out_of_range_file_line_citation_rejected(self) -> None:
+        # `path:line` used to be accepted for ANY line number, in-range or not --
+        # `Justfile:999999` and `Justfile:1004` were indistinguishable (#1459). Fixed
+        # by checking the position against the file's actual line count once it is
+        # confirmed to exist. The out-of-range value is computed from the real file
+        # rather than hardcoded, so this test does not rot if Justfile is edited.
+        justfile = validate.repo_root() / "Justfile"
+        with justfile.open(encoding="utf-8", errors="replace") as handle:
+            line_count = sum(1 for _ in handle)
+        errors, unverified = _classify_one(f"Justfile:{line_count + 1}")
+        self.assertEqual(len(errors), 1)
+        self.assertEqual(unverified, [])
+        self.assertIn("beyond the end of the file", errors[0])
+
+    def test_out_of_range_file_range_citation_rejected(self) -> None:
+        # The range form (`path:start-end`) carries the identical gap -- neither
+        # bound was ever checked against the file's length. `end` is the bound that
+        # matters here; `start` alone being in range must not be enough to pass.
+        justfile = validate.repo_root() / "Justfile"
+        with justfile.open(encoding="utf-8", errors="replace") as handle:
+            line_count = sum(1 for _ in handle)
+        errors, unverified = _classify_one(f"Justfile:1-{line_count + 1}")
+        self.assertEqual(len(errors), 1)
+        self.assertEqual(unverified, [])
+        self.assertIn("beyond the end of the file", errors[0])
+
+    def test_in_range_file_range_citation_still_accepted(self) -> None:
+        # The bounds check must not overreach: a range that is genuinely within the
+        # file must keep passing.
+        justfile = validate.repo_root() / "Justfile"
+        with justfile.open(encoding="utf-8", errors="replace") as handle:
+            line_count = sum(1 for _ in handle)
+        self.assertGreater(line_count, 5, "Justfile is expected to have >5 lines")
+        errors, unverified = _classify_one(f"Justfile:1-{line_count}")
         self.assertEqual(errors, [])
         self.assertEqual(unverified, [])
 

@@ -192,12 +192,51 @@ def find_non_canonical_nodes(corpus_root: Path) -> list[str]:
     return errors
 
 
+def _looks_like_more_frontmatter(text: str) -> bool:
+    """True if `text` itself parses as a YAML mapping, rather than as prose.
+
+    Used to detect a stray '---\\n' line inside the intended frontmatter block
+    (#1482): the correct close is the SECOND '---\\n' occurrence in the file, but a
+    stray one earlier makes the naive first-occurrence split pick the wrong close and
+    silently drop everything after it -- including, in the reported repro, a
+    `relationships` block naming an unresolvable target that would otherwise be a hard
+    error. A markdown body legitimately containing further '---\\n' lines (a
+    horizontal rule, or a fenced code-block example quoting a frontmatter block, both
+    confirmed present in the real corpus) does not parse as a YAML *mapping*; only
+    genuine held-back frontmatter content does.
+    """
+    try:
+        loaded = yaml.safe_load(text)
+    except yaml.YAMLError:
+        return False
+    return isinstance(loaded, dict)
+
+
 def _load_frontmatter(path: Path, known_keys: frozenset[str] = frozenset()) -> dict:
     """Parse a Markdown-with-YAML-frontmatter node (ADR-0028's representation)."""
     text = path.read_text()
     if not text.startswith("---\n"):
         raise ValueError("no leading '---' frontmatter delimiter")
-    _, frontmatter, _body = text.split("---\n", 2)
+    parts = text.split("---\n")
+    if len(parts) < 3:
+        # Only the opening delimiter is present. An earlier revision destructured
+        # `text.split("---\n", 2)` into three names unconditionally, so this case
+        # raised Python's own `ValueError: not enough values to unpack` instead of a
+        # message naming the actual problem (#1483).
+        raise ValueError("no closing '---' frontmatter delimiter")
+    frontmatter = parts[1]
+
+    # `parts[2]` is everything between the CHOSEN close (the second '---\n') and the
+    # next '---\n' after it, if any -- exactly the span a stray delimiter would hide.
+    # Checked only when a further delimiter exists at all: with exactly one closing
+    # delimiter in the whole file (`len(parts) == 3`), there is nothing to hide behind
+    # and no ambiguity to resolve.
+    if len(parts) > 3 and _looks_like_more_frontmatter(parts[2]):
+        raise ValueError(
+            "stray '---' delimiter inside frontmatter -- content after it (up to "
+            "the next '---') still parses as YAML mapping keys, so it was silently "
+            "discarded as body text instead of being validated"
+        )
 
     duplicate = _find_duplicate_key(yaml.compose(frontmatter))
     if duplicate is not None:
@@ -650,7 +689,12 @@ def _classify_url(url: str) -> CitationVerdict:
     )
 
 
-def _classify_repo_path(path_text: str, repo_root_path: Path) -> CitationVerdict:
+def _classify_repo_path(
+    path_text: str,
+    repo_root_path: Path,
+    start: int | None = None,
+    end: int | None = None,
+) -> CitationVerdict:
     """A repo-relative citation must resolve to a real file INSIDE the repository.
 
     Three distinct rejections, in order:
@@ -668,6 +712,14 @@ def _classify_repo_path(path_text: str, repo_root_path: Path) -> CitationVerdict
     `../../../../etc/passwd` escaped the repository entirely and a bare directory
     name like `launchpad` passed as though it were a file. Resolving first also
     means a symlink pointing out of the tree is caught, not followed.
+
+    `start`/`end` (1-based, from a `path:line` or `path:start-end` citation) are
+    checked against the resolved file's actual line count once it is confirmed to
+    exist -- checking whether line N exists in a file already open on disk is one
+    `len()` away and is verifiable by nature, not the real staleness detection (would
+    the cited *content* still support the claim?) this validator still does not
+    attempt (#1459). Bare-path citations pass neither argument and skip this check
+    entirely.
     """
     if _is_prohibited_citation(path_text):
         return CitationVerdict(
@@ -695,6 +747,20 @@ def _classify_repo_path(path_text: str, repo_root_path: Path) -> CitationVerdict
         return CitationVerdict(
             "error", "does not resolve to a real file in the repository"
         )
+
+    if start is not None:
+        try:
+            with candidate.open(encoding="utf-8", errors="replace") as handle:
+                line_count = sum(1 for _ in handle)
+        except OSError:
+            return CitationVerdict(
+                "error", "could not be read to verify its line position"
+            )
+        if (end if end is not None else start) > line_count:
+            return CitationVerdict(
+                "error", "cites a line position beyond the end of the file"
+            )
+
     return CitationVerdict("ok")
 
 
@@ -746,12 +812,21 @@ def _classify_citation(citation: str, repo_root_path: Path) -> CitationVerdict:
     if position:
         start = int(position.group("start"))
         end = position.group("end")
-        # Only the position's internal consistency is checked, not whether the file
-        # is actually that long. Bounds-checking line numbers against file contents
-        # is real staleness detection and belongs with the staleness work, not here.
+        # Internal consistency first (start >= 1, end >= start): a malformed
+        # position is rejected without even opening the file. Whether the position
+        # falls within the file's actual length is then checked inside
+        # _classify_repo_path once the file is confirmed to exist (#1459) -- that is
+        # verifiable by nature (a len() away), not the real staleness detection
+        # (would the cited content still support the claim?) this validator does
+        # not attempt.
         if start < 1 or (end is not None and int(end) < start):
             return CitationVerdict("error", "carries a malformed line position")
-        return _classify_repo_path(position.group("path"), repo_root_path)
+        return _classify_repo_path(
+            position.group("path"),
+            repo_root_path,
+            start,
+            int(end) if end is not None else None,
+        )
 
     if any(character.isspace() for character in text):
         return CitationVerdict(
