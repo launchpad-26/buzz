@@ -366,6 +366,48 @@ def looks_agent_authored(visible: str) -> bool:
     return False
 
 
+def parse_agent_identities(raw: str | None) -> frozenset[str]:
+    """A configured list of known agent identities, comma-separated.
+
+    In this fork agents run under a cohort member's own GitHub account — there is no
+    separate bot account — so the account itself doubles as a third detection signal
+    alongside the label and the body content (#1771: neither of those two catches an
+    agent PR whose body never says so and whose label got dropped).
+
+    Casefolded here so `agent_signals` only has to casefold the incoming author, not the
+    whole configured set on every call. That matters: a login typo'd with different
+    casing into the workflow's env value must not silently and permanently disable the
+    signal for that account, with no error and nothing to fail.
+
+    Unset or blank means nothing is configured — no author is ever treated as a signal,
+    identical to this file's behaviour before the signal existed.
+    """
+    if raw is None or not raw.strip():
+        return frozenset()
+    return frozenset(login.strip().casefold() for login in raw.split(",") if login.strip())
+
+
+def agent_signals(
+    visible: str,
+    labels: list[str],
+    author: str | None,
+    agent_identities: frozenset[str],
+) -> tuple[bool, bool, bool]:
+    """The three independent ways a PR can be agent-authored, computed in one place.
+
+    `check()`'s "missing label" rule and `main()`'s final "(agent)"/"(human)" print both
+    need exactly this classification. Computing it twice risks the two disagreeing — the
+    same class of drift this file's docstring already warns about for markdown parsing —
+    so both read this function instead of recomputing the boolean logic themselves.
+
+    Returns (labelled_agent, body_says_agent, author_says_agent).
+    """
+    labelled_agent = "by:agent" in labels
+    body_says_agent = looks_agent_authored(visible)
+    author_says_agent = bool(author) and author.casefold() in agent_identities
+    return labelled_agent, body_says_agent, author_says_agent
+
+
 def report_size(
     closing_refs: list[int] | None, additions: int | None, changed_files: int | None
 ) -> list[str]:
@@ -499,13 +541,16 @@ def check(
     feature_children: list[int] | None = None,
     additions: int | None = None,
     changed_files: int | None = None,
+    author: str | None = None,
+    agent_identities: frozenset[str] | None = None,
 ) -> tuple[list[str], list[str]]:
     """Return (errors, notes). Empty errors means the body is acceptable."""
     visible = strip_comments(body)
     prose = strip_code(visible)
-    labelled_agent = "by:agent" in labels
-    body_says_agent = looks_agent_authored(visible)
-    is_agent = labelled_agent or body_says_agent
+    labelled_agent, body_says_agent, author_says_agent = agent_signals(
+        visible, labels, author, agent_identities or frozenset()
+    )
+    is_agent = labelled_agent or body_says_agent or author_says_agent
     errors: list[str] = []
     notes: list[str] = []
 
@@ -530,14 +575,21 @@ def check(
     elif not any(v.lower() in itype.lower() for v in ISSUE_TYPES):
         errors.append(f"Issue type must be one of {sorted(ISSUE_TYPES)}. Found: {itype!r}")
 
-    if body_says_agent and not labelled_agent:
+    if (body_says_agent or author_says_agent) and not labelled_agent:
         # Rule 3 requires the label, and its absence is the shape a stripped label leaves.
         # The strict checks already ran above regardless; this makes the omission visible
-        # rather than letting the body and the metadata disagree quietly.
+        # rather than letting the body/author and the metadata disagree quietly. Named
+        # per signal so the message never claims a body reason when it was really the
+        # author identity (#1771) that triggered agent mode.
+        reasons = []
+        if body_says_agent:
+            reasons.append("carries agent provenance or an Authority claim")
+        if author_says_agent:
+            reasons.append(f"was opened by {author!r}, a known agent identity")
         errors.append(
-            "This body carries agent provenance or an Authority claim but no 'by:agent' "
-            "label. Add it. Removing the label does not remove the requirements — they "
-            "are keyed on the body now, not only on metadata."
+            "This PR " + " and ".join(reasons) + ", but has no 'by:agent' label. Add "
+            "it. Removing the label does not remove the requirements — they are keyed "
+            "on the body and author now, not only on metadata."
         )
 
     if is_agent:
@@ -577,9 +629,18 @@ def main() -> int:
     feature_children = parse_closing_refs(os.environ.get("FEATURE_CHILDREN"))
     additions = parse_int(os.environ.get("PR_ADDITIONS"))
     changed_files = parse_int(os.environ.get("PR_CHANGED_FILES"))
+    author = os.environ.get("PR_AUTHOR") or None
+    agent_identities = parse_agent_identities(os.environ.get("AGENT_AUTHOR_LOGINS"))
 
     errors, notes = check(
-        body, labels, closing_refs, feature_children, additions, changed_files
+        body,
+        labels,
+        closing_refs,
+        feature_children,
+        additions,
+        changed_files,
+        author,
+        agent_identities,
     )
     for note in notes:
         print(f"  {note}")
@@ -592,7 +653,13 @@ def main() -> int:
         print("Agent PRs: launchpad/AGENT_PR_TEMPLATE.md")
         return 1
 
-    kind = "agent" if "by:agent" in labels else "human"
+    # Recomputed via the same shared helper `check()` used above — never the label
+    # alone — so a passing run cannot report "(human)" for a PR that check() just
+    # held to the agent-only rules (#1771's second, narrower instance of the gap).
+    labelled_agent, body_says_agent, author_says_agent = agent_signals(
+        strip_comments(body), labels, author, agent_identities
+    )
+    kind = "agent" if (labelled_agent or body_says_agent or author_says_agent) else "human"
     print(f"\nPR body check passed. ({kind})")
     return 0
 
