@@ -166,10 +166,13 @@ Returns empty on a fresh process and **says so in `things_to_be_aware_of`**, bec
 `HISTORY`-state narrative. A claim drawn from a commit message is **always `INFERENCE`**: a
 message states intent, never a measured outcome.
 
-Queries a window of `HISTORY_LINE_WINDOW` (10) lines, not the definition line, and cites the
-window actually queried. That is a workaround for #569 — `inspect_git_history` returns zero
-commits for a degenerate `start == end` range — and **should be reverted when #569 is fixed**,
-because it makes every history citation wider than the claim it supports.
+Queries the exact definition line and cites that line. Used to query a 10-line
+window instead (`HISTORY_LINE_WINDOW`) as a workaround for #569 —
+`inspect_git_history` returned zero commits for a degenerate `start == end`
+range — because a window made every history citation wider than the claim it
+supported. #569 is fixed (`inspect_git_history` now calls `git log -L`
+directly instead of RepoQL's `=> history` modifier, which returns the correct
+result for a single line), so the workaround is removed.
 
 ### `ask(agent, text: str) -> Answer`
 
@@ -283,7 +286,7 @@ DoD item 2. Every place this contract, the design doc, and the merged code diver
 | 2 | Design doc says `setup(task)` returns "cited operational steps". Implementation returns the recipe *header* (`Justfile defines 'test': test:`), with no runnable command. | **Open — #572.** |
 | 3 | Design doc treats `BASE` as first-class and separately queryable. Implementation classifies `BASE` and reads `WORKING`, disclosing it in a caveat. | **Open — #588.** BASE reads need `git show HEAD:<path>`. `ask()` also discards the classified state when it routes, so the §5 caveat does not appear for routed questions. |
 | 4 | Design doc's step 1 queries three components "for an existing answer". Implementation's `confident` is a `ProjectMemory` hit **only** — a graph or semantic hit proves the symbol exists, which is not an answer. | **Intentional.** The doc's own worked example agrees: `search_symbols` finds `UserRepository` and it still records "confidence: none yet". |
-| 5 | `history` queries a 10-line window, not the definition line. | **Workaround for #569.** Revert when fixed. |
+| 5 | `history` used to query a 10-line window, not the definition line. | **Resolved — #569.** Was a workaround; `history` now queries the exact definition line. |
 | 6 | Design doc's investigation progression lists five tool calls. The real trace has six — the tests stage reads the file to locate `mod tests` *and* searches below it. | **Contract and `PROGRESSION` both list six.** A canonical order omitting a call the code makes is the same lie as a trace omitting it. |
 | 7 | `ProjectMemory` has no persistence, so `conventions()` is empty on a fresh process and the confidence gate never fires. | **Open — #570.** Disclosed in every affected answer. |
 
