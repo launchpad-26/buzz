@@ -98,20 +98,20 @@ regexes = ['''postgres(?:ql)?://[^:@/\s]+:[^@\s]+@(?:localhost|127\.0\.0\.1)(?::
 # launchpad/deploy/ entirely by the deploy-method archival that landed after
 # #67 was filed): neither of those two strings matches any rule in this
 # config any more, so neither needs an entry here. What the file's current
-# content does trip is `<64 hex characters>` — a literal bracketed
-# placeholder idiom this SOP uses for "a value goes here", not a value
-# itself — via gitleaks' own default generic-api-key rule. #389 re-verified
-# this empirically with gitleaks 8.30.1: the placeholder line alone produces
-# zero findings under the default generic-api-key rule (its own value is
-# `<64 hex characters>`, which has no hex/high-entropy content to trigger
-# on). The one real finding on this file is the adjacent "Public key:"
-# line, which the literal regex entry below already covers. A broad
-# `'''<[A-Za-z0-9 ]+>'''` regex entry that would have exempted every
+# content does trip is its "Public key:" worked-example line, via gitleaks'
+# own default generic-api-key rule — covered by the literal regex entry
+# below. #67 also flagged the adjacent "Secret key:  <64 hex characters>"
+# placeholder line as needing an exclusion, on the theory that its bracketed
+# idiom would trip the same rule; #389 re-verified this empirically with
+# gitleaks 8.30.1 and found that theory false: the placeholder line alone,
+# in isolation and as part of the full file, produces zero findings (its
+# value has no hex/high-entropy content to trigger generic-api-key on). A
+# broad `'''<[A-Za-z0-9 ]+>'''` regex entry that would have exempted every
 # bracket-placeholder idiom repo-wide, from every rule, forever was
 # therefore never needed for this reason and has been removed rather than
 # kept as unused breadth.
 [allowlist]
-description = "Paths this scan reads but never reports on, and one documentation placeholder value"
+description = "Paths this scan reads but never reports on, and one documented public-key example"
 paths = [
     '''launchpad/scripts/security_audit_fixtures/secrets/.*''',
     # Same class of false positive .intersect/sadscan.yaml already documents
