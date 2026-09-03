@@ -38,7 +38,7 @@ relationships:
 - **Script**: `launchpad/project-intelligence/corpus/indexes.py` (builder `doc-to-code-map`, `launchpad/project-intelligence/corpus/index_defs/doc_to_code_map.py`)
 - **Inputs**: the 205 canonical corpus node(s) discovered by `validate.py`'s
   `discover_markdown_files` contract (sorted walk, `schema/` excluded, symlinks resolved),
-  minus the 11 registered generated output path(s)
+  minus the 15 registered generated output path(s)
 - **Ordering**: mapping rows sorted lexicographically by node id, then by code path -- the inverse of generated/code-to-doc-map.md's own (code path, node id) sort; duplicate (node, path) pairs arising from multiple line-suffixed citations of one file collapse into one row, the same way they do there
 - **Source revision**: input digest `sha256:224e78b5d4dcbb6f840c2c3da2bd815237b37a523b4108199aba621ffe9a7301` over the
   sorted (relative path, bytes) of the canonical inputs
@@ -57,7 +57,7 @@ This index deliberately excludes:
 - absolute paths, paths with `..` components, and path-shaped citations that do not resolve to a regular file in the current working tree
 - The `schema/` subtree, for the same reason `validate.py` excludes it: schema-testing
   infrastructure, not corpus content
-- Every registered generated output path (`GLOSSARY.md`, `INDEX.md`, `decisions/INDEX.md`, `generated/api-index.md`, `generated/capability-index.md`, `generated/code-to-doc-map.md`, `generated/concept-index.md`, `generated/configuration-index.md`, `generated/corpus-index.md`, `generated/coverage.md`, `generated/doc-to-code-map.md`), so no generated
+- Every registered generated output path (`GLOSSARY.md`, `INDEX.md`, `decisions/INDEX.md`, `generated/api-index.md`, `generated/capability-index.md`, `generated/code-to-doc-map.md`, `generated/concept-index.md`, `generated/configuration-index.md`, `generated/corpus-index.md`, `generated/coverage.md`, `generated/crate-index.md`, `generated/database-index.md`, `generated/decision-index.md`, `generated/dependency-graph.md`, `generated/doc-to-code-map.md`), so no generated
   view feeds itself
 
 ## Doc-to-code mapping
