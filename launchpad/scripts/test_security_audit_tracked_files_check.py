@@ -274,5 +274,37 @@ class NewlyHiddenTrackedFileTest(_NoUpstreamMixin, unittest.TestCase):
         self.assertEqual(result.status, Status.PASS)
 
 
+class NewlyHiddenGitFailureTest(_NoUpstreamMixin, unittest.TestCase):
+    """Regression for #391: a git failure in the newly-hidden-file heuristic
+    must not read the same as "nothing newly hidden". PR mode is on
+    (GITHUB_BASE_REF set) but no 'origin' remote is configured, so
+    `git fetch origin <base_ref>` fails exactly as it would against an
+    unreachable or misconfigured remote in CI.
+    """
+
+    def test_fetch_failure_in_pr_mode_is_indeterminate_not_pass(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            _init_repo_with_files(root, {"README.md": "hello\n", ".gitignore": "\n"})
+            with mock.patch.dict("os.environ", {"GITHUB_BASE_REF": "launchpad"}):
+                result = run(root)
+        self.assertEqual(result.status, Status.INDETERMINATE)
+        self.assertIn("could not determine", result.detail)
+        self.assertIn("not the same as nothing newly hidden", result.detail)
+
+    def test_fetch_failure_does_not_mask_a_real_cohort_owned_hit(self):
+        # The acceptance criterion, same shape as UpstreamOwnershipTest's: a
+        # heuristic that cannot run must never suppress a real, independently
+        # detected sensitive tracked file. FAIL (from the primary scan) still
+        # wins over INDETERMINATE (from the unrelated newly-hidden heuristic).
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            _init_repo_with_files(root, {"deploy/host.pem": "fixture bytes, deliberately not key-shaped\n", ".gitignore": "\n"})
+            with mock.patch.dict("os.environ", {"GITHUB_BASE_REF": "launchpad"}):
+                result = run(root)
+        self.assertEqual(result.status, Status.FAIL)
+        self.assertIn("host.pem", result.detail)
+
+
 if __name__ == "__main__":
     unittest.main()
