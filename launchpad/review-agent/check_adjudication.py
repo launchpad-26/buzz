@@ -286,7 +286,7 @@ check(
     "an ordinary finding_id still resolves to its own recorded verdict alongside a reserved key",
 )
 check(
-    _reserved_lookup_result["verdict"] == "UNPROVEN"
+    _reserved_lookup_result.get("verdict") == "UNPROVEN"
     and "reserved-value-should-never-surface" not in json.dumps(_reserved_lookup_result),
     "make_replay_judge never returns a reserved underscore-prefixed key's value for any finding_id lookup "
     f"(got {_reserved_lookup_result!r})",
