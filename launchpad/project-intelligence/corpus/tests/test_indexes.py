@@ -74,10 +74,15 @@ class DiscoveryTest(unittest.TestCase):
             indexes.discover_builders(Path("/nonexistent/index_defs")), []
         )
 
-    def test_shipped_index_defs_package_registers_no_builders(self) -> None:
-        # The framework ships zero real builders on purpose -- each generated
-        # document is its own follow-up issue.
-        self.assertEqual(indexes.discover_builders(), [])
+    def test_shipped_index_defs_package_discovers_cleanly(self) -> None:
+        # The framework shipped with zero builders; each generated document is
+        # its own follow-up issue that adds exactly one module. This assertion
+        # is count-agnostic on purpose: discovery itself already fails loudly
+        # on an invalid SPEC or a duplicate name/output path, so the shipped
+        # package's invariant is "everything discovered validated", not a
+        # particular number of builders.
+        for spec in indexes.discover_builders():
+            self.assertIsInstance(spec, indexes.IndexSpec)
 
     def test_builders_discovered_in_sorted_module_name_order(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
