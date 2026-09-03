@@ -250,15 +250,60 @@ class CommitSummary:
     message: str
 
 
+# git log's format separators for inspect_git_history: 0x1f (unit separator)
+# between fields, 0x1e (record separator) between commits. Neither can appear
+# in a commit hash, ISO date, author name, or subject line, unlike ":" or "|"
+# which real commit subjects do contain.
+_GIT_LOG_FIELD_SEP = "\x1f"
+_GIT_LOG_RECORD_SEP = "\x1e"
+
+
 def inspect_git_history(file: str, start_line: int, end_line: int) -> list[CommitSummary]:
-    """Commits touching a file range -- a thin wrapper over RepoQL's `=> history`
-    modifier, the same primitive #206 already proved (enrich_git_ownership())."""
+    """Commits touching a file's line range, via `git log -L start,end:file`
+    directly rather than RepoQL's `=> history` modifier.
+
+    issue #569: RepoQL's `#line=N,N => history` fragment returned zero commits
+    for a degenerate single-line range (start_line == end_line), even where
+    `git log -L N,N:file` names a real one for that exact line -- measured on
+    crates/buzz-core/src/kind.rs (0 commits for (850, 850), 4 for (840, 860)),
+    independently confirmed twice: once by this issue and once already
+    recorded in investigation.py's own HISTORY_LINE_WINDOW comment. Reading
+    this function's own source rules out the alternative hypothesis that the
+    bug was here -- there was no line-count-dependent branch, just a direct
+    `data.get("commits", [])` passthrough -- leaving RepoQL's own fragment
+    resolution as the only remaining place in the chain. Rather than guess at
+    RepoQL's internal `#line` semantics (unreachable for direct testing in the
+    environment this fix was built in -- see the commit message), this calls
+    `git log -L` directly: the same primitive RepoQL's own history modifier is
+    meant to mirror, and the same "avoid depending on RepoQL where a
+    git-native tool already answers the question" trade-off search_text()
+    above makes for grep -- "one less tool affected if the RepoQL host is
+    unavailable" applies here too.
+
+    Raises ValueError for start_line > end_line, and RuntimeError (via a
+    non-zero `git log` exit) for a file or line range git itself cannot
+    resolve -- an out-of-range line or nonexistent file is a real error, not
+    a silent empty result.
+    """
     _validate_repo_relative_path(file, "file")
-    data = _rql_read_json(f"file:///{file}#line={start_line},{end_line} => history")
-    return [
-        CommitSummary(hash=c["hash"], date=c["date"], author=c["author"], message=c["message"])
-        for c in data.get("commits", [])
-    ]
+    _resolve_within_repo(file)  # containment check; git now runs directly, not through RepoQL's own sandboxing
+    if start_line > end_line:
+        raise ValueError(f"start_line ({start_line}) must be <= end_line ({end_line})")
+    fmt = f"%H{_GIT_LOG_FIELD_SEP}%aI{_GIT_LOG_FIELD_SEP}%an{_GIT_LOG_FIELD_SEP}%s{_GIT_LOG_RECORD_SEP}"
+    cmd = ["git", "log", "--no-patch", f"--pretty=format:{fmt}", "-L", f"{start_line},{end_line}:{file}"]
+    result = subprocess.run(cmd, capture_output=True, text=True, cwd=REPO_ROOT)
+    if result.returncode != 0:
+        raise RuntimeError(
+            f"inspect_git_history: git log -L failed for {file}:{start_line}-{end_line}: {result.stderr.strip()}"
+        )
+    commits = []
+    for record in result.stdout.split(_GIT_LOG_RECORD_SEP):
+        record = record.strip("\n")
+        if not record:
+            continue
+        commit_hash, date, author, message = record.split(_GIT_LOG_FIELD_SEP)
+        commits.append(CommitSummary(hash=commit_hash, date=date, author=author, message=message))
+    return commits
 
 
 @dataclass(frozen=True)
