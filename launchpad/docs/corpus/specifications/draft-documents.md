@@ -46,7 +46,7 @@ relationships:
 - **Script**: `launchpad/project-intelligence/corpus/indexes.py` (builder `specifications-draft-documents`, `launchpad/project-intelligence/corpus/index_defs/specifications_draft_documents.py`)
 - **Inputs**: the 205 canonical corpus node(s) discovered by `validate.py`'s
   `discover_markdown_files` contract (sorted walk, `schema/` excluded, symlinks resolved),
-  minus the 26 registered generated output path(s)
+  minus the 29 registered generated output path(s)
 - **Ordering**: listing rows sorted lexicographically by corpus-root-relative path
 - **Source revision**: input digest `sha256:224e78b5d4dcbb6f840c2c3da2bd815237b37a523b4108199aba621ffe9a7301` over the
   sorted (relative path, bytes) of the canonical inputs
@@ -63,7 +63,7 @@ This index deliberately excludes:
 - every registered generated output path, including this document's own sibling `specifications/INDEX.md`, so no generated view feeds itself or is mistaken for an authored draft
 - The `schema/` subtree, for the same reason `validate.py` excludes it: schema-testing
   infrastructure, not corpus content
-- Every registered generated output path (`GLOSSARY.md`, `INDEX.md`, `decisions/INDEX.md`, `generated/api-index.md`, `generated/capability-index.md`, `generated/code-to-doc-map.md`, `generated/concept-index.md`, `generated/configuration-index.md`, `generated/corpus-index.md`, `generated/coverage.md`, `generated/crate-index.md`, `generated/database-index.md`, `generated/decision-index.md`, `generated/dependency-graph.md`, `generated/doc-to-code-map.md`, `generated/documentation-graph.md`, `generated/event-kind-index.md`, `generated/layer-index.md`, `generated/nip-index.md`, `generated/orphaned-docs.md`, `generated/provenance-index.md`, `generated/stale-docs.md`, `generated/test-index.md`, `generated/test-to-doc-map.md`, `specifications/INDEX.md`, `specifications/draft-documents.md`), so no generated
+- Every registered generated output path (`GLOSSARY.md`, `INDEX.md`, `decisions/INDEX.md`, `generated/api-index.md`, `generated/capability-index.md`, `generated/code-to-doc-map.md`, `generated/concept-index.md`, `generated/configuration-index.md`, `generated/corpus-index.md`, `generated/coverage.md`, `generated/crate-index.md`, `generated/database-index.md`, `generated/decision-index.md`, `generated/dependency-graph.md`, `generated/doc-to-code-map.md`, `generated/documentation-graph.md`, `generated/event-kind-index.md`, `generated/layer-index.md`, `generated/nip-index.md`, `generated/orphaned-docs.md`, `generated/provenance-index.md`, `generated/stale-docs.md`, `generated/test-index.md`, `generated/test-to-doc-map.md`, `specifications/INDEX.md`, `specifications/draft-documents.md`, `specifications/implemented-documents.md`, `specifications/normative-documents.md`, `specifications/superseded-documents.md`), so no generated
   view feeds itself
 
 ## Draft specification nodes under `specifications/`
