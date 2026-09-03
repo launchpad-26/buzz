@@ -52,6 +52,10 @@ evidence:
     entry_class: FACT
     evidence:
       - "launchpad/project-intelligence/corpus/validate.py"
+  - statement: "A path:line:col citation reaches the same rejection as the whitespace-free fallthrough through an unrelated route: it matches the file-position pattern, whose non-greedy path group backtracks to the last colon that leaves a bare digits or digits-digits suffix, so the path group absorbs the first colon and the middle number as literal text instead of the position being truncated away."
+    entry_class: FACT
+    evidence:
+      - "launchpad/project-intelligence/corpus/validate.py"
   - statement: "Citation checking is structural: a citation that resolves to a real file is never opened, so nothing compares that file against the statement the citation sits under."
     entry_class: FACT
     evidence:
@@ -242,11 +246,27 @@ on every pull request and every push to `launchpad` that touches
    them.
 3. **That a line number is real.** `Justfile:999999` passes against a 1005-line file
    (#1459).
-4. **That a rejection means what its message says.** A citation containing no whitespace
-   that matches no other form falls through to the repository-path rule, so `#1459` and
-   `launchpad-26/buzz#1459` are reported as paths that "do not resolve to a real file in
-   the repository". They are not paths and were never intended as paths. An author
-   debugging that message will look for a missing file that was never meant to exist.
+4. **That a rejection means what its message says.** The same message — "does not
+   resolve to a real file in the repository" — is reached by two different routes, and
+   an author debugging it needs to know which one they hit.
+
+   A citation containing no whitespace that matches no other form falls through to the
+   repository-path rule directly: `#1459`, `launchpad-26/buzz#1459`, and the fragment
+   example in the table above (`…kind.rs#symbol=Kind`) all take this route. They are not
+   paths and were never intended as paths.
+
+   A `path:line:col` citation such as `…kind.rs:219:5` takes a different route entirely:
+   it *matches* `_FILE_POSITION_RE`. The pattern's non-greedy path group backtracks until
+   the trailing text satisfies `:digits` or `:digits-digits` at the end of the string,
+   which for this shape only happens at the *last* colon — so the path group absorbs the
+   first colon and the middle number as literal text (`…kind.rs:219`), and the final
+   number (`5`) is captured as the start line instead. Nothing here is truncated; the
+   captured path is *longer* than the real file path, not shorter, which is why it
+   resolves to nothing and the message reads identically to the fallthrough case above,
+   for an unrelated reason.
+
+   Either way, an author debugging this message will look for a missing file that was
+   never meant to exist.
 
 **What a reviewer has to hold, because no check will.** MUST 4 (path over link),
 MUST 8 (a `FACT` rests on something openable), MUST 9 (one commit-only `FACT`), and every
