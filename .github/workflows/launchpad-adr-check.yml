@@ -43,6 +43,7 @@ jobs:
         run: |
           missing=0
           for f in launchpad/scripts/adr_boundary_check.py \
+                   launchpad/scripts/adr_trailing_newline_check.py \
                    launchpad/decisions/ADR-0005-launchpad-deployment-boundary.md \
                    launchpad/AGENTS.md; do
             if [ ! -f "$f" ]; then
@@ -64,3 +65,11 @@ jobs:
 
       - name: Check the ADR boundary
         run: python3 launchpad/scripts/adr_boundary_check.py .
+
+      # launchpad-26/buzz#1453: every ADR file created for the batch filed as
+      # PRs #1433-#1446 was missing a trailing newline, and no single script
+      # produced them to patch — they were written directly by agent sessions.
+      # This step is what actually stops the recurrence, independent of
+      # whatever writes the next ADR.
+      - name: Check ADR files end with a trailing newline
+        run: python3 launchpad/scripts/adr_trailing_newline_check.py .
