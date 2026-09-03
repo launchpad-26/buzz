@@ -173,6 +173,33 @@ class SeverityValidationTests(unittest.TestCase):
 
 
 class EntryPointEvidenceTests(unittest.TestCase):
+    def test_entry_point_set_with_real_evidence_validates_clean(self):
+        """The happy path this class was otherwise missing: every other test
+        here pairs a set ``entry_point`` with evidence that should be
+        rejected. Without this test, an ``is_nonempty_str`` that always
+        returns False (or a guard that always appends the violation
+        regardless of ``evidence``) would pass every test in this class.
+        Mirrors test_verdicts.py's WellFormedPairTests.test_well_formed_pair_
+        validates_clean, which guards the identical positive case for
+        verdict_evidence.
+        """
+        doc = make_document(
+            reports=[
+                make_report(
+                    findings_list=[
+                        make_finding(
+                            anchor="pr",
+                            file=None,
+                            line=None,
+                            entry_point="pr_body",
+                            evidence="a real excerpt of the PR body",
+                        )
+                    ]
+                )
+            ]
+        )
+        self.assertEqual(findings.validate(doc), [])
+
     def test_entry_point_set_with_no_evidence_is_rejected(self):
         doc = make_document(
             reports=[
@@ -232,6 +259,62 @@ class EntryPointEvidenceTests(unittest.TestCase):
             any("entry_point must be a string or null" in v and "list" in v for v in violations),
             violations,
         )
+
+    def test_whitespace_only_evidence_is_rejected(self):
+        """#283: ``if not evidence:`` was a bare truthiness test -- ``not "   "``
+        is False, so a whitespace-only value satisfied a check meant to
+        require a real one. Mirrors test_verdicts.py's
+        ``test_whitespace_only_verdict_evidence_is_rejected`` for the sibling
+        site of this same idiom.
+        """
+        # "\xa0" is a non-breaking space: whitespace to str.strip(), but not
+        # something an eye catches in a diff. Kept deliberately, same as the
+        # verdicts.py sibling test.
+        for blank in ("   ", "\n", "\t", "  \n  ", "\xa0"):
+            with self.subTest(evidence=blank):
+                doc = make_document(
+                    reports=[
+                        make_report(
+                            findings_list=[
+                                make_finding(
+                                    anchor="pr", file=None, line=None, entry_point="pr_body", evidence=blank
+                                )
+                            ]
+                        )
+                    ]
+                )
+                violations = findings.validate(doc)
+                self.assertTrue(
+                    any("evidence" in v and "entry_point is set" in v for v in violations), violations
+                )
+
+    def test_non_string_evidence_is_rejected(self):
+        """The sibling half of #283: the guard had no type check at all, so
+        every truthy value passed. ``evidence: 42`` is not defensible under
+        any reading of the contract. Mirrors test_verdicts.py's
+        ``test_non_string_verdict_evidence_is_rejected``.
+        """
+        for wrong_type in (42, True, 0.5, ["x"], {"a": 1}):
+            with self.subTest(evidence=wrong_type):
+                doc = make_document(
+                    reports=[
+                        make_report(
+                            findings_list=[
+                                make_finding(
+                                    anchor="pr",
+                                    file=None,
+                                    line=None,
+                                    entry_point="pr_body",
+                                    evidence=wrong_type,
+                                )
+                            ]
+                        )
+                    ]
+                )
+                violations = findings.validate(doc)
+                self.assertTrue(
+                    any("evidence" in v and "entry_point is set" in v for v in violations), violations
+                )
 
 
 class DimensionAndFindingIdTests(unittest.TestCase):
