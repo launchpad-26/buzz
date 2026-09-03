@@ -16,11 +16,12 @@ import os
 import re
 import subprocess
 import sys
+from pathlib import Path
 
 from contain import CONTROL_FLAGS_ENV_VAR, ENTRY_POINTS
 
-HERE = __file__.rsplit("/", 1)[0]
-PAYLOAD = f"{HERE}/fixtures/captured-pr.json"
+HERE = Path(__file__).parent
+PAYLOAD = str(HERE / "fixtures" / "captured-pr.json")
 SENTINELS = {
     "pr_title": "SENTINEL-TITLE-0a1b",
     "pr_body": "SENTINEL-BODY-2c3d",
@@ -37,7 +38,7 @@ failures: list[str] = []
 def run(args: list[str]) -> tuple[int, str]:
     env = {**os.environ, CONTROL_FLAGS_ENV_VAR: "true"}
     proc = subprocess.run(
-        [sys.executable, f"{HERE}/contain.py", *args],
+        [sys.executable, str(HERE / "contain.py"), *args],
         capture_output=True,
         text=True,
         env=env,
