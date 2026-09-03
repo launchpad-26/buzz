@@ -204,7 +204,15 @@ def extract_recorded_revision(node: "validate.LoadedNode") -> RecordedRevision:
     `statement` matches the recorded-revision sentence.
 
     Rung 2: otherwise, exactly one distinct `commit <sha>` citation anywhere
-    in the ledger.
+    in the ledger -- counting only FULL 40-character SHAs. `_COMMIT_CITATION_RE`
+    also matches 7-39 character abbreviations, but an abbreviation and the same
+    commit's full SHA are the identical commit under two different strings; if
+    both were tallied as distinct they would wrongly trip rung 3's "ambiguous"
+    fallthrough for what is actually a single, unambiguous commit. Rung 2 has
+    no repository to resolve an abbreviation against (this function takes no
+    `repo_dir`), so an abbreviation on its own -- with no full-length citation
+    of the same commit elsewhere in the ledger -- is excluded from the tally
+    rather than guessed at.
 
     Rung 3: otherwise, unestablished -- ambiguous or absent, never guessed.
     """
@@ -223,7 +231,7 @@ def extract_recorded_revision(node: "validate.LoadedNode") -> RecordedRevision:
             if not isinstance(citation, str):
                 continue
             commit_match = _COMMIT_CITATION_RE.match(citation.strip())
-            if commit_match:
+            if commit_match and len(commit_match.group(1)) == 40:
                 commit_citation_shas.add(commit_match.group(1).lower())
 
     if len(matching_statement_shas) == 1:
@@ -435,10 +443,13 @@ def evaluate_citation(
             recorded_sha,
         )
 
-    position = validate._FILE_POSITION_RE.match(text)
-    if position:
-        path_text = position.group("path")
-    elif any(character.isspace() for character in text):
+    # Everything else is either a file-shaped citation (bare path, or
+    # `path:line`/`path:start-end`) or matches none of CONTRACT.md's forms at
+    # all -- the same shape-routing decision `normalize_file_citation` already
+    # makes (and #635 already relies on), so it is the single call site for
+    # that decision rather than a second, inline copy of it.
+    path_text = normalize_file_citation(text)
+    if path_text is None:
         return Finding(
             node_id,
             "unestablished",
@@ -446,8 +457,6 @@ def evaluate_citation(
             "matches none of CONTRACT.md's six supported citation forms",
             recorded_sha,
         )
-    else:
-        path_text = text
 
     if validate._is_prohibited_citation(path_text):
         return Finding(

@@ -28,8 +28,11 @@ merged into `origin/launchpad` since, and the real count as measured directly
 against this checkout on 2026-09-03 is 205 nodes, distribution {1: 204, 2: 1}
 by statement-match count, {1: 202, 2: 1, 3: 2} by distinct commit-citation
 count -- `standards/linking.md` remains the only node whose statement count
-is not exactly 1. `RealCorpusSmokeTest` asserts the measured numbers, not the
-plan's stale ones, and says so.
+is not exactly 1. `RealCorpusSmokeTest` no longer hardcodes that count: it
+compares `discover_nodes()`'s result against a fresh, independently-computed
+walk of the same corpus root, the same precedent `test_validate.py`'s own
+real-corpus test already set, so growth in the corpus strengthens rather than
+breaks the test.
 """
 
 from __future__ import annotations
@@ -272,6 +275,40 @@ class RecordedRevisionLadderTest(unittest.TestCase):
             self.assertEqual(result.sha, sha)
             self.assertIsNone(result.reason)
 
+    def test_rung2_abbreviated_and_full_citation_of_same_commit_is_not_ambiguous(
+        self,
+    ) -> None:
+        # The same commit cited once abbreviated and once in full must count
+        # as ONE distinct SHA toward rung 2's tally, never two -- otherwise
+        # this falls through to rung 3 `unestablished` for a commit that was
+        # never actually ambiguous. Neither entry's statement matches the
+        # rung-1 pattern, so this can only resolve via rung 2.
+        sha = "d" * 40
+        abbreviated = sha[:7]
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            write_node(
+                root,
+                "abbreviated-and-full.md",
+                "fixture-abbreviated-and-full",
+                [
+                    {
+                        "statement": "Cites the commit in full.",
+                        "entry_class": "FACT",
+                        "evidence": [f"commit {sha}"],
+                    },
+                    {
+                        "statement": "Cites the identical commit, abbreviated.",
+                        "entry_class": "FACT",
+                        "evidence": [f"commit {abbreviated}"],
+                    },
+                ],
+            )
+            node = _single_node(root)
+            result = stale.extract_recorded_revision(node)
+            self.assertEqual(result.sha, sha)
+            self.assertIsNone(result.reason)
+
     def test_rung1_exactly_one_matching_statement_resolves_directly(self) -> None:
         sha = "c" * 40
         with tempfile.TemporaryDirectory() as tmp:
@@ -281,6 +318,44 @@ class RecordedRevisionLadderTest(unittest.TestCase):
             result = stale.extract_recorded_revision(node)
             self.assertEqual(result.sha, sha)
             self.assertIsNone(result.reason)
+
+
+# ---------------------------------------------------------------------------
+# `normalize_file_citation` -- STEP 2's own function, public and stable-
+# signature for #635's benefit (see its docstring), but previously exercised
+# only indirectly through `evaluate_citation`. No git/fixture needed: it is a
+# pure string decision over CONTRACT.md's citation shapes.
+# ---------------------------------------------------------------------------
+
+
+class NormalizeFileCitationTest(unittest.TestCase):
+    def test_bare_path_returns_itself(self) -> None:
+        self.assertEqual(
+            stale.normalize_file_citation("launchpad/AGENTS.md"),
+            "launchpad/AGENTS.md",
+        )
+
+    def test_single_line_position_strips_to_the_path(self) -> None:
+        self.assertEqual(stale.normalize_file_citation("path/to/file.py:12"), "path/to/file.py")
+
+    def test_line_range_position_strips_to_the_path(self) -> None:
+        self.assertEqual(
+            stale.normalize_file_citation("path/to/file.py:12-20"), "path/to/file.py"
+        )
+
+    def test_commit_citation_is_not_a_file_shape(self) -> None:
+        self.assertIsNone(stale.normalize_file_citation("commit " + "a" * 40))
+
+    def test_url_citation_is_not_a_file_shape(self) -> None:
+        self.assertIsNone(stale.normalize_file_citation("https://example.invalid/x"))
+
+    def test_graph_edge_citation_is_not_a_file_shape(self) -> None:
+        self.assertIsNone(
+            stale.normalize_file_citation("some_symbol -> other_symbol (1 hop)")
+        )
+
+    def test_empty_citation_returns_none(self) -> None:
+        self.assertIsNone(stale.normalize_file_citation("   "))
 
 
 # ---------------------------------------------------------------------------
@@ -302,6 +377,8 @@ class GateTest(unittest.TestCase):
             self.assertEqual(recorded.sha, never_committed_sha)
             verdict = stale.evaluate_node(node, recorded, head_sha, root)
             self.assertEqual(verdict.status, "unestablished")
+            self.assertEqual(len(verdict.findings), 1)
+            self.assertIn("absent from this repository", verdict.findings[0].reason)
 
     def test_gate2_divergent_branch_is_unestablished(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
@@ -322,6 +399,8 @@ class GateTest(unittest.TestCase):
             self.assertFalse(stale.is_ancestor(sha_a, head_sha, root))
             verdict = stale.evaluate_node(node, recorded, head_sha, root)
             self.assertEqual(verdict.status, "unestablished")
+            self.assertEqual(len(verdict.findings), 1)
+            self.assertIn("not an ancestor", verdict.findings[0].reason)
 
     def test_gate3_path_never_existed_at_recorded_revision_is_unestablished(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
@@ -347,8 +426,10 @@ class GateTest(unittest.TestCase):
             recorded = stale.extract_recorded_revision(node)
             verdict = stale.evaluate_node(node, recorded, head_sha, root)
             self.assertEqual(verdict.status, "unestablished")
+            self.assertEqual(len(verdict.findings), 1)
             for finding in verdict.findings:
                 self.assertNotIn("never-existed.txt", finding.citation)
+                self.assertIn("does not resolve to a real file", finding.reason)
 
     def test_gate4_prohibited_citation_is_unestablished_and_not_echoed(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
@@ -374,9 +455,11 @@ class GateTest(unittest.TestCase):
             recorded = stale.extract_recorded_revision(node)
             verdict = stale.evaluate_node(node, recorded, head_sha, root)
             self.assertEqual(verdict.status, "unestablished")
+            self.assertEqual(len(verdict.findings), 1)
             for finding in verdict.findings:
                 self.assertNotIn("id_rsa", finding.citation)
                 self.assertTrue(finding.citation.startswith("evidence entry"))
+                self.assertIn("prohibited credential-like pattern", finding.reason)
 
     def test_gate4_escaping_path_is_unestablished_and_not_echoed(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
@@ -402,8 +485,10 @@ class GateTest(unittest.TestCase):
             recorded = stale.extract_recorded_revision(node)
             verdict = stale.evaluate_node(node, recorded, head_sha, root)
             self.assertEqual(verdict.status, "unestablished")
+            self.assertEqual(len(verdict.findings), 1)
             for finding in verdict.findings:
                 self.assertNotIn("passwd", finding.citation)
+                self.assertIn("resolves outside the repository", finding.reason)
 
     def test_one_unestablished_citation_prevents_fresh_even_with_clean_citations(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
@@ -436,6 +521,8 @@ class GateTest(unittest.TestCase):
             verdict = stale.evaluate_node(node, recorded, head_sha, root)
             self.assertEqual(verdict.status, "unestablished")
             self.assertNotEqual(verdict.status, "fresh")
+            self.assertEqual(len(verdict.findings), 1)
+            self.assertIn("commit reference", verdict.findings[0].reason)
 
 
 # ---------------------------------------------------------------------------
@@ -674,6 +761,8 @@ class DodFixturesAndTrapsTest(unittest.TestCase):
             verdict = stale.evaluate_node(node, recorded, head_sha, root)
             self.assertNotEqual(verdict.status, "fresh")
             self.assertEqual(verdict.status, "unestablished")
+            self.assertEqual(len(verdict.findings), 1)
+            self.assertIn("absent from this repository", verdict.findings[0].reason)
 
     def test_trap_divergent_branch_is_unestablished_not_fresh(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
@@ -693,6 +782,8 @@ class DodFixturesAndTrapsTest(unittest.TestCase):
             verdict = stale.evaluate_node(node, recorded, head_sha, root)
             self.assertNotEqual(verdict.status, "fresh")
             self.assertEqual(verdict.status, "unestablished")
+            self.assertEqual(len(verdict.findings), 1)
+            self.assertIn("not an ancestor", verdict.findings[0].reason)
 
     def test_trap_path_never_existed_is_unestablished_not_fresh(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
@@ -719,6 +810,8 @@ class DodFixturesAndTrapsTest(unittest.TestCase):
             verdict = stale.evaluate_node(node, recorded, head_sha, root)
             self.assertNotEqual(verdict.status, "fresh")
             self.assertEqual(verdict.status, "unestablished")
+            self.assertEqual(len(verdict.findings), 1)
+            self.assertIn("does not resolve to a real file", verdict.findings[0].reason)
 
     def test_trap_deleted_or_renamed_file_is_stale_with_path_named(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
@@ -843,32 +936,73 @@ class DeterminismTest(unittest.TestCase):
 class RealCorpusSmokeTest(unittest.TestCase):
     def test_real_corpus_recorded_revisions_all_resolve(self) -> None:
         """Every real node's recorded revision resolves to a SHA, none
-        ambiguous. Measured directly against this checkout on 2026-09-03:
-        205 nodes total, 0 unresolved -- NOT the plan's stale "94" figure,
-        which was measured against an earlier corpus snapshot the same day.
-        This test asserts the invariant (0 unresolved) and the count as
-        measured now; it will need updating, honestly, the next time the
-        corpus grows, the same way test_validate.py's own real-corpus test
-        says it will."""
+        ambiguous.
+
+        Replaces a hardcoded `self.assertEqual(len(nodes), 205)`, the same
+        fragile-assertion-on-changing-real-state pattern
+        `test_validate.py`'s `test_real_corpus_root_discovery_matches_an_
+        independent_walk` documents replacing for exactly the reason given
+        there: a bare count says nothing about *which* nodes were found and
+        breaks on the exact growth it should tolerate. This follows that
+        fix's precedent -- `discover_nodes()`'s result set is compared
+        against a fresh, independently-computed walk of the same corpus
+        root, so the test strengthens as the corpus grows rather than merely
+        breaking on it."""
         root = validate.repo_root() / "launchpad" / "docs" / "corpus"
+        resolved_root = root.resolve()
+        expected_paths = sorted(
+            path
+            for path in root.rglob("*.md")
+            if path.relative_to(root).parts[0] != "schema"
+            and path.resolve().is_relative_to(resolved_root)
+        )
+        self.assertNotEqual(expected_paths, [])  # corpus must not be empty
+
         nodes = stale.discover_nodes(root)
-        self.assertEqual(len(nodes), 205)
+        self.assertEqual(sorted(node.path for node in nodes), expected_paths)
+
         results = [stale.extract_recorded_revision(node) for node in nodes]
         unresolved = [r for r in results if r.sha is None]
         self.assertEqual(unresolved, [])
 
-    def test_real_corpus_run_finds_at_least_one_stale_node_and_is_reproducible(self) -> None:
+    def test_real_corpus_run_is_well_formed_and_reproducible(self) -> None:
         """Runs the actual checker over the real corpus at real `HEAD`. Not a
         fixture -- this repository's real git history is what produces a real
-        stale finding, which no hermetic fixture can substitute for. Also
-        proves STEP 3's reproducibility requirement: the same run against the
-        same `HEAD` is byte-for-byte identical."""
+        report, which no hermetic fixture can substitute for. Also proves
+        STEP 3's reproducibility requirement: the same run against the same
+        `HEAD` is byte-for-byte identical.
+
+        Deliberately does NOT assert `assertIn("STALE  ", first)`. CI's
+        `actions/checkout@v4` runs at depth 1 (no `fetch-depth` set in
+        `.github/workflows/launchpad-corpus-validate.yml`), so `commit_exists()`
+        (gate 1) fails closed for every real node's recorded SHA there -- none
+        of that history is fetched -- and the report has zero `STALE` lines in
+        CI, exactly the depth-1 caveat this module's own docstring warns about.
+        Asserting a specific verdict distribution here would make this test
+        fail deterministically in CI, for a reason that has nothing to do with
+        a regression. What IS depth-independent -- and what this asserts
+        instead -- is that the report is well-formed and reproducible.
+        Hermetic-fixture tests elsewhere in this file
+        (`test_known_stale_fixture_proves_detection`) already prove
+        stale-detection itself works, with no CI-checkout dependency."""
         repo_root = validate.repo_root()
         root = repo_root / "launchpad" / "docs" / "corpus"
         first = stale.run(root, "HEAD", repo_root).render()
         second = stale.run(root, "HEAD", repo_root).render()
         self.assertEqual(first, second)
-        self.assertIn("STALE  ", first)
+
+        lines = first.rstrip("\n").split("\n")
+        self.assertTrue(lines)
+        summary_line = lines[-1]
+        self.assertTrue(summary_line.startswith("SUMMARY  "))
+        for line in lines[:-1]:
+            self.assertTrue(
+                line.startswith("STALE  ") or line.startswith("UNESTABLISHED  "),
+                f"unexpected report line shape: {line!r}",
+            )
+
+        nodes = stale.discover_nodes(root)
+        self.assertIn(f"{len(nodes)} node(s)", summary_line)
 
 
 if __name__ == "__main__":
