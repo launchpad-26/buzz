@@ -187,6 +187,15 @@ class State:
             self._migrate()
             self._assert_fingerprint()
         except (sqlite3.Error, OSError) as exc:
+            # `self.db` is only assigned once `sqlite3.connect()` above has
+            # succeeded -- if connect() itself is what raised, the attribute
+            # was never set, so guard with getattr rather than assuming it
+            # exists. Close before re-raising so a failed State(...)
+            # construction never abandons an open connection (and its WAL
+            # handle) to garbage collection.
+            db = getattr(self, "db", None)
+            if db is not None:
+                db.close()
             raise StatePersistenceError(
                 f"gh-admin state persistence did not open cleanly at {self.db_path}: {exc}"
             ) from exc
