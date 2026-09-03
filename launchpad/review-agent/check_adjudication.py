@@ -962,38 +962,134 @@ for _name in REAL_FIXTURE_NAMES:
 # committed guard, so the exact same drift could recur silently the next
 # time a recording's verdict_evidence changes. This makes it a mechanical
 # check instead of a fact re-verified by the next human reviewer.
+#
+# Issue #1412 (a Fable + Codex cohort review panel on PR #1406) found the
+# original mechanical check proved SUBSTRING containment, not exact match:
+# it matched each quote against the CONCATENATION of every real recording's
+# verdict_evidence. That let (1) a truncated quote still pass -- a truncated
+# string is still `in` the full text -- and (2) a fabricated quote spanning
+# the tail of one recording's evidence and the head of the next pass too,
+# since no single recording's own boundary was ever checked, only the
+# flattened whole. Fixed by resolving each "Before" quote to the ONE
+# specific recording named by its own "Target: `<finding_id>`" line --
+# via run_adjudication.make_replay_judge, the same finding_id -> recorded-
+# output lookup already used elsewhere in this file (e.g. the in-process
+# replay check and the bare-SEVERITY_ORDER check above), not a second,
+# invented lookup -- and requiring EXACT equality after whitespace
+# normalization, not `in`.
 import re as _re  # noqa: E402 -- single-use, local to this one check
+
+
+def _normalize_whitespace(text: str) -> str:
+    return " ".join(_re.sub(r"\s+", " ", text).split()).strip()
+
+
+def _extract_before_pairs(markdown_text: str) -> list[tuple[str, str]]:
+    """Return (finding_id, quoted_text) for every 'Pair N' block, in document
+    order. finding_id comes from that pair's own preceding
+    'Target: `<finding_id>`' line; quoted_text is whatever sits inside the
+    first/last double-quote of the joined, whitespace-normalized 'Before'
+    blockquote (empty string if the block carries no quoted text at all).
+    """
+    pair_re = _re.compile(
+        r"Target: `([0-9a-f]+)`[\s\S]*?"
+        r"\*\*Before \(full adjudicator\.md\), the actual recorded verdict:\*\*\n\n"
+        r"((?:> .*\n?)+)"
+    )
+    pairs: list[tuple[str, str]] = []
+    for _finding_id, _block in pair_re.findall(markdown_text):
+        _joined = " ".join(line[2:] if line.startswith("> ") else line for line in _block.splitlines())
+        _joined = _normalize_whitespace(_joined)
+        _quote_match = _re.search(r'"(.*)"', _joined)
+        pairs.append((_finding_id, _quote_match.group(1) if _quote_match else ""))
+    return pairs
+
+
+def _falsifiability_pair_ok(quoted_text: str, finding_id: str, judge) -> bool:
+    """True only when `quoted_text` is byte-verbatim (after whitespace
+    normalization) against ONE specific recording's verdict_evidence -- the
+    one `judge` resolves for `finding_id` -- never against any other
+    recording or a concatenation of several.
+    """
+    if not quoted_text:
+        return False
+    recorded = judge({"finding_id": finding_id}, {})
+    target_evidence = recorded.get("verdict_evidence", "") if recorded else ""
+    return _normalize_whitespace(quoted_text) == _normalize_whitespace(target_evidence)
+
 
 _falsifiability_path = HERE / "fixtures" / "adjudication" / "recordings" / "FALSIFIABILITY.md"
 _falsifiability_text = _falsifiability_path.read_text(encoding="utf-8")
+_falsifiability_judge = run_adjudication.make_replay_judge(RECORDINGS_DIR)
 
-_all_recorded_evidence: list[str] = []
-for _recording_path in sorted(RECORDINGS_DIR.glob("*.json")):
-    with _recording_path.open(encoding="utf-8") as _handle:
-        _recording_data = json.load(_handle)
-    for _key, _value in _recording_data.items():
-        if _key.startswith("_") or not isinstance(_value, dict):
-            continue
-        _evidence = _value.get("verdict_evidence", "")
-        _all_recorded_evidence.append(" ".join(_re.sub(r"\s+", " ", _evidence).split()))
-_all_real_evidence = " ".join(_all_recorded_evidence)
+_before_pairs = _extract_before_pairs(_falsifiability_text)
+check(len(_before_pairs) == 4, f"FALSIFIABILITY.md names exactly four 'Before' blocks (found {len(_before_pairs)})")
 
-_before_heading = r"\*\*Before \(full adjudicator\.md\), the actual recorded verdict:\*\*\n\n((?:> .*\n?)+)"
-_before_blocks = _re.findall(_before_heading, _falsifiability_text)
-check(len(_before_blocks) == 4, f"FALSIFIABILITY.md names exactly four 'Before' blocks (found {len(_before_blocks)})")
-
-for _index, _block in enumerate(_before_blocks, start=1):
-    _joined = " ".join(line[2:] if line.startswith("> ") else line for line in _block.splitlines())
-    _joined = _re.sub(r"\s+", " ", _joined).strip()
-    _quote_match = _re.search(r'"(.*)"', _joined)
-    check(_quote_match is not None, f"pair {_index}: the 'Before' block contains a quoted verdict_evidence")
-    if _quote_match is None:
-        continue
-    _quoted_text = _quote_match.group(1)
+for _index, (_finding_id, _quoted_text) in enumerate(_before_pairs, start=1):
+    check(bool(_quoted_text), f"pair {_index}: the 'Before' block contains a quoted verdict_evidence")
     check(
-        _quoted_text in _all_real_evidence,
-        f"pair {_index}: the 'Before' quote is byte-verbatim against some real recording's verdict_evidence",
+        _falsifiability_pair_ok(_quoted_text, _finding_id, _falsifiability_judge),
+        f"pair {_index}: the 'Before' quote is byte-verbatim against its own target ({_finding_id!r})'s "
+        "recorded verdict_evidence, not merely a substring of every recording concatenated",
     )
+
+check(
+    all(_falsifiability_pair_ok(_q, _f, _falsifiability_judge) for _f, _q in _before_pairs),
+    "all four real FALSIFIABILITY.md pairs still validate against their own targets under the stricter "
+    "per-target exact-equality check (issue #1412's fix does not regress the legitimate, already-correct case)",
+)
+
+# --- regression coverage for issue #1412's two named gaps -------------------
+# Neither case below touches the real FALSIFIABILITY.md or any real
+# recording file -- both feed hand-built quoted_text through the SAME
+# _falsifiability_pair_ok/_falsifiability_judge used by the guard above,
+# exactly this file's own established idiom (see e.g. the dedupe and
+# downgrades checks further up: hand-built input fed straight to the real
+# function under test, not a second, weaker stand-in).
+
+# (1) A truncated quote: take a REAL target's verdict_evidence and drop its
+# final clause. Under the pre-#1412 substring-of-the-concatenation check
+# this was proven (during investigation) to still read as `in` the full
+# corpus text; the byte-verbatim-per-target check must reject it.
+_pair1_finding_id = "74046c6b01333e4b"  # Pair 1's target, line-anchored-findings.json
+_pair1_real_evidence = _falsifiability_judge({"finding_id": _pair1_finding_id}, {})["verdict_evidence"]
+_pair1_words = _pair1_real_evidence.split()
+_truncated_quote = " ".join(_pair1_words[: len(_pair1_words) - 12])
+check(
+    len(_truncated_quote) < len(_pair1_real_evidence),
+    "the truncated-quote fixture below is actually shorter than the real evidence (sanity check on the test itself)",
+)
+check(
+    not _falsifiability_pair_ok(_truncated_quote, _pair1_finding_id, _falsifiability_judge),
+    "issue #1412 gap 1: a truncated 'Before' quote (final clause dropped) is REJECTED by the "
+    "byte-verbatim-per-target check, where the old substring-of-the-concatenation check let it pass",
+)
+
+# (2) A cross-recording boundary quote: fabricate a string from the tail of
+# one real recording's evidence plus the head of a DIFFERENT real
+# recording's evidence. Under the pre-#1412 check, joining every recording
+# into one search haystack made this construction read as `in` the full
+# corpus text even though it is absent from either recording alone; the
+# byte-verbatim-per-target check, which never builds that haystack, must
+# reject it against its own declared target.
+_boundary_target_id = "0d4a625fa2227bcc"  # pr-anchored-finding.json
+_boundary_other_id = "f699b70a97ebb6e5"  # pr-anchored-finding.json, a DIFFERENT finding
+_boundary_target_evidence = _falsifiability_judge({"finding_id": _boundary_target_id}, {})["verdict_evidence"]
+_boundary_other_evidence = _falsifiability_judge({"finding_id": _boundary_other_id}, {})["verdict_evidence"]
+_boundary_crossing_quote = (
+    _normalize_whitespace(_boundary_target_evidence)[-40:] + " " + _normalize_whitespace(_boundary_other_evidence)[:40]
+)
+check(
+    _boundary_crossing_quote not in _boundary_target_evidence,
+    "the boundary-crossing fixture below is actually absent from its declared target's own evidence "
+    "(sanity check on the test itself)",
+)
+check(
+    not _falsifiability_pair_ok(_boundary_crossing_quote, _boundary_target_id, _falsifiability_judge),
+    "issue #1412 gap 2: a quote fabricated from the tail of one recording's evidence and the head of a "
+    "DIFFERENT recording's evidence is REJECTED against its declared target, where matching against the "
+    "concatenation of every recording could have masked exactly this boundary-crossing case",
+)
 
 print(f"\n{len(failures)} failure(s)")
 sys.exit(1 if failures else 0)
