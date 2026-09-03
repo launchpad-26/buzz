@@ -74,10 +74,17 @@ class DiscoveryTest(unittest.TestCase):
             indexes.discover_builders(Path("/nonexistent/index_defs")), []
         )
 
-    def test_shipped_index_defs_package_registers_no_builders(self) -> None:
-        # The framework ships zero real builders on purpose -- each generated
-        # document is its own follow-up issue.
-        self.assertEqual(indexes.discover_builders(), [])
+    def test_shipped_index_defs_builders_target_generated_outputs(self) -> None:
+        # Real builders land one module per issue (#886-#906), so this cannot
+        # pin a count. Discovery itself hard-fails any invalid SPEC; the shipped
+        # invariant pinned here is that every registered output is a generated/
+        # document, never a path that could shadow a hand-authored node.
+        for spec in indexes.discover_builders():
+            self.assertTrue(
+                spec.output_path.startswith("generated/"),
+                f"{spec.name}: output_path {spec.output_path!r} is outside "
+                "generated/",
+            )
 
     def test_builders_discovered_in_sorted_module_name_order(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
