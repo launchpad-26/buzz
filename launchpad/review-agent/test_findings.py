@@ -173,6 +173,33 @@ class SeverityValidationTests(unittest.TestCase):
 
 
 class EntryPointEvidenceTests(unittest.TestCase):
+    def test_entry_point_set_with_real_evidence_validates_clean(self):
+        """The happy path this class was otherwise missing: every other test
+        here pairs a set ``entry_point`` with evidence that should be
+        rejected. Without this test, an ``is_nonempty_str`` that always
+        returns False (or a guard that always appends the violation
+        regardless of ``evidence``) would pass every test in this class.
+        Mirrors test_verdicts.py's WellFormedPairTests.test_well_formed_pair_
+        validates_clean, which guards the identical positive case for
+        verdict_evidence.
+        """
+        doc = make_document(
+            reports=[
+                make_report(
+                    findings_list=[
+                        make_finding(
+                            anchor="pr",
+                            file=None,
+                            line=None,
+                            entry_point="pr_body",
+                            evidence="a real excerpt of the PR body",
+                        )
+                    ]
+                )
+            ]
+        )
+        self.assertEqual(findings.validate(doc), [])
+
     def test_entry_point_set_with_no_evidence_is_rejected(self):
         doc = make_document(
             reports=[
