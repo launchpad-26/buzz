@@ -186,19 +186,36 @@ class State:
             self.db.execute("PRAGMA foreign_keys=ON")
             self._migrate()
             self._assert_fingerprint()
+        except StatePersistenceError:
+            # _assert_fingerprint() raises this directly (not a
+            # sqlite3.Error/OSError) when the on-disk schema doesn't match
+            # this suite's expected shape. Close before propagating -- same
+            # leak the clause below closes, but this exception is already
+            # the right type and must not be wrapped a second time.
+            self._close_after_init_failure()
+            raise
         except (sqlite3.Error, OSError) as exc:
-            # `self.db` is only assigned once `sqlite3.connect()` above has
-            # succeeded -- if connect() itself is what raised, the attribute
-            # was never set, so guard with getattr rather than assuming it
-            # exists. Close before re-raising so a failed State(...)
-            # construction never abandons an open connection (and its WAL
-            # handle) to garbage collection.
-            db = getattr(self, "db", None)
-            if db is not None:
-                db.close()
+            self._close_after_init_failure()
             raise StatePersistenceError(
                 f"gh-admin state persistence did not open cleanly at {self.db_path}: {exc}"
             ) from exc
+
+    def _close_after_init_failure(self) -> None:
+        """Close `self.db` when __init__ fails after opening it.
+
+        `self.db` is only assigned once `sqlite3.connect()` above has
+        succeeded -- if connect() itself is what raised, the attribute was
+        never set, so this is a no-op rather than an AttributeError. A
+        secondary error from close() itself is suppressed so it can't mask
+        the original failure being propagated.
+        """
+        db = getattr(self, "db", None)
+        if db is None:
+            return
+        try:
+            db.close()
+        except sqlite3.Error:
+            pass
 
     def try_runtime_lock(self, command: str) -> RuntimeLock | None:
         """Acquire the state-dir command lock, or return None when another run owns it."""

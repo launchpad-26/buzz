@@ -15,6 +15,7 @@ import tempfile
 
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent.parent / "scripts"))
 
+import state  # noqa: E402
 from state import EXPECTED_TABLES, State, StatePersistenceError  # noqa: E402
 
 
@@ -96,6 +97,71 @@ def test_named_baseline_first_writer_wins_is_caught_not_silent() -> None:
         )
     except StatePersistenceError as exc:
         assert "don't match this suite's expected shape" in str(exc)
+
+
+def test_fingerprint_mismatch_closes_the_connection() -> None:
+    """Issue #1947, precisely: the failure path this file's own objective
+    demonstrates (the fingerprint-mismatch collider above) must not leak the
+    connection. Lock-contention on a second connection can't prove this
+    deterministically -- _assert_fingerprint() only ever runs read-only
+    PRAGMA/SELECT queries, so a second connection can open and write
+    whether or not the first was closed. Instead, wrap sqlite3.connect for
+    the duration of this test to track close() on the exact connection
+    object State opens, so the assertion is about what State actually did,
+    not an inference from lock behaviour.
+
+    This is the scenario a naive `except (sqlite3.Error, OSError)` clause
+    misses: _assert_fingerprint() raises StatePersistenceError directly,
+    which is neither of those types, so a fix that only closes on
+    sqlite3.Error/OSError never runs for this exact path."""
+    import sqlite3
+
+    tmp_dir = pathlib.Path(tempfile.mkdtemp())
+    db_path = tmp_dir / "gh-admin-state.sqlite3"
+    collider = sqlite3.connect(db_path)
+    collider.executescript(
+        """
+        CREATE TABLE IF NOT EXISTS jobs (id TEXT PRIMARY KEY);
+        CREATE TABLE IF NOT EXISTS leases (
+          repo TEXT NOT NULL,
+          number INTEGER NOT NULL,
+          job_id TEXT NOT NULL,
+          claimed_at TEXT NOT NULL,
+          PRIMARY KEY (repo, number),
+          FOREIGN KEY (job_id) REFERENCES jobs(id)
+        );
+        """
+    )
+    collider.commit()
+    collider.close()
+
+    closed: list[bool] = []
+
+    class TrackingConnection(sqlite3.Connection):
+        def close(self) -> None:
+            closed.append(True)
+            super().close()
+
+    real_connect = state.sqlite3.connect
+
+    def tracking_connect(*args, **kwargs):
+        kwargs["factory"] = TrackingConnection
+        return real_connect(*args, **kwargs)
+
+    state.sqlite3.connect = tracking_connect
+    try:
+        try:
+            State(str(tmp_dir))
+            raise AssertionError("expected StatePersistenceError")
+        except StatePersistenceError:
+            pass
+    finally:
+        state.sqlite3.connect = real_connect
+
+    assert closed == [True], (
+        "the connection State opened before _assert_fingerprint() raised "
+        "must be closed exactly once"
+    )
 
 
 def test_reopen_is_idempotent() -> None:
