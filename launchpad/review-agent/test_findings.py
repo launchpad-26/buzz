@@ -233,6 +233,62 @@ class EntryPointEvidenceTests(unittest.TestCase):
             violations,
         )
 
+    def test_whitespace_only_evidence_is_rejected(self):
+        """#283: ``if not evidence:`` was a bare truthiness test -- ``not "   "``
+        is False, so a whitespace-only value satisfied a check meant to
+        require a real one. Mirrors test_verdicts.py's
+        ``test_whitespace_only_verdict_evidence_is_rejected`` for the sibling
+        site of this same idiom.
+        """
+        # "\xa0" is a non-breaking space: whitespace to str.strip(), but not
+        # something an eye catches in a diff. Kept deliberately, same as the
+        # verdicts.py sibling test.
+        for blank in ("   ", "\n", "\t", "  \n  ", "\xa0"):
+            with self.subTest(evidence=blank):
+                doc = make_document(
+                    reports=[
+                        make_report(
+                            findings_list=[
+                                make_finding(
+                                    anchor="pr", file=None, line=None, entry_point="pr_body", evidence=blank
+                                )
+                            ]
+                        )
+                    ]
+                )
+                violations = findings.validate(doc)
+                self.assertTrue(
+                    any("evidence" in v and "entry_point is set" in v for v in violations), violations
+                )
+
+    def test_non_string_evidence_is_rejected(self):
+        """The sibling half of #283: the guard had no type check at all, so
+        every truthy value passed. ``evidence: 42`` is not defensible under
+        any reading of the contract. Mirrors test_verdicts.py's
+        ``test_non_string_verdict_evidence_is_rejected``.
+        """
+        for wrong_type in (42, True, 0.5, ["x"], {"a": 1}):
+            with self.subTest(evidence=wrong_type):
+                doc = make_document(
+                    reports=[
+                        make_report(
+                            findings_list=[
+                                make_finding(
+                                    anchor="pr",
+                                    file=None,
+                                    line=None,
+                                    entry_point="pr_body",
+                                    evidence=wrong_type,
+                                )
+                            ]
+                        )
+                    ]
+                )
+                violations = findings.validate(doc)
+                self.assertTrue(
+                    any("evidence" in v and "entry_point is set" in v for v in violations), violations
+                )
+
 
 class DimensionAndFindingIdTests(unittest.TestCase):
     def test_finding_missing_dimension_is_rejected(self):
