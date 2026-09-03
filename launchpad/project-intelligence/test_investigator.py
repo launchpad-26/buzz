@@ -222,6 +222,17 @@ class InspectGitHistoryTest(unittest.TestCase):
         with self.assertRaises(ValueError):
             investigator.inspect_git_history(self.FILE, self.LINE, self.LINE - 1)
 
+    def test_an_out_of_range_line_raises_rather_than_returning_empty(self) -> None:
+        # A line number past the end of the file is a real error (git itself
+        # refuses: "file ... has only N lines"), not a degenerate range that
+        # should look the same as "this line has no history".
+        with self.assertRaises(RuntimeError):
+            investigator.inspect_git_history(self.FILE, 999_999, 999_999)
+
+    def test_a_nonexistent_file_raises_rather_than_returning_empty(self) -> None:
+        with self.assertRaises(RuntimeError):
+            investigator.inspect_git_history("crates/buzz-core/src/no_such_file_xyz.rs", 1, 1)
+
 
 class InspectDependencyTest(unittest.TestCase):
     def test_resolves_a_real_workspace_inherited_dependency(self) -> None:
