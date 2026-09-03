@@ -183,6 +183,46 @@ class InjectionRejectionTest(unittest.TestCase):
         investigator._validate_repo_relative_path("crates/buzz-core/src/kind.rs", "file")
 
 
+class InspectGitHistoryTest(unittest.TestCase):
+    """issue #569: the previous test coverage for inspect_git_history tested
+    input validation only, never a successful call -- which the issue names
+    as exactly why the single-line-range bug went unnoticed. These call
+    through for real: inspect_git_history() now shells out to plain `git log
+    -L`, not RepoQL, so (unlike search_symbols/find_references above) a real
+    call here needs no live rql host and is safe to run in every CI run.
+    """
+
+    FILE = "crates/buzz-core/src/kind.rs"
+    # The issue's own worked example: `git log -L 850,850:crates/buzz-core/src/kind.rs`
+    # names this exact commit for this exact line. Foundational, pre-fork
+    # history ("Initial backend revisions..."), not a line under active
+    # rebase risk.
+    LINE = 850
+    EXPECTED_HASH_PREFIX = "cd3b45f948"
+
+    def test_a_single_line_range_returns_the_real_commit(self) -> None:
+        # This is the exact case that returned [] before this fix (issue #569).
+        commits = investigator.inspect_git_history(self.FILE, self.LINE, self.LINE)
+        self.assertTrue(commits, "single-line range must not come back empty")
+        self.assertTrue(any(c.hash.startswith(self.EXPECTED_HASH_PREFIX) for c in commits))
+
+    def test_the_single_line_result_is_a_subset_of_a_wider_window(self) -> None:
+        # Cross-checks precision against a wider query for the same line,
+        # without hard-coding the wider range's full commit set (which could
+        # grow over time as the file keeps changing) -- only the subset
+        # relationship is asserted.
+        single = investigator.inspect_git_history(self.FILE, self.LINE, self.LINE)
+        wide = investigator.inspect_git_history(self.FILE, self.LINE - 10, self.LINE + 10)
+        single_hashes = {c.hash for c in single}
+        wide_hashes = {c.hash for c in wide}
+        self.assertTrue(single_hashes, "single-line range must not come back empty")
+        self.assertTrue(single_hashes.issubset(wide_hashes))
+
+    def test_start_line_after_end_line_raises(self) -> None:
+        with self.assertRaises(ValueError):
+            investigator.inspect_git_history(self.FILE, self.LINE, self.LINE - 1)
+
+
 class InspectDependencyTest(unittest.TestCase):
     def test_resolves_a_real_workspace_inherited_dependency(self) -> None:
         dep = investigator.inspect_dependency("buzz-core", "nostr")
