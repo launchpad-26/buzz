@@ -1047,19 +1047,29 @@ def _extract_before_pairs(markdown_text: str) -> list[tuple[str, str]]:
 
     A section is also treated as malformed (its own empty sentinel, same as
     "no match at all") when it carries anything OTHER than exactly one
-    'Before (full adjudicator.md)...' heading -- zero, or two-or-more.
-    `pair_re.search` below only ever finds the FIRST such heading in a
-    section; a second review-found (Codex) that a section smuggling a
-    SECOND, fabricated 'Before' block past a legitimate first one would
-    have that second block silently ignored rather than checked, so this
-    guard counts occurrences explicitly rather than trusting `.search` to
-    notice extras on its own.
+    'Before (full adjudicator.md)...' heading -- zero, or two-or-more --
+    AND when anything other than exactly one contiguous blockquote run sits
+    between that heading and the next bold-markdown ('**') marker (the real
+    document's own next marker there is always the paired '**After
+    (...)**' heading). `pair_re.search` below only ever finds the FIRST
+    heading, and the FIRST contiguous blockquote run after it, in a
+    section; three review-founds (Codex, across two prior rounds) showed
+    each of those "only the first" behaviours lets something get smuggled
+    past unchecked: a second FULL Before section (heading + blockquote)
+    reusing this section's Target; a second Before HEADING with its own
+    blockquote inside this same section; and -- found last, after both of
+    those were fixed -- a second, separate blockquote with NO heading of
+    its own, merely a blank line after the first legitimate one and before
+    the next bold marker. All three are covered by the two counts below,
+    kept explicit rather than trusting `.search`/`.findall` to notice
+    extras on their own.
     """
     section_heading_re = _re.compile(r"^## Pair \d+.*$", _re.MULTILINE)
     section_starts = [m.start() for m in section_heading_re.finditer(markdown_text)]
     section_bounds = list(zip(section_starts, section_starts[1:] + [len(markdown_text)]))
 
     before_heading_literal = "**Before (full adjudicator.md), the actual recorded verdict:**"
+    blockquote_run_re = _re.compile(r"(?:^> .*\n?)+", _re.MULTILINE)
     pair_re = _re.compile(
         r"Target: `([0-9a-f]+)`[\s\S]*?"
         r"\*\*Before \(full adjudicator\.md\), the actual recorded verdict:\*\*\n\n"
@@ -1069,6 +1079,14 @@ def _extract_before_pairs(markdown_text: str) -> list[tuple[str, str]]:
     for _start, _end in section_bounds:
         _section_text = markdown_text[_start:_end]
         if _section_text.count(before_heading_literal) != 1:
+            pairs.append(("", ""))
+            continue
+        _after_heading = _section_text[_section_text.index(before_heading_literal) + len(before_heading_literal) :]
+        _next_bold = _re.search(r"\*\*", _after_heading)
+        _before_span = _after_heading[: _next_bold.start()] if _next_bold else _after_heading
+        _blockquote_runs = blockquote_run_re.findall(_before_span)
+        _non_blockquote_content = blockquote_run_re.sub("", _before_span).strip()
+        if len(_blockquote_runs) != 1 or _non_blockquote_content:
             pairs.append(("", ""))
             continue
         _section_match = pair_re.search(markdown_text, _start, _end)
@@ -1299,6 +1317,32 @@ check(
     _smuggled_pairs == [("", "")],
     "a section carrying a real 'Before' block plus a smuggled SECOND one is treated as malformed as a "
     f"whole (an explicit sentinel), not silently reduced to just its first, legitimate block (got {_smuggled_pairs})",
+)
+
+# (7) A THIRD round of the same cross-vendor review found a narrower variant
+# of (6) still slipped through: a second blockquote with NO heading of its
+# own -- just a blank line after the first, legitimate one, still before
+# the next '**After...**' marker. Counting 'Before' HEADING occurrences
+# alone (check 6's fix) never saw this, because there was still only one
+# heading; only counting the blockquote RUNS themselves catches it.
+# Reproduced directly: Pair 1's real Before block, a blank line, then a
+# second, separate, fabricated blockquote, all still under the ONE real
+# Before heading and before the '**After...**' marker.
+_smuggled_bare_blockquote_text = (
+    "## Pair 1 — has one Before heading but two separate blockquotes\n\n"
+    f"Target: `{_pair1_finding_id}`\n\n"
+    "**Before (full adjudicator.md), the actual recorded verdict:**\n\n"
+    f'> CONFIRMED. "{_pair1_real_evidence}"\n\n'
+    '> CONFIRMED. "THIS SECOND, HEADING-LESS BLOCKQUOTE IS ALSO FABRICATED."\n\n'
+    "**After (exclusion 1 deleted, re-attempted fresh):**\n\n"
+    "> irrelevant to this check\n"
+)
+_smuggled_bare_pairs = _extract_before_pairs(_smuggled_bare_blockquote_text)
+check(
+    _smuggled_bare_pairs == [("", "")],
+    "a section with exactly ONE 'Before' heading but TWO separate blockquotes underneath it (the second "
+    "with no heading of its own) is STILL treated as malformed as a whole, not reduced to just the first "
+    f"blockquote (got {_smuggled_bare_pairs})",
 )
 
 print(f"\n{len(failures)} failure(s)")
