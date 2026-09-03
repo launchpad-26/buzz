@@ -57,7 +57,7 @@ reasonably have called differently.
 | RQA-BR-001 | Complete | Pass | — |
 | RQA-BR-001 | Singular | Pass | — |
 | RQA-BR-001 | Feasible | Pass | — |
-| RQA-BR-001 | Verifiable | Pass | — |
+| RQA-BR-001 | Verifiable | Caveat | Verified only transitively, by construction: RQA-BR-001's fit criterion defers entirely to the source-derived obligations already in the set (consistency→BR-002, auditability→FR-012/NFR-022/NFR-028, efficiency→FR-019/FR-020/FR-021, trustworthiness→FR-011/FR-013 and the no-manufactured-success rows). Deleting BR-001 would fail no single check, because its evidence is the conjunction of other rows; this is the accepted shape of an umbrella clause (CL-001 still needs a disposition), and it is recorded here so the transitive-by-construction nature is explicit rather than silently passed. |
 | RQA-BR-001 | Correct | Pass | — |
 | RQA-BR-001 | Conforming | Pass | — |
 | RQA-BR-002 | Necessary | Pass | Distinct from RQA-BR-001's synthesis: states P1's own specific, independently testable obligation. |
@@ -178,8 +178,6 @@ reasonably have called differently.
 | RQA-BR-014 | Correct | Pass | — |
 | RQA-BR-014 | Conforming | Pass | — |
 
----
-
 ## Functional requirements (RQA-FR-001…039)
 
 | ID | Characteristic | Verdict | Basis (where not obvious) |
@@ -228,7 +226,7 @@ reasonably have called differently.
 | RQA-FR-005 | Feasible | Pass | — |
 | RQA-FR-005 | Verifiable | Pass | — |
 | RQA-FR-005 | Correct | Pass | — |
-| RQA-FR-005 | Conforming | Pass | — |
+| RQA-FR-005 | Conforming | Caveat | The fit criterion introduces an audit-apparatus element beyond AC03: it requires the zero-reinvocation observation to be 'independently corroborated' (a boundary trace, an audited invocation log, or an equivalent), where AC03 itself imposes nothing about how the zero is observed. This is a verification-hygiene choice, not a source-scope widening of the obligation itself; recorded here rather than weakening the criterion, because an independently checkable observation is the one reading that makes the row's own fit criterion answerable by someone who did not write it. |
 | RQA-FR-006 | Necessary | Pass | — |
 | RQA-FR-006 | Appropriate | Pass | — |
 | RQA-FR-006 | Unambiguous | Caveat | The set of obligations a push 'invalidates' depends on the same undefined 'material' boundary RQA-FR-005's Unambiguous caveat records; #2006 does not itself state how invalidation is determined for a given file change, and none is invented here — the fit criterion tests set equality with whatever that determination produces, not the determination itself. |
@@ -536,8 +534,6 @@ reasonably have called differently.
 | RQA-FR-039 | Correct | Pass | — |
 | RQA-FR-039 | Conforming | Pass | — |
 
----
-
 ## Non-functional requirements (RQA-NFR-001…030)
 
 | ID | Characteristic | Verdict | Basis (where not obvious) |
@@ -813,8 +809,6 @@ reasonably have called differently.
 | RQA-NFR-030 | Correct | Caveat | CL-060 states the credential ceiling without an activity-relative qualifier; this row's third ceiling dimension (no more permission than a repository's configured activity requires) is read in from the same CL-056 least-privilege principle as RQA-NFR-024's floor conditioning (see that row's Correct caveat for the full reasoning) — round 7 moved this clause here from RQA-NFR-024's own statement, where it broke that row's singularity; the type and repository-scope ceiling dimensions remain CL-060's own literal wording. |
 | RQA-NFR-030 | Conforming | Pass | Names 'pull-request write' and 'repository-content read' — the same lightly-normalised credential-scope vocabulary as RQA-NFR-024. |
 
----
-
 ## Summary
 
 - 747 judgements recorded across 83 requirements and 9 characteristics.
@@ -833,7 +827,13 @@ reasonably have called differently.
     cleanly between the floor and ceiling rows).
   - **Verifiable caveats**: RQA-FR-038 (records CL-039's open-textured "safe", now against an explicitly bounded
     and individually-justified invariant set); RQA-BR-006 (records that the fit criterion deliberately tests
-    only the weaker of two source-admitted readings, per round 7's correction).
+    only the weaker of two source-admitted readings, per round 7's correction); **RQA-BR-001 (new round 8)**
+    (verified only transitively, by construction — its fit criterion defers entirely to the source-derived
+    obligations already in the set, and deleting it would fail no single check; recorded so the
+    transitive-by-construction nature of this umbrella row is explicit rather than silently passed).
+  - **Conforming caveats**: **RQA-FR-005 (new round 8)** (the fit criterion introduces an audit-apparatus
+    element — an independently corroborated observation of the zero-reinvocation — that AC03 itself does not
+    name; a verification-hygiene choice, not a widening of the obligation).
 - Corrected across rounds 1–6: six `Singular` verdicts split into new rows; well over three dozen `Verifiable`
   verdicts whose fit criteria were rewritten across successive rounds; the `Conforming` basis for every
   GitHub/source-vocabulary row; the `Necessary`/`Correct` bases for RQA-BR-005; `Feasible`/`Correct` for the
@@ -842,3 +842,8 @@ reasonably have called differently.
   `Correct` for RQA-FR-006, RQA-FR-018, RQA-NFR-024, RQA-NFR-030; `Singular` for RQA-NFR-024, RQA-NFR-030,
   RQA-NFR-007; five new `Unambiguous` caveats (see above); default-`Pass` fit repairs (no caveat needed) for
   RQA-FR-008, RQA-FR-021, RQA-FR-031.
+- Corrected round 8 (final polish, codex R8 accept-with-edits): two new `Caveat`s added — `Verifiable` for
+  RQA-BR-001 (transitively verified umbrella, above) and `Conforming` for RQA-FR-005 (audit-apparatus element
+  beyond AC03, above). No `Pass`→`Caveat` or `Caveat`→`Pass` reversion of any earlier judgement; no requirement's
+  obligation, EARS label or fit criterion changed in this round. Fable R8 returned no findings beyond its
+  accept-with-edits verdict.
