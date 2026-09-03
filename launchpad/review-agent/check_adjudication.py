@@ -1044,11 +1044,22 @@ def _extract_before_pairs(markdown_text: str) -> list[tuple[str, str]]:
     finding_id comes from that section's own 'Target: `<finding_id>`' line;
     quoted_text is whatever sits inside the first/last double-quote of the
     joined, whitespace-normalized 'Before' blockquote.
+
+    A section is also treated as malformed (its own empty sentinel, same as
+    "no match at all") when it carries anything OTHER than exactly one
+    'Before (full adjudicator.md)...' heading -- zero, or two-or-more.
+    `pair_re.search` below only ever finds the FIRST such heading in a
+    section; a second review-found (Codex) that a section smuggling a
+    SECOND, fabricated 'Before' block past a legitimate first one would
+    have that second block silently ignored rather than checked, so this
+    guard counts occurrences explicitly rather than trusting `.search` to
+    notice extras on its own.
     """
     section_heading_re = _re.compile(r"^## Pair \d+.*$", _re.MULTILINE)
     section_starts = [m.start() for m in section_heading_re.finditer(markdown_text)]
     section_bounds = list(zip(section_starts, section_starts[1:] + [len(markdown_text)]))
 
+    before_heading_literal = "**Before (full adjudicator.md), the actual recorded verdict:**"
     pair_re = _re.compile(
         r"Target: `([0-9a-f]+)`[\s\S]*?"
         r"\*\*Before \(full adjudicator\.md\), the actual recorded verdict:\*\*\n\n"
@@ -1056,6 +1067,10 @@ def _extract_before_pairs(markdown_text: str) -> list[tuple[str, str]]:
     )
     pairs: list[tuple[str, str]] = []
     for _start, _end in section_bounds:
+        _section_text = markdown_text[_start:_end]
+        if _section_text.count(before_heading_literal) != 1:
+            pairs.append(("", ""))
+            continue
         _section_match = pair_re.search(markdown_text, _start, _end)
         if _section_match is None:
             pairs.append(("", ""))
@@ -1258,6 +1273,32 @@ check(
     len(_five_heading_pairs) == 5,
     "a five-'## Pair'-heading document (one malformed, four real) extracts to FIVE entries, not four -- "
     f"the malformed section cannot hide behind an otherwise-matching count (got {len(_five_heading_pairs)})",
+)
+
+# (6) A second round of the same cross-vendor review (Codex) found a section
+# with a LEGITIMATE 'Before' block plus a SECOND, fabricated one was not
+# malformed by the checks above -- `pair_re.search` only ever finds the
+# FIRST 'Before' heading in a section, so a smuggled second one (an
+# arbitrary, non-verbatim claim) was silently ignored rather than checked,
+# even though "the checker can still report success while FALSIFIABILITY.md
+# contains an arbitrary non-verbatim Before claim" is exactly the failure
+# this whole guard exists to prevent. Reproduced directly: Pair 1's own
+# real, genuinely-verbatim Before block, immediately followed by a second,
+# fabricated Before heading and quote inside the SAME section.
+_smuggled_extra_before_text = (
+    "## Pair 1 — has a real Before block AND a smuggled second one\n\n"
+    f"Target: `{_pair1_finding_id}`\n\n"
+    "**Before (full adjudicator.md), the actual recorded verdict:**\n\n"
+    f'> CONFIRMED. "{_pair1_real_evidence}"\n\n'
+    "**Before (full adjudicator.md), the actual recorded verdict:**\n\n"
+    '> CONFIRMED. "THIS SECOND BEFORE BLOCK IS FABRICATED AND VERBATIM AGAINST NOTHING REAL."\n\n'
+    "---\n\n"
+)
+_smuggled_pairs = _extract_before_pairs(_smuggled_extra_before_text)
+check(
+    _smuggled_pairs == [("", "")],
+    "a section carrying a real 'Before' block plus a smuggled SECOND one is treated as malformed as a "
+    f"whole (an explicit sentinel), not silently reduced to just its first, legitimate block (got {_smuggled_pairs})",
 )
 
 print(f"\n{len(failures)} failure(s)")
