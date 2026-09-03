@@ -10,6 +10,20 @@ and `GIT_CONFIG_SYSTEM` point at `/dev/null`, `HOME` points at the fixture
 directory itself, `user.name`/`user.email`/`commit.gpgsign=false` are pinned
 with `-c` rather than written to any config file, and commit dates are fixed
 so the same fixture yields the same SHAs on every run.
+
+Cross-process determinism (`_run_compute_impact_in_subprocess` below) is
+tested by actually launching a fresh `python3` subprocess per call, not by
+calling `compute_impact` twice in the same interpreter. Two calls in one
+process share one hash seed, so they cannot exercise -- or catch a
+regression in -- the `PYTHONHASHSEED`-driven `set`-iteration-order class of
+bug this module's determinism guarantee depends on (a `frontier` built from
+a `set` of BFS-propagated node ids, ordering the `reason` string a
+propagated node gets attributed). The helper cannot go through `impact.py`'s
+own `--base`/`--head` CLI, because `main()` resolves `repo_dir` via
+`validate.repo_root()` (real-repo `git rev-parse --show-toplevel`, not an
+overridable argument) -- so it instead launches a `python3 -c` driver that
+imports `impact.py` by path, the same way this test module does, and calls
+`compute_impact` directly against the fixture's own `corpus_root`/`repo_dir`.
 """
 
 from __future__ import annotations
@@ -158,6 +172,50 @@ def provenance_entry(sha: str) -> dict:
     }
 
 
+_SUBPROCESS_DRIVER = """
+import sys
+from pathlib import Path
+
+sys.path.insert(0, {corpus_dir!r})
+import impact
+
+report = impact.compute_impact(Path({corpus_root!r}), {base!r}, {head!r}, Path({repo_dir!r}))
+sys.stdout.write(report.to_json())
+"""
+
+
+def _run_compute_impact_in_subprocess(
+    corpus_root: Path, base: str, head: str, repo_dir: Path, pythonhashseed: str
+) -> str:
+    """Run `compute_impact` in a genuinely separate `python3` process with
+    `PYTHONHASHSEED` pinned to `pythonhashseed`, and return its raw JSON.
+
+    A fresh interpreter with a controlled hash seed is what two separate
+    `PYTHONHASHSEED` values reproduce independently: this is not a
+    simulation of cross-process nondeterminism, it IS a second process,
+    with `str` hashing (and therefore `set` iteration order) genuinely
+    seeded differently from the first call when the two seeds differ.
+    """
+    script = _SUBPROCESS_DRIVER.format(
+        corpus_dir=str(_CORPUS_DIR),
+        corpus_root=str(corpus_root),
+        base=base,
+        head=head,
+        repo_dir=str(repo_dir),
+    )
+    env = dict(os.environ)
+    env["PYTHONHASHSEED"] = pythonhashseed
+    result = subprocess.run(
+        [sys.executable, "-c", script],
+        capture_output=True,
+        text=True,
+        env=env,
+    )
+    if result.returncode != 0:
+        raise RuntimeError(f"compute_impact subprocess failed: {result.stderr}")
+    return result.stdout
+
+
 # ---------------------------------------------------------------------------
 # STEP 1 -- citation-to-node index
 # ---------------------------------------------------------------------------
@@ -191,6 +249,16 @@ class CitationIndexTest(unittest.TestCase):
             node_ids = {ref.node_id for ref in index["foo/bar.rs"]}
             self.assertEqual(node_ids, {"fixture-both-shapes"})
             self.assertEqual(len(index["foo/bar.rs"]), 2)
+
+            # DoD bullet 4 asks for the "reason/evidence path" -- which node,
+            # which evidence entry, and what it claims. A count and a
+            # node-id set can't prove that; assert the actual `statement`
+            # and `entry_index` values each `CitationRef` carries, for both
+            # distinct citations of this same file.
+            refs_by_entry_index = {ref.entry_index: ref for ref in index["foo/bar.rs"]}
+            self.assertEqual(set(refs_by_entry_index), {1, 2})
+            self.assertEqual(refs_by_entry_index[1].statement, "Cites a ranged position.")
+            self.assertEqual(refs_by_entry_index[2].statement, "Cites the same file bare.")
 
     def test_unopenable_citation_shapes_index_to_no_path(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
@@ -286,6 +354,56 @@ class ComputeImpactWiringTest(unittest.TestCase):
             self.assertIn('"node_id": "fixture-wiring"', first)
             self.assertIn('"changed_path": "src.rs"', first)
 
+    def test_two_directly_impacted_nodes_converging_on_one_neighbour_are_identical_across_processes(
+        self,
+    ) -> None:
+        """Regression test for the BFS-frontier-from-a-`set` nondeterminism
+        bug: two directly-impacted nodes (`node-a`, `node-b`) both declare a
+        `part-of` edge to the same shared neighbour (`node-c`). Before the
+        fix, `node-c`'s `reason` names whichever of `node-a`/`node-b` a
+        `set`'s hash-order-dependent iteration processed first -- which
+        differs across processes with different `PYTHONHASHSEED` values.
+        Two genuinely separate `python3` subprocesses (not two in-process
+        calls, which would share one hash seed and never exercise this)
+        must still produce byte-identical output.
+        """
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            init_repo(root)
+            corpus_root = root / "corpus"
+            (root / "a.rs").write_text("v1\n")
+            (root / "b.rs").write_text("v1\n")
+            base = commit_all(root, "base", "2020-01-01T00:00:00")
+            write_node(
+                corpus_root,
+                "node-a.md",
+                "node-a",
+                [{"statement": "Cites a.rs.", "entry_class": "FACT", "evidence": ["a.rs"]}],
+                relationships=[{"type": "part-of", "target": "node-c"}],
+            )
+            write_node(
+                corpus_root,
+                "node-b.md",
+                "node-b",
+                [{"statement": "Cites b.rs.", "entry_class": "FACT", "evidence": ["b.rs"]}],
+                relationships=[{"type": "part-of", "target": "node-c"}],
+            )
+            write_node(
+                corpus_root,
+                "node-c.md",
+                "node-c",
+                [{"statement": "Unrelated claim.", "entry_class": "FACT", "evidence": ["other.rs"]}],
+            )
+            (root / "a.rs").write_text("v2\n")
+            (root / "b.rs").write_text("v2\n")
+            head = commit_all(root, "change a.rs and b.rs", "2020-01-02T00:00:00")
+
+            first = _run_compute_impact_in_subprocess(corpus_root, base, head, root, "0")
+            second = _run_compute_impact_in_subprocess(corpus_root, base, head, root, "1")
+
+            self.assertEqual(first, second)
+            self.assertIn('"node_id": "node-c"', first)
+
 
 # ---------------------------------------------------------------------------
 # STEP 4 -- relationship-type propagation
@@ -353,6 +471,96 @@ class PropagationTest(unittest.TestCase):
             self.assertIn("part-of", by_id["n-part-of"].reason)
             self.assertIn("supersedes", by_id["n-supersedes"].reason)
             self.assertIn("depends-on", by_id["n-depends-on"].reason)
+
+    def test_transitive_three_node_chain_reaches_a_neighbour_of_a_neighbour(self) -> None:
+        """`propagate_impact` is documented as transitive (multi-hop), not a
+        single hop from the directly-impacted node -- this proves it: A cites
+        the changed file directly, A declares `part-of` -> B, and B (not A)
+        declares `part-of` -> C. C has no relationship to A at all and cites
+        nothing changed itself, so it can only become impacted via a
+        neighbour-of-a-neighbour hop through B.
+        """
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            init_repo(root)
+            corpus_root = root / "corpus"
+            (root / "src.rs").write_text("v1\n")
+            base = commit_all(root, "base", "2020-01-01T00:00:00")
+
+            write_node(
+                corpus_root,
+                "chain-a.md",
+                "chain-a",
+                [{"statement": "Cites src.rs.", "entry_class": "FACT", "evidence": ["src.rs"]}],
+                relationships=[{"type": "part-of", "target": "chain-b"}],
+            )
+            write_node(
+                corpus_root,
+                "chain-b.md",
+                "chain-b",
+                [{"statement": "Unrelated claim.", "entry_class": "FACT", "evidence": ["other.rs"]}],
+                relationships=[{"type": "part-of", "target": "chain-c"}],
+            )
+            write_node(
+                corpus_root,
+                "chain-c.md",
+                "chain-c",
+                [{"statement": "Unrelated claim.", "entry_class": "FACT", "evidence": ["other.rs"]}],
+            )
+
+            (root / "src.rs").write_text("v2\n")
+            head = commit_all(root, "change src.rs", "2020-01-02T00:00:00")
+
+            report = impact.compute_impact(corpus_root, base, head, root)
+            impacted_ids = {row.node_id for row in report.impacted_nodes}
+
+            self.assertIn("chain-a", impacted_ids)
+            self.assertIn("chain-b", impacted_ids)
+            self.assertIn("chain-c", impacted_ids)
+
+            by_id = {row.node_id: row for row in report.impacted_nodes}
+            self.assertIn("chain-b", by_id["chain-c"].reason)
+
+    def test_supersedes_propagates_when_the_neighbour_declares_it_pointing_at_the_impacted_node(
+        self,
+    ) -> None:
+        """The other `supersedes` fixture only has the directly-impacted node
+        declare `supersedes` outward. `_PROPAGATION_DIRECTION["supersedes"] =
+        "both"` claims propagation flows both ways -- this proves the
+        reverse direction: a NEIGHBOUR declares `supersedes` pointing AT the
+        directly-impacted node, and impact still flows from the impacted
+        node out to that neighbour.
+        """
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            init_repo(root)
+            corpus_root = root / "corpus"
+            (root / "src.rs").write_text("v1\n")
+            base = commit_all(root, "base", "2020-01-01T00:00:00")
+
+            write_node(
+                corpus_root,
+                "impacted.md",
+                "impacted",
+                [{"statement": "Cites src.rs.", "entry_class": "FACT", "evidence": ["src.rs"]}],
+            )
+            write_node(
+                corpus_root,
+                "supersedes-neighbour.md",
+                "supersedes-neighbour",
+                [{"statement": "Unrelated claim.", "entry_class": "FACT", "evidence": ["other.rs"]}],
+                relationships=[{"type": "supersedes", "target": "impacted"}],
+            )
+
+            (root / "src.rs").write_text("v2\n")
+            head = commit_all(root, "change src.rs", "2020-01-02T00:00:00")
+
+            report = impact.compute_impact(corpus_root, base, head, root)
+            impacted_ids = {row.node_id for row in report.impacted_nodes}
+
+            self.assertIn("supersedes-neighbour", impacted_ids)
+            by_id = {row.node_id: row for row in report.impacted_nodes}
+            self.assertIn("supersedes", by_id["supersedes-neighbour"].reason)
 
 
 # ---------------------------------------------------------------------------

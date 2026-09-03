@@ -23,6 +23,15 @@ across the corpus graph; `references` and `implements` do not. See
 `_PROPAGATION_DIRECTION` for the direction each propagating type flows, taken
 from `relationships.schema.json`'s own `relationshipMeta` directionality text.
 
+Propagation is transitive (multi-hop), not a single hop from the directly
+impacted node: a neighbour of a newly-propagated neighbour is admitted too,
+because the same "genuine dependency" justification that admits a direct
+neighbour recurses -- see `propagate_impact`'s own docstring for the detail.
+
+`changed_paths` diffs `base`/`head` with git's literal two-dot form
+(tree-to-tree), not the merge-base-relative three-dot form. This is a
+deliberate, already-made decision -- see `changed_paths`'s docstring.
+
 What this module does NOT establish:
 
 - That a node cites a changed file is not evidence the node's CLAIMS
@@ -138,6 +147,19 @@ def changed_paths(base: str, head: str, repo_dir: Path) -> list[ChangedPath]:
     and would otherwise make the same range produce different output on
     different machines -- the determinism this module's DoD bullet 6 asks
     for has to hold across machines, not just across repeated runs on one.
+
+    Deliberately literal two-dot `git diff <base> <head>` (tree-to-tree),
+    NOT the merge-base-relative three-dot `<base>...<head>` form the
+    repository's own pre-push lanes use elsewhere. This is a decision, made
+    once here, not an oversight: this module is a general-purpose diffing
+    tool that takes exact refs from its caller (a human at the CLI, or a
+    future automated caller such as issue #631's skill), and two-dot is the
+    unsurprising, literal reading of "diff base against head" for that
+    contract. A caller that wants merge-base-relative (three-dot) semantics
+    instead -- e.g. "everything head has done since it diverged from base"
+    -- can compute `git merge-base <base> <head>` itself and pass the
+    result as `base`; this module does not do that resolution on the
+    caller's behalf.
     """
     result = subprocess.run(
         [
@@ -250,7 +272,22 @@ def propagate_impact(
 
     known_ids = {node.id for node in nodes}
     seen = set(directly_impacted)
-    frontier = list(seen)
+    # `seen` is a `set`, and Python randomizes `str` hash order per process
+    # (PYTHONHASHSEED unset by default) -- `list(seen)` would give a
+    # different frontier order on every separate `python3 impact.py`
+    # invocation, even against byte-identical input. That is not just
+    # internal bookkeeping: when two frontier members both have an edge to
+    # the same not-yet-seen neighbour, whichever is processed first is the
+    # one named in that neighbour's `reason` string (e.g. "propagated via
+    # 'part-of' relationship with a" vs "...with b"), so an unordered
+    # frontier makes the reported `reason` -- and therefore the JSON output
+    # -- nondeterministic across processes. Sorting by `str(id)` here is
+    # what makes two separate invocations against the same input produce
+    # byte-identical output (DoD bullet 6). Every downstream frontier
+    # (`next_frontier` below) is already deterministic once this one is:
+    # it is built by iterating this sorted frontier in order, then each
+    # node's own edge list in its declared (list, not set) order.
+    frontier = sorted(seen, key=str)
     propagated: list[ImpactedNode] = []
     while frontier:
         next_frontier: list[object] = []
