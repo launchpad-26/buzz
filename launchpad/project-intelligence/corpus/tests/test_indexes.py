@@ -74,10 +74,14 @@ class DiscoveryTest(unittest.TestCase):
             indexes.discover_builders(Path("/nonexistent/index_defs")), []
         )
 
-    def test_shipped_index_defs_package_registers_no_builders(self) -> None:
-        # The framework ships zero real builders on purpose -- each generated
-        # document is its own follow-up issue.
-        self.assertEqual(indexes.discover_builders(), [])
+    def test_shipped_index_defs_package_discovers_cleanly(self) -> None:
+        # Real builders now ship in index_defs/, one per generated-document
+        # issue under PRD #621 (#638 landed the first). Discovery of the
+        # shipped package must stay loud-fail clean -- every SPEC parses --
+        # while asserting no specific count, so parallel builder tasks
+        # cannot fight over this test.
+        for spec in indexes.discover_builders():
+            self.assertIsNotNone(spec.module_path)
 
     def test_builders_discovered_in_sorted_module_name_order(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
