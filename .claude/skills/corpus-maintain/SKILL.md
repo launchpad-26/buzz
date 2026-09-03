@@ -170,6 +170,20 @@ any node. Writing a new node for a gap is `corpus-author`'s job, under a new
 issue. This skill's correct output for a gap is a named finding in the
 review summary (Phase 4) — not a draft, not a stub, not a new file.
 
+**A non-empty `unreadable_nodes` list is always its own finding, never
+silently absorbed.** `impact.py` drops a schema-invalid node from
+`valid_nodes` before building the citation index, so that node is excluded
+from both direct matching and relationship propagation entirely — its
+impact status is *unknowable*, not "not impacted," and any path it alone
+used to cite will misleadingly surface as an ordinary coverage gap with
+nothing pointing at the real cause. Treat `unreadable_nodes` the same way
+as `coverage_gaps`: report each entry (its label/path plus the schema
+error) as a named finding in Phase 4's review summary, distinct from
+coverage gaps, every time the list is non-empty. Do not fix the node
+yourself — that is a corpus-authoring edit, out of this skill's scope —
+and do not let a broken node go unreported just because it produced no
+coverage-gap or impacted-node row.
+
 ## Phase 3 — provenance, and the MUST 4 default
 
 DoD bullet 4 says "Updated provenance records the source revision/evidence
@@ -204,6 +218,19 @@ by number, to every node this skill edits:
 - **MUST 5** — the `id` is never touched by any of this (already stated in
   Phase 2; restated here because moving a revision and renaming an id are
   unrelated operations that should never be confused).
+
+**`stale.py`'s `unestablished` verdict means "route 2 could not run," never
+"verified fresh."** Phase 1's worked example showed a summary dominated by
+`unestablished` findings — under a shallow checkout (this repository's own
+history is frequently shallow; CI checks out at depth 1) `stale.py` cannot
+resolve a node's recorded revision or diff against it at all, and says so
+via `unestablished` rather than guessing. Read an `unestablished` finding
+the same way as MUST 3's "neither route available" case: it does not
+satisfy route 2, so that claim falls back to route 1 (manual
+re-verification) or is left unmoved under MUST 4. Never treat
+`unestablished` as equivalent to `fresh` or as license to leave a node's
+provenance untouched *because it checked out clean* — it did not check out
+at all.
 
 **The normalization trap.** `git diff --name-only <sha> -- <path>` for a
 citation carrying a line or range suffix — `path/to/file.md:127` — matches
