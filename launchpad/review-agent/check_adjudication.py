@@ -1096,7 +1096,18 @@ def _extract_before_pairs(markdown_text: str) -> list[tuple[str, str]]:
         _finding_id, _block = _section_match.group(1), _section_match.group(2)
         _joined = " ".join(line[2:] if line.startswith("> ") else line for line in _block.splitlines())
         _joined = _normalize_whitespace(_joined)
-        _quote_match = _re.search(r'"(.*)"', _joined)
+        # fullmatch, not search: the ENTIRE normalized blockquote must be
+        # exactly "<VERDICT>[, <Severity>]. "<quoted text>"" with nothing
+        # else before the verdict label or after the closing quote. A
+        # fourth review-found (Codex) that a bare `search(r'"(.*)"', ...)`
+        # only extracts what sits between the first and last quote marks
+        # and silently ignores anything else in the same blockquote run --
+        # an unquoted fabricated line tacked on either before the verdict
+        # label or after the closing quote passed clean under `search`,
+        # since it was never inside those two quote marks in the first
+        # place. `fullmatch` closes that: any such stowaway content fails
+        # the whole pattern instead of being silently dropped.
+        _quote_match = _re.fullmatch(r'[A-Z]+(?:,\s*[A-Za-z]+)?\.\s*"(.*)"', _joined)
         pairs.append((_finding_id, _quote_match.group(1) if _quote_match else ""))
     return pairs
 
@@ -1343,6 +1354,53 @@ check(
     "a section with exactly ONE 'Before' heading but TWO separate blockquotes underneath it (the second "
     "with no heading of its own) is STILL treated as malformed as a whole, not reduced to just the first "
     f"blockquote (got {_smuggled_bare_pairs})",
+)
+
+# (8) A FOURTH round of the same cross-vendor review found the deepest
+# variant yet: a fabricated line living INSIDE the single legitimate
+# blockquote run itself, with no double quotes of its own, either right
+# after the real quoted line or right before it. `search(r'"(.*)"', ...)`
+# only ever looks at what sits between the FIRST and LAST quote mark in the
+# whole joined blockquote and silently ignores anything else in that same
+# text -- so a stowaway unquoted line attached to an otherwise-legitimate
+# quote passed clean, since it was never between those two quote marks.
+# Reproduced both directions: fabricated text trailing the real, correctly
+# quoted evidence, and fabricated text leading it.
+_trailing_stowaway_text = (
+    "## Pair 1 — a real Before block with fabricated text tacked on after it\n\n"
+    f"Target: `{_pair1_finding_id}`\n\n"
+    "**Before (full adjudicator.md), the actual recorded verdict:**\n\n"
+    f'> CONFIRMED. "{_pair1_real_evidence}" FABRICATED TRAILING TEXT WITH NO QUOTES OF ITS OWN\n\n'
+    "**After (exclusion 1 deleted, re-attempted fresh):**\n\n"
+    "> irrelevant to this check\n"
+)
+_trailing_stowaway_pairs = _extract_before_pairs(_trailing_stowaway_text)
+check(
+    _trailing_stowaway_pairs == [(_pair1_finding_id, "")],
+    "unquoted text tacked on AFTER a real, correctly-quoted 'Before' evidence string, in the same "
+    f"blockquote run, yields no quoted_text at all -- not the real quote with the stowaway silently "
+    f"dropped (got {_trailing_stowaway_pairs})",
+)
+check(
+    not _falsifiability_pair_ok(
+        _trailing_stowaway_pairs[0][1], _pair1_finding_id, _falsifiability_judge, _falsifiability_real_ids
+    ),
+    "and that empty quoted_text correctly fails to validate against the real target",
+)
+
+_leading_stowaway_text = (
+    "## Pair 1 — a real Before block with fabricated text tacked on before it\n\n"
+    f"Target: `{_pair1_finding_id}`\n\n"
+    "**Before (full adjudicator.md), the actual recorded verdict:**\n\n"
+    f'> FABRICATED LEADING TEXT WITH NO QUOTES OF ITS OWN CONFIRMED. "{_pair1_real_evidence}"\n\n'
+    "**After (exclusion 1 deleted, re-attempted fresh):**\n\n"
+    "> irrelevant to this check\n"
+)
+_leading_stowaway_pairs = _extract_before_pairs(_leading_stowaway_text)
+check(
+    _leading_stowaway_pairs == [(_pair1_finding_id, "")],
+    "unquoted text tacked on BEFORE the verdict label of an otherwise-real, correctly-quoted 'Before' "
+    f"evidence string yields no quoted_text at all either (got {_leading_stowaway_pairs})",
 )
 
 print(f"\n{len(failures)} failure(s)")
