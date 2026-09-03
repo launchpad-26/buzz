@@ -118,6 +118,19 @@ jobs:
           FEATURE_CHILDREN: ${{ steps.feature.outputs.children }}
           PR_ADDITIONS: ${{ github.event.pull_request.additions }}
           PR_CHANGED_FILES: ${{ github.event.pull_request.changed_files }}
+          # #1771: the label and body content were the only two agent-detection
+          # signals, so a PR with neither read as human even when it plainly
+          # wasn't. Author identity closes that hole. It needs no `gh api` call —
+          # unlike CLOSING_REFS/FEATURE_CHILDREN above, the login is already on
+          # the pull_request event payload.
+          PR_AUTHOR: ${{ github.event.pull_request.user.login }}
+          # In this fork agents run under a cohort member's own GitHub account —
+          # there is no separate bot account — so that account doubles as a third
+          # detection signal alongside the label and the body. Comparison in
+          # pr_body_check.py is case-insensitive, so exact GitHub casing here
+          # isn't required. Add a new cohort member's login here as a one-line
+          # edit when they start opening PRs.
+          AGENT_AUTHOR_LOGINS: serina-mcfall,tucktuck101,benmitchell11
         run: python3 launchpad/scripts/pr_body_check.py
 
   # The controls for launchpad/scripts/. A suite that runs only on the author's
