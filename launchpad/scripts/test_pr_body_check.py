@@ -25,18 +25,27 @@ def run_main(
     labels: str = "[]",
     closing_refs: str | None = None,
     feature_children: str | None = None,
+    author: str | None = None,
+    agent_identities: str | None = None,
 ):
     """Drive main() the way the workflow does, and capture what it prints.
 
     check() returning the right note is not the same as a reader SEEING it. The
     degraded mode exists so an unverified pass is visible, and that promise lives
     in main()'s output — so it has to be asserted there, not one layer down.
+
+    `author`/`agent_identities` mirror the workflow's PR_AUTHOR/AGENT_AUTHOR_LOGINS
+    env vars (#1771) — passed through the same way LABELS/CLOSING_REFS already are.
     """
     env = {"BODY": body, "LABELS": labels}
     if closing_refs is not None:
         env["CLOSING_REFS"] = closing_refs
     if feature_children is not None:
         env["FEATURE_CHILDREN"] = feature_children
+    if author is not None:
+        env["PR_AUTHOR"] = author
+    if agent_identities is not None:
+        env["AGENT_AUTHOR_LOGINS"] = agent_identities
     buf = io.StringIO()
     with mock.patch.dict(os.environ, env, clear=True), contextlib.redirect_stdout(buf):
         code = m.main()
@@ -594,6 +603,116 @@ class LabelStrippingDoesNotBypass(unittest.TestCase):
         )
         errors, _ = m.check(body, [], [])
         self.assertEqual(errors, [])
+
+
+class ParseAgentIdentities(unittest.TestCase):
+    """The configured-list parser feeding the third detection signal."""
+
+    def test_unset_is_empty(self):
+        self.assertEqual(m.parse_agent_identities(None), frozenset())
+
+    def test_blank_is_empty(self):
+        self.assertEqual(m.parse_agent_identities("   "), frozenset())
+
+    def test_comma_list_is_trimmed_and_casefolded(self):
+        self.assertEqual(
+            m.parse_agent_identities(" Serina-McFall , tucktuck101 "),
+            frozenset({"serina-mcfall", "tucktuck101"}),
+        )
+
+    def test_a_blank_entry_among_commas_is_ignored(self):
+        self.assertEqual(
+            m.parse_agent_identities("serina-mcfall,,tucktuck101"),
+            frozenset({"serina-mcfall", "tucktuck101"}),
+        )
+
+
+class AuthorIdentityIsAThirdSignal(unittest.TestCase):
+    """#1771: an agent PR with no label and no body markers must not read as human.
+
+    Mirrors the issue's own reproduction — a body with none of the by:agent label,
+    a provenance table, or a non-N/A Authority section — and adds the author as a
+    known agent identity, the one signal PR #1768 carried that the old check()
+    never consulted.
+    """
+
+    NO_MARKERS = "### Issue type\nBug\n\n### Feature\nN/A - single-issue PR\n\nCloses #148\n"
+
+    def test_a_configured_author_triggers_every_agent_only_rule(self):
+        # (a) The exact gap from #1771: no label, no provenance table, no Authority
+        # section — only the author identifies this as agent work.
+        errors, _ = m.check(
+            self.NO_MARKERS,
+            [],
+            [148],
+            author="serina-mcfall",
+            agent_identities=frozenset({"serina-mcfall"}),
+        )
+        self.assertTrue(any("known agent identity" in e for e in errors), errors)
+        self.assertTrue(any("Harness / provider" in e for e in errors), errors)
+        self.assertTrue(any("Not verified" in e for e in errors), errors)
+        self.assertTrue(any("fenced code block" in e for e in errors), errors)
+        self.assertTrue(any("Authority" in e for e in errors), errors)
+        self.assertTrue(any("Deferred blockers" in e for e in errors), errors)
+
+    def test_an_unconfigured_author_stays_human(self):
+        # (b) Negative control: the same body, but the author is not in the
+        # configured list. Proves the signal is scoped, not "any author at all".
+        errors, _ = m.check(
+            self.NO_MARKERS,
+            [],
+            [148],
+            author="a-random-contributor",
+            agent_identities=frozenset({"serina-mcfall"}),
+        )
+        self.assertEqual(errors, [])
+
+    def test_author_signal_without_label_reports_the_same_rule_3_violation(self):
+        # (c) The generalised message must still fire the missing-label rule, the
+        # same way a body-content signal without the label already does.
+        errors, _ = m.check(
+            self.NO_MARKERS,
+            [],
+            [148],
+            author="serina-mcfall",
+            agent_identities=frozenset({"serina-mcfall"}),
+        )
+        self.assertTrue(any("no 'by:agent' label" in e for e in errors), errors)
+
+    def test_main_prints_agent_even_when_the_label_is_the_only_reason_it_would_pass(self):
+        # (d) main()'s printed kind used to read `"by:agent" in labels` alone,
+        # independently of check()'s own is_agent computation — a second place the
+        # same three signals could disagree, even though rule 3 (below) means the
+        # disagreement can never surface through a real body: whenever the body or
+        # author signal fires without the label, check() always raises the missing-
+        # label error and the run never reaches the passing branch that prints
+        # `kind` at all. That makes the two computations structurally impossible to
+        # observe disagreeing today — this test pins the WIRING (main() reads
+        # agent_signals(), not the label in isolation) so a future change that
+        # loosens rule 3 cannot silently reopen the gap this file's docstring
+        # already warns about for markdown parsing: two computations of the same
+        # boolean, free to drift apart.
+        with mock.patch.object(m, "check", return_value=([], [])):
+            code, out = run_main(
+                "anything",
+                labels="[]",
+                author="serina-mcfall",
+                agent_identities="serina-mcfall",
+            )
+        self.assertEqual(code, 0)
+        self.assertIn("(agent)", out)
+
+    def test_case_mismatch_in_the_configured_list_still_matches(self):
+        # The casefold fix (review-plan finding, 2026-09-04): a differently-cased
+        # login in AGENT_AUTHOR_LOGINS must not silently disable the signal.
+        errors, _ = m.check(
+            self.NO_MARKERS,
+            [],
+            [148],
+            author="Serina-McFall",
+            agent_identities=m.parse_agent_identities("serina-mcfall"),
+        )
+        self.assertTrue(any("known agent identity" in e for e in errors), errors)
 
 
 if __name__ == "__main__":
