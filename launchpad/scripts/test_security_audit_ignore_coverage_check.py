@@ -164,6 +164,42 @@ class IgnoreCoverageTest(unittest.TestCase):
             result = run(root)
         self.assertEqual(result.status, Status.INDETERMINATE)
 
+    # Regression for #391: literal-line presence alone does not mean a
+    # pattern actually takes effect. A later exact negation (`!*.pem`)
+    # un-ignores everything the earlier `*.pem` line covered, but the old
+    # check only asked "is '*.pem' a line in this file" and never looked
+    # past it -- so it PASSed while `git check-ignore -v` (and `git add -n`)
+    # showed the file genuinely was not ignored.
+
+    def test_pattern_negated_by_later_line_fails(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            _write_full_coverage(root)
+            gitignore = root / ".gitignore"
+            gitignore.write_text(gitignore.read_text(encoding="utf-8") + "!*.pem\n", encoding="utf-8")
+            result = run(root)
+        self.assertEqual(result.status, Status.FAIL)
+        self.assertIn("*.pem", result.detail)
+        self.assertIn("negated", result.detail)
+
+    def test_negation_before_pattern_still_passes(self):
+        # Order matters, same as git's own last-rule-wins semantics: a
+        # negation that comes BEFORE the required pattern does not undo it,
+        # since the later, positive line is what git actually applies.
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            patterns = REQUIRED_COVERAGE[".gitignore"]
+            content = "!*.pem\n" + "\n".join(patterns) + "\n"
+            (root / ".gitignore").write_text(content, encoding="utf-8")
+            deploy_gitignore = root / "launchpad/deploy/archived/.gitignore"
+            deploy_gitignore.parent.mkdir(parents=True, exist_ok=True)
+            deploy_gitignore.write_text(
+                "\n".join(REQUIRED_COVERAGE["launchpad/deploy/archived/.gitignore"]) + "\n",
+                encoding="utf-8",
+            )
+            result = run(root)
+        self.assertEqual(result.status, Status.PASS)
+
 
 if __name__ == "__main__":
     unittest.main()
