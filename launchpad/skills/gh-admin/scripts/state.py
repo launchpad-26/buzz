@@ -338,7 +338,23 @@ class State:
             );
             """
         )
+        # Additive column migrations for databases created by an earlier
+        # version. `CREATE TABLE IF NOT EXISTS` above cannot add a column to
+        # an existing table, so each new column a later sibling task needs
+        # is applied idempotently here via `_add_column_if_missing`, mirroring
+        # review-queue-automation's `common.py` (`self._add_column_if_missing(
+        # "jobs", "snapshot_hash", "TEXT")`). No column needs adding yet, so
+        # there is no call site here today -- this is the path existing for
+        # the next sibling task under Feature #1845 that does need one.
         self.commit()
+
+    def _add_column_if_missing(self, table: str, column: str, decl: str) -> bool:
+        """Add `column` to `table` when absent. Returns True when it was added."""
+        existing = {row["name"] for row in self.db.execute(f"PRAGMA table_info({table})")}
+        if column in existing:
+            return False
+        self.db.execute(f"ALTER TABLE {table} ADD COLUMN {column} {decl}")
+        return True
 
     def _assert_fingerprint(self) -> None:
         rows = self.execute(
