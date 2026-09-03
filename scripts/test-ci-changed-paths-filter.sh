@@ -24,10 +24,10 @@ set -euo pipefail
 # `Justfile` -- the filter output for that entry is always false, and a PR
 # that changes only that file never trips the jobs the filter gates. This is
 # checked for every literal (non-glob) pattern in every filter: it must match
-# a tracked file via `git ls-files` with the exact case as written. Glob
-# patterns (containing `*`, `?`, or `[`) and negated patterns (leading `!`,
-# which name an exclusion rather than a real path) are skipped -- neither is
-# a claim that a file with that exact name exists.
+# a tracked file via `git ls-files` with the exact case as written. Glob and
+# brace patterns (containing `*`, `?`, `[`, `{`, or `}`) and negated patterns
+# (leading `!`, which name an exclusion rather than a real path) are skipped
+# -- neither is a claim that a file with that exact name exists.
 
 repo_root=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
 workflow="$repo_root/.github/workflows/ci.yml"
@@ -74,13 +74,19 @@ while IFS=$'\t' read -r filter_name patterns; do
   # match a tracked file with the exact case as written.
   for item in "${items[@]}"; do
     [ -z "$item" ] && continue
-    raw="${item#\'}"
-    raw="${raw%\'}"
+    # Strip one layer of surrounding quotes, whichever kind wraps this entry
+    # -- the YAML in ci.yml is single-quoted today, but a harmless style
+    # change to double quotes must not turn into a false #442 citation here.
+    raw="$item"
+    case "$raw" in
+      \'*\') raw="${raw#\'}"; raw="${raw%\'}" ;;
+      \"*\") raw="${raw#\"}"; raw="${raw%\"}" ;;
+    esac
     case "$raw" in
       !*) continue ;;              # exclusion pattern, not a claim a file exists
     esac
     case "$raw" in
-      *[\*\?\[]*) continue ;;      # glob pattern, not a literal path
+      *[\*\?\[\{\}]*) continue ;;  # glob/brace pattern, not a literal path
     esac
     if ! git -C "$repo_root" ls-files --error-unmatch -- "$raw" > /dev/null 2>&1; then
       echo "::error::filter '$filter_name' in $workflow has entry '$raw' which does not match any tracked file with that exact case -- dorny/paths-filter matches literal patterns case-sensitively against git diff --name-status, so a wrong-case entry silently never fires (this is exactly launchpad-26/buzz#442). Check the tracked file's real casing with 'git ls-files' and correct the pattern." >&2
