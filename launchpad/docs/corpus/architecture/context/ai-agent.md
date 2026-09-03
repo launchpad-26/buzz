@@ -75,10 +75,12 @@ evidence:
     entry_class: FACT
     evidence:
       - "crates/buzz-core/src/kind.rs"
-  - statement: "buzz-core defines KIND_AGENT_PROFILE (agent metadata plus a reference to the agent's human owner) and KIND_MANAGED_AGENT (an agent definition published by the workspace owner, explicitly forbidden from carrying the agent's secret key or other runtime secrets since the event is world-readable on the relay), establishing that every AI agent in Buzz has both a Nostr identity of its own and a declared owning human."
+  - statement: "buzz-core defines KIND_AGENT_PROFILE (the agent's own self-authored metadata, e.g. its channel_add_policy -- it carries no owner reference) and KIND_MANAGED_AGENT (an agent definition published by the workspace owner, explicitly forbidden from carrying the agent's secret key or other runtime secrets since the event is world-readable on the relay); ownership itself is declared separately, via a NIP-OA auth tag on the agent's kind:0 metadata event, establishing that every AI agent in Buzz has both a Nostr identity of its own and a declared owning human."
     entry_class: FACT
     evidence:
       - "crates/buzz-core/src/kind.rs"
+      - "crates/buzz-acp/src/lib.rs"
+      - "crates/buzz-sdk/src/nip_oa.rs"
   - statement: "buzz-agent's Reply Guard, enabled by default only for Buzz Desktop's shared-compute (\"mesh\") agents, is motivated by small local models being the ones most likely to do real tool work and then end a turn without posting the result to Buzz, since an agent's reasoning and raw tool output are never shown to a human directly."
     entry_class: FACT
     evidence:
@@ -130,7 +132,7 @@ decision onto the wire as a valid Buzz event in the first place.
 | **sprig** | Buzz-owned system (packaging) | Bundles `buzz-acp` + `buzz-agent` + `buzz-dev-mcp` into one deployable binary; not a separate architectural actor, just a distribution unit for the systems above. |
 | **LLM Provider** (Anthropic, an OpenAI-compatible endpoint, OpenRouter, Databricks) | External system | The HTTPS service an AI Agent (at least `buzz-agent`, Buzz's own reference agent) calls to get the next reasoning/tool-call step. Buzz has no direct relationship with it -- only the agent does. |
 | **Buzz Relay** | Buzz-owned system (the platform itself) | Receives, verifies, stores and fans out the signed events an AI Agent's actions ultimately produce, identically to how it handles a human client. |
-| **Human owner** | External actor | Every managed AI agent identity is declared with an owning human (`KIND_MANAGED_AGENT`, `KIND_AGENT_PROFILE`); the owner is who the agent acts on behalf of and who Desktop's default `owner-only` inbound gate answers to. |
+| **Human owner** | External actor | Every managed AI agent identity is declared with an owning human -- via a NIP-OA `auth` tag on the agent's kind:0 metadata event (not on `KIND_AGENT_PROFILE`, which carries no owner reference), and separately via `KIND_MANAGED_AGENT`'s own owner-authorship; the owner is who the agent acts on behalf of and who Desktop's default `owner-only` inbound gate answers to. |
 
 ## Diagram
 
@@ -176,11 +178,13 @@ category deliberately excludes.
    ACP over stdio to whatever spawned them; neither path has the agent talk to the relay
    directly.
 2. **Identity.** Every agent has its own Nostr keypair, distinct from any human's. Two
-   Buzz kinds encode this: `KIND_AGENT_PROFILE` carries the agent's own metadata plus a
-   reference to its owner, and `KIND_MANAGED_AGENT` is an owner-published definition of a
-   managed agent that is explicitly forbidden from ever carrying the agent's secret key,
-   auth tag, or other runtime secrets, since the event itself is world-readable on the
-   relay.
+   Buzz kinds encode this: `KIND_AGENT_PROFILE` carries only the agent's own metadata
+   (e.g. its `channel_add_policy`) -- it carries no owner reference -- and
+   `KIND_MANAGED_AGENT` is an owner-published definition of a managed agent that is
+   explicitly forbidden from ever carrying the agent's secret key, auth tag, or other
+   runtime secrets, since the event itself is world-readable on the relay. Ownership
+   itself is declared separately: a NIP-OA `auth` tag on the agent's kind:0 metadata
+   event cryptographically attests which human owns the agent.
 3. **Prompting.** The harness (whichever one is in play) batches queued relay events
    (`@mention`s, by default) into a single ACP `session/prompt` call to the agent process.
 4. **Reasoning.** For Buzz's own reference agent, `buzz-agent`, this step calls out over
