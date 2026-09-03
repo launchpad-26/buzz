@@ -28,6 +28,23 @@ from review import SEVERITY_ORDER
 _CONTAINMENT_KINDS = frozenset({"delimiter_forge", "delimiter_lookalike", "injection_attempt"})
 
 
+def is_nonempty_str(value: object) -> bool:
+    """A string carrying at least one non-whitespace character.
+
+    FINDINGS.md requires ``evidence`` non-empty when ``entry_point`` is set, and a bare
+    truthiness test is the wrong check for that: ``not "   "`` is ``False``, so a
+    whitespace-only value sails through, and truthiness also admits ``42``, ``True`` and
+    ``["x"]``, none of which a reader can act on as evidence.
+
+    Public, and the canonical home of this predicate: ``verdicts.py`` (#118) imports it
+    from here rather than keeping its own copy, exactly because a second private copy
+    of one contract rule is how this bug class (#283) happened in the first place --
+    the validator in ``findings.py`` accepted whitespace/wrong-typed evidence while
+    ``verdicts.py`` had already been fixed to reject it.
+    """
+    return isinstance(value, str) and bool(value.strip())
+
+
 def finding_id(
     dimension: str,
     anchor: str,
@@ -236,7 +253,7 @@ def _validate_finding(
             violations.append(
                 f"{label}: entry_point {entry_point!r} is not one of contain.ENTRY_POINTS"
             )
-        if not evidence:
+        if not is_nonempty_str(evidence):
             violations.append(
                 f"{label}: evidence must be set (non-null, non-empty) when entry_point is set"
             )
