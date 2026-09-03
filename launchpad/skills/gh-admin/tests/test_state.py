@@ -138,6 +138,52 @@ def test_runtime_lock_excludes_a_second_holder_until_released() -> None:
         state.close()
 
 
+def test_add_column_if_missing_adds_idempotently_to_on_disk_schema() -> None:
+    """Issue #1946: `_migrate()` had no additive-column path -- `CREATE TABLE
+    IF NOT EXISTS` cannot add a column to a table that already exists on
+    disk. Reproduce that exact scenario: an on-disk `gh-admin-state.sqlite3`
+    already carrying the pre-addition schema (created by a first State
+    instance and closed, matching how a real prior run left the file), then
+    reopen it and add a column the original schema never had. The column
+    must appear after the first call and the call must be idempotent -- a
+    second call must not raise and must report nothing was added."""
+    tmp_dir = tempfile.mkdtemp()
+
+    first = State(tmp_dir)
+    first.close()
+
+    second = State(tmp_dir)
+    try:
+        before = {row["name"] for row in second.execute("PRAGMA table_info(sessions)")}
+        assert "example_new_column" not in before
+
+        added = second._add_column_if_missing("sessions", "example_new_column", "TEXT")
+        assert added is True
+        second.commit()
+
+        after = {row["name"] for row in second.execute("PRAGMA table_info(sessions)")}
+        assert "example_new_column" in after
+
+        added_again = second._add_column_if_missing("sessions", "example_new_column", "TEXT")
+        assert added_again is False, "a second call must be a no-op, not an error"
+    finally:
+        second.close()
+
+    # Confirm the column survived on disk, not just in the connection that
+    # added it -- via a raw connection, not another State(...), since
+    # State's own _assert_fingerprint() rejects any table whose columns
+    # don't exactly match EXPECTED_COLUMNS, and this test's added column is
+    # deliberately not in that fixed set.
+    import sqlite3
+
+    raw = sqlite3.connect(pathlib.Path(tmp_dir) / "gh-admin-state.sqlite3")
+    try:
+        columns = {row[1] for row in raw.execute("PRAGMA table_info(sessions)")}
+        assert "example_new_column" in columns
+    finally:
+        raw.close()
+
+
 def test_execute_wraps_sqlite_errors() -> None:
     state = fresh_state()
     try:
