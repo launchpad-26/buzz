@@ -128,3 +128,7 @@ pub(super) fn effective_discovery_provider(
         inferred: true,
     }
 }
+
+#[cfg(test)]
+#[path = "agent_models_env_tests.rs"]
+mod tests;

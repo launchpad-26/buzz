@@ -110,3 +110,7 @@ pub(super) fn filter_openrouter_models(
         supports_switching: true,
     }))
 }
+
+#[cfg(test)]
+#[path = "agent_models_openrouter_tests.rs"]
+mod tests;

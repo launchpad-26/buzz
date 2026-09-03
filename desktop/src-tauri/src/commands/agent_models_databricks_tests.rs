@@ -107,3 +107,61 @@ async fn databricks_interactive_auth_timeout_records_cooldown_and_returns_timeou
     assert_eq!(error, databricks_sign_in_timed_out_error());
     assert!(cooldowns.is_active(host, Instant::now()));
 }
+
+#[test]
+fn databricks_filtered_empty_response_is_authoritative() {
+    let filter = buzz_agent_pkg::config::DatabricksModelFilter::parse(Some("allowed-*")).unwrap();
+    let response = databricks_models_response(
+        "databricks_v2",
+        Vec::new(),
+        Some("configured".into()),
+        filter.as_ref(),
+    )
+    .expect("active filter permits an empty authoritative catalog");
+    assert!(response.models.is_empty());
+    assert!(!response.supports_switching);
+    assert_eq!(response.selected_model.as_deref(), Some("configured"));
+}
+
+#[test]
+fn is_databricks_provider_matches_both_variants() {
+    assert!(is_databricks_provider(Some("databricks")));
+    assert!(is_databricks_provider(Some("databricks_v2")));
+    assert!(is_databricks_provider(Some("  DATABRICKS  ")));
+    assert!(!is_databricks_provider(Some("anthropic")));
+    assert!(!is_databricks_provider(None));
+}
+
+#[test]
+fn databricks_interactive_auth_launches_only_without_a_static_token() {
+    // Phase 2: both surfaces launch the browser flow when the token is empty;
+    // the surface distinction is now cooldown-only (asserted separately). A
+    // configured static token still short-circuits interactive auth entirely.
+    assert!(should_start_interactive_auth(""));
+    assert!(!should_start_interactive_auth("static-token"));
+}
+
+#[test]
+fn databricks_passive_auth_error_has_reachable_create_flow_guidance() {
+    let error = databricks_sign_in_required_error();
+    assert!(error.contains("save this agent, then open its model picker"));
+    assert!(error.contains("buzz-agent auth databricks"));
+}
+
+#[test]
+fn databricks_static_token_error_redacts_echoed_token() {
+    let token = "secret-databricks-token";
+    let redaction_env = BTreeMap::from([("DATABRICKS_TOKEN".to_string(), token.to_string())]);
+
+    let error = databricks_static_token_error(
+        &format!("Databricks rejected bearer {token}"),
+        &redaction_env,
+    );
+
+    assert!(error.contains("[REDACTED]"), "got: {error}");
+    assert!(!error.contains(token), "token leaked in error: {error}");
+    assert!(
+        error.contains("update it in agent settings"),
+        "error lost its remediation: {error}"
+    );
+}
