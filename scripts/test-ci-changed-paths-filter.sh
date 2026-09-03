@@ -17,6 +17,17 @@ set -euo pipefail
 # filter genuinely needs "under A, but not under B", split B into its own
 # filter and OR the two outputs together at the job `if:` condition instead
 # (this repo already does exactly that for desktop vs. desktop-rust).
+#
+# Also guards against the bug behind launchpad-26/buzz#442: dorny/paths-filter
+# matches literal path patterns case-sensitively against `git diff
+# --name-status`. A pattern like 'justfile' silently never matches a tracked
+# `Justfile` -- the filter output for that entry is always false, and a PR
+# that changes only that file never trips the jobs the filter gates. This is
+# checked for every literal (non-glob) pattern in every filter: it must match
+# a tracked file via `git ls-files` with the exact case as written. Glob
+# patterns (containing `*`, `?`, or `[`) and negated patterns (leading `!`,
+# which name an exclusion rather than a real path) are skipped -- neither is
+# a claim that a file with that exact name exists.
 
 repo_root=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
 workflow="$repo_root/.github/workflows/ci.yml"
@@ -58,6 +69,24 @@ while IFS=$'\t' read -r filter_name patterns; do
     echo "::error::filter '$filter_name' in $workflow mixes a negated pattern with positive patterns -- picomatch treats each entry as an independent OR clause, so the negated pattern alone matches almost every file and the filter silently becomes true for nearly any change (this is exactly launchpad-26/buzz#181). Split the excluded path into its own filter and OR the outputs at the job if: condition instead." >&2
     failed=1
   fi
+
+  # launchpad-26/buzz#442: every literal (non-glob, non-negated) pattern must
+  # match a tracked file with the exact case as written.
+  for item in "${items[@]}"; do
+    [ -z "$item" ] && continue
+    raw="${item#\'}"
+    raw="${raw%\'}"
+    case "$raw" in
+      !*) continue ;;              # exclusion pattern, not a claim a file exists
+    esac
+    case "$raw" in
+      *[\*\?\[]*) continue ;;      # glob pattern, not a literal path
+    esac
+    if ! git -C "$repo_root" ls-files --error-unmatch -- "$raw" > /dev/null 2>&1; then
+      echo "::error::filter '$filter_name' in $workflow has entry '$raw' which does not match any tracked file with that exact case -- dorny/paths-filter matches literal patterns case-sensitively against git diff --name-status, so a wrong-case entry silently never fires (this is exactly launchpad-26/buzz#442). Check the tracked file's real casing with 'git ls-files' and correct the pattern." >&2
+      failed=1
+    fi
+  done
 done < /tmp/ci-changed-paths-filters.$$
 
 rm -f /tmp/ci-changed-paths-filters.$$
