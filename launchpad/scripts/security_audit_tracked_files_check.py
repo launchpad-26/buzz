@@ -242,6 +242,18 @@ def run(repo_root: Path) -> CheckResult:
             f"could not establish upstream ownership for {len(unknown_hits)} "
             f"sensitive-shaped tracked file(s): " + "; ".join(unknown_hits[:10]),
         )
+    if newly_hidden is None:
+        # The PR-mode newly-hidden-file heuristic could not run (git fetch or
+        # diff failed) -- not the same as "checked and found nothing". A real
+        # cohort-owned or unknown-ownership hit above still takes priority
+        # over this unrelated heuristic's own failure.
+        return CheckResult(
+            NAME,
+            Status.INDETERMINATE,
+            "could not determine whether a newly-added ignore pattern covers an "
+            "already-tracked path (git fetch or diff failed in PR mode); this is "
+            "not the same as nothing newly hidden",
+        )
     if newly_hidden:
         return CheckResult(
             NAME,
