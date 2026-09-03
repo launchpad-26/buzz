@@ -439,6 +439,9 @@ table does **not** say which number owns which subject. Look the subject up
 than citing this table for a subject-to-issue pairing — an agent authoring a sibling node
 did exactly that and produced nine invented mappings, which is the "FACT cited to a file
 that does not discuss the claim" failure this document warns about two sections up.
+
+| Not covered here | Owned by |
+|---|---|
 | How generated artifacts prove their provenance, and the exception process for them | #1316 |
 | Encoding ADR-0029's claim-type classification and the flagged state in the schema and checker | #1410 |
 | The human-facing entry point to the corpus | #639 |
