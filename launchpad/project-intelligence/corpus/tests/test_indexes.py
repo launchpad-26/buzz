@@ -74,10 +74,13 @@ class DiscoveryTest(unittest.TestCase):
             indexes.discover_builders(Path("/nonexistent/index_defs")), []
         )
 
-    def test_shipped_index_defs_package_registers_no_builders(self) -> None:
-        # The framework ships zero real builders on purpose -- each generated
-        # document is its own follow-up issue.
-        self.assertEqual(indexes.discover_builders(), [])
+    def test_shipped_index_defs_package_builders_validate(self) -> None:
+        # The framework itself ships zero builders; real builders arrive one
+        # module per follow-up issue (#845 and siblings). Whatever is installed
+        # must validate cleanly -- discovery raising SpecError here would mean
+        # a broken shipped builder.
+        for spec in indexes.discover_builders():
+            self.assertIsInstance(spec, indexes.IndexSpec)
 
     def test_builders_discovered_in_sorted_module_name_order(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
