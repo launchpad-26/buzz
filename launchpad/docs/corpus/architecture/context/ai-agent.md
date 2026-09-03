@@ -75,7 +75,7 @@ evidence:
     entry_class: FACT
     evidence:
       - "crates/buzz-core/src/kind.rs"
-  - statement: "buzz-core defines KIND_AGENT_PROFILE (the agent's own self-authored metadata, e.g. its channel_add_policy -- it carries no owner reference) and KIND_MANAGED_AGENT (an agent definition published by the workspace owner, explicitly forbidden from carrying the agent's secret key or other runtime secrets since the event is world-readable on the relay); ownership itself is declared separately, via a NIP-OA auth tag on the agent's kind:0 metadata event, establishing that every AI agent in Buzz has both a Nostr identity of its own and a declared owning human."
+  - statement: "buzz-core defines KIND_AGENT_PROFILE (the agent's own self-authored metadata, e.g. its channel_add_policy -- it carries no owner reference) and KIND_MANAGED_AGENT (an agent definition published by the workspace owner, explicitly forbidden from carrying the agent's secret key or other runtime secrets since the event is world-readable on the relay). Every agent has a Nostr identity of its own; a declared human owner is established separately -- via a NIP-OA auth tag on the agent's kind:0 metadata event, which buzz-acp's resolve_agent_owner resolves optionally (it returns None when no owner is configured), or unconditionally for a KIND_MANAGED_AGENT-defined agent, which is owner-authored by construction."
     entry_class: FACT
     evidence:
       - "crates/buzz-core/src/kind.rs"
