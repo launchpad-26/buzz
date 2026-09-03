@@ -47,7 +47,8 @@ evidence:
   - statement: "Buzz Desktop manages templates through a dedicated Settings panel ('Channel templates'), reachable via `SettingsPanels.tsx`'s `channel-templates` section and rendered by `ChannelTemplatesSettingsCard`, which supports create, edit, duplicate and delete."
     entry_class: FACT
     evidence:
-      - "desktop/src/features/settings/ui/SettingsPanels.tsx:88-187"
+      - "desktop/src/features/settings/ui/SettingsPanels.tsx:228-231"
+      - "desktop/src/features/settings/ui/SettingsPanels.tsx:953-954"
       - "desktop/src/features/settings/ui/ChannelTemplatesSettingsCard.tsx:62-135"
   - statement: "On desktop, creating a channel from a template first creates the channel, then best-effort applies the template's canvas content (substituting `{channel.name}` and `{template.name}` placeholders) via `applyCanvas`, then fires-and-forgets `applyAgents` to add the template's persona/team roster as managed agents; a canvas-apply failure does not block navigation to the new channel."
     entry_class: FACT
