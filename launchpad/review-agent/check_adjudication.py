@@ -246,6 +246,52 @@ try:
 except AssertionError as _exc:
     check(False, f"replaying the real fixtures touched the network or a subprocess: {_exc}")
 
+# --- #1413: reserved underscore-prefixed keys never reach the lookup -------
+# make_replay_judge reserves top-level recording-file keys prefixed with `_`
+# (_provenance, _dedupe_groups) and excludes them from the finding_id ->
+# judge output lookup it builds. No REAL fixture's finding_id starts with
+# `_`, so nothing above (or anywhere else in this file) would notice if that
+# filter were deleted entirely -- the reserved value would merge into the
+# lookup, but nothing would ever look it up. This builds a synthetic
+# recording directory, separate from RECORDINGS_DIR, carrying one ordinary
+# finding plus a reserved `_provenance` key holding a distinct, recognizable
+# value, then proves the ordinary lookup still works AND a lookup for
+# finding_id="_provenance" itself -- genuinely reading the reserved key back
+# out through the judge's public interface -- fails closed to UNPROVEN
+# rather than returning the reserved dict.
+import tempfile as _tempfile  # noqa: E402 -- single-use, local to this one check
+
+_reserved_key_finding = make_raw_finding()
+_reserved_payload = {"model": "reserved-value-should-never-surface", "date": "2026-01-01"}
+with _tempfile.TemporaryDirectory() as _tmp:
+    _reserved_key_recording_path = Path(_tmp) / "recorded.json"
+    _reserved_key_recording_path.write_text(
+        json.dumps(
+            {
+                _reserved_key_finding["finding_id"]: {
+                    "verdict": "CONFIRMED",
+                    "verdict_evidence": "replay: read the file at head_sha, credential present.",
+                },
+                "_provenance": _reserved_payload,
+            }
+        )
+    )
+    _reserved_key_judge = run_adjudication.make_replay_judge(Path(_tmp))
+    _ordinary_lookup_result = _reserved_key_judge(_reserved_key_finding, {})
+    _reserved_lookup_finding = make_raw_finding(finding_id="_provenance")
+    _reserved_lookup_result = _reserved_key_judge(_reserved_lookup_finding, {})
+
+check(
+    _ordinary_lookup_result["verdict"] == "CONFIRMED",
+    "an ordinary finding_id still resolves to its own recorded verdict alongside a reserved key",
+)
+check(
+    _reserved_lookup_result["verdict"] == "UNPROVEN"
+    and "reserved-value-should-never-surface" not in json.dumps(_reserved_lookup_result),
+    "make_replay_judge never returns a reserved underscore-prefixed key's value for any finding_id lookup "
+    f"(got {_reserved_lookup_result!r})",
+)
+
 # --- finding_id sets equal: a drop and an invention are DIFFERENT defects ---
 # (#118 criterion 1; STEP 10's own first bullet)
 
