@@ -962,38 +962,446 @@ for _name in REAL_FIXTURE_NAMES:
 # committed guard, so the exact same drift could recur silently the next
 # time a recording's verdict_evidence changes. This makes it a mechanical
 # check instead of a fact re-verified by the next human reviewer.
+#
+# Issue #1412 (a Fable + Codex cohort review panel on PR #1406) found the
+# original mechanical check proved SUBSTRING containment, not exact match:
+# it matched each quote against the CONCATENATION of every real recording's
+# verdict_evidence. That let (1) a truncated quote still pass -- a truncated
+# string is still `in` the full text -- and (2) a fabricated quote spanning
+# the tail of one recording's evidence and the head of the next pass too,
+# since no single recording's own boundary was ever checked, only the
+# flattened whole. Fixed by resolving each "Before" quote to the ONE
+# specific recording named by its own "Target: `<finding_id>`" line --
+# via run_adjudication.make_replay_judge, the same finding_id -> recorded-
+# output lookup already used elsewhere in this file (e.g. the in-process
+# replay check and the bare-SEVERITY_ORDER check above), not a second,
+# invented lookup -- and requiring EXACT equality after whitespace
+# normalization, not `in`.
+#
+# A first version of this fix was itself found wanting by cross-vendor
+# review (Codex, per this team's agentic-debugging skill): (a) an unknown
+# finding_id still "passed" if the quote happened to equal
+# make_replay_judge's own synthetic "no recorded judge output..." fallback
+# text -- that fallback exists so a real adjudication run degrades to
+# UNPROVEN instead of crashing, which is the right behaviour THERE, but
+# wrong here, where "no real recording" must mean "reject", not "compare
+# against placeholder text"; (b) the Target-to-Before span was not bounded
+# to its own "## Pair N" section, so a malformed document (a pair missing
+# its own Before block) could let extraction cross into the NEXT pair's
+# Target/Before instead of failing closed. Both are fixed below: presence
+# in the real recordings is checked independently of what the judge
+# returns, and extraction is scoped to one "## Pair" section at a time.
 import re as _re  # noqa: E402 -- single-use, local to this one check
+
+
+def _normalize_whitespace(text: str) -> str:
+    return " ".join(_re.sub(r"\s+", " ", text).split()).strip()
+
+
+def _load_real_recording_ids(replay_dir: Path) -> set[str]:
+    """The set of finding_ids that have an ACTUAL entry in some `*.json`
+    under `replay_dir` -- the same file-glob and `_`-prefix-skipping
+    semantics run_adjudication.make_replay_judge's own loading step uses,
+    kept as an independent presence check so this guard can tell "no
+    recording exists for this finding_id" apart from make_replay_judge's
+    own deliberate fail-open UNPROVEN response for a missing id (correct
+    for letting an actual adjudication run continue past a gap, wrong for
+    asserting a quote is genuinely verbatim against something real).
+    """
+    ids: set[str] = set()
+    if replay_dir.is_dir():
+        for _path in sorted(replay_dir.glob("*.json")):
+            with _path.open("r", encoding="utf-8") as _handle:
+                _data = json.load(_handle)
+            if isinstance(_data, dict):
+                ids.update(_k for _k in _data if not _k.startswith("_"))
+    return ids
+
+
+def _extract_before_pairs(markdown_text: str) -> list[tuple[str, str]]:
+    """Return (finding_id, quoted_text) for every '## Pair N' section, in
+    document order -- exactly one entry per heading found, ALWAYS, so a
+    malformed section can never simply vanish from the result. Each section
+    is bounded by the next '## Pair' heading (or the end of the document)
+    BEFORE the Target/Before pattern is searched for, so a malformed section
+    -- e.g. one missing its own 'Before' block -- can never have its Target
+    line pair up with a LATER section's Before block; both must come from
+    the SAME bounded section.
+
+    A section review-found (Codex, on an earlier version of this fix) could
+    otherwise be silently DROPPED rather than borrowed: if the surrounding
+    document happened to carry exactly four other well-formed sections, a
+    dropped fifth would still leave "found four" true, hiding the
+    malformation instead of failing on it. So a section with no match
+    inside its own bounds contributes an explicit sentinel pair,
+    `("", "")`, rather than nothing -- it still counts toward the total,
+    and its empty finding_id/quoted_text then fail the per-pair checks
+    below on their own terms (finding_id "" is never a real recording;
+    quoted_text "" is never a quote), so the malformation surfaces as a
+    named FAIL rather than a missing count that might coincidentally still
+    read as correct.
+
+    finding_id comes from that section's own 'Target: `<finding_id>`' line;
+    quoted_text is whatever sits inside the first/last double-quote of the
+    joined, whitespace-normalized 'Before' blockquote.
+
+    A section is also treated as malformed (its own empty sentinel, same as
+    "no match at all") when it carries anything OTHER than exactly one
+    'Before (full adjudicator.md)...' heading -- zero, or two-or-more --
+    AND when anything other than exactly one contiguous blockquote run sits
+    between that heading and the next bold-markdown ('**') marker (the real
+    document's own next marker there is always the paired '**After
+    (...)**' heading). `pair_re.search` below only ever finds the FIRST
+    heading, and the FIRST contiguous blockquote run after it, in a
+    section; three review-founds (Codex, across two prior rounds) showed
+    each of those "only the first" behaviours lets something get smuggled
+    past unchecked: a second FULL Before section (heading + blockquote)
+    reusing this section's Target; a second Before HEADING with its own
+    blockquote inside this same section; and -- found last, after both of
+    those were fixed -- a second, separate blockquote with NO heading of
+    its own, merely a blank line after the first legitimate one and before
+    the next bold marker. All three are covered by the two counts below,
+    kept explicit rather than trusting `.search`/`.findall` to notice
+    extras on their own.
+    """
+    section_heading_re = _re.compile(r"^## Pair \d+.*$", _re.MULTILINE)
+    section_starts = [m.start() for m in section_heading_re.finditer(markdown_text)]
+    section_bounds = list(zip(section_starts, section_starts[1:] + [len(markdown_text)]))
+
+    before_heading_literal = "**Before (full adjudicator.md), the actual recorded verdict:**"
+    blockquote_run_re = _re.compile(r"(?:^> .*\n?)+", _re.MULTILINE)
+    pair_re = _re.compile(
+        r"Target: `([0-9a-f]+)`[\s\S]*?"
+        r"\*\*Before \(full adjudicator\.md\), the actual recorded verdict:\*\*\n\n"
+        r"((?:> .*\n?)+)"
+    )
+    pairs: list[tuple[str, str]] = []
+    for _start, _end in section_bounds:
+        _section_text = markdown_text[_start:_end]
+        if _section_text.count(before_heading_literal) != 1:
+            pairs.append(("", ""))
+            continue
+        _after_heading = _section_text[_section_text.index(before_heading_literal) + len(before_heading_literal) :]
+        _next_bold = _re.search(r"\*\*", _after_heading)
+        _before_span = _after_heading[: _next_bold.start()] if _next_bold else _after_heading
+        _blockquote_runs = blockquote_run_re.findall(_before_span)
+        _non_blockquote_content = blockquote_run_re.sub("", _before_span).strip()
+        if len(_blockquote_runs) != 1 or _non_blockquote_content:
+            pairs.append(("", ""))
+            continue
+        _section_match = pair_re.search(markdown_text, _start, _end)
+        if _section_match is None:
+            pairs.append(("", ""))
+            continue
+        _finding_id, _block = _section_match.group(1), _section_match.group(2)
+        _joined = " ".join(line[2:] if line.startswith("> ") else line for line in _block.splitlines())
+        _joined = _normalize_whitespace(_joined)
+        # fullmatch, not search: the ENTIRE normalized blockquote must be
+        # exactly "<VERDICT>[, <Severity>]. "<quoted text>"" with nothing
+        # else before the verdict label or after the closing quote. A
+        # fourth review-found (Codex) that a bare `search(r'"(.*)"', ...)`
+        # only extracts what sits between the first and last quote marks
+        # and silently ignores anything else in the same blockquote run --
+        # an unquoted fabricated line tacked on either before the verdict
+        # label or after the closing quote passed clean under `search`,
+        # since it was never inside those two quote marks in the first
+        # place. `fullmatch` closes that: any such stowaway content fails
+        # the whole pattern instead of being silently dropped.
+        _quote_match = _re.fullmatch(r'[A-Z]+(?:,\s*[A-Za-z]+)?\.\s*"(.*)"', _joined)
+        pairs.append((_finding_id, _quote_match.group(1) if _quote_match else ""))
+    return pairs
+
+
+def _falsifiability_pair_ok(quoted_text: str, finding_id: str, judge, real_recording_ids: set[str]) -> bool:
+    """True only when `finding_id` names an ACTUAL recording (never a
+    missing one that merely got a fail-open placeholder response) and
+    `quoted_text` is byte-verbatim (after whitespace normalization) against
+    that ONE recording's verdict_evidence -- the one `judge` resolves for
+    `finding_id` -- never against any other recording or a concatenation of
+    several.
+    """
+    if not quoted_text or finding_id not in real_recording_ids:
+        return False
+    recorded = judge({"finding_id": finding_id}, {})
+    target_evidence = recorded.get("verdict_evidence", "") if recorded else ""
+    return _normalize_whitespace(quoted_text) == _normalize_whitespace(target_evidence)
+
 
 _falsifiability_path = HERE / "fixtures" / "adjudication" / "recordings" / "FALSIFIABILITY.md"
 _falsifiability_text = _falsifiability_path.read_text(encoding="utf-8")
+_falsifiability_judge = run_adjudication.make_replay_judge(RECORDINGS_DIR)
+_falsifiability_real_ids = _load_real_recording_ids(RECORDINGS_DIR)
 
-_all_recorded_evidence: list[str] = []
-for _recording_path in sorted(RECORDINGS_DIR.glob("*.json")):
-    with _recording_path.open(encoding="utf-8") as _handle:
-        _recording_data = json.load(_handle)
-    for _key, _value in _recording_data.items():
-        if _key.startswith("_") or not isinstance(_value, dict):
-            continue
-        _evidence = _value.get("verdict_evidence", "")
-        _all_recorded_evidence.append(" ".join(_re.sub(r"\s+", " ", _evidence).split()))
-_all_real_evidence = " ".join(_all_recorded_evidence)
+_before_pairs = _extract_before_pairs(_falsifiability_text)
+check(len(_before_pairs) == 4, f"FALSIFIABILITY.md names exactly four 'Before' blocks (found {len(_before_pairs)})")
 
-_before_heading = r"\*\*Before \(full adjudicator\.md\), the actual recorded verdict:\*\*\n\n((?:> .*\n?)+)"
-_before_blocks = _re.findall(_before_heading, _falsifiability_text)
-check(len(_before_blocks) == 4, f"FALSIFIABILITY.md names exactly four 'Before' blocks (found {len(_before_blocks)})")
-
-for _index, _block in enumerate(_before_blocks, start=1):
-    _joined = " ".join(line[2:] if line.startswith("> ") else line for line in _block.splitlines())
-    _joined = _re.sub(r"\s+", " ", _joined).strip()
-    _quote_match = _re.search(r'"(.*)"', _joined)
-    check(_quote_match is not None, f"pair {_index}: the 'Before' block contains a quoted verdict_evidence")
-    if _quote_match is None:
-        continue
-    _quoted_text = _quote_match.group(1)
+for _index, (_finding_id, _quoted_text) in enumerate(_before_pairs, start=1):
+    check(bool(_quoted_text), f"pair {_index}: the 'Before' block contains a quoted verdict_evidence")
     check(
-        _quoted_text in _all_real_evidence,
-        f"pair {_index}: the 'Before' quote is byte-verbatim against some real recording's verdict_evidence",
+        _finding_id in _falsifiability_real_ids,
+        f"pair {_index}: the 'Before' block's Target ({_finding_id!r}) names an ACTUAL real recording",
     )
+    check(
+        _falsifiability_pair_ok(_quoted_text, _finding_id, _falsifiability_judge, _falsifiability_real_ids),
+        f"pair {_index}: the 'Before' quote is byte-verbatim against its own target ({_finding_id!r})'s "
+        "recorded verdict_evidence, not merely a substring of every recording concatenated",
+    )
+
+check(
+    all(_falsifiability_pair_ok(_q, _f, _falsifiability_judge, _falsifiability_real_ids) for _f, _q in _before_pairs),
+    "all four real FALSIFIABILITY.md pairs still validate against their own targets under the stricter "
+    "per-target exact-equality check (issue #1412's fix does not regress the legitimate, already-correct case)",
+)
+
+# --- regression coverage for issue #1412's two named gaps -------------------
+# Neither case below touches the real FALSIFIABILITY.md or any real
+# recording file -- both feed hand-built quoted_text through the SAME
+# _falsifiability_pair_ok/_falsifiability_judge used by the guard above,
+# exactly this file's own established idiom (see e.g. the dedupe and
+# downgrades checks further up: hand-built input fed straight to the real
+# function under test, not a second, weaker stand-in).
+
+# (1) A truncated quote: take a REAL target's verdict_evidence and drop its
+# final clause. Under the pre-#1412 substring-of-the-concatenation check
+# this was proven (during investigation) to still read as `in` the full
+# corpus text; the byte-verbatim-per-target check must reject it.
+_pair1_finding_id = "74046c6b01333e4b"  # Pair 1's target, line-anchored-findings.json
+_pair1_real_evidence = _falsifiability_judge({"finding_id": _pair1_finding_id}, {})["verdict_evidence"]
+_pair1_words = _pair1_real_evidence.split()
+_truncated_quote = " ".join(_pair1_words[: len(_pair1_words) - 12])
+check(
+    len(_truncated_quote) < len(_pair1_real_evidence),
+    "the truncated-quote fixture below is actually shorter than the real evidence (sanity check on the test itself)",
+)
+check(
+    not _falsifiability_pair_ok(_truncated_quote, _pair1_finding_id, _falsifiability_judge, _falsifiability_real_ids),
+    "issue #1412 gap 1: a truncated 'Before' quote (final clause dropped) is REJECTED by the "
+    "byte-verbatim-per-target check, where the old substring-of-the-concatenation check let it pass",
+)
+
+# (2) A cross-recording boundary quote: fabricate a string from the tail of
+# one real recording's evidence plus the head of a DIFFERENT real
+# recording's evidence. Under the pre-#1412 check, joining every recording
+# into one search haystack made this construction read as `in` the full
+# corpus text even though it is absent from either recording alone; the
+# byte-verbatim-per-target check, which never builds that haystack, must
+# reject it against its own declared target.
+_boundary_target_id = "0d4a625fa2227bcc"  # pr-anchored-finding.json
+_boundary_other_id = "f699b70a97ebb6e5"  # pr-anchored-finding.json, a DIFFERENT finding
+_boundary_target_evidence = _falsifiability_judge({"finding_id": _boundary_target_id}, {})["verdict_evidence"]
+_boundary_other_evidence = _falsifiability_judge({"finding_id": _boundary_other_id}, {})["verdict_evidence"]
+_boundary_crossing_quote = (
+    _normalize_whitespace(_boundary_target_evidence)[-40:] + " " + _normalize_whitespace(_boundary_other_evidence)[:40]
+)
+check(
+    _boundary_crossing_quote not in _boundary_target_evidence,
+    "the boundary-crossing fixture below is actually absent from its declared target's own evidence "
+    "(sanity check on the test itself)",
+)
+check(
+    not _falsifiability_pair_ok(
+        _boundary_crossing_quote, _boundary_target_id, _falsifiability_judge, _falsifiability_real_ids
+    ),
+    "issue #1412 gap 2: a quote fabricated from the tail of one recording's evidence and the head of a "
+    "DIFFERENT recording's evidence is REJECTED against its declared target, where matching against the "
+    "concatenation of every recording could have masked exactly this boundary-crossing case",
+)
+
+# --- cross-vendor review coverage (Codex, on the first version of this fix) -
+# Both cases below were found by an independent Codex review of the first
+# version of this fix and are fail-open gaps THAT version of
+# _falsifiability_pair_ok/_extract_before_pairs did not catch, distinct from
+# issue #1412's own two named gaps above.
+
+# (3) An unknown finding_id must never "pass" merely because the quote
+# happens to equal make_replay_judge's own synthetic "no recorded judge
+# output for finding_id ..." fallback text -- that fallback exists so a
+# real adjudication run degrades to UNPROVEN past a missing recording
+# instead of crashing, which says nothing about whether a quote is
+# genuinely verbatim against something real.
+_missing_finding_id = "deadbeefdeadbeef"
+check(
+    _missing_finding_id not in _falsifiability_real_ids,
+    "the missing-target fixture below actually names a finding_id absent from every real recording "
+    "(sanity check on the test itself)",
+)
+_missing_target_synthetic_evidence = _falsifiability_judge({"finding_id": _missing_finding_id}, {})[
+    "verdict_evidence"
+]
+check(
+    not _falsifiability_pair_ok(
+        _missing_target_synthetic_evidence, _missing_finding_id, _falsifiability_judge, _falsifiability_real_ids
+    ),
+    "a quote equal to make_replay_judge's own synthetic 'no recording' fallback text is REJECTED when its "
+    "declared target names no real recording at all, not accepted as if that fallback were real evidence",
+)
+
+# (4) Target/Before extraction must not cross a '## Pair' section boundary:
+# a malformed document where one pair is missing its own 'Before' block
+# must not let its Target line pair up with the NEXT pair's Before block.
+### The quote-extraction regex (r'"(.*)"', greedy) matches from the FIRST to
+# the LAST double-quote on the joined line, so the "Before" text needs to be
+# wrapped in its own explicit outer quotes here -- the same shape every real
+# entry in FALSIFIABILITY.md uses (`CONFIRMED. "..."`) -- not left bare, or
+# the internal quote marks already present inside real evidence text (e.g.
+# `action="store_true"`) would be mistaken for the outer pair instead.
+_malformed_falsifiability_text = (
+    "## Pair 1 — malformed, no Before block at all\n\n"
+    f"Target: `{_pair1_finding_id}`\n\n"
+    "(no Before block here on purpose)\n\n"
+    "---\n\n"
+    "## Pair 2 — a real pair, quoted so its own Before block is unambiguous\n\n"
+    f"Target: `{_boundary_target_id}`\n\n"
+    "**Before (full adjudicator.md), the actual recorded verdict:**\n\n"
+    f'> CONFIRMED. "{_boundary_target_evidence}"\n'
+)
+_malformed_pairs = _extract_before_pairs(_malformed_falsifiability_text)
+check(
+    _pair1_finding_id not in {_fid for _fid, _ in _malformed_pairs},
+    "a '## Pair' section with no Before block of its own never pairs its own Target with a LATER "
+    f"section's Before block (extracted: {_malformed_pairs})",
+)
+check(
+    _malformed_pairs == [("", ""), (_boundary_target_id, _boundary_target_evidence)],
+    "the malformed Pair 1 section yields an explicit empty sentinel (not silently dropped) and the "
+    f"well-formed Pair 2 section is still extracted correctly alongside it (got {_malformed_pairs})",
+)
+check(
+    not _falsifiability_pair_ok("", "", _falsifiability_judge, _falsifiability_real_ids),
+    "the empty sentinel for a malformed section never validates as a genuine match",
+)
+
+# (5) A first version of THIS fix (cross-vendor review found this too, same
+# round) bounded extraction to '## Pair' sections but silently DROPPED a
+# section with no match inside its own bounds, rather than counting it --
+# so a document with one malformed section plus exactly four well-formed
+# ones still extracted to exactly four pairs, and the "exactly four"
+# top-level check read that as fine. Reproduced here directly: a
+# five-heading document (Pair 1 malformed, Pairs 2-5 each a REAL target)
+# must extract to five entries, not four, so the malformation cannot hide
+# behind a coincidentally-matching count.
+_five_heading_text = (
+    "## Pair 1 — malformed, no Before block at all\n\n"
+    f"Target: `{_pair1_finding_id}`\n\n"
+    "(no Before block here on purpose)\n\n"
+    "---\n\n"
+)
+for _n, _fid in enumerate(
+    ["74046c6b01333e4b", "0d4a625fa2227bcc", "1c947d53116f5737", "f699b70a97ebb6e5"], start=2
+):
+    _evidence = _falsifiability_judge({"finding_id": _fid}, {})["verdict_evidence"]
+    _five_heading_text += (
+        f"## Pair {_n} — a real, well-formed pair\n\n"
+        f"Target: `{_fid}`\n\n"
+        "**Before (full adjudicator.md), the actual recorded verdict:**\n\n"
+        f'> CONFIRMED. "{_evidence}"\n\n'
+        "---\n\n"
+    )
+_five_heading_pairs = _extract_before_pairs(_five_heading_text)
+check(
+    len(_five_heading_pairs) == 5,
+    "a five-'## Pair'-heading document (one malformed, four real) extracts to FIVE entries, not four -- "
+    f"the malformed section cannot hide behind an otherwise-matching count (got {len(_five_heading_pairs)})",
+)
+
+# (6) A second round of the same cross-vendor review (Codex) found a section
+# with a LEGITIMATE 'Before' block plus a SECOND, fabricated one was not
+# malformed by the checks above -- `pair_re.search` only ever finds the
+# FIRST 'Before' heading in a section, so a smuggled second one (an
+# arbitrary, non-verbatim claim) was silently ignored rather than checked,
+# even though "the checker can still report success while FALSIFIABILITY.md
+# contains an arbitrary non-verbatim Before claim" is exactly the failure
+# this whole guard exists to prevent. Reproduced directly: Pair 1's own
+# real, genuinely-verbatim Before block, immediately followed by a second,
+# fabricated Before heading and quote inside the SAME section.
+_smuggled_extra_before_text = (
+    "## Pair 1 — has a real Before block AND a smuggled second one\n\n"
+    f"Target: `{_pair1_finding_id}`\n\n"
+    "**Before (full adjudicator.md), the actual recorded verdict:**\n\n"
+    f'> CONFIRMED. "{_pair1_real_evidence}"\n\n'
+    "**Before (full adjudicator.md), the actual recorded verdict:**\n\n"
+    '> CONFIRMED. "THIS SECOND BEFORE BLOCK IS FABRICATED AND VERBATIM AGAINST NOTHING REAL."\n\n'
+    "---\n\n"
+)
+_smuggled_pairs = _extract_before_pairs(_smuggled_extra_before_text)
+check(
+    _smuggled_pairs == [("", "")],
+    "a section carrying a real 'Before' block plus a smuggled SECOND one is treated as malformed as a "
+    f"whole (an explicit sentinel), not silently reduced to just its first, legitimate block (got {_smuggled_pairs})",
+)
+
+# (7) A THIRD round of the same cross-vendor review found a narrower variant
+# of (6) still slipped through: a second blockquote with NO heading of its
+# own -- just a blank line after the first, legitimate one, still before
+# the next '**After...**' marker. Counting 'Before' HEADING occurrences
+# alone (check 6's fix) never saw this, because there was still only one
+# heading; only counting the blockquote RUNS themselves catches it.
+# Reproduced directly: Pair 1's real Before block, a blank line, then a
+# second, separate, fabricated blockquote, all still under the ONE real
+# Before heading and before the '**After...**' marker.
+_smuggled_bare_blockquote_text = (
+    "## Pair 1 — has one Before heading but two separate blockquotes\n\n"
+    f"Target: `{_pair1_finding_id}`\n\n"
+    "**Before (full adjudicator.md), the actual recorded verdict:**\n\n"
+    f'> CONFIRMED. "{_pair1_real_evidence}"\n\n'
+    '> CONFIRMED. "THIS SECOND, HEADING-LESS BLOCKQUOTE IS ALSO FABRICATED."\n\n'
+    "**After (exclusion 1 deleted, re-attempted fresh):**\n\n"
+    "> irrelevant to this check\n"
+)
+_smuggled_bare_pairs = _extract_before_pairs(_smuggled_bare_blockquote_text)
+check(
+    _smuggled_bare_pairs == [("", "")],
+    "a section with exactly ONE 'Before' heading but TWO separate blockquotes underneath it (the second "
+    "with no heading of its own) is STILL treated as malformed as a whole, not reduced to just the first "
+    f"blockquote (got {_smuggled_bare_pairs})",
+)
+
+# (8) A FOURTH round of the same cross-vendor review found the deepest
+# variant yet: a fabricated line living INSIDE the single legitimate
+# blockquote run itself, with no double quotes of its own, either right
+# after the real quoted line or right before it. `search(r'"(.*)"', ...)`
+# only ever looks at what sits between the FIRST and LAST quote mark in the
+# whole joined blockquote and silently ignores anything else in that same
+# text -- so a stowaway unquoted line attached to an otherwise-legitimate
+# quote passed clean, since it was never between those two quote marks.
+# Reproduced both directions: fabricated text trailing the real, correctly
+# quoted evidence, and fabricated text leading it.
+_trailing_stowaway_text = (
+    "## Pair 1 — a real Before block with fabricated text tacked on after it\n\n"
+    f"Target: `{_pair1_finding_id}`\n\n"
+    "**Before (full adjudicator.md), the actual recorded verdict:**\n\n"
+    f'> CONFIRMED. "{_pair1_real_evidence}" FABRICATED TRAILING TEXT WITH NO QUOTES OF ITS OWN\n\n'
+    "**After (exclusion 1 deleted, re-attempted fresh):**\n\n"
+    "> irrelevant to this check\n"
+)
+_trailing_stowaway_pairs = _extract_before_pairs(_trailing_stowaway_text)
+check(
+    _trailing_stowaway_pairs == [(_pair1_finding_id, "")],
+    "unquoted text tacked on AFTER a real, correctly-quoted 'Before' evidence string, in the same "
+    f"blockquote run, yields no quoted_text at all -- not the real quote with the stowaway silently "
+    f"dropped (got {_trailing_stowaway_pairs})",
+)
+check(
+    not _falsifiability_pair_ok(
+        _trailing_stowaway_pairs[0][1], _pair1_finding_id, _falsifiability_judge, _falsifiability_real_ids
+    ),
+    "and that empty quoted_text correctly fails to validate against the real target",
+)
+
+_leading_stowaway_text = (
+    "## Pair 1 — a real Before block with fabricated text tacked on before it\n\n"
+    f"Target: `{_pair1_finding_id}`\n\n"
+    "**Before (full adjudicator.md), the actual recorded verdict:**\n\n"
+    f'> FABRICATED LEADING TEXT WITH NO QUOTES OF ITS OWN CONFIRMED. "{_pair1_real_evidence}"\n\n'
+    "**After (exclusion 1 deleted, re-attempted fresh):**\n\n"
+    "> irrelevant to this check\n"
+)
+_leading_stowaway_pairs = _extract_before_pairs(_leading_stowaway_text)
+check(
+    _leading_stowaway_pairs == [(_pair1_finding_id, "")],
+    "unquoted text tacked on BEFORE the verdict label of an otherwise-real, correctly-quoted 'Before' "
+    f"evidence string yields no quoted_text at all either (got {_leading_stowaway_pairs})",
+)
 
 print(f"\n{len(failures)} failure(s)")
 sys.exit(1 if failures else 0)
