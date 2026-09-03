@@ -36,7 +36,7 @@ relationships:
 - **Script**: `launchpad/project-intelligence/corpus/indexes.py` (builder `index`, `launchpad/project-intelligence/corpus/index_defs/index.py`)
 - **Inputs**: the 205 canonical corpus node(s) discovered by `validate.py`'s
   `discover_markdown_files` contract (sorted walk, `schema/` excluded, symlinks resolved),
-  minus the 5 registered generated output path(s)
+  minus the 10 registered generated output path(s)
 - **Ordering**: groups: the corpus root first, then top-level directories in sorted name order; rows within each group sort by corpus-root-relative path
 - **Source revision**: input digest `sha256:224e78b5d4dcbb6f840c2c3da2bd815237b37a523b4108199aba621ffe9a7301` over the
   sorted (relative path, bytes) of the canonical inputs
@@ -51,7 +51,7 @@ This index deliberately excludes:
 - nothing subject-specific -- this is the root table of contents, so the only exclusions are the contract-level ones below
 - The `schema/` subtree, for the same reason `validate.py` excludes it: schema-testing
   infrastructure, not corpus content
-- Every registered generated output path (`GLOSSARY.md`, `INDEX.md`, `decisions/INDEX.md`, `generated/api-index.md`, `generated/capability-index.md`), so no generated
+- Every registered generated output path (`GLOSSARY.md`, `INDEX.md`, `decisions/INDEX.md`, `generated/api-index.md`, `generated/capability-index.md`, `generated/code-to-doc-map.md`, `generated/concept-index.md`, `generated/configuration-index.md`, `generated/corpus-index.md`, `generated/coverage.md`), so no generated
   view feeds itself
 
 ## Corpus index
@@ -313,6 +313,11 @@ derived view, excluded from the canonical listing above by construction:
 - `decisions/INDEX.md`
 - `generated/api-index.md`
 - `generated/capability-index.md`
+- `generated/code-to-doc-map.md`
+- `generated/concept-index.md`
+- `generated/configuration-index.md`
+- `generated/corpus-index.md`
+- `generated/coverage.md`
 
 ## Relationships
 
