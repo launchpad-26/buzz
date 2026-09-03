@@ -39,7 +39,7 @@ relationships:
 - **Script**: `launchpad/project-intelligence/corpus/indexes.py` (builder `api-index`, `launchpad/project-intelligence/corpus/index_defs/api_index.py`)
 - **Inputs**: the 205 canonical corpus node(s) discovered by `validate.py`'s
   `discover_markdown_files` contract (sorted walk, `schema/` excluded, symlinks resolved),
-  minus the 15 registered generated output path(s)
+  minus the 20 registered generated output path(s)
 - **Ordering**: listing rows sorted lexicographically by node id
 - **Source revision**: input digest `sha256:224e78b5d4dcbb6f840c2c3da2bd815237b37a523b4108199aba621ffe9a7301` over the
   sorted (relative path, bytes) of the canonical inputs
@@ -54,7 +54,7 @@ This index deliberately excludes:
 - the governance templates `corpus-template-interface` and `corpus-template-event-kind`, which prescribe the shape of future interface/event nodes but are not themselves API-surface nodes
 - The `schema/` subtree, for the same reason `validate.py` excludes it: schema-testing
   infrastructure, not corpus content
-- Every registered generated output path (`GLOSSARY.md`, `INDEX.md`, `decisions/INDEX.md`, `generated/api-index.md`, `generated/capability-index.md`, `generated/code-to-doc-map.md`, `generated/concept-index.md`, `generated/configuration-index.md`, `generated/corpus-index.md`, `generated/coverage.md`, `generated/crate-index.md`, `generated/database-index.md`, `generated/decision-index.md`, `generated/dependency-graph.md`, `generated/doc-to-code-map.md`), so no generated
+- Every registered generated output path (`GLOSSARY.md`, `INDEX.md`, `decisions/INDEX.md`, `generated/api-index.md`, `generated/capability-index.md`, `generated/code-to-doc-map.md`, `generated/concept-index.md`, `generated/configuration-index.md`, `generated/corpus-index.md`, `generated/coverage.md`, `generated/crate-index.md`, `generated/database-index.md`, `generated/decision-index.md`, `generated/dependency-graph.md`, `generated/doc-to-code-map.md`, `generated/documentation-graph.md`, `generated/event-kind-index.md`, `generated/layer-index.md`, `generated/nip-index.md`, `generated/orphaned-docs.md`), so no generated
   view feeds itself
 
 ## API surface listing
