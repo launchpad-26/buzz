@@ -7,18 +7,18 @@ of done: **necessary, appropriate, unambiguous, complete, singular, feasible, ve
 
 Linked from requirements-specification.md § Set-level assessment.
 
-**Revision note (round 6).** Following a sixth adversarial review round, this revision: flips `Feasible` from
-`Caveat` to `Pass` for RQA-FR-001, RQA-NFR-002, RQA-NFR-003, RQA-FR-030, RQA-NFR-022 and RQA-NFR-028 — none of
-these six is actually feasibility-contingent on `#2064` or `ADR-C`; the placement/design-choice context moves to
-each row's `Correct` judgement, matching the round-5 treatment already given to `ADR-A`'s five rows (`ADR-B`'s
-two rows, RQA-NFR-024/RQA-NFR-030, keep their genuine feasibility caveat); restores a `Correct` caveat on
-RQA-NFR-027 that a round-5 rebuild had dropped while two other documents still referenced it; fixes a copy-paste
-error in the RQA-NFR-024/RQA-NFR-030 `Correct` bases that mislabelled the floor row as the ceiling; adds
-`Unambiguous` caveats to RQA-BR-013, RQA-FR-017, RQA-FR-038, RQA-FR-039, and RQA-NFR-007 for source-inherited
-qualifiers or cross-clause imports that were previously bare `Pass`; downgrades RQA-BR-006's `Verifiable` from
-`Pass` to `Caveat`, since its fit criterion silently selects the stronger of two source-admitted readings of
-P5's own ambiguous conjunction; and updates RQA-BR-010's `Singular`/`Unambiguous` bases to reflect its now-joint
-CL-014/CL-017/CL-040 derivation.
+**Revision note (round 7).** Following a seventh adversarial review round, this revision: rewrites `Verifiable`
+for RQA-NFR-028 (authority/acceptance-boundary test, not physical-immutability), RQA-BR-006 (tests only the
+conjunction, correcting a criterion that operationalised the stronger source-admitted reading), RQA-BR-011
+(scoped to the assurance-use population), RQA-BR-013 (interruption-only, distinguishing immediate interruption
+from a genuinely necessary non-immediate escalation), RQA-FR-017 (necessity-gated, not purpose-asserted),
+RQA-FR-038 (an explicitly bounded, individually-justified security-invariant set); corrects `Correct` for
+RQA-FR-006 and RQA-FR-018 (statement fixes removed a scope mismatch with their cited clause) and adds it as a new
+`Caveat` for RQA-NFR-024/RQA-NFR-030 (recording the activity-conditioning interpretive choice, now split cleanly
+between the two rows); adds `Unambiguous` caveats to RQA-NFR-024, RQA-NFR-030, RQA-FR-005, RQA-FR-006 and
+RQA-NFR-028 for source-inherited or interpretive ambiguities that were previously bare `Pass`; and updates
+`Singular` for RQA-NFR-024 (now floor-only), RQA-NFR-030 (now the three-dimension ceiling) and RQA-NFR-007 (now
+citing CL-023/CL-035/CL-039 jointly).
 
 ---
 
@@ -98,11 +98,11 @@ reasonably have called differently.
 | RQA-BR-005 | Conforming | Pass | — |
 | RQA-BR-006 | Necessary | Pass | Distinct from RQA-BR-001's synthesis: states P5's own specific, independently testable obligation. |
 | RQA-BR-006 | Appropriate | Pass | — |
-| RQA-BR-006 | Unambiguous | Caveat | 'Shall not require a further contributor and a further review cycle' inherits P5's own conjunction from the source ('the fix still needs another contributor and another review cycle') without resolving whether the prohibition reads as ¬(A∧B) — not both together — or ¬A∧¬B — neither at all; #2006 does not disambiguate the conjunction, and this specification carries the ambiguity rather than silently picking a reading, matching the treatment already given to RQA-BR-010 and RQA-FR-034's own inherited qualifiers. |
+| RQA-BR-006 | Unambiguous | Caveat | 'Shall not require a further contributor and a further review cycle' inherits P5's own conjunction from the source ('the fix still needs another contributor and another review cycle') without resolving whether the prohibition reads as ¬(A∧B) — not both together — or ¬A∧¬B — neither at all; #2006 does not disambiguate the conjunction. Round 7: the fit criterion now tests only the weaker ¬(A∧B) reading (correcting a prior criterion that silently operationalised the stronger ¬A∧¬B reading), but the underlying source ambiguity is unresolved and this caveat continues to record it rather than treat the chosen reading as the only one #2006 admits. |
 | RQA-BR-006 | Complete | Pass | — |
 | RQA-BR-006 | Singular | Pass | — |
 | RQA-BR-006 | Feasible | Pass | — |
-| RQA-BR-006 | Verifiable | Caveat | The fit criterion tests the stronger ¬A∧¬B reading (neither a second contributor turn nor a second full review cycle) of P5's own ambiguous conjunction (see this row's Unambiguous caveat), which is one of two source-admitted readings; a solution conforming to the weaker ¬(A∧B) reading alone (avoiding the combination, but still needing one contributor action) would fail this criterion despite conforming to a reading #2006 does not rule out. Recorded here rather than silently resolved by picking the stronger reading as though it were the only one. |
+| RQA-BR-006 | Verifiable | Caveat | Round 7: the fit criterion now tests only ¬(A∧B) — the combination is not required — correcting a prior criterion that operationalised the stronger ¬A∧¬B reading and would have rejected a system needing one further contributor action alone. The underlying source ambiguity (see this row's Unambiguous caveat) is recorded, not resolved: this criterion picks the weaker, source-permitted reading rather than claiming #2006 forces it. |
 | RQA-BR-006 | Correct | Pass | — |
 | RQA-BR-006 | Conforming | Pass | — |
 | RQA-BR-007 | Necessary | Pass | Distinct from RQA-BR-001's synthesis: states P6's own specific, independently testable obligation. |
@@ -134,9 +134,9 @@ reasonably have called differently.
 | RQA-BR-009 | Conforming | Pass | — |
 | RQA-BR-010 | Necessary | Pass | Distinct from RQA-BR-001's synthesis: states P9's own specific, independently testable obligation. |
 | RQA-BR-010 | Appropriate | Pass | — |
-| RQA-BR-010 | Unambiguous | Caveat | 'Genuinely requires human judgement' synthesises P9/CL-014's own framing with P12/CL-017's and AC13/CL-040's (round 6: now cited as joint source clauses, not merely 'imported'); #2006 does not itself define the line between genuine and non-genuine judgement even across all three clauses, and none is invented here. |
+| RQA-BR-010 | Unambiguous | Caveat | 'Genuinely requires human judgement' synthesises P9/CL-014's own framing with P12/CL-017's and AC13/CL-040's (cited as joint source clauses since round 6); #2006 does not itself define the line between genuine and non-genuine judgement even across all three clauses, and none is invented here. |
 | RQA-BR-010 | Complete | Pass | — |
-| RQA-BR-010 | Singular | Pass | One dominant obligation ('progression shall not depend on manual intervention beyond genuine judgement'); citing three source clauses (CL-014, CL-017, CL-040 — round 6) jointly informs that single obligation's qualifier rather than adding a second obligation — see § Singular-split record's CL-017/CL-040 entries. |
+| RQA-BR-010 | Singular | Pass | One dominant obligation ('progression shall not depend on manual intervention beyond genuine judgement'); citing three source clauses (CL-014, CL-017, CL-040) jointly informs that single obligation's qualifier rather than adding a second obligation — see § Singular-split record's CL-017/CL-040 entries. |
 | RQA-BR-010 | Feasible | Pass | — |
 | RQA-BR-010 | Verifiable | Pass | — |
 | RQA-BR-010 | Correct | Pass | — |
@@ -191,7 +191,7 @@ reasonably have called differently.
 | RQA-FR-001 | Singular | Pass | One dominant obligation; CL-028 was split across RQA-FR-001, RQA-FR-002 — see requirements-specification.md § Singular-split record for how the split was drawn. |
 | RQA-FR-001 | Feasible | Pass | — |
 | RQA-FR-001 | Verifiable | Pass | — |
-| RQA-FR-001 | Correct | Pass | Reflects AC01's plain reading; #2064 owns where this specification (and by extension the published protocol definition it requires) is placed, not whether the obligation itself is agreed — a placement question, not a feasibility one (round 6). |
+| RQA-FR-001 | Correct | Pass | Reflects AC01's plain reading; #2064 owns where this specification (and by extension the published protocol definition it requires) is placed, not whether the obligation itself is agreed — a placement question, not a feasibility one. |
 | RQA-FR-001 | Conforming | Pass | — |
 | RQA-FR-002 | Necessary | Pass | — |
 | RQA-FR-002 | Appropriate | Pass | — |
@@ -222,7 +222,7 @@ reasonably have called differently.
 | RQA-FR-004 | Conforming | Pass | — |
 | RQA-FR-005 | Necessary | Pass | — |
 | RQA-FR-005 | Appropriate | Pass | — |
-| RQA-FR-005 | Unambiguous | Pass | — |
+| RQA-FR-005 | Unambiguous | Caveat | 'Nothing material' is AC03's own undefined qualifier, and 'material' is not defined anywhere in #2006; what counts as a materially-immaterial change is left to the same undefined boundary already caveated on RQA-FR-034's 'materially serves'/'materially simpler'. This specification does not invent a definition, and this row's fit criterion tests only the observable consequence (zero reviewer invocations), not the boundary itself. |
 | RQA-FR-005 | Complete | Pass | — |
 | RQA-FR-005 | Singular | Pass | One dominant obligation; CL-030 was split across RQA-FR-005, RQA-FR-006, RQA-FR-007 — see requirements-specification.md § Singular-split record for how the split was drawn. |
 | RQA-FR-005 | Feasible | Pass | — |
@@ -231,7 +231,7 @@ reasonably have called differently.
 | RQA-FR-005 | Conforming | Pass | — |
 | RQA-FR-006 | Necessary | Pass | — |
 | RQA-FR-006 | Appropriate | Pass | — |
-| RQA-FR-006 | Unambiguous | Pass | — |
+| RQA-FR-006 | Unambiguous | Caveat | The set of obligations a push 'invalidates' depends on the same undefined 'material' boundary RQA-FR-005's Unambiguous caveat records; #2006 does not itself state how invalidation is determined for a given file change, and none is invented here — the fit criterion tests set equality with whatever that determination produces, not the determination itself. |
 | RQA-FR-006 | Complete | Pass | — |
 | RQA-FR-006 | Singular | Pass | One dominant obligation; CL-030 was split across RQA-FR-005, RQA-FR-006, RQA-FR-007 — see requirements-specification.md § Singular-split record for how the split was drawn. |
 | RQA-FR-006 | Feasible | Pass | — |
@@ -323,14 +323,14 @@ reasonably have called differently.
 | RQA-FR-016 | Appropriate | Pass | — |
 | RQA-FR-016 | Unambiguous | Pass | — |
 | RQA-FR-016 | Complete | Pass | — |
-| RQA-FR-016 | Singular | Pass | — |
+| RQA-FR-016 | Singular | Pass | One dominant obligation; CL-035 was split across RQA-FR-016, RQA-NFR-007 — see requirements-specification.md § Singular-split record for how the split was drawn. |
 | RQA-FR-016 | Feasible | Pass | — |
 | RQA-FR-016 | Verifiable | Pass | — |
 | RQA-FR-016 | Correct | Pass | — |
 | RQA-FR-016 | Conforming | Pass | Names 'one command' — AC08's own vocabulary for the query interface; no particular command, tool or format is chosen. |
 | RQA-FR-017 | Necessary | Pass | — |
 | RQA-FR-017 | Appropriate | Pass | — |
-| RQA-FR-017 | Unambiguous | Caveat | 'Unnecessarily' is AC09's own qualifier ('without unnecessarily creating human intervention'); #2006 does not define which human intervention is necessary versus unnecessary for a given mechanical finding, and none is invented here — round 6's necessity carve-out defers to repository policy where policy speaks, but does not itself define the boundary #2006 leaves open. |
+| RQA-FR-017 | Unambiguous | Caveat | 'Unnecessarily' is AC09's own qualifier ('without unnecessarily creating human intervention'); #2006 does not define which human intervention is necessary versus unnecessary for a given mechanical finding, and none is invented here — round 6/7's necessity carve-out defers to repository policy where policy speaks, but does not itself define the boundary #2006 leaves open. |
 | RQA-FR-017 | Complete | Pass | — |
 | RQA-FR-017 | Singular | Pass | One dominant obligation; CL-036 was split across RQA-FR-017, RQA-FR-018 — see requirements-specification.md § Singular-split record for how the split was drawn. |
 | RQA-FR-017 | Feasible | Pass | — |
@@ -386,7 +386,7 @@ reasonably have called differently.
 | RQA-FR-023 | Appropriate | Pass | — |
 | RQA-FR-023 | Unambiguous | Pass | — |
 | RQA-FR-023 | Complete | Pass | — |
-| RQA-FR-023 | Singular | Pass | One dominant obligation; CL-039 was split across RQA-FR-023, RQA-FR-024, RQA-FR-038 — see requirements-specification.md § Singular-split record for how the split was drawn. |
+| RQA-FR-023 | Singular | Pass | One dominant obligation; CL-039 was split across RQA-FR-023, RQA-FR-024, RQA-FR-038, RQA-NFR-007 — see requirements-specification.md § Singular-split record for how the split was drawn. |
 | RQA-FR-023 | Feasible | Pass | — |
 | RQA-FR-023 | Verifiable | Pass | — |
 | RQA-FR-023 | Correct | Pass | — |
@@ -395,7 +395,7 @@ reasonably have called differently.
 | RQA-FR-024 | Appropriate | Pass | — |
 | RQA-FR-024 | Unambiguous | Pass | — |
 | RQA-FR-024 | Complete | Pass | — |
-| RQA-FR-024 | Singular | Pass | One dominant obligation; CL-039 was split across RQA-FR-023, RQA-FR-024, RQA-FR-038 — see requirements-specification.md § Singular-split record for how the split was drawn. |
+| RQA-FR-024 | Singular | Pass | One dominant obligation; CL-039 was split across RQA-FR-023, RQA-FR-024, RQA-FR-038, RQA-NFR-007 — see requirements-specification.md § Singular-split record for how the split was drawn. |
 | RQA-FR-024 | Feasible | Pass | — |
 | RQA-FR-024 | Verifiable | Pass | — |
 | RQA-FR-024 | Correct | Pass | — |
@@ -452,7 +452,7 @@ reasonably have called differently.
 | RQA-FR-030 | Singular | Pass | — |
 | RQA-FR-030 | Feasible | Pass | — |
 | RQA-FR-030 | Verifiable | Pass | — |
-| RQA-FR-030 | Correct | Pass | Reflects its own source clause's plain reading; ADR-C is an undecided design choice at the intersection of AC15 and Security bullet 4, not a textual inconsistency between them, and not a feasibility question — round 6 moved the placement/design-context note here from a Feasible caveat, since satisfaction is not actually contingent on ADR-C's resolution (jointly satisfiable under every source-conforming option) — see the reframed ADR-C draft. |
+| RQA-FR-030 | Correct | Pass | Reflects its own source clause's plain reading; ADR-C is an undecided design choice at the intersection of AC15 and Security bullet 4, not a textual inconsistency between them, and not a feasibility question — the placement/design-context note lives here rather than as a Feasible caveat, since satisfaction is not actually contingent on ADR-C's resolution (jointly satisfiable under every source-conforming option) — see the reframed ADR-C draft. |
 | RQA-FR-030 | Conforming | Pass | — |
 | RQA-FR-031 | Necessary | Pass | — |
 | RQA-FR-031 | Appropriate | Pass | — |
@@ -519,11 +519,11 @@ reasonably have called differently.
 | RQA-FR-037 | Conforming | Pass | — |
 | RQA-FR-038 | Necessary | Pass | — |
 | RQA-FR-038 | Appropriate | Pass | — |
-| RQA-FR-038 | Unambiguous | Caveat | 'Safe' is CL-039's own word, used without enumeration; this specification's fit criterion tests the most complete closed set of source-derived safety invariants available (see this row's Verifiable caveat) but cannot claim that set exhausts what #2006 means by 'safe', and none beyond that closed set is invented here. |
+| RQA-FR-038 | Unambiguous | Caveat | 'Safe' is CL-039's own word, used without enumeration; this specification's fit criterion tests the most complete, explicitly-bounded set of source-derived standing security invariants available (see this row's Verifiable caveat) but cannot claim that set exhausts what #2006 means by 'safe', and none beyond that closed, justified set is invented here. |
 | RQA-FR-038 | Complete | Pass | — |
-| RQA-FR-038 | Singular | Pass | One dominant obligation; CL-039 was split across RQA-FR-023, RQA-FR-024, RQA-FR-038 — see requirements-specification.md § Singular-split record for how the split was drawn. |
+| RQA-FR-038 | Singular | Pass | One dominant obligation; CL-039 was split across RQA-FR-023, RQA-FR-024, RQA-FR-038, RQA-NFR-007 — see requirements-specification.md § Singular-split record for how the split was drawn. |
 | RQA-FR-038 | Feasible | Pass | — |
-| RQA-FR-038 | Verifiable | Caveat | CL-039 uses 'safe' without enumerating what safety consists of. The fit criterion tests every source-derived security invariant this specification separately states (RQA-NFR-010, RQA-NFR-018, RQA-NFR-022, RQA-NFR-028, RQA-NFR-019…021), which is the most complete closed set available from the extract, but cannot rule out a safety property #2006 gestures at without stating; recorded as an open-texture limitation rather than claimed as an exhaustive definition of 'safe'. |
+| RQA-FR-038 | Verifiable | Caveat | CL-039 uses 'safe' without enumerating what safety consists of. Round 7: the fit criterion tests every standing security invariant this specification states, with the excluded rows (RQA-NFR-015/016/017/026/023/027/029) each given a stated reason (ongoing-conduct or configuration-setting properties, not a resting-state property) rather than silently omitted; this is the most complete, explicitly-bounded set available from the extract, but cannot rule out a safety property #2006 gestures at without stating. |
 | RQA-FR-038 | Correct | Pass | — |
 | RQA-FR-038 | Conforming | Pass | — |
 | RQA-FR-039 | Necessary | Pass | — |
@@ -552,13 +552,13 @@ reasonably have called differently.
 | RQA-NFR-001 | Correct | Pass | — |
 | RQA-NFR-001 | Conforming | Pass | — |
 | RQA-NFR-002 | Necessary | Pass | — |
-| RQA-NFR-002 | Appropriate | Pass | Priced Could because C1's own text says a contributor 'may' use a thin skill/plugin/hook — using one is the contributor's option; the system's obligation to accommodate that choice, once made, is unconditional (round 6 restatement), which is why this row (the contributor-side option) and RQA-FR-030 (the system-side obligation to admit a non-built-in harness generally) carry different priorities without duplicating each other's subject matter. |
+| RQA-NFR-002 | Appropriate | Pass | Priced Could because C1's own text says a contributor 'may' use a thin skill/plugin/hook — using one is the contributor's option; the system's obligation to accommodate that choice, once made, is unconditional, which is why this row (the contributor-side option) and RQA-FR-030 (the system-side obligation to admit a non-built-in harness generally) carry different priorities without duplicating each other's subject matter. |
 | RQA-NFR-002 | Unambiguous | Pass | — |
 | RQA-NFR-002 | Complete | Pass | — |
 | RQA-NFR-002 | Singular | Pass | One dominant obligation; CL-018 was split across RQA-NFR-001, RQA-NFR-002 — see requirements-specification.md § Singular-split record for how the split was drawn. |
 | RQA-NFR-002 | Feasible | Pass | — |
 | RQA-NFR-002 | Verifiable | Pass | — |
-| RQA-NFR-002 | Correct | Pass | Round 6: restated so the system's obligation is to accommodate participation through the published contract, not to implement acceptance of three named mechanism forms specifically; #2064's placement question does not bear on whether this obligation is agreed. |
+| RQA-NFR-002 | Correct | Pass | Restated so the system's obligation is to accommodate participation through the published contract, not to implement acceptance of three named mechanism forms specifically; #2064's placement question does not bear on whether this obligation is agreed. |
 | RQA-NFR-002 | Conforming | Pass | Names 'skill, plugin or hook' — C1's own vocabulary for the optional integration path, not a mechanism chosen by this specification. |
 | RQA-NFR-003 | Necessary | Pass | — |
 | RQA-NFR-003 | Appropriate | Pass | — |
@@ -567,7 +567,7 @@ reasonably have called differently.
 | RQA-NFR-003 | Singular | Pass | — |
 | RQA-NFR-003 | Feasible | Pass | — |
 | RQA-NFR-003 | Verifiable | Pass | — |
-| RQA-NFR-003 | Correct | Pass | Reflects C2's plain reading, conjunctively per artifact (round 6); #2064's placement question does not bear on whether this obligation is agreed. |
+| RQA-NFR-003 | Correct | Pass | Reflects C2's plain reading, conjunctively per artifact; #2064's placement question does not bear on whether this obligation is agreed. |
 | RQA-NFR-003 | Conforming | Pass | — |
 | RQA-NFR-004 | Necessary | Pass | — |
 | RQA-NFR-004 | Appropriate | Pass | — |
@@ -598,13 +598,13 @@ reasonably have called differently.
 | RQA-NFR-006 | Conforming | Pass | — |
 | RQA-NFR-007 | Necessary | Pass | — |
 | RQA-NFR-007 | Appropriate | Pass | — |
-| RQA-NFR-007 | Unambiguous | Caveat | 'Whenever progression remains possible' is imported from AC08/CL-035's 'unable to progress' disposition and AC12/CL-039's mandated safe stop, not stated by C6/CL-023 itself; the harmonisation is necessary (a literal reading of C6 alone would contradict AC12's mandated stop and AC08's disposition, both baseline acceptance criteria in the same extract), and this specification records the cross-clause import rather than treating the qualifier as C6's own unqualified text — matching the treatment already given to RQA-BR-010's own cross-clause import (round 6, fable). |
+| RQA-NFR-007 | Unambiguous | Caveat | 'Whenever progression remains possible' is imported from AC08/CL-035's 'unable to progress' disposition and AC12/CL-039's mandated safe stop, not stated by C6/CL-023 itself; the harmonisation is necessary (a literal reading of C6 alone would contradict AC12's mandated stop and AC08's disposition, both baseline acceptance criteria in the same extract). Round 7: CL-035 and CL-039 are now cited as joint source clauses for this qualifier (previously only admitted here, not encoded as reference-graph edges), matching the fix already applied to RQA-BR-010 in round 6; #2006 still does not itself define where 'possible' stops, and none is invented here. |
 | RQA-NFR-007 | Complete | Pass | — |
-| RQA-NFR-007 | Singular | Pass | One dominant obligation; CL-023 was split across RQA-NFR-007, RQA-NFR-008 — see requirements-specification.md § Singular-split record for how the split was drawn. |
+| RQA-NFR-007 | Singular | Pass | One dominant obligation ('the system shall manage every lifecycle step through to an authoritative outcome whenever progression remains possible'); citing three source clauses (CL-023, CL-035, CL-039 — round 7) jointly informs that single obligation's qualifier rather than adding a second obligation. |
 | RQA-NFR-007 | Feasible | Pass | — |
 | RQA-NFR-007 | Verifiable | Pass | — |
 | RQA-NFR-007 | Correct | Pass | — |
-| RQA-NFR-007 | Conforming | Pass | Names GitHub / its review-state vocabulary under the Methodology's deliberate exception: CL-023 (C6) is itself stated in those terms. |
+| RQA-NFR-007 | Conforming | Pass | Names GitHub / its review-state vocabulary under the Methodology's deliberate exception: CL-023 (C6, AC08, AC12) is itself stated in those terms. |
 | RQA-NFR-008 | Necessary | Pass | — |
 | RQA-NFR-008 | Appropriate | Pass | — |
 | RQA-NFR-008 | Unambiguous | Pass | — |
@@ -690,7 +690,7 @@ reasonably have called differently.
 | RQA-NFR-017 | Appropriate | Pass | — |
 | RQA-NFR-017 | Unambiguous | Pass | — |
 | RQA-NFR-017 | Complete | Pass | — |
-| RQA-NFR-017 | Singular | Pass | One dominant obligation; CL-056 was split across RQA-NFR-017, RQA-NFR-018, RQA-NFR-026 — see requirements-specification.md § Singular-split record for how the split was drawn. |
+| RQA-NFR-017 | Singular | Pass | One dominant obligation; CL-056 was split across RQA-NFR-017, RQA-NFR-018, RQA-NFR-024, RQA-NFR-026, RQA-NFR-030 — see requirements-specification.md § Singular-split record for how the split was drawn. |
 | RQA-NFR-017 | Feasible | Pass | — |
 | RQA-NFR-017 | Verifiable | Pass | — |
 | RQA-NFR-017 | Correct | Pass | — |
@@ -699,7 +699,7 @@ reasonably have called differently.
 | RQA-NFR-018 | Appropriate | Pass | — |
 | RQA-NFR-018 | Unambiguous | Pass | — |
 | RQA-NFR-018 | Complete | Pass | — |
-| RQA-NFR-018 | Singular | Pass | One dominant obligation; CL-056 was split across RQA-NFR-017, RQA-NFR-018, RQA-NFR-026 — see requirements-specification.md § Singular-split record for how the split was drawn. |
+| RQA-NFR-018 | Singular | Pass | One dominant obligation; CL-056 was split across RQA-NFR-017, RQA-NFR-018, RQA-NFR-024, RQA-NFR-026, RQA-NFR-030 — see requirements-specification.md § Singular-split record for how the split was drawn. |
 | RQA-NFR-018 | Feasible | Pass | — |
 | RQA-NFR-018 | Verifiable | Pass | — |
 | RQA-NFR-018 | Correct | Pass | — |
@@ -738,7 +738,7 @@ reasonably have called differently.
 | RQA-NFR-022 | Singular | Pass | One dominant obligation; CL-058 was split across RQA-NFR-022, RQA-NFR-028 — see requirements-specification.md § Singular-split record for how the split was drawn. |
 | RQA-NFR-022 | Feasible | Pass | — |
 | RQA-NFR-022 | Verifiable | Pass | — |
-| RQA-NFR-022 | Correct | Pass | Reflects its own source clause's plain reading; ADR-C is an undecided design choice at the intersection of AC15 and Security bullet 4, not a textual inconsistency between them, and not a feasibility question — round 6 moved the placement/design-context note here from a Feasible caveat, since satisfaction is not actually contingent on ADR-C's resolution (jointly satisfiable under every source-conforming option) — see the reframed ADR-C draft. |
+| RQA-NFR-022 | Correct | Pass | Reflects its own source clause's plain reading; ADR-C is an undecided design choice at the intersection of AC15 and Security bullet 4, not a textual inconsistency between them, and not a feasibility question — the placement/design-context note lives here rather than as a Feasible caveat, since satisfaction is not actually contingent on ADR-C's resolution (jointly satisfiable under every source-conforming option) — see the reframed ADR-C draft. |
 | RQA-NFR-022 | Conforming | Pass | — |
 | RQA-NFR-023 | Necessary | Pass | — |
 | RQA-NFR-023 | Appropriate | Pass | — |
@@ -751,13 +751,13 @@ reasonably have called differently.
 | RQA-NFR-023 | Conforming | Pass | — |
 | RQA-NFR-024 | Necessary | Pass | — |
 | RQA-NFR-024 | Appropriate | Pass | — |
-| RQA-NFR-024 | Unambiguous | Caveat | Round 6 follow-up: whether CL-060's credential floor applies unconditionally to every managed repository or only to those configured for authority CL-056 would actually exercise is not resolved by CL-060's own text; this row picks the narrower, activity-conditioned reading (see its Correct caveat) rather than treating the unconditional reading as the only one, but #2006 itself does not disambiguate the two. |
+| RQA-NFR-024 | Unambiguous | Caveat | Whether CL-060's credential floor applies unconditionally to every managed repository or only to those configured for authority CL-056 would actually exercise is not resolved by CL-060's own text; this row picks the narrower, activity-conditioned reading (see its Correct caveat) rather than treating the unconditional reading as the only one, but #2006 itself does not disambiguate the two. |
 | RQA-NFR-024 | Complete | Pass | — |
-| RQA-NFR-024 | Singular | Pass | Split from a prior two-`shall` row (floor + ceiling) into this row (floor only, the positive permission set) and RQA-NFR-030 (ceiling only, the no-broader-permission and no-unmanaged-repository prohibition) — see § Singular-split record's CL-060 entry. |
+| RQA-NFR-024 | Singular | Pass | Round 7: now floor-only — a single obligation conditioned on one configuration ('carry X on repositories configured for authoritative outcomes'). The activity-relative ceiling a prior draft joined to this row with a semicolon (breaking singularity, since it was independently falsifiable from the floor) moved to RQA-NFR-030 — see § Singular-split record's CL-060 entry. |
 | RQA-NFR-024 | Feasible | Caveat | The obligation itself is agreed (status DECIDED); ADR-B owns an open, **externally-contingent feasibility** question (whether the enumerated credential scope admits the merge/push actions elsewhere required, given GitHub's own permission model — a premise the extract never states) this row's full satisfaction is contingent on — see § Set-level assessment's Consistent row. |
 | RQA-NFR-024 | Verifiable | Pass | — |
-| RQA-NFR-024 | Correct | Caveat | CL-060 states the credential floor unconditionally ('A GitHub token scoped to the target repositories with pull-requests write and contents read'), with no activity-configuration qualifier in its own text. This row reads that floor as conditioned on the repository being configured to submit authoritative review outcomes — narrower activity (e.g. advisory-only, per CL-055's own contemplation of that authority level) needs only the permissions that narrower activity requires — because an unconditional floor would hand pull-request write to a repository configured never to exercise it, which conflicts with CL-056's own least-privilege, default-disabled, per-activity authorisation principle for the same credential. This is a recorded interpretive choice, not CL-060's own literal, unconditional wording; ADR-B (kept) already owns the adjacent external-feasibility question of whether this scope suffices for the activities configured, so no second ADR is raised for this narrower, source-internal reading. |
-| RQA-NFR-024 | Conforming | Pass | Names 'pull-request write' and 'repository-content read' — the Security implications section's own credential-scope vocabulary, carried verbatim rather than translated into a platform-specific permission name. |
+| RQA-NFR-024 | Correct | Caveat | CL-060 states the credential floor unconditionally ('A GitHub token scoped to the target repositories with pull-requests write and contents read'), with no activity-configuration qualifier in its own text. This row reads that floor as conditioned on the repository being configured to submit authoritative review outcomes — narrower activity (e.g. advisory-only, per CL-055's own contemplation of that authority level) needs only the permissions that narrower activity requires — because an unconditional floor would hand pull-request write to a repository configured never to exercise it, which conflicts with CL-056's own least-privilege, default-disabled, per-activity authorisation principle for the same credential (now cited jointly, round 7). This is a recorded interpretive choice, not CL-060's own literal, unconditional wording; ADR-B (kept) already owns the adjacent external-feasibility question of whether this scope suffices for the activities configured, so no second ADR is raised for this narrower, source-internal reading. |
+| RQA-NFR-024 | Conforming | Pass | Names 'pull-request write' and 'repository-content read' — the Security implications section's own credential-scope vocabulary (CL-060 says 'pull-requests write and contents read'), carried in lightly normalised form, not translated into a platform-specific permission name. |
 | RQA-NFR-025 | Necessary | Pass | — |
 | RQA-NFR-025 | Appropriate | Pass | — |
 | RQA-NFR-025 | Unambiguous | Pass | — |
@@ -771,7 +771,7 @@ reasonably have called differently.
 | RQA-NFR-026 | Appropriate | Pass | — |
 | RQA-NFR-026 | Unambiguous | Pass | — |
 | RQA-NFR-026 | Complete | Pass | — |
-| RQA-NFR-026 | Singular | Pass | One dominant obligation; CL-056 was split across RQA-NFR-017, RQA-NFR-018, RQA-NFR-026 — see requirements-specification.md § Singular-split record for how the split was drawn. |
+| RQA-NFR-026 | Singular | Pass | One dominant obligation; CL-056 was split across RQA-NFR-017, RQA-NFR-018, RQA-NFR-024, RQA-NFR-026, RQA-NFR-030 — see requirements-specification.md § Singular-split record for how the split was drawn. |
 | RQA-NFR-026 | Feasible | Pass | — |
 | RQA-NFR-026 | Verifiable | Pass | — |
 | RQA-NFR-026 | Correct | Pass | — |
@@ -787,12 +787,12 @@ reasonably have called differently.
 | RQA-NFR-027 | Conforming | Pass | — |
 | RQA-NFR-028 | Necessary | Pass | — |
 | RQA-NFR-028 | Appropriate | Pass | — |
-| RQA-NFR-028 | Unambiguous | Pass | — |
+| RQA-NFR-028 | Unambiguous | Caveat | Round 7: 'forgeable-proof' is read at the authority/acceptance boundary (an unauthorised alteration must be detectable and refused as authoritative, not physically impossible to make) rather than as literal storage immutability; CL-058's own text does not state which of the two readings is intended, and this specification records the interpretive choice rather than treating the stronger, immutability reading as the only one available. |
 | RQA-NFR-028 | Complete | Pass | — |
 | RQA-NFR-028 | Singular | Pass | One dominant obligation; CL-058 was split across RQA-NFR-022, RQA-NFR-028 — see requirements-specification.md § Singular-split record for how the split was drawn. |
 | RQA-NFR-028 | Feasible | Pass | — |
 | RQA-NFR-028 | Verifiable | Pass | — |
-| RQA-NFR-028 | Correct | Pass | Reflects its own source clause's plain reading; ADR-C is an undecided design choice at the intersection of AC15 and Security bullet 4, not a textual inconsistency between them, and not a feasibility question — round 6 moved the placement/design-context note here from a Feasible caveat, since satisfaction is not actually contingent on ADR-C's resolution (jointly satisfiable under every source-conforming option) — see the reframed ADR-C draft. |
+| RQA-NFR-028 | Correct | Pass | Reflects its own source clause's plain reading; ADR-C is an undecided design choice at the intersection of AC15 and Security bullet 4, not a textual inconsistency between them, and not a feasibility question — the placement/design-context note lives here rather than as a Feasible caveat, since satisfaction is not actually contingent on ADR-C's resolution (jointly satisfiable under every source-conforming option) — see the reframed ADR-C draft. |
 | RQA-NFR-028 | Conforming | Pass | — |
 | RQA-NFR-029 | Necessary | Pass | — |
 | RQA-NFR-029 | Appropriate | Pass | — |
@@ -805,13 +805,13 @@ reasonably have called differently.
 | RQA-NFR-029 | Conforming | Pass | — |
 | RQA-NFR-030 | Necessary | Pass | — |
 | RQA-NFR-030 | Appropriate | Pass | — |
-| RQA-NFR-030 | Unambiguous | Pass | — |
+| RQA-NFR-030 | Unambiguous | Caveat | Same source ambiguity as RQA-NFR-024's own Unambiguous caveat: CL-060's own text does not state that the credential ceiling is activity-relative (round 7 moved that content here from RQA-NFR-024); the activity-relative reading is adopted for the reason recorded in this row's Correct caveat, not because #2006 disambiguates it. |
 | RQA-NFR-030 | Complete | Pass | — |
-| RQA-NFR-030 | Singular | Pass | One dominant obligation; CL-060 was split across RQA-NFR-024, RQA-NFR-025, RQA-NFR-030 — see requirements-specification.md § Singular-split record for how the split was drawn. |
+| RQA-NFR-030 | Singular | Pass | One dominant obligation ('the credential's permissions shall never exceed what type, repository-scope and configured activity allow'), tested across three ceiling dimensions the way RQA-NFR-021 tests four never-actions in one row — each dimension is a facet of the same upper-bound obligation, not an independent obligation on a different subject. |
 | RQA-NFR-030 | Feasible | Caveat | The obligation itself is agreed (status DECIDED); ADR-B owns an open, **externally-contingent feasibility** question (whether the enumerated credential scope admits the merge/push actions elsewhere required, given GitHub's own permission model — a premise the extract never states) this row's full satisfaction is contingent on — see § Set-level assessment's Consistent row. |
 | RQA-NFR-030 | Verifiable | Pass | — |
-| RQA-NFR-030 | Correct | Pass | Reflects the Security implications section's plain-reading credential-scope statement, split into its floor (RQA-NFR-024) and ceiling (this row) rather than one row asserting both; ADR-B (reframed) asks whether that scope is feasible given GitHub's external permission model, not whether the scope statement itself is agreed. |
-| RQA-NFR-030 | Conforming | Pass | Names 'pull-request write' and 'repository-content read' — the Security implications section's own credential-scope vocabulary, carried verbatim rather than translated into a platform-specific permission name. |
+| RQA-NFR-030 | Correct | Caveat | CL-060 states the credential ceiling without an activity-relative qualifier; this row's third ceiling dimension (no more permission than a repository's configured activity requires) is read in from the same CL-056 least-privilege principle as RQA-NFR-024's floor conditioning (see that row's Correct caveat for the full reasoning) — round 7 moved this clause here from RQA-NFR-024's own statement, where it broke that row's singularity; the type and repository-scope ceiling dimensions remain CL-060's own literal wording. |
+| RQA-NFR-030 | Conforming | Pass | Names 'pull-request write' and 'repository-content read' — the same lightly-normalised credential-scope vocabulary as RQA-NFR-024. |
 
 ---
 
@@ -820,33 +820,25 @@ reasonably have called differently.
 - 747 judgements recorded across 83 requirements and 9 characteristics.
 - Every judgement is `Pass` except the deliberate `Caveat`s below, none of which mark a requirement as failing —
   each records a qualification the requirement inherits from #2006's own text, from an open ADR question, from a
-  multi-clause derivation step, or from an open-textured source term, rather than from a defect introduced in
-  derivation:
-  - **Feasible caveats**: only `ADR-B`'s two rows now carry one — RQA-NFR-024, RQA-NFR-030 (round 6: the other
-    six rows that previously carried a `#2064`- or `ADR-C`-attributed caveat, RQA-FR-001/RQA-NFR-002/
-    RQA-NFR-003/RQA-FR-030/RQA-NFR-022/RQA-NFR-028, are now `Pass` — none of the six is actually contingent on
-    those questions; see each row's `Correct` judgement for the placement/design context instead).
-  - **Unambiguous caveats**: RQA-BR-001, RQA-BR-006, RQA-BR-010, RQA-BR-012, RQA-BR-013, RQA-BR-014, RQA-FR-017,
-    RQA-FR-025, RQA-FR-034, RQA-FR-038, RQA-FR-039 (new round 6), RQA-NFR-003, RQA-NFR-007 (new round 6),
-    RQA-NFR-013, RQA-NFR-024 (new, follow-up fix). RQA-NFR-011 is `Pass` (its round-3 ambiguity was removed by the round-4 positive-only rewrite).
-  - **Correct caveats**: RQA-NFR-027 (restored round 6 — records its conjunctive CL-024-and-CL-026 derivation
-    as an inferential step across two clauses, not a quotation from either); RQA-NFR-024 (follow-up fix —
-    records that this row conditions CL-060's unconditional credential floor on the repository being
-    configured to submit authoritative review outcomes, an interpretive choice adopted because the
-    unconditional reading would conflict with CL-056's least-privilege, default-disabled principle for the
-    same credential).
-  - **Verifiable caveats**: RQA-FR-038 (records CL-039's open-textured "safe" rather than an unqualified Pass);
-    RQA-BR-006 (new round 6 — records that the fit criterion selects the stronger of two source-admitted
-    readings of P5's ambiguous conjunction, rather than treating it as the only possible reading).
-- Corrected across rounds 1–5: six `Singular` verdicts split into new rows; well over two dozen `Verifiable`
+  multi-clause derivation step, or from an interpretive/open-textured reading, rather than from a defect
+  introduced in derivation:
+  - **Feasible caveats**: only `ADR-B`'s two rows carry one — RQA-NFR-024, RQA-NFR-030.
+  - **Unambiguous caveats**: RQA-BR-001, RQA-BR-006, RQA-BR-010, RQA-BR-012, RQA-BR-013, RQA-BR-014, RQA-FR-005
+    (new round 7), RQA-FR-006 (new round 7), RQA-FR-017, RQA-FR-025, RQA-FR-034, RQA-FR-038, RQA-FR-039,
+    RQA-NFR-003, RQA-NFR-007, RQA-NFR-013, RQA-NFR-024 (new round 7), RQA-NFR-028 (new round 7), RQA-NFR-030
+    (new round 7). RQA-NFR-011 is `Pass` (its round-3 ambiguity was removed by the round-4 positive-only
+    rewrite).
+  - **Correct caveats**: RQA-NFR-027 (conjunctive CL-024-and-CL-026 derivation); RQA-NFR-024 and RQA-NFR-030
+    (new round 7 — the activity-conditioning interpretive choice against CL-060's unconditional wording, split
+    cleanly between the floor and ceiling rows).
+  - **Verifiable caveats**: RQA-FR-038 (records CL-039's open-textured "safe", now against an explicitly bounded
+    and individually-justified invariant set); RQA-BR-006 (records that the fit criterion deliberately tests
+    only the weaker of two source-admitted readings, per round 7's correction).
+- Corrected across rounds 1–6: six `Singular` verdicts split into new rows; well over three dozen `Verifiable`
   verdicts whose fit criteria were rewritten across successive rounds; the `Conforming` basis for every
-  GitHub/source-vocabulary row; the `Necessary`/`Correct` bases for RQA-BR-005; `Singular` for RQA-FR-029 and
-  RQA-NFR-024; `Feasible`/`Correct` for the five `ADR-A` rows (round 5).
-- Corrected round 6: `Verifiable` for RQA-NFR-002 (no longer three mandated mechanism forms), RQA-FR-008 (no
-  invented exactly-one cardinality), RQA-BR-013 (interruption only, not resolution/progression), RQA-FR-013
-  (restored assurance-use predicate), RQA-FR-018 (validity retention only, not re-run avoidance), RQA-FR-005 and
-  RQA-NFR-003 (oscillation-adjudicated compromise wordings — see requirements-specification.md's Revision note),
-  and RQA-FR-017 (necessity carve-out clarified, not replaced); `Feasible` for six rows (see above); `Correct`
-  for RQA-NFR-027 (restored caveat) and RQA-NFR-024/RQA-NFR-030 (copy-paste fix); `Singular`/`Unambiguous` for
-  RQA-BR-010 (joint CL-014/CL-017/CL-040 derivation); new `Unambiguous` caveats for RQA-BR-013, RQA-FR-017,
-  RQA-FR-038, RQA-FR-039, RQA-NFR-007.
+  GitHub/source-vocabulary row; the `Necessary`/`Correct` bases for RQA-BR-005; `Feasible`/`Correct` for the
+  five `ADR-A` rows and the six `#2064`/`ADR-C` rows (rounds 5–6).
+- Corrected round 7: `Verifiable` for RQA-NFR-028, RQA-BR-006, RQA-BR-011, RQA-BR-013, RQA-FR-017, RQA-FR-038;
+  `Correct` for RQA-FR-006, RQA-FR-018, RQA-NFR-024, RQA-NFR-030; `Singular` for RQA-NFR-024, RQA-NFR-030,
+  RQA-NFR-007; five new `Unambiguous` caveats (see above); default-`Pass` fit repairs (no caveat needed) for
+  RQA-FR-008, RQA-FR-021, RQA-FR-031.
