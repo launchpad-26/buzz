@@ -7,7 +7,7 @@ of done: **necessary, appropriate, unambiguous, complete, singular, feasible, ve
 
 ## How to read this
 
-One heading per requirement, nine judgements each — 84 × 9 = 756 recorded judgements in total. Each judgement
+One heading per requirement, nine judgements each — 86 × 9 = 774 recorded judgements in total. Each judgement
 is `Pass` or `Caveat`. A `Caveat` never means the requirement fails; it means the judgement is not unqualified,
 and the qualification is written out rather than smoothed over. Basis is `—` where the judgement follows
 directly from reading the requirement against its source clause and fit criterion; a one-line basis is given
@@ -29,6 +29,7 @@ wherever the judgement takes a position a reader could reasonably have called di
 
 ---
 
+
 ### RQA-BR-001
 
 | Characteristic | Verdict | Basis (where not obvious) |
@@ -42,6 +43,7 @@ wherever the judgement takes a position a reader could reasonably have called di
 | Verifiable | Caveat | Verified only transitively, by construction: RQA-BR-001's fit criterion defers entirely to the source-derived obligations already in the set (consistency→BR-002, auditability→FR-012/NFR-022/NFR-028, efficiency→FR-019/FR-020/FR-021, trustworthiness→FR-011/FR-013 and the no-manufactured-success rows). Deleting BR-001 would fail no single check, because its evidence is the conjunction of other rows; this is the accepted shape of an umbrella clause (CL-001 still needs a disposition), and it is recorded here so the transitive-by-construction nature is explicit rather than silently passed. |
 | Correct | Pass | — |
 | Conforming | Pass | — |
+
 
 ### RQA-BR-002
 
@@ -57,6 +59,7 @@ wherever the judgement takes a position a reader could reasonably have called di
 | Correct | Pass | — |
 | Conforming | Pass | — |
 
+
 ### RQA-BR-003
 
 | Characteristic | Verdict | Basis (where not obvious) |
@@ -70,6 +73,7 @@ wherever the judgement takes a position a reader could reasonably have called di
 | Verifiable | Pass | — |
 | Correct | Pass | — |
 | Conforming | Pass | — |
+
 
 ### RQA-BR-004
 
@@ -85,6 +89,7 @@ wherever the judgement takes a position a reader could reasonably have called di
 | Correct | Pass | — |
 | Conforming | Pass | — |
 
+
 ### RQA-BR-005
 
 | Characteristic | Verdict | Basis (where not obvious) |
@@ -98,6 +103,7 @@ wherever the judgement takes a position a reader could reasonably have called di
 | Verifiable | Pass | — |
 | Correct | Pass | Reworded to a distinguishability obligation, reflecting both cited clauses' plain readings without implying a separate-blocking-mechanism reading that would conflict with C6/AC14. |
 | Conforming | Pass | — |
+
 
 ### RQA-BR-006
 
@@ -113,6 +119,7 @@ wherever the judgement takes a position a reader could reasonably have called di
 | Correct | Pass | — |
 | Conforming | Pass | — |
 
+
 ### RQA-BR-007
 
 | Characteristic | Verdict | Basis (where not obvious) |
@@ -126,6 +133,7 @@ wherever the judgement takes a position a reader could reasonably have called di
 | Verifiable | Pass | — |
 | Correct | Pass | — |
 | Conforming | Pass | — |
+
 
 ### RQA-BR-008
 
@@ -141,6 +149,7 @@ wherever the judgement takes a position a reader could reasonably have called di
 | Correct | Pass | — |
 | Conforming | Pass | — |
 
+
 ### RQA-BR-009
 
 | Characteristic | Verdict | Basis (where not obvious) |
@@ -154,6 +163,7 @@ wherever the judgement takes a position a reader could reasonably have called di
 | Verifiable | Pass | — |
 | Correct | Pass | — |
 | Conforming | Pass | — |
+
 
 ### RQA-BR-010
 
@@ -169,6 +179,7 @@ wherever the judgement takes a position a reader could reasonably have called di
 | Correct | Pass | — |
 | Conforming | Pass | — |
 
+
 ### RQA-BR-011
 
 | Characteristic | Verdict | Basis (where not obvious) |
@@ -182,6 +193,7 @@ wherever the judgement takes a position a reader could reasonably have called di
 | Verifiable | Pass | — |
 | Correct | Pass | — |
 | Conforming | Pass | — |
+
 
 ### RQA-BR-012
 
@@ -197,6 +209,7 @@ wherever the judgement takes a position a reader could reasonably have called di
 | Correct | Pass | — |
 | Conforming | Pass | — |
 
+
 ### RQA-BR-013
 
 | Characteristic | Verdict | Basis (where not obvious) |
@@ -210,6 +223,7 @@ wherever the judgement takes a position a reader could reasonably have called di
 | Verifiable | Pass | — |
 | Correct | Pass | — |
 | Conforming | Pass | — |
+
 
 ### RQA-BR-014
 
@@ -225,6 +239,7 @@ wherever the judgement takes a position a reader could reasonably have called di
 | Correct | Pass | — |
 | Conforming | Pass | — |
 
+
 ### RQA-FR-001
 
 | Characteristic | Verdict | Basis (where not obvious) |
@@ -238,6 +253,7 @@ wherever the judgement takes a position a reader could reasonably have called di
 | Verifiable | Pass | — |
 | Correct | Pass | Reflects AC01's plain reading; #2064 owns where this specification (and by extension the published protocol definition it requires) is placed, not whether the obligation itself is agreed — a placement question, not a feasibility one. |
 | Conforming | Pass | — |
+
 
 ### RQA-FR-002
 
@@ -253,6 +269,7 @@ wherever the judgement takes a position a reader could reasonably have called di
 | Correct | Pass | — |
 | Conforming | Pass | — |
 
+
 ### RQA-FR-003
 
 | Characteristic | Verdict | Basis (where not obvious) |
@@ -266,6 +283,7 @@ wherever the judgement takes a position a reader could reasonably have called di
 | Verifiable | Pass | — |
 | Correct | Pass | — |
 | Conforming | Pass | — |
+
 
 ### RQA-FR-004
 
@@ -281,6 +299,7 @@ wherever the judgement takes a position a reader could reasonably have called di
 | Correct | Pass | — |
 | Conforming | Pass | — |
 
+
 ### RQA-FR-005
 
 | Characteristic | Verdict | Basis (where not obvious) |
@@ -294,6 +313,7 @@ wherever the judgement takes a position a reader could reasonably have called di
 | Verifiable | Pass | — |
 | Correct | Pass | — |
 | Conforming | Caveat | The fit criterion introduces an audit-apparatus element beyond AC03: it requires the zero-reinvocation observation to be 'independently corroborated' (a boundary trace, an audited invocation log, or an equivalent), where AC03 itself imposes nothing about how the zero is observed. This is a verification-hygiene choice, not a source-scope widening of the obligation itself; recorded here rather than weakening the criterion, because an independently checkable observation is the one reading that makes the row's own fit criterion answerable by someone who did not write it. |
+
 
 ### RQA-FR-006
 
@@ -309,6 +329,7 @@ wherever the judgement takes a position a reader could reasonably have called di
 | Correct | Pass | — |
 | Conforming | Pass | — |
 
+
 ### RQA-FR-007
 
 | Characteristic | Verdict | Basis (where not obvious) |
@@ -322,6 +343,7 @@ wherever the judgement takes a position a reader could reasonably have called di
 | Verifiable | Pass | — |
 | Correct | Pass | — |
 | Conforming | Pass | — |
+
 
 ### RQA-FR-008
 
@@ -337,6 +359,7 @@ wherever the judgement takes a position a reader could reasonably have called di
 | Correct | Pass | — |
 | Conforming | Pass | — |
 
+
 ### RQA-FR-009
 
 | Characteristic | Verdict | Basis (where not obvious) |
@@ -350,6 +373,7 @@ wherever the judgement takes a position a reader could reasonably have called di
 | Verifiable | Pass | — |
 | Correct | Pass | — |
 | Conforming | Pass | — |
+
 
 ### RQA-FR-010
 
@@ -365,6 +389,7 @@ wherever the judgement takes a position a reader could reasonably have called di
 | Correct | Pass | — |
 | Conforming | Pass | — |
 
+
 ### RQA-FR-011
 
 | Characteristic | Verdict | Basis (where not obvious) |
@@ -378,6 +403,7 @@ wherever the judgement takes a position a reader could reasonably have called di
 | Verifiable | Pass | — |
 | Correct | Pass | — |
 | Conforming | Pass | — |
+
 
 ### RQA-FR-012
 
@@ -393,6 +419,7 @@ wherever the judgement takes a position a reader could reasonably have called di
 | Correct | Pass | — |
 | Conforming | Pass | Names 'a single command' — AC06's own vocabulary for the reconstruction interface; no particular command, tool or format is chosen. |
 
+
 ### RQA-FR-013
 
 | Characteristic | Verdict | Basis (where not obvious) |
@@ -406,6 +433,7 @@ wherever the judgement takes a position a reader could reasonably have called di
 | Verifiable | Pass | — |
 | Correct | Pass | — |
 | Conforming | Pass | — |
+
 
 ### RQA-FR-014
 
@@ -421,6 +449,7 @@ wherever the judgement takes a position a reader could reasonably have called di
 | Correct | Pass | — |
 | Conforming | Pass | — |
 
+
 ### RQA-FR-015
 
 | Characteristic | Verdict | Basis (where not obvious) |
@@ -434,6 +463,7 @@ wherever the judgement takes a position a reader could reasonably have called di
 | Verifiable | Pass | — |
 | Correct | Pass | — |
 | Conforming | Pass | — |
+
 
 ### RQA-FR-016
 
@@ -449,6 +479,7 @@ wherever the judgement takes a position a reader could reasonably have called di
 | Correct | Pass | — |
 | Conforming | Pass | Names 'one command' — AC08's own vocabulary for the query interface; no particular command, tool or format is chosen. |
 
+
 ### RQA-FR-017
 
 | Characteristic | Verdict | Basis (where not obvious) |
@@ -457,11 +488,12 @@ wherever the judgement takes a position a reader could reasonably have called di
 | Appropriate | Pass | — |
 | Unambiguous | Caveat | 'Unnecessarily' is AC09's own qualifier ('without unnecessarily creating human intervention'); #2006 does not define which human intervention is necessary versus unnecessary for a given mechanical finding, and none is invented here — round 6/7's necessity carve-out defers to repository policy where policy speaks, but does not itself define the boundary #2006 leaves open. |
 | Complete | Pass | — |
-| Singular | Pass | One dominant obligation; CL-036 was split across RQA-FR-017, RQA-FR-018 — see [singular-splits.md](singular-splits.md) for how the split was drawn. |
+| Singular | Pass | One dominant obligation; CL-036 was split across RQA-FR-017, RQA-FR-018, RQA-NFR-031, RQA-NFR-033 — see [singular-splits.md](singular-splits.md) for how the split was drawn. |
 | Feasible | Pass | — |
 | Verifiable | Pass | — |
 | Correct | Pass | Reflects AC09's plain-reading obligation. The 2026-09-04 amendment confirms directly that RQA itself may apply and push a deterministic, non-behavioural fix under this obligation — previously an open design question (draft ADR-A), now the source's own stated position. |
 | Conforming | Pass | — |
+
 
 ### RQA-FR-018
 
@@ -471,11 +503,12 @@ wherever the judgement takes a position a reader could reasonably have called di
 | Appropriate | Pass | — |
 | Unambiguous | Pass | — |
 | Complete | Pass | — |
-| Singular | Pass | One dominant obligation; CL-036 was split across RQA-FR-017, RQA-FR-018 — see [singular-splits.md](singular-splits.md) for how the split was drawn. |
+| Singular | Pass | One dominant obligation; CL-036 was split across RQA-FR-017, RQA-FR-018, RQA-NFR-031, RQA-NFR-033 — see [singular-splits.md](singular-splits.md) for how the split was drawn. |
 | Feasible | Pass | — |
 | Verifiable | Pass | — |
 | Correct | Pass | Reflects AC09's plain-reading obligation. The 2026-09-04 amendment confirms directly that RQA itself may apply and push a deterministic, non-behavioural fix under this obligation — previously an open design question (draft ADR-A), now the source's own stated position. |
 | Conforming | Pass | — |
+
 
 ### RQA-FR-019
 
@@ -491,6 +524,7 @@ wherever the judgement takes a position a reader could reasonably have called di
 | Correct | Pass | — |
 | Conforming | Pass | — |
 
+
 ### RQA-FR-020
 
 | Characteristic | Verdict | Basis (where not obvious) |
@@ -504,6 +538,7 @@ wherever the judgement takes a position a reader could reasonably have called di
 | Verifiable | Pass | — |
 | Correct | Pass | — |
 | Conforming | Pass | — |
+
 
 ### RQA-FR-021
 
@@ -519,6 +554,7 @@ wherever the judgement takes a position a reader could reasonably have called di
 | Correct | Pass | — |
 | Conforming | Pass | — |
 
+
 ### RQA-FR-022
 
 | Characteristic | Verdict | Basis (where not obvious) |
@@ -532,6 +568,7 @@ wherever the judgement takes a position a reader could reasonably have called di
 | Verifiable | Pass | — |
 | Correct | Pass | — |
 | Conforming | Pass | — |
+
 
 ### RQA-FR-023
 
@@ -547,6 +584,7 @@ wherever the judgement takes a position a reader could reasonably have called di
 | Correct | Pass | — |
 | Conforming | Pass | — |
 
+
 ### RQA-FR-024
 
 | Characteristic | Verdict | Basis (where not obvious) |
@@ -560,6 +598,7 @@ wherever the judgement takes a position a reader could reasonably have called di
 | Verifiable | Pass | — |
 | Correct | Pass | — |
 | Conforming | Pass | — |
+
 
 ### RQA-FR-025
 
@@ -575,6 +614,7 @@ wherever the judgement takes a position a reader could reasonably have called di
 | Correct | Pass | — |
 | Conforming | Pass | — |
 
+
 ### RQA-FR-026
 
 | Characteristic | Verdict | Basis (where not obvious) |
@@ -588,6 +628,7 @@ wherever the judgement takes a position a reader could reasonably have called di
 | Verifiable | Pass | — |
 | Correct | Pass | — |
 | Conforming | Pass | — |
+
 
 ### RQA-FR-027
 
@@ -603,6 +644,7 @@ wherever the judgement takes a position a reader could reasonably have called di
 | Correct | Pass | — |
 | Conforming | Pass | — |
 
+
 ### RQA-FR-028
 
 | Characteristic | Verdict | Basis (where not obvious) |
@@ -616,6 +658,7 @@ wherever the judgement takes a position a reader could reasonably have called di
 | Verifiable | Pass | — |
 | Correct | Pass | — |
 | Conforming | Pass | Names GitHub / its review-state vocabulary under the Methodology's deliberate exception: CL-041 (AC14) is itself stated in those terms. |
+
 
 ### RQA-FR-029
 
@@ -631,6 +674,7 @@ wherever the judgement takes a position a reader could reasonably have called di
 | Correct | Pass | — |
 | Conforming | Pass | — |
 
+
 ### RQA-FR-030
 
 | Characteristic | Verdict | Basis (where not obvious) |
@@ -644,6 +688,7 @@ wherever the judgement takes a position a reader could reasonably have called di
 | Verifiable | Pass | — |
 | Correct | Pass | Reflects its own source clause's plain reading. The 2026-09-04 amendment resolves what was an undecided design choice at the intersection of AC15 and Security bullet 4 (draft ADR-C): provenance is now stated to be written by RQA itself, never by reviewed content or model output, so a harness's self-reported identity is input RQA acts on, not an authoritative write of its own — resolved at the source, not by this specification. |
 | Conforming | Pass | — |
+
 
 ### RQA-FR-031
 
@@ -659,6 +704,7 @@ wherever the judgement takes a position a reader could reasonably have called di
 | Correct | Pass | — |
 | Conforming | Pass | Names GitHub / its review-state vocabulary under the Methodology's deliberate exception: CL-043 (AC16) is itself stated in those terms. |
 
+
 ### RQA-FR-032
 
 | Characteristic | Verdict | Basis (where not obvious) |
@@ -672,6 +718,7 @@ wherever the judgement takes a position a reader could reasonably have called di
 | Verifiable | Pass | — |
 | Correct | Pass | — |
 | Conforming | Pass | — |
+
 
 ### RQA-FR-033
 
@@ -687,6 +734,7 @@ wherever the judgement takes a position a reader could reasonably have called di
 | Correct | Pass | — |
 | Conforming | Pass | — |
 
+
 ### RQA-FR-034
 
 | Characteristic | Verdict | Basis (where not obvious) |
@@ -700,6 +748,7 @@ wherever the judgement takes a position a reader could reasonably have called di
 | Verifiable | Pass | — |
 | Correct | Pass | — |
 | Conforming | Pass | Names 'architectural component' — the closing criterion's own vocabulary for what is being justified; no particular architecture is chosen. |
+
 
 ### RQA-FR-035
 
@@ -715,6 +764,7 @@ wherever the judgement takes a position a reader could reasonably have called di
 | Correct | Pass | — |
 | Conforming | Pass | Names issue numbers #109, #535, #536 verbatim from the source closing criterion (CL-046); these are issue-tracker references the source itself supplies, not a named mechanism, component, product or technology. |
 
+
 ### RQA-FR-036
 
 | Characteristic | Verdict | Basis (where not obvious) |
@@ -728,6 +778,7 @@ wherever the judgement takes a position a reader could reasonably have called di
 | Verifiable | Pass | — |
 | Correct | Pass | — |
 | Conforming | Pass | — |
+
 
 ### RQA-FR-037
 
@@ -743,6 +794,7 @@ wherever the judgement takes a position a reader could reasonably have called di
 | Correct | Pass | — |
 | Conforming | Pass | — |
 
+
 ### RQA-FR-038
 
 | Characteristic | Verdict | Basis (where not obvious) |
@@ -756,6 +808,7 @@ wherever the judgement takes a position a reader could reasonably have called di
 | Verifiable | Caveat | CL-039 uses 'safe' without enumerating what safety consists of. Round 7: the fit criterion tests every standing security invariant this specification states, with the excluded rows (RQA-NFR-015/016/017/026/023/027/029) each given a stated reason (ongoing-conduct or configuration-setting properties, not a resting-state property) rather than silently omitted; this is the most complete, explicitly-bounded set available from the extract, but cannot rule out a safety property #2006 gestures at without stating. |
 | Correct | Pass | — |
 | Conforming | Pass | — |
+
 
 ### RQA-FR-039
 
@@ -771,6 +824,7 @@ wherever the judgement takes a position a reader could reasonably have called di
 | Correct | Pass | — |
 | Conforming | Pass | — |
 
+
 ### RQA-NFR-001
 
 | Characteristic | Verdict | Basis (where not obvious) |
@@ -784,6 +838,7 @@ wherever the judgement takes a position a reader could reasonably have called di
 | Verifiable | Pass | — |
 | Correct | Pass | — |
 | Conforming | Pass | — |
+
 
 ### RQA-NFR-002
 
@@ -799,6 +854,7 @@ wherever the judgement takes a position a reader could reasonably have called di
 | Correct | Pass | Restated so the system's obligation is to accommodate participation through the published contract, not to implement acceptance of three named mechanism forms specifically; #2064's placement question does not bear on whether this obligation is agreed. |
 | Conforming | Pass | Names 'skill, plugin or hook' — C1's own vocabulary for the optional integration path, not a mechanism chosen by this specification. |
 
+
 ### RQA-NFR-003
 
 | Characteristic | Verdict | Basis (where not obvious) |
@@ -812,6 +868,7 @@ wherever the judgement takes a position a reader could reasonably have called di
 | Verifiable | Pass | — |
 | Correct | Pass | Reflects C2's plain reading, conjunctively per artifact; #2064's placement question does not bear on whether this obligation is agreed. |
 | Conforming | Pass | — |
+
 
 ### RQA-NFR-004
 
@@ -827,6 +884,7 @@ wherever the judgement takes a position a reader could reasonably have called di
 | Correct | Pass | — |
 | Conforming | Pass | — |
 
+
 ### RQA-NFR-005
 
 | Characteristic | Verdict | Basis (where not obvious) |
@@ -840,6 +898,7 @@ wherever the judgement takes a position a reader could reasonably have called di
 | Verifiable | Pass | — |
 | Correct | Pass | — |
 | Conforming | Pass | — |
+
 
 ### RQA-NFR-006
 
@@ -855,6 +914,7 @@ wherever the judgement takes a position a reader could reasonably have called di
 | Correct | Pass | — |
 | Conforming | Pass | — |
 
+
 ### RQA-NFR-007
 
 | Characteristic | Verdict | Basis (where not obvious) |
@@ -868,6 +928,7 @@ wherever the judgement takes a position a reader could reasonably have called di
 | Verifiable | Pass | — |
 | Correct | Pass | — |
 | Conforming | Pass | Names GitHub / its review-state vocabulary under the Methodology's deliberate exception: CL-023 (C6, AC08, AC12) is itself stated in those terms. |
+
 
 ### RQA-NFR-008
 
@@ -883,6 +944,7 @@ wherever the judgement takes a position a reader could reasonably have called di
 | Correct | Pass | — |
 | Conforming | Pass | — |
 
+
 ### RQA-NFR-009
 
 | Characteristic | Verdict | Basis (where not obvious) |
@@ -896,6 +958,7 @@ wherever the judgement takes a position a reader could reasonably have called di
 | Verifiable | Pass | — |
 | Correct | Pass | — |
 | Conforming | Pass | — |
+
 
 ### RQA-NFR-010
 
@@ -911,6 +974,7 @@ wherever the judgement takes a position a reader could reasonably have called di
 | Correct | Pass | — |
 | Conforming | Pass | — |
 
+
 ### RQA-NFR-011
 
 | Characteristic | Verdict | Basis (where not obvious) |
@@ -924,6 +988,7 @@ wherever the judgement takes a position a reader could reasonably have called di
 | Verifiable | Pass | — |
 | Correct | Pass | — |
 | Conforming | Pass | Names GitHub / its review-state vocabulary under the Methodology's deliberate exception: CL-025 (C8) is itself stated in those terms. |
+
 
 ### RQA-NFR-012
 
@@ -939,6 +1004,7 @@ wherever the judgement takes a position a reader could reasonably have called di
 | Correct | Pass | — |
 | Conforming | Pass | — |
 
+
 ### RQA-NFR-013
 
 | Characteristic | Verdict | Basis (where not obvious) |
@@ -952,6 +1018,7 @@ wherever the judgement takes a position a reader could reasonably have called di
 | Verifiable | Pass | — |
 | Correct | Pass | — |
 | Conforming | Pass | — |
+
 
 ### RQA-NFR-014
 
@@ -967,6 +1034,7 @@ wherever the judgement takes a position a reader could reasonably have called di
 | Correct | Pass | — |
 | Conforming | Pass | — |
 
+
 ### RQA-NFR-015
 
 | Characteristic | Verdict | Basis (where not obvious) |
@@ -980,6 +1048,7 @@ wherever the judgement takes a position a reader could reasonably have called di
 | Verifiable | Pass | — |
 | Correct | Pass | — |
 | Conforming | Pass | — |
+
 
 ### RQA-NFR-016
 
@@ -995,6 +1064,7 @@ wherever the judgement takes a position a reader could reasonably have called di
 | Correct | Pass | — |
 | Conforming | Pass | — |
 
+
 ### RQA-NFR-017
 
 | Characteristic | Verdict | Basis (where not obvious) |
@@ -1008,6 +1078,7 @@ wherever the judgement takes a position a reader could reasonably have called di
 | Verifiable | Pass | — |
 | Correct | Pass | — |
 | Conforming | Pass | — |
+
 
 ### RQA-NFR-018
 
@@ -1023,6 +1094,7 @@ wherever the judgement takes a position a reader could reasonably have called di
 | Correct | Pass | — |
 | Conforming | Pass | — |
 
+
 ### RQA-NFR-019
 
 | Characteristic | Verdict | Basis (where not obvious) |
@@ -1031,11 +1103,12 @@ wherever the judgement takes a position a reader could reasonably have called di
 | Appropriate | Pass | — |
 | Unambiguous | Pass | — |
 | Complete | Pass | — |
-| Singular | Pass | One dominant obligation; CL-057 was split across RQA-NFR-019, RQA-NFR-020, RQA-NFR-021 — see [singular-splits.md](singular-splits.md) for how the split was drawn. |
+| Singular | Pass | One dominant obligation; CL-057 was split across RQA-NFR-019, RQA-NFR-020, RQA-NFR-021, RQA-NFR-031 — see [singular-splits.md](singular-splits.md) for how the split was drawn. |
 | Feasible | Pass | — |
 | Verifiable | Pass | — |
 | Correct | Pass | Reflects CL-057's (Security implications, bullet 3) plain-reading obligation, not AC09's. The 2026-09-04 amendment confirms remediation authority to modify and push code for mechanical findings is now source-granted (previously an open design question, draft ADR-A) — this bound is therefore a currently live, binding constraint on an exercised authority, not a pre-emptive one held in reserve against a future grant. |
 | Conforming | Pass | — |
+
 
 ### RQA-NFR-020
 
@@ -1045,11 +1118,12 @@ wherever the judgement takes a position a reader could reasonably have called di
 | Appropriate | Pass | — |
 | Unambiguous | Pass | — |
 | Complete | Pass | — |
-| Singular | Pass | One dominant obligation; CL-057 was split across RQA-NFR-019, RQA-NFR-020, RQA-NFR-021 — see [singular-splits.md](singular-splits.md) for how the split was drawn. |
+| Singular | Pass | One dominant obligation; CL-057 was split across RQA-NFR-019, RQA-NFR-020, RQA-NFR-021, RQA-NFR-031 — see [singular-splits.md](singular-splits.md) for how the split was drawn. |
 | Feasible | Pass | — |
 | Verifiable | Pass | — |
 | Correct | Pass | Reflects CL-057's (Security implications, bullet 3) plain-reading obligation, not AC09's. The 2026-09-04 amendment confirms remediation authority to modify and push code for mechanical findings is now source-granted (previously an open design question, draft ADR-A) — this bound is therefore a currently live, binding constraint on an exercised authority, not a pre-emptive one held in reserve against a future grant. |
 | Conforming | Pass | Names 'working tree' — CL-057's own term for the isolation boundary, not a chosen isolation mechanism (the fit criterion deliberately does not name one). |
+
 
 ### RQA-NFR-021
 
@@ -1059,11 +1133,12 @@ wherever the judgement takes a position a reader could reasonably have called di
 | Appropriate | Pass | — |
 | Unambiguous | Pass | — |
 | Complete | Pass | — |
-| Singular | Pass | One dominant obligation; CL-057 was split across RQA-NFR-019, RQA-NFR-020, RQA-NFR-021 — see [singular-splits.md](singular-splits.md) for how the split was drawn. |
+| Singular | Pass | One dominant obligation; CL-057 was split across RQA-NFR-019, RQA-NFR-020, RQA-NFR-021, RQA-NFR-031 — see [singular-splits.md](singular-splits.md) for how the split was drawn. |
 | Feasible | Pass | — |
 | Verifiable | Pass | — |
 | Correct | Pass | Reflects CL-057's (Security implications, bullet 3) plain-reading obligation, not AC09's. The 2026-09-04 amendment confirms remediation authority to modify and push code for mechanical findings is now source-granted (previously an open design question, draft ADR-A) — this bound is therefore a currently live, binding constraint on an exercised authority, not a pre-emptive one held in reserve against a future grant. |
 | Conforming | Pass | Names 'force-push', 'merge', 'branch protection' and 'protected branch' — CL-057's own enumerated prohibitions, carried verbatim. |
+
 
 ### RQA-NFR-022
 
@@ -1071,13 +1146,14 @@ wherever the judgement takes a position a reader could reasonably have called di
 |---|---|---|
 | Necessary | Pass | — |
 | Appropriate | Pass | — |
-| Unambiguous | Pass | — |
+| Unambiguous | Pass | 'Any model output, authenticated or not' makes explicit what the amended source states ('never by reviewed content or model output'); the pre-amendment 'unauthenticated' qualifier that left authenticated model output outside the prohibition is removed. |
 | Complete | Pass | — |
-| Singular | Pass | One dominant obligation; CL-058 was split across RQA-NFR-022, RQA-NFR-028 — see [singular-splits.md](singular-splits.md) for how the split was drawn. |
+| Singular | Pass | One prohibition widened to the amended writer set; CL-058 is split across the prohibition row, the tamper-evidence row (RQA-NFR-028) and the positive sole-writer row (RQA-NFR-032). |
 | Feasible | Pass | — |
 | Verifiable | Pass | — |
-| Correct | Pass | Reflects its own source clause's plain reading. The 2026-09-04 amendment resolves what was an undecided design choice at the intersection of AC15 and Security bullet 4 (draft ADR-C): provenance is now stated to be written by RQA itself, never by reviewed content or model output, so a harness's self-reported identity is input RQA acts on, not an authoritative write of its own — resolved at the source, not by this specification. |
-| Conforming | Pass | — |
+| Correct | Pass | Directly the amended CL-058 sentence 'Provenance is written by RQA, never by reviewed content or model output'; the prohibition now matches the source's unqualified model-output exclusion. |
+| Conforming | Pass | Names only the source's own writer categories ('reviewed content', 'model output') and the elements RQA-FR-012 reconstructs. |
+
 
 ### RQA-NFR-023
 
@@ -1093,19 +1169,21 @@ wherever the judgement takes a position a reader could reasonably have called di
 | Correct | Pass | — |
 | Conforming | Pass | — |
 
+
 ### RQA-NFR-024
 
 | Characteristic | Verdict | Basis (where not obvious) |
 |---|---|---|
-| Necessary | Pass | — |
-| Appropriate | Pass | — |
-| Unambiguous | Pass | The 2026-09-04 amendment states the activity-conditioned floor directly in CL-060's own text; what was previously an interpretive reading (see this row's Correct basis) is now the source's own explicit statement. |
+| Necessary | Pass | Carries the configured-scope-growth half of amended CL-060 that no other row states — the base scopes plus exactly the write scope a remediation-push or merge-after-review repository's operations require. |
+| Appropriate | Pass | Stated at the non-functional credential-scope level alongside RQA-NFR-030, its ceiling complement. |
+| Unambiguous | Pass | Maps directly to amended CL-060's structure: a base scope on every managed repository, plus an exactly-bounded additional scope where configured operations require it; no round-6-of-NFR-arch interpretive gap remains because the source states this structure itself. |
 | Complete | Pass | — |
-| Singular | Pass | Round 7: now floor-only — a single obligation conditioned on one configuration ('carry X on repositories configured for authoritative outcomes'). The activity-relative ceiling a prior draft joined to this row with a semicolon (breaking singularity, since it was independently falsifiable from the floor) moved to RQA-NFR-030 — see [singular-splits.md](singular-splits.md)'s CL-060 entry. |
-| Feasible | Pass | The 2026-09-04 amendment resolves what draft ADR-B owned: the credential scope is no longer a fixed enumeration asserted to somehow suffice for merge/push; the amended CL-060 states the scope grows to cover whatever a repository's configured activity requires, self-adjusting rather than resting on an external premise about GitHub's permission model. |
+| Singular | Pass | One floor obligation — 'carry the configured scopes on each managed repository' — whose additional-scope conjunct is keyed to the same configuration axis, not an independent obligation. |
+| Feasible | Pass | The scope is stated to grow exactly as configured authority requires; satisfaction is not contingent on any external premise. |
 | Verifiable | Pass | — |
-| Correct | Pass | The 2026-09-04 amendment states this floor's activity-conditioning directly: “where a repository's policy additionally grants remediation push or merge-after-review, the token for that repository additionally carries the write scope those operations require, and no more — repositories configured for advisory-only review carry no write scope beyond pull-requests.” What round 7 recorded as an interpretive choice (reading CL-060's floor as conditioned on configured activity, via CL-056's least-privilege principle) is now CL-060's own literal wording; no second ADR is needed because there is no longer a reading to choose between. |
-| Conforming | Pass | Names 'pull-request write' and 'repository-content read' — the Security implications section's own credential-scope vocabulary (CL-060 says 'pull-requests write and contents read'), carried in lightly normalised form, not translated into a platform-specific permission name. |
+| Correct | Pass | Directly reflects amended CL-060's sentences: the base scopes over the target repositories, the additional operation-scope where a repository's policy grants remediation push or merge-after-review, and the advisory cap — all source text, no interpretive step. |
+| Conforming | Pass | Names the scopes in CL-060's own vocabulary ('pull-requests write and contents read', lightly normalised) and no mechanism. |
+
 
 ### RQA-NFR-025
 
@@ -1121,6 +1199,7 @@ wherever the judgement takes a position a reader could reasonably have called di
 | Correct | Pass | — |
 | Conforming | Pass | Names 'deploy-key', 'relay' and 'VPS' — the Security implications section's own enumerated exclusions, carried verbatim. |
 
+
 ### RQA-NFR-026
 
 | Characteristic | Verdict | Basis (where not obvious) |
@@ -1134,6 +1213,7 @@ wherever the judgement takes a position a reader could reasonably have called di
 | Verifiable | Pass | — |
 | Correct | Pass | — |
 | Conforming | Pass | — |
+
 
 ### RQA-NFR-027
 
@@ -1149,19 +1229,21 @@ wherever the judgement takes a position a reader could reasonably have called di
 | Correct | Caveat | Derivation is conjunctive — cited from both CL-024 and CL-026, not a single clause. C7's 'only when explicitly configured' configuration-gating principle is applied to C9's own named content types (code, diffs, metadata, evidence) and C9's own permitted act (sending to an external provider); neither clause alone states this prohibition, but read together they entail it. This is an inferential step across two clauses, not a quotation from either, and is recorded as such rather than asserted as a single-clause literal derivation. |
 | Conforming | Pass | — |
 
+
 ### RQA-NFR-028
 
 | Characteristic | Verdict | Basis (where not obvious) |
 |---|---|---|
 | Necessary | Pass | — |
 | Appropriate | Pass | — |
-| Unambiguous | Caveat | Round 7: 'forgeable-proof' is read at the authority/acceptance boundary (an unauthorised alteration must be detectable and refused as authoritative, not physically impossible to make) rather than as literal storage immutability; CL-058's own text does not state which of the two readings is intended, and this specification records the interpretive choice rather than treating the stronger, immutability reading as the only one available. |
+| Unambiguous | Pass | The 2026-09-04 amendment explicitly selects tamper-evidence: CL-058 now says provenance 'is tamper-evident within the operator's trust boundary, and does not defend against a compromised operator machine', which is the acceptance/authority-boundary reading this row's fit criterion operationalises — the prior Caveat recorded an ambiguity the amendment resolved. |
 | Complete | Pass | — |
-| Singular | Pass | One dominant obligation; CL-058 was split across RQA-NFR-022, RQA-NFR-028 — see [singular-splits.md](singular-splits.md) for how the split was drawn. |
+| Singular | Pass | One dominant obligation; CL-058 was split across RQA-NFR-022, RQA-NFR-028, RQA-NFR-032 — see [singular-splits.md](singular-splits.md) for how the split was drawn. |
 | Feasible | Pass | — |
 | Verifiable | Pass | — |
 | Correct | Pass | Reflects its own source clause's plain reading. The 2026-09-04 amendment resolves what was an undecided design choice at the intersection of AC15 and Security bullet 4 (draft ADR-C): provenance is now stated to be written by RQA itself, never by reviewed content or model output, so a harness's self-reported identity is input RQA acts on, not an authoritative write of its own — resolved at the source, not by this specification. |
 | Conforming | Pass | — |
+
 
 ### RQA-NFR-029
 
@@ -1177,61 +1259,95 @@ wherever the judgement takes a position a reader could reasonably have called di
 | Correct | Pass | — |
 | Conforming | Pass | — |
 
+
 ### RQA-NFR-030
 
 | Characteristic | Verdict | Basis (where not obvious) |
 |---|---|---|
-| Necessary | Pass | — |
+| Necessary | Pass | Carries the per-repository activity-relative ceiling that RQA-NFR-024's floor does not; the two are independently falsifiable in each direction. |
 | Appropriate | Pass | — |
-| Unambiguous | Pass | The 2026-09-04 amendment states the activity-relative ceiling directly in CL-060's own text (see this row's Correct basis); what round 7 recorded as an interpretive reading is now the source's own explicit statement. |
+| Unambiguous | Pass | 'No permission beyond what that repository's configured activities require' is CL-060's own 'and no more' ceiling, restated over the managed-repository and non-managed boundaries; the removed fixed-cap reading that the pre-amendment clause forced is gone. |
 | Complete | Pass | — |
-| Singular | Pass | One dominant obligation ('the credential's permissions shall never exceed what type, repository-scope and configured activity allow'), tested across three ceiling dimensions the way RQA-NFR-021 tests four never-actions in one row — each dimension is a facet of the same upper-bound obligation, not an independent obligation on a different subject. |
-| Feasible | Pass | The 2026-09-04 amendment resolves what draft ADR-B owned: the credential scope is no longer a fixed enumeration asserted to somehow suffice for merge/push; the amended CL-060 states the scope grows to cover whatever a repository's configured activity requires, self-adjusting rather than resting on an external premise about GitHub's permission model. |
+| Singular | Pass | One ceiling obligation tested across the configured-activity and managed-repository boundaries; its three clauses are facets of the same upper bound, matching how RQA-NFR-021 tests four never-actions in one row. |
+| Feasible | Pass | — |
 | Verifiable | Pass | — |
-| Correct | Pass | CL-060 now states the activity-relative ceiling directly: a repository's additional write scope is capped to “the write scope those operations require, and no more,” and an advisory-only repository “carries no write scope beyond pull-requests.” What round 7 read in from CL-056's least-privilege principle (see RQA-NFR-024's Correct basis) is now CL-060's own literal wording for all three ceiling dimensions (type, repository-scope, activity-relative). |
-| Conforming | Pass | Names 'pull-request write' and 'repository-content read' — the same lightly-normalised credential-scope vocabulary as RQA-NFR-024. |
+| Correct | Pass | CL-060 now states exactly this per-repository ceiling ('the token for that repository additionally carries the write scope those operations require, and no more — repositories configured for advisory-only review carry no write scope beyond pull-requests'); the advisory example in the fit criterion treats holding base pull-requests write as compliant, matching the source's 'no write scope beyond pull-requests'. |
+| Conforming | Pass | — |
+
 
 ### RQA-NFR-031
 
 | Characteristic | Verdict | Basis (where not obvious) |
 |---|---|---|
-| Necessary | Pass | Distinct from RQA-NFR-019: that row bounds authority to whatever categories policy names as mechanical, but does not itself bound what policy may name as mechanical — this row states the ceiling on the category itself, a load-bearing obligation the amendment adds that no existing row carried. |
+| Necessary | Pass | Now carries both necessary properties of a mechanical remedy — deterministic AND non-behaviour-changing — that amended AC09 states; no other row bounds determinism. |
 | Appropriate | Pass | — |
-| Unambiguous | Caveat | 'Behaviour' and 'behavioural' are the amended source's own undefined terms (CL-036/CL-057 use them without further definition, mirroring the deterministic/non-behavioural distinction AC09 itself draws); this specification does not invent a boundary #2006 leaves open, and the fit criterion tests the classification outcome, not the definition of 'behaviour' itself. |
+| Unambiguous | Caveat | Two source-inherited open-textured points: 'behaviour'/'behavioural' are the amended source's own undefined terms, and the statement qualifies AC09's 'the system's behaviour' as 'the software under review's behaviour' so a reader does not misread the referent as RQA itself (this document's usual 'the system'); the fit criterion tests the classification outcome, not a definition #2006 leaves open. |
 | Complete | Pass | — |
-| Singular | Pass | One dominant obligation, jointly cited from CL-036 and CL-057 — both amended clauses state the same ceiling from opposite sides (AC09's own grant, and the Security section's authority description); see [singular-splits.md](singular-splits.md)'s CL-036 and CL-057 entries for how the joint citation was drawn. |
+| Singular | Pass | — |
+| Feasible | Pass | — |
+| Verifiable | Pass | Strengthened fit criterion closes the prior false-green: no mechanical-only handling may occur — classification, treatment, or suppression of the human-attention path — rather than only the final gate before remediation authority acts. |
+| Correct | Pass | AC09 defines a mechanical remedy as 'deterministic and does not change the system's behaviour' and CL-057 states the behavioural line is the ceiling on what policy may classify as mechanical; the statement carries both conjuncts. |
+| Conforming | Pass | Uses the source's own 'deterministic'/'behaviour' vocabulary with a Conforming-scoped referent qualification recorded in the Unambiguous basis. |
+
+
+### RQA-NFR-032
+
+| Characteristic | Verdict | Basis (where not obvious) |
+|---|---|---|
+| Necessary | Pass | Carries the positive half of amended CL-058 ('Provenance is written by RQA') that neither NFR-022 (a prohibition) nor NFR-028 (tamper-evidence) states; a design where every prohibited writer is excluded but no authoritative writer is designated would fail nothing else. |
+| Appropriate | Pass | — |
+| Unambiguous | Pass | 'Written by the system itself' and 'input the system records, not a write of its own' state the sole-writer rule and the self-report-as-input distinction in plain terms. |
+| Complete | Pass | — |
+| Singular | Pass | One obligation — RQA writes the authoritative record; the semicolon clause is an explanatory clarification of what 'written by the system itself' means for a harness/model self-report, not a second shall. |
 | Feasible | Pass | — |
 | Verifiable | Pass | — |
-| Correct | Pass | Reflects both cited clauses' plain reading directly; the 2026-09-04 amendment states this ceiling explicitly in both AC09 and Security bullet 3, so no interpretive step is needed to derive it. |
-| Conforming | Pass | Names no mechanism; 'classified or treated as mechanical' and 'repository policy' are the source's own vocabulary from AC09 and Security bullet 3. |
+| Correct | Pass | Reflects CL-058's 'Provenance is written by RQA, never by reviewed content or model output' directly; the fit criterion permits a self-report to remain input while requiring RQA's own write path to construct and commit every authoritative provenance element. |
+| Conforming | Pass | — |
+
+
+### RQA-NFR-033
+
+| Characteristic | Verdict | Basis (where not obvious) |
+|---|---|---|
+| Necessary | Pass | Carries AC09's 'and requires human attention' conjunct, which no other row states: RQA-FR-025/026/027 govern escalations actually raised, yet nothing compels one for a behaviour-changing finding — a finding could be classified non-mechanical and left unprogressed with no human seeing it while every other criterion passes. |
+| Appropriate | Pass | — |
+| Unambiguous | Caveat | Same source-inherited open-textured 'behaviour' term as RQA-NFR-031, and the same qualified referent ('the software under review'); the fit criterion makes 'human attention' observable as a named human receiving and considering the finding without equating attention with approval. |
+| Complete | Pass | — |
+| Singular | Pass | One obligation — a behaviour-changing finding receives human attention; the conjoined CL-036/AC09 citation is the amendment's own single sentence. |
+| Feasible | Pass | — |
+| Verifiable | Pass | — |
+| Correct | Pass | AC09's closing sentence 'A finding whose remedy would change behaviour is never mechanical, regardless of how small it is, and requires human attention' states the obligation directly. |
+| Conforming | Pass | Names no implementation mechanism; the fit criterion permits a specific escalation or another recorded human-review path and requires only the source's human-attention outcome. |
+
 
 ---
 
 ## Summary
 
-756 judgements recorded across 84 requirements and 9 characteristics. Every judgement is `Pass` except the
+774 judgements recorded across 86 requirements and 9 characteristics. Every judgement is `Pass` except the
 `Caveat`s below — none of which mark a requirement as failing. Each records a qualification the requirement
 inherits from #2006's own text or from a multi-clause derivation, rather than a defect in the derivation:
 
-- **Unambiguous:** RQA-BR-001, RQA-BR-006, RQA-BR-010, RQA-BR-012, RQA-BR-013, RQA-BR-014, RQA-FR-005, RQA-FR-006, RQA-FR-017, RQA-FR-025, RQA-FR-034, RQA-FR-038, RQA-FR-039, RQA-NFR-003, RQA-NFR-007, RQA-NFR-013, RQA-NFR-028, RQA-NFR-031 — each carries an undefined qualifier the source itself leaves open (for example, "material", "genuinely requires human judgement") that this specification does not resolve.
-- **Correct:** RQA-NFR-027 — rests on a stated interpretive choice against its source clause's plain reading (a conjunctive derivation from C7 and C9), recorded rather than asserted as the only possible one.
-- **Verifiable:** RQA-BR-001 (verified only transitively, through the rows it defers to), RQA-BR-006 (its fit criterion tests only the weaker of two source-admitted readings), RQA-FR-038 (tested against an explicitly bounded, individually-justified invariant set).
-- **Conforming:** RQA-FR-005 — its fit criterion introduces an audit-apparatus element (independently corroborated evidence) that AC03 itself does not name.
+- **Unambiguous:** RQA-BR-001, RQA-BR-006, RQA-BR-010, RQA-BR-012, RQA-BR-013, RQA-BR-014, RQA-FR-005, RQA-FR-006, RQA-FR-017, RQA-FR-025, RQA-FR-034, RQA-FR-038, RQA-FR-039, RQA-NFR-003, RQA-NFR-007, RQA-NFR-013, RQA-NFR-031, RQA-NFR-033 — each carries an undefined qualifier the source itself leaves open
+  (for example, "material", "genuinely requires human judgement", "behaviour") that this specification does not
+  resolve. These include RQA-NFR-031 and RQA-NFR-033, whose statements govern remedies to the software under
+  review and therefore carry a documented referent qualification alongside the unresolved "behaviour" term.
+- **Correct:** RQA-NFR-027 — rests on a stated interpretive choice against its source clause's plain
+  reading (a conjunctive derivation from C7 and C9), recorded rather than asserted as the only possible one.
+- **Verifiable:** RQA-BR-001, RQA-BR-006, RQA-FR-038 — RQA-BR-001 (verified only transitively, through the rows it defers to),
+  RQA-BR-006 (its fit criterion tests only the weaker of two source-admitted readings), RQA-FR-038 (tested
+  against an explicitly bounded, individually-justified invariant set).
+- **Conforming:** RQA-FR-005 — its fit criterion introduces an audit-apparatus element (independently
+  corroborated evidence) that AC03 itself does not name.
 
 No `Pass` judgement was weakened to reach these counts, and no `Caveat` was smoothed into an unqualified `Pass`.
 
-**Round 9 (2026-09-04 amendment).** Six judgements that were `Caveat` are now `Pass`: RQA-NFR-024's and
-RQA-NFR-030's Unambiguous, Feasible and Correct, three characteristics each. This is not a smoothing-over:
-the 2026-09-04 amendment states, in CL-060's own text, exactly what round 6/7 had read in as an interpretive,
-externally-contingent choice — the activity-conditioned credential floor and ceiling, and the resolution of the
-external GitHub-permission-model premise draft ADR-B owned. Eight further `Correct` bases were reworded without
-changing their verdict (RQA-FR-017, RQA-FR-018, RQA-NFR-019, RQA-NFR-020, RQA-NFR-021, RQA-FR-030, RQA-NFR-022,
-RQA-NFR-028) to record that the design questions draft ADR-A and draft ADR-C once owned are now resolved at the
-source; none of these eight was ever a `Caveat` on Correct, since each already held as an agreed obligation
-under every option the drafts considered.
-
-A new requirement, `RQA-NFR-031`, was also added in round 9 with nine fresh judgements — the amendment states a
-behavioural-ceiling obligation (a finding whose remedy would change the system's behaviour is never classified as
-mechanical) that no existing row carried; `RQA-NFR-019` bounds authority to whatever policy names as mechanical
-but does not itself bound what policy may name. `RQA-NFR-031`'s own Unambiguous judgement is a `Caveat`, for the
-same reason as several existing rows: 'behaviour'/'behavioural' are the amended source's own undefined terms.
+**Round 9 (2026-09-04 amendment).** Six judgements that were `Caveat` became `Pass` for RQA-NFR-024 and
+RQA-NFR-030 (their Unambiguous, Feasible and Correct, three each) when the amendment's CL-060 stated the
+configured-authority credential structure directly. That promotion was later re-examined (round 9b): the two
+credential rows were re-derived against the amended clause, so their judgements here are fresh for the reworded
+statements. RQA-NFR-022, RQA-NFR-031 were reworded and re-judged; RQA-NFR-032 and RQA-NFR-033 were added as new
+rows with nine fresh judgements each; RQA-NFR-028's Unambiguous Caveat was promoted to Pass because the
+amendment explicitly selects tamper-evidence over physical immutability. RQA-NFR-024 and RQA-NFR-030's
+Unambiguous, Feasible and Correct were Pass in the round-9 commit; the 9b re-derivation keeps each Pass but on
+the amended statement, and is recorded as a fresh judgement rather than a surviving promotion.

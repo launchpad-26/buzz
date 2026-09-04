@@ -10,7 +10,7 @@ choice the source left open (`ADR-C`).
 drafted by an agent from the maintainer's dictated resolutions and applied on the maintainer's instruction — and
 that amendment settled all three questions directly in the PRD text. **No ADR issue was ever filed for any of
 them, and none now will be.** The three files below are kept as the historical record of what was once open and
-why; no row in the current requirements specification carries an ADR pointer.
+why. No requirement row carries an `ADR-A`/`ADR-B`/`ADR-C` pointer — those three drafts are all resolved and retired. Three requirement rows do still carry an `ADR: [#2064]` pointer, because #2064 is a separate, still-open decision about repo-wide policy-document placement, unrelated to the three questions these drafts raised.
 
 | Draft | Question it asked | How #2006's 2026-09-04 amendment resolved it |
 |---|---|---|

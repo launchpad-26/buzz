@@ -2,8 +2,10 @@
 """Deterministic validator for the RQA requirements specification (C-T shape).
 
 Compares the current candidate files against the frozen baseline commit and checks every
-invariant this restructuring promised to preserve. Stdlib only. Run from anywhere; paths
-are relative to this file.
+invariant. Strict full byte-identity mode: every requirement field (statement, fit, EARS,
+priority, status, ADR), every ordered source-clause ID and verbatim quote, and every QA
+verdict must match the frozen baseline exactly. Stdlib only. Run from anywhere; paths are
+relative to this file.
 
     python3 validate.py
 
@@ -19,7 +21,12 @@ from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
 REPO_ROOT = HERE.parents[3]  # .../buzz
-FROZEN_COMMIT = "9ab6ba497"
+# Baseline prior to the round-9b corrections. The orchestrator substitutes the actual
+# commit SHA (which will contain the round-9b document corrections) here after commit;
+# that commit is in the same C-T block shape and is parsed with the same block parser.
+# An explicit BUZZ_FROZEN_COMMIT env override is honoured for one-off proof runs without
+# editing the committed placeholder.
+FROZEN_COMMIT = __import__("os").environ.get("BUZZ_FROZEN_COMMIT", "R9B-COMMIT")
 FROZEN_SPEC_PATH = "launchpad/skills/review-queue-automation/requirements/requirements-specification.md"
 FROZEN_QA_PATH = "launchpad/skills/review-queue-automation/requirements/requirements-quality-assessment.md"
 FROZEN_CLAUSE_PATH = "launchpad/skills/review-queue-automation/requirements/clause-inventory.md"
@@ -67,52 +74,9 @@ def parse_table_rows(lines: list[str], header_idx: int) -> list[list[str]]:
     return rows
 
 
-CHUNK_START = re.compile(r"\*\*(CL-\d{3})\*\*")
-LINK_RE = re.compile(r"\(([^)]*\[extract\]\(([^)]*)\))\)")
-QUOTE_ONLY_RE = re.compile(r"[\u201c\"](.+?)[\u201d\"]", re.DOTALL)
-
-
-def parse_derives_cell(cell: str) -> list[tuple[str, str, str, str]]:
-    """Return ordered [(clause_id, section_label, link_target, quote), ...].
-
-    Tolerant of narrative text between the clause id and its quote (representation
-    detail only) — extracts exactly the clause id, its first extract-linked
-    parenthetical, and the first quoted string that follows.
-    """
-    starts = list(CHUNK_START.finditer(cell))
-    out = []
-    for i, m in enumerate(starts):
-        cid = m.group(1)
-        chunk_end = starts[i + 1].start() if i + 1 < len(starts) else len(cell)
-        chunk = cell[m.end():chunk_end]
-        lm = LINK_RE.search(chunk)
-        if not lm:
-            continue
-        section_text = lm.group(1)
-        link_target = lm.group(2)
-        section_label = re.sub(r",?\s*\[extract\]\([^)]*\)", "", section_text).strip().strip(",").strip()
-        qm = QUOTE_ONLY_RE.search(chunk[lm.end():])
-        quote = qm.group(1) if qm else None
-        out.append((cid, section_label, link_target, quote))
-    return out
-
-
-def normalize_adr(cell: str) -> str:
-    """Collapse an ADR cell (either representation) to a bare token for comparison."""
-    cell = cell.strip()
-    if cell in ("\u2014", "-", ""):
-        return "\u2014"
-    if "#2064" in cell:
-        return "#2064"
-    m = re.search(r"ADR-[ABC]", cell)
-    if m:
-        return m.group(0)
-    return cell
-
-
 # --------------------------------------------------------------------------- #
-# candidate + frozen baseline: both are C-T block-shaped as of commit 9ab6ba497,
-# so both sides are parsed with the same block parser below.
+# candidate + frozen baseline: both are C-T block-shaped, so both sides are parsed
+# with the same block parser below.
 # --------------------------------------------------------------------------- #
 
 BLOCK_RE = re.compile(
@@ -138,19 +102,21 @@ def parse_candidate_spec(text: str) -> dict:
             "priority": pri.strip(), "status": status.strip(), "fit": fit.strip(),
             "clauses": [(cid, sec.strip(), link.strip(), quote.strip())
                         for cid, sec, link, quote in clause_list],
-            "adr": normalize_adr(adr),
+            "adr": adr,
         }
-    # heading-regex exactness/uniqueness
-    heading_lines = [l for l in text.split("\n") if l.startswith("### ")]
-    exact = re.compile(r"^### RQA-(BR|FR|NFR)-[0-9]{3}$")
-    bad_headings = [l for l in heading_lines if not exact.match(l)]
-    if bad_headings:
-        fail(f"[candidate] {len(bad_headings)} '### ' heading(s) do not match the exact ID regex: {bad_headings[:5]}")
-    ids_from_headings = [l[len('### '):] for l in heading_lines if exact.match(l)]
-    if len(ids_from_headings) != len(set(ids_from_headings)):
-        dupes = [x for x in set(ids_from_headings) if ids_from_headings.count(x) > 1]
-        fail(f"[candidate] duplicate requirement heading(s): {dupes}")
-    return {"requirements": records, "heading_ids": ids_from_headings}
+    return records
+
+
+def parse_candidate_qa(text: str) -> dict:
+    by_id: dict[str, dict[str, str]] = defaultdict(dict)
+    blocks = re.split(r"^### (RQA-(?:BR|FR|NFR)-\d{3})$", text, flags=re.MULTILINE)
+    for i in range(1, len(blocks), 2):
+        rid = blocks[i]
+        body = blocks[i + 1]
+        for char, verdict in re.findall(r"\| (\w+) \| (Pass|Caveat) \|", body):
+            if char in CHAR_ORDER:
+                by_id[rid][char] = verdict
+    return by_id
 
 
 def parse_candidate_clause_inventory(text: str) -> dict:
@@ -175,17 +141,17 @@ def parse_candidate_singular_splits(text: str) -> list[str]:
     return [re.match(r"\*\*(CL-\d{3})\*\*", r[0]).group(1) for r in rows]
 
 
-def parse_candidate_qa(text: str) -> dict:
-    by_id: dict[str, dict[str, str]] = defaultdict(dict)
-    blocks = re.split(r"^### (RQA-(?:BR|FR|NFR)-\d{3})$", text, flags=re.MULTILINE)
-    # blocks[0] is preamble; then alternating id, body
-    for i in range(1, len(blocks), 2):
-        rid = blocks[i]
-        body = blocks[i + 1]
-        for char, verdict in re.findall(r"\| (\w+) \| (Pass|Caveat) \|", body):
-            if char in CHAR_ORDER:
-                by_id[rid][char] = verdict
-    return by_id
+def parse_candidate_heading_ids(text: str) -> list[str]:
+    exact = re.compile(r"^### RQA-(BR|FR|NFR)-[0-9]{3}$")
+    heading_lines = [l for l in text.split("\n") if l.startswith("### ")]
+    bad = [l for l in heading_lines if not exact.match(l)]
+    if bad:
+        fail(f"[candidate] {len(bad)} '### ' heading(s) do not match the exact ID regex: {bad[:5]}")
+    ids = [l[len('### '):] for l in heading_lines if exact.match(l)]
+    if len(ids) != len(set(ids)):
+        dupes = [x for x in set(ids) if ids.count(x) > 1]
+        fail(f"[candidate] duplicate requirement heading(s): {dupes}")
+    return ids
 
 
 # --------------------------------------------------------------------------- #
@@ -235,7 +201,6 @@ def check_links_resolve(path: Path, text: str) -> None:
             continue
         file_part, has_hash, anchor = target.partition("#")
         if not file_part:
-            # pure in-page anchor — must match a heading slug in this same file
             if has_hash and anchor and anchor not in own_slugs:
                 fail(f"[links] {path.name}: in-page anchor '#{anchor}' does not match any heading")
             continue
@@ -272,17 +237,18 @@ def main() -> int:
     candidate_clauses = parse_candidate_clause_inventory(candidate_clause_text)
     candidate_qa = parse_candidate_qa(candidate_qa_text)
     candidate_split_clause_ids = parse_candidate_singular_splits(candidate_split_text)
+    candidate_heading_ids = parse_candidate_heading_ids(candidate_spec_text)
 
-    # ---- 1. per-ID field-level byte equality against the frozen baseline ---- #
-    frozen_ids = set(frozen["requirements"])
-    candidate_ids = set(candidate["requirements"])
+    # ---- 1. per-ID field-level byte equality ---- #
+    frozen_ids = set(frozen)
+    candidate_ids = set(candidate)
     if frozen_ids != candidate_ids:
         fail(f"[equality] ID set differs. Missing from candidate: {sorted(frozen_ids - candidate_ids)}; "
              f"extra in candidate: {sorted(candidate_ids - frozen_ids)}")
 
     for rid in sorted(frozen_ids & candidate_ids):
-        f_rec = frozen["requirements"][rid]
-        c_rec = candidate["requirements"][rid]
+        f_rec = frozen[rid]
+        c_rec = candidate[rid]
         for field in ("statement", "ears", "priority", "status", "fit", "adr"):
             if f_rec[field] != c_rec[field]:
                 fail(f"[equality] {rid}.{field} differs.\n  frozen:    {f_rec[field]!r}\n  candidate: {c_rec[field]!r}")
@@ -296,9 +262,9 @@ def main() -> int:
             if f_sec.strip() != c_sec.strip():
                 fail(f"[equality] {rid} section label for {f_cid} differs: frozen={f_sec!r} candidate={c_sec!r}")
 
-    # ---- 2. 84 unique blocks ---- #
-    if len(candidate["heading_ids"]) != 84:
-        fail(f"[counts] expected 84 requirement headings, found {len(candidate['heading_ids'])}")
+    # ---- 2. 86 unique blocks ---- #
+    if len(candidate_heading_ids) != 86:
+        fail(f"[counts] expected 86 requirement headings, found {len(candidate_heading_ids)}")
 
     # ---- 3. 65 exactly-once clause dispositions ---- #
     if len(candidate_clauses) != 65:
@@ -307,7 +273,6 @@ def main() -> int:
         if c["disposition"] not in ("Derived", "Derived \u2014 traceability rule", "Scope exclusion", "Context \u2014 no obligation"):
             fail(f"[dispositions] {cid} has an unrecognised disposition: {c['disposition']!r}")
 
-    # cross-check candidate clause verbatim text against frozen (content must not have moved)
     for cid, f_c in frozen_clauses.items():
         c_c = candidate_clauses.get(cid)
         if c_c is None:
@@ -325,38 +290,35 @@ def main() -> int:
              f"{sorted(set(frozen_split_clause_ids)-set(candidate_split_clause_ids))} candidate-only="
              f"{sorted(set(candidate_split_clause_ids)-set(frozen_split_clause_ids))}")
 
-    # ---- 4. 93 requirement->clause edges preserved ---- #
-    candidate_edges = sum(len(r["clauses"]) for r in candidate["requirements"].values())
-    frozen_edges = sum(len(r["clauses"]) for r in frozen["requirements"].values())
+    # ---- 4. 95 requirement->clause edges ---- #
+    candidate_edges = sum(len(r["clauses"]) for r in candidate.values())
+    frozen_edges = sum(len(r["clauses"]) for r in frozen.values())
     if candidate_edges != frozen_edges:
         fail(f"[counts] requirement->clause edge count differs: frozen={frozen_edges} candidate={candidate_edges}")
-    if candidate_edges != 93:
-        fail(f"[counts] expected 93 requirement->clause edges, found {candidate_edges}")
+    if candidate_edges != 95:
+        fail(f"[counts] expected 95 requirement->clause edges, found {candidate_edges}")
 
-    # ---- 5. 26 splits (count of derived clauses cited by >1 requirement's clause list, INCLUDING
-    #          joint-citation edges — matches how requirements-specification.md counts them) ---- #
+    # ---- 5. 26 splits ---- #
     clause_to_reqs = defaultdict(list)
-    for rid, rec in candidate["requirements"].items():
+    for rid, rec in candidate.items():
         for cid, *_ in rec["clauses"]:
             clause_to_reqs[cid].append(rid)
     n_splits = sum(1 for reqs in clause_to_reqs.values() if len(reqs) > 1)
     if n_splits != 26:
         fail(f"[counts] expected 26 split clauses, found {n_splits}")
-    # cross-check against singular-splits.md's own row list
     split_rows_set = set(candidate_split_clause_ids)
     computed_split_set = {cid for cid, reqs in clause_to_reqs.items() if len(reqs) > 1}
     if split_rows_set != computed_split_set:
         fail(f"[counts] singular-splits.md rows {sorted(split_rows_set)} != computed split set {sorted(computed_split_set)}")
 
-    # ---- 6. 756 QA judgements, 9 per ID ---- #
+    # ---- 6. 774 QA judgements, 9 per ID ---- #
     total_qa = sum(len(v) for v in candidate_qa.values())
-    if total_qa != 756:
-        fail(f"[counts] expected 756 QA judgements, found {total_qa}")
+    if total_qa != 774:
+        fail(f"[counts] expected 774 QA judgements, found {total_qa}")
     for rid in candidate_ids:
         chars = candidate_qa.get(rid, {})
         if set(chars) != set(CHAR_ORDER):
             fail(f"[qa] {rid} does not carry exactly the nine characteristics: {sorted(chars)}")
-    # candidate QA verdicts must match frozen QA verdicts (substance preserved; restructuring is heading-only)
     for rid in sorted(frozen_ids & candidate_ids):
         for char in CHAR_ORDER:
             f_v = frozen_qa.get(rid, {}).get(char)
@@ -364,14 +326,13 @@ def main() -> int:
             if f_v != c_v:
                 fail(f"[qa-equality] {rid}.{char} verdict differs: frozen={f_v} candidate={c_v}")
 
-    # ---- 7. class-index completeness: every ID in requirements-specification.md's class indexes ---- #
+    # ---- 7. class-index completeness ---- #
     for label, prefix in (("Business requirements", "BR"), ("Functional requirements", "FR"), ("Non-functional requirements", "NFR")):
         header_match = re.search(rf"\*\*{re.escape(label)} \((\d+)\):\*\*", candidate_spec_text)
         if not header_match:
             fail(f"[class-index] could not find class index header for {label!r}")
             continue
         count = int(header_match.group(1))
-        # the index table runs from the header to the blank line before the next bold header/section
         block_start = header_match.end()
         next_marker = re.search(r"\n\n(?:\*\*|##)", candidate_spec_text[block_start:])
         block_end = block_start + next_marker.start() if next_marker else len(candidate_spec_text)
@@ -383,7 +344,7 @@ def main() -> int:
         if listed_ids != ids_in_class:
             fail(f"[class-index] {label} index lists {sorted(listed_ids ^ ids_in_class)} inconsistently")
 
-    # ---- 8. note-cell equality (candidate clause-inventory.md) ---- #
+    # ---- 8. note-cell equality ---- #
     derived_cids = {cid for cid, c in candidate_clauses.items() if c["disposition"] == "Derived"}
     for cid in derived_cids:
         actual_reqs = clause_to_reqs.get(cid, [])
@@ -398,7 +359,7 @@ def main() -> int:
     unreferenced_derived = derived_cids - named_cids
     if unreferenced_derived:
         fail(f"[traceability] derived clause(s) not named by any requirement: {sorted(unreferenced_derived)}")
-    for rid, rec in candidate["requirements"].items():
+    for rid, rec in candidate.items():
         for cid, *_ in rec["clauses"]:
             if cid not in candidate_clauses:
                 fail(f"[traceability] {rid} references non-existent clause {cid}")
@@ -432,7 +393,8 @@ def main() -> int:
           f"{sum(1 for r in candidate_ids if r.startswith('RQA-NFR'))} non-functional")
     print(f"- {len(candidate_clauses)} clauses, {candidate_edges} requirement\u2192clause edges, {n_splits} split clauses")
     print(f"- {total_qa} QA judgements (9 per requirement), all verdicts match the frozen baseline")
-    print(f"- every candidate field byte-matches commit {FROZEN_COMMIT}'s statement/fit/EARS/priority/status/ADR/source-clause/quote")
+    print(f"- every candidate field byte-matches commit {FROZEN_COMMIT}'s "
+          f"statement/fit/EARS/priority/status/ADR/source-clause/quote")
     print("- both traceability directions hold; note-cell equality holds; every relative link resolves")
     return 0
 

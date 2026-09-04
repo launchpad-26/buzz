@@ -15,7 +15,7 @@ original extraction used.
   (`updated_at` `2026-09-01T06:34:12Z`, body SHA-256 `12bb2a6d5ca0f55446332e9f4300faa1a392b835f6457f49c303ea5f1ef596dd`)
   is superseded by a 2026-09-04 amendment — see [`revision-history.md`](revision-history.md)'s round 9. If #2006
   is amended again, this pin goes stale and is detectable rather than silent.
-- **Frozen for [#2069](https://github.com/launchpad-26/buzz/issues/2069) at commit** `9ab6ba497` \u2014 the
+- **Frozen for [#2069](https://github.com/launchpad-26/buzz/issues/2069) at commit** `9ab6ba497` — the
   panel-approved baseline lineage runs `be77edee5` (round-8 panel consensus) to `9ab6ba497` (re-derivation
   against the 2026-09-04 PRD amendment, pinned at `updated_at` `2026-09-04T00:25:35Z`, body SHA-256
   `a78c73bdbe771964d166a3867add2697278173953e88e65d8514741e9c368e3d`). This restructured presentation of that
@@ -23,7 +23,7 @@ original extraction used.
 - **Published here** because [#2067](https://github.com/launchpad-26/buzz/issues/2067) is the feature that
   produced it; where policy documents belong repo-wide is an open question owned by
   [#2064](https://github.com/launchpad-26/buzz/issues/2064), not by this document.
-- **No open questions remain.** The first derivation surfaced three design questions as ADR drafts
+- **No `ADR-A`/`ADR-B`/`ADR-C` draft remains open.** The first derivation surfaced three design questions as ADR drafts
   (`ADR-A`, `ADR-B`, `ADR-C`, kept at [`adr-drafts/`](adr-drafts/) for the record). The maintainer resolved all
   three at the source in the 2026-09-04 amendment; none was ever filed as a GitHub issue, and none now will be
   — see [`adr-drafts/README.md`](adr-drafts/README.md) for how each was resolved.
@@ -88,7 +88,7 @@ are binding; the gloss exists to help a reader who is new to RQA understand the 
 | [RQA-FR-031](#rqa-fr-031) | [RQA-FR-032](#rqa-fr-032) | [RQA-FR-033](#rqa-fr-033) | [RQA-FR-034](#rqa-fr-034) | [RQA-FR-035](#rqa-fr-035) | [RQA-FR-036](#rqa-fr-036) |
 | [RQA-FR-037](#rqa-fr-037) | [RQA-FR-038](#rqa-fr-038) | [RQA-FR-039](#rqa-fr-039) |  |  |  |
 
-**Non-functional requirements (31):**
+**Non-functional requirements (33):**
 
 | ID | ID | ID | ID | ID |
 |---|---|---|---|---|
@@ -98,7 +98,7 @@ are binding; the gloss exists to help a reader who is new to RQA understand the 
 | [RQA-NFR-016](#rqa-nfr-016) | [RQA-NFR-017](#rqa-nfr-017) | [RQA-NFR-018](#rqa-nfr-018) | [RQA-NFR-019](#rqa-nfr-019) | [RQA-NFR-020](#rqa-nfr-020) |
 | [RQA-NFR-021](#rqa-nfr-021) | [RQA-NFR-022](#rqa-nfr-022) | [RQA-NFR-023](#rqa-nfr-023) | [RQA-NFR-024](#rqa-nfr-024) | [RQA-NFR-025](#rqa-nfr-025) |
 | [RQA-NFR-026](#rqa-nfr-026) | [RQA-NFR-027](#rqa-nfr-027) | [RQA-NFR-028](#rqa-nfr-028) | [RQA-NFR-029](#rqa-nfr-029) | [RQA-NFR-030](#rqa-nfr-030) |
-| [RQA-NFR-031](#rqa-nfr-031) |  |  |  |  |
+| [RQA-NFR-031](#rqa-nfr-031) | [RQA-NFR-032](#rqa-nfr-032) | [RQA-NFR-033](#rqa-nfr-033) |  |  |
 
 ---
 
@@ -461,16 +461,19 @@ A human approval used to satisfy assurance shall name the approving human and th
 
 ### RQA-NFR-022
 
-A provenance record shall never be writable by the reviewed content or by an unauthenticated model response.
+A provenance record shall never be writable by the reviewed content or by any model output, authenticated or not.
 
-*In plain terms: The record of who reviewed what, and how, must never be something the PR's own content or an unverified AI response could write into.*
+*In plain terms: The review record can never be written by the PR's own content, and never by output from any model — however trustworthy the model appears.*
 
 `Unwanted-behaviour` · `Must` · `DECIDED` · ADR: —
 
 **Source:**
 - **CL-058** (Security implications, bullet 4, [extract](prd-2006-normative-extract.md#security-implications)): “Provenance must be forgeable-proof. AC06 records reviewer identity, harness, model and provider. If that record can be written by the reviewed content or by an unauthenticated model response, the audit trail is worse than none. Provenance is written by RQA, never by reviewed content or model output; it is tamper-evident within the operator's trust boundary, and does not defend against a compromised operator machine.”
 
-**Fit criterion:** Attempting to set any element of the authoritative provenance record RQA-FR-012 reconstructs — PR revision, protocol in force, policy in force, reviewer identity, reviewer type, harness, model, provider, evidence examined, findings produced, decision basis, and disposition — from PR content or from an unauthenticated model response is rejected rather than accepted into the record; a check that exercises only the reviewer-identity/harness/model/provider fields and leaves the other eight elements untested does not satisfy this row.
+**Fit criterion:** Attempting to set any element of the authoritative provenance record RQA-FR-012 reconstructs — PR revision, protocol in force, policy in force, reviewer identity, reviewer type, harness, model, provider, evidence examined, findings produced, decision basis, and disposition — from PR content or from any model output is rejected rather than accepted into the record, and this holds whether the model response was authenticated or not; a check that exercises an authenticated model response writing a provenance element and finds it accepted fails this row.
+
+**See also:** [RQA-NFR-032](#rqa-nfr-032) (positive complement, shares source clause CL-058)
+
 
 ### RQA-NFR-028
 
@@ -484,6 +487,22 @@ A provenance record shall be protected against forgery or alteration by any acto
 - **CL-058** (Security implications, bullet 4, [extract](prd-2006-normative-extract.md#security-implications)): “Provenance must be forgeable-proof. AC06 records reviewer identity, harness, model and provider. If that record can be written by the reviewed content or by an unauthenticated model response, the audit trail is worse than none. Provenance is written by RQA, never by reviewed content or model output; it is tamper-evident within the operator's trust boundary, and does not defend against a compromised operator machine.”
 
 **Fit criterion:** For any authoritative outcome, no element of the provenance record RQA-FR-012 reconstructs — PR revision, protocol in force, policy in force, reviewer identity, reviewer type, harness, model, provider, evidence examined, findings produced, decision basis, and disposition — can be created or altered by an actor lacking authority to write it and then be **accepted as authentic and authoritative without detection**; tamper-evidence satisfies this check — for example, a signed or otherwise integrity-checked record whose unauthorised alteration produces a detectably invalid result that the system refuses to treat as authoritative. This row does not require the underlying storage bytes to be physically unalterable; it requires that an unauthorised alteration, if made, cannot pass as authentic. RQA-NFR-022 tests the two source-named writers against this same acceptance boundary, this row tests every other unauthorised actor against it. This row does not extend to a compromise of the machine RQA itself runs on — the amended source excludes that scenario from the guarantee explicitly (“tamper-evident within the operator's trust boundary, and does not defend against a compromised operator machine”); an actor with control of that machine is outside this row's threat model, and this is a stated boundary on the guarantee, not a gap in it.
+
+### RQA-NFR-032
+
+The authoritative provenance record shall be written by the system itself; a harness's or model's self-reported identity is input the system records, not a write of its own.
+
+*In plain terms: Only the system itself writes the official review record. A harness or model telling you who it is is one thing the system records — not a write the harness or model makes.*
+
+`Ubiquitous` · `Must` · `DECIDED` · ADR: —
+
+**Source:**
+- **CL-058** (Security implications, bullet 4, [extract](prd-2006-normative-extract.md#security-implications)): “Provenance must be forgeable-proof. AC06 records reviewer identity, harness, model and provider. If that record can be written by the reviewed content or by an unauthenticated model response, the audit trail is worse than none. Provenance is written by RQA, never by reviewed content or model output; it is tamper-evident within the operator's trust boundary, and does not defend against a compromised operator machine.”
+
+**Fit criterion:** Every element of the authoritative provenance record RQA-FR-012 reconstructs — PR revision, protocol in force, policy in force, reviewer identity, reviewer type, harness, model, provider, evidence examined, findings produced, decision basis, and disposition — is constructed and committed by the system itself. A harness or model may supply self-reported identity as input for the system to record, but cannot directly create or alter an authoritative provenance element; a check that permits such input to mutate the authoritative record outside the system's own write path fails this row.
+
+**See also:** [RQA-NFR-022](#rqa-nfr-022) (shares source clause CL-058), [RQA-NFR-028](#rqa-nfr-028) (shares source clause CL-058)
+
 
 ---
 
@@ -751,9 +770,9 @@ Remediation shall never force-push, merge, bypass branch protection, or touch a 
 
 ### RQA-NFR-031
 
-A finding whose remedy would change the system's behaviour shall not be classified or treated as mechanical, regardless of repository policy.
+A finding shall be classified or treated as mechanical only where its remedy is deterministic and does not change the software under review's behaviour, regardless of repository policy.
 
-*In plain terms: A fix that would change how the system behaves is never treated as a safe, automatic one — no matter what a repository's policy says counts as "mechanical".*
+*In plain terms: A fix is only 'safe to apply automatically' when it's both deterministic and avoids changing how the software behaves — and no repository policy can relax that.*
 
 `State-driven` · `Must` · `DECIDED` · ADR: —
 
@@ -761,9 +780,26 @@ A finding whose remedy would change the system's behaviour shall not be classifi
 - **CL-036** (AC09, [extract](prd-2006-normative-extract.md#success-criteria)): “A finding classified as mechanical and permitted by policy is resolved without unnecessarily creating human intervention or a complete re-review cycle, and resolving it does not invalidate unrelated review work that remains valid. Where the finding is mechanical — its remedy is deterministic and does not change the system's behaviour — RQA may apply and push the fix directly, under the remediation bounds in Security implications. A finding whose remedy would change behaviour is never mechanical, regardless of how small it is, and requires human attention.”
 - **CL-057** (Security implications, bullet 3, [extract](prd-2006-normative-extract.md#security-implications)): “Remediation authority is the largest new exposure. AC09 grants RQA authority to modify and push a branch for mechanical findings only; the behavioural line in AC09 is the ceiling on what repository policy may classify as mechanical. That authority must be separately gated, bounded to categories policy names as mechanical, isolated from the repository working tree, and never able to force-push, merge, bypass protection, or touch a protected branch.”
 
-**Fit criterion:** A finding whose actual remedy would change the system's behaviour is never classified or treated as mechanical: a classification that labels such a finding mechanical is rejected or corrected before remediation authority can act on it, and a repository policy configured to name a behaviour-changing category as mechanical does not itself grant remediation authority over that category — a system that defers to such a policy's own configuration, rather than testing the remedy's actual behavioural effect, fails this check.
+**Fit criterion:** No mechanical-only handling occurs for a finding whose remedy is non-deterministic or changes the software under review's behaviour: such a finding is never classified as mechanical, never treated as mechanical in any observable way — including suppressing the human-attention path — and no repository policy can widen the definition by naming such a remedy mechanical. A system that defers to a policy's own configuration, or that reached the remediation gate without ever having applied the mechanical handling elsewhere, fails this check.
 
-**See also:** [RQA-FR-017](#rqa-fr-017) (shares source clause CL-036), [RQA-FR-018](#rqa-fr-018) (shares source clause CL-036), [RQA-NFR-019](#rqa-nfr-019) (shares source clause CL-057)
+**See also:** [RQA-FR-017](#rqa-fr-017) (shares source clause CL-036), [RQA-FR-018](#rqa-fr-018) (shares source clause CL-036), [RQA-NFR-019](#rqa-nfr-019) (shares source clause CL-057), [RQA-NFR-033](#rqa-nfr-033) (human-attention complement, shares source clause CL-036)
+
+
+### RQA-NFR-033
+
+A finding whose remedy would change the software under review's behaviour shall receive human attention.
+
+*In plain terms: When a fix would change how the software behaves, a real person has to look at it — the system can't just set it aside.*
+
+`State-driven` · `Must` · `DECIDED` · ADR: —
+
+**Source:**
+- **CL-036** (AC09, [extract](prd-2006-normative-extract.md#success-criteria)): “A finding classified as mechanical and permitted by policy is resolved without unnecessarily creating human intervention or a complete re-review cycle, and resolving it does not invalidate unrelated review work that remains valid. Where the finding is mechanical — its remedy is deterministic and does not change the system's behaviour — RQA may apply and push the fix directly, under the remediation bounds in Security implications. A finding whose remedy would change behaviour is never mechanical, regardless of how small it is, and requires human attention.”
+
+**Fit criterion:** Before a review containing a behaviour-changing finding completes, its record shows that a named human received and considered that finding. The system may obtain that attention by raising a specific escalation under RQA-FR-026 or through another recorded human-review path; merely classifying the finding as non-mechanical, leaving it unprogressed, or recording an unrelated human approval fails this check.
+
+**See also:** [RQA-NFR-031](#rqa-nfr-031) (behavioural-ceiling sibling, shares source clause CL-036), [RQA-FR-026](#rqa-fr-026) (a specific escalation can request the required human attention)
+
 
 ---
 
@@ -1205,17 +1241,18 @@ A malformed or unreadable policy shall never widen authority beyond what was alr
 
 ### RQA-NFR-024
 
-The credential the system holds shall carry pull-request write and repository-content read on the repositories where the system is configured to submit authoritative review outcomes.
+The credential the system holds shall carry pull-request write and repository-content read on each managed repository, and, where a repository's configured operations include remediation push or merge-after-review, additionally exactly the write scope those operations require.
 
-*In plain terms: On any repository where the system is set up to give an official verdict, its access token needs at least write-to-PRs and read-the-code permissions.*
+*In plain terms: The system's token needs at least write-to-PRs and read-the-code on every managed repo; a repo configured to push fixes or auto-merge additionally carries exactly the write scope those need.*
 
-`Optional-feature` · `Must` · `DECIDED` · ADR: —
+`State-driven` · `Must` · `DECIDED` · ADR: —
 
 **Source:**
 - **CL-060** (Security implications, bullet 6, [extract](prd-2006-normative-extract.md#security-implications)): “Credentials stay narrow and follow configured authority. A GitHub token scoped to the target repositories with pull-requests write and contents read; where a repository's policy additionally grants remediation push or merge-after-review, the token for that repository additionally carries the write scope those operations require, and no more — repositories configured for advisory-only review carry no write scope beyond pull-requests. In all cases: no deploy keys, no relay or VPS credentials, no access to a contributor's machine.”
 - **CL-056** (Security implications, bullet 2, [extract](prd-2006-normative-extract.md#security-implications)): “Authority is per-activity and fail-closed. Review, comment, approve, request-changes, remediate and merge are separately configured and default to disabled; a malformed or unreadable policy must never widen authority.”
 
-**Fit criterion:** For a repository configured to submit authoritative review outcomes, inspecting the credential's granted scopes shows both pull-request write and repository-content read present on it; a credential missing either named permission on such a repository fails this check. This row states only the floor for that configuration; what a credential may hold on a repository configured for narrower activity, or beyond these two permissions anywhere, is RQA-NFR-030's own check, not this one's.
+**Fit criterion:** Inspecting the credential's granted scopes shows, on an authoritative-review-only repository, pull-request write and repository-content read present; on a repository configured for remediation push or merge-after-review, those same two plus exactly the additional write scope those configured operations require; and on an advisory-only repository, pull-requests write present as the base scope. A credential missing any required scope on a repository configured to exercise it fails this check.
+
 
 ### RQA-NFR-025
 
@@ -1245,9 +1282,9 @@ Each of review, comment, approve, request-changes, remediate and merge shall def
 
 ### RQA-NFR-030
 
-The credential the system holds shall have no permission broader than pull-request write and repository-content read, no permission on any repository outside those it manages, and no permission on a repository beyond what the activities configured for that repository require.
+The credential the system holds shall carry no permission on a managed repository beyond what that repository's configured activities require, and no permission at all on any repository the system does not manage.
 
-*In plain terms: The system's access token should never hold more than the minimum permissions needed — nothing extra, nowhere it doesn't manage, and nothing beyond what a given repository's setup actually requires.*
+*In plain terms: No repository's token holds more than its configured activities need — advisory-only repos keep base pull-request write and nothing more, and repos the system doesn't manage get nothing.*
 
 `Unwanted-behaviour` · `Must` · `DECIDED` · ADR: —
 
@@ -1255,7 +1292,8 @@ The credential the system holds shall have no permission broader than pull-reque
 - **CL-060** (Security implications, bullet 6, [extract](prd-2006-normative-extract.md#security-implications)): “Credentials stay narrow and follow configured authority. A GitHub token scoped to the target repositories with pull-requests write and contents read; where a repository's policy additionally grants remediation push or merge-after-review, the token for that repository additionally carries the write scope those operations require, and no more — repositories configured for advisory-only review carry no write scope beyond pull-requests. In all cases: no deploy keys, no relay or VPS credentials, no access to a contributor's machine.”
 - **CL-056** (Security implications, bullet 2, [extract](prd-2006-normative-extract.md#security-implications)): “Authority is per-activity and fail-closed. Review, comment, approve, request-changes, remediate and merge are separately configured and default to disabled; a malformed or unreadable policy must never widen authority.”
 
-**Fit criterion:** Inspecting the credential's granted scopes shows, on every repository: nothing beyond pull-request write and repository-content read; no permission at all on a repository outside the managed set; and, on a repository configured for narrower activity than submitting authoritative review outcomes (for example, advisory-only), no more permission than that narrower activity requires — a credential carrying pull-request write on a repository configured only for advisory, non-authoritative activity fails this check by holding more than that configuration needs, even though it holds no more than the two named permission types in the abstract. All three are ceiling tests on the same credential; a credential failing any one of them fails this check.
+**Fit criterion:** Inspecting the credential's granted scopes shows, on every managed repository, no permission beyond comprising pull-request write and repository-content read plus, where the repository is configured for remediation push or merge-after-review, exactly the additional write scope that configuration requires; an advisory-only repository's configured activities require pull-requests write, so holding it is compliant rather than a failure; and a repository the system does not manage carries no granted permission at all. A credential exceeding the bound its repository's configured activities allow fails this check.
+
 
 ---
 

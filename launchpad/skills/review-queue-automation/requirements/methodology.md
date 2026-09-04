@@ -56,8 +56,7 @@ Every requirement in this specification traces to a clause #2006 already agrees 
 ([clause-inventory.md](clause-inventory.md) records the disposition for each). The first derivation surfaced
 three narrower questions as draft ADRs (`ADR-A`, `ADR-B`, `ADR-C`) without any of them changing a requirement's
 own standing; the 2026-09-04 amendment then resolved all three at the source (see round 9 in
-[revision-history.md](revision-history.md)), so none was ever filed as a GitHub issue and no requirement below
-carries an ADR pointer. #2064 still owns where this specification itself is published — a placement question,
+[revision-history.md](revision-history.md)), so none was ever filed as a GitHub issue and no requirement below carries an `ADR-A`/`ADR-B`/`ADR-C` pointer. RQA-FR-001, RQA-NFR-002 and RQA-NFR-003 still carry an `ADR: [#2064]` pointer, because #2064 is a separate, still-open decision about repo-wide policy-document placement, not one of the three resolved drafts. #2064 still owns where this specification itself is published — a placement question,
 not a requirement's standing — and RQA-FR-001/RQA-NFR-002/RQA-NFR-003 are unaffected by how that resolves. Every
 requirement below is therefore `DECIDED`. This specification was authored with no implementation knowledge of
 RQA — the clean-room constraint under which it was written forbids reading anything about RQA's current code,
