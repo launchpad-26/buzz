@@ -1,10 +1,11 @@
 # RQA revision history
 
 This specification went through eight review rounds before being frozen for
-[#2069](https://github.com/launchpad-26/buzz/issues/2069) at commit `be77edee5`. Each round re-checked the whole
-document against [`prd-2006-normative-extract.md`](prd-2006-normative-extract.md) and against itself; every
-round after the first was adversarial peer review by two independent reviewer models. This page records what
-each round changed, briefly and without the review commentary that produced it.
+[#2069](https://github.com/launchpad-26/buzz/issues/2069) at commit `be77edee5`. Each of those rounds re-checked
+the whole document against [`prd-2006-normative-extract.md`](prd-2006-normative-extract.md) and against itself;
+every round after the first was adversarial peer review by two independent reviewer models. A ninth round then
+re-derived the affected rows after the maintainer amended #2006 itself. This page records what each round
+changed, briefly and without the review commentary that produced it.
 
 | Round | What it did |
 |---|---|
@@ -16,11 +17,15 @@ each round changed, briefly and without the review commentary that produced it.
 | 6 | Stated an explicit test distinguishing the `State-driven` and `Ubiquitous` patterns (condition-subject vs. produced-record-subject), reclassified `RQA-FR-025` under it, and closed a traceability gap: `RQA-BR-010`'s qualifier had always depended on `CL-017`/`CL-040` as well as its primary clause, but that dependency was not yet recorded as a reference-graph edge. |
 | 7 | Closed the equivalent traceability gap for `RQA-NFR-007` (`CL-035`/`CL-039`) and `RQA-NFR-024` (`CL-056`); completed the round-6 differentiator registry for three more rows (`RQA-BR-006`, `RQA-BR-009`, `RQA-NFR-018`); and repaired eleven fit criteria found capable of passing on a false green or failing on a false red, including `RQA-NFR-028` (tested at the authority boundary, not physical storage immutability) and `RQA-BR-006` (tested against the weaker of two source-admitted readings its own Unambiguous caveat already recorded). |
 | 8 | Final polish: added an explicit EARS-classification check for the two credential rows most changed in round 7; added a `Conforming` caveat to `RQA-FR-005` (its fit criterion asks for corroborated evidence beyond what AC03 itself names) and a `Verifiable` caveat to `RQA-BR-001` (it is verified only transitively, through the rows it defers to); recorded that `RQA-FR-011` and `RQA-FR-037` restate the same proposition from two source clauses; and clarified how the singular-split count treats a joint-citation edge versus a genuine content split. |
+| 9 | **Re-derivation, not review — #2006 itself changed.** On 2026-09-04 the maintainer amended #2006, resolving all three questions the first derivation had raised as ADR drafts. `AC09` (`CL-036`) now states RQA may apply and push a deterministic, non-behavioural fix directly, with the behavioural line as the ceiling on what policy may classify as mechanical (resolves `ADR-A`). Security bullet 6 (`CL-060`) now states the credential scope grows with configured authority — an additional write scope for repositories configured for remediation push or merge-after-review, none beyond pull-requests for advisory-only ones (resolves `ADR-B`). Security bullet 4 (`CL-058`) now states provenance is written by RQA itself, never by reviewed content or model output, and bounds the tamper-evidence guarantee to the operator's trust boundary (resolves `ADR-C`). Security bullet 3 (`CL-057`) restates the same authority grant from the remediation side. Re-quoted all four clauses; updated `RQA-FR-017`, `RQA-FR-018`, `RQA-NFR-019`, `RQA-NFR-020`, `RQA-NFR-021`, `RQA-NFR-022`, `RQA-NFR-024`, `RQA-NFR-025`, `RQA-NFR-028`, `RQA-NFR-030`'s source quotes; added the trust-boundary bound to `RQA-NFR-028`'s fit criterion; promoted six `Caveat` judgements to `Pass` (`RQA-NFR-024`/`RQA-NFR-030`'s Unambiguous, Feasible and Correct); removed every ADR pointer from every row and from the set-level Consistent/Feasible verdicts, both of which now hold unconditionally. No statement, fit criterion or ID changed for any unaffected row. Added a new requirement, `RQA-NFR-031` ('a finding whose remedy would change the system's behaviour shall not be classified or treated as mechanical, regardless of repository policy'), derived jointly from `CL-036` and `CL-057` — the amendment's behavioural ceiling is a load-bearing obligation `RQA-NFR-019` does not itself carry, since `RQA-NFR-019` only bounds authority to whatever categories policy names as mechanical, and does not itself bound what policy may name. |
 
-**Every round preserved:** the 83 requirement IDs (14 business, 39 functional, 30 non-functional), the 65-clause
-inventory, and both directions of the bidirectional check. No round retired or renumbered an identifier; rounds
-that discovered a bundled obligation appended a new ID rather than reusing or renumbering an existing one (see
-[`singular-splits.md`](singular-splits.md)).
+**Every round preserved:** the requirement-ID space (84 as of round 9: 14 business, 39 functional, 31
+non-functional), the 65-clause inventory, and both directions of the bidirectional check. No round retired or
+renumbered an identifier; rounds that discovered a bundled obligation, or (round 9) a source amendment stating a
+load-bearing obligation no existing row carried, appended a new ID rather than reusing or renumbering an
+existing one (see [`singular-splits.md`](singular-splits.md)).
 
-**Open questions this specification could not settle** are recorded once, as ADR drafts, rather than resolved
-here: see [`adr-drafts/`](adr-drafts/).
+**No open question remains.** The three questions the first derivation raised as ADR drafts were all resolved by
+the 2026-09-04 amendment to #2006, not by an ADR issue — see round 9 above and
+[`adr-drafts/README.md`](adr-drafts/README.md) for how each was resolved. The draft files are kept for the
+historical record; none was ever filed, and none now will be.

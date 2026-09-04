@@ -7,11 +7,19 @@ rule is copied unmodified from the body of
 **Revision pin.** Extracted from the issue body as returned by
 `gh api repos/launchpad-26/buzz/issues/2006 --jq .body` with:
 
-- `updated_at`: `2026-09-01T06:34:12Z`
-- SHA-256 of the full issue body at extraction: `12bb2a6d5ca0f55446332e9f4300faa1a392b835f6457f49c303ea5f1ef596dd`
+- `updated_at`: `2026-09-04T00:25:35Z`
+- SHA-256 of the full issue body at extraction: `a78c73bdbe771964d166a3867add2697278173953e88e65d8514741e9c368e3d`
 
 If #2006 is amended, its `updated_at` and body hash change and this extract is
 detectably stale rather than silently so.
+
+**This is the second pin.** The first extraction (`updated_at` `2026-09-01T06:34:12Z`,
+body SHA-256 `12bb2a6d5ca0f55446332e9f4300faa1a392b835f6457f49c303ea5f1ef596dd`) is
+superseded by a 2026-09-04 amendment that resolved, at the source, the three
+open questions the first derivation had raised as ADR drafts. The amendment note
+itself lives in #2006's `## Evidence` section, which this extraction rule excludes
+from the extract body below — see that section for the maintainer's own account of
+what changed and why.
 
 **Extraction rule.** The sections `## Problem` (problem statement, P1–P12, C1–C9
 and the project requirement), `## Success criteria` (AC01–AC17 and both closing
@@ -107,7 +115,7 @@ not satisfy the criterion.
 - [ ] AC06 — For any authoritative review outcome, a single command reconstructs the exact PR revision, protocol and policy in force, reviewer identity and type, harness, model, provider, evidence examined, findings produced, decision basis and disposition; a human approval used to satisfy assurance names the approving human and the basis of that approval.
 - [ ] AC07 — For a PR whose only failing check also fails on its merge base, RQA classifies that failure as inherited rather than attributable, does not treat it as a blocker, and states the classification.
 - [ ] AC08 — For any managed PR, one command returns its current disposition from {being reviewed, blocked, awaiting remediation, awaiting human judgement, review-complete, unable to progress} and the reason, without a human reconciling historical reviews, comments or checks.
-- [ ] AC09 — A finding classified as mechanical and permitted by policy is resolved without unnecessarily creating human intervention or a complete re-review cycle, and resolving it does not invalidate unrelated review work that remains valid. Per the baseline, this does not require RQA to modify code directly.
+- [ ] AC09 — A finding classified as mechanical and permitted by policy is resolved without unnecessarily creating human intervention or a complete re-review cycle, and resolving it does not invalidate unrelated review work that remains valid. Where the finding is mechanical — its remedy is deterministic and does not change the system's behaviour — RQA may apply and push the fix directly, under the remediation bounds in Security implications. A finding whose remedy would change behaviour is never mechanical, regardless of how small it is, and requires human attention.
 - [ ] AC10 — For a given policy, RQA performs no reviewer pass, independent pass, repeated analysis, reasoning strategy or higher-cost method that is not required by that policy's stated assurance, and valid existing results are reused rather than regenerated.
 - [ ] AC11 — Resource consumption is recorded from what the execution environment actually exposes and is distinguishable from an estimate; a configured bound, when reached, produces a configured fallback, an explicitly incomplete review, or an escalation — never a successful outcome.
 - [ ] AC12 — With a configured reviewer, model or provider made unavailable, RQA continues through an explicitly configured fallback; with no fallback configured it invents none and stops in a clear, safe, recoverable non-success state.
@@ -132,8 +140,8 @@ not satisfy the criterion.
 
 - **PR content is untrusted data, never instructions.** A PR author controls the diff, body and comments that RQA reads. A crafted PR attempting to induce a clean review or a fabricated evidence state is itself a blocking finding. This applies at every authority level, including advisory-only.
 - **Authority is per-activity and fail-closed.** Review, comment, approve, request-changes, remediate and merge are separately configured and default to disabled; a malformed or unreadable policy must never widen authority.
-- **Remediation authority is the largest new exposure.** AC09 asks RQA to modify and push a branch. That authority must be separately gated, bounded to categories policy names as mechanical, isolated from the repository working tree, and never able to force-push, merge, bypass protection, or touch a protected branch.
-- **Provenance must be forgeable-proof.** AC06 records reviewer identity, harness, model and provider. If that record can be written by the reviewed content or by an unauthenticated model response, the audit trail is worse than none.
+- **Remediation authority is the largest new exposure.** AC09 grants RQA authority to modify and push a branch for mechanical findings only; the behavioural line in AC09 is the ceiling on what repository policy may classify as mechanical. That authority must be separately gated, bounded to categories policy names as mechanical, isolated from the repository working tree, and never able to force-push, merge, bypass protection, or touch a protected branch.
+- **Provenance must be forgeable-proof.** AC06 records reviewer identity, harness, model and provider. If that record can be written by the reviewed content or by an unauthenticated model response, the audit trail is worse than none. Provenance is written by RQA, never by reviewed content or model output; it is tamper-evident within the operator's trust boundary, and does not defend against a compromised operator machine.
 - **External providers receive repository content** (C9). The active provider path must be identifiable before evidence is sent, so an operator can decide whether a given repository or change may be sent at all. Private repositories under AC16 make this a per-repository decision, not a global one.
-- **Credentials stay narrow.** A GitHub token scoped to the target repositories with pull-requests write and contents read; no deploy keys, no relay or VPS credentials, no access to a contributor's machine.
+- **Credentials stay narrow and follow configured authority.** A GitHub token scoped to the target repositories with pull-requests write and contents read; where a repository's policy additionally grants remediation push or merge-after-review, the token for that repository additionally carries the write scope those operations require, and no more — repositories configured for advisory-only review carry no write scope beyond pull-requests. In all cases: no deploy keys, no relay or VPS credentials, no access to a contributor's machine.
 - **Reaching a resource bound must never produce a successful review** (AC11). A false green under exhaustion is the highest-severity failure mode in this system.

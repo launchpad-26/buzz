@@ -61,15 +61,16 @@ record this exception explicitly).
 
 - Clause → requirement: all 50 numbered-requirement-derived clauses are named by ≥1 requirement (0 unreferenced);
   CL-062 is named by the traceability rule, its recorded exception.
-- Requirement → clause: all 83 requirements (14 business, 39 functional, 30 non-functional) name at least one
+- Requirement → clause: all 84 requirements (14 business, 39 functional, 31 non-functional) name at least one
   existing derived clause, and none names a clause disposed as context or scope exclusion (0 such references).
   RQA-BR-005 names two source clauses (CL-009 and CL-002), RQA-BR-010 names three (CL-014, CL-017, CL-040),
   RQA-NFR-007 names three (CL-023, CL-035, CL-039 — round 7), RQA-NFR-024 and RQA-NFR-030 each name two
-  (CL-060, CL-056 — round 7), and RQA-NFR-027 names two (CL-024 and CL-026), so there are 91 requirement→clause
-  derivation edges across the 83 requirement rows.
+  (CL-060, CL-056 — round 7), RQA-NFR-027 names two (CL-024 and CL-026), and RQA-NFR-031 names two (CL-036 and
+  CL-057 — round 9), so there are 93 requirement→clause derivation edges across the 84 requirement rows.
 - Note-cell equality: every Derived clause's Note cell names every requirement its `cl` reference set actually
   contains (0 stale cells within the check's Derived-only scope).
-- Total requirements: 83 = 14 + 39 + 30 (RQA-FR-036…039 and RQA-NFR-026…030 were appended across rework rounds; no
-  existing ID was renumbered or retired). Total clauses: 65 = 50 numbered-requirement-derived + 1
+- Total requirements: 84 = 14 + 39 + 31 (RQA-FR-036…039 and RQA-NFR-026…030 were appended across rework rounds,
+  and RQA-NFR-031 was appended in round 9 after the 2026-09-04 amendment; no existing ID was renumbered or
+  retired). Total clauses: 65 = 50 numbered-requirement-derived + 1
   traceability-rule-derived (CL-062) + 8 scope exclusion + 6 context.
 

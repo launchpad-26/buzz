@@ -51,21 +51,18 @@ document does not restate that legend; it links to it, matching `launchpad/REQUI
 
 **Why every requirement below is `DECIDED`, and none is `OPEN` or `IMPLEMENTED`.** `VISION.md`'s `OPEN` means *the
 obligation itself* is undecided, evidenced by an ADR issue that owns *whether* the obligation holds — not that
-some detail of *how* an agreed obligation is met remains open, and not a publication-placement or design-mechanism
-question either. Every requirement in this specification traces to a clause #2006 already agrees to
-([clause-inventory.md](clause-inventory.md) records the disposition for each); `ADR-A`, `ADR-B`, `ADR-C` and #2064 each own a
-narrower question — a mechanism, a feasibility premise, a design choice, or a publication location — not the
-requirement's own standing. RQA-FR-017/RQA-FR-018 and RQA-NFR-019/020/021 hold as agreed obligations regardless
-of which way `ADR-A` resolves. RQA-FR-030/RQA-NFR-022/RQA-NFR-028 are jointly satisfiable under every
-**source-conforming** option `ADR-C` lists (its option 3 is explicitly marked as requiring a source amendment,
-not a conforming resolution), and RQA-FR-001/RQA-NFR-002/RQA-NFR-003 are unaffected by where #2064 eventually
-places this specification's own publication. Only RQA-NFR-024/RQA-NFR-030's scope statements remain genuinely
-feasibility-contingent, on `ADR-B`'s external GitHub-permission-model premise. Every requirement below is
-therefore `DECIDED`, with its ADR column (not its Status, Source, or Feasible cell) naming any open choice. This
-specification was authored with no implementation knowledge of RQA — the clean-room constraint under which it
-was written forbids reading anything about RQA's current code, evidence or impacted components — so
-`IMPLEMENTED` (which requires "a link to the file or commit") is never available as evidence, and no row uses
-it.
+some detail of *how* an agreed obligation is met remains open, and not a publication-placement question either.
+Every requirement in this specification traces to a clause #2006 already agrees to
+([clause-inventory.md](clause-inventory.md) records the disposition for each). The first derivation surfaced
+three narrower questions as draft ADRs (`ADR-A`, `ADR-B`, `ADR-C`) without any of them changing a requirement's
+own standing; the 2026-09-04 amendment then resolved all three at the source (see round 9 in
+[revision-history.md](revision-history.md)), so none was ever filed as a GitHub issue and no requirement below
+carries an ADR pointer. #2064 still owns where this specification itself is published — a placement question,
+not a requirement's standing — and RQA-FR-001/RQA-NFR-002/RQA-NFR-003 are unaffected by how that resolves. Every
+requirement below is therefore `DECIDED`. This specification was authored with no implementation knowledge of
+RQA — the clean-room constraint under which it was written forbids reading anything about RQA's current code,
+evidence or impacted components beyond the single authorised re-fetch of #2006's own body — so `IMPLEMENTED`
+(which requires "a link to the file or commit") is never available as evidence, and no row uses it.
 
 **MoSCoW priority.** Every requirement carries a MoSCoW priority, following `REQUIREMENTS.md`'s convention. Because
 #2006 states P1–P12 and C1–C9 as "the twelve problems this PRD exists to solve" (CL-064) and "the nine design
