@@ -60,12 +60,17 @@ on:
 #     permission) — it only reads the target repo, runs the drafting agent over its
 #     content, and uploads a patch of the result as a build artifact. If prompt
 #     injection compromises this job, it has nothing to write with.
-#   - `verify-and-open-pr` never runs the drafting agent and never processes raw
-#     target-repo content as agent input. It downloads the patch, applies it to a
-#     FRESH checkout (not the one the drafting job touched), independently re-runs
-#     all three gates against every file the patch touches — modified AND newly
-#     added, `git apply --index` stages both — and only then, if everything passes,
-#     opens the PR with the write-scoped credential this job alone holds.
+#   - `verify-and-open-pr` never runs the drafting agent — no open-ended reasoning
+#     over arbitrary repo content, with tool access and a place to act on a
+#     decision. It DOES still run verify-claims' narrow, isolated per-claim dispatch
+#     (corrected 2026-09-05 — an earlier version of this comment overclaimed zero
+#     model calls here at all), whose only possible output is a constrained verdict
+#     per claim — no tool access of its own, no ability to touch the write-scoped
+#     credential directly. It downloads the patch, applies it to a FRESH checkout
+#     (not the one the drafting job touched), independently re-runs all three gates
+#     against every file the patch touches — modified AND newly added, `git apply
+#     --index` stages both — and only then, if everything passes, opens the PR with
+#     the write-scoped credential this job alone holds.
 # This also fixes a second bug the same review found: the old single-job version's
 # re-verification loop used `git diff --name-only HEAD`, which only lists modified
 # TRACKED files — it silently skipped every newly-drafted page, draft-page's actual
@@ -217,6 +222,28 @@ jobs:
         if: steps.has-changes.outputs.changed == 'true'
         run: git apply --index "${{ runner.temp }}/professor-changes.patch"
 
+      - name: Confirm the patch only touches this suite's own expected surface
+        if: steps.has-changes.outputs.changed == 'true'
+        run: |
+          # Added 2026-09-05, after a review pointed out the gates below only ever
+          # check '*.md' files, while `git add -A` (drafting job) stages EVERY
+          # change — a compromised or misdirected drafting run could in principle
+          # write outside the doc library (a script, a workflow file, a config
+          # anywhere else in the repo) and nothing downstream would notice, because
+          # nothing downstream looks outside '*.md'. This suite's own tool surface
+          # never legitimately writes anything except pages under the resolved
+          # library root and `.professor/`'s own metadata (library.json,
+          # scan-state.json, provenance/*.jsonl) — so anything else in the patch is
+          # itself a finding, independent of what it contains. FILL IN once the
+          # library root is resolvable here (same resolution `library-index`
+          # `bootstrap` uses, redesign doc §6.6):
+          #   git diff --cached --name-only -z | while IFS= read -r -d '' f; do
+          #     case "$f" in
+          #       <library-root>/*.md|.professor/*) ;;
+          #       *) echo "::error::patch touches unexpected path: $f" >&2; exit 1 ;;
+          #     esac
+          #   done
+
       - name: Independently re-verify every changed page against all three gates
         if: steps.has-changes.outputs.changed == 'true'
         run: |
@@ -242,9 +269,18 @@ jobs:
           # `git apply --index` stages new files too, so this doesn't have the
           # "misses untracked files" bug the old single-job version's `git diff
           # --name-only HEAD` had.
-          # FILL IN once tools/professor.py exists (redesign doc §9, Phase 1):
+          # check-page is page-content-specific (frontmatter, claim rule, citation
+          # resolution) — '*.md' only. screen-content has no such restriction and
+          # also runs against '.professor/*.json'/'.professor/**/*.jsonl' (added
+          # 2026-09-05) — commit_author/commit_at/pr fields in a provenance ledger
+          # are read from git metadata, which is still repo-content-derived text,
+          # not something this suite authored itself. FILL IN once tools/professor.py
+          # exists (redesign doc §9, Phase 1):
           #   git diff --cached --name-only -z -- '*.md' | while IFS= read -r -d '' f; do
           #     "$PROFESSOR_PACK_ROOT/tools/professor.py" check-page "$f" --target . || exit 1
+          #     "$PROFESSOR_PACK_ROOT/tools/professor.py" screen-content "$f" --target . || exit 1
+          #   done
+          #   git diff --cached --name-only -z -- '.professor/*.json' '.professor/**/*.jsonl' | while IFS= read -r -d '' f; do
           #     "$PROFESSOR_PACK_ROOT/tools/professor.py" screen-content "$f" --target . || exit 1
           #   done
           # verify-claims' dispatch — RESOLVED (redesign doc, Open Questions item 9):

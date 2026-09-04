@@ -57,14 +57,20 @@ that current commit against the `sources[]` entry's recorded `commit`:
   diff**: this suite's tool surface (`resolve-pin`, `path-exists-at`) confirms a
   commit and a path exist, it does not fetch that external file's actual content at
   either commit, so there is nothing to diff against even after confirming the pin
-  moved. **Do not rewrite the section from a guess.** Instead, flag it — update the
-  section's provenance with a note that the external source's pin has moved since the
-  cited commit (a fact `library-index sweep`, §6.6, can also pick up and report), and
-  hand it to review the same way a `library-index sweep` finding is: reported, not
-  silently resolved. This is a real, accepted limitation of this design, not an
-  oversight — extending this suite to fetch arbitrary external file content is a
-  larger tool-surface change than this document scopes, and named here so a future
-  reader doesn't rediscover the gap from scratch.
+  moved. **Do not rewrite the section from a guess, and do not touch the ledger
+  either** — corrected 2026-09-05, an earlier version of this text said to write a
+  "pin moved" note into provenance, but no such field exists in the ledger schema
+  (§8), and none needs adding: the recorded `commit` stays exactly what it was, so
+  this same section reports `needs_external_check` again on every future scan,
+  unconditionally, exactly as `scan-repo` §5 already always does for any
+  non-`self` source — the finding doesn't need a persistent flag to survive, only
+  for nothing to silently mark it resolved. Report the mismatch as a finding for
+  this run (which commit was recorded, which one `resolve-pin` found instead) to
+  whoever invoked this run, same disposition as a `library-index sweep` finding:
+  reported, not silently resolved. This is a real, accepted limitation of this
+  design, not an oversight — extending this suite to fetch arbitrary external file
+  content is a larger tool-surface change than this document scopes, and named here
+  so a future reader doesn't rediscover the gap from scratch.
 
 ## 2. Rewrite the section against the diff
 

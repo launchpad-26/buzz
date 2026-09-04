@@ -207,18 +207,31 @@ other draft would, using this skill's own steps 1, 4, and 5 exactly as written:
 2. For each behaviour claim, find and pin a real citation the same way step 4 does —
    a path and commit in the target repo (or a resolved external pin, step 4's own
    exception) that actually supports what the sentence asserts. **If no honest
-   citation can be found for a claim already in the page**, do not invent one and do
-   not delete the sentence either — flag it in this run's report, the same
-   disposition as `screen-sensitive`'s `block`, and leave that specific claim's
-   citation empty rather than fabricated. A partially-baselined section is a real,
-   visible outcome; a section with one invented citation is not.
+   citation can be found for a claim already in the page — corrected 2026-09-05, a
+   second review caught this contradicting the contract gate's own mandatory bar —
+   do not invent one, do not delete the sentence, and do not treat the section as
+   partially baselined either.** `check-page` (step 5 below) flags any behaviour
+   claim with no citation at all, exactly as it would for a freshly-drafted page —
+   nothing about baseline mode gets a carve-out from that. Report which claim(s)
+   blocked it and stop **this run**, same disposition as any other `check-page`
+   block: the section stays `unknown-pre-existing`, unchanged, and reports again on
+   the next `needs_baseline` pass — a human adding the missing evidence directly, or
+   accepting the claim needs rewording to something citable, is what actually moves
+   it forward, the same as any other blocked draft.
 3. Confirm every found citation the way step 5 does.
 4. Embed the inline provenance markers (step 6) directly above the section's existing
    heading — this is the first time this section gets one, not a rewrite of an
    existing marker.
 5. Run the contract gate (step 7) and the sensitivity gate (step 8) exactly as any
-   other draft would, against the now-annotated section.
-6. On a clean pass, `provenance-log` writes a real `"added"` line (not
+   other draft would, against the now-annotated section — **and, corrected
+   2026-09-05, `verify-claims` (§6.7) and the mandatory final independent pass, same
+   as any other draft gets (§6's flow-diagram note)**; an earlier version of this
+   text stopped at two gates, silently exempting baseline mode from the third.
+6. On a clean pass, `provenance-log` writes an `"updated"` line — **corrected
+   2026-09-05: not `"added"`**, because the section's `unknown-pre-existing` line
+   already exists and is itself the section's first-ever ledger line; §8's own rule
+   ("added" only for a section's very first line ever) already covers this, baseline
+   mode doesn't need an exception, it needs to actually follow the rule (not
    `"unknown-pre-existing"`) with real `sources[]` entries — this is what lets
    `scan-repo` §3 finally treat the section like any other on every scan after this
    one.

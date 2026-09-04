@@ -32,14 +32,18 @@ that shape is superseded.
 
 ## `write` mode
 
-Called with: page path, section anchor, `sources` (an array of `{repo, path, commit,
-ref?, commit_author, commit_at, pr}` — `repo: "self"` for a target-repo-local
-citation, the real `owner/repo` plus `ref` for an external one; `commit_author`/
-`commit_at`/`pr` describe the **code change**, not the doc edit — see the redesign
-doc §8 for the exact shape, why `sources` is an array rather than a single shared
-commit over a flat path list, and why the code-provenance fields are kept separate
-from this mode's own `by`/`at` below), and a contributor (an agent name plus
-session/task reference — e.g. `the-professor` plus whatever identifies the current
+Called with: page path, section anchor, `sources` (an array of `{repo, path, span,
+commit, ref?, commit_author, commit_at, pr}` — `repo: "self"` for a target-repo-local
+citation, the real `owner/repo` plus `ref` for an external one; `span` is a line
+range (`"L42-L58"`) or `null` when the claim is about a file's general shape rather
+than specific lines (added 2026-09-05 — `verify-claims` and contradiction detection
+both need this); `commit_author`/`commit_at`/`pr` describe the **code change**, not
+the doc edit — see the redesign doc §8 for the exact shape, why `sources` is one
+entry per *citation* rather than deduplicated by path (two claims against the same
+file at different spans are two entries, not one), and why the code-provenance
+fields are kept separate from this mode's own `by`/`at` below), and a contributor
+(an agent name plus session/task reference — e.g. `the-professor` plus whatever
+identifies the current
 run — or a human's identity, when step 1 below finds one).
 
 1. **Check for a hand-edit first.** A hand-edit means: a human, working directly in

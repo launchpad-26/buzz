@@ -73,7 +73,7 @@ with that branch regardless of which way it goes.
 
 | Phase | Delivers | Depends on | Status |
 |---|---|---|---|
-| 0 | Group decision: script-only tool layer vs. #1402's dual-mode server (§1a) | — | **Decided** — script-only (durable record still pending, see Phase 0's own review gate) |
+| 0 | Group decision: script-only tool layer vs. #1402's dual-mode server (§1a) | — | **Decided, durable record MET** — script-only, recorded in `ADR-0057-professor-script-only-tool-layer.md` |
 | 1 | `tools/professor.py` — the tool layer itself (4 subcommands, no MCP) | 0 | Not started |
 | 1b | Claim verification gate: `verify-claims` (§6.7) | 1 | **Decided 2026-09-04** — mandatory, unskippable; not started |
 | 2 | One real drafted page for a real target repo, end to end | 1, 1b | Not started |
@@ -603,7 +603,7 @@ generalized here.
 | **Purpose** | For a doc section flagged `stale` by `scan-repo`, rewrite **only that section**, not the whole page — the capability the original suite had no mechanism for at all (it only ever drafted whole new pages). |
 | **Trigger** | Called by `scan-repo`'s `stale` list. |
 | **Inputs** | Page path + section anchor; the section's current provenance record (`.professor/provenance/<page>.jsonl`, §8); the current source at the cited path. |
-| **Outputs** | For a local (`repo: "self"`) source: a patch touching only the flagged section's markdown span (identified by its heading through the next heading of the same or shallower level) plus its provenance comment; the rest of the page is untouched byte-for-byte — this is checked as part of the skill's own done-when, not assumed. **For a `needs_external_check` entry — fixed 2026-09-05, a review found this wasn't actually possible as originally written**: a rewrite only if `resolve-pin`'s current commit matches the recorded one (i.e. nothing to do); otherwise a provenance flag noting the pin moved, handed to review — **never a rewrite**, because this suite's tool surface has no way to fetch an external file's actual content to ground one in. |
+| **Outputs** | For a local (`repo: "self"`) source: a patch touching only the flagged section's markdown span (identified by its heading through the next heading of the same or shallower level) plus its provenance comment; the rest of the page is untouched byte-for-byte — this is checked as part of the skill's own done-when, not assumed. **For a `needs_external_check` entry — fixed 2026-09-05, a review found this wasn't actually possible as originally written, then corrected again 2026-09-05 after a second review caught a self-contradiction and an invented schema field in the first fix**: no rewrite either way. If `resolve-pin`'s current commit matches the recorded one, nothing is wrong — no output at all beyond confirming the check ran. If it doesn't match, **no rewrite and no ledger change** — the recorded `commit` stays exactly as it was, so `scan-repo` reports this section `needs_external_check` again on every future scan (§5's own unconditional-for-any-non-`self`-source behavior already guarantees this, no new persistence mechanism needed); this run instead reports the mismatch (recorded vs. current commit) as a finding for whoever invoked it, same disposition as a `library-index sweep` finding — never a rewrite, because this suite's tool surface has no way to fetch an external file's actual content to ground one in. |
 | **Tools** | `Read` the section span; `git diff <old-commit>..<new-commit> -- <path>` (plain git) — **local sources only**, since `scan-repo` never computes a `new_commit` for an external one (its own §5). For a `needs_external_check` entry: `resolve-pin`, to get the external source's *current* commit — never a diff, since a local `git diff` needs a checkout this suite never has for an external repo. `tools/professor.py check-page` against the **whole page** (not just the section) once a local rewrite is done — same contract gate `draft-page` runs, and for the same reason: a section-scoped edit can still break a page-level rule. |
 | **Hands to** | `check-page`, then `screen-sensitive`, then `verify-claims` (§6.7), then `provenance-log` to record the new commit/timestamp for just that section. **Then all three gates run again, independently, as the true final step** (decided 2026-09-04 — §6's flow-diagram note), same as `draft-page` — a section-scoped rewrite gets exactly the same final-pass requirement as a whole new page, not a lighter version of it. |
 
@@ -626,7 +626,7 @@ generalized here.
 | **Trigger** | Called by `draft-page` and `update-page`, always, as the last step before a write — never optional, never skipped because "this section is just prose." |
 | **Inputs** | Draft content (new page or a single section's patch). |
 | **Outputs** | One of: **pass** (content unchanged, write proceeds); **redact** (specific spans replaced with `[REDACTED: <category>]`, content proceeds with the redaction, and the redaction itself is logged — never silently); **block** (write refused entirely, with the finding reported to whoever invoked the skill, same shape as `check_page`'s `findings` list in the original design so review has one place to look). |
-| **Tools** | `tools/professor.py screen-content <draft-file>`, running the `[pattern]`-marked categories of `tools/contract/sensitive-patterns.md`'s ruleset (§9, follow-up — the ruleset file scaffolded in this branch is the spec the subcommand implements) as a plain local subprocess. No network, no MCP — this was never a candidate for a network-shaped tool, since a screening gate has no cross-repo dimension to begin with. Per §3, a target-repo override at `.professor/sensitive-patterns.md` takes precedence over the bundled ruleset, but the subcommand that runs it is the same either way. **Plus, added 2026-09-05: one additional dispatch to `$PROFESSOR_VERIFIER_CMD`** for the ruleset's `[dispatch]`-marked categories (roster/access-control names used as data, not attribution) — recognizing what a name is *being used for* is a semantic judgment `screen-content`'s pattern matching cannot do, so it is checked the same way `verify-claims` checks a claim, not folded into the mechanical pass. Still local, still unskippable, still blocking. |
+| **Tools** | `tools/professor.py screen-content <draft-file>`, running the `[pattern]`-marked categories of `tools/contract/sensitive-patterns.md`'s ruleset (§9, follow-up — the ruleset file scaffolded in this branch is the spec the subcommand implements) as a plain local subprocess. No network, no MCP — this was never a candidate for a network-shaped tool, since a screening gate has no cross-repo dimension to begin with. Per §3, a target-repo override at `.professor/sensitive-patterns.md` takes precedence over the bundled ruleset, but the subcommand that runs it is the same either way. **Plus, added 2026-09-05: one additional dispatch to `$PROFESSOR_VERIFIER_CMD`** for the ruleset's `[dispatch]`-marked categories (roster/access-control names used as data, not attribution) — recognizing what a name is *being used for* is a semantic judgment `screen-content`'s pattern matching cannot do, so it is checked the same way `verify-claims` checks a claim, in fresh isolated context, then merged into this skill's one `pass`/`redact`/`block` outcome. Still local, still unskippable. **Disposition is `redact`, matching `sensitive-patterns.md`'s own table** (this category is listed under "Redact," not "Block" — corrected 2026-09-05, an earlier version of this row said "blocking," contradicting the ruleset it implements). |
 | **Why this is a tool/gate, not persona judgement** | Applying the original design's own test from §2: "is being wrong silent and mechanically checkable?" A committed AWS key or a hardcoded email address is exactly that — checkable by pattern, and silently wrong if missed. This belongs behind a script the persona cannot decline to run, same reasoning as the original `resolve_pin`. **The one `[dispatch]` category doesn't pass that literal test** — it isn't pattern-checkable — but it passes the deeper reasoning behind it: the drafting persona still can't be trusted to self-certify "this name isn't roster data," so it goes to an independent, isolated dispatch instead of the persona's own judgement call, same enforcement discipline as `verify-claims`, applied here because a pure pattern check genuinely can't reach this one category. |
 
 ### 6.6 `library-index` — library structure + index maintenance
@@ -720,7 +720,20 @@ never processes raw target-repo content as agent input — it downloads that pat
 every file the patch touches, and only then, with the write-scoped credential this job alone
 holds, opens the PR. "Independent" now means what it always claimed to mean: a fresh checkout, no
 shared runtime state with the job that processed untrusted content, not merely a later step
-reading the same working tree. This restructure also closed a second bug the same review found:
+reading the same working tree.
+
+**Corrected 2026-09-05, a second review found the previous paragraph overstated this**:
+`verify-and-open-pr` still runs `verify-claims`, which dispatches an isolated per-claim check
+against a cited source span — so the write-scoped job is not free of every model call over
+target-repo content. What's actually true, precisely: it never runs the *drafting agent* — the
+open-ended reasoning that reads arbitrary repo content and decides what to write, with tool access
+and a place to act on a decision — only `verify-claims`' narrow, isolated dispatch, whose sole
+possible output is a constrained verdict per claim, with no tool access of its own and no ability
+to act on the write-scoped credential directly; the workflow, not the dispatch, decides what to do
+with the verdict. That distinction — no open-ended agent reasoning with a write credential in
+reach, versus zero model calls at all — is the real boundary this restructure draws, and the one
+worth stating accurately rather than the broader claim that overstated it. This restructure also
+closed a second bug the same first review found:
 the prior single-job version's re-verification loop (`git diff --name-only HEAD`) only listed
 modified *tracked* files, silently skipping every newly-drafted page — `draft-page`'s actual
 output. Deriving the changed-file list from the applied patch instead (`git apply --index`, then
@@ -814,18 +827,33 @@ made before the hook was installed).
 
 Two representations of the same fact, written together so they cannot drift:
 
-**`<page-slug>`, defined precisely — added 2026-09-05, fixing a real collision a review found.**
+**`<page-slug>`, defined precisely — added 2026-09-05, fixing a real collision a review found,
+then corrected again 2026-09-05 after a second review caught the fix itself being underspecified.**
 This term was used throughout this document and never actually defined, and the natural reading
-(a page's basename) collides: `docs/api/config.md` and `docs/cli/config.md` would both resolve to
-`config.jsonl`, silently merging two unrelated pages' provenance into one file. **`<page-slug>` is
-the page's full path relative to the library root, with every `/` replaced by `--`** — the two
-examples above become `docs--api--config.jsonl` and `docs--cli--config.jsonl`, never colliding
-regardless of how many directories share a filename. `--` rather than `_` because a real path
-segment can itself contain `_` (e.g. `docs/api/user_config.md`), and `--` is not a character
-either this suite's own conventions or common filesystem/doc-directory naming uses inside a single
-path segment, so the substitution stays unambiguous. Every skill and file that references
-`<page-slug>` (§5's directory tree, `provenance-log/SKILL.md`, and this section's own examples
-below) means this exact derivation, not a filename-only shorthand.
+(a page's basename) collides: two pages named `config.md` in different directories would both
+resolve to `config.jsonl`, silently merging two unrelated pages' provenance into one file.
+
+**`<page-slug>` is the page's path *relative to the library root* — never the repo root, which is
+a different thing and usually a different path** (`library-index`'s own `bootstrap`, §6.6,
+resolves the library root once, per target — it might be `docs/`, `launchpad/docs/`, or a fresh
+`professor-library/`, and it is never assumed here) — with its trailing `.md` stripped and every
+remaining `/` replaced by `--`. Concretely, if `bootstrap` resolved the library root to `docs/`,
+a page at `docs/api/config.md` has the relative path `api/config.md` (the library-root prefix
+itself is never part of the slug — it's the same for every page in that library, so keeping it
+would only add noise) and the slug `api--config`; a page at `docs/cli/config.md` in the same
+library slugs to `cli--config` — never colliding, regardless of how many directories share a
+filename, because the full relative path, not just the basename, is what's encoded.
+
+**One narrow, named limit, not solved further**: a real path segment that itself contains a
+literal `--` (e.g. `docs/my--thing/config.md`) is not distinguishable from the separator by this
+encoding — `--` was chosen because it's not a character this suite's own conventions or common
+doc-directory naming uses inside a single segment, which makes the collision astronomically
+unlikely in practice, not impossible in principle. A fully injective encoding (percent-escaping,
+or hashing the path) would close this completely at the cost of a slug a human can no longer read
+at a glance in a file listing — not adopted, because the practical benefit doesn't clear that cost
+for a collision this narrow. Every skill and file that references `<page-slug>` (§5's directory
+tree, `provenance-log/SKILL.md`, and this section's own examples below) means this exact
+derivation, not a filename-only shorthand.
 
 **Machine ledger** — `.professor/provenance/<page-slug>.jsonl`, an **append-only log**, not a
 snapshot: one line per event, per section, forever, never rewritten or deleted, even to correct a
@@ -835,11 +863,18 @@ single JSON object per page, rewritten in place on every update — see "Snapsho
 log" below for why that changed; every example and every downstream skill's `write`/`read` mode
 in this document already assumes the log shape, not the snapshot.
 
-`sources` is an array, one entry per cited path, each carrying its own commit — **not** a single
-shared `source_commit` over a flat path list. That flat shape was tried first and doesn't survive
-contact with an external citation: it has nowhere to put a second repo/ref, and it can't tell you
-which of several paths a single shared commit is even supposed to describe once more than one is
-listed.
+`sources` is an array, one entry per **citation** — not per unique path, each carrying its own
+commit — **not** a single shared `source_commit` over a flat path list. That flat shape was tried
+first and doesn't survive contact with an external citation: it has nowhere to put a second
+repo/ref, and it can't tell you which of several paths a single shared commit is even supposed to
+describe once more than one is listed.
+
+**"Per citation," not "per path," clarified 2026-09-05 after a review found this ambiguous once
+`span` (below) existed**: a section can have two behaviour claims against the *same* file at
+*different* line ranges — that's two `sources[]` entries, same `repo`/`path`/`commit`, different
+`span`. Deduplicating by path alone would silently drop one claim's actual location once a second
+claim cited the same file. Nothing about this schema is deduplicated automatically; each behaviour
+claim in a section gets its own `sources[]` entry when it has a citation at all.
 
 **`span` — added 2026-09-05, fixing a real gap a review found**: an optional line-range string
 (`"L42"` for one line, `"L42-L58"` for a range), naming the specific lines a behaviour claim

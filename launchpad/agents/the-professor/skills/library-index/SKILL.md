@@ -74,7 +74,9 @@ wrong: it mutates the map for a unit that might never actually get drafted).
 
 ## `sweep` mode — on the same schedule as the scan hook, or on demand
 
-Reads the whole library, three checks, none auto-fixed:
+Reads the whole library, five checks (extended 2026-09-05 — the last two are new,
+added alongside two decisions the redesign doc's §6.6 already specified but this
+file hadn't caught up to yet), none auto-fixed:
 
 1. **Duplicate-topic pages** — two or more pages whose content (or, cheaply, whose
    title/first-heading and cited source paths) overlap heavily enough to be about the
@@ -91,9 +93,24 @@ Reads the whole library, three checks, none auto-fixed:
    External (`http(s)://`) links are out of scope for this check — verifying the
    living internet is a different problem than verifying the library's own internal
    consistency.
+4. **Contradicting claims** — group every section's `sources[]` entries across the
+   whole library by `{repo, path, commit}` (same source, same commit); within a
+   group of more than one section, compare the actual claim sentences for
+   disagreement (a fresh, isolated check per group — same discipline as
+   `verify-claims`, not a self-comparison). Report disagreeing pairs; two sections
+   citing unrelated code are never compared, which is what keeps this bounded instead
+   of an all-pairs comparison over the whole library.
+5. **Published pages with no matching provenance ledger entry** — for every section
+   whose latest ledger line is anything other than `"unknown-pre-existing"` (a real
+   `"added"`/`"updated"` line should exist for it), confirm
+   `.professor/provenance/<page-slug>.jsonl` actually has one. This is the check
+   `check-page` explicitly cannot do at draft time (`page-contract.md`'s own
+   "Provenance" section — no ledger entry exists yet for a not-yet-published scratch
+   file); `sweep` is where it happens instead, against pages that are already
+   published and therefore should already have one.
 
 Also reconciles `scan-repo`'s `removed` entries here: a section citing a path that no
-longer exists gets surfaced as part of this report (as a fourth category, "stale
+longer exists gets surfaced as part of this report (as a sixth category, "stale
 citations needing a source or removal"), rather than silently left for the next
 person to notice by reading the page.
 
@@ -116,6 +133,7 @@ skill has no cross-repo dimension in any mode, so it never calls `tools/professo
 - [ ] `place`: `library.json` checked for an existing match before resolving a new
       category; the new mapping and the `index.md` entry were both written, not just
       one
-- [ ] `sweep`: all three checks (duplicates, orphans, broken cross-refs) ran, plus the
+- [ ] `sweep`: all five checks (duplicates, orphans, broken cross-refs, contradicting
+      claims, missing provenance records) ran, plus the
       `removed`-entries reconciliation, and every finding was reported rather than
       silently fixed

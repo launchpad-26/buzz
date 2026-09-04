@@ -35,16 +35,37 @@ ruleset file scaffolded in this pack is the spec it implements).
 
 **One category in the ruleset is not pattern-matched — added 2026-09-05, after a
 review found this skill's own "mechanical for everything" framing wasn't quite
-accurate.** `tools/contract/sensitive-patterns.md` marks every category **[pattern]**
-or **[dispatch]**. `screen-content` (above) covers every **[pattern]** category
+accurate, and its disposition wasn't defined precisely enough to actually run.**
+`tools/contract/sensitive-patterns.md` marks every category **[pattern]** or
+**[dispatch]**. `screen-content` (above) covers every **[pattern]** category
 directly. The one **[dispatch]** category (member/roster names used as
 access-control data, as opposed to attribution) needs recognizing what a name is
 *being used for* in its sentence — not a shape `screen-content`'s pattern matching
-can test — so it is checked the same way `verify-claims` checks a claim: a fresh,
-isolated, mandatory dispatch to `$PROFESSOR_VERIFIER_CMD` (§3/§6.7), run as an
-additional step alongside `screen-content`, not folded into it. Still local (no
-GitHub API call), still unskippable, still blocking on a finding — the dispatch
-mechanism, not the severity, is what differs from the rest of this gate.
+can test.
+
+**The protocol, run once per name `screen-content` flags as a candidate** (a plain
+name-shaped token — the pattern side still does that detection; dispatch only
+decides *role*, it doesn't hunt for names itself): run `$PROFESSOR_VERIFIER_CMD` as a
+subprocess (same mechanism `verify-claims` uses, §6.7 — a fresh, isolated call),
+fed only the name and its containing sentence, nothing else. It returns one of:
+
+- **`ATTRIBUTION`** — the name is a citation's author or a provenance record's
+  contributor. Not flagged at all; this is exactly the case
+  `sensitive-patterns.md`'s own "why redact" column names as never sensitive.
+- **`ROSTER_DATA`** — the name is being used as configuration/access-control data
+  (an allowlist, a hardcoded reviewer list). **Disposition: `redact`** — matching
+  `sensitive-patterns.md`'s own table (this category lives under "Redact," not
+  "Block"). Corrected 2026-09-05: an earlier version of this text said "blocking,"
+  contradicting the ruleset it's supposed to implement.
+- **`AMBIGUOUS`** — the dispatch can't confidently tell. Treated as `ROSTER_DATA`
+  (redact) — the same "when in doubt, the safer disposition" reasoning
+  `sensitive-patterns.md`'s own block-vs-redact column already uses elsewhere on
+  this list, applied to an uncertain verdict instead of an uncertain shape.
+
+Still local (no GitHub API call), still unskippable, still folded into this
+skill's own `pass`/`redact`/`block` outcome in step 2 below exactly like
+`screen-content`'s findings — the dispatch mechanism, not the disposition or the
+reporting shape, is what differs from the rest of this gate.
 
 **Until that subcommand exists, this whole skill is a Phase 1 dependency, not a
 standing design choice.** A manual pass — reading `tools/contract/sensitive-patterns.md`
@@ -62,10 +83,16 @@ isn't incomplete anymore.
 
 ## 2. Act on the result
 
-- **`pass`** — nothing flagged. The write proceeds unchanged.
+**One combined outcome, from both checks** — `screen-content`'s pattern findings and
+step 1's dispatch verdicts (`ROSTER_DATA`/`AMBIGUOUS`, both `redact`) are merged into
+a single `pass`/`redact`/`block` result for this skill, never reported or acted on
+separately; whichever category applies, apply the discipline below.
+
+- **`pass`** — nothing flagged, by either check. The write proceeds unchanged.
 - **`redact`** — one or more spans matched a category the ruleset marks as
   redact-not-block (e.g. an internal hostname that's useful context but shouldn't be
-  published verbatim). Replace each flagged span with `[REDACTED: <category>]`, and
+  published verbatim, or a name dispatch classified `ROSTER_DATA`/`AMBIGUOUS`).
+  Replace each flagged span with `[REDACTED: <category>]`, and
   log the redaction — which category, which section, never the redacted value itself
   — so a reviewer can see what was removed without the removed content ever having
   been written anywhere, including a log.
