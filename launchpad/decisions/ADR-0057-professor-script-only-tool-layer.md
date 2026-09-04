@@ -70,7 +70,7 @@ that tradeoff was made deliberately, not by default.
 registers anything — but the broader concern behind it, reaching Professor's tooling from an
 arbitrary session, resurfaces as a different, narrower problem this document did not originally
 address: resolving `<pack-root>` when the session isn't inside this fork. That problem is answered
-separately (`$PROFESSOR_PACK_ROOT`, recorded in the design doc's own Open Questions item 1), not by
+separately (`$PROFESSOR_PACK_ROOT`, recorded in the design doc's own Open Questions item 6), not by
 this ADR.
 
 ## Security implications

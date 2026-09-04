@@ -16,26 +16,61 @@ rest of the page untouched, byte for byte.
 Same target resolution as `scan-repo`/`draft-page` (§0 in each) — including
 confirming `$PROFESSOR_PACK_ROOT` is set (`draft-page` §0 has the exact fail-loud
 message; every `<pack-root>` reference below, steps 3 and 5, means this variable).
-Take the `stale` entry: page path, section anchor, `old_commit`, `new_commit`.
+Take the `stale` entry: page path, section anchor, `old_commit`, and — **only for a
+`repo: "self"` source** — `new_commit`. **A `needs_external_check` entry has no
+`new_commit` at all** (fixed 2026-09-05, a review found this assumed uniformly, which
+it never was): `scan-repo` deliberately never resolves one for an external source
+(its own §5 — no network calls), so step 1 below branches on this instead of assuming
+every entry looks the same.
 
-## 1. Diff, don't re-read-and-guess
+## 1. Diff, don't re-read-and-guess — local sources only
 
-Run `git diff <old_commit>..<new_commit> -- <path>` against the target's checkout for
-every `sources[].path` entry the section's provenance record names (`provenance-log`
-`read` mode, `latest` view — §8 has the exact shape; this is an array of `{repo, path,
-commit, ...}` objects, not a flat `source_paths` list). This is the
-evidence the rewrite is grounded in — a diff shows exactly what changed, which is a
-narrower and more reliable basis for an update than reading the whole current file and
-trying to guess what's different from a page drafted against an earlier version you
-no longer have open. If the diff is empty for every cited path (the section's
-provenance said stale but nothing in the actual diff touches what the section claims),
-say so plainly rather than rewriting for the sake of rewriting — a section can be
-correctly marked "cited commit is behind HEAD" while still being accurate, if the
-change was elsewhere in the file and didn't touch the claimed behaviour.
+**For every `sources[].path` entry with `repo: "self"`** (`provenance-log` `read`
+mode, `latest` view — §8 has the exact shape; this is an array of `{repo, path,
+commit, ...}` objects, not a flat `source_paths` list): run
+`git diff <old_commit>..<new_commit> -- <path>` against the target's checkout. This
+is the evidence the rewrite is grounded in — a diff shows exactly what changed, which
+is a narrower and more reliable basis for an update than reading the whole current
+file and trying to guess what's different from a page drafted against an earlier
+version you no longer have open. If the diff is empty for every local cited path (the
+section's provenance said stale but nothing in the actual diff touches what the
+section claims), say so plainly rather than rewriting for the sake of rewriting — a
+section can be correctly marked "cited commit is behind HEAD" while still being
+accurate, if the change was elsewhere in the file and didn't touch the claimed
+behaviour.
+
+## 1a. External sources — resolve first, never assume a diff is possible
+
+**A `needs_external_check` entry's external `sources[].path` entries cannot be
+diffed the way a local one can** — `git diff` needs a local checkout of that commit
+range, and this suite never clones an external repo (§1a of the redesign doc — the
+whole reason `resolve-pin`/`path-exists-at` are network calls instead). For each
+external source: run `resolve-pin <repo> <ref>` to get its **current** commit — never
+trust a `new_commit` field, because none was ever computed for this entry. Compare
+that current commit against the `sources[]` entry's recorded `commit`:
+
+- **Unchanged** — the citation is still current. Nothing to rewrite; report this
+  section as checked-and-current, the outcome `scan-repo`'s own §5 note says
+  `update-page` might find for a `needs_external_check` entry that turns out not to
+  be stale at all.
+- **Changed** — the pin moved, but **this skill still cannot ground a rewrite in a
+  diff**: this suite's tool surface (`resolve-pin`, `path-exists-at`) confirms a
+  commit and a path exist, it does not fetch that external file's actual content at
+  either commit, so there is nothing to diff against even after confirming the pin
+  moved. **Do not rewrite the section from a guess.** Instead, flag it — update the
+  section's provenance with a note that the external source's pin has moved since the
+  cited commit (a fact `library-index sweep`, §6.6, can also pick up and report), and
+  hand it to review the same way a `library-index sweep` finding is: reported, not
+  silently resolved. This is a real, accepted limitation of this design, not an
+  oversight — extending this suite to fetch arbitrary external file content is a
+  larger tool-surface change than this document scopes, and named here so a future
+  reader doesn't rediscover the gap from scratch.
 
 ## 2. Rewrite the section against the diff
 
-Apply the same claim-tagging discipline `draft-page` §3 uses — behaviour claims cited,
+**Applies to step 1's local diff only.** Step 1a's "unchanged" outcome needs no
+rewrite; its "changed" outcome stops at flag-and-report, per that step's own text —
+neither reaches this step. Apply the same claim-tagging discipline `draft-page` §3 uses — behaviour claims cited,
 opinion claims attributed to `author`, never both. The rewrite should read as if
 drafted fresh against the current source, not as a patch note ("this used to do X, now
 it does Y") — a reader who never saw the old version shouldn't be able to tell this

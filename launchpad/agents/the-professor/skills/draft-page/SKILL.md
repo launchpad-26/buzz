@@ -187,6 +187,46 @@ what `library-index sweep` should also treat as a defect once it exists to check
 it (a page whose provenance markers have no matching ledger entry) — not designed
 further here, named so it isn't lost.
 
+## Baseline mode — called by `scan-repo`'s `needs_baseline` list, added 2026-09-05
+
+**Fixes a real gap a review found**: a page `library-index` `bootstrap` adopted from
+an existing, pre-suite doc convention gets an `unknown-pre-existing` provenance line
+with an empty `sources` array — nothing to cite-check, ever, unless something
+establishes real citations for it first. Nothing previously did. This mode is that
+something.
+
+**The content does not change.** This is the one entry point into `draft-page` that
+never rewrites prose — the existing section's wording is presumed already correct
+(a human wrote it before this suite existed); the job is only to retroactively
+establish real citations for the behaviour claims already there, the same way any
+other draft would, using this skill's own steps 1, 4, and 5 exactly as written:
+
+1. Read the section's existing prose and identify each sentence that reads as a
+   behaviour claim (step 3's claim rule still applies for classification, just not
+   for drafting new sentences).
+2. For each behaviour claim, find and pin a real citation the same way step 4 does —
+   a path and commit in the target repo (or a resolved external pin, step 4's own
+   exception) that actually supports what the sentence asserts. **If no honest
+   citation can be found for a claim already in the page**, do not invent one and do
+   not delete the sentence either — flag it in this run's report, the same
+   disposition as `screen-sensitive`'s `block`, and leave that specific claim's
+   citation empty rather than fabricated. A partially-baselined section is a real,
+   visible outcome; a section with one invented citation is not.
+3. Confirm every found citation the way step 5 does.
+4. Embed the inline provenance markers (step 6) directly above the section's existing
+   heading — this is the first time this section gets one, not a rewrite of an
+   existing marker.
+5. Run the contract gate (step 7) and the sensitivity gate (step 8) exactly as any
+   other draft would, against the now-annotated section.
+6. On a clean pass, `provenance-log` writes a real `"added"` line (not
+   `"unknown-pre-existing"`) with real `sources[]` entries — this is what lets
+   `scan-repo` §3 finally treat the section like any other on every scan after this
+   one.
+
+**Baseline mode never places a page or resolves a category** (steps 0's contract
+resolution and step 2 don't apply — the page already exists, already has a place in
+the library) — it only ever touches the one section `needs_baseline` named.
+
 ## Summary checklist
 
 - [ ] `$PROFESSOR_PACK_ROOT` confirmed set before anything else ran — failed loud with

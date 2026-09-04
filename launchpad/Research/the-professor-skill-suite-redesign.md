@@ -30,13 +30,13 @@ pack a fixed, known internal path, which is exactly the shape of answer item 6's
 list was reaching for. Confirming that connection, and everything else about container
 packaging, is left to whoever picks that goal up.
 
-**Status: Phase 0's decision is made; its durable-record review gate is not yet met. Phases 1–7
-are still a proposal, not yet built.** The group's
-consensus, reported 2026-09-03, is to step away from MCP servers entirely — that's §1a's central
-question settled, in favor of this document's script-only tool layer over #1402's dual-mode
-approach. Nothing beyond the documents and prompts in this branch is implemented — no script, no
-working gate, no dry run against a real repo — and Phases 1–7 still want an explicit go-ahead
-before anyone starts Phase 1, but the open *decision* that used to gate that go-ahead is closed.
+**Status: Phase 0's decision is made and its durable-record review gate is now met
+(`ADR-0057-professor-script-only-tool-layer.md`, closing #2098). Phases 1–7 are still a proposal,
+not yet built.** The group's consensus, reported 2026-09-03, is to step away from MCP servers
+entirely — that's §1a's central question settled, in favor of this document's script-only tool
+layer over #1402's dual-mode approach. Nothing beyond the documents and prompts in this branch is
+implemented — no script, no working gate, no dry run against a real repo — and Phases 1–7 still
+want an explicit go-ahead before anyone starts Phase 1.
 
 **For a human, in three sentences:** The Professor currently drafts documentation for exactly one
 repo (`launchpad-26/handbook`) and only from sessions that happen to have registered its MCP
@@ -263,7 +263,7 @@ re-deriving them:
 | Nothing is quoted from a document that changes — read it live | §4 | The target repo's own source changes; so does its own contract, if it has one |
 | A pack lives at `launchpad/agents/<name>/`, never `examples/` or `docs/` | "How the next agent gets built" | Unaffected by what the pack points at |
 | A pack is a specification the runtime is manually configured to match (Route 2), not something a runtime reads today | §8 | No change in this document to how packs are consumed |
-| One identity, growing skills, not a new persona per job | §1 | The suite adds five skills to one persona, not five personas |
+| One identity, growing skills, not a new persona per job | §1 | The suite adds six skills to one persona, not six personas |
 
 ---
 
@@ -580,16 +580,16 @@ generalized here.
 | **Purpose** | Build (or refresh) an inventory of the target repo's documentable units — modules, crates, packages, public APIs, CLI commands — and diff it against the existing library to produce a gap list: undocumented units, and units whose source changed since their doc section's recorded provenance commit. |
 | **Trigger** | Manually invoked to start work on a new target; invoked by the scheduled-scan hook (§7) on an interval; invoked by `update-page` when it needs to know *what* changed, not just *that* something did. |
 | **Inputs** | `PROFESSOR_TARGET` (path or `owner/repo`); optional `--since <commit>` to bound the scan (defaults to `.professor/scan-state.json`'s last-recorded commit, or the full tree on first run). |
-| **Outputs** | A gap report (JSON, printed and also written to `.professor/scan-state.json`): `{new: [...documentable units with no doc page...], stale: [...doc sections whose cited source commit is behind current, plus any section citing an external source at all, tagged needs_external_check...], removed: [...local citations confirmed gone at HEAD...], pending: [...entries from a prior run that didn't complete...]}`. |
+| **Outputs** | A gap report (JSON, printed and also written to `.professor/scan-state.json`): `{new: [...documentable units with no doc page...], stale: [...doc sections whose cited source commit is behind current, plus any section citing an external source at all, tagged needs_external_check...], removed: [...local citations confirmed gone at HEAD...], needs_baseline: [...adopted sections with no citations at all yet, fixed 2026-09-05 — see §6.6's bootstrap for how these get created and §6.2's baseline mode for how they get resolved...], pending: [...entries from a prior run that didn't complete...]}`. |
 | **Tools** | `git cat-file -e`/`git log`/`git diff --name-status`, `Glob`/`Grep` over the tree — no script, no network, ever, even for sections citing an external source (§8 explains why that's routed to `update-page` instead of checked here). Only exception: if `PROFESSOR_TARGET` is an `owner/repo` the session hasn't checked out (the scheduled-scan hook's own case), the very first step is a plain `git clone`, not a `tools/professor.py` call — cloning isn't one of the four subcommands, it's what makes the rest of this skill's local-only tooling applicable at all. |
-| **Hands to** | `draft-page` for each `new` entry; `update-page` for each `stale` entry (including every `needs_external_check` one); `library-index` for each `removed` entry (orphan cleanup) and every `unknown-pre-existing` section it adopted without a baseline. |
+| **Hands to** | `draft-page` for each `new` entry, and (fixed 2026-09-05, correcting an earlier version of this row that sent these to `library-index` instead) each `needs_baseline` entry, in that skill's baseline mode; `update-page` for each `stale` entry (including every `needs_external_check` one); `library-index` for each `removed` entry (orphan cleanup). |
 
 ### 6.2 `draft-page` — code-to-docs generation (rewritten)
 
 | | |
 |---|---|
-| **Purpose** | Turn one gap-report entry (a documentable unit with no existing page) into a drafted doc page, reading the **target repo's own source** as the primary evidence rather than five external repos. |
-| **Trigger** | Called by `scan-repo`'s `new` list, one unit at a time; callable directly for a manually-named topic. |
+| **Purpose** | Turn one gap-report entry (a documentable unit with no existing page) into a drafted doc page, reading the **target repo's own source** as the primary evidence rather than five external repos. **Plus, in baseline mode (added 2026-09-05, fixing a real gap a review found)**: retroactively establish real citations for an already-existing, adopted section that has none — content unchanged, only its provenance goes from empty to real. |
+| **Trigger** | Called by `scan-repo`'s `new` list, one unit at a time, for the default mode; called by `scan-repo`'s `needs_baseline` list for baseline mode; callable directly for a manually-named topic. |
 | **Inputs** | The unit to document (a path, module, or symbol); `PROFESSOR_TARGET`; the resolved contract (§3). |
 | **Outputs** | Draft page content (frontmatter + body, shaped per the resolved contract), handed to `screen-sensitive` — never written to disk before that gate runs. |
 | **Tools** | `Read`/`Grep` the unit's source directly; `git log -1 --format=%H -- <path>` (plain git, no script) to get the exact commit each cited path is drafted against. `tools/professor.py check-page <draft-file> --target <target-root>` against the finished draft, always — the contract gate, run before the draft ever reaches `screen-sensitive`. For an external citation only (the unit genuinely wraps or depends on another repo): `resolve-pin <repo> <ref>` and `path-exists-at <repo> <commit> <path>`, as direct Bash calls — the one place in this skill the network subcommands from §4 are used. |
@@ -603,8 +603,8 @@ generalized here.
 | **Purpose** | For a doc section flagged `stale` by `scan-repo`, rewrite **only that section**, not the whole page — the capability the original suite had no mechanism for at all (it only ever drafted whole new pages). |
 | **Trigger** | Called by `scan-repo`'s `stale` list. |
 | **Inputs** | Page path + section anchor; the section's current provenance record (`.professor/provenance/<page>.jsonl`, §8); the current source at the cited path. |
-| **Outputs** | A patch touching only the flagged section's markdown span (identified by its heading through the next heading of the same or shallower level) plus its provenance comment; the rest of the page is untouched byte-for-byte — this is checked as part of the skill's own done-when, not assumed. |
-| **Tools** | `Read` the section span; `git diff <old-commit>..HEAD -- <path>` (plain git) to see exactly what changed, so the rewrite is grounded in a diff rather than a full re-read-and-guess. `tools/professor.py check-page` against the **whole page** (not just the section) once the rewrite is done — same contract gate `draft-page` runs, and for the same reason: a section-scoped edit can still break a page-level rule. For a section citing an external source: `resolve-pin`, same as `draft-page` — the only network call this skill ever makes. |
+| **Outputs** | For a local (`repo: "self"`) source: a patch touching only the flagged section's markdown span (identified by its heading through the next heading of the same or shallower level) plus its provenance comment; the rest of the page is untouched byte-for-byte — this is checked as part of the skill's own done-when, not assumed. **For a `needs_external_check` entry — fixed 2026-09-05, a review found this wasn't actually possible as originally written**: a rewrite only if `resolve-pin`'s current commit matches the recorded one (i.e. nothing to do); otherwise a provenance flag noting the pin moved, handed to review — **never a rewrite**, because this suite's tool surface has no way to fetch an external file's actual content to ground one in. |
+| **Tools** | `Read` the section span; `git diff <old-commit>..<new-commit> -- <path>` (plain git) — **local sources only**, since `scan-repo` never computes a `new_commit` for an external one (its own §5). For a `needs_external_check` entry: `resolve-pin`, to get the external source's *current* commit — never a diff, since a local `git diff` needs a checkout this suite never has for an external repo. `tools/professor.py check-page` against the **whole page** (not just the section) once a local rewrite is done — same contract gate `draft-page` runs, and for the same reason: a section-scoped edit can still break a page-level rule. |
 | **Hands to** | `check-page`, then `screen-sensitive`, then `verify-claims` (§6.7), then `provenance-log` to record the new commit/timestamp for just that section. **Then all three gates run again, independently, as the true final step** (decided 2026-09-04 — §6's flow-diagram note), same as `draft-page` — a section-scoped rewrite gets exactly the same final-pass requirement as a whole new page, not a lighter version of it. |
 
 ### 6.4 `provenance-log` — per-section provenance ledger
@@ -626,8 +626,8 @@ generalized here.
 | **Trigger** | Called by `draft-page` and `update-page`, always, as the last step before a write — never optional, never skipped because "this section is just prose." |
 | **Inputs** | Draft content (new page or a single section's patch). |
 | **Outputs** | One of: **pass** (content unchanged, write proceeds); **redact** (specific spans replaced with `[REDACTED: <category>]`, content proceeds with the redaction, and the redaction itself is logged — never silently); **block** (write refused entirely, with the finding reported to whoever invoked the skill, same shape as `check_page`'s `findings` list in the original design so review has one place to look). |
-| **Tools** | `tools/professor.py screen-content <draft-file>`, running `tools/contract/sensitive-patterns.md`'s ruleset (§9, follow-up — the ruleset file scaffolded in this branch is the spec the subcommand implements) as a plain local subprocess. No network, no MCP — this was never a candidate for a network-shaped tool, since a screening gate has no cross-repo dimension to begin with. Per §3, a target-repo override at `.professor/sensitive-patterns.md` takes precedence over the bundled ruleset, but the subcommand that runs it is the same either way. |
-| **Why this is a tool/gate, not persona judgement** | Applying the original design's own test from §2: "is being wrong silent and mechanically checkable?" A committed AWS key or a hardcoded email address is exactly that — checkable by pattern, and silently wrong if missed. This belongs behind a script the persona cannot decline to run, same reasoning as the original `resolve_pin`. |
+| **Tools** | `tools/professor.py screen-content <draft-file>`, running the `[pattern]`-marked categories of `tools/contract/sensitive-patterns.md`'s ruleset (§9, follow-up — the ruleset file scaffolded in this branch is the spec the subcommand implements) as a plain local subprocess. No network, no MCP — this was never a candidate for a network-shaped tool, since a screening gate has no cross-repo dimension to begin with. Per §3, a target-repo override at `.professor/sensitive-patterns.md` takes precedence over the bundled ruleset, but the subcommand that runs it is the same either way. **Plus, added 2026-09-05: one additional dispatch to `$PROFESSOR_VERIFIER_CMD`** for the ruleset's `[dispatch]`-marked categories (roster/access-control names used as data, not attribution) — recognizing what a name is *being used for* is a semantic judgment `screen-content`'s pattern matching cannot do, so it is checked the same way `verify-claims` checks a claim, not folded into the mechanical pass. Still local, still unskippable, still blocking. |
+| **Why this is a tool/gate, not persona judgement** | Applying the original design's own test from §2: "is being wrong silent and mechanically checkable?" A committed AWS key or a hardcoded email address is exactly that — checkable by pattern, and silently wrong if missed. This belongs behind a script the persona cannot decline to run, same reasoning as the original `resolve_pin`. **The one `[dispatch]` category doesn't pass that literal test** — it isn't pattern-checkable — but it passes the deeper reasoning behind it: the drafting persona still can't be trusted to self-certify "this name isn't roster data," so it goes to an independent, isolated dispatch instead of the persona's own judgement call, same enforcement discipline as `verify-claims`, applied here because a pure pattern check genuinely can't reach this one category. |
 
 ### 6.6 `library-index` — library structure + index maintenance
 
@@ -636,7 +636,7 @@ generalized here.
 | **Purpose** | Own the target repo's doc library as a whole: where new pages go (replacing the original's hardcoded `list_categories()` call to one specific `mkdocs.yml`), the contents/index page, and the library's health — duplication, orphaned pages, broken cross-references, and (decided 2026-09-04, reopening Open Questions item 3) cross-page claim contradiction (capability 7). |
 | **Trigger** | Called once per target repo on first `scan-repo` run (bootstraps the library — §5's target-repo tree — if none exists, or adopts an existing convention if one does); called by `draft-page` to resolve where a new page belongs; called on a schedule (piggybacking the same interval as §7's scan hook) to sweep for orphans/broken links. |
 | **Inputs** | `bootstrap` mode: the target repo's tree, to detect its actual documentation *procedure* — not just whether a `docs/`-shaped folder exists, but where content is authored, what format governs it, and whether a separate build/ship step produces a downstream artifact from it (e.g. a generated projection consumed by other code, the way `launchpad/crates/knowledge` reads a pre-rendered projection of `launchpad/docs/corpus` and never re-derives it — Ruling 11/ADR-0027, this fork's own precedent for exactly this split). `place` mode: a drafted page's topic, to resolve or create its category. `sweep` mode: nothing — reads the whole library. |
-| **Outputs** | `bootstrap`, ordinary case (no existing governed system detected): `.professor/library.json` — a topic → `{category, page}` map, `page` filled in once a page actually exists for that topic — and an index page (adopting an existing convention's index if one exists, `docs/professor-library/index.md` if nothing existed to adopt) if neither did. **`bootstrap`, deferred case (decided 2026-09-04, by Serina — resolves Open Questions item 1):** if the target's own documentation procedure is itself an actively-governed generation system — a schema/validator sitting next to the docs, a template directory, an `AGENTS.md`/`CONTRIBUTING.md` that names a specific pipeline and says not to hand-edit its output — `library-index` does not scan, draft, or place anything into it. It resolves `.professor/defer-hook` using §3's own two-step order: **target-supplied override** — an executable at that path, same shape as `.professor/check-page` — is run, and whatever it does (e.g. invoking the target's own drafting pipeline) is this skill's entire output for that run; **suite default** — no override exists — `library-index` stops and reports what it found (the detected system, its location, why bootstrap is not proceeding) to whoever invoked it, same disposition/reporting shape as a gate's `block`. Professor never writes into a target's generated/shipped layer directly, and never guesses at an unfamiliar target's specific pipeline by name — only a target-supplied `defer-hook` can wire that up, keeping the suite itself generic. `place`: a category name to use in the new page's frontmatter — recorded in `library.json` against that topic (leaving `page` for `provenance-log`/the write step to fill in once the file exists), so the next page on the same topic doesn't re-derive it, and a `list_categories()`-shaped call becomes "read `library.json`" instead of "fetch one hardcoded repo's `mkdocs.yml`." `sweep`: a report of duplicate-topic pages (candidate merge targets), pages not reachable from the index (orphans), relative links in the library that don't resolve to a real path (broken cross-refs), and **(decided 2026-09-04, reopening Open Questions item 3) contradicting claims** — two behaviour claims, on the same page or different pages, that cite overlapping or the same source span but disagree — none of these are auto-fixed silently; the report is handed back for review, matching the original design's own "an agent can decline to run its own check" caution about not letting a model self-certify. |
+| **Outputs** | `bootstrap`, ordinary case (no existing governed system detected): `.professor/library.json` — a topic → `{category, page}` map, `page` filled in once a page actually exists for that topic — and an index page (adopting an existing convention's index if one exists, `docs/professor-library/index.md` if nothing existed to adopt) if neither did. **`bootstrap`, deferred case (decided 2026-09-04, by Serina — resolves Open Questions item 1):** if the target's own documentation procedure is itself an actively-governed generation system — a schema/validator sitting next to the docs, a template directory, an `AGENTS.md`/`CONTRIBUTING.md` that names a specific pipeline and says not to hand-edit its output — `library-index` does not scan, draft, or place anything into it. It resolves `.professor/defer-hook` using §3's own two-step order: **target-supplied override** — an executable at that path, same shape as `.professor/check-page` — is run, and whatever it does (e.g. invoking the target's own drafting pipeline) is this skill's entire output for that run; **suite default** — no override exists — `library-index` stops and reports what it found (the detected system, its location, why bootstrap is not proceeding) to whoever invoked it, same disposition/reporting shape as a gate's `block`. Professor never writes into a target's generated/shipped layer directly, and never guesses at an unfamiliar target's specific pipeline by name — only a target-supplied `defer-hook` can wire that up, keeping the suite itself generic. `place`: a category name to use in the new page's frontmatter — recorded in `library.json` against that topic (leaving `page` for `provenance-log`/the write step to fill in once the file exists), so the next page on the same topic doesn't re-derive it, and a `list_categories()`-shaped call becomes "read `library.json`" instead of "fetch one hardcoded repo's `mkdocs.yml`." `sweep`: a report of duplicate-topic pages (candidate merge targets), pages not reachable from the index (orphans), relative links in the library that don't resolve to a real path (broken cross-refs), **(decided 2026-09-04, reopening Open Questions item 3) contradicting claims** — two behaviour claims, on the same page or different pages, that cite overlapping or the same source span but disagree — and **(added 2026-09-05, fixing a contradiction a review found in `page-contract.md`) published pages with no matching provenance ledger entry** — the check `check-page` explicitly cannot do at draft time (§3, `page-contract.md`'s own "Provenance" section — no ledger entry exists yet for a not-yet-published scratch file), so `sweep` is where it actually happens, against pages that are already published and therefore should already have one; none of these are auto-fixed silently; the report is handed back for review, matching the original design's own "an agent can decline to run its own check" caution about not letting a model self-certify. |
 | **Tools** | `Glob`/`Grep`/`Read` over the target repo's tree; `.professor/defer-hook`, if present, as a plain executable (same invocation shape as `.professor/check-page`); never touches `tools/professor.py` in any mode — this skill has no cross-repo dimension at all. |
 | **Contradiction detection — how it stays bounded** | Decided 2026-09-04, by Serina. Naive cross-page contradiction checking is all-pairs over the whole library — unbounded, and `verify-claims` (§6.7) already declined that shape for exactly this reason. `sweep` instead groups claims by **cited source** — every claim across the library that cites the same path/span (using `provenance-log`'s own per-section records, §8, rather than re-deriving citations from scratch) lands in the same group — and only dispatches a comparison *within* a group, never across unrelated ones. Two claims about different code can't contradict each other in any way this check is built to catch; two claims about the *same* code citing the *same* span are exactly where drift or disagreement is both likely and cheap to compare, since the group size is bounded by how many pages cite that one span, not by the library's total size. |
 
@@ -660,7 +660,7 @@ this specific call), not a reason to let an unverified claim reach a target repo
 | **Inputs** | The gated draft content (new page or section patch), already past `screen-sensitive`; for each individual behaviour claim in it, its specific cited source, if it has one (the exact commit + path + span `check-page` already resolved — not the rest of the draft, and not the drafting agent's own reasoning). |
 | **Outputs** | Per claim: a verdict of `SUPPORTED`, `NOT_SUPPORTED`, `PARTIALLY_SUPPORTED`, or **`UNSOURCED`** (decided 2026-09-04, by Serina, reopening Open Questions item 3 — a behaviour claim with no citation at all; identified during step 1, before any per-claim dispatch, since there is nothing to check a citation *against*), each with a one-sentence reason. Any verdict other than `SUPPORTED`, on any claim, blocks the write entirely — same disposition/reporting shape as `screen-sensitive`'s `block` (see the flow diagram above): findings reported to whoever invoked the skill, nothing touches disk. All-`SUPPORTED` passes the draft through to the write step. |
 | **Mechanism** | For each claim that has a citation, dispatch a genuinely separate check in fresh context — only the cited source span and the specific claim sentence, deliberately *not* the rest of the draft, the drafting agent's reasoning, or the other claims' verdicts. This isolation is the point: a verifier that shares context with the drafter inherits the drafter's own blind spots instead of catching them. A claim with no citation skips dispatch entirely — `UNSOURCED` is immediate, cheaper than the per-claim model call every other verdict requires. **Dispatch itself — RESOLVED 2026-09-04, decided by Serina (Open Questions item 9, §3):** a subprocess call to `$PROFESSOR_VERIFIER_CMD` (a target/session-configured headless, single-turn CLI command — no suite-applied default, fails loud if unset, same as `$PROFESSOR_PACK_ROOT`; `claude --print` is the suite's recommended value to configure, not an automatic fallback), fed only the source span and claim text, its stdout captured as the verdict — the same subprocess shape every other tool call in this suite has, even though the logic behind it is a model, not a script. |
-| **Explicitly not solved by this gate** | The verifier itself can be wrong too — this raises confidence, it is not proof. Opinion/judgement claims are never checked, by design — the mechanical-check test from the original design's §2 ("is being wrong silent and mechanically checkable?") doesn't apply to a claim that's attributed judgement rather than a factual assertion. **Cross-page contradiction is no longer out of scope for the suite** (decided 2026-09-04, reopening item 3) — it is handled by `library-index` `sweep` (§6.6), not here, because it needs the whole library, not one draft in isolation. |
+| **Explicitly not solved by this gate** | The verifier itself can be wrong too — this raises confidence, it is not proof. Opinion/judgement claims are never checked, by design — the mechanical-check test from the original design's §2 ("is being wrong silent and mechanically checkable?") doesn't apply to a claim that's attributed judgement rather than a factual assertion. **Cross-page contradiction is no longer out of scope for the suite** (decided 2026-09-04, reopening item 3) — it is handled by `library-index` `sweep` (§6.6), not here, because it needs the whole library, not one draft in isolation. **Claim identification itself is not independently verified** (named 2026-09-05) — step 1's extraction (which sentences even count as behaviour claims) is done by the same drafting agent being checked, not an isolated pass; a claim it mis-classifies as opinion, or never notices at all, never reaches dispatch. Running the whole gate twice (the final-pass rule, above) catches a transient miss, not a systematic one the same agent would repeat identically both times. |
 | **The final, independent pass** | Decided 2026-09-04, by Serina — Open Questions item 3's second half generalized into a suite-wide rule (§6's flow-diagram note, below): every gate a draft passes during drafting runs **again, independently, as the true final step**, immediately before a write is finalized or a PR opens — on every path, interactive or scheduled, not only Phase 6's CI. The first pass exists so the drafting agent can fix what it flags; the second pass is the actual gate of record, because "unskippable" is a prompt instruction to the agent during drafting, not proof the agent complied. This doubles `verify-claims`' own per-claim model-call cost — accepted deliberately, same reasoning as the gate's original mandatory decision: accuracy first, cost is a build/ops problem to solve, not a reason to trust a single pass. |
 | **The architectural difference this gate introduces, now resolved** | Every other tool in this suite is a plain deterministic script — the entire point of retiring MCP (§1a) was "works identically via Bash, from any harness, no special capability required." `verify-claims` still dispatches a model call, not a script, but the *dispatch itself* is a plain subprocess call to a configured command (`$PROFESSOR_VERIFIER_CMD`, above), same shape as every other tool call — Open Questions item 9's portability concern is answered, not left open. A harness with no headless single-turn CLI at all still cannot run this mandatory gate — a named limitation, not a silent one. |
 | **Hands to** | `provenance-log`, on an all-`SUPPORTED` pass — same as `screen-sensitive` would have, had this gate not existed; `verify-claims` slots into the sequence, it doesn't change what happens after it. |
@@ -689,36 +689,56 @@ drafted pages that passed
 own "the gate runs on pull requests, so that's where the guarantee reaches" principle from the
 original design's §8.
 
-**Two properties the template adds beyond the basic shape, because the basic shape isn't actually
-a boundary on its own:** first, it pins the pack checkout (`PROFESSOR_PACK_REF`) to a specific
-tag/commit rather than a floating branch — an unpinned branch means every scheduled run executes
-whatever that branch currently holds, which nobody reviewed for this specific target repo at this
-specific time. Second, it re-runs `check-page`/`screen-content`/**`verify-claims`** (extended
-2026-09-04 — this step originally only named the first two) in CI, independently, against every
-page the run's diff touches, rather than only trusting the drafting agent's own internal gate
-calls. That second property matters because "the gate is unskippable" (`screen-sensitive`'s own
-text) is a prompt instruction to the agent, not an enforced boundary — an agent under time or
-context pressure could still write a page without running it, and nothing before this workflow
-would catch that. CI re-verification is what makes the gate a real boundary instead of a
-convention the agent could decline to follow, matching the original design's own "enforce at the
-boundary where the violation happens" rule (§2) rather than trusting the action that produced the
-content to have also checked it. **This is no longer a Phase-6-only property** — §6's flow-diagram
-note (decided 2026-09-04) generalizes it to every path this suite has: `draft-page`/`update-page`
-run all three gates a second, independent time as their own final step, on an interactive run
-exactly as on a scheduled one. This workflow's own CI step is simply how that generalized rule is
-enforced *here*, where "independent" additionally means "a separate job, not just a separate
-skill invocation in the same session."
+**Three properties the template adds beyond the basic shape, because the basic shape isn't
+actually a boundary on its own:** first, it pins the pack checkout (`PROFESSOR_PACK_REF`) to a
+specific tag/commit rather than a floating branch — an unpinned branch means every scheduled run
+executes whatever that branch currently holds, which nobody reviewed for this specific target
+repo at this specific time.
+
+Second, it re-runs `check-page`/`screen-content`/**`verify-claims`** (extended 2026-09-04 — this
+step originally only named the first two), independently, against every page the run touches,
+rather than only trusting the drafting agent's own internal gate calls. That property matters
+because "the gate is unskippable" (`screen-sensitive`'s own text) is a prompt instruction to the
+agent, not an enforced boundary — an agent under time or context pressure could still write a
+page without running it, and nothing before this workflow would catch that. Re-verification is
+what makes the gate a real boundary instead of a convention the agent could decline to follow,
+matching the original design's own "enforce at the boundary where the violation happens" rule
+(§2) rather than trusting the action that produced the content to have also checked it. **This is
+no longer a Phase-6-only property** — §6's flow-diagram note (decided 2026-09-04) generalizes it
+to every path this suite has: `draft-page`/`update-page` run all three gates a second,
+independent time as their own final step, on an interactive run exactly as on a scheduled one.
+
+Third — **RESOLVED 2026-09-05, corrected after a review found the template's earlier version
+didn't actually implement what this section already claimed**: the template is **two jobs**, not
+one, and re-verification genuinely runs in a separate job, not just a later step in the same
+mutable one. `scan-and-draft` holds no `contents`/`pull-requests` permission at all — it checks
+out the target repo, runs the drafting agent over its content, and hands off a **patch artifact**
+of whatever it produced; it never touches a write-capable credential, so a prompt injection that
+compromises it has nothing to write with. `verify-and-open-pr` never runs the drafting agent and
+never processes raw target-repo content as agent input — it downloads that patch, applies it to a
+**completely fresh checkout** neither job has touched before, re-runs all three gates against
+every file the patch touches, and only then, with the write-scoped credential this job alone
+holds, opens the PR. "Independent" now means what it always claimed to mean: a fresh checkout, no
+shared runtime state with the job that processed untrusted content, not merely a later step
+reading the same working tree. This restructure also closed a second bug the same review found:
+the prior single-job version's re-verification loop (`git diff --name-only HEAD`) only listed
+modified *tracked* files, silently skipping every newly-drafted page — `draft-page`'s actual
+output. Deriving the changed-file list from the applied patch instead (`git apply --index`, then
+`git diff --cached --name-only`) doesn't have that gap, since a freshly-applied patch's files are
+staged, new or not.
 
 **Credential decision — RESOLVED 2026-09-04, decided by Serina (Open Questions item 2).** The
 default GitHub Actions `GITHUB_TOKEN` — not a separately provisioned PAT or GitHub App — is the
 credential this template uses, for the deployment shape it actually describes: a target repo
 copies this template into its *own* `.github/workflows/`, so the workflow always runs against the
-same repo that hosts it. `GITHUB_TOKEN` is auto-issued per run, scoped only to that repo, expires
-when the job ends, and needs no manual secret to create, store, or rotate — the template's own
-`permissions:` block (`contents: write`, `pull-requests: write`) is the complete, already-minimal
-scope declaration; no further narrowing is pending. A separately provisioned credential is only
-needed for a materially different shape — one central place scanning many repos it doesn't host
-workflows in — which this template does not attempt and is not scoped to solve.
+same repo that hosts it. `GITHUB_TOKEN` is auto-issued per job, scoped only to that repo, expires
+when the job ends, and needs no manual secret to create, store, or rotate — the template's
+`verify-and-open-pr` job (§7.1's own third property, above) is the only one declaring
+`contents: write`/`pull-requests: write` at all; `scan-and-draft` declares `contents: read` and
+nothing else. That split is itself part of the already-minimal scope, not something pending
+further narrowing. A separately provisioned credential is only needed for a materially different
+shape — one central place scanning many repos it doesn't host workflows in — which this template
+does not attempt and is not scoped to solve.
 
 **One real adopter-side setting this decision surfaced, not something the template can set for
 them:** `peter-evans/create-pull-request` (used below) fails even with `pull-requests: write`
@@ -741,16 +761,21 @@ above) mean nothing reaches the default branch without an independent re-check a
 approving the diff.
 
 **What none of those cover: the headless runner's own permission surface.** Whatever executes
-`RUNNER_COMMAND` in the CI job has real shell access and a real, scoped `GITHUB_TOKEN` (§7.1's
-credential decision, above) — every gate named so far assumes the agent stayed inside the
-drafting task, not that injected content got it to act outside that task entirely. **Decision, in
-two parts, both required, neither optional:**
+`RUNNER_COMMAND` in the CI job has real shell access — every gate named so far assumes the agent
+stayed inside the drafting task, not that injected content got it to act outside that task
+entirely. **Decision, in two parts, both required, neither optional:**
 
 1. **The headless runner's tool access is scoped to exactly §4/§6's own named surface** — the
    `tools/professor.py` subcommands, and the read-only `git`/`gh` calls §6.1's own procedure
    already uses — nothing broader. No general-purpose shell access, no other network egress. This
    is a concrete Phase 6 build requirement (`RUNNER_COMMAND`'s own implementation, and whatever
    sandboxing the chosen headless entry point supports), not a research question left open.
+   **Reinforced 2026-09-05, not superseded**: `RUNNER_COMMAND` now runs in `scan-and-draft`
+   (§7.1's third property), which holds no `contents: write`/`pull-requests: write` credential at
+   all — a real, scoped `GITHUB_TOKEN` with write access exists only in the separate
+   `verify-and-open-pr` job, which never executes `RUNNER_COMMAND` or processes raw target-repo
+   content as agent input. Tool-access scoping is still required exactly as stated; it is no
+   longer the *only* thing standing between injected content and a write-capable credential.
 2. **Mandatory human PR review before merge is named explicitly as the accepted final backstop**
    — not a claim that prompt injection is "solved" by the above, an honest statement that the
    layered gates plus a human reviewing every diff before it reaches the default branch is the
@@ -789,6 +814,19 @@ made before the hook was installed).
 
 Two representations of the same fact, written together so they cannot drift:
 
+**`<page-slug>`, defined precisely — added 2026-09-05, fixing a real collision a review found.**
+This term was used throughout this document and never actually defined, and the natural reading
+(a page's basename) collides: `docs/api/config.md` and `docs/cli/config.md` would both resolve to
+`config.jsonl`, silently merging two unrelated pages' provenance into one file. **`<page-slug>` is
+the page's full path relative to the library root, with every `/` replaced by `--`** — the two
+examples above become `docs--api--config.jsonl` and `docs--cli--config.jsonl`, never colliding
+regardless of how many directories share a filename. `--` rather than `_` because a real path
+segment can itself contain `_` (e.g. `docs/api/user_config.md`), and `--` is not a character
+either this suite's own conventions or common filesystem/doc-directory naming uses inside a single
+path segment, so the substitution stays unambiguous. Every skill and file that references
+`<page-slug>` (§5's directory tree, `provenance-log/SKILL.md`, and this section's own examples
+below) means this exact derivation, not a filename-only shorthand.
+
 **Machine ledger** — `.professor/provenance/<page-slug>.jsonl`, an **append-only log**, not a
 snapshot: one line per event, per section, forever, never rewritten or deleted, even to correct a
 mistake (append a corrective event instead, the same way you would in accounting — never edit
@@ -803,11 +841,23 @@ contact with an external citation: it has nowhere to put a second repo/ref, and 
 which of several paths a single shared commit is even supposed to describe once more than one is
 listed.
 
+**`span` — added 2026-09-05, fixing a real gap a review found**: an optional line-range string
+(`"L42"` for one line, `"L42-L58"` for a range), naming the specific lines a behaviour claim
+actually rests on. Optional because not every citation is claim-shaped down to a line — a claim
+about a whole file's general structure legitimately has none — but required by `page-contract.md`
+whenever the claim describes specific code rather than a file's overall shape (its own "claim
+rule" now says so explicitly). Without this, `verify-claims` (§6.7) and contradiction detection
+(§6.6) both had to say they check "the exact span already resolved" while nothing in this schema
+ever recorded one — this field is what actually makes that true. Filled in by whichever skill
+resolves the citation (`draft-page`/`update-page`, since they're the ones reading the source to
+write the claim in the first place — no new tool call, just recording which lines were already
+read), the same way `commit`/`commit_author`/`commit_at`/`pr` already are.
+
 ```json
 {"section": "how-tenants-are-resolved", "event": "added", "at": "2026-09-03T04:12:00Z",
  "by": "the-professor",
  "sources": [
-   {"repo": "self", "path": "crates/buzz-relay/src/tenant.rs",
+   {"repo": "self", "path": "crates/buzz-relay/src/tenant.rs", "span": "L42-L58",
     "commit": "538e5e113fc33571f939c87b925567fd4e277109",
     "commit_at": "2026-08-30T14:22:00Z", "commit_author": "Jane Dev <jane@example.com>",
     "pr": 1987}
@@ -815,16 +865,20 @@ listed.
 {"section": "how-tenants-are-resolved", "event": "updated", "at": "2026-10-01T09:00:00Z",
  "by": "the-professor",
  "sources": [
-   {"repo": "self", "path": "crates/buzz-relay/src/tenant.rs",
+   {"repo": "self", "path": "crates/buzz-relay/src/tenant.rs", "span": "L47-L63",
     "commit": "9f8e7d6c5b4a3928f7e6d5c4b3a29180f7e6d5c4",
     "commit_at": "2026-09-28T11:40:00Z", "commit_author": "Someone Else <someone@example.com>",
     "pr": 2041},
-   {"repo": "block/other-crate", "ref": "refs/heads/main", "path": "src/lib.rs",
+   {"repo": "block/other-crate", "ref": "refs/heads/main", "path": "src/lib.rs", "span": null,
     "commit": "a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2",
     "commit_at": "2026-08-12T09:03:00Z", "commit_author": "Someone Else <someone@example.com>",
     "pr": null}
  ]}
 ```
+
+The second example's external source deliberately has `span: null` — its claim describes the
+whole cited module's general role, not a specific line range, which `page-contract.md`'s own rule
+allows (span is only *required* when the claim is line-specific).
 
 Two lines, one page, one section — the first line from the original draft, the second from a
 later `update-page` run that added a second citation. `event` is `"added"` only for a section's
@@ -880,10 +934,12 @@ existing, by design rather than by oversight.
 
 **Human-visible marker**, one HTML comment directly above each section's heading, so provenance
 survives even if the sidecar is deleted and stays git-blame-visible in the page's own diff. One
-`path@short-commit` pair per source, semicolon-separated when a section cites more than one:
+`path@short-commit` pair per source (**plus `#span`, added 2026-09-05, when the ledger entry has
+one** — GitHub's own line-range URL fragment shape, so it's a familiar convention rather than an
+invented one), semicolon-separated when a section cites more than one:
 
 ```markdown
-<!-- professor:section sources="tenant.rs@538e5e1" updated_by=the-professor updated_at=2026-09-03 -->
+<!-- professor:section sources="tenant.rs@538e5e1#L42-L58" updated_by=the-professor updated_at=2026-09-03 -->
 ## How tenants are resolved
 ```
 
@@ -975,7 +1031,7 @@ depend only on Phase 3 having produced a real library to work against. Every oth
 strict chain; building out of order means building on an assumption the prior phase's review gate
 never actually checked.
 
-### Phase 0 — Group decision (no code) — **DECIDED 2026-09-03, review gate still open**
+### Phase 0 — Group decision (no code) — **DECIDED 2026-09-03, review gate MET 2026-09-04**
 
 **Delivers:** a decision — this document's script-only tool layer, #1402's dual-mode server, or
 an explicit hybrid the group defines — made by a human, not inferred from whichever branch has
@@ -983,15 +1039,15 @@ code first. **Outcome: the group's consensus is to step away from MCP servers en
 script-only tool layer (§4) is confirmed.**
 **Depends on:** nothing.
 **Review gate:** the decision is recorded somewhere durable (an ADR, if the group treats it as
-one — whose call that is belongs to this fork's own process, not this document). **This has not
-happened yet** — the decision currently exists only in this document and wherever the group
-discussed it, which is exactly the "lost to the noise" failure mode this fork's own §4 issue-type
-rules warn about for undocumented decisions. Treat Phase 0 as decided-but-not-closed until it has
-a durable record; the distinction matters if the decision is ever questioned later with nothing
-to point back to.
+one — whose call that is belongs to this fork's own process, not this document). **Met**:
+`launchpad/decisions/ADR-0057-professor-script-only-tool-layer.md`, closing
+[#2098](https://github.com/launchpad-26/buzz/issues/2098) per `launchpad/AGENTS.md` rule 3 — the
+decision no longer exists only in this document and wherever the group discussed it, closing the
+"lost to the noise" failure mode this fork's own §4 issue-type rules warn about for undocumented
+decisions.
 **Blocks:** every phase below. No script gets written against an unsettled premise — the premise
-itself is now settled, so Phase 1 can start without waiting on the durable-record step, but that
-step shouldn't be dropped just because it stopped blocking anything.
+was already settled before the durable record landed, so Phase 1 was never actually waiting on
+this step, but it's done now regardless.
 
 ### Phase 1 — Tool layer
 
@@ -1138,14 +1194,17 @@ correctly triggers a section-scoped rewrite, not a whole-page regeneration.
 **Depends on:** Phase 3.
 **Review gate:** modify a real source file cited by an existing drafted page, re-run `scan-repo`,
 confirm exactly the affected section — and nothing else on the page — gets rewritten, with
-`provenance-log`'s `updated_at`/`updated_by` reflecting only that section. **Also exercise two
+`provenance-log`'s `updated_at`/`updated_by` reflecting only that section. **Also exercise three
 edge cases**, not just the clean-modification case: a `git mv`/rename of a cited path (this
 design does not do rename-aware detection — confirm the honest, current behavior instead: the old
 path reports `removed` and the moved unit, if still undocumented under its new path, reports
 `new`, and `library-index` sweep's human-reviewed report is where that pair gets reconciled rather
-than either half being silently lost), and a deliberate `check-page` rejection mid-update (confirm
+than either half being silently lost); a deliberate `check-page` rejection mid-update (confirm
 the real file is left untouched and the scratch copy is discarded, per `update-page` §4–§5, rather
-than a partial rewrite landing on disk).
+than a partial rewrite landing on disk); and a `needs_external_check` entry whose pin has actually
+moved (confirm `update-page` flags it for review via `resolve-pin` alone, per its own §1a — and
+does **not** attempt a rewrite it has no grounded content for, which was a real gap a review found
+in this design before this phase existed to test it).
 
 ### Phase 5 — Library health sweep
 
@@ -1164,17 +1223,20 @@ actually delivered the fourth thing this phase claims to.
 ### Phase 6 — Scheduled automation
 
 **Delivers:** `hooks/scheduled-scan.workflow.yml.template` (already scaffolded in this branch,
-including the pinned-pack-ref and independent CI re-verification steps §7.1 describes) filled in
-with a real headless runner command and deployed to one real, low-stakes target repo as a live
-end-to-end test of the scheduled path, including the open-a-PR-not-push-directly behavior and the
-CI-side gate re-verification.
+including the pinned-pack-ref, the two-job split — `scan-and-draft` holds no write credential at
+all, `verify-and-open-pr` runs in a fresh checkout and holds the only one — and the independent
+CI re-verification steps §7.1 describes) filled in with a real headless runner command and
+deployed to one real, low-stakes target repo as a live end-to-end test of the scheduled path,
+including the open-a-PR-not-push-directly behavior and the CI-side gate re-verification.
 **The credential and threat-model prerequisites this phase used to wait on are now decided**
-(Open Questions items 2 and 7, §7.1): the default `GITHUB_TOKEN`, scoped to exactly `contents:
-write`/`pull-requests: write`, no further narrowing pending; and, for the prompt-injection risk
-target-repo content reaching the agent as input creates, two required build requirements this
-phase actually implements, not just documents — the headless runner's tool access scoped to
-exactly §4/§6's named surface (`tools/professor.py`'s subcommands, read-only `git`/`gh` calls,
-nothing broader), and mandatory human PR review named explicitly as the accepted final backstop.
+(Open Questions items 2 and 7, §7.1): the default `GITHUB_TOKEN`, held only by
+`verify-and-open-pr` and scoped to exactly `contents: write`/`pull-requests: write` there — never
+by the job that runs `RUNNER_COMMAND` over untrusted content — no further narrowing pending; and,
+for the prompt-injection risk target-repo content reaching the agent as input creates, two
+required build requirements this phase actually implements, not just documents — the headless
+runner's tool access scoped to exactly §4/§6's named surface (`tools/professor.py`'s subcommands,
+read-only `git`/`gh` calls, nothing broader), and mandatory human PR review named explicitly as
+the accepted final backstop.
 **Depends on:** Phases 4 and 5 — a scheduled run should exercise the whole pipeline (drafting,
 updating, and library health), not just new-page detection.
 **Review gate:** the workflow fires via `workflow_dispatch` first, then via a real scheduled run;
@@ -1184,7 +1246,11 @@ missing citation, a planted secret) in a test run, proving it's a real check and
 always passes; **and, per Open Questions item 7**, the runner's *actual* tool access is inspected
 and confirmed to match its intended narrow scope (not just assumed from `RUNNER_COMMAND`'s own
 text), **and** a deliberately-injected instruction planted in test target-repo content is
-confirmed to not survive past human review undetected in a dry run.
+confirmed to not survive past human review undetected in a dry run; **and** confirm `scan-and-
+draft`'s job token has no write access in a real run (inspect the token's actual scope, don't
+assume it from the `permissions:` block alone), and that `verify-and-open-pr` genuinely runs
+against a fresh checkout — no artifact or state from `scan-and-draft`'s runtime beyond the patch
+file itself.
 
 ### Phase 7 — Hardening from real dry runs
 

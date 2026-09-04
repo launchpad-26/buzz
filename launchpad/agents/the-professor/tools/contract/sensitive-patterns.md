@@ -9,6 +9,21 @@ result in either disposition gets handled, and
 script that will eventually apply this mechanically (not yet built — screened by hand
 against this list until then, per that skill's own instruction, not skipped).
 
+**Two dispositions of a different kind, added 2026-09-05 after a review found every
+category below being described as equally "mechanical" wasn't accurate.** Every
+category is marked **[pattern]** or **[dispatch]**:
+
+- **[pattern]** categories are genuinely regex/entropy/structure checks — a fixed
+  prefix, a PEM marker, a URL shape, a Shannon-entropy threshold next to a suspicious
+  word, an IP range. `tools/professor.py screen-content` implements these directly, no
+  model call involved, exactly as `screen-sensitive/SKILL.md` describes.
+- **[dispatch]** categories require recognizing what a name or value is *being used
+  for* in its sentence — not a shape a regex can test. These are checked the same way
+  `verify-claims` checks a claim: a fresh, isolated, mandatory model dispatch (reusing
+  `$PROFESSOR_VERIFIER_CMD`, §3/§6.7 — no separate mechanism invented for this), never
+  a plain-text pattern match pretending to be one. Still unskippable, still blocking —
+  the dispatch, not the mechanism, is what differs from the rest of this list.
+
 This list's shape deliberately mirrors `the-professor-design.md`'s own "What stays out" table
 (under "How the next agent gets built") — *"Secrets, tokens, credentials, private
 host paths and member rosters"* — because the reasoning is the same reasoning, one
@@ -21,19 +36,19 @@ exactly as it's true of this pack itself.
 
 | Category | Shape | Why block, not redact |
 |---|---|---|
-| API keys / access tokens | Provider-recognizable prefixes (e.g. `sk-`, `AKIA`, `ghp_`, `xox[bp]-`) or a high-entropy opaque string adjacent to words like `key`/`token`/`secret` | A redaction placeholder in the page's git history still proves *something* lived there and roughly where — not worth it when the real value could instead just not be drafted yet |
-| Private keys / certificates | `-----BEGIN ... PRIVATE KEY-----` or equivalent PEM/OpenSSH markers | Same reasoning, more severe — a private key fragment is never safe to leave any trace of |
-| Passwords / connection strings with embedded credentials | `://user:password@host`, or a literal assigned to a variable named like `password`/`passwd` | The credential is live data, not descriptive text about a system |
-| Live webhook/callback URLs with embedded tokens | A URL whose query string or path segment is itself an auth token | Same class as an API key, just URL-shaped |
+| **[pattern]** API keys / access tokens | Provider-recognizable prefixes (e.g. `sk-`, `AKIA`, `ghp_`, `xox[bp]-`) or a high-entropy opaque string adjacent to words like `key`/`token`/`secret` | A redaction placeholder in the page's git history still proves *something* lived there and roughly where — not worth it when the real value could instead just not be drafted yet |
+| **[pattern]** Private keys / certificates | `-----BEGIN ... PRIVATE KEY-----` or equivalent PEM/OpenSSH markers | Same reasoning, more severe — a private key fragment is never safe to leave any trace of |
+| **[pattern]** Passwords / connection strings with embedded credentials | `://user:password@host`, or a literal assigned to a variable named like `password`/`passwd` | The credential is live data, not descriptive text about a system |
+| **[pattern]** Live webhook/callback URLs with embedded tokens | A URL whose query string or path segment is itself an auth token | Same class as an API key, just URL-shaped |
 
 ## Redact (span replaced with `[REDACTED: <category>]`, page still ships)
 
 | Category | Shape | Why redact, not block |
 |---|---|---|
-| Email addresses | Standard email shape, outside of a `git blame`-style attribution context the contract's own provenance already covers | Useful to know a section references *a* contact; the specific address is the sensitive part, not the fact of a reference existing |
-| Internal hostnames / private IP ranges | `*.internal`, `10.x.x.x`/`172.16-31.x.x`/`192.168.x.x`, or a project's own known-internal domain suffix | Context ("this calls an internal service") is worth keeping; the literal address is what shouldn't leave the private network's own boundary |
-| Member/roster names in a non-attribution context | A personal name appearing as configuration data (an allowlist, a hardcoded reviewer list) rather than as a citation's author or a provenance record's contributor | The mere presence of a name isn't sensitive — `provenance-log`'s own `updated_by` field is exactly that, deliberately not screened. What's flagged is a name used *as data* (who's allowed to do X), which is roster disclosure, not attribution |
-| Physical addresses | Standard street-address shape | Same reasoning as email — the surrounding sentence's claim usually survives redaction intact |
+| **[pattern]** Email addresses | Standard email shape, outside a structurally-identifiable attribution context (a citation's `author` frontmatter field, or inside a `professor:section` provenance comment) — a structural check, not a semantic one: is this email inside one of those specific fields, yes or no | Useful to know a section references *a* contact; the specific address is the sensitive part, not the fact of a reference existing |
+| **[pattern]** Internal hostnames / private IP ranges | `*.internal`, `10.x.x.x`/`172.16-31.x.x`/`192.168.x.x`, or a project's own known-internal domain suffix **— that suffix is target-specific and not knowable by this bundled default; a target with one configures it in its own `.professor/sensitive-patterns.md` override (§3), not by this list guessing it** | Context ("this calls an internal service") is worth keeping; the literal address is what shouldn't leave the private network's own boundary |
+| **[dispatch]** Member/roster names in a non-attribution context | A personal name appearing as configuration data (an allowlist, a hardcoded reviewer list) rather than as a citation's author or a provenance record's contributor — **recognizing "used as access-control data" vs. "merely mentioned" is a semantic judgment about the name's role in its sentence, not a shape**, which is why this is the one category dispatched rather than pattern-matched | The mere presence of a name isn't sensitive — `provenance-log`'s own `updated_by` field is exactly that, deliberately not screened. What's flagged is a name used *as data* (who's allowed to do X), which is roster disclosure, not attribution |
+| **[pattern]** Physical addresses | Standard street-address shape (number + street name + suffix, or a recognizable multi-line mailing-address block) | Same reasoning as email — the surrounding sentence's claim usually survives redaction intact |
 
 ## What this list deliberately excludes
 

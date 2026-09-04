@@ -34,9 +34,12 @@ navigation config at all, which is the common case. It runs in three modes.
    would give it nothing to find there), just one whose fields are `null` because
    nobody here generated the content or knows its origin. Don't fabricate a
    commit/contributor for it, and don't crash or skip the page instead. `scan-repo`
-   §3 treats `unknown-pre-existing` sections as needing neither `stale` nor `removed`
-   handling on their own — they surface again only if a future citation check against
-   them fails, at which point they're handled like any other section from there on.
+   §3 adds every `unknown-pre-existing` section to its `needs_baseline` list (fixed
+   2026-09-05 — an earlier version of this text said these sections just wait for a
+   future citation check to fail, which can never happen against an empty `sources`
+   array with nothing to check; `needs_baseline` routes them to `draft-page`'s
+   baseline mode instead, which is what actually gets them a real citation and out of
+   this state).
 4. **Only once step 3's indexing is done** (or immediately, if step 1 found nothing),
    write/confirm `.professor/library.json`. Don't pre-populate categories for topics
    nothing documents yet by guessing at a taxonomy; let new ones emerge as `place`

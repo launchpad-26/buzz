@@ -42,7 +42,11 @@ Every sentence in the body that asserts something is either:
 - **A behaviour claim** — how the documented unit actually works today. It carries a
   citation to a real path and a real commit in the target repo's own history (or, for
   a genuinely external dependency, a resolved pin in the cited repo — see
-  `draft-page`'s procedure for both cases).
+  `draft-page`'s procedure for both cases), **and, where the claim describes a
+  specific piece of code rather than a whole file's general shape, the line range
+  that actually backs it** (fixed 2026-09-05 — `verify-claims` and contradiction
+  detection both need this to check *the right lines*, not just that the file and
+  commit resolve; see §8's `span` field for the exact format).
 - **An opinion claim** — what should be true, or what is worth watching. No citation;
   attributed instead to the page's `author` field.
 
@@ -71,13 +75,23 @@ draft time.
 
 - A citation whose path does not exist in the repo/commit it names
 - A behaviour claim with no citation at all
+- A behaviour claim citing a specific line range (`#L<n>` or `#L<n>-L<m>`) that is out
+  of bounds for the cited file at the cited commit (fixed 2026-09-05 alongside the
+  claim rule's own span requirement, above)
 - A section with no inline provenance marker directly above its heading, or one whose
   `sources` don't match the citations actually present in that section's text
 - A sentence that reads as both a behaviour claim and an opinion claim (mixed-claim)
-- A section with no matching provenance record
 - Frontmatter missing any required field above, or an unparseable frontmatter block
   (treated as *worse* than a finding — it means nothing else in this list could be
   checked either, same as the original design's `skipped` category)
+
+**Deliberately not on this list, fixed 2026-09-05 after a review caught the
+contradiction:** "a section with no matching provenance *record*" (the ledger entry,
+as opposed to the inline marker two bullets above) cannot be `check-page`'s job — the
+"Provenance" section above already explains why: at draft time, against a
+not-yet-published scratch file, no ledger entry exists yet for `check-page` to find
+missing. Checking that a published page's ledger entry actually exists is
+`library-index` `sweep`'s job, against already-published pages, not this gate's.
 
 ## What this contract deliberately does not specify
 

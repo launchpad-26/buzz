@@ -69,10 +69,16 @@ For every existing doc page's sections, read `.professor/provenance/<page-slug>.
 (via `provenance-log` in `read` mode, `latest` view). A section whose latest line has
 `"event": "unknown-pre-existing"` (a page `library-index` `bootstrap` adopted rather
 than generated — see that skill's own text for how that line gets created) has an
-empty `sources` array, nothing to compare against; skip it for this run rather than
-treating a missing baseline as either stale or removed. It only enters
-`stale`/`removed` handling once a real `"added"`/`"updated"` line exists for it —
-i.e., after `update-page` or `draft-page` has touched it at least once.
+empty `sources` array, nothing to compare against for `stale`/`removed` handling.
+**Fixed 2026-09-05, a review found the original text left these permanently stuck**:
+add every such section to a new `needs_baseline` list instead of silently skipping it
+— "skip it, it only enters real handling once something else touches it first" was
+never true, because nothing in this design ever *did* touch it first. `needs_baseline`
+entries are handed to `draft-page` in baseline mode (that skill's own text), not
+`update-page` — there's no prior commit to diff against, only existing prose that
+needs real citations established for the first time. Once that runs, the section gets
+a real `"added"` line and re-enters normal `stale`/`removed` handling on every scan
+after.
 
 For every section that does have a real record, check **each entry in its `sources`
 array separately** — a section citing one local path and one external path needs both
@@ -135,6 +141,7 @@ into whichever list you checked first.
   "new": [{"unit": "...", "paths": ["..."]}],
   "stale": [{"page": "...", "section": "...", "old_commit": "...", "new_commit": "..."}],
   "removed": [{"page": "...", "section": "...", "missing_path": "..."}],
+  "needs_baseline": [{"page": "...", "section": "..."}],
   "carried_over_from_pending": ["<entries from the prior run's pending list, folded into",
                                  " new/stale/removed above, listed again here only so",
                                  " it's visible that they came from a prior run, not this one's own scan>"]
@@ -151,6 +158,9 @@ rule first.
 - Every `removed` entry → `library-index` (sweep mode), for a human-reviewed decision
   about whether the page needs trimming, the citation needs replacing, or the whole
   page is now orphaned.
+- Every `needs_baseline` entry → `draft-page`, in baseline mode (fixed 2026-09-05 —
+  see that skill's own text; the existing content stays, only real citations get
+  established where none existed).
 
 **"Handed off" is not the same as "succeeded."** A `new` entry whose `draft-page` run
 gets blocked by `screen-sensitive`, or a `stale` entry `update-page` couldn't resolve,

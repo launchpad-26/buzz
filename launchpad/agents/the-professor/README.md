@@ -3,13 +3,15 @@
 **A portable Skill-suite plugin, not a standalone agent** — pointed at one target repo at a
 time: it scans a repo for undocumented or stale code, drafts and updates its documentation
 library, tags every section with provenance, screens everything for sensitive content before
-it's written, and keeps the resulting library organized. The distributable unit is the seven
-skills plus their tool layer, installable via a marketplace into whatever agent a team already
-runs; the bundled persona (`personas/the-professor.persona.md`) is an optional companion voice
-for a team that wants a dedicated identity running these skills, not a requirement to use them.
+it's written, verifies that every claim's citation actually supports it, and keeps the resulting
+library organized. The distributable unit is the seven skills plus their tool layer, installable
+via a marketplace into whatever agent a team already runs; the bundled persona
+(`personas/the-professor.persona.md`) is an optional companion voice for a team that wants a
+dedicated identity running these skills, not a requirement to use them.
 A future goal (explicitly not scoped into any phase yet) is packaging this as a Docker image —
-see the redesign document's Summary for why that would also help settle one of its open
-questions, not just add a deployment option.
+see the redesign document's Summary for why that would also make `$PROFESSOR_PACK_ROOT`
+resolution (Open Questions item 6, already resolved) unnecessary for a session running inside
+that container, not just add a deployment option.
 
 ## Redesign proposal (2026-09-03): from one handbook to any repo — Phase 0 resolved, Phases 1–7 not yet built
 

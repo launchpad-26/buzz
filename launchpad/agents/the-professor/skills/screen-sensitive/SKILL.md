@@ -33,6 +33,19 @@ touches the network (`launchpad/Research/the-professor-skill-suite-redesign.md` 
 the subcommand's actual pattern-matching logic is deferred follow-up work; the
 ruleset file scaffolded in this pack is the spec it implements).
 
+**One category in the ruleset is not pattern-matched — added 2026-09-05, after a
+review found this skill's own "mechanical for everything" framing wasn't quite
+accurate.** `tools/contract/sensitive-patterns.md` marks every category **[pattern]**
+or **[dispatch]**. `screen-content` (above) covers every **[pattern]** category
+directly. The one **[dispatch]** category (member/roster names used as
+access-control data, as opposed to attribution) needs recognizing what a name is
+*being used for* in its sentence — not a shape `screen-content`'s pattern matching
+can test — so it is checked the same way `verify-claims` checks a claim: a fresh,
+isolated, mandatory dispatch to `$PROFESSOR_VERIFIER_CMD` (§3/§6.7), run as an
+additional step alongside `screen-content`, not folded into it. Still local (no
+GitHub API call), still unskippable, still blocking on a finding — the dispatch
+mechanism, not the severity, is what differs from the rest of this gate.
+
 **Until that subcommand exists, this whole skill is a Phase 1 dependency, not a
 standing design choice.** A manual pass — reading `tools/contract/sensitive-patterns.md`
 (or the target's override, same resolution order) and checking the scratch file's

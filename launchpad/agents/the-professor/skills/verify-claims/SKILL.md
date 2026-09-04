@@ -51,8 +51,10 @@ Read the gated draft content (the same scratch file `screen-sensitive` just clea
 never the real target path). Extract every **behaviour claim**: a factual statement
 about what code *does* — "this function retries three times," "this endpoint returns
 404 when the channel doesn't exist," "this flag defaults to `false`" — each already
-tied to a specific cited source (the exact commit + path + span `check-page` already
-resolved for it in the earlier gate).
+tied to a specific cited source (the exact commit + path, and a line-range span when
+the claim is line-specific rather than about a file's general shape — `draft-page`/
+`update-page` wrote all of it into the citation when they drafted the claim;
+`check-page` in the earlier gate confirmed it resolves, it didn't invent it).
 
 **Opinion and judgement claims are never checked here, by design.** "This approach is
 simpler than the alternative" or "this is the recommended pattern" are attributed
@@ -138,6 +140,16 @@ Naming these explicitly so they are never mistaken for silent guarantees:
   as evidence, not certainty.
 - **Opinion claims are never checked** (step 1) — this is a deliberate scope limit,
   not a gap to close later.
+- **Claim identification itself is not independently verified — named 2026-09-05,
+  after a review pointed out this wasn't stated anywhere.** Step 1's extraction (which
+  sentences count as behaviour claims at all) is done by the same drafting agent whose
+  work is being checked, not by an isolated pass the way step 2's dispatch is. A claim
+  the drafting agent mis-classifies as opinion, or simply never notices as a claim,
+  never reaches this gate — running the whole procedure twice (step 4) re-runs the
+  same extraction twice, which catches a *transient* mistake but not a *systematic*
+  one the same agent would make identically both times. This is not solved by this
+  gate; it is a real, named limit on what "mandatory and unskippable" actually
+  guarantees.
 
 **No longer out of scope for the suite** (though still not this skill's own job):
 cross-page contradiction — a claim well-cited and internally consistent on its own page
