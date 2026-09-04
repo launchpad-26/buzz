@@ -15,11 +15,11 @@ original extraction used.
   (`updated_at` `2026-09-01T06:34:12Z`, body SHA-256 `12bb2a6d5ca0f55446332e9f4300faa1a392b835f6457f49c303ea5f1ef596dd`)
   is superseded by a 2026-09-04 amendment — see [`revision-history.md`](revision-history.md)'s round 9. If #2006
   is amended again, this pin goes stale and is detectable rather than silent.
-- **Frozen for [#2069](https://github.com/launchpad-26/buzz/issues/2069) at commit** `be77edee5` — the
-  panel-approved wording baseline against which every requirement's statement, fit criterion and source quote is
-  still checked, except where the 2026-09-04 amendment changed a cited clause's own text (see round 9 in
-  [`revision-history.md`](revision-history.md) for the enumerated exceptions). This restructured presentation of
-  that content was committed at `02272b10c`.
+- **Frozen for [#2069](https://github.com/launchpad-26/buzz/issues/2069) at commit** `9ab6ba497` \u2014 the
+  panel-approved baseline lineage runs `be77edee5` (round-8 panel consensus) to `9ab6ba497` (re-derivation
+  against the 2026-09-04 PRD amendment, pinned at `updated_at` `2026-09-04T00:25:35Z`, body SHA-256
+  `a78c73bdbe771964d166a3867add2697278173953e88e65d8514741e9c368e3d`). This restructured presentation of that
+  content was committed at `02272b10c`.
 - **Published here** because [#2067](https://github.com/launchpad-26/buzz/issues/2067) is the feature that
   produced it; where policy documents belong repo-wide is an open question owned by
   [#2064](https://github.com/launchpad-26/buzz/issues/2064), not by this document.
