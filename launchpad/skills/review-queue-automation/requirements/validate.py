@@ -21,12 +21,9 @@ from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
 REPO_ROOT = HERE.parents[3]  # .../buzz
-# Baseline prior to the round-9b corrections. The orchestrator substitutes the actual
-# commit SHA (which will contain the round-9b document corrections) here after commit;
-# that commit is in the same C-T block shape and is parsed with the same block parser.
-# An explicit BUZZ_FROZEN_COMMIT env override is honoured for one-off proof runs without
-# editing the committed placeholder.
-FROZEN_COMMIT = __import__("os").environ.get("BUZZ_FROZEN_COMMIT", "R9B-COMMIT")
+# Frozen round-9b requirements baseline. This commit contains the amended specification,
+# QA assessment, clause inventory and singular-split records compared below.
+FROZEN_COMMIT = "6f95444df"
 FROZEN_SPEC_PATH = "launchpad/skills/review-queue-automation/requirements/requirements-specification.md"
 FROZEN_QA_PATH = "launchpad/skills/review-queue-automation/requirements/requirements-quality-assessment.md"
 FROZEN_CLAUSE_PATH = "launchpad/skills/review-queue-automation/requirements/clause-inventory.md"
