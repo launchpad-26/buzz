@@ -1,140 +1,215 @@
 ---
 name: "draft-page"
-description: "Draft a handbook page that satisfies the page contract's provenance rules, using this pack's tools for every fact instead of recalling it."
+description: "Draft a documentation page for one gap-report entry from a target repo's own source, against whichever contract resolves for that repo, using tools for every fact instead of recalling it."
 ---
 
-# Drafting a handbook page
+# Drafting a page from a target repo's own source
 
-This skill is the procedure for turning a topic into a handbook page that passes
-the Provenance gate on the first pull request. The five tools on the
-`professor-tools` MCP server (`read_contract`, `list_categories`, `resolve_pin`,
-`path_exists_at`, `check_page`) exist because each one answers a question you
-cannot reliably answer from memory — a commit SHA, a live category list, whether
-a path still exists, whether a draft actually passes the gate. Call them; do not
-guess and hope review catches it. A guess that happens to be right teaches you
-nothing about which guesses are wrong.
+This skill turns one `scan-repo` `new` entry — a documentable unit with no existing
+page — into a drafted page. It reads the target's own code as primary evidence; it
+does not draft claims about other repositories unless the unit being documented
+genuinely wraps or depends on one (an external citation — step 4 covers that case
+specifically, as the exception, not the default it was originally built around).
 
-## 1. Read the contract before you draft anything
+**Everything here is one section of the redesign document's tool design
+(`launchpad/Research/the-professor-skill-suite-redesign.md` §4).** Read that section
+once before running this for the first time — the short version: `tools/professor.py`
+is a plain script, no MCP involved, and its network subcommands
+(`resolve-pin`/`path-exists-at`) are needed only for the narrow slice of work that
+touches a repo you don't have checked out. Nothing here requires them for the common
+case.
 
-Call `read_contract()` first, every time, even if you drafted a page an hour
-ago. Follow what it actually says about frontmatter fields, the claim rule, and
-the reference format — not this skill's summary of it, and not what you
-remember from the last page you drafted. The contract is a living document in
-`launchpad-26/handbook`; this skill's paraphrase of it is not. If the two ever
-disagree, `read_contract()` is right and this file is stale.
+## 0. Resolve the target, the pack root, and the contract
 
-Do not start writing frontmatter or prose until you have that output in front
-of you.
+`PROFESSOR_TARGET` names the repo (see `scan-repo` §0 for the same resolution — reuse
+it, don't re-derive it). **Also confirm `$PROFESSOR_PACK_ROOT` is set before doing
+anything else in this skill** — every `<pack-root>` reference below (steps 4, 5, 6)
+means "read this environment variable," per the redesign document's Open Questions
+item 6. If it's unset, stop immediately and fail loud with a specific message —
+`PROFESSOR_PACK_ROOT is not set; see this pack's README for how to configure it` — not
+a generic error from whichever step first tries to use it. This check costs nothing
+when the variable is set (which is the common case) and saves a confusing failure
+three steps later when it isn't.
 
-## 2. Pick a real category
+Then resolve the contract in the order the redesign document's §3 specifies:
 
-Call `list_categories()` and choose one of the categories it returns for the
-page's `category` field. Do not assume the handbook has eleven categories, or
-thirteen, or any other number you recall from a design doc or a past page —
-the nav list is live and can change. `list_categories()` is the only source of
-truth for what a current category name actually is.
+1. `<target-root>/.professor/contract.md`, if it exists — that repo's own standard.
+2. `tools/contract/page-contract.md` in this pack, otherwise — the suite default.
+
+Read whichever one applies, live, every time — never from memory of a previous draft,
+even one drafted minutes ago against the same target. A quoted contract goes stale
+silently; a read one cannot.
+
+## 1. Read the unit's own source
+
+`Read`/`Grep` the paths `scan-repo` listed for this unit. This is the evidence the
+page is drafted from. Don't stop at the first file that looks relevant — a module's
+public surface is usually more than its entry point; check what it actually exports,
+calls, and is called by, within the unit's own boundary.
+
+## 2. Resolve where the page belongs
+
+Call `library-index` in `place` mode with the unit's topic. It returns a category
+(from `.professor/library.json` if the target already has one recorded, or a newly
+resolved one, written back so the next unit on the same topic doesn't re-derive it).
+Do not assume a fixed category list — the original build's `list_categories()` read
+one hardcoded repo's `mkdocs.yml`; this pack has no equivalent fixed list, by design.
 
 ## 3. Draft the claims, and tag each one by kind — never both
 
 Every sentence in the body that asserts something is either:
 
-- **A behaviour claim** — how a system actually works today. It gets tagged
-  with an origin prefix (`[upstream]`, `[launchpad]`, `[cohort]`, or
-  `[supporting]`) and a source reference. The prefix must match the repo the
-  claim is actually about: a claim about `block/buzz` behaviour is
-  `[upstream]`, a claim about a fork-specific convention is `[launchpad]`, and
-  so on — pick the prefix from which repo the *claim* describes, not from
-  which repo you happened to read the fact in.
-- **An opinion claim** — what the cohort *should* do. It gets no origin prefix
-  and no source reference. Instead it is attributed to the page's `author`
-  frontmatter field, which is who is accountable for the page's judgement
-  calls.
+- **A behaviour claim** — how the unit actually works today, per the source you just
+  read. It carries a citation: at minimum the source path; the exact commit comes
+  from step 4. Use whatever prefix vocabulary the resolved contract specifies (the
+  persona's own text has more on why this is no longer a fixed four-way scheme).
+- **An opinion claim** — what should be true, or what's worth watching. It gets no
+  citation. Instead it is attributed to the page's `author` frontmatter field.
 
-A claim is never both. If you find yourself wanting to write a behaviour
-sentence and also credit it to `author`, split it: state the behaviour with its
-prefix and citation, then state the recommendation as its own sentence
-attributed to `author`. Mixing the two in one sentence is exactly the failure
-mode the contract's claim rule exists to catch, and `check_page` (step 5) will
-catch it too, but it is cheaper to get it right the first time than to untangle
-it after a failed check.
+A claim is never both. If you find yourself wanting to state a behaviour and also
+credit it to `author`, split it — state the behaviour with its citation, then state
+the recommendation as its own sentence attributed to `author`. This is the same
+discipline `screen-sensitive` and the resolved contract's own gate (once §9's gate
+script exists) will both check; getting it right the first time is cheaper than
+untangling it after a failed check.
 
-`read_contract()`'s own text has the authoritative detail on where a prefix may
-sit in the markdown (paragraph, list item, quote, and their nesting) and where
-it deliberately does not count as a claim (fenced code blocks, bare
-indentation) — re-read that section if a placement looks ambiguous, rather than
-guessing.
+## 4. Pin every citation to a real commit — and capture who wrote that code, and when
 
-## 4. Resolve every pin with the tool, never from memory
+Every source needs more than just a commit: the redesign document's §8 draws a firm
+line between *who drafted this doc section* (you, or a human editor — that's
+`provenance-log`'s `added_by`/`updated_by`) and *who wrote the code change the
+section describes* (someone else entirely, possibly long before this page existed —
+`commit_author`/`commit_at`/`pr` on the source itself). Get both, not just the first.
 
-For every source you cite, call `resolve_pin(repo, ref)` to get the full
-40-character commit SHA that goes in `sources[].commit`. Never type a SHA you
-recall or infer from a shorter one you've seen — a hallucinated SHA is a valid
-40-character hex string that looks exactly like a real one, and it will point
-at the wrong commit (or none) silently. A visibly malformed SHA at least fails
-loudly; a plausible-but-wrong one is the worse failure, because nothing about
-its shape reveals the mistake. `resolve_pin` is the only way to get a SHA that
-is actually correct rather than merely well-formed.
+For a path inside the target repo (the common case): run one combined command, not
+two — `git log -1 --format="%H%x1f%aI%x1f%an <%ae>%x1f%s" -- <path>` against the
+target's local checkout, and split the result on the `\x1f` separator into commit,
+author date, `"Name <email>"`, and subject. This is plain `git`, nothing more, and
+it's the only correct source for all four fields, because the target is checked out
+locally and its own history is authoritative without asking anything external. Parse
+`pr` from the subject's trailing `(#NNNN)` if present (GitHub's default squash-merge
+format) — if it isn't there, `pr` is `null`, not guessed at.
 
-## 5. Confirm every cited path exists at that pin
+For a path in a *different* repo (the unit genuinely wraps or cites an external
+source — the exception, not the default): run
+`<pack-root>/tools/professor.py resolve-pin <repo> <ref>` via Bash. Never write a SHA
+you recall or infer — a hallucinated SHA is a valid-looking 40-character hex string
+that points at the wrong commit, or none, silently. `resolve-pin` returns
+`{"commit": "...", "commit_author": "...", "commit_at": "...", "pr": <int|null>}` —
+one structured object, not a bare SHA string (§9, Phase 1 — the subcommand keeps the
+author/date/message the underlying GitHub API call already returns, rather than
+discarding them the way the original `resolve_pin` did, and parses `pr` from the
+message the same way the local `git log` case parses it from `%s`), so this is still
+one call, not a second round-trip to get what step 4 needs for the local case.
 
-For every path you list under `sources[].paths`, call
-`path_exists_at(repo, commit, path)` before you cite it, using the exact commit
-you just resolved in step 4. A `False` result means either the path is wrong or
-you resolved the wrong ref — fix it before moving on, don't cite the path
-anyway on the assumption it's probably fine. Confirming existence here is
-cheaper than finding out from a failed `reference-unresolved` or
-`pin-path-missing` gate finding later, and it's the same check the gate itself
-will run.
+## 5. Confirm every cited path exists at that commit
 
-List only the paths the page actually draws on. An extra unused path creates
-false staleness later; a missing one creates a citation nothing backs.
+For a target-repo path: it does, by construction — you just read it and just resolved
+its commit from the same checkout in the same step. Nothing to confirm.
 
-## 6. Check the draft before declaring it done
+For an external path (step 4's exception case): run
+`<pack-root>/tools/professor.py path-exists-at <repo> <commit> <path>` via Bash. A
+`false` result means the path or the resolved ref was wrong; fix it before citing it,
+don't cite it anyway on the assumption it's probably fine.
 
-Once the page (frontmatter and body together) is complete, call
-`check_page(draft_content)` with the full draft text. This runs the handbook's
-real provenance gate against your draft — the same script CI runs — so it is
-the closest thing to a dress rehearsal for the actual pull request. Do not
-declare the task done without having called it at least once against the final
-draft.
+## 6. Embed the inline provenance markers, then write the draft to an isolated scratch
+   file — not the target library yet
 
-Read the result carefully; it is not one pass/fail bit:
+**Add each section's inline provenance comment now, before either gate runs** —
+`<!-- professor:section sources="..." updated_by=... updated_at=... -->` directly
+above its heading, built from step 4's `sources` (§8 has the exact format). This is
+content, not a separate ledger write: it's why `check-page` (step 7) can legitimately
+require every section to carry one (page-contract.md's own "Provenance" section
+explains the distinction) — the marker exists in the draft itself from this point on,
+whereas the `.jsonl` ledger append only happens later, in step 8, once the page is
+actually published. Getting this ordering right matters: a version of this skill that
+deferred the inline marker to step 8 (alongside the ledger append) would hand
+`check-page` a scratch file with no markers to check, making its own provenance
+requirement impossible to satisfy — don't reintroduce that by moving this step later.
 
-- **`findings`** — real defects in the page (e.g. `prefix-repo-mismatch`,
-  `reference-not-pinned`, `pin-path-missing`). Fix every one and re-run
-  `check_page` until this list is empty. Don't ship past a finding.
-- **`unchecked`** — sources in repositories the check can't see (the private
-  cohort repos). This is a permission boundary, not a defect — it blocks
-  nothing, and there's nothing to "fix" about it.
-- **`skipped`** — the page's frontmatter didn't parse, so no rule ran on it at
-  all. This is worse than a finding, not better: it means the check verified
-  nothing. Fix the frontmatter and re-run.
-- **`page_index`** — a second, independent check of required frontmatter
-  fields and pin shape. Treat `page_index.errors` the same as `findings`: fix
-  and re-run.
+Both gates below (`check-page`, then `screen-sensitive`) need the complete draft —
+markers included — as a file argument, so write it to a fresh temp path first
+(mirroring the original `check_page()`'s own pattern: an isolated scratch location
+holding nothing else, never the real target library). **This is not the write §7
+forbids** — the section of `screen-sensitive`'s own text that says "never write
+flagged content anywhere" is about the *real* target location and any logs, not about
+this scratch file, which is the thing being screened in the first place and gets
+deleted once both gates have run, pass or fail.
 
-**One exception, and it matters:** if calling `check_page` itself raises an
-error whose message names a rate limit, an authentication problem, or a
-network/subprocess failure (for example, `resolve_pin` or `path_exists_at`
-raising about GitHub API status 401/403/429, or `check_page` failing to refresh
-its handbook checkout), that is the *check* failing, not the *page*. Don't
-"fix" the page in response to a message like that — there is nothing in the
-draft to fix. Retry the call once the underlying problem (auth, rate limit,
-connectivity) is resolved, and only act on an actual `findings`/`page_index`
-entry as a real defect.
+## 7. Run the contract gate
+
+Resolve which gate implementation to run, same order as the contract itself (§3):
+
+1. `<target-root>/.professor/check-page`, if it exists and is executable — the
+   target's own gate takes precedence.
+2. `<pack-root>/tools/professor.py check-page`, otherwise — the suite default.
+
+Run whichever applies against the scratch file from step 6:
+`<the resolved command> <scratch-file> --target <target-root>` — the mechanical
+check of everything the resolved contract (step 0) requires: every required
+frontmatter field present, every citation's path actually resolves, no sentence reads
+as both a behaviour claim and an opinion claim. Fix every finding it reports (editing
+the scratch file, then re-running) until the findings list is empty; don't hand a
+draft to `screen-sensitive` (step 8) that this gate would reject — a page that fails
+the contract gate doesn't become safe by also passing the sensitivity gate.
+
+## 8. Hand off to the sensitivity gate — never write to the target library before it runs
+
+The scratch file goes to `screen-sensitive`, only after step 7 is clean. This is not
+optional and not something judgement decides case by case — see that skill's own
+text for why. Only after it returns `pass` or `redact` does the page get written to
+its real path in the target's library; a `block` result means the draft doesn't ship
+in its current form, full stop, and the scratch file is discarded without its content
+appearing anywhere else — no log, no retry-with-the-same-content, nothing.
+
+Once written to its real path (inline provenance markers already in it, from step 6),
+two more things need to happen — not guaranteed atomic with each other or with the
+page write itself (this is a plain filesystem, not a transaction: a crash between
+these steps is possible, and this design accepts that rather than building a rollback
+protocol for it), but ordered so a partial failure is always safe to retry rather
+than silently wrong:
+
+1. Hand the page to `provenance-log` (`write` mode) to **append** the ledger event
+   for every section — passing the full `sources` array from step 4,
+   `commit_author`/`commit_at`/`pr` included per entry, not just the bare commits.
+   Appending is idempotent-safe to retry: if this step fails and the whole hand-off
+   re-runs, appending the same event again produces a duplicate line, not corruption
+   — a cheap-to-detect problem (matching consecutive lines), unlike a lost write
+   would be.
+2. Update `library-index`'s `library.json` entry for this topic (still `page: null`
+   from step 2's `place` call) to the page's real path, and add it under its category
+   in `index.md`.
+
+Skipping step 2 once a page is actually written is exactly the orphan condition
+`library-index`'s `sweep` mode exists to catch — don't create it here by treating
+step 2's category resolution as the whole job. Skipping step 1 (the ledger append) is
+what `library-index sweep` should also treat as a defect once it exists to check for
+it (a page whose provenance markers have no matching ledger entry) — not designed
+further here, named so it isn't lost.
 
 ## Summary checklist
 
-Before calling the draft done, confirm:
-
-- [ ] `read_contract()` called this session, and its actual field list/claim
-      rule followed (not recalled from a prior draft)
-- [ ] `category` came from a fresh `list_categories()` call
-- [ ] Every behaviour claim has a matching origin prefix + citation; every
-      opinion claim is attributed to `author` instead; no claim has both
-- [ ] Every `sources[].commit` came from `resolve_pin`, not memory
-- [ ] Every `sources[].paths` entry passed `path_exists_at` at that commit
-- [ ] `check_page` was run against the final draft, its `findings` and
-      `page_index.errors` are both empty, and any tool error you saw was
-      triaged as either a real defect or a check-itself failure before you
-      decided what to do about it
+- [ ] `$PROFESSOR_PACK_ROOT` confirmed set before anything else ran — failed loud with
+      the specific message if not, never a generic error from a later step
+- [ ] Contract resolved live, in the target-override-then-suite-default order, not
+      recalled from a prior draft
+- [ ] Category came from a fresh `library-index` `place` call
+- [ ] Every behaviour claim cites a real path in the target repo (the default case) or
+      an external source resolved via `tools/professor.py resolve-pin` (the exception);
+      every opinion claim is attributed to `author` instead; no claim has both
+- [ ] Every target-repo citation's commit came from a live `git log -1`, not memory
+- [ ] Every external citation's commit came from `tools/professor.py resolve-pin`, and
+      its path was confirmed with `tools/professor.py path-exists-at`
+- [ ] Every section's inline provenance marker was embedded in the draft **before**
+      the scratch write — not deferred to the ledger-append step
+- [ ] Draft was written to an isolated scratch file before either gate ran, never
+      straight to the target library
+- [ ] The contract gate resolved a target override (`.professor/check-page`) before
+      falling back to the bundled `tools/professor.py check-page`, and reported no
+      findings against the scratch file before `screen-sensitive` ever saw it
+- [ ] `screen-sensitive` ran against the scratch file and returned `pass` or `redact`
+      before the page was written to its real path — never `block`
+- [ ] `provenance-log` ran in `write` mode for every section once the page existed at
+      its real path
+- [ ] `library.json`'s entry for this topic was updated from `page: null` to the real
+      path, and the page was added to `index.md` under its category
