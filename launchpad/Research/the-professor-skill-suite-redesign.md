@@ -512,15 +512,19 @@ complete `## archive mode` section including the never-archive-the-latest-event 
 note was written from inference, not from actually checking the files — exactly the mistake this
 document's own house rules warn against.
 
-**What is genuinely still stale, verified directly:** `draft-page` and `update-page`'s own
-procedure text still only sequences two gates (`check-page`, `screen-sensitive`) — neither
-mentions `verify-claims` (§6.7) at all, and neither has the "run every gate twice, once more
-independently as the final step" requirement (§6's flow-diagram note) that this document now
-states as universal. `library-index`'s own procedure text likewise predates, and does not yet
-implement, `bootstrap`'s defer-and-report behavior (Open Questions item 1) or `sweep`'s
-contradiction-detection check (Open Questions item 3). `verify-claims/SKILL.md` itself, drafted
-2026-09-04 after these decisions, is current and does not carry any of this. A reconciliation pass
-before Phase 1 treats any of the six as final still needs to happen — just for these specific
+**What is genuinely still stale, verified directly:** `draft-page` and `update-page`'s own **main**
+procedure text (not baseline mode, added 2026-09-05 and already current) still only sequences two
+gates (`check-page`, `screen-sensitive`) for a normal new-page or update run — neither mentions
+`verify-claims` (§6.7) there, and neither has the "run every gate twice, once more independently
+as the final step" requirement (§6's flow-diagram note) that this document now states as
+universal. `library-index`'s `bootstrap` mode likewise predates, and does not yet implement,
+defer-and-report behavior (Open Questions item 1) — **`sweep` mode, however, was reconciled
+2026-09-05** and now implements all five checks this document specifies, including contradiction
+detection (Open Questions item 3) and the missing-provenance-record check, not just the original
+three structural ones. `verify-claims/SKILL.md` itself, drafted 2026-09-04 after these decisions,
+is current and does not carry any of this. A reconciliation pass before Phase 1 treats
+`draft-page`/`update-page`'s main flow or `library-index`'s `bootstrap` mode as final still needs
+to happen — just for these specific
 gaps, not the three originally (and wrongly) claimed ones.
 
 The diagram below is the end-to-end flow — how a hook or a manual run turns into a gap report,
@@ -714,26 +718,21 @@ one, and re-verification genuinely runs in a separate job, not just a later step
 mutable one. `scan-and-draft` holds no `contents`/`pull-requests` permission at all — it checks
 out the target repo, runs the drafting agent over its content, and hands off a **patch artifact**
 of whatever it produced; it never touches a write-capable credential, so a prompt injection that
-compromises it has nothing to write with. `verify-and-open-pr` never runs the drafting agent and
-never processes raw target-repo content as agent input — it downloads that patch, applies it to a
-**completely fresh checkout** neither job has touched before, re-runs all three gates against
-every file the patch touches, and only then, with the write-scoped credential this job alone
-holds, opens the PR. "Independent" now means what it always claimed to mean: a fresh checkout, no
-shared runtime state with the job that processed untrusted content, not merely a later step
-reading the same working tree.
-
-**Corrected 2026-09-05, a second review found the previous paragraph overstated this**:
-`verify-and-open-pr` still runs `verify-claims`, which dispatches an isolated per-claim check
-against a cited source span — so the write-scoped job is not free of every model call over
-target-repo content. What's actually true, precisely: it never runs the *drafting agent* — the
-open-ended reasoning that reads arbitrary repo content and decides what to write, with tool access
-and a place to act on a decision — only `verify-claims`' narrow, isolated dispatch, whose sole
-possible output is a constrained verdict per claim, with no tool access of its own and no ability
-to act on the write-scoped credential directly; the workflow, not the dispatch, decides what to do
-with the verdict. That distinction — no open-ended agent reasoning with a write credential in
-reach, versus zero model calls at all — is the real boundary this restructure draws, and the one
-worth stating accurately rather than the broader claim that overstated it. This restructure also
-closed a second bug the same first review found:
+compromises it has nothing to write with. `verify-and-open-pr` never runs the **drafting agent** —
+the open-ended reasoning that reads arbitrary repo content and decides what to write, with tool
+access and a place to act on a decision. **Corrected 2026-09-05, a second review found an earlier
+version of this sentence overstated this as "never processes raw target-repo content as agent
+input at all," which isn't true**: `verify-and-open-pr` does still run `verify-claims`, whose
+narrow, isolated per-claim dispatch sees a cited source span — but that dispatch has no tool access
+of its own and no ability to touch the write-scoped credential directly; the workflow, not the
+dispatch, decides what to do with its verdict. The real boundary is "no open-ended agent reasoning
+with a write credential in reach," not "zero model calls over repo content" — stating it precisely
+matters more than stating it broadly. It downloads the patch, applies it to a **completely fresh
+checkout** neither job has touched before, re-runs all three gates against every file the patch
+touches, and only then, with the write-scoped credential this job alone holds, opens the PR.
+"Independent" now means what it always claimed to mean: a fresh checkout, no shared runtime state
+with the job that processed untrusted content, not merely a later step reading the same working
+tree. This restructure also closed a second bug the same first review found:
 the prior single-job version's re-verification loop (`git diff --name-only HEAD`) only listed
 modified *tracked* files, silently skipping every newly-drafted page — `draft-page`'s actual
 output. Deriving the changed-file list from the applied patch instead (`git apply --index`, then
@@ -786,9 +785,11 @@ entirely. **Decision, in two parts, both required, neither optional:**
    **Reinforced 2026-09-05, not superseded**: `RUNNER_COMMAND` now runs in `scan-and-draft`
    (§7.1's third property), which holds no `contents: write`/`pull-requests: write` credential at
    all — a real, scoped `GITHUB_TOKEN` with write access exists only in the separate
-   `verify-and-open-pr` job, which never executes `RUNNER_COMMAND` or processes raw target-repo
-   content as agent input. Tool-access scoping is still required exactly as stated; it is no
-   longer the *only* thing standing between injected content and a write-capable credential.
+   `verify-and-open-pr` job, which never executes `RUNNER_COMMAND` and never runs the open-ended
+   drafting agent (it does still run `verify-claims`' narrow, isolated per-claim dispatch — §7.1's
+   third property has the precise distinction, corrected 2026-09-05). Tool-access scoping is still
+   required exactly as stated; it is no longer the *only* thing standing between injected content
+   and a write-capable credential.
 2. **Mandatory human PR review before merge is named explicitly as the accepted final backstop**
    — not a claim that prompt injection is "solved" by the above, an honest statement that the
    layered gates plus a human reviewing every diff before it reaches the default branch is the
@@ -1243,14 +1244,16 @@ in this design before this phase existed to test it).
 
 ### Phase 5 — Library health sweep
 
-**Delivers:** `library-index` `sweep` mode's three structural checks (duplicate-topic pages,
-orphaned pages, broken cross-references) **plus** its fourth job — reconciling `scan-repo`'s
-`removed` entries (§6.6) — implemented and run for real against the library Phases 2–3 built.
+**Delivers:** `library-index` `sweep` mode's five checks (duplicate-topic pages, orphaned pages,
+broken cross-references, contradicting claims, and missing provenance ledger records — updated
+2026-09-05, the last two are new since this phase was first written) **plus** its sixth job —
+reconciling `scan-repo`'s `removed` entries (§6.6) — implemented and run for real against the
+library Phases 2–3 built.
 **Depends on:** Phase 3 (needs a real library with more than one page to have anything to sweep,
 and needs Phase 3's `removed` detection to actually be feeding this phase something to reconcile).
-**Review gate:** deliberately introduce one instance of each of the three structural defects into
+**Review gate:** deliberately introduce one instance of each of the five defect types into
 a test copy of the library **and** feed it at least one genuinely removed citation from Phase 3's
-own test case, confirming `sweep` reports all four correctly; remove the deliberate defects and
+own test case, confirming `sweep` reports all six correctly; remove the deliberate defects and
 confirm a clean sweep reports none — a check that only ever sees a clean library can't prove it
 would catch a dirty one, and a sweep that's never tested against `removed` reconciliation hasn't
 actually delivered the fourth thing this phase claims to.

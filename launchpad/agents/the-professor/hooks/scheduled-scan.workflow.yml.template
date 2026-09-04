@@ -128,9 +128,12 @@ jobs:
           # that's the primary defense, this scoping requirement is the second layer,
           # not the only one. Must:
           #   1. run scan-repo's procedure against $PROFESSOR_TARGET
-          #   2. for each `new` entry, run draft-page; for each `stale` entry
-          #      (including every needs_external_check one), run update-page — both
-          #      already end at screen-sensitive before any write
+          #   2. for each `new`/`needs_baseline` entry, run draft-page (baseline mode
+          #      for the latter); for each `stale` entry (including every
+          #      needs_external_check one), run update-page — all three already run
+          #      check-page, screen-sensitive, AND verify-claims' first pass before
+          #      any write (corrected 2026-09-05 — an earlier version of this line
+          #      only named two of the three gates)
           #   3. run library-index in sweep mode once, regardless of whether step 2
           #      drafted or updated anything — Phase 6 (redesign doc §9) claims this
           #      workflow exercises "library health," and that's only true if sweep
@@ -143,9 +146,9 @@ jobs:
           #      changes; a run with nothing to draft/update should still archive
           #   6. leave every write on the local checkout uncommitted — this job never
           #      commits or pushes; the next job applies a patch instead
-          #   7. exit non-zero if any gate (check-page/screen-content) reported a
-          #      `block` it could not resolve, or if any step above failed outright —
-          #      the next step must not run on a non-zero exit here
+          #   7. exit non-zero if any gate (check-page/screen-content/verify-claims)
+          #      reported a `block` it could not resolve, or if any step above failed
+          #      outright — the next step must not run on a non-zero exit here
           #   Use "$PROFESSOR_PACK_ROOT/tools/professor.py" for every gate/subcommand
           #   call — never a bare "tools/professor.py", which assumes the pack lives
           #   inside the target repo's own checkout, which it doesn't (see the pack
@@ -230,16 +233,26 @@ jobs:
           # change — a compromised or misdirected drafting run could in principle
           # write outside the doc library (a script, a workflow file, a config
           # anywhere else in the repo) and nothing downstream would notice, because
-          # nothing downstream looks outside '*.md'. This suite's own tool surface
-          # never legitimately writes anything except pages under the resolved
-          # library root and `.professor/`'s own metadata (library.json,
-          # scan-state.json, provenance/*.jsonl) — so anything else in the patch is
-          # itself a finding, independent of what it contains. FILL IN once the
+          # nothing downstream looks outside '*.md'.
+          #
+          # NARROWED 2026-09-05, a second review found the first version of this
+          # allowlist too broad: a bare `.professor/*` also permits touching
+          # TARGET-SUPPLIED OVERRIDE FILES (`.professor/check-page`,
+          # `.professor/defer-hook`, `.professor/contract.md`,
+          # `.professor/sensitive-patterns.md`) — files this suite only ever READS
+          # (§3's override resolution), never writes. A patch that rewrites one of
+          # those isn't "unexpected," it's exactly the attack this check exists to
+          # catch: silently weakening or replacing the gate a later step is about to
+          # trust. The suite's own tool surface only ever WRITES pages under the
+          # resolved library root plus these four specific `.professor/` metadata
+          # paths — nothing else, and never an override file. FILL IN once the
           # library root is resolvable here (same resolution `library-index`
           # `bootstrap` uses, redesign doc §6.6):
           #   git diff --cached --name-only -z | while IFS= read -r -d '' f; do
           #     case "$f" in
-          #       <library-root>/*.md|.professor/*) ;;
+          #       <library-root>/*.md) ;;
+          #       .professor/library.json|.professor/scan-state.json) ;;
+          #       .professor/provenance/*.jsonl) ;;
           #       *) echo "::error::patch touches unexpected path: $f" >&2; exit 1 ;;
           #     esac
           #   done

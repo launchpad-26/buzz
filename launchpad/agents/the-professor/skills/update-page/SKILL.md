@@ -16,28 +16,38 @@ rest of the page untouched, byte for byte.
 Same target resolution as `scan-repo`/`draft-page` (§0 in each) — including
 confirming `$PROFESSOR_PACK_ROOT` is set (`draft-page` §0 has the exact fail-loud
 message; every `<pack-root>` reference below, steps 3 and 5, means this variable).
-Take the `stale` entry: page path, section anchor, `old_commit`, and — **only for a
-`repo: "self"` source** — `new_commit`. **A `needs_external_check` entry has no
-`new_commit` at all** (fixed 2026-09-05, a review found this assumed uniformly, which
-it never was): `scan-repo` deliberately never resolves one for an external source
-(its own §5 — no network calls), so step 1 below branches on this instead of assuming
-every entry looks the same.
+Take the `stale` entry: page path, section anchor, `path`, `old_commit`, and — **only
+for a `repo: "self"` source** — `new_commit`. **The entry's `path` names exactly
+which one of the section's (possibly several) `sources[]` entries this commit pair
+applies to** — corrected 2026-09-05, a review found an earlier version of this skill
+diffed *every* local source in the section with one shared commit pair, which silently
+mixes up the actual stale path with any other, unrelated, unchanged local source the
+same section happens to cite; `scan-repo`'s own §3 now emits one `stale` entry per
+affected path for exactly this reason, never one entry covering a whole section's
+sources at once. **A `needs_external_check` entry has no `new_commit` at all** (fixed
+2026-09-05, a review found this assumed uniformly, which it never was): `scan-repo`
+deliberately never resolves one for an external source (its own §5 — no network
+calls), so step 1 below branches on this instead of assuming every entry looks the
+same.
 
 ## 1. Diff, don't re-read-and-guess — local sources only
 
-**For every `sources[].path` entry with `repo: "self"`** (`provenance-log` `read`
-mode, `latest` view — §8 has the exact shape; this is an array of `{repo, path,
-commit, ...}` objects, not a flat `source_paths` list): run
+**Only the one `sources[].path` entry named by the stale entry's own `path` field**
+(`provenance-log` `read` mode, `latest` view — §8 has the exact shape; this is an
+array of `{repo, path, commit, ...}` objects, not a flat `source_paths` list) — never
+every local source in the section, which was the bug named in step 0 above: run
 `git diff <old_commit>..<new_commit> -- <path>` against the target's checkout. This
 is the evidence the rewrite is grounded in — a diff shows exactly what changed, which
 is a narrower and more reliable basis for an update than reading the whole current
 file and trying to guess what's different from a page drafted against an earlier
-version you no longer have open. If the diff is empty for every local cited path (the
-section's provenance said stale but nothing in the actual diff touches what the
-section claims), say so plainly rather than rewriting for the sake of rewriting — a
-section can be correctly marked "cited commit is behind HEAD" while still being
-accurate, if the change was elsewhere in the file and didn't touch the claimed
-behaviour.
+version you no longer have open. **A section with more than one local source gets
+here once per stale path**, each its own `stale` entry with its own commit pair — this
+step never has to guess which of several sources a shared pair belongs to, because it
+is never shared. If the diff is empty for the cited path (the section's provenance
+said stale but nothing in the actual diff touches what the section claims), say so
+plainly rather than rewriting for the sake of rewriting — a section can be correctly
+marked "cited commit is behind HEAD" while still being accurate, if the change was
+elsewhere in the file and didn't touch the claimed behaviour.
 
 ## 1a. External sources — resolve first, never assume a diff is possible
 

@@ -77,7 +77,10 @@ never true, because nothing in this design ever *did* touch it first. `needs_bas
 entries are handed to `draft-page` in baseline mode (that skill's own text), not
 `update-page` — there's no prior commit to diff against, only existing prose that
 needs real citations established for the first time. Once that runs, the section gets
-a real `"added"` line and re-enters normal `stale`/`removed` handling on every scan
+a real `"updated"` line (not `"added"` — corrected 2026-09-05 to match `draft-page`'s
+own baseline-mode text and §8's own event-naming rule: `unknown-pre-existing` is
+itself the section's first-ever ledger line, so the next real line is `"updated"`) and
+re-enters normal `stale`/`removed` handling on every scan
 after.
 
 For every section that does have a real record, check **each entry in its `sources`
@@ -127,10 +130,15 @@ nothing changed) for keeping `scan-repo` itself free of network calls — a deli
 scope choice, not an oversight, and named here so it doesn't read as one.
 
 If that commit differs from that `sources[]` entry's recorded `commit`, the section is
-stale — add it to the `stale` list with both commits, so `update-page` has the exact
-range to diff. A section citing multiple paths where some are removed and others are
-merely stale goes on both lists, once per affected path — don't collapse a mixed case
-into whichever list you checked first.
+stale — add it to the `stale` list **with the specific `path` this commit pair applies
+to, not just both commits** (corrected 2026-09-05, a review found the entry had no way
+to say which source of a multi-source section was actually the stale one, so
+`update-page` couldn't tell a real stale commit range from a coincidentally-similar
+one on a different, unchanged source in the same section). A section citing multiple
+paths where some are removed and others are merely stale goes on both lists, once per
+affected path, **each its own entry naming its own path** — don't collapse a mixed
+case into whichever list you checked first, and don't merge two different paths'
+stale entries into one just because they're in the same section.
 
 ## 4. Write the gap report
 
@@ -139,8 +147,8 @@ into whichever list you checked first.
   "scanned_at": "<ISO 8601>",
   "since_commit": "<last_scanned_commit, or null on a first run>",
   "new": [{"unit": "...", "paths": ["..."]}],
-  "stale": [{"page": "...", "section": "...", "old_commit": "...", "new_commit": "..."},
-            {"page": "...", "section": "...", "old_commit": "...", "needs_external_check": true}],
+  "stale": [{"page": "...", "section": "...", "path": "...", "old_commit": "...", "new_commit": "..."},
+            {"page": "...", "section": "...", "path": "...", "old_commit": "...", "needs_external_check": true}],
   "removed": [{"page": "...", "section": "...", "missing_path": "..."}],
   "needs_baseline": [{"page": "...", "section": "..."}],
   "carried_over_from_pending": ["<entries from the prior run's pending list, folded into",

@@ -94,16 +94,28 @@ file hadn't caught up to yet), none auto-fixed:
    living internet is a different problem than verifying the library's own internal
    consistency.
 4. **Contradicting claims** — group every section's `sources[]` entries across the
-   whole library by `{repo, path, commit}` (same source, same commit); within a
-   group of more than one section, compare the actual claim sentences for
-   disagreement (a fresh, isolated check per group — same discipline as
-   `verify-claims`, not a self-comparison). Report disagreeing pairs; two sections
-   citing unrelated code are never compared, which is what keeps this bounded instead
-   of an all-pairs comparison over the whole library.
-5. **Published pages with no matching provenance ledger entry** — for every section
-   whose latest ledger line is anything other than `"unknown-pre-existing"` (a real
-   `"added"`/`"updated"` line should exist for it), confirm
-   `.professor/provenance/<page-slug>.jsonl` actually has one. This is the check
+   whole library by `{repo, path, commit}` **and overlapping `span`** (corrected
+   2026-09-05 — grouping by `{repo, path, commit}` alone, without `span`, would
+   compare two claims about different, unrelated lines of the same file, which the
+   redesign doc's own §6.6 never intended; two spans overlap when their line ranges
+   intersect, or when either entry's `span` is `null` — a whole-file claim can
+   contradict a line-specific one about that same file). Within a group of more than
+   one section, compare the actual claim sentences for disagreement (a fresh,
+   isolated check per group — same discipline as `verify-claims`, not a
+   self-comparison). Report disagreeing pairs; two sections citing unrelated code, or
+   non-overlapping lines of the same file, are never compared, which is what keeps
+   this bounded instead of an all-pairs comparison over the whole library.
+5. **Published pages with no matching provenance ledger entry** — corrected
+   2026-09-05, an earlier version of this check was circular (it read a ledger's
+   latest line to decide whether the ledger had one, which is always true if a line
+   exists to read at all). The actual check: for every section heading found in a
+   published page (by anchor, reading the page directly), confirm
+   `.professor/provenance/<page-slug>.jsonl` has **any** entry for that anchor at
+   all, real or `"unknown-pre-existing"`. A section with **zero** entries — not
+   created by `bootstrap` (§3 above), and never drafted or updated since — is the
+   actual failure mode this check exists to catch: a page written or edited entirely
+   outside this suite's own flow, after the library already existed, that neither
+   `bootstrap` (a one-time pass) nor a normal scan ever saw. This is the check
    `check-page` explicitly cannot do at draft time (`page-contract.md`'s own
    "Provenance" section — no ledger entry exists yet for a not-yet-published scratch
    file); `sweep` is where it happens instead, against pages that are already

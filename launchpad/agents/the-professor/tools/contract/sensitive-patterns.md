@@ -21,8 +21,11 @@ category is marked **[pattern]** or **[dispatch]**:
   for* in its sentence — not a shape a regex can test. These are checked the same way
   `verify-claims` checks a claim: a fresh, isolated, mandatory model dispatch (reusing
   `$PROFESSOR_VERIFIER_CMD`, §3/§6.7 — no separate mechanism invented for this), never
-  a plain-text pattern match pretending to be one. Still unskippable, still blocking —
-  the dispatch, not the mechanism, is what differs from the rest of this list.
+  a plain-text pattern match pretending to be one. Still unskippable — **disposition
+  is `redact`, not block, matching the roster-names row's own table entry below**
+  (corrected 2026-09-05, this line previously said "blocking" and contradicted the
+  table it's introducing) — the dispatch, not the mechanism or the disposition, is
+  what differs from the rest of this list.
 
 This list's shape deliberately mirrors `the-professor-design.md`'s own "What stays out" table
 (under "How the next agent gets built") — *"Secrets, tokens, credentials, private
