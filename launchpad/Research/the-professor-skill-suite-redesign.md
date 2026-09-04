@@ -1055,7 +1055,7 @@ treated as `NOT_SUPPORTED`) — four real cases, not one clean pass; confirm any
 independent pass actually re-runs the full procedure against the finished file rather than
 reusing the first pass's cached verdicts; **and**, matching Phase 1's own `$PROFESSOR_PACK_ROOT`
 proof requirement, confirm `$PROFESSOR_VERIFIER_CMD` resolution actually works with a real
-alternate command configured (not only the suite default), and that an unset
+command configured (not only the recommended `claude --print`), and that an unset
 `$PROFESSOR_VERIFIER_CMD` fails loud with a specific, actionable message rather than a generic
 crash from whatever tries to invoke an empty command.
 
