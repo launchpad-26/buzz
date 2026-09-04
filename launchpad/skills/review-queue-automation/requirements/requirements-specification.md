@@ -11,7 +11,9 @@ any GitHub issue, or any implementation of RQA.
 - **Pinned to #2006 as of:** `updated_at` `2026-09-01T06:34:12Z`, body SHA-256
   `12bb2a6d5ca0f55446332e9f4300faa1a392b835f6457f49c303ea5f1ef596dd`, extract committed at `7c41608be`. If #2006 is
   amended, this pin goes stale and is detectable rather than silent.
-- **Frozen for [#2069](https://github.com/launchpad-26/buzz/issues/2069) at commit** `be77edee5`.
+- **Frozen for [#2069](https://github.com/launchpad-26/buzz/issues/2069) at commit** `be77edee5` — the
+  panel-approved wording baseline `validate.py` compares against. This restructured presentation of the
+  same content was committed at `02272b10c`.
 - **Published here** because [#2067](https://github.com/launchpad-26/buzz/issues/2067) is the feature that
   produced it; where policy documents belong repo-wide is an open question owned by
   [#2064](https://github.com/launchpad-26/buzz/issues/2064), not by this document.
