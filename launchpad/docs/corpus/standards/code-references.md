@@ -136,7 +136,7 @@ revision this node records.
 
 | Form | Example | Verdict | What the verdict establishes |
 |---|---|---|---|
-| Bare repository path | `Justfile` | `ok` | **The file exists.** The path was resolved and opened. |
+| Bare repository path | `Justfile` | `ok` | **The file exists.** The path was resolved and confirmed to be a file. |
 | Bare path, directory | `launchpad` | `error` | — a directory is not a file |
 | Bare path, absolute | `/etc/passwd` | `error` | — must be repo-relative |
 | Bare path, escaping | `../buzz/Justfile` | `error` | — resolves outside the repository |
