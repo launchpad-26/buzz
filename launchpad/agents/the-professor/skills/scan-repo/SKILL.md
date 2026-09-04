@@ -121,9 +121,12 @@ git log -1 --format=%H -- <path>
 these itself — checking an external source means a network call
 (`resolve-pin`/`path-exists-at`), and this skill is deliberately kept network-free so
 a scheduled scan over a large repo stays cheap regardless of how many pages exist
-(§4's design). Instead, add any section with at least one non-`self` source straight
-to the `stale` list unconditionally, tagged `"needs_external_check": true` in that
-entry, and let `update-page` (which already calls both subcommands per its own §3)
+(§4's design). Instead, for **each** non-`self` source in a section, add a `stale`
+entry naming that specific `path`, tagged `"needs_external_check": true` — same "once
+per affected path" rule local sources get (below), never one entry covering every
+external source in the section at once (corrected 2026-09-05, an earlier version of
+this text added one entry per *section* regardless of how many external sources it
+had) — and let `update-page` (which already calls both subcommands per its own §1a)
 resolve whether it's actually current, actually stale, or the citation is actually
 gone. This trades a small amount of unnecessary `update-page` work (it may find
 nothing changed) for keeping `scan-repo` itself free of network calls — a deliberate

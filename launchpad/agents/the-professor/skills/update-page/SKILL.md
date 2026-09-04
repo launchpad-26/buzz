@@ -51,13 +51,18 @@ elsewhere in the file and didn't touch the claimed behaviour.
 
 ## 1a. External sources — resolve first, never assume a diff is possible
 
-**A `needs_external_check` entry's external `sources[].path` entries cannot be
-diffed the way a local one can** — `git diff` needs a local checkout of that commit
-range, and this suite never clones an external repo (§1a of the redesign doc — the
-whole reason `resolve-pin`/`path-exists-at` are network calls instead). For each
-external source: run `resolve-pin <repo> <ref>` to get its **current** commit — never
-trust a `new_commit` field, because none was ever computed for this entry. Compare
-that current commit against the `sources[]` entry's recorded `commit`:
+**A `needs_external_check` entry's external source cannot be diffed the way a local
+one can** — `git diff` needs a local checkout of that commit range, and this suite
+never clones an external repo (§1a of the redesign doc — the whole reason
+`resolve-pin`/`path-exists-at` are network calls instead). **Only the one
+`sources[].path` entry named by this stale entry's own `path` field** (corrected
+2026-09-05, to match step 1's fix above — a section with several external sources
+gets one `needs_external_check` entry per affected path, same "once per affected
+path" rule `scan-repo` §3 already applies to local ones, never one entry looping over
+every external source in the section): run `resolve-pin <repo> <ref>` to get its
+**current** commit — never trust a `new_commit` field, because none was ever computed
+for this entry. Compare that current commit against the named `sources[]` entry's
+recorded `commit`:
 
 - **Unchanged** — the citation is still current. Nothing to rewrite; report this
   section as checked-and-current, the outcome `scan-repo`'s own §5 note says
