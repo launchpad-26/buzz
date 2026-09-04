@@ -184,6 +184,23 @@ def _sha_resolves_locally(sha: str, repo_root: Path) -> bool:
     return ok
 
 
+def _is_shallow_repository(repo_root: Path) -> bool | None:
+    """True/False from a live `git rev-parse --is-shallow-repository` check,
+    scoped to repo_root. None when the check itself could not run (missing
+    git, non-git directory, timeout, or unexpected output) -- distinct from a
+    definite False, so the caller can phrase an honest 'could not determine'
+    rather than silently assuming either state."""
+    ok, stdout = _run_git(["rev-parse", "--is-shallow-repository"], repo_root)
+    if not ok:
+        return None
+    value = stdout.strip()
+    if value == "true":
+        return True
+    if value == "false":
+        return False
+    return None
+
+
 def _changed_paths_since(sha: str, paths: list[str], repo_root: Path) -> tuple[bool, list[str]]:
     """(command_ok, sorted changed paths) for `git diff --name-only <sha> --
     <paths>`, scoped to repo_root. command_ok is False only when the git
@@ -226,6 +243,20 @@ class _Classified:
 
 
 _CLASSIFICATION_CACHE: dict[int, list[_Classified]] = {}
+_SHALLOW_CACHE: dict[int, bool | None] = {}
+
+
+def _shallow_for(ctx) -> bool | None:
+    """Live shallow-clone check, cached per ctx identity so `_generate` and
+    `_extra_evidence` -- both of which need this fact for the same
+    generation run -- issue exactly one subprocess call between them. `None`
+    is a legitimate cached value (could not be determined), so membership is
+    checked explicitly rather than truthiness."""
+    if id(ctx) in _SHALLOW_CACHE:
+        return _SHALLOW_CACHE[id(ctx)]
+    result = _is_shallow_repository(_repo_root_for(ctx.corpus_root))
+    _SHALLOW_CACHE[id(ctx)] = result
+    return result
 
 
 def _classify_all(ctx) -> list[_Classified]:
@@ -354,7 +385,7 @@ def _bucket_table(
     return lines
 
 
-def _freshness_section(classified: list[_Classified]) -> list[str]:
+def _freshness_section(classified: list[_Classified], shallow: bool | None) -> list[str]:
     checked = [
         c
         for c in classified
@@ -424,13 +455,28 @@ def _freshness_section(classified: list[_Classified]) -> list[str]:
         ["Node id", "Path", "Recorded commit"],
         _unresolvable_row,
     )
+    if shallow is True:
+        unresolvable_cause = (
+            "this worktree's repository is a shallow clone, so an older, "
+            "entirely valid revision can be genuinely unreachable from it, "
+        )
+    elif shallow is False:
+        unresolvable_cause = (
+            "this worktree's repository is a full clone, so a genuinely "
+            "unreachable revision here is not explained by shallow history; "
+        )
+    else:
+        unresolvable_cause = (
+            "whether this worktree's repository is a shallow clone could "
+            "not be determined, so a genuinely unreachable revision may or "
+            "may not be explained by shallow history; "
+        )
     lines.append(
         "A recorded commit failing to resolve locally is not evidence of "
-        "staleness by itself -- this worktree's repository is a shallow "
-        "clone, so an older, entirely valid revision can be genuinely "
-        "unreachable from it, or the `git` binary/working tree can be "
-        "unavailable to this generator run. Either way, this builder never "
-        "folds an unresolvable commit into \"possibly stale\"."
+        f"staleness by itself -- {unresolvable_cause}"
+        "or the `git` binary/working tree can be unavailable to this "
+        "generator run. Either way, this builder never folds an "
+        "unresolvable commit into \"possibly stale\"."
     )
     lines.append("")
 
@@ -449,6 +495,7 @@ def _freshness_section(classified: list[_Classified]) -> list[str]:
 
 def _generate(ctx):
     classified = _classify_all(ctx)
+    shallow = _shallow_for(ctx)
 
     lines: list[str] = []
     lines.append("## Stale-docs audit")
@@ -457,10 +504,29 @@ def _generate(ctx):
     lines.append("")
     lines += _ambiguous_revision_section(classified)
     lines.append("")
-    lines += _freshness_section(classified)
+    lines += _freshness_section(classified, shallow)
 
     no_revision_count = sum(1 for c in classified if c.bucket == "no_revision")
     ambiguous_count = sum(1 for c in classified if c.bucket == "ambiguous_revision")
+
+    if shallow is True:
+        shallow_sentence = (
+            "This worktree's repository is a shallow clone "
+            "(`git rev-parse --is-shallow-repository` -> true, checked at "
+            "generation time)."
+        )
+    elif shallow is False:
+        shallow_sentence = (
+            "This worktree's repository is a full clone "
+            "(`git rev-parse --is-shallow-repository` -> false, checked at "
+            "generation time)."
+        )
+    else:
+        shallow_sentence = (
+            "Whether this worktree's repository is a shallow clone could "
+            "not be determined at generation time (`git rev-parse "
+            "--is-shallow-repository` did not resolve)."
+        )
 
     return {
         "sections": "\n".join(lines),
@@ -514,13 +580,12 @@ def _generate(ctx):
             "coverage.py` (#892), `index_defs/orphaned_docs.py` (#902) and "
             "`index_defs/decision_index.py` (#895) already make for their "
             "own digest-uncovered reads.",
-            f"This worktree's repository is a shallow clone; "
-            f"{no_revision_count} node(s) recorded no revision at all and "
-            f"{ambiguous_count} recorded more than one distinct revision -- "
-            "neither condition is checked further by the freshness "
-            "comparison, and the 'cannot verify locally' bucket can grow on "
-            "a shallower or more recent clone even with no corpus content "
-            "change at all.",
+            f"{shallow_sentence} {no_revision_count} node(s) recorded no "
+            f"revision at all and {ambiguous_count} recorded more than one "
+            "distinct revision -- neither condition is checked further by "
+            "the freshness comparison, and the 'cannot verify locally' "
+            "bucket can grow on a shallower or more recent clone even with "
+            "no corpus content change at all.",
         ],
     }
 
@@ -530,12 +595,19 @@ def _extra_evidence(ctx):
     # builds the body first), so the classification is already cached under
     # this ctx's identity -- no second, expensive subprocess sweep.
     classified = _classify_all(ctx)
+    shallow = _shallow_for(ctx)
     no_revision = sum(1 for c in classified if c.bucket == "no_revision")
     ambiguous = sum(1 for c in classified if c.bucket == "ambiguous_revision")
     possibly_stale = sum(1 for c in classified if c.bucket == "possibly_stale")
     fresh = sum(1 for c in classified if c.bucket == "fresh")
     unresolvable = sum(1 for c in classified if c.bucket == "unresolvable")
     no_files = sum(1 for c in classified if c.bucket == "no_file_citations")
+    if shallow is True:
+        checkout_desc = "shallow"
+    elif shallow is False:
+        checkout_desc = "non-shallow"
+    else:
+        checkout_desc = "shallow-status-undetermined"
     return [
         {
             "statement": (
@@ -547,7 +619,7 @@ def _extra_evidence(ctx):
                 f"changed since their recorded revision (`git diff "
                 f"--name-only <sha> -- <cited paths>`), {fresh} have none "
                 f"changed, {unresolvable} record a commit that does not "
-                f"resolve locally in this (shallow) checkout via `git "
+                f"resolve locally in this ({checkout_desc}) checkout via `git "
                 f"cat-file -e`, and {no_files} record a revision but cite "
                 "no other openable file to compare against."
             ),

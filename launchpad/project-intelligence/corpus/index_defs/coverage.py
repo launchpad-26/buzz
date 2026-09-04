@@ -80,7 +80,11 @@ def _cell(text: str) -> str:
 
 def _generate(ctx):
     root = _repo_root_for(ctx.corpus_root)
-    report = _coverage.build_coverage(root, ctx.corpus_root.resolve())
+    report = _coverage.build_coverage(
+        root,
+        ctx.corpus_root.resolve(),
+        excluded_output_paths=frozenset(ctx.output_paths),
+    )
 
     counts = {d: 0 for d in _DISPOSITION_ORDER}
     for row in report.rows:

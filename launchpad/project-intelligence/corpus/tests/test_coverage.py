@@ -368,6 +368,70 @@ class GapVisibilityTest(unittest.TestCase):
             self.assertTrue(any("skipped" in f for f in report.findings))
 
 
+class ExcludedOutputPathsTest(unittest.TestCase):
+    """Issue #2059: a generated document's own evidence citation must not be
+
+    able to certify an in-scope item as documented -- the same self-feeding
+    indexes.py's own canonical-input contract already excludes registered
+    output paths to prevent.
+    """
+
+    def test_without_exclusion_a_generated_looking_node_still_documents(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = _fixture_root(
+                tmp, nodes={"generated-demo-index": ["crates/demo/src/lib.rs"]}
+            )
+            report = coverage.build_coverage(root, _corpus_root(root))
+            row = _rows_by_key(report)["rust_crate:demo"]
+            self.assertEqual(row.disposition, coverage.DOCUMENTED)
+            self.assertEqual(row.nodes, ("generated-demo-index",))
+
+    def test_excluded_output_path_no_longer_documents_its_own_citation(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = _fixture_root(
+                tmp, nodes={"generated-demo-index": ["crates/demo/src/lib.rs"]}
+            )
+            report = coverage.build_coverage(
+                root,
+                _corpus_root(root),
+                excluded_output_paths={"generated-demo-index.md"},
+            )
+            row = _rows_by_key(report)["rust_crate:demo"]
+            self.assertEqual(row.disposition, coverage.GAP)
+
+    def test_exclusion_does_not_affect_a_non_excluded_node_citing_the_same_item(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = _fixture_root(
+                tmp,
+                nodes={
+                    "generated-demo-index": ["crates/demo/src/lib.rs"],
+                    "hand-authored-demo": ["crates/demo/src/lib.rs"],
+                },
+            )
+            report = coverage.build_coverage(
+                root,
+                _corpus_root(root),
+                excluded_output_paths={"generated-demo-index.md"},
+            )
+            row = _rows_by_key(report)["rust_crate:demo"]
+            self.assertEqual(row.disposition, coverage.DOCUMENTED)
+            self.assertEqual(row.nodes, ("hand-authored-demo",))
+
+    def test_empty_exclusion_set_behaves_identically_to_omitting_it(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = _fixture_root(
+                tmp, nodes={"generated-demo-index": ["crates/demo/src/lib.rs"]}
+            )
+            without = coverage.build_coverage(root, _corpus_root(root))
+            with_empty = coverage.build_coverage(
+                root, _corpus_root(root), excluded_output_paths=frozenset()
+            )
+            self.assertEqual(
+                _rows_by_key(without)["rust_crate:demo"].disposition,
+                _rows_by_key(with_empty)["rust_crate:demo"].disposition,
+            )
+
+
 class CliContractTest(unittest.TestCase):
     def _run_main(self, argv: list[str]) -> tuple[int, str, str]:
         stdout, stderr = io.StringIO(), io.StringIO()

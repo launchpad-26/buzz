@@ -141,7 +141,11 @@ def _covering_node_ids(ctx) -> set[str]:
     if cached is not None:
         return cached
     root = _repo_root_for(ctx.corpus_root)
-    report = _coverage.build_coverage(root, ctx.corpus_root.resolve())
+    report = _coverage.build_coverage(
+        root,
+        ctx.corpus_root.resolve(),
+        excluded_output_paths=frozenset(ctx.output_paths),
+    )
     covering: set[str] = set()
     for row in report.rows:
         covering.update(row.nodes)

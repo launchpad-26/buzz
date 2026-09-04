@@ -403,6 +403,7 @@ def build_coverage(
     corpus_root: Path,
     manifest_rows: list | tuple = (),
     registry: list[RegistryEntry] | None = None,
+    excluded_output_paths: frozenset[str] | set[str] | None = None,
 ) -> CoverageReport:
     """Account for every in-scope inventory item; the API #892 renders from.
 
@@ -410,10 +411,29 @@ def build_coverage(
     `corpus_root` does not exist, and CoverageInputError when a registry entry
     names a source_key the inventory does not contain -- a stale registry is
     input drift, not something to skip past.
+
+    `excluded_output_paths` names corpus-root-relative posix paths of
+    registered generated-document outputs (`indexes.py`'s own
+    `ctx.output_paths`). A generated document's own evidence citations prove
+    that IT was produced correctly -- they are not independent confirmation
+    that some OTHER in-scope file its rendered content happens to name is
+    documented. Without this exclusion, a future builder whose evidence cites
+    an in-scope source file directly would silently mark that file
+    `documented`, laundering a real gap through a generated artifact -- the
+    same self-feeding `indexes.py`'s own canonical-input contract already
+    guards against for its own listings. Omit (the default) to preserve prior
+    behavior for a caller with no generator registry to pass.
     """
     report = CoverageReport()
     inv = inventory.run_inventory(root)
     nodes = validate.load_nodes(corpus_root)
+    excluded = frozenset(excluded_output_paths or ())
+    if excluded:
+        nodes = [
+            node
+            for node in nodes
+            if node.path.relative_to(corpus_root).as_posix() not in excluded
+        ]
 
     # Nodes that failed to parse or validate contribute no citations: their
     # coverage claims are not trustworthy, and losing them fails in the safe

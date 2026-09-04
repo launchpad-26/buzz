@@ -281,6 +281,32 @@ class HermeticGitFixtureTest(unittest.TestCase):
         text = _render_fixture(self.corpus)
         self.assertIn("narrowing step, not a certification", text)
 
+    def test_shallow_disclosure_reflects_live_non_shallow_fixture(self) -> None:
+        # Issue #2060: this fixture is a real, freshly `git init`'d, single-
+        # commit checkout -- not shallow -- so a live check must say "full
+        # clone", never the old hardcoded "shallow clone" claim regardless
+        # of the actual repository state.
+        text = _render_fixture(self.corpus)
+        self.assertIn("This worktree's repository is a full clone", text)
+        self.assertNotIn("This worktree's repository is a shallow clone", text)
+
+    def test_unresolvable_explanation_reflects_live_non_shallow_fixture(self) -> None:
+        text = _render_fixture(self.corpus)
+        section = text.split(
+            "#### Cannot verify locally", 1
+        )[1].split("#### No other file citation", 1)[0]
+        self.assertIn("this worktree's repository is a full clone", section)
+        self.assertNotIn(
+            "this worktree's repository is a shallow clone, so an older",
+            section,
+        )
+
+    def test_extra_evidence_statement_describes_checkout_as_non_shallow(self) -> None:
+        text = _render_fixture(self.corpus)
+        front_matter = text.split("---\n")[1]
+        self.assertIn("(non-shallow) checkout", front_matter)
+        self.assertNotIn("(shallow) checkout", front_matter)
+
 
 class NonGitFixtureTest(unittest.TestCase):
     """A fixture corpus with NO `.git` at all (or one outside any repo),
@@ -309,6 +335,19 @@ class NonGitFixtureTest(unittest.TestCase):
         # of gracefully rather than crash generation for the whole document.
         text = _render_fixture(self.corpus)
         self.assertIn("fixture-plain", text)
+
+    def test_shallow_disclosure_says_could_not_determine(self) -> None:
+        # Issue #2060: outside any git repository, `git rev-parse
+        # --is-shallow-repository` cannot resolve -- the disclosure must say
+        # so plainly, never fall back to asserting either shallow or full.
+        text = _render_fixture(self.corpus)
+        self.assertIn(
+            "Whether this worktree's repository is a shallow clone could "
+            "not be determined",
+            text,
+        )
+        self.assertNotIn("This worktree's repository is a shallow clone", text)
+        self.assertNotIn("This worktree's repository is a full clone", text)
 
 
 class RealCorpusSmokeTest(unittest.TestCase):
