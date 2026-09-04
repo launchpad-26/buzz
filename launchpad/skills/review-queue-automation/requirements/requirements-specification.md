@@ -1,646 +1,1308 @@
 # RQA requirements specification
 
-Requirements Specification for Review Queue Automation (RQA), authored against
-[launchpad-26/buzz#2069](https://github.com/launchpad-26/buzz/issues/2069)'s definition of done.
-
-**Revision note (round 7).** A seventh adversarial two-model review round (Codex: REJECT, 9 majors + 3 minors + 2
-nits; Fable: accept-with-edits, 1 major + 3 minors + 3 nits) found: RQA-NFR-007 and RQA-NFR-024's own admitted
-cross-clause dependencies (CL-035/CL-039 and CL-056 respectively) were still not encoded as reference-graph edges
-— the same defect class round 6 fixed for RQA-BR-010, recurring; RQA-NFR-028 over-strengthened CL-058's
-"forgeable-proof" into physical storage immutability, which a tamper-evident (e.g. signed) design would fail
-despite being forgery-proof at the authority boundary the source actually cares about; RQA-BR-006's fit criterion
-still operationalised the stronger of two source-admitted conjunction readings despite its own Unambiguous caveat
-admitting the weaker one is source-permitted; RQA-BR-011, RQA-BR-013, RQA-FR-017, RQA-FR-006, RQA-FR-018,
-RQA-FR-038, RQA-FR-008, RQA-FR-021 and RQA-FR-031's fit criteria or statements could each reject source-conforming
-behaviour or admit a false green; RQA-NFR-024's semicolon-joined second clause broke its own claimed singularity
-without using a second lexical `shall`; and three more EARS labels (RQA-BR-006, RQA-BR-009, RQA-NFR-018) were
-misclassified under the specification's own differentiator, again falsifying a "no other row changes" claim —
-this time round 6's own. Every accepted finding is applied throughout this document; the handful rejected, with
-one-line reasons, are:
-
-- **Codex/Fable's suggestion to fill or remove `FREEZE-COMMIT` now.** Rejected, same reason as rounds 1–6.
-- **Any implicit re-raising of "file the ADR issues now."** Still deferred on standing product-owner instruction.
-- **Codex's audit_conclusions itself validated RQA-FR-005 and RQA-NFR-003's compromise wordings as sound** (its
-  own words: "the explicitly non-prescriptive alternatives in FR-005 and NFR-003" are among the fit criteria that
-  "were acceptable") — no finding to reject here, but recorded because a prior round's oscillation on these two
-  rows makes their current stability worth confirming explicitly rather than leaving implicit.
-
-**On repeated "no other row changes" claims.** This is the third round in which an EARS re-sweep's own
-completeness claim was found false by the next round (round 5 → round 6 → round 7, each catching what the prior
-round's sweep missed). Rather than issue a fourth version of the same claim, § Methodology's EARS section below
-states plainly that the differentiator is a living registry to be re-checked whenever a row is added or restated,
-not a one-time sweep whose completeness can be asserted and relied upon.
-
----
-
 ## Provenance and pin
 
-This specification is derived **solely** from
-[`prd-2006-normative-extract.md`](prd-2006-normative-extract.md), the verbatim, unmodified extract of
+This specification is derived solely from
+[`prd-2006-normative-extract.md`](prd-2006-normative-extract.md), the verbatim extract of
 [launchpad-26/buzz#2006](https://github.com/launchpad-26/buzz/issues/2006)'s Problem, Success criteria, Non-goals
-and Security implications sections. No other file under
-[`launchpad/skills/review-queue-automation/`](..) was read while authoring it or any rework round, and no GitHub
-issue, comment, pull request, code, or implementation of RQA was consulted. Where a requirement below could be
-worded in more than one way, the wording that stays closest to the extract's own language was chosen over one
-informed by any knowledge of how RQA might be built — because no such knowledge was available to this document's
-author, by construction of the task that produced it. All seven adversarial panel review rounds that produced
-this revision were themselves held to the same clean-room boundary (the three requirements/ files,
-REQUIREMENTS.md and VISION.md's status legend only; no other skill-directory file, no GitHub fetch).
+and Security implications sections. It was authored without reading any other file under this skill's directory,
+any GitHub issue, or any implementation of RQA.
 
-**Revision pin.** The extract, and therefore this specification, is pinned to #2006 as of:
-
-- `updated_at`: `2026-09-01T06:34:12Z`
-- Body SHA-256 at extraction: `12bb2a6d5ca0f55446332e9f4300faa1a392b835f6457f49c303ea5f1ef596dd`
-- Extract committed at `7c41608be`
-
-If #2006 is amended after this pin, its `updated_at` and body hash change and the extract — and every requirement
-below that traces to it — becomes detectably stale rather than silently so. Re-deriving this specification against
-an amended #2006 is a new authoring pass over a new extract, not an edit to this one.
-
-**Freezing commit.** This specification was frozen for #2069 at commit `be77edee5`.
-
-**Interim publication location.** This specification publishes under `launchpad/skills/review-queue-automation/`
-because [#2067](https://github.com/launchpad-26/buzz/issues/2067) is the feature that produced it and no other
-location is settled. Where launchpad-repo policy and contract documents belong generally is an open question owned
-by [#2064](https://github.com/launchpad-26/buzz/issues/2064), not by this document; if #2064 relocates policy
-documents, this specification moves with that decision rather than pre-empting it.
-
-**ADR filing is deferred.** `ADR-A`, `ADR-B` and `ADR-C` (§ Set-level assessment; drafts in
-`/tmp/rqa-adr-drafts/`) are maintained as reference material and cited by token from every affected row below, but
-none has been filed as a GitHub issue. The questions they name will be raised as ADR issues, parented to #2006,
-only after this requirements set is confirmed; the `ADR-A`/`ADR-B`/`ADR-C` tokens in the ADR column below are
-substituted with the filed issue numbers at that point, alongside the `FREEZE-COMMIT` substitution above. No
-requirement below is blocked on that filing — see § Methodology's status-marker discussion for why every row is
-`DECIDED` regardless.
+- **Pinned to #2006 as of:** `updated_at` `2026-09-01T06:34:12Z`, body SHA-256
+  `12bb2a6d5ca0f55446332e9f4300faa1a392b835f6457f49c303ea5f1ef596dd`, extract committed at `7c41608be`. If #2006 is
+  amended, this pin goes stale and is detectable rather than silent.
+- **Frozen for [#2069](https://github.com/launchpad-26/buzz/issues/2069) at commit** `be77edee5`.
+- **Published here** because [#2067](https://github.com/launchpad-26/buzz/issues/2067) is the feature that
+  produced it; where policy documents belong repo-wide is an open question owned by
+  [#2064](https://github.com/launchpad-26/buzz/issues/2064), not by this document.
+- **Open questions this specification surfaces but does not settle** are drafted under
+  [`adr-drafts/`](adr-drafts/) and referenced from the affected requirements below by token (`ADR-A`, `ADR-B`,
+  `ADR-C`); none has been filed as a GitHub issue yet — see [`adr-drafts/README.md`](adr-drafts/README.md).
 
 ---
 
-## Methodology
+## What this is
 
-**This document is structured by the shape of a Requirements Specification as outlined in
-ISO/IEC/IEEE 29148:2018 — a scope, a set of individually identified requirements each carrying an EARS-patterned
-statement, a priority, a status, a source and a fit criterion, plus set-level and individual-level quality
-characteristics — and does not claim conformance to that standard.** The standard's full text was not read (it is
-paywalled and outside this task's clean-room inputs); only the shape used by
-[`launchpad/REQUIREMENTS.md`](../../../REQUIREMENTS.md), which makes the identical declining-of-conformance
-statement, was available. Saying "structured by" is the whole of the claim, exactly as REQUIREMENTS.md's own
-methodology section states it for the same reason.
+**Review Queue Automation (RQA)** reviews pull requests automatically: it checks a PR against a repository's
+own rules, decides whether the PR passes, and can act on the result (comment, approve, request changes, fix a
+small class of issues itself, or hand a decision to a person). It is meant to replace ad-hoc, inconsistent human
+review with something repeatable, auditable, and no more expensive than it needs to be.
 
-**Which characteristics were applied, and how they were obtained.** Two characteristic sets are applied below:
+**This document is RQA's requirements specification** — the list of things RQA must be true of, written as
+individually identified, checkable statements. It does not say how RQA is built. It says what any build of RQA
+has to satisfy, and how a reader can tell whether a given build satisfies it.
 
-- **Nine individual characteristics** — necessary, appropriate, unambiguous, complete, singular, feasible,
-  verifiable, correct, conforming — assessed per requirement in
-  [`requirements-quality-assessment.md`](requirements-quality-assessment.md). These nine are the individual
-  requirement-characteristics named by #2069's own definition of done, not an independently chosen subset; they
-  were obtained by re-reading each requirement statement against its own clause and fit criterion, not by applying
-  an external checklist not provided as a clean-room input.
-- **Five set characteristics** — complete, consistent, feasible, comprehensible, validatable — assessed once for
-  the whole set in § Set-level assessment below, obtained the same way: by re-reading the set as a whole against
-  the extract and against itself.
+Every requirement below carries one `shall` obligation, a plain-English gloss of that obligation, the exact
+source text it comes from, and a fit criterion — the specific, checkable thing that decides whether the
+obligation is met. **The gloss is not itself a requirement.** Only the `shall` statement and the fit criterion
+are binding; the gloss exists to help a reader who is new to RQA understand the statement faster.
 
-Both lists were supplied by #2069's definition of done itself, quoted there without a citation to 29148, so no
-claim is made that they are 29148's own vocabulary for these characteristics — only that they are the
-characteristics #2069 asked this specification to apply.
-
-**EARS pattern legend.** Every requirement below is labelled with exactly one of five patterns, and the label is a
-**semantic classification against a defined, collectively exhaustive rule, not a claim of syntactic form.** Round
-5 repairs two further gaps adversarial review found in round 4's rule — an artifact-exclusion test scoped only to
-"review-produced" artifacts, which left an author-produced artifact (a pull request) with no defined home, and a
-standing-affordance carve-out applied inconsistently across structurally identical rows — and corrects six labels
-the repaired rule reclassifies. The rule is restated below so every row has exactly one home:
-
-| Pattern | Semantic test | Used for |
-|---|---|---|
-| Optional-feature | The obligation's entire content is contingent on an operator-chosen configuration or capability being *present* — there is nothing to obligate in its absence. A row phrased as a standing capacity ("shall be able to…", "shall be configurable") is never Optional-feature merely because its text names the scenario the capacity matters in most — that stays Ubiquitous, rule 5 below, because the capacity itself must hold regardless of the scenario. | A specific action ("shall accept…", "shall permit…", "shall continue through…") that genuinely does not occur, and has no content, without the named configuration. |
-| State-driven | The obligation is conditioned on a **condition that holds** — a fact or status obtaining at the point of evaluation, whether a sticky configuration fact (e.g. "for a given policy", "configured with different review policies", "the repository is configured to merge after review") or a freshly-evaluated per-instance status (e.g. "any required review obligation is unsatisfied", "the review's obligations are satisfied", "a finding classified as mechanical and permitted by policy", "no human judgement is required") — signalled by "while"/"where"/"for a given X"/"when X is/remains Y" phrasing, a configuration-bearing noun phrase as grammatical subject, or a biconditional whose negative branch itself carries an obligation (obligating *both* configurations, not only the feature's presence, disqualifies Optional-feature and routes here instead). | A behaviour keyed to a condition — sticky or freshly evaluated, config-level or per-instance — rather than a discrete occurrence or an unconditioned artifact-class rule. |
-| Event-driven | The obligation activates upon a discrete **occurrence** — a grammatical subject denoting something *happening* (a push arriving, a change being made, evidence being sent, a check *failing*) — **and its mandated response is a positive action**. A subject noun phrase denoting an **artifact** — something that *exists* rather than *happens*, whether produced by the review process itself (a finding, an approval, an escalation, a policy) or supplied by an outside party (a pull request) — is not a trigger clause merely because the artifact's arrival could be described as an event; if the row states a condition-free universal rule over that artifact class, it is Ubiquitous (rule 5); if the artifact carries a further per-instance condition, it is State-driven (rule 2). | A response to a specific event whose dominant content is *what the system does*, not what it refuses to do, triggered by something happening rather than something existing. |
-| Unwanted-behaviour | The **residual prohibition class**, covering every prohibition ("shall not"/"shall never"/"no…shall"/"shall have no…") that rules 1–3 do not already claim: (a) an unconditional prohibition with no precedence-relevant precondition at all; (b) a discrete event's mandated response is itself a prohibition. | Every standing or event-scoped prohibition that is not itself a conditioned state or an artifact-class rule. |
-| Ubiquitous | Reached only once rules 1–4 are checked and none applies: the obligation holds continuously, with no precedence-relevant precondition and no prohibition at all — including a standing "shall be able to…"/"shall be configurable" capacity whose own text may name a scenario without being contingent on it, and a condition-free universal rule over an existing artifact class ("every finding shall carry…", "a human approval… shall name…", "a required escalation shall name…", "a pull request crafted to… shall itself be recorded…"). | A default capability, property, or artifact-class rule with nothing else going on. |
-
-**Precedence order:** 1 (Optional-feature) → 2 (State-driven) → 3 (Event-driven) → 4 (Unwanted-behaviour) →
-5 (Ubiquitous, the true default) — unchanged since round 3. The earliest-listed test that applies wins.
-
-**Round-5 mechanical re-sweep.** All 83 rows were re-checked against the restated rule. Round 4's re-sweep table
-claimed the rows it did not list were "confirmed unchanged"; that claim was false for four of them, found on this
-round's adversarial review — round 4 repaired the rule's *state* test but never re-applied the repaired rule to
-every row it could newly reach, which is corrected here. This reclassifies six rows:
-
-| Row | Change | Why |
-|---|---|---|
-| RQA-BR-013 | `Unwanted-behaviour → State-driven` | "Where no human judgement is required" is an explicit held-state condition; rule 2 wins ahead of rule 4 regardless of the prohibitive response, the same precedence already applied to RQA-FR-011/RQA-FR-037. |
-| RQA-FR-017 | `Event-driven → State-driven` | "A finding classified as mechanical and permitted by policy" is an existing artifact carrying a further per-instance condition (its classification and policy-permission status) — not a discrete occurrence, and not condition-free, so rule 2 claims it rather than rule 3 or rule 5. |
-| RQA-FR-028 | `Event-driven → State-driven` | "When the review's obligations are satisfied" is the positive-branch twin of RQA-FR-037's "when its required obligations are not satisfied", already State-driven; the round-4 re-sweep reclassified one branch of this condition pair and missed the other. |
-| RQA-FR-029 | `Optional-feature → State-driven` | The biconditional obligates *both* branches of "the repository is configured to merge after review" — including the negative branch, which obligates non-merging — so rule 1's "nothing to obligate in its absence" test fails; the row is keyed to a sticky configuration fact, matching RQA-FR-003/RQA-FR-019's precedent. |
-| RQA-NFR-016 | `Event-driven → Ubiquitous` | "A pull request crafted to…" is an artifact subject (something supplied, not something happening); round 4's artifact-exclusion test was wrongly scoped to "review-produced" artifacts only, missing this author-produced one — the rule above now covers both, and this row states a condition-free universal rule over that artifact class, so rule 5 claims it, matching RQA-FR-026's precedent. |
-| RQA-FR-030 | `Optional-feature → Ubiquitous` | "…shall be **able to** participate…" is standing-capacity phrasing, the same carve-out already keeping RQA-NFR-008/RQA-NFR-013/RQA-NFR-029 Ubiquitous despite each naming a scenario ("a harness not built into the system") the capacity must hold in — round 4 applied the carve-out inconsistently by leaving this row in Optional-feature. |
-
-No other row changed under this sweep. RQA-FR-023/RQA-NFR-002/RQA-NFR-012 remain Optional-feature: each
-uses a specific-action verb ("shall continue through", "shall accept", "shall permit") whose obligation has no
-content at all without the named configuration, distinguishing them from the now-Ubiquitous standing-capacity
-rows above. RQA-FR-032 also remains Optional-feature, on the same "nothing to obligate in its absence" ground
-rather than the specific-action-verb pattern: "the active external provider path shall be identifiable" names
-no path, and obligates nothing, without a configured external provider — a passive-capacity phrasing that
-still satisfies rule 1 because the obligation itself, not merely its most natural phrasing, is what is vacuous
-in the configuration's absence.
-
-**Round-6 refinement: State-driven "condition" rows versus Ubiquitous artifact-class rows.** Adversarial review
-found the boundary between these two patterns was being resolved by which example a contested row happened to
-resemble, rather than by a stated test — a methodology-transparency gap, since no requirement's obligation
-changes under either label. The differentiator is stated explicitly here: a row is **State-driven** where its
-grammatical subject names a **condition or qualifying state of affairs** — "a routine, mechanical or non-urgent
-condition", "a finding classified as mechanical **and permitted by policy**" — even where part of that condition
-(a category, a classification) is fixed once assigned, because the row's obligation is keyed to the *condition
-holding*, not to the existence of a specific record. A row is **Ubiquitous** (an artifact-class universal rule)
-where its grammatical subject names a **produced record or outcome object** — "a human approval", "a required
-escalation", "a pull request crafted to…", "every finding['s category]" — and the obligation is a standing
-property every instance of that object class carries, independent of any further condition. Applying this
-explicitly: RQA-FR-017 and RQA-BR-013 are State-driven (each names a condition); RQA-FR-013, RQA-FR-026,
-RQA-NFR-016, RQA-BR-011, RQA-FR-008 and RQA-FR-010 are Ubiquitous (each names a produced object and states a
-universal rule about it). This reclassifies one further row this round:
-
-| Row | Change | Why |
-|---|---|---|
-| RQA-FR-025 | `Unwanted-behaviour → State-driven` | "A routine, mechanical or non-urgent condition" is a condition-class subject under the differentiator above, matching RQA-BR-013's identical vocabulary and already-State-driven label — round 5 reclassified BR-013 on this ground and missed its sibling. |
-
-This reclassification was believed complete at the time — round 7 later found the registry itself had not been fully applied to every row (see round 7's own correction below), so this sentence is retained here as a record of round 6's own claim, not as a still-standing completeness assertion.
-
-**Round-7 correction: the differentiator registry was incomplete, and one row was misclassified under it.**
-Adversarial review found RQA-BR-006 misclassified (`Unwanted-behaviour`) under the round-6 condition-class test:
-its subject — "a cheaply remediable, deterministic finding accompanied by its exact remedy" — is exactly the
-condition-class shape ("a finding [with per-instance conditions]") that already placed RQA-FR-017 in
-`State-driven`, not the produced-object shape that keeps RQA-FR-013/RQA-FR-026/RQA-NFR-016/RQA-BR-011/RQA-FR-008/
-RQA-FR-010 `Ubiquitous`. This reclassifies one row and completes the registry for two more the differentiator's
-initial statement did not explicitly resolve:
-
-| Row | Change | Why |
-|---|---|---|
-| RQA-BR-006 | `Unwanted-behaviour → State-driven` | Condition-class subject ("a...finding accompanied by its exact remedy"), matching RQA-FR-017's precedent — round 6's differentiator registry omitted this row when it restated the rule. |
-| RQA-BR-009 | `Event-driven → Ubiquitous` (confirmed, registry completed) | "A failing automated review or check signal" is a produced artifact (a signal/record), and the row states a universal property of every such artifact ("shall carry an attribution") rather than a positive response to a discrete occurrence — the same shape as RQA-BR-011/RQA-FR-013/RQA-FR-026/RQA-NFR-016, which the round-6 registry already lists; this row belongs in that list and is added to it now. |
-| RQA-NFR-018 | `Unwanted-behaviour → State-driven` (confirmed, registry completed) | "A malformed or unreadable policy" is a held-state subject (the policy's own condition, evaluated continuously, not a one-time detected occurrence), matching RQA-NFR-009/RQA-NFR-027's precedent for a persisting configuration/environment fact — rule 2 wins ahead of rule 4 regardless of the prohibitive response. |
-
-The two credential rows most changed in round 7 were also re-checked against this differentiator, and both retain
-their round-3 labels with justification rather than by inertia. **RQA-NFR-024 (the floor) stays
-`Optional-feature`**: its positive content — "shall carry pull-request write and repository-content read" — has
-no meaning at all on a repository not configured to submit authoritative review outcomes, so rule 1's "nothing
-to obligate in its absence" test applies, the same ground that keeps RQA-NFR-002/RQA-NFR-012 Optional-feature.
-**RQA-NFR-030 (the ceiling) stays `Unwanted-behaviour`**: it is a standing prohibition on the credential's scope
-("shall have no permission broader than…, no permission on any repository outside those it manages, …") that
-must hold continuously, on every managed repository, with no activating condition. Its third clause bounds one
-*dimension* of that ceiling — "no permission on a repository beyond what the activities configured for that
-repository require" — but the phrase does not *trigger* the obligation the way a State-driven row's condition
-does; it narrows how the (already continuous) ceiling is measured for a narrower-activity repository. That is
-rule 4(a)'s unconditional-prohibition shape, not rule 2's condition-keyed trigger, so the label stands. The per-activity conditioned-sibling precedent codex's review pointed to (RQA-FR-024, "while no fallback is
-configured") is inapposite here precisely because FR-024's obligation *only exists while* its condition holds,
-whereas the credential ceiling must exist regardless — the difference between a trigger and a measurement
-dimension.
-
-**The round-5/round-6 "no other row changes" claims were each false for at least one row a later round found** —
-round 6 corrected round 5's claim (RQA-FR-025); round 7 corrects round 6's claim (the three rows above). This
-specification does not repeat the unqualified claim again: the differentiator registry is the living, current
-source of truth for every artifact-class-versus-condition-class row, not a one-time sweep result, and the correct
-practice going forward is to re-check it whenever a new row is added or an existing row's statement changes,
-rather than to assert completeness once and rely on that assertion in a later round.
-
-**Status-marker legend.** Every requirement below carries exactly one status marker, read exactly as defined in
-[`VISION.md` § How to read this](../../../VISION.md#how-to-read-this): `IMPLEMENTED` (true today, evidenced by a
-link to the file or commit), `DECIDED` (agreed, not built, evidenced by a link to the accepted decision or the
-issue that agreed it), `PROPOSED` (not yet agreed), `OPEN` (undecided, evidenced by a link to the ADR issue). This
-document does not restate that legend; it links to it, matching `launchpad/REQUIREMENTS.md`'s own convention.
-
-**Why every requirement below is `DECIDED`, and none is `OPEN` or `IMPLEMENTED`.** `VISION.md`'s `OPEN` means *the
-obligation itself* is undecided, evidenced by an ADR issue that owns *whether* the obligation holds — not that
-some detail of *how* an agreed obligation is met remains open, and not a publication-placement or design-mechanism
-question either. Every requirement in this specification traces to a clause #2006 already agrees to (§
-Source-clause inventory records the disposition for each); `ADR-A`, `ADR-B`, `ADR-C` and #2064 each own a
-narrower question — a mechanism, a feasibility premise, a design choice, or a publication location — not the
-requirement's own standing. RQA-FR-017/RQA-FR-018 and RQA-NFR-019/020/021 hold as agreed obligations regardless
-of which way `ADR-A` resolves. RQA-FR-030/RQA-NFR-022/RQA-NFR-028 are jointly satisfiable under every
-**source-conforming** option `ADR-C` lists (its option 3 is explicitly marked as requiring a source amendment,
-not a conforming resolution), and RQA-FR-001/RQA-NFR-002/RQA-NFR-003 are unaffected by where #2064 eventually
-places this specification's own publication. Only RQA-NFR-024/RQA-NFR-030's scope statements remain genuinely
-feasibility-contingent, on `ADR-B`'s external GitHub-permission-model premise. Every requirement below is
-therefore `DECIDED`, with its ADR column (not its Status, Source, or Feasible cell) naming any open choice. This
-specification was authored with no implementation knowledge of RQA — the clean-room constraint under which it
-was written forbids reading anything about RQA's current code, evidence or impacted components — so
-`IMPLEMENTED` (which requires "a link to the file or commit") is never available as evidence, and no row uses
-it.
-
-**MoSCoW priority.** Every requirement carries a MoSCoW priority, following `REQUIREMENTS.md`'s convention. Because
-#2006 states P1–P12 and C1–C9 as "the twelve problems this PRD exists to solve" (CL-064) and "the nine design
-constraints the solution must hold" (CL-065), and states every AC as baseline acceptance criteria, every
-requirement below defaults to `Must`. It is downgraded only where the extract's own text uses permissive language
-("may") for the specific capability in question, never on this document's own judgement of importance — see
-RQA-NFR-002 and RQA-NFR-012. RQA-NFR-003 is `Must`, with "where practical" carried inside the statement itself (as
-C2 states it) and given an evidential fit criterion (§ Non-functional requirements) rather than priced away as a
-`Should`. RQA-NFR-002 (Could) and RQA-FR-030 (Must) both describe the same non-built-in integration path but carry
-different priorities deliberately: NFR-002's Could prices the *contributor's* option to use a thin skill/plugin/
-hook (C1's own "may"), while FR-030's Must prices the *system's* obligation to admit that contributor once they
-exercise the option (AC15 states this as a hard acceptance criterion with no softening language) — the two rows
-are not in tension; they price different actors' obligations for the same path (see each row's Appropriate
-judgement in requirements-quality-assessment.md). RQA-NFR-012's split (§ Singular-split record) illustrates the
-same discipline in the other direction: the *permission* to send content to a configured external provider stays
-Could (C9's own "may"), but the *prohibition* on sending anything to an unconfigured one (RQA-NFR-027 — round 3:
-re-derived from C7/CL-024, reconciled with RQA-NFR-009, see § Singular-split record's CL-024 entry) is priced
-Must, because the security guarantee RQA-NFR-023/RQA-NFR-029 presuppose must not be deferrable merely because the
-permission it gates is optional.
-
-**On naming GitHub and other source vocabulary.** No requirement below invents an implementation choice beyond
-the source's own terminology; the rule is **"no mechanism, component, product or technology is named beyond what
-the source clause itself names."** The deliberate GitHub exception is used in exactly five requirement statements,
-each because its cited source clause is itself GitHub- or GitHub-review-state-scoped: RQA-NFR-007 and RQA-FR-028
-(`APPROVED`/`CHANGES_REQUESTED`, the vocabulary C6 and AC14 themselves use), RQA-NFR-011 (C8's own "GitHub scope",
-stated in C8's own scope-release terms rather than a prohibition — see this row's entry below), RQA-FR-031
-(AC16's own "different GitHub owners or organisations"), and RQA-FR-035 (`#109`/`#535`/`#536`, the issue numbers
-CL-046's closing criterion itself names). Beyond GitHub, several requirements carry other vocabulary the source
-itself supplies rather than a mechanism this specification chose: "skill, plugin or hook" (RQA-NFR-002, C1's own
-term), "working tree" and "force-push" / "branch protection" / "protected branch" (RQA-NFR-020/RQA-NFR-021,
-CL-057's own enumeration), "a single command"/"one command" (RQA-FR-012/RQA-FR-016, AC06's/AC08's own interface
-vocabulary), "architectural component" (RQA-FR-034, the closing criterion's own term for what is being justified),
-and "pull-request write"/"repository-content read" (RQA-NFR-024/RQA-NFR-030) and "deploy-key"/"relay"/"VPS" (RQA-NFR-025) — the Security implications section's own credential-scope enumeration, carried in lightly normalised form rather than verbatim: CL-060 itself says "pull-requests write and contents read", and these three rows use the platform-neutral singular/expanded phrasing this specification uses throughout ("repository-content read" rather than GitHub's own "contents read"), not GitHub's own literal string. Fit criteria previously invented a
-representation their cited clause never names, rather than testing the clause's own vocabulary: RQA-FR-001's
-"single published protocol *document*" is "protocol *definition*" (AC01's own word, not a packaging format);
-RQA-NFR-018's "policy *file*" is "policy *input*" (CL-056 says only "malformed or unreadable policy", not a file
-specifically); RQA-FR-030's "no *commit*…required" is "source unchanged…regardless of whether a commit was made
-and later reverted" (a commit is a Git-specific proxy CL-042/AC15 does not name); RQA-FR-021's fit criterion no
-longer prescribes a "measured" label or any other particular representation for an actual resource-consumption
-reading (round 3). RQA-NFR-004's fit criterion names "organisation" without qualifying it as a GitHub
-organisation, even though C3/CL-020 — its own source clause — is platform-neutral and never mentions GitHub; the
-criterion is correct only because C8/RQA-NFR-011 have already scoped the whole specification to GitHub elsewhere,
-and this row's own entry records that reliance rather than re-deriving GitHub scoping from CL-020 itself. Each use
-is recorded in that row's Conforming judgement in requirements-quality-assessment.md; none of them invents a
-mechanism the source clause does not already name.
+> **Non-normative material is marked.** Only a requirement's `shall` statement and its fit criterion are binding. Every *In plain terms* gloss, every section introduction, and every `See also` note exists to help a reader, and is not itself a requirement.
 
 ---
 
-## Source-clause inventory
+## Reading order
 
-Every clause of the extract — each problem-statement paragraph, each P and C row (and the lead-in sentence
-introducing each of those two tables), the project requirement, each AC (and both preamble sentences introducing
-the Success-criteria section), both closing criteria, each non-goal bullet, and each security-implications bullet
-— is numbered `CL-001`…`CL-065` below and carries exactly one disposition: **Derived** (produces at least one
-named requirement below), **Derived — traceability rule** (CL-062 alone: produces the cross-cutting rule in
-§ Traceability rule rather than a numbered requirement), **Scope exclusion** (recorded as out of scope, produces
-no requirement), or **Context — no obligation** (background that restates or elaborates a clause disposed
-elsewhere, adding no independently testable obligation).
+- **New to RQA?** Read this page top to bottom once: the purpose above, then the eleven sections below in order.
+  Each section opens with one sentence naming the question it answers.
+- **Looking for one requirement?** Every requirement has a unique ID, prefixed `RQA-BR-`, `RQA-FR-`, or
+  `RQA-NFR-` plus a number — for example `RQA-FR-005`. Search this file for that exact ID; each appears in
+  exactly one place, as a heading.
+- **Reviewing everything a repository, or a feature, touches?** Use the class indexes just below to see every
+  business, functional, or non-functional requirement at a glance, grouped by ID rather than by topic.
+- **Want the reasoning behind how this document was built** — the 29148 methodology, the EARS patterns, the
+  source-clause inventory, how one acceptance criterion sometimes became several requirements, the quality
+  assessment, or the open questions raised as ADRs — see [Cold reference material](#cold-reference-material) at
+  the end of this document.
 
-| Clause | Section | Verbatim text (markup normalised) | Disposition | Note |
+---
+
+## Requirements by class
+
+**Business requirements (14):**
+
+| ID | ID | ID | ID | ID | ID |
+|---|---|---|---|---|---|
+| [RQA-BR-001](#rqa-br-001) | [RQA-BR-002](#rqa-br-002) | [RQA-BR-003](#rqa-br-003) | [RQA-BR-004](#rqa-br-004) | [RQA-BR-005](#rqa-br-005) | [RQA-BR-006](#rqa-br-006) |
+| [RQA-BR-007](#rqa-br-007) | [RQA-BR-008](#rqa-br-008) | [RQA-BR-009](#rqa-br-009) | [RQA-BR-010](#rqa-br-010) | [RQA-BR-011](#rqa-br-011) | [RQA-BR-012](#rqa-br-012) |
+| [RQA-BR-013](#rqa-br-013) | [RQA-BR-014](#rqa-br-014) |  |  |  |  |
+
+**Functional requirements (39):**
+
+| ID | ID | ID | ID | ID | ID |
+|---|---|---|---|---|---|
+| [RQA-FR-001](#rqa-fr-001) | [RQA-FR-002](#rqa-fr-002) | [RQA-FR-003](#rqa-fr-003) | [RQA-FR-004](#rqa-fr-004) | [RQA-FR-005](#rqa-fr-005) | [RQA-FR-006](#rqa-fr-006) |
+| [RQA-FR-007](#rqa-fr-007) | [RQA-FR-008](#rqa-fr-008) | [RQA-FR-009](#rqa-fr-009) | [RQA-FR-010](#rqa-fr-010) | [RQA-FR-011](#rqa-fr-011) | [RQA-FR-012](#rqa-fr-012) |
+| [RQA-FR-013](#rqa-fr-013) | [RQA-FR-014](#rqa-fr-014) | [RQA-FR-015](#rqa-fr-015) | [RQA-FR-016](#rqa-fr-016) | [RQA-FR-017](#rqa-fr-017) | [RQA-FR-018](#rqa-fr-018) |
+| [RQA-FR-019](#rqa-fr-019) | [RQA-FR-020](#rqa-fr-020) | [RQA-FR-021](#rqa-fr-021) | [RQA-FR-022](#rqa-fr-022) | [RQA-FR-023](#rqa-fr-023) | [RQA-FR-024](#rqa-fr-024) |
+| [RQA-FR-025](#rqa-fr-025) | [RQA-FR-026](#rqa-fr-026) | [RQA-FR-027](#rqa-fr-027) | [RQA-FR-028](#rqa-fr-028) | [RQA-FR-029](#rqa-fr-029) | [RQA-FR-030](#rqa-fr-030) |
+| [RQA-FR-031](#rqa-fr-031) | [RQA-FR-032](#rqa-fr-032) | [RQA-FR-033](#rqa-fr-033) | [RQA-FR-034](#rqa-fr-034) | [RQA-FR-035](#rqa-fr-035) | [RQA-FR-036](#rqa-fr-036) |
+| [RQA-FR-037](#rqa-fr-037) | [RQA-FR-038](#rqa-fr-038) | [RQA-FR-039](#rqa-fr-039) |  |  |  |
+
+**Non-functional requirements (30):**
+
+| ID | ID | ID | ID | ID |
 |---|---|---|---|---|
-| **CL-001** (Problem, paragraph 1) | [Problem](prd-2006-normative-extract.md#problem) | Launchpad Buzz does not have a consistent, auditable, efficient, and trustworthy pull-request review process. | Derived | Derives RQA-BR-001, the umbrella business obligation. |
-| **CL-002** (Problem, paragraph 2) | [Problem](prd-2006-normative-extract.md#problem) | Reviews are performed using different reviewer-defined protocols, different blocking thresholds, and inconsistent levels of evidence. Review records do not consistently capture structured provenance showing who or what performed the review or which process was followed. The same unchanged revision is frequently reviewed multiple times, while mechanical or creation-time defects can consume the same blocking mechanism as substantive correctness, security, architectural, or evidence failures. | Derived | Most of this paragraph restates P1 (CL-006), P2 (CL-007), P3 (CL-008), P4 (CL-009) and P6 (CL-011) — context for those parts. Its 'mechanical or creation-time defects' framing of the shared-blocking-mechanism problem is distinct: P4/CL-009 names only 'mechanical' findings sharing a blocking mechanism with substantive ones, never 'creation-time' ones. That distinct content is Derived here, jointly with CL-009, into RQA-BR-005. |
-| **CL-003** (Problem, paragraph 3) | [Problem](prd-2006-normative-extract.md#problem) | As a result, GitHub review state does not reliably communicate whether a pull request has received sufficient review, what was actually examined, which findings materially block the change, or why an approval should be trusted. Humans must interpret and reconcile accumulated reviews, checks, findings, exceptions, and approvals before deciding whether a pull request can progress. That consumes scarce human attention and interrupts other development work. | Context — no obligation | Restates consequences already itemised by P7 (CL-012), P8 (CL-013) and P12 (CL-017); no independent obligation beyond those rows. |
-| **CL-004** (Problem, paragraph 4) | [Problem](prd-2006-normative-extract.md#problem) | The process also consumes finite model and token capacity. Duplicate review, unnecessary re-review, overlapping reviewer effort, and inefficient review strategies can consume enough capacity that contributors cannot continue implementation work. | Context — no obligation | Restates the consequence already itemised by P11 (CL-016); no independent obligation beyond that row. |
-| **CL-005** (Problem, paragraph 5) | [Problem](prd-2006-normative-extract.md#problem) | The operational consequence is duplicated work, resource exhaustion, human interruption, and a growing review queue. The more important consequence is reduced assurance: substantial review activity does not consistently demonstrate that the important risks, claims, and evidence associated with a pull request were actually examined. | Derived | The second sentence states a distinct top-level business obligation (demonstrable assurance) not reducible to any single P-row; derives RQA-BR-014. |
-| **CL-006** (P1) | [P1](prd-2006-normative-extract.md#problem) | No shared review protocol. Reviewers use independently designed processes, so a review has no consistent definition across the repository. | Derived | Derives RQA-BR-002. |
-| **CL-007** (P2) | [P2](prd-2006-normative-extract.md#problem) | Review provenance is not recorded. Records do not establish who or what reviewed, which protocol was followed, or how the judgement was produced. | Derived | Derives RQA-BR-003. |
-| **CL-008** (P3) | [P3](prd-2006-normative-extract.md#problem) | Blocking semantics are inconsistent. Reviewers apply materially different thresholds for CHANGES_REQUESTED, so GitHub review state has no consistent meaning. | Derived | Derives RQA-BR-004. |
-| **CL-009** (P4) | [P4](prd-2006-normative-extract.md#problem) | Mechanical and substantive findings share one blocking mechanism. Procedural issues and correctness/security/architectural/evidence failures are all expressed as CHANGES_REQUESTED. | Derived | Derives RQA-BR-005. |
-| **CL-010** (P5) | [P5](prd-2006-normative-extract.md#problem) | Cheaply remediable findings create unnecessary review cycles. An agent can identify a deterministic defect and supply the exact remedy, yet the fix still needs another contributor and another review cycle. | Derived | Derives RQA-BR-006. |
-| **CL-011** (P6) | [P6](prd-2006-normative-extract.md#problem) | Review work is duplicated across unchanged revisions. | Derived | Derives RQA-BR-007. |
-| **CL-012** (P7) | [P7](prd-2006-normative-extract.md#problem) | Review output has poor signal-to-noise for assurance. Activity focuses on labels, metadata and formatting without establishing whether higher-value claims, risks or cited evidence were verified. | Derived | Derives RQA-BR-008. |
-| **CL-013** (P8) | [P8](prd-2006-normative-extract.md#problem) | Automated review and check signals require manual interpretation. Humans must decide whether a failure is attributable to the PR, inherited from base, procedural, incomplete automation, unrelated infrastructure, or a genuine blocker. | Derived | Derives RQA-BR-009. |
-| **CL-014** (P9) | [P9](prd-2006-normative-extract.md#problem) | Progression depends heavily on manual owner intervention. | Derived | Derives RQA-BR-010, jointly with CL-017 and CL-040 for its 'beyond what genuinely requires human judgement' qualifier (round 6: previously cited CL-014 alone while the QA's own Unambiguous caveat already admitted the qualifier's P12/AC13 origin — the edges are now added rather than the qualifier stripped, since the joint reading is the correct one). |
-| **CL-015** (P10) | [P10](prd-2006-normative-extract.md#problem) | Human approvals do not consistently preserve review evidence. Approval satisfies merge mechanics without preserving assurance evidence. | Derived | Derives RQA-BR-011. |
-| **CL-016** (P11) | [P11](prd-2006-normative-extract.md#problem) | PR review consumes scarce model capacity inefficiently. Capacity is shared with implementation work. | Derived | Derives RQA-BR-012. |
-| **CL-017** (P12) | [P12](prd-2006-normative-extract.md#problem) | PR review consumes scarce human attention and causes unnecessary interruption. Routine, mechanical or non-urgent PR issues impose context-switching costs where no human judgement is required. | Derived | Derives RQA-BR-013, and — jointly with CL-014 and CL-040 (round 6) — informs RQA-BR-010's 'beyond what genuinely requires human judgement' qualifier. |
-| **CL-018** (C1) | [C1](prd-2006-normative-extract.md#problem) | Tooling independence. Must operate across uncontrolled contributor environments; cannot depend on a particular harness, agent, model or provider. Contributors may use a thin skill/plugin/hook conforming to a common interaction contract. | Derived | Derives RQA-NFR-001, RQA-NFR-002. |
-| **CL-019** (C2) | [C2](prd-2006-normative-extract.md#problem) | Open interoperability. Integration boundaries use open, portable, implementation-neutral contracts and formats where practical. | Derived | Derives RQA-NFR-003. |
-| **CL-020** (C3) | [C3](prd-2006-normative-extract.md#problem) | Multi-repository and cross-organisation operation. Public and private repositories, different owners, different organisations. | Derived | Derives RQA-NFR-004. |
-| **CL-021** (C4) | [C4](prd-2006-normative-extract.md#problem) | Repository-specific policy and configuration. Updating configuration must not require rebuilding or redeploying RQA. | Derived | Derives RQA-NFR-005. |
-| **CL-022** (C5) | [C5](prd-2006-normative-extract.md#problem) | Local-first operation. No central hosting, tenancy or SaaS functionality required; one contributor can run the complete workflow locally. | Derived | Derives RQA-NFR-006. |
-| **CL-023** (C6) | [C6](prd-2006-normative-extract.md#problem) | End-to-end GitHub review responsibility. Must manage the lifecycle through authoritative APPROVED or CHANGES_REQUESTED. Whether RQA also merges is configurable per repository. | Derived | Derives RQA-NFR-007, jointly with CL-035 and CL-039 for its 'whenever progression remains possible' qualifier (round 7: the qualifier is imported from AC08/CL-035's 'unable to progress' disposition and AC12/CL-039's mandated safe stop — both already admitted in RQA-NFR-007's own Unambiguous caveat but not previously encoded as reference-graph edges), and RQA-NFR-008 (whether merging after that outcome is configurable). |
-| **CL-024** (C7) | [C7](prd-2006-normative-extract.md#problem) | Configured resilience. Alternative models/providers only when explicitly configured. Failure must not leave an ambiguous, corrupted or partially authoritative outcome. | Derived | Derives RQA-NFR-009, RQA-NFR-010, and — jointly with CL-026 (round 4: conjunctive derivation, corrected from round 3's single-clause citation) — RQA-NFR-027. See § Singular-split record's CL-024 entry for the reconciliation between RQA-NFR-009 (provider/model selection) and RQA-NFR-027 (content transmission). |
-| **CL-025** (C8) | [C8](prd-2006-normative-extract.md#problem) | GitHub scope. GitHub only; generic cross-SCM support is not required. | Derived | Derives RQA-NFR-011, worded as the positive in-scope obligation alone ('shall support review of GitHub-hosted repositories'). The clause's other half — 'generic cross-SCM support is not required' — is a scope release, not a prohibition; it is not carried inside RQA-NFR-011's own `shall` (round 4: a prior wording, 'shall be required to operate only against...', read ambiguously as exclusivity despite the fit criterion testing only the weaker release). The release itself needs no separate numbered requirement: it authorises silence on cross-SCM support, which this specification's own non-goal disposition of Non-goal 1/CL-047 already records. |
-| **CL-026** (C9) | [C9](prd-2006-normative-extract.md#problem) | External model use is permitted. Code, diffs, metadata and evidence may be sent to explicitly configured external providers; users choose review paths appropriate to sensitivity. | Derived | Derives RQA-NFR-012, RQA-NFR-013, and — jointly with CL-024 (round 4: conjunctive derivation) — RQA-NFR-027. C7's 'only when explicitly configured' principle is applied here to C9's own named content types (code, diffs, metadata, evidence) and its own permitted act (sending to an external provider); neither clause alone states the prohibition, but read together they entail it — see § Singular-split record's CL-024 entry. |
-| **CL-027** (Project requirement) | [Project requirement](prd-2006-normative-extract.md#problem) | RQA must have an open-source, freely usable implementation path. Optional external providers need not themselves be free or open source. | Derived | Derives RQA-NFR-014; the second sentence is carried as that requirement's boundary clause, not a separate obligation. |
-| **CL-028** (AC01) | [AC01](prd-2006-normative-extract.md#success-criteria) | Every RQA-managed review produces a verdict that validates against one published protocol definition covering review scope, required evidence, findings, blocking conditions, review completion and final disposition; two reviews of the same PR by different harnesses, models or providers carry the same concept semantics. | Derived | Derives RQA-FR-001, RQA-FR-002. |
-| **CL-029** (AC02) | [AC02](prd-2006-normative-extract.md#success-criteria) | Two repositories configured with different review policies produce demonstrably different blocking outcomes on the same diff, and a policy change takes effect on the next review with no rebuild, reinstall or redeploy. | Derived | Derives RQA-FR-003, RQA-FR-004. |
-| **CL-030** (AC03) | [AC03](prd-2006-normative-extract.md#success-criteria) | A push that changes nothing material re-runs zero reviewer calls; a push touching file X re-runs only the review obligations invalidated by that change; the reused and regenerated sets are both recorded and inspectable. | Derived | Derives RQA-FR-005, RQA-FR-006, RQA-FR-007. |
-| **CL-031** (AC04) | [AC04](prd-2006-normative-extract.md#success-criteria) | Every finding carries a category distinguishing mechanical, procedural and creation-time findings from correctness, security, architectural and evidence findings, and whether it blocks is decided by repository policy, not by the reviewer's severity choice alone. | Derived | Derives RQA-FR-008, RQA-FR-009. |
-| **CL-032** (AC05) | [AC05](prd-2006-normative-extract.md#success-criteria) | Every required review obligation carries an explicit evidence state from {verified, not verified, unavailable, contradictory, failed, incomplete, unknown}, and no successful disposition can be produced while any required obligation is unsatisfied. | Derived | Derives RQA-FR-010, RQA-FR-011. |
-| **CL-033** (AC06) | [AC06](prd-2006-normative-extract.md#success-criteria) | For any authoritative review outcome, a single command reconstructs the exact PR revision, protocol and policy in force, reviewer identity and type, harness, model, provider, evidence examined, findings produced, decision basis and disposition; a human approval used to satisfy assurance names the approving human and the basis of that approval. | Derived | Derives RQA-FR-012, RQA-FR-013. |
-| **CL-034** (AC07) | [AC07](prd-2006-normative-extract.md#success-criteria) | For a PR whose only failing check also fails on its merge base, RQA classifies that failure as inherited rather than attributable, does not treat it as a blocker, and states the classification. | Derived | Derives RQA-FR-014, RQA-FR-015, RQA-FR-036. |
-| **CL-035** (AC08) | [AC08](prd-2006-normative-extract.md#success-criteria) | For any managed PR, one command returns its current disposition from {being reviewed, blocked, awaiting remediation, awaiting human judgement, review-complete, unable to progress} and the reason, without a human reconciling historical reviews, comments or checks. | Derived | Derives RQA-FR-016, and — jointly with CL-023 and CL-039 (round 7) — informs RQA-NFR-007's 'whenever progression remains possible' qualifier via AC08's 'unable to progress' disposition. |
-| **CL-036** (AC09) | [AC09](prd-2006-normative-extract.md#success-criteria) | A finding classified as mechanical and permitted by policy is resolved without unnecessarily creating human intervention or a complete re-review cycle, and resolving it does not invalidate unrelated review work that remains valid. Per the baseline, this does not require RQA to modify code directly. | Derived | Derives RQA-FR-017, RQA-FR-018. |
-| **CL-037** (AC10) | [AC10](prd-2006-normative-extract.md#success-criteria) | For a given policy, RQA performs no reviewer pass, independent pass, repeated analysis, reasoning strategy or higher-cost method that is not required by that policy's stated assurance, and valid existing results are reused rather than regenerated. | Derived | Derives RQA-FR-019, RQA-FR-020. |
-| **CL-038** (AC11) | [AC11](prd-2006-normative-extract.md#success-criteria) | Resource consumption is recorded from what the execution environment actually exposes and is distinguishable from an estimate; a configured bound, when reached, produces a configured fallback, an explicitly incomplete review, or an escalation — never a successful outcome. | Derived | Derives RQA-FR-021, RQA-FR-022, RQA-FR-039. |
-| **CL-039** (AC12) | [AC12](prd-2006-normative-extract.md#success-criteria) | With a configured reviewer, model or provider made unavailable, RQA continues through an explicitly configured fallback; with no fallback configured it invents none and stops in a clear, safe, recoverable non-success state. | Derived | Derives RQA-FR-023, RQA-FR-024, RQA-FR-038, and — jointly with CL-023 and CL-035 (round 7) — informs RQA-NFR-007's 'whenever progression remains possible' qualifier via AC12's mandated safe stop. |
-| **CL-040** (AC13) | [AC13](prd-2006-normative-extract.md#success-criteria) | Routine, mechanical and non-urgent conditions raise no immediate human request; a required escalation names the specific unresolved decision, conflicting judgement, evidence gap, required information or authority requirement; and supplying that input resumes the lifecycle without restarting the review. | Derived | Derives RQA-FR-025, RQA-FR-026, RQA-FR-027, and — jointly with CL-014 and CL-017 (round 6) — informs RQA-BR-010's 'beyond what genuinely requires human judgement' qualifier. |
-| **CL-041** (AC14) | [AC14](prd-2006-normative-extract.md#success-criteria) | RQA submits APPROVED or CHANGES_REQUESTED when the obligations are satisfied and cannot manufacture a successful outcome when they are not; one repository can be configured to merge after review and another configured not to, with both behaving accordingly. | Derived | Derives RQA-FR-028, RQA-FR-029, RQA-FR-037. |
-| **CL-042** (AC15) | [AC15](prd-2006-normative-extract.md#success-criteria) | A harness not built into RQA participates in a review by satisfying the published interaction contract alone, with no change to RQA's own source. | Derived | Derives RQA-FR-030. |
-| **CL-043** (AC16) | [AC16](prd-2006-normative-extract.md#success-criteria) | One operator running locally reviews PRs across at least two independently configured repositories under different GitHub owners or organisations, with no centrally hosted service. | Derived | Derives RQA-FR-031. |
-| **CL-044** (AC17) | [AC17](prd-2006-normative-extract.md#success-criteria) | The active external provider path is identifiable before evidence is sent, and removing that provider from configuration leaves RQA's review protocol and semantics unchanged. | Derived | Derives RQA-FR-032, RQA-FR-033. |
-| **CL-045** (Closing criterion 1) | [Closing criterion 1](prd-2006-normative-extract.md#success-criteria) | Every architectural component retained in the delivered design is justified against this baseline under the §6 rule: it materially serves a criterion, no materially simpler approach suffices, or a constraint requires it. | Derived | Derives RQA-FR-034. |
-| **CL-046** (Closing criterion 2) | [Closing criterion 2](prd-2006-normative-extract.md#success-criteria) | #109 is closed or explicitly re-parented, and its features #535 and #536 are reconciled against this scope, so exactly one authoritative review-agent scope is open. | Derived | Derives RQA-FR-035. |
-| **CL-047** (Non-goal 1) | [Non-goal 1](prd-2006-normative-extract.md#non-goals) | Non-GitHub source control. GitLab, Bitbucket and generic cross-SCM support are out of scope (C8). | Scope exclusion | Mirrors C8 (CL-025); recorded as scope exclusion rather than a second derivation of the same decision. |
-| **CL-048** (Non-goal 2) | [Non-goal 2](prd-2006-normative-extract.md#non-goals) | Centrally hosted, multi-user, multi-tenant or SaaS operation. RQA is local-first for this scope (C5). | Scope exclusion | Mirrors C5 (CL-022); recorded as scope exclusion rather than a second derivation of the same decision. |
-| **CL-049** (Non-goal 3) | [Non-goal 3](prd-2006-normative-extract.md#non-goals) | Mandating any specific model, provider or coding harness. Naming a default is permitted; depending on one is not (C1, C9). | Scope exclusion | Bounds C1/C9-derived requirements (RQA-NFR-001, RQA-NFR-012): a default may be named, dependence may not. |
-| **CL-050** (Non-goal 4) | [Non-goal 4](prd-2006-normative-extract.md#non-goals) | Prescribing implementation mechanisms — a particular database, message queue, telemetry backend, GitHub App, language, deployment architecture or agent harness. Those are design choices to be justified against this baseline, not requirements of it (§6). | Scope exclusion | Excludes implementation-mechanism choices from this specification's obligations entirely — the basis for naming no mechanism/component/product/technology in any requirement statement. |
-| **CL-051** (Non-goal 5) | [Non-goal 5](prd-2006-normative-extract.md#non-goals) | Making an external provider mandatory. RQA's protocol and semantics must survive removing any one provider (AC17). | Scope exclusion | Mirrors AC17 (CL-044); recorded as scope exclusion rather than a second derivation. |
-| **CL-052** (Non-goal 6) | [Non-goal 6](prd-2006-normative-extract.md#non-goals) | Deciding the human-approval count. Whether RQA's approval substitutes for a human approval is a policy and governance question owned by the repository, not by this PRD. | Scope exclusion | Explicitly punts an open question to repository governance, naming its own owner; not an unresolved inconsistency within #2006 and therefore not raised as an ADR by this specification. |
-| **CL-053** (Non-goal 7) | [Non-goal 7](prd-2006-normative-extract.md#non-goals) | Re-litigating #109's phase model. The phases are superseded by the acceptance criteria above; no phase-1/2/3 gating work is carried forward as-is. | Scope exclusion | Out of scope for this specification: a different issue's phase model, superseded by the acceptance criteria already dispositioned above. |
-| **CL-054** (Non-goal 8) | [Non-goal 8](prd-2006-normative-extract.md#non-goals) | Retrofitting provenance onto the 1,064 historical reviews. The evidence is used to establish the problem, not to be corrected. | Scope exclusion | Out of scope for this specification: historical remediation is explicitly excluded from #2006's own ask. |
-| **CL-055** (Security implications, bullet 1) | [Security implications](prd-2006-normative-extract.md#security-implications) | PR content is untrusted data, never instructions. A PR author controls the diff, body and comments that RQA reads. A crafted PR attempting to induce a clean review or a fabricated evidence state is itself a blocking finding. This applies at every authority level, including advisory-only. | Derived | Derives RQA-NFR-015, RQA-NFR-016. |
-| **CL-056** (Security implications, bullet 2) | [Security implications](prd-2006-normative-extract.md#security-implications) | Authority is per-activity and fail-closed. Review, comment, approve, request-changes, remediate and merge are separately configured and default to disabled; a malformed or unreadable policy must never widen authority. | Derived | Derives RQA-NFR-017, RQA-NFR-018, RQA-NFR-026, and — jointly with CL-060 (round 7) — informs both RQA-NFR-024's activity-conditioned floor and RQA-NFR-030's activity-relative ceiling clause: this clause's least-privilege, default-disabled, per-activity authorisation principle is why CL-060's credential floor is read as applying only to repositories configured for authoritative-outcome activity (RQA-NFR-024), and why a repository configured for narrower activity must hold no more permission than that narrower activity requires (RQA-NFR-030) — see requirements-quality-assessment.md's Correct rows for both. |
-| **CL-057** (Security implications, bullet 3) | [Security implications](prd-2006-normative-extract.md#security-implications) | Remediation authority is the largest new exposure. AC09 asks RQA to modify and push a branch. That authority must be separately gated, bounded to categories policy names as mechanical, isolated from the repository working tree, and never able to force-push, merge, bypass protection, or touch a protected branch. | Derived | Derives RQA-NFR-019, RQA-NFR-020, RQA-NFR-021. The 'separately gated' phrase restates the per-activity default-disabled gating already carried by CL-056 (Security implications, bullet 2; RQA-NFR-017, RQA-NFR-026) and is not split into a fourth requirement here. |
-| **CL-058** (Security implications, bullet 4) | [Security implications](prd-2006-normative-extract.md#security-implications) | Provenance must be forgeable-proof. AC06 records reviewer identity, harness, model and provider. If that record can be written by the reviewed content or by an unauthenticated model response, the audit trail is worse than none. | Derived | Derives RQA-NFR-022, RQA-NFR-028 (blocker fix, round 2: split into the specific untrusted-writer prohibition and the general provenance-integrity requirement). |
-| **CL-059** (Security implications, bullet 5) | [Security implications](prd-2006-normative-extract.md#security-implications) | External providers receive repository content (C9). The active provider path must be identifiable before evidence is sent, so an operator can decide whether a given repository or change may be sent at all. Private repositories under AC16 make this a per-repository decision, not a global one. | Derived | Derives RQA-NFR-023, RQA-NFR-029 (blocker fix, round 2: carries both the per-repository and the per-change decision granularity CL-059's own text states). |
-| **CL-060** (Security implications, bullet 6) | [Security implications](prd-2006-normative-extract.md#security-implications) | Credentials stay narrow. A GitHub token scoped to the target repositories with pull-requests write and contents read; no deploy keys, no relay or VPS credentials, no access to a contributor's machine. | Derived | Derives RQA-NFR-024, RQA-NFR-025, RQA-NFR-030 (round 4: RQA-NFR-024 split into the floor, RQA-NFR-024, and the ceiling, RQA-NFR-030 — see § Singular-split record's CL-060 entry). |
-| **CL-061** (Security implications, bullet 7) | [Security implications](prd-2006-normative-extract.md#security-implications) | Reaching a resource bound must never produce a successful review (AC11). A false green under exhaustion is the highest-severity failure mode in this system. | Context — no obligation | Restates AC11 (CL-038); the 'never produce a successful outcome' obligation is carried specifically by RQA-FR-039 (the positive mandated-outcome alternatives — a fallback, an explicitly incomplete review, or an escalation — are RQA-FR-022's, with RQA-FR-021 covering only the separate measured-recording obligation). Adds severity framing ('highest-severity failure mode') but no independent testable obligation beyond what RQA-FR-039 already derives from CL-038. |
-| **CL-062** (Success criteria, preamble sentence 2) | [Success criteria](prd-2006-normative-extract.md#success-criteria) | A criterion is satisfied only when its complete behaviour is demonstrated — passing one clause of a multi-part criterion does not satisfy the criterion. | Derived — traceability rule | Derives no numbered requirement of its own; instead it derives the traceability rule for AC-derived splits stated in § Traceability rule below: a source acceptance criterion is satisfied only when every requirement derived from it is satisfied, not merely one. This specification separately adopts the same atomicity discipline, as its own methodology choice, for splits of P/C/security-bullet clauses — CL-062's own text speaks only to acceptance criteria, and § Traceability rule states that extension as this document's methodology rather than attributing it to the source. |
-| **CL-063** (Success criteria, preamble sentence 1) | [Success criteria](prd-2006-normative-extract.md#success-criteria) | Each line is one acceptance criterion from the requirements baseline, stated as an observable check. | Context — no obligation | Descriptive framing of what a line in the Success criteria section is; imposes no obligation beyond what each individual AC row (CL-028–CL-044) already carries on its own account. |
-| **CL-064** (Problem section, P-table lead-in) | [Problem section](prd-2006-normative-extract.md#problem) | The twelve problems this PRD exists to solve: | Context — no obligation | Descriptive framing introducing the P1–P12 table; each P row (CL-006–CL-017) is individually dispositioned and derived on its own account. This sentence supplies no obligation beyond that. |
-| **CL-065** (Problem section, C-table lead-in) | [Problem section](prd-2006-normative-extract.md#problem) | The nine design constraints the solution must hold (they bound the design; they do not prescribe an implementation): | Context — no obligation | Descriptive framing introducing the C1–C9 table; each C row (CL-018–CL-026) is individually dispositioned and derived on its own account. § Methodology's MoSCoW Must-default rule cites this sentence (together with CL-064) as its textual basis for defaulting P- and C-derived requirements to Must; the parenthetical 'they bound the design; they do not prescribe an implementation' is restated by non-goal 4 (CL-050), which already grounds this specification's no-mechanism rule. |
-
-**Disposition totals:** 65 clauses — 50 derived into numbered requirements, 1 derived into the traceability rule
-(CL-062), 8 scope exclusions, 6 context. See § Bidirectional check below for how "derived" was verified against
-the requirement tables, including the Note-cell-equality strengthening.
+| [RQA-NFR-001](#rqa-nfr-001) | [RQA-NFR-002](#rqa-nfr-002) | [RQA-NFR-003](#rqa-nfr-003) | [RQA-NFR-004](#rqa-nfr-004) | [RQA-NFR-005](#rqa-nfr-005) |
+| [RQA-NFR-006](#rqa-nfr-006) | [RQA-NFR-007](#rqa-nfr-007) | [RQA-NFR-008](#rqa-nfr-008) | [RQA-NFR-009](#rqa-nfr-009) | [RQA-NFR-010](#rqa-nfr-010) |
+| [RQA-NFR-011](#rqa-nfr-011) | [RQA-NFR-012](#rqa-nfr-012) | [RQA-NFR-013](#rqa-nfr-013) | [RQA-NFR-014](#rqa-nfr-014) | [RQA-NFR-015](#rqa-nfr-015) |
+| [RQA-NFR-016](#rqa-nfr-016) | [RQA-NFR-017](#rqa-nfr-017) | [RQA-NFR-018](#rqa-nfr-018) | [RQA-NFR-019](#rqa-nfr-019) | [RQA-NFR-020](#rqa-nfr-020) |
+| [RQA-NFR-021](#rqa-nfr-021) | [RQA-NFR-022](#rqa-nfr-022) | [RQA-NFR-023](#rqa-nfr-023) | [RQA-NFR-024](#rqa-nfr-024) | [RQA-NFR-025](#rqa-nfr-025) |
+| [RQA-NFR-026](#rqa-nfr-026) | [RQA-NFR-027](#rqa-nfr-027) | [RQA-NFR-028](#rqa-nfr-028) | [RQA-NFR-029](#rqa-nfr-029) | [RQA-NFR-030](#rqa-nfr-030) |
 
 ---
 
-## Traceability rule
+## Requirements by topic
 
-CL-062, the success-criteria preamble sentence 2, states: **"A criterion is satisfied only when its complete
-behaviour is demonstrated — passing one clause of a multi-part criterion does not satisfy the criterion."** This
-specification carries that sentence forward as a binding traceability rule for **acceptance-criterion splits**
-rather than as a numbered requirement, because it is not itself an obligation on the delivered system — it is an
-obligation on how this specification's own AC-derived splits must be read:
-
-> **A source acceptance criterion is satisfied only when every requirement derived from it is satisfied, not
-> merely one.**
-
-CL-062's own text speaks only to acceptance criteria ("passing one clause of a multi-part *criterion*"). This
-specification separately **adopts the same atomicity discipline as its own methodology choice** — not as
-something CL-062 itself mandates — for splits of P, C, project-requirement, closing-criterion, and
-security-implications clauses: a source P/C/security bullet is likewise satisfied only when every requirement
-derived from it holds, not merely one.
-
-Every multi-requirement entry in § Singular-split record below is subject to this rule (both the CL-062-mandated
-half for AC splits, and this specification's own adopted extension for the rest). Where one clause produced
-several requirements — for example CL-034/AC07 into RQA-FR-014, RQA-FR-015 and RQA-FR-036 — a gap analysis that
-reports the clause "covered" because one child requirement holds, while the others remain unmet, misreads this
-specification exactly as CL-062 forbids for AC splits, and exactly as this specification's own adopted rule
-forbids for every other split. This rule is CL-062's own disposition: **Derived — traceability rule**, the one
-clause in § Source-clause inventory that derives no numbered requirement of its own (§ Bidirectional check records
-this exception explicitly).
+1. [Protocol and assurance](#protocol-and-assurance)
+2. [Policy, findings and blocking](#policy-findings-and-blocking)
+3. [Revision reuse and check attribution](#revision-reuse-and-check-attribution)
+4. [Evidence and provenance](#evidence-and-provenance)
+5. [Lifecycle, disposition and merge](#lifecycle-disposition-and-merge)
+6. [Remediation and escalation](#remediation-and-escalation)
+7. [Capacity and resilience](#capacity-and-resilience)
+8. [Harness interoperability and operation](#harness-interoperability-and-operation)
+9. [External provider sensitivity](#external-provider-sensitivity)
+10. [Authority, credentials and untrusted content](#authority-credentials-and-untrusted-content)
+11. [Scope and design baseline](#scope-and-design-baseline)
 
 ---
 
-## Business requirements
+## Protocol and assurance
 
-Derived from the problem statement (CL-001–CL-005) and P1–P12 (CL-006–CL-017). Prefix `RQA-BR-`, numbered from
-001; no retired identifier in this series is reused.
+What a review is, and what makes one trustworthy: one shared definition, applied the same way regardless of who or what performs it.
 
-| ID | Requirement | EARS pattern | Priority | Status | Source | Fit criterion | Derives from (clause + verbatim source text) | ADR |
-|---|---|---|---|---|---|---|---|---|
-| RQA-BR-001 | The review process for a pull request shall be consistent, auditable, efficient, and trustworthy. | Ubiquitous | Must | `DECIDED` | [#2006](https://github.com/launchpad-26/buzz/issues/2006) (pinned revision — see § Provenance and pin) | Each of the four qualities is validated by the source-derived obligations already in this set, not by an independent packaging or cardinality test of its own: consistency by RQA-BR-002's cross-reviewer definitional agreement; auditability by RQA-FR-012's full outcome reconstruction and RQA-NFR-022/RQA-NFR-028's tamper-evident provenance; efficiency by RQA-FR-019/RQA-FR-020's bound against policy-required work and RQA-FR-021's actual-versus-estimate distinction; trustworthiness by RQA-FR-011's disposition gate and RQA-FR-013's approval-basis naming. This row is satisfied exactly when those cited rows are; no separate 'one audit trail per PR' packaging constraint or bare bound-exists proxy is imposed here. | **CL-001** (Problem, paragraph 1, [extract](prd-2006-normative-extract.md#problem)): “Launchpad Buzz does not have a consistent, auditable, efficient, and trustworthy pull-request review process.” | — |
-| RQA-BR-002 | A pull-request review shall have one consistent definition across the repository, independent of which reviewer performed it. | Ubiquitous | Must | `DECIDED` | [#2006](https://github.com/launchpad-26/buzz/issues/2006) (pinned revision — see § Provenance and pin) | Given the same class of change reviewed under this repository's protocol, two reviewers independently describe the same review scope, required evidence, findings taxonomy, blocking conditions, review-completion condition, and final-disposition semantics — all six of AC01/CL-028's protocol concepts, not a subset of them; agreement on only some (e.g. scope and evidence but not blocking conditions or disposition semantics) does not satisfy this check. | **CL-006** (P1, [extract](prd-2006-normative-extract.md#problem)): “No shared review protocol. Reviewers use independently designed processes, so a review has no consistent definition across the repository.” | — |
-| RQA-BR-003 | A review record shall establish who or what performed the review, which protocol was followed, and how the judgement was produced. | Ubiquitous | Must | `DECIDED` | [#2006](https://github.com/launchpad-26/buzz/issues/2006) (pinned revision — see § Provenance and pin) | Given any review record, a reader can name its performer, its protocol, and the basis of its judgement without asking the performer. | **CL-007** (P2, [extract](prd-2006-normative-extract.md#problem)): “Review provenance is not recorded. Records do not establish who or what reviewed, which protocol was followed, or how the judgement was produced.” | — |
-| RQA-BR-004 | The threshold at which a finding blocks a pull request shall be consistent rather than left to each reviewer's individual judgement. | Ubiquitous | Must | `DECIDED` | [#2006](https://github.com/launchpad-26/buzz/issues/2006) (pinned revision — see § Provenance and pin) | Two reviewers applying the same policy to equivalent findings reach the same blocking decision. | **CL-008** (P3, [extract](prd-2006-normative-extract.md#problem)): “Blocking semantics are inconsistent. Reviewers apply materially different thresholds for CHANGES_REQUESTED, so GitHub review state has no consistent meaning.” | — |
-| RQA-BR-005 | Mechanical, procedural, or creation-time findings shall not be indistinguishable in the record from substantive correctness, security, architectural or evidence findings merely because both block. | Unwanted-behaviour | Must | `DECIDED` | [#2006](https://github.com/launchpad-26/buzz/issues/2006) (pinned revision — see § Provenance and pin) | Given a mechanical, procedural, or creation-time finding and a substantive finding that both contribute to the same blocking outcome on a PR, a reader can still tell them apart in the record by category and decision basis; two policy-blocking findings sharing the one authoritative outcome C6/AC14 require does not, by itself, fail this check — what fails it is a record in which the two categories of finding cannot be told apart at all. | **CL-009** (P4, [extract](prd-2006-normative-extract.md#problem)): “Mechanical and substantive findings share one blocking mechanism. Procedural issues and correctness/security/architectural/evidence failures are all expressed as CHANGES_REQUESTED.”<br><br>**CL-002** (Problem, paragraph 2, [extract](prd-2006-normative-extract.md#problem)): “Reviews are performed using different reviewer-defined protocols, different blocking thresholds, and inconsistent levels of evidence. Review records do not consistently capture structured provenance showing who or what performed the review or which process was followed. The same unchanged revision is frequently reviewed multiple times, while mechanical or creation-time defects can consume the same blocking mechanism as substantive correctness, security, architectural, or evidence failures.” | — |
-| RQA-BR-006 | A cheaply remediable, deterministic finding accompanied by its exact remedy shall not require a further contributor and a further review cycle to resolve. | State-driven | Must | `DECIDED` | [#2006](https://github.com/launchpad-26/buzz/issues/2006) (pinned revision — see § Provenance and pin) | A deterministic defect with a supplied remedy is resolved without requiring **both** a second contributor turn **and** a second full review cycle together; a resolution needing one of the two alone — for example, one lightweight contributor acknowledgement with no further review cycle — satisfies this check. This tests only ¬(A∧B), the weaker of the two source-admitted readings (see this row's Unambiguous caveat), per round 7's correction of a prior criterion that operationalised the stronger ¬A∧¬B reading #2006's own text does not force; what fails this check is the combination occurring together, not either element occurring alone. | **CL-010** (P5, [extract](prd-2006-normative-extract.md#problem)): “Cheaply remediable findings create unnecessary review cycles. An agent can identify a deterministic defect and supply the exact remedy, yet the fix still needs another contributor and another review cycle.” | — |
-| RQA-BR-007 | Review work shall not be duplicated across a revision that has not changed. | Unwanted-behaviour | Must | `DECIDED` | [#2006](https://github.com/launchpad-26/buzz/issues/2006) (pinned revision — see § Provenance and pin) | Requesting review twice on an identical revision does not repeat the same reviewer work twice. | **CL-011** (P6, [extract](prd-2006-normative-extract.md#problem)): “Review work is duplicated across unchanged revisions.” | — |
-| RQA-BR-008 | Review output shall establish whether the higher-value claims, risks and cited evidence in a pull request were verified, not only its labels, metadata or formatting. | Ubiquitous | Must | `DECIDED` | [#2006](https://github.com/launchpad-26/buzz/issues/2006) (pinned revision — see § Provenance and pin) | A reader of a review record can state which claims, risks or cited evidence were verified and which were not, distinct from cosmetic observations. | **CL-012** (P7, [extract](prd-2006-normative-extract.md#problem)): “Review output has poor signal-to-noise for assurance. Activity focuses on labels, metadata and formatting without establishing whether higher-value claims, risks or cited evidence were verified.” | — |
-| RQA-BR-009 | A failing automated review or check signal shall carry an attribution — to the pull request, the base, a procedural cause, incomplete automation, unrelated infrastructure, or a genuine blocker — without requiring a human to decide which. | Ubiquitous | Must | `DECIDED` | [#2006](https://github.com/launchpad-26/buzz/issues/2006) (pinned revision — see § Provenance and pin) | Given a failing automated review signal or a failing check, a reader finds its attribution in the record rather than having to investigate and decide it themselves; a system that attributes only check failures and leaves automated-review-signal failures uninterpreted fails this check. | **CL-013** (P8, [extract](prd-2006-normative-extract.md#problem)): “Automated review and check signals require manual interpretation. Humans must decide whether a failure is attributable to the PR, inherited from base, procedural, incomplete automation, unrelated infrastructure, or a genuine blocker.” | — |
-| RQA-BR-010 | Progression of a pull request through review shall not depend on manual owner intervention beyond what genuinely requires human judgement. | Unwanted-behaviour | Must | `DECIDED` | [#2006](https://github.com/launchpad-26/buzz/issues/2006) (pinned revision — see § Provenance and pin) | A pull request whose findings require no human judgement is driven through every applicable lifecycle transition RQA-FR-016 names, and none of those transitions depends on owner action; a system that automates the first transition and then requires an owner to act on a later one, even where that later transition itself requires no judgement, fails this check. | **CL-014** (P9, [extract](prd-2006-normative-extract.md#problem)): “Progression depends heavily on manual owner intervention.”<br><br>**CL-017** (P12, [extract](prd-2006-normative-extract.md#problem)): “PR review consumes scarce human attention and causes unnecessary interruption. Routine, mechanical or non-urgent PR issues impose context-switching costs where no human judgement is required.”<br><br>**CL-040** (AC13, [extract](prd-2006-normative-extract.md#success-criteria)): “Routine, mechanical and non-urgent conditions raise no immediate human request; a required escalation names the specific unresolved decision, conflicting judgement, evidence gap, required information or authority requirement; and supplying that input resumes the lifecycle without restarting the review.” | — |
-| RQA-BR-011 | A human approval used to satisfy assurance shall preserve the evidence behind that approval, not merely satisfy merge mechanics. | Ubiquitous | Must | `DECIDED` | [#2006](https://github.com/launchpad-26/buzz/issues/2006) (pinned revision — see § Provenance and pin) | A human approval used to satisfy assurance carries retrievable evidence of what was examined, not only the fact of approval; an approval recorded only to satisfy merge mechanics, and never cited as assurance evidence, is outside this check's population and its absence of retrievable examination evidence does not fail it — the same assurance-use predicate RQA-FR-013's fit criterion applies. | **CL-015** (P10, [extract](prd-2006-normative-extract.md#problem)): “Human approvals do not consistently preserve review evidence. Approval satisfies merge mechanics without preserving assurance evidence.” | — |
-| RQA-BR-012 | Review activity shall use scarce model capacity efficiently, given that capacity is shared with implementation work. | Ubiquitous | Must | `DECIDED` | [#2006](https://github.com/launchpad-26/buzz/issues/2006) (pinned revision — see § Provenance and pin) | Comparing recorded model/token consumption for a review against what that review's policy states as required assurance shows no material excess; a system that merely records consumption without this comparison being able to show non-excess does not satisfy the check. | **CL-016** (P11, [extract](prd-2006-normative-extract.md#problem)): “PR review consumes scarce model capacity inefficiently. Capacity is shared with implementation work.” | — |
-| RQA-BR-013 | Routine, mechanical or non-urgent pull-request conditions shall not interrupt a human where no human judgement is required. | State-driven | Must | `DECIDED` | [#2006](https://github.com/launchpad-26/buzz/issues/2006) (pinned revision — see § Provenance and pin) | No condition genuinely requiring no human judgement ever raises a notification demanding a human's immediate attention. A condition that does require human judgement may still raise a specific, non-immediate required escalation (RQA-FR-026's own population) without failing this check — what this row prohibits is an immediate-attention interruption for a condition that did not need one, not every notification whatsoever; whether or when a condition is subsequently resolved or progressed remains a lifecycle-row concern (e.g. RQA-FR-016, RQA-FR-017), not this row's own test. | **CL-017** (P12, [extract](prd-2006-normative-extract.md#problem)): “PR review consumes scarce human attention and causes unnecessary interruption. Routine, mechanical or non-urgent PR issues impose context-switching costs where no human judgement is required.” | — |
-| RQA-BR-014 | Review activity on a pull request shall demonstrate that the important risks, claims and evidence associated with it were actually examined. | Ubiquitous | Must | `DECIDED` | [#2006](https://github.com/launchpad-26/buzz/issues/2006) (pinned revision — see § Provenance and pin) | For a completed review, a reader can confirm from the record — not from trust in the activity's volume — that the important risks, claims and evidence were examined. | **CL-005** (Problem, paragraph 5, [extract](prd-2006-normative-extract.md#problem)): “The operational consequence is duplicated work, resource exhaustion, human interruption, and a growing review queue. The more important consequence is reduced assurance: substantial review activity does not consistently demonstrate that the important risks, claims, and evidence associated with a pull request were actually examined.” | — |
+### RQA-BR-001
 
----
+The review process for a pull request shall be consistent, auditable, efficient, and trustworthy.
 
-## Functional requirements
+*In plain terms: Reviews should work the same way every time, leave a trail, avoid wasted effort, and be believable.*
 
-Derived from AC01–AC17 (CL-028–CL-044) and both closing criteria (CL-045–CL-046). Prefix `RQA-FR-`, numbered from
-001; no retired identifier in this series is reused. IDs RQA-FR-036–RQA-FR-039 were appended across rework rounds
-to carry an obligation panel review found bundled into an existing row (§ Singular-split record); no existing ID
-was renumbered.
+`Ubiquitous` · `Must` · `DECIDED` · ADR: —
 
-| ID | Requirement | EARS pattern | Priority | Status | Source | Fit criterion | Derives from (clause + verbatim source text) | ADR |
-|---|---|---|---|---|---|---|---|---|
-| RQA-FR-001 | Every managed review shall produce a verdict that validates against one published protocol definition covering review scope, required evidence, findings, blocking conditions, review completion and final disposition. | Ubiquitous | Must | `DECIDED` | [#2006](https://github.com/launchpad-26/buzz/issues/2006) (pinned revision — see § Provenance and pin) | A verdict from any managed review can be checked against a single published protocol definition and either validates or fails validation against it; there is exactly one such definition in force for the review, however it is packaged (a single document, a schema plus prose, or any other representation). | **CL-028** (AC01, [extract](prd-2006-normative-extract.md#success-criteria)): “Every RQA-managed review produces a verdict that validates against one published protocol definition covering review scope, required evidence, findings, blocking conditions, review completion and final disposition; two reviews of the same PR by different harnesses, models or providers carry the same concept semantics.” | [#2064](https://github.com/launchpad-26/buzz/issues/2064) (repo-wide policy/contract document placement) |
-| RQA-FR-002 | Two reviews of the same pull request performed by different harnesses, models or providers shall carry the same concept semantics. | Ubiquitous | Must | `DECIDED` | [#2006](https://github.com/launchpad-26/buzz/issues/2006) (pinned revision — see § Provenance and pin) | Given two review records for the same PR produced through different harnesses, models or providers, each of the protocol concepts AC01 names — review scope, required evidence, findings, blocking conditions, review completion, and final disposition — means the same thing in both records; agreement on only some of these concepts does not satisfy this check. | **CL-028** (AC01, [extract](prd-2006-normative-extract.md#success-criteria)): “Every RQA-managed review produces a verdict that validates against one published protocol definition covering review scope, required evidence, findings, blocking conditions, review completion and final disposition; two reviews of the same PR by different harnesses, models or providers carry the same concept semantics.” | — |
-| RQA-FR-003 | Two repositories configured with different review policies shall be able to produce demonstrably different blocking outcomes on the same diff. | State-driven | Must | `DECIDED` | [#2006](https://github.com/launchpad-26/buzz/issues/2006) (pinned revision — see § Provenance and pin) | The same diff submitted under two differently configured repository policies produces two blocking outcomes, and the difference is attributable to the policy configuration. | **CL-029** (AC02, [extract](prd-2006-normative-extract.md#success-criteria)): “Two repositories configured with different review policies produce demonstrably different blocking outcomes on the same diff, and a policy change takes effect on the next review with no rebuild, reinstall or redeploy.” | — |
-| RQA-FR-004 | A change to a repository's review policy shall take effect on that repository's next review with no rebuild, reinstall or redeploy. | Event-driven | Must | `DECIDED` | [#2006](https://github.com/launchpad-26/buzz/issues/2006) (pinned revision — see § Provenance and pin) | After a policy configuration change, the very next review on that repository reflects the new policy without any build, install or deployment step having been performed in between. | **CL-029** (AC02, [extract](prd-2006-normative-extract.md#success-criteria)): “Two repositories configured with different review policies produce demonstrably different blocking outcomes on the same diff, and a policy change takes effect on the next review with no rebuild, reinstall or redeploy.” | — |
-| RQA-FR-005 | A push that changes nothing material shall re-run zero reviewer calls. | Unwanted-behaviour | Must | `DECIDED` | [#2006](https://github.com/launchpad-26/buzz/issues/2006) (pinned revision — see § Provenance and pin) | A push whose diff is immaterial to every review obligation is followed by reliable, independently checkable evidence that zero reviewer invocations occurred — a boundary trace, an audited invocation log, or an equivalent independently corroborated observation; a bare recorded counter reading zero, with no independent corroboration, is insufficient on its own to satisfy this check. | **CL-030** (AC03, [extract](prd-2006-normative-extract.md#success-criteria)): “A push that changes nothing material re-runs zero reviewer calls; a push touching file X re-runs only the review obligations invalidated by that change; the reused and regenerated sets are both recorded and inspectable.” | — |
-| RQA-FR-006 | A push that touches file X shall re-run only the review obligations that push invalidates. | Event-driven | Must | `DECIDED` | [#2006](https://github.com/launchpad-26/buzz/issues/2006) (pinned revision — see § Provenance and pin) | For a push touching a known file, the set of obligations re-run is exactly the set invalidated by that file's change — no more, no less; where that invalidated set is every obligation (for example, a root policy-file change that legitimately invalidates all of them), re-running all of them satisfies this check, since the criterion tests set equality with what the push actually invalidates, not a bound below the total. | **CL-030** (AC03, [extract](prd-2006-normative-extract.md#success-criteria)): “A push that changes nothing material re-runs zero reviewer calls; a push touching file X re-runs only the review obligations invalidated by that change; the reused and regenerated sets are both recorded and inspectable.” | — |
-| RQA-FR-007 | The set of review obligations reused from a prior revision and the set regenerated for the current revision shall each be recorded and inspectable. | Ubiquitous | Must | `DECIDED` | [#2006](https://github.com/launchpad-26/buzz/issues/2006) (pinned revision — see § Provenance and pin) | For any review, a reader can retrieve both the reused-obligation set and the regenerated-obligation set and see which obligation is in which. | **CL-030** (AC03, [extract](prd-2006-normative-extract.md#success-criteria)): “A push that changes nothing material re-runs zero reviewer calls; a push touching file X re-runs only the review obligations invalidated by that change; the reused and regenerated sets are both recorded and inspectable.” | — |
-| RQA-FR-008 | Every finding shall carry a category distinguishing mechanical, procedural and creation-time findings from correctness, security, architectural and evidence findings. | Ubiquitous | Must | `DECIDED` | [#2006](https://github.com/launchpad-26/buzz/issues/2006) (pinned revision — see § Provenance and pin) | Every finding in a review record carries at least one category that makes the mechanical-vs-substantive distinction observable, drawn from one of the two named groups — mechanical/procedural/creation-time, or correctness/security/architectural/evidence — and no finding is uncategorised. A finding may additionally carry further categories outside those two groups (for example, an orthogonal 'performance' tag) without failing this check, and a finding legitimately carrying two categories from the two named groups also satisfies it, provided the distinguishing category is present and observable; this check does not close the category taxonomy to only the two named groups. | **CL-031** (AC04, [extract](prd-2006-normative-extract.md#success-criteria)): “Every finding carries a category distinguishing mechanical, procedural and creation-time findings from correctness, security, architectural and evidence findings, and whether it blocks is decided by repository policy, not by the reviewer's severity choice alone.” | — |
-| RQA-FR-009 | Whether a finding blocks a pull request shall be decided by repository policy, not by the reviewer's severity choice alone. | Ubiquitous | Must | `DECIDED` | [#2006](https://github.com/launchpad-26/buzz/issues/2006) (pinned revision — see § Provenance and pin) | Given a finding's category, repository policy, and any other input the policy itself declares relevant — which may include reviewer severity as one named input alongside others — the blocking decision is reproducible from those inputs; this check fails only where reviewer severity, independent of repository policy and its other declared inputs, alone determines the blocking decision. A policy that declares severity as one input among several does not fail this check merely for including it. | **CL-031** (AC04, [extract](prd-2006-normative-extract.md#success-criteria)): “Every finding carries a category distinguishing mechanical, procedural and creation-time findings from correctness, security, architectural and evidence findings, and whether it blocks is decided by repository policy, not by the reviewer's severity choice alone.” | — |
-| RQA-FR-010 | Every required review obligation shall carry an explicit evidence state from {verified, not verified, unavailable, contradictory, failed, incomplete, unknown}. | Ubiquitous | Must | `DECIDED` | [#2006](https://github.com/launchpad-26/buzz/issues/2006) (pinned revision — see § Provenance and pin) | Every required obligation in a review record carries exactly one evidence state from the seven-value set, and no required obligation is left without one. | **CL-032** (AC05, [extract](prd-2006-normative-extract.md#success-criteria)): “Every required review obligation carries an explicit evidence state from {verified, not verified, unavailable, contradictory, failed, incomplete, unknown}, and no successful disposition can be produced while any required obligation is unsatisfied.” | — |
-| RQA-FR-011 | No successful disposition shall be produced while any required review obligation is unsatisfied. | State-driven | Must | `DECIDED` | [#2006](https://github.com/launchpad-26/buzz/issues/2006) (pinned revision — see § Provenance and pin) | A review in which some required obligation is neither in the 'verified' evidence state nor demonstrably satisfied through a recorded, named human approval under RQA-FR-013 that substantiates that specific obligation's content never yields a successful disposition; a named approval with no substantiated basis for the specific obligation it is claimed to satisfy does not, by itself, count that obligation as satisfied, and AC05's own evidence-state vocabulary is not bypassed by naming an approver alone. | **CL-032** (AC05, [extract](prd-2006-normative-extract.md#success-criteria)): “Every required review obligation carries an explicit evidence state from {verified, not verified, unavailable, contradictory, failed, incomplete, unknown}, and no successful disposition can be produced while any required obligation is unsatisfied.” | — |
-| RQA-FR-012 | For any authoritative review outcome, a single command shall reconstruct the exact PR revision, the protocol and policy in force, reviewer identity and type, harness, model, provider, evidence examined, findings produced, decision basis and disposition. | Ubiquitous | Must | `DECIDED` | [#2006](https://github.com/launchpad-26/buzz/issues/2006) (pinned revision — see § Provenance and pin) | Running one command against an authoritative outcome returns each of the elements AC06 names — PR revision, protocol in force, policy in force, reviewer identity, reviewer type, harness, model, provider, evidence examined, findings produced, decision basis, and disposition — with none requiring a second lookup. | **CL-033** (AC06, [extract](prd-2006-normative-extract.md#success-criteria)): “For any authoritative review outcome, a single command reconstructs the exact PR revision, protocol and policy in force, reviewer identity and type, harness, model, provider, evidence examined, findings produced, decision basis and disposition; a human approval used to satisfy assurance names the approving human and the basis of that approval.” | — |
-| RQA-FR-013 | A human approval used to satisfy assurance shall name the approving human and the basis of that approval. | Ubiquitous | Must | `DECIDED` | [#2006](https://github.com/launchpad-26/buzz/issues/2006) (pinned revision — see § Provenance and pin) | Every recorded human approval used to satisfy assurance names a specific human and states the basis for that approval; an approval recorded only to satisfy merge mechanics, and never cited as assurance evidence, is outside this check's population and its absence of a named basis does not fail it. | **CL-033** (AC06, [extract](prd-2006-normative-extract.md#success-criteria)): “For any authoritative review outcome, a single command reconstructs the exact PR revision, protocol and policy in force, reviewer identity and type, harness, model, provider, evidence examined, findings produced, decision basis and disposition; a human approval used to satisfy assurance names the approving human and the basis of that approval.” | — |
-| RQA-FR-014 | When a pull request's only failing check also fails on its merge base, the review shall classify that failure as inherited rather than attributable. | Event-driven | Must | `DECIDED` | [#2006](https://github.com/launchpad-26/buzz/issues/2006) (pinned revision — see § Provenance and pin) | Given a pull request whose only failing check also fails on its merge base, the review's decision behaviour and decision basis treat that failure as inherited rather than attributable — for example, excluding it from the blocking-condition evaluation — independent of whether that classification is yet persisted in or exposed from the review record, which RQA-FR-015 tests separately; the check does not apply to a PR with more than one failing check. | **CL-034** (AC07, [extract](prd-2006-normative-extract.md#success-criteria)): “For a PR whose only failing check also fails on its merge base, RQA classifies that failure as inherited rather than attributable, does not treat it as a blocker, and states the classification.” | — |
-| RQA-FR-015 | When a pull request's only failing check also fails on its merge base, the review shall state the inherited-versus-attributable classification of that failure in the record. | Event-driven | Must | `DECIDED` | [#2006](https://github.com/launchpad-26/buzz/issues/2006) (pinned revision — see § Provenance and pin) | For a pull request whose only failing check also fails on its merge base, the inherited classification of that failure is retrievable from the review record; the check does not extend to a classification of a check failure outside AC07's own condition. | **CL-034** (AC07, [extract](prd-2006-normative-extract.md#success-criteria)): “For a PR whose only failing check also fails on its merge base, RQA classifies that failure as inherited rather than attributable, does not treat it as a blocker, and states the classification.” | — |
-| RQA-FR-016 | For any managed pull request, one command shall return its current disposition from {being reviewed, blocked, awaiting remediation, awaiting human judgement, review-complete, unable to progress} and the reason, without a human reconciling historical reviews, comments or checks. | Ubiquitous | Must | `DECIDED` | [#2006](https://github.com/launchpad-26/buzz/issues/2006) (pinned revision — see § Provenance and pin) | Driving a managed PR through its observable lifecycle transitions and, after each transition, querying the one command shows a result and reason equal to the PR's independently established current state at that point — not merely one of the six legal values with a plausible-sounding reason regardless of the PR's actual state; a command that returns a stale or generic answer after a transition has occurred fails this check even if the value it returns is individually legal. | **CL-035** (AC08, [extract](prd-2006-normative-extract.md#success-criteria)): “For any managed PR, one command returns its current disposition from {being reviewed, blocked, awaiting remediation, awaiting human judgement, review-complete, unable to progress} and the reason, without a human reconciling historical reviews, comments or checks.” | — |
-| RQA-FR-017 | A finding classified as mechanical and permitted by policy shall be resolved without unnecessarily creating human intervention or a complete re-review cycle. | State-driven | Must | `DECIDED` | [#2006](https://github.com/launchpad-26/buzz/issues/2006) (pinned revision — see § Provenance and pin) | A mechanical, policy-permitted finding is resolved, and every human-intervention request or full re-review cycle generated in the course of resolving it is one a source-derived authority, evidence, or judgement gap genuinely makes necessary — necessity determined by repository policy where policy speaks to it; an intervention generated for any other reason while resolving the finding (for example, an unnecessary re-confirmation request unconnected to an authority, evidence, or judgement gap) fails this check even if it is not the request that formally closes the finding. | **CL-036** (AC09, [extract](prd-2006-normative-extract.md#success-criteria)): “A finding classified as mechanical and permitted by policy is resolved without unnecessarily creating human intervention or a complete re-review cycle, and resolving it does not invalidate unrelated review work that remains valid. Per the baseline, this does not require RQA to modify code directly.” | `ADR-A` (draft in /tmp/rqa-adr-drafts/ — to be raised as a GitHub ADR issue after this requirements set is confirmed, per § Provenance and pin) |
-| RQA-FR-018 | Resolving a finding classified as mechanical and permitted by policy shall not invalidate unrelated review work that remains valid. | Unwanted-behaviour | Must | `DECIDED` | [#2006](https://github.com/launchpad-26/buzz/issues/2006) (pinned revision — see § Provenance and pin) | After a mechanical finding is resolved, every unrelated obligation that was previously satisfied remains valid and satisfied. Whether that unrelated obligation is also, redundantly, re-run is RQA-FR-020's own test (reuse of a valid result), not this row's — an unrelated obligation that is redundantly re-run but remains satisfied and valid does not fail this check; what fails it is a previously valid obligation becoming invalid or unsatisfied as a side effect of the remediation. | **CL-036** (AC09, [extract](prd-2006-normative-extract.md#success-criteria)): “A finding classified as mechanical and permitted by policy is resolved without unnecessarily creating human intervention or a complete re-review cycle, and resolving it does not invalidate unrelated review work that remains valid. Per the baseline, this does not require RQA to modify code directly.” | `ADR-A` (draft in /tmp/rqa-adr-drafts/ — to be raised as a GitHub ADR issue after this requirements set is confirmed, per § Provenance and pin) |
-| RQA-FR-019 | For a given policy, no reviewer pass, independent pass, repeated analysis, reasoning strategy or higher-cost method not required by that policy's stated assurance shall be performed. | State-driven | Must | `DECIDED` | [#2006](https://github.com/launchpad-26/buzz/issues/2006) (pinned revision — see § Provenance and pin) | Comparing every effort type CL-037 names — reviewer pass, independent pass, repeated analysis, reasoning strategy, and higher-cost method — that a review actually performed against its policy's stated assurance requirement shows none beyond what the policy requires; a pass that uses an unrequired repeated analysis, reasoning strategy, or higher-cost method fails this check even where the raw pass count matches policy. | **CL-037** (AC10, [extract](prd-2006-normative-extract.md#success-criteria)): “For a given policy, RQA performs no reviewer pass, independent pass, repeated analysis, reasoning strategy or higher-cost method that is not required by that policy's stated assurance, and valid existing results are reused rather than regenerated.” | — |
-| RQA-FR-020 | A valid existing result shall be reused rather than regenerated. | Ubiquitous | Must | `DECIDED` | [#2006](https://github.com/launchpad-26/buzz/issues/2006) (pinned revision — see § Provenance and pin) | Where a prior result remains valid for the current revision, the review record shows it reused rather than a new equivalent result generated. | **CL-037** (AC10, [extract](prd-2006-normative-extract.md#success-criteria)): “For a given policy, RQA performs no reviewer pass, independent pass, repeated analysis, reasoning strategy or higher-cost method that is not required by that policy's stated assurance, and valid existing results are reused rather than regenerated.” | — |
-| RQA-FR-021 | Resource consumption shall be recorded from what the execution environment actually exposes and be distinguishable from an estimate. | Ubiquitous | Must | `DECIDED` | [#2006](https://github.com/launchpad-26/buzz/issues/2006) (pinned revision — see § Provenance and pin) | Where the execution environment exposes an actual resource-consumption reading, that actual figure — not an estimate substituted in its place — is what the record relies on; a run that has an exposed actual reading available and records only an estimate instead fails this check. Where the environment ever produces only an estimate (no actual reading exposed), an observer can distinguish that record's estimated reading from an actual one by its own inspectable provenance. This check does not require a system whose environment always exposes actuals to manufacture an estimate-only scenario for testing — the estimate-distinguishability test applies only where an estimate is genuinely in use. | **CL-038** (AC11, [extract](prd-2006-normative-extract.md#success-criteria)): “Resource consumption is recorded from what the execution environment actually exposes and is distinguishable from an estimate; a configured bound, when reached, produces a configured fallback, an explicitly incomplete review, or an escalation — never a successful outcome.” | — |
-| RQA-FR-022 | When a configured resource bound is reached, the review shall produce a configured fallback, an explicitly incomplete review, or an escalation. | Event-driven | Must | `DECIDED` | [#2006](https://github.com/launchpad-26/buzz/issues/2006) (pinned revision — see § Provenance and pin) | Every review run in which a configured bound was reached ends in one of the three named outcomes; where the outcome is a fallback, it is the fallback already in force in configuration before the bound was reached, not one invented ad hoc — a run that substitutes an unconfigured alternative and calls it 'a fallback' fails this check even though a fallback-shaped outcome occurred. | **CL-038** (AC11, [extract](prd-2006-normative-extract.md#success-criteria)): “Resource consumption is recorded from what the execution environment actually exposes and is distinguishable from an estimate; a configured bound, when reached, produces a configured fallback, an explicitly incomplete review, or an escalation — never a successful outcome.” | — |
-| RQA-FR-023 | Where a fallback is explicitly configured, the review shall continue through that fallback when a configured reviewer, model or provider becomes unavailable. | Optional-feature | Must | `DECIDED` | [#2006](https://github.com/launchpad-26/buzz/issues/2006) (pinned revision — see § Provenance and pin) | Given a configured fallback and an unavailable configured reviewer, model or provider, the review proceeds via the fallback rather than halting. | **CL-039** (AC12, [extract](prd-2006-normative-extract.md#success-criteria)): “With a configured reviewer, model or provider made unavailable, RQA continues through an explicitly configured fallback; with no fallback configured it invents none and stops in a clear, safe, recoverable non-success state.” | — |
-| RQA-FR-024 | While no fallback is configured for a reviewer, model or provider, the review shall invent no fallback when that reviewer, model or provider becomes unavailable. | State-driven | Must | `DECIDED` | [#2006](https://github.com/launchpad-26/buzz/issues/2006) (pinned revision — see § Provenance and pin) | With no fallback configured and a configured reviewer, model or provider unavailable, the review never substitutes an unconfigured alternative in its place. | **CL-039** (AC12, [extract](prd-2006-normative-extract.md#success-criteria)): “With a configured reviewer, model or provider made unavailable, RQA continues through an explicitly configured fallback; with no fallback configured it invents none and stops in a clear, safe, recoverable non-success state.” | — |
-| RQA-FR-025 | A routine, mechanical or non-urgent condition shall not raise an immediate human request. | State-driven | Must | `DECIDED` | [#2006](https://github.com/launchpad-26/buzz/issues/2006) (pinned revision — see § Provenance and pin) | No review event classified routine, mechanical or non-urgent generates a human-facing request that demands immediate attention. | **CL-040** (AC13, [extract](prd-2006-normative-extract.md#success-criteria)): “Routine, mechanical and non-urgent conditions raise no immediate human request; a required escalation names the specific unresolved decision, conflicting judgement, evidence gap, required information or authority requirement; and supplying that input resumes the lifecycle without restarting the review.” | — |
-| RQA-FR-026 | A required escalation shall name the specific unresolved decision, conflicting judgement, evidence gap, required information or authority requirement that produced it. | Ubiquitous | Must | `DECIDED` | [#2006](https://github.com/launchpad-26/buzz/issues/2006) (pinned revision — see § Provenance and pin) | Every escalation record names one of the five listed causes concretely, not as a generic 'needs attention' notice. | **CL-040** (AC13, [extract](prd-2006-normative-extract.md#success-criteria)): “Routine, mechanical and non-urgent conditions raise no immediate human request; a required escalation names the specific unresolved decision, conflicting judgement, evidence gap, required information or authority requirement; and supplying that input resumes the lifecycle without restarting the review.” | — |
-| RQA-FR-027 | Supplying the input a raised escalation names shall resume the lifecycle without restarting the review. | Event-driven | Must | `DECIDED` | [#2006](https://github.com/launchpad-26/buzz/issues/2006) (pinned revision — see § Provenance and pin) | After the requested input is supplied for an open escalation, the review continues from its prior state rather than beginning again from the start. | **CL-040** (AC13, [extract](prd-2006-normative-extract.md#success-criteria)): “Routine, mechanical and non-urgent conditions raise no immediate human request; a required escalation names the specific unresolved decision, conflicting judgement, evidence gap, required information or authority requirement; and supplying that input resumes the lifecycle without restarting the review.” | — |
-| RQA-FR-028 | When the review's obligations are satisfied, the review shall submit APPROVED or CHANGES_REQUESTED. | State-driven | Must | `DECIDED` | [#2006](https://github.com/launchpad-26/buzz/issues/2006) (pinned revision — see § Provenance and pin) | Every review whose required obligations are all satisfied results in a submitted APPROVED or CHANGES_REQUESTED outcome; a satisfied review that submits neither fails this check. | **CL-041** (AC14, [extract](prd-2006-normative-extract.md#success-criteria)): “RQA submits APPROVED or CHANGES_REQUESTED when the obligations are satisfied and cannot manufacture a successful outcome when they are not; one repository can be configured to merge after review and another configured not to, with both behaving accordingly.” | — |
-| RQA-FR-029 | The system shall merge after a successful review if and only if the repository is configured to merge after review. | State-driven | Must | `DECIDED` | [#2006](https://github.com/launchpad-26/buzz/issues/2006) (pinned revision — see § Provenance and pin) | One repository configured to merge-after-review merges following a successful disposition; a second repository configured not to does not, on an otherwise identical successful disposition — both directions of the biconditional are exercised, not merely the enabled case. | **CL-041** (AC14, [extract](prd-2006-normative-extract.md#success-criteria)): “RQA submits APPROVED or CHANGES_REQUESTED when the obligations are satisfied and cannot manufacture a successful outcome when they are not; one repository can be configured to merge after review and another configured not to, with both behaving accordingly.” | — |
-| RQA-FR-030 | A harness not built into the system shall be able to participate in a review by satisfying the published interaction contract alone, with no change to the system's own source. | Ubiquitous | Must | `DECIDED` | [#2006](https://github.com/launchpad-26/buzz/issues/2006) (pinned revision — see § Provenance and pin) | A harness never previously integrated participates in a review using only the published interaction contract, with one fixed, unmodified revision of the system's own source held constant throughout both admission and execution of that review — inspectable as identical at every point during the review, not merely equal again at the end; a transient patch applied to admit the harness and reverted afterward fails this check even though the source is identical before and after. | **CL-042** (AC15, [extract](prd-2006-normative-extract.md#success-criteria)): “A harness not built into RQA participates in a review by satisfying the published interaction contract alone, with no change to RQA's own source.” | `ADR-C` (draft in /tmp/rqa-adr-drafts/ — to be raised as a GitHub ADR issue after this requirements set is confirmed, per § Provenance and pin) |
-| RQA-FR-031 | One operator running locally shall be able to review pull requests across at least two independently configured repositories under different GitHub owners or organisations, with no centrally hosted service. | Ubiquitous | Must | `DECIDED` | [#2006](https://github.com/launchpad-26/buzz/issues/2006) (pinned revision — see § Provenance and pin) | One operator, running locally with no centrally hosted service, completes a review on each of two repositories under two different GitHub owners or organisations; this check does not require both reviews to run from the same physical machine — one operator reviewing one repository from a local desktop and the other from a local laptop, with no central service involved in either, still satisfies it, since CL-043 requires one operator running locally, not one physical machine. | **CL-043** (AC16, [extract](prd-2006-normative-extract.md#success-criteria)): “One operator running locally reviews PRs across at least two independently configured repositories under different GitHub owners or organisations, with no centrally hosted service.” | — |
-| RQA-FR-032 | The active external provider path shall be identifiable before evidence is sent to it. | Optional-feature | Must | `DECIDED` | [#2006](https://github.com/launchpad-26/buzz/issues/2006) (pinned revision — see § Provenance and pin) | Before any evidence leaves the system for an external provider, the specific provider path it will use can be named. | **CL-044** (AC17, [extract](prd-2006-normative-extract.md#success-criteria)): “The active external provider path is identifiable before evidence is sent, and removing that provider from configuration leaves RQA's review protocol and semantics unchanged.” | — |
-| RQA-FR-033 | Removing the active external provider from configuration shall leave the review protocol and semantics unchanged. | Event-driven | Must | `DECIDED` | [#2006](https://github.com/launchpad-26/buzz/issues/2006) (pinned revision — see § Provenance and pin) | With the external provider removed from configuration, the same published protocol definition still validates reviews and the same concept semantics still hold. | **CL-044** (AC17, [extract](prd-2006-normative-extract.md#success-criteria)): “The active external provider path is identifiable before evidence is sent, and removing that provider from configuration leaves RQA's review protocol and semantics unchanged.” | — |
-| RQA-FR-034 | Every architectural component retained in the delivered design shall be justified as materially serving a criterion, as having no materially simpler sufficient approach, or as required by a constraint. | Ubiquitous | Must | `DECIDED` | [#2006](https://github.com/launchpad-26/buzz/issues/2006) (pinned revision — see § Provenance and pin) | For every retained architectural component, a recorded justification substantiates — with a specific, checkable claim, not a bare label — at least one of the three named grounds: the specific criterion it materially serves, the specific materially-simpler alternative that was considered and rejected and why, or the specific constraint requiring it; a recorded claim that names a ground with no supporting specific content does not satisfy this check. This row does not prescribe who authors or evaluates the justification — CL-045/the §6 rule names neither — only that the substantiation itself is specific and checkable. | **CL-045** (Closing criterion 1, [extract](prd-2006-normative-extract.md#success-criteria)): “Every architectural component retained in the delivered design is justified against this baseline under the §6 rule: it materially serves a criterion, no materially simpler approach suffices, or a constraint requires it.” | — |
-| RQA-FR-035 | Exactly one authoritative review-agent scope shall remain open, achieved by closing or explicitly re-parenting #109 and reconciling its features #535 and #536 against this scope. | Ubiquitous | Must | `DECIDED` | [#2006](https://github.com/launchpad-26/buzz/issues/2006) (pinned revision — see § Provenance and pin) | At any point after delivery, each of three conditions is checked on its own terms, not interchangeably: #109 is confirmed to be either closed or explicitly re-parented (not merely 'reconciled'); #535 and #536 are each confirmed reconciled against this scope; and exactly one open issue can be pointed to as the authoritative review-agent scope. | **CL-046** (Closing criterion 2, [extract](prd-2006-normative-extract.md#success-criteria)): “#109 is closed or explicitly re-parented, and its features #535 and #536 are reconciled against this scope, so exactly one authoritative review-agent scope is open.” | — |
-| RQA-FR-036 | When a pull request's only failing check also fails on its merge base, the review shall not treat that failure as a blocker. | Unwanted-behaviour | Must | `DECIDED` | [#2006](https://github.com/launchpad-26/buzz/issues/2006) (pinned revision — see § Provenance and pin) | Given a pull request whose only failing check also fails on its merge base, that failure does not contribute to a blocking disposition, even though every other required obligation is still checked normally. | **CL-034** (AC07, [extract](prd-2006-normative-extract.md#success-criteria)): “For a PR whose only failing check also fails on its merge base, RQA classifies that failure as inherited rather than attributable, does not treat it as a blocker, and states the classification.” | — |
-| RQA-FR-037 | The review shall never manufacture a successful outcome when its required obligations are not satisfied. | State-driven | Must | `DECIDED` | [#2006](https://github.com/launchpad-26/buzz/issues/2006) (pinned revision — see § Provenance and pin) | A review whose required obligations are unsatisfied never results in a submitted APPROVED outcome, an internally recorded review-complete or other successful disposition (including the 'review-complete' value RQA-FR-016 names), or any other representation the protocol treats as a successful outcome, regardless of any other pressure to close it out; a check that exercises only the submitted APPROVED path and ignores an internally-recorded success signal does not satisfy this row. | **CL-041** (AC14, [extract](prd-2006-normative-extract.md#success-criteria)): “RQA submits APPROVED or CHANGES_REQUESTED when the obligations are satisfied and cannot manufacture a successful outcome when they are not; one repository can be configured to merge after review and another configured not to, with both behaving accordingly.” | — |
-| RQA-FR-038 | While no fallback is configured for a reviewer, model or provider, the review shall stop in a clear, safe, recoverable non-success state when that reviewer, model or provider becomes unavailable. | State-driven | Must | `DECIDED` | [#2006](https://github.com/launchpad-26/buzz/issues/2006) (pinned revision — see § Provenance and pin) | With no fallback configured and a configured reviewer, model or provider unavailable, the review halts in a state independently observable to hold every standing security invariant this specification states — RQA-NFR-010 (no ambiguous/corrupted/partial outcome), RQA-NFR-018 (no widened authority), RQA-NFR-019…021 (remediation bounds), RQA-NFR-022/RQA-NFR-028 (forgeable-proof provenance), and RQA-NFR-024/RQA-NFR-030 (credential floor and ceiling) — and from which a subsequent run can resume. This set is bounded to the standing invariants that describe a state a stopped run can be *left in*; it deliberately excludes RQA-NFR-015/016 (untrusted-content handling and blocking-finding behaviour, which describe ongoing review conduct, not a resting state), RQA-NFR-017/026 (per-activity authorisation configuration, a standing system setting independent of any one run's stop), and RQA-NFR-023/027/029 (external-send decisions, which govern whether content is sent during a run, not the state left behind once it stops) — each excluded for the stated reason, not silently. `Safe` is not fully closed-form: CL-039 does not itself enumerate what safety consists of beyond 'clear, safe, recoverable', so this check tests the most complete, explicitly-bounded set of source-derived standing invariants available, which requirements-quality-assessment.md records as an open-texture limitation rather than an exhaustive definition of 'safe'. | **CL-039** (AC12, [extract](prd-2006-normative-extract.md#success-criteria)): “With a configured reviewer, model or provider made unavailable, RQA continues through an explicitly configured fallback; with no fallback configured it invents none and stops in a clear, safe, recoverable non-success state.” | — |
-| RQA-FR-039 | When a configured resource bound is reached, the review shall never produce a successful outcome. | Unwanted-behaviour | Must | `DECIDED` | [#2006](https://github.com/launchpad-26/buzz/issues/2006) (pinned revision — see § Provenance and pin) | No review run in which a configured bound was reached ends in a successful disposition, independent of which of RQA-FR-022's three outcomes it produced instead. | **CL-038** (AC11, [extract](prd-2006-normative-extract.md#success-criteria)): “Resource consumption is recorded from what the execution environment actually exposes and is distinguishable from an estimate; a configured bound, when reached, produces a configured fallback, an explicitly incomplete review, or an escalation — never a successful outcome.” | — |
+**Source:**
+- **CL-001** (Problem, paragraph 1, [extract](prd-2006-normative-extract.md#problem)): “Launchpad Buzz does not have a consistent, auditable, efficient, and trustworthy pull-request review process.”
+
+**Fit criterion:** Each of the four qualities is validated by the source-derived obligations already in this set, not by an independent packaging or cardinality test of its own: consistency by RQA-BR-002's cross-reviewer definitional agreement; auditability by RQA-FR-012's full outcome reconstruction and RQA-NFR-022/RQA-NFR-028's tamper-evident provenance; efficiency by RQA-FR-019/RQA-FR-020's bound against policy-required work and RQA-FR-021's actual-versus-estimate distinction; trustworthiness by RQA-FR-011's disposition gate and RQA-FR-013's approval-basis naming. This row is satisfied exactly when those cited rows are; no separate 'one audit trail per PR' packaging constraint or bare bound-exists proxy is imposed here.
+
+### RQA-BR-002
+
+A pull-request review shall have one consistent definition across the repository, independent of which reviewer performed it.
+
+*In plain terms: Two people should describe what a pull-request review is supposed to check the same way, regardless of who reviewed it.*
+
+`Ubiquitous` · `Must` · `DECIDED` · ADR: —
+
+**Source:**
+- **CL-006** (P1, [extract](prd-2006-normative-extract.md#problem)): “No shared review protocol. Reviewers use independently designed processes, so a review has no consistent definition across the repository.”
+
+**Fit criterion:** Given the same class of change reviewed under this repository's protocol, two reviewers independently describe the same review scope, required evidence, findings taxonomy, blocking conditions, review-completion condition, and final-disposition semantics — all six of AC01/CL-028's protocol concepts, not a subset of them; agreement on only some (e.g. scope and evidence but not blocking conditions or disposition semantics) does not satisfy this check.
+
+### RQA-FR-001
+
+Every managed review shall produce a verdict that validates against one published protocol definition covering review scope, required evidence, findings, blocking conditions, review completion and final disposition.
+
+*In plain terms: There should be one written definition of what a review checks, what evidence it needs, and how it ends, and every completed review should match it.*
+
+`Ubiquitous` · `Must` · `DECIDED` · ADR: [#2064](https://github.com/launchpad-26/buzz/issues/2064) (repo-wide policy/contract document placement)
+
+**Source:**
+- **CL-028** (AC01, [extract](prd-2006-normative-extract.md#success-criteria)): “Every RQA-managed review produces a verdict that validates against one published protocol definition covering review scope, required evidence, findings, blocking conditions, review completion and final disposition; two reviews of the same PR by different harnesses, models or providers carry the same concept semantics.”
+
+**Fit criterion:** A verdict from any managed review can be checked against a single published protocol definition and either validates or fails validation against it; there is exactly one such definition in force for the review, however it is packaged (a single document, a schema plus prose, or any other representation).
+
+### RQA-FR-002
+
+Two reviews of the same pull request performed by different harnesses, models or providers shall carry the same concept semantics.
+
+*In plain terms: If two different AI systems review the same PR, they should mean the same thing by their verdicts, even though the systems are different.*
+
+`Ubiquitous` · `Must` · `DECIDED` · ADR: —
+
+**Source:**
+- **CL-028** (AC01, [extract](prd-2006-normative-extract.md#success-criteria)): “Every RQA-managed review produces a verdict that validates against one published protocol definition covering review scope, required evidence, findings, blocking conditions, review completion and final disposition; two reviews of the same PR by different harnesses, models or providers carry the same concept semantics.”
+
+**Fit criterion:** Given two review records for the same PR produced through different harnesses, models or providers, each of the protocol concepts AC01 names — review scope, required evidence, findings, blocking conditions, review completion, and final disposition — means the same thing in both records; agreement on only some of these concepts does not satisfy this check.
+
+**See also:** [RQA-FR-030](#rqa-fr-030) (harness/model/provider interoperability, Harness interoperability and operation)
 
 ---
 
-## Non-functional requirements
+## Policy, findings and blocking
 
-Derived from C1–C9 (CL-018–CL-026), the project requirement (CL-027) and every security obligation
-(CL-055–CL-060; CL-061 is context, restating CL-038/RQA-FR-039). Prefix `RQA-NFR-`, numbered from 001; no retired
-identifier in this series is reused. IDs RQA-NFR-026–RQA-NFR-030 were appended across rework rounds for the same
-reason as RQA-FR-036–RQA-FR-039 above. RQA-NFR-027's source clauses changed from CL-026 (round 1) to CL-024 alone
-(round 3) to CL-024 **and** CL-026 conjunctively (round 4) — its ID was never renumbered. RQA-NFR-024's statement
-carried both a floor and an activity-relative ceiling clause through round 6; round 7 moved the ceiling clause to
-RQA-NFR-030, leaving RQA-NFR-024 floor-only — see § Singular-split record's CL-060 entry.
+How a repository's own policy decides what counts as a finding and what blocks a merge — and why two repositories can legitimately disagree.
 
-| ID | Requirement | EARS pattern | Priority | Status | Source | Fit criterion | Derives from (clause + verbatim source text) | ADR |
-|---|---|---|---|---|---|---|---|---|
-| RQA-NFR-001 | The system shall operate across uncontrolled contributor environments without depending on a particular harness, agent, model or provider. | Ubiquitous | Must | `DECIDED` | [#2006](https://github.com/launchpad-26/buzz/issues/2006) (pinned revision — see § Provenance and pin) | The system's conformance to the published interaction contract is demonstrated through materially independent implementations, including at least one environment not previously used in that demonstration, and inspection shows the system's core review logic carries no hard-coded dependency requiring one particular harness, agent, model or provider to be present; a per-provider adapter implementing a common interface is not itself evidence of forbidden dependence — only a core logic path that fails or behaves differently without one specific harness/agent/model/provider is. A system hard-coded to exactly two known combinations does not satisfy this check merely by running under both of them. | **CL-018** (C1, [extract](prd-2006-normative-extract.md#problem)): “Tooling independence. Must operate across uncontrolled contributor environments; cannot depend on a particular harness, agent, model or provider. Contributors may use a thin skill/plugin/hook conforming to a common interaction contract.” | — |
-| RQA-NFR-002 | Where a contributor chooses to use a thin skill, plugin or hook conforming to the published interaction contract for a non-built-in environment, the system shall accommodate that environment's participation through the contract. | Optional-feature | Could | `DECIDED` | [#2006](https://github.com/launchpad-26/buzz/issues/2006) (pinned revision — see § Provenance and pin) | A contributor's environment integrates via a thin skill, plugin or hook that conforms to the published interaction contract, and the system accommodates that environment's participation through the contract; this check does not require the system to separately implement acceptance of each of the three named mechanism forms — a system that lets the environment speak the contract directly, without a dedicated skill/plugin/hook acceptance path, still satisfies this check provided a contributor's conforming use of one is accommodated when it occurs. | **CL-018** (C1, [extract](prd-2006-normative-extract.md#problem)): “Tooling independence. Must operate across uncontrolled contributor environments; cannot depend on a particular harness, agent, model or provider. Contributors may use a thin skill/plugin/hook conforming to a common interaction contract.” | [#2064](https://github.com/launchpad-26/buzz/issues/2064) (repo-wide policy/contract document placement) |
-| RQA-NFR-003 | Where practical, an integration boundary shall use open, portable, implementation-neutral contracts and formats. | State-driven | Must | `DECIDED` | [#2006](https://github.com/launchpad-26/buzz/issues/2006) (pinned revision — see § Provenance and pin) | For the contract an integration boundary uses, and separately for the format it uses, all three qualities — open, portable, and implementation-neutral — hold conjunctively, or an independent evaluator can verify a specific, evidenced reason why holding all three was impractical for that artifact; an artifact meeting only one or two of the three qualities, with no evidenced impracticality reason covering the others, fails this check. The evaluator's verification does not require the implementation itself to carry a prescribed record of that reason — the reason must be evidenced and checkable, not necessarily stored by the system under test. | **CL-019** (C2, [extract](prd-2006-normative-extract.md#problem)): “Open interoperability. Integration boundaries use open, portable, implementation-neutral contracts and formats where practical.” | [#2064](https://github.com/launchpad-26/buzz/issues/2064) (repo-wide policy/contract document placement) |
-| RQA-NFR-004 | The system shall operate across multiple repositories and multiple organisations, including both public and private repositories under different owners. | Ubiquitous | Must | `DECIDED` | [#2006](https://github.com/launchpad-26/buzz/issues/2006) (pinned revision — see § Provenance and pin) | The system completes a review on a repository under one organisation and a second repository under a genuinely different organisation — not merely a second owner account within the same organisation — with one covering a public repository and the other a private one. Both organisations are necessarily GitHub organisations, since C8/RQA-NFR-011 scope the whole specification to GitHub; this fit criterion does not itself re-derive that scoping from CL-020, which is platform-neutral, and names no platform. | **CL-020** (C3, [extract](prd-2006-normative-extract.md#problem)): “Multi-repository and cross-organisation operation. Public and private repositories, different owners, different organisations.” | — |
-| RQA-NFR-005 | Updating a repository's policy or configuration shall not require rebuilding or redeploying the system. | Unwanted-behaviour | Must | `DECIDED` | [#2006](https://github.com/launchpad-26/buzz/issues/2006) (pinned revision — see § Provenance and pin) | A policy or configuration change is applied and takes effect without any build or deployment step being run. | **CL-021** (C4, [extract](prd-2006-normative-extract.md#problem)): “Repository-specific policy and configuration. Updating configuration must not require rebuilding or redeploying RQA.” | — |
-| RQA-NFR-006 | One contributor shall be able to run the complete review workflow locally, with no central hosting, tenancy or SaaS functionality required. | Ubiquitous | Must | `DECIDED` | [#2006](https://github.com/launchpad-26/buzz/issues/2006) (pinned revision — see § Provenance and pin) | A single contributor completes an end-to-end review from their own machine with no centrally hosted RQA service in the loop; GitHub itself, as the platform under review, is necessarily reached over the network and is not what this check tests. | **CL-022** (C5, [extract](prd-2006-normative-extract.md#problem)): “Local-first operation. No central hosting, tenancy or SaaS functionality required; one contributor can run the complete workflow locally.” | — |
-| RQA-NFR-007 | The system shall manage every step of a pull request's review lifecycle, carrying it through to an authoritative APPROVED or CHANGES_REQUESTED outcome whenever progression remains possible. | State-driven | Must | `DECIDED` | [#2006](https://github.com/launchpad-26/buzz/issues/2006) (pinned revision — see § Provenance and pin) | Every managed PR reaches an authoritative APPROVED or CHANGES_REQUESTED outcome, or the record carries evidence that no source-conforming next transition was available at the point the PR entered RQA-FR-038's safe non-success stop or RQA-FR-016's 'unable to progress' disposition; a PR labelled with either non-success alternative while an available reviewer, a valid policy, and no unresolved decision existed fails this check even though the label itself is a legal value. A recorded human approval (RQA-FR-013) or the input a raised escalation names being supplied and resuming the lifecycle (RQA-FR-026, RQA-FR-027) does not itself fail this check, because the system still initiates, tracks and incorporates that input. | **CL-023** (C6, [extract](prd-2006-normative-extract.md#problem)): “End-to-end GitHub review responsibility. Must manage the lifecycle through authoritative APPROVED or CHANGES_REQUESTED. Whether RQA also merges is configurable per repository.”<br><br>**CL-035** (AC08, [extract](prd-2006-normative-extract.md#success-criteria)): “For any managed PR, one command returns its current disposition from {being reviewed, blocked, awaiting remediation, awaiting human judgement, review-complete, unable to progress} and the reason, without a human reconciling historical reviews, comments or checks.”<br><br>**CL-039** (AC12, [extract](prd-2006-normative-extract.md#success-criteria)): “With a configured reviewer, model or provider made unavailable, RQA continues through an explicitly configured fallback; with no fallback configured it invents none and stops in a clear, safe, recoverable non-success state.” | — |
-| RQA-NFR-008 | Whether the system also merges after an authoritative outcome shall be configurable per repository. | Ubiquitous | Must | `DECIDED` | [#2006](https://github.com/launchpad-26/buzz/issues/2006) (pinned revision — see § Provenance and pin) | Two repositories can independently be set to merge-after-review or not, and each behaves as configured. | **CL-023** (C6, [extract](prd-2006-normative-extract.md#problem)): “End-to-end GitHub review responsibility. Must manage the lifecycle through authoritative APPROVED or CHANGES_REQUESTED. Whether RQA also merges is configurable per repository.” | — |
-| RQA-NFR-009 | An alternative model or provider shall be used only when explicitly configured. | State-driven | Must | `DECIDED` | [#2006](https://github.com/launchpad-26/buzz/issues/2006) (pinned revision — see § Provenance and pin) | With no alternative model or provider configured, none is substituted; one only activates once configuration names it. | **CL-024** (C7, [extract](prd-2006-normative-extract.md#problem)): “Configured resilience. Alternative models/providers only when explicitly configured. Failure must not leave an ambiguous, corrupted or partially authoritative outcome.” | — |
-| RQA-NFR-010 | A failure during review shall never leave an ambiguous, corrupted or partially authoritative outcome. | Unwanted-behaviour | Must | `DECIDED` | [#2006](https://github.com/launchpad-26/buzz/issues/2006) (pinned revision — see § Provenance and pin) | Every failure during a review run is independently checked against three distinct invariants — the outcome is not ambiguous, not corrupted, and not partially authoritative — and passes only if all three hold; a clearly labelled but corrupted non-authoritative record fails this check even though it is unambiguous. | **CL-024** (C7, [extract](prd-2006-normative-extract.md#problem)): “Configured resilience. Alternative models/providers only when explicitly configured. Failure must not leave an ambiguous, corrupted or partially authoritative outcome.” | — |
-| RQA-NFR-011 | The system shall support review of GitHub-hosted repositories. | Ubiquitous | Must | `DECIDED` | [#2006](https://github.com/launchpad-26/buzz/issues/2006) (pinned revision — see § Provenance and pin) | The system's review-lifecycle requirements are demonstrated against a GitHub-hosted repository; a system that supports GitHub review as this specification requires satisfies this row regardless of whether it also supports a second source-control platform, since C8/Non-goal 1 release cross-SCM support as out of scope rather than prohibiting it. | **CL-025** (C8, [extract](prd-2006-normative-extract.md#problem)): “GitHub scope. GitHub only; generic cross-SCM support is not required.” | — |
-| RQA-NFR-012 | Where an external provider is explicitly configured, the system shall permit code, diffs, metadata and evidence to be sent to it. | Optional-feature | Could | `DECIDED` | [#2006](https://github.com/launchpad-26/buzz/issues/2006) (pinned revision — see § Provenance and pin) | With an external provider configured, each of code, diffs, metadata and evidence — every type the statement names — can individually be sent to it; the statement names an inclusive list of permitted content types, not any single alternative among them, so a system that can send only one of the four types does not satisfy this check. | **CL-026** (C9, [extract](prd-2006-normative-extract.md#problem)): “External model use is permitted. Code, diffs, metadata and evidence may be sent to explicitly configured external providers; users choose review paths appropriate to sensitivity.” | — |
-| RQA-NFR-013 | An operator shall be able to choose a review path appropriate to a repository's sensitivity. | Ubiquitous | Must | `DECIDED` | [#2006](https://github.com/launchpad-26/buzz/issues/2006) (pinned revision — see § Provenance and pin) | An operator can select, per repository, a review path that avoids sending that repository's content to an external provider, distinct from one that permits it. | **CL-026** (C9, [extract](prd-2006-normative-extract.md#problem)): “External model use is permitted. Code, diffs, metadata and evidence may be sent to explicitly configured external providers; users choose review paths appropriate to sensitivity.” | — |
-| RQA-NFR-014 | The system shall have an open-source, freely usable implementation path, and an optional external provider used alongside it need not itself be free or open source. | Ubiquitous | Must | `DECIDED` | [#2006](https://github.com/launchpad-26/buzz/issues/2006) (pinned revision — see § Provenance and pin) | A user can assemble and run a complete implementation using only free, open-source components, and choosing to add a non-free external provider on top does not remove that path. | **CL-027** (Project requirement, [extract](prd-2006-normative-extract.md#problem)): “RQA must have an open-source, freely usable implementation path. Optional external providers need not themselves be free or open source.” | — |
-| RQA-NFR-015 | Pull-request content shall be treated as untrusted data, never as instructions, at every authority level including advisory-only. | Unwanted-behaviour | Must | `DECIDED` | [#2006](https://github.com/launchpad-26/buzz/issues/2006) (pinned revision — see § Provenance and pin) | Adversarial injection content placed in a PR's diff, body or comments produces no change in review behaviour or evidence state attributable to **following that content as an instruction** — the review neither approves, alters a finding, nor changes an evidence state because the content told it to — at each configured authority level including advisory-only. This check explicitly allows, and RQA-NFR-016 separately requires, the defensive response to the same content: classifying it and recording a blocking finding is not itself a change made because the content instructed it, and does not fail this check; a system that silently ignores the attempted injection with no defensive response fails RQA-NFR-016, not this row. | **CL-055** (Security implications, bullet 1, [extract](prd-2006-normative-extract.md#security-implications)): “PR content is untrusted data, never instructions. A PR author controls the diff, body and comments that RQA reads. A crafted PR attempting to induce a clean review or a fabricated evidence state is itself a blocking finding. This applies at every authority level, including advisory-only.” | — |
-| RQA-NFR-016 | A pull request crafted to induce a clean review or a fabricated evidence state shall itself be recorded as a blocking finding, at every authority level including advisory-only. | Ubiquitous | Must | `DECIDED` | [#2006](https://github.com/launchpad-26/buzz/issues/2006) (pinned revision — see § Provenance and pin) | Given a PR containing content designed to manufacture a clean review or false evidence state, the review record contains a blocking finding describing that attempt, whether the system is running advisory-only or at any other configured authority level. | **CL-055** (Security implications, bullet 1, [extract](prd-2006-normative-extract.md#security-implications)): “PR content is untrusted data, never instructions. A PR author controls the diff, body and comments that RQA reads. A crafted PR attempting to induce a clean review or a fabricated evidence state is itself a blocking finding. This applies at every authority level, including advisory-only.” | — |
-| RQA-NFR-017 | Each of review, comment, approve, request-changes, remediate and merge shall be separately authorised. | Ubiquitous | Must | `DECIDED` | [#2006](https://github.com/launchpad-26/buzz/issues/2006) (pinned revision — see § Provenance and pin) | Each of the six named activities has its own authorisation setting, independent of the other five. | **CL-056** (Security implications, bullet 2, [extract](prd-2006-normative-extract.md#security-implications)): “Authority is per-activity and fail-closed. Review, comment, approve, request-changes, remediate and merge are separately configured and default to disabled; a malformed or unreadable policy must never widen authority.” | — |
-| RQA-NFR-018 | A malformed or unreadable policy shall never widen authority beyond what was already granted. | State-driven | Must | `DECIDED` | [#2006](https://github.com/launchpad-26/buzz/issues/2006) (pinned revision — see § Provenance and pin) | Deliberately corrupting or truncating the policy input never results in an activity gaining authorisation it did not already have, regardless of what form that policy input takes — a tracked file, a database record, an API response, or any other representation; the check also exercises a policy input that is unreadable for a reason other than malformation — permission denied, unavailable, or timed out — and confirms the same non-widening result holds there too, not only for the malformed-input path. | **CL-056** (Security implications, bullet 2, [extract](prd-2006-normative-extract.md#security-implications)): “Authority is per-activity and fail-closed. Review, comment, approve, request-changes, remediate and merge are separately configured and default to disabled; a malformed or unreadable policy must never widen authority.” | — |
-| RQA-NFR-019 | Remediation authority shall be bounded to only the finding categories a repository's policy names as mechanical. | Ubiquitous | Must | `DECIDED` | [#2006](https://github.com/launchpad-26/buzz/issues/2006) (pinned revision — see § Provenance and pin) | Attempting a remediation action against a finding outside the categories the repository's policy names as mechanical is denied before it takes effect — the authority to perform it does not exist for that category; a run whose history merely happens not to have attempted one, with the broader authority still present, does not satisfy this check. | **CL-057** (Security implications, bullet 3, [extract](prd-2006-normative-extract.md#security-implications)): “Remediation authority is the largest new exposure. AC09 asks RQA to modify and push a branch. That authority must be separately gated, bounded to categories policy names as mechanical, isolated from the repository working tree, and never able to force-push, merge, bypass protection, or touch a protected branch.” | `ADR-A` (draft in /tmp/rqa-adr-drafts/ — to be raised as a GitHub ADR issue after this requirements set is confirmed, per § Provenance and pin) |
-| RQA-NFR-020 | Remediation shall be isolated from the repository's working tree. | Ubiquitous | Must | `DECIDED` | [#2006](https://github.com/launchpad-26/buzz/issues/2006) (pinned revision — see § Provenance and pin) | Attempting a remediation action against the repository's working tree — the boundary CL-057 itself names — is denied before it takes effect; the check does not require establishing whether a contributor was concurrently or 'actively' using that tree, because CL-057 names the working tree itself as the isolation boundary, not contributor activity within it. | **CL-057** (Security implications, bullet 3, [extract](prd-2006-normative-extract.md#security-implications)): “Remediation authority is the largest new exposure. AC09 asks RQA to modify and push a branch. That authority must be separately gated, bounded to categories policy names as mechanical, isolated from the repository working tree, and never able to force-push, merge, bypass protection, or touch a protected branch.” | `ADR-A` (draft in /tmp/rqa-adr-drafts/ — to be raised as a GitHub ADR issue after this requirements set is confirmed, per § Provenance and pin) |
-| RQA-NFR-021 | Remediation shall never force-push, merge, bypass branch protection, or touch a protected branch. | Unwanted-behaviour | Must | `DECIDED` | [#2006](https://github.com/launchpad-26/buzz/issues/2006) (pinned revision — see § Provenance and pin) | Attempting a force-push, a merge, a branch-protection bypass, or a write to a protected branch under remediation authority is denied before it takes effect; remediation authority is never able to perform any of the four, regardless of what a particular run's history shows — a run whose history is clean only because none was attempted, while the capability to perform one still exists, does not satisfy this check. | **CL-057** (Security implications, bullet 3, [extract](prd-2006-normative-extract.md#security-implications)): “Remediation authority is the largest new exposure. AC09 asks RQA to modify and push a branch. That authority must be separately gated, bounded to categories policy names as mechanical, isolated from the repository working tree, and never able to force-push, merge, bypass protection, or touch a protected branch.” | `ADR-A` (draft in /tmp/rqa-adr-drafts/ — to be raised as a GitHub ADR issue after this requirements set is confirmed, per § Provenance and pin) |
-| RQA-NFR-022 | A provenance record shall never be writable by the reviewed content or by an unauthenticated model response. | Unwanted-behaviour | Must | `DECIDED` | [#2006](https://github.com/launchpad-26/buzz/issues/2006) (pinned revision — see § Provenance and pin) | Attempting to set any element of the authoritative provenance record RQA-FR-012 reconstructs — PR revision, protocol in force, policy in force, reviewer identity, reviewer type, harness, model, provider, evidence examined, findings produced, decision basis, and disposition — from PR content or from an unauthenticated model response is rejected rather than accepted into the record; a check that exercises only the reviewer-identity/harness/model/provider fields and leaves the other eight elements untested does not satisfy this row. | **CL-058** (Security implications, bullet 4, [extract](prd-2006-normative-extract.md#security-implications)): “Provenance must be forgeable-proof. AC06 records reviewer identity, harness, model and provider. If that record can be written by the reviewed content or by an unauthenticated model response, the audit trail is worse than none.” | `ADR-C` (draft in /tmp/rqa-adr-drafts/ — to be raised as a GitHub ADR issue after this requirements set is confirmed, per § Provenance and pin) |
-| RQA-NFR-023 | The decision to permit sending a given repository's content to an external provider shall be made per repository, not globally. | Ubiquitous | Must | `DECIDED` | [#2006](https://github.com/launchpad-26/buzz/issues/2006) (pinned revision — see § Provenance and pin) | Configuring one repository to permit external-provider sends and a second to forbid it produces different sending behaviour on each, from one shared installation. | **CL-059** (Security implications, bullet 5, [extract](prd-2006-normative-extract.md#security-implications)): “External providers receive repository content (C9). The active provider path must be identifiable before evidence is sent, so an operator can decide whether a given repository or change may be sent at all. Private repositories under AC16 make this a per-repository decision, not a global one.” | — |
-| RQA-NFR-024 | The credential the system holds shall carry pull-request write and repository-content read on the repositories where the system is configured to submit authoritative review outcomes. | Optional-feature | Must | `DECIDED` | [#2006](https://github.com/launchpad-26/buzz/issues/2006) (pinned revision — see § Provenance and pin) | For a repository configured to submit authoritative review outcomes, inspecting the credential's granted scopes shows both pull-request write and repository-content read present on it; a credential missing either named permission on such a repository fails this check. This row states only the floor for that configuration; what a credential may hold on a repository configured for narrower activity, or beyond these two permissions anywhere, is RQA-NFR-030's own check, not this one's. | **CL-060 and CL-056 jointly** — **CL-060** (Security implications, bullet 6, [extract](prd-2006-normative-extract.md#security-implications)) supplies the two permission-type dimensions and the managed-repository scope: “Credentials stay narrow. A GitHub token scoped to the target repositories with pull-requests write and contents read; no deploy keys, no relay or VPS credentials, no access to a contributor's machine.” **CL-056** (Security implications, bullet 2, [extract](prd-2006-normative-extract.md#security-implications)) supplies the per-activity, least-privilege dimension (the third clause's ceiling): “Authority is per-activity and fail-closed. Review, comment, approve, request-changes, remediate and merge are separately configured and default to disabled; a malformed or unreadable policy must never widen authority.” | `ADR-B` (draft in /tmp/rqa-adr-drafts/ — to be raised as a GitHub ADR issue after this requirements set is confirmed, per § Provenance and pin) |
-| RQA-NFR-025 | The system shall hold no deploy-key, relay or VPS credential, and no credential granting access to a contributor's machine. | Unwanted-behaviour | Must | `DECIDED` | [#2006](https://github.com/launchpad-26/buzz/issues/2006) (pinned revision — see § Provenance and pin) | An inventory of credentials the system holds contains no deploy key, no relay or VPS credential, and nothing granting access to a contributor's own machine. | **CL-060** (Security implications, bullet 6, [extract](prd-2006-normative-extract.md#security-implications)): “Credentials stay narrow. A GitHub token scoped to the target repositories with pull-requests write and contents read; no deploy keys, no relay or VPS credentials, no access to a contributor's machine.” | — |
-| RQA-NFR-026 | Each of review, comment, approve, request-changes, remediate and merge shall default to disabled. | Ubiquitous | Must | `DECIDED` | [#2006](https://github.com/launchpad-26/buzz/issues/2006) (pinned revision — see § Provenance and pin) | An unconfigured deployment has every one of the six named activities off, with no activity defaulting to enabled. | **CL-056** (Security implications, bullet 2, [extract](prd-2006-normative-extract.md#security-implications)): “Authority is per-activity and fail-closed. Review, comment, approve, request-changes, remediate and merge are separately configured and default to disabled; a malformed or unreadable policy must never widen authority.” | — |
-| RQA-NFR-027 | Where no external provider is explicitly configured, no code, diff, metadata or evidence shall be sent to any external provider. | State-driven | Must | `DECIDED` | [#2006](https://github.com/launchpad-26/buzz/issues/2006) (pinned revision — see § Provenance and pin) | With no external provider configured, no code, diff, metadata or evidence leaves the system for one. | **CL-024** (C7, [extract](prd-2006-normative-extract.md#problem)): “Configured resilience. Alternative models/providers only when explicitly configured. Failure must not leave an ambiguous, corrupted or partially authoritative outcome.”<br><br>**CL-026** (C9, [extract](prd-2006-normative-extract.md#problem)): “External model use is permitted. Code, diffs, metadata and evidence may be sent to explicitly configured external providers; users choose review paths appropriate to sensitivity.” | — |
-| RQA-NFR-028 | A provenance record shall be protected against forgery or alteration by any actor lacking authority to write it. | Ubiquitous | Must | `DECIDED` | [#2006](https://github.com/launchpad-26/buzz/issues/2006) (pinned revision — see § Provenance and pin) | For any authoritative outcome, no element of the provenance record RQA-FR-012 reconstructs — PR revision, protocol in force, policy in force, reviewer identity, reviewer type, harness, model, provider, evidence examined, findings produced, decision basis, and disposition — can be created or altered by an actor lacking authority to write it and then be **accepted as authentic and authoritative without detection**; tamper-evidence satisfies this check — for example, a signed or otherwise integrity-checked record whose unauthorised alteration produces a detectably invalid result that the system refuses to treat as authoritative. This row does not require the underlying storage bytes to be physically unalterable; it requires that an unauthorised alteration, if made, cannot pass as authentic. RQA-NFR-022 tests the two source-named writers against this same acceptance boundary, this row tests every other unauthorised actor against it. | **CL-058** (Security implications, bullet 4, [extract](prd-2006-normative-extract.md#security-implications)): “Provenance must be forgeable-proof. AC06 records reviewer identity, harness, model and provider. If that record can be written by the reviewed content or by an unauthenticated model response, the audit trail is worse than none.” | `ADR-C` (draft in /tmp/rqa-adr-drafts/ — to be raised as a GitHub ADR issue after this requirements set is confirmed, per § Provenance and pin) |
-| RQA-NFR-029 | An operator shall be able to deny sending an individual change's content to an external provider even where its repository otherwise permits external-provider sends. | Ubiquitous | Must | `DECIDED` | [#2006](https://github.com/launchpad-26/buzz/issues/2006) (pinned revision — see § Provenance and pin) | A repository configured to permit external-provider sends in general still allows one specific, individually flagged change to be withheld from every external provider; a system offering only a repository-wide toggle, with no way to withhold one sensitive change, fails this check. | **CL-059** (Security implications, bullet 5, [extract](prd-2006-normative-extract.md#security-implications)): “External providers receive repository content (C9). The active provider path must be identifiable before evidence is sent, so an operator can decide whether a given repository or change may be sent at all. Private repositories under AC16 make this a per-repository decision, not a global one.” | — |
-| RQA-NFR-030 | The credential the system holds shall have no permission broader than pull-request write and repository-content read, no permission on any repository outside those it manages, and no permission on a repository beyond what the activities configured for that repository require. | Unwanted-behaviour | Must | `DECIDED` | [#2006](https://github.com/launchpad-26/buzz/issues/2006) (pinned revision — see § Provenance and pin) | Inspecting the credential's granted scopes shows, on every repository: nothing beyond pull-request write and repository-content read; no permission at all on a repository outside the managed set; and, on a repository configured for narrower activity than submitting authoritative review outcomes (for example, advisory-only), no more permission than that narrower activity requires — a credential carrying pull-request write on a repository configured only for advisory, non-authoritative activity fails this check by holding more than that configuration needs, even though it holds no more than the two named permission types in the abstract. All three are ceiling tests on the same credential; a credential failing any one of them fails this check. | **CL-060** (Security implications, bullet 6, [extract](prd-2006-normative-extract.md#security-implications)): “Credentials stay narrow. A GitHub token scoped to the target repositories with pull-requests write and contents read; no deploy keys, no relay or VPS credentials, no access to a contributor's machine.”<br><br>**CL-056** (Security implications, bullet 2, [extract](prd-2006-normative-extract.md#security-implications)): “Authority is per-activity and fail-closed. Review, comment, approve, request-changes, remediate and merge are separately configured and default to disabled; a malformed or unreadable policy must never widen authority.” | `ADR-B` (draft in /tmp/rqa-adr-drafts/ — to be raised as a GitHub ADR issue after this requirements set is confirmed, per § Provenance and pin) |
+### RQA-BR-004
 
----
+The threshold at which a finding blocks a pull request shall be consistent rather than left to each reviewer's individual judgement.
 
-## Singular-split record
+*In plain terms: The line between "this blocks the merge" and "this doesn't" should be a repository rule, not a personal call.*
 
-Where one acceptance criterion, constraint or security bullet yielded more than one requirement, the split and its
-reasoning are recorded here so it is reviewable rather than asserted — bound by the § Traceability rule above.
-26 of the 50 numbered-requirement-derived clauses were split into more than one requirement; the remaining 24
-produced exactly one requirement each. Two distinct kinds of split are counted in that 26: a **content-split**,
-where one clause's text yields several genuinely independent obligations (each a separate row), and a
-**qualifier-citation row**, where a clause informs a qualifier on an existing row that its *other* source clause
-already produces — the added edge is a joint-citation entry (recorded where its clause's Note cell so marks it,
-e.g. CL-017/CL-035/CL-039/CL-040/CL-056 in round 6 or 7) rather than a content division. Both kinds are counted
-together in the "26 of 50" total because both a *new obligation* and an *added qualifier edge* bind a clause to a
-row it would otherwise not name; the rows table distinguishes them per entry. Splits marked **round 1**–**round 7** below were added, corrected, or (for
-RQA-NFR-027) re-derived across multiple source clauses, or (round 6, RQA-BR-010; round 7, RQA-NFR-007) newly
-cited jointly from clauses that already informed an existing row's qualifier, after adversarial panel review;
-each appended a new ID rather than renumbering an existing one, except RQA-NFR-027's clause re-derivations,
-RQA-BR-010's and RQA-NFR-007's added citations, and RQA-NFR-024/RQA-NFR-030's round-7 content move, none of
-which changed any ID. RQA-FR-029 (round 3), RQA-NFR-024 (round 4, then round 7), and RQA-NFR-030 (round 7) are
-each now genuinely singular.
+`Ubiquitous` · `Must` · `DECIDED` · ADR: —
 
-| Clause | Source label | Requirements produced | How the split was drawn |
-|---|---|---|---|
-| **CL-017** | P12 | RQA-BR-010, RQA-BR-013 | P12's own content derives RQA-BR-013 (routine/mechanical/non-urgent conditions shall not interrupt). **Round 6:** CL-017 additionally, jointly with CL-014 and CL-040, informs RQA-BR-010's 'beyond what genuinely requires human judgement' qualifier — adversarial review found this qualifier's P12 origin was already admitted in RQA-BR-010's own Unambiguous caveat but not encoded as a reference-graph edge; the edge is added here rather than the qualifier being stripped, because the joint P9+P12+AC13 reading is the correct one. |
-| **CL-018** | C1 | RQA-NFR-001, RQA-NFR-002 | Independence from a particular harness/agent/model/provider (RQA-NFR-001, a prohibition) is distinct from the optional-feature affordance for a thin conformant integration (RQA-NFR-002, a permission); the first binds every environment, the second only the non-built-in ones. |
-| **CL-023** | C6 | RQA-NFR-007, RQA-NFR-008 | The obligation to carry the lifecycle to an authoritative outcome (RQA-NFR-007) is distinct from whether merging after that outcome is configurable (RQA-NFR-008); a system could hold one without the other. **Round 7:** RQA-NFR-007 is now also cited jointly from CL-035 and CL-039 (see those clauses' own entries) for its 'whenever progression remains possible' qualifier. |
-| **CL-024** | C7 | RQA-NFR-009, RQA-NFR-010, RQA-NFR-027 | RQA-NFR-027 is cited from CL-024 **and** CL-026 conjunctively (see CL-026's own entry below for the joint reasoning). RQA-NFR-009 (provider/model *selection*, C7's own literal subject) remains distinct from RQA-NFR-027 (content *transmission*, requiring C9's contribution as well). RQA-NFR-010 (the ambiguous/corrupted/partial-outcome guarantee) remains the clause's third, unrelated obligation. |
-| **CL-026** | C9 | RQA-NFR-012, RQA-NFR-013, RQA-NFR-027 | The conditional permission to send content to a configured external provider (RQA-NFR-012) is distinct from the operator's ability to choose a sensitivity-appropriate path (RQA-NFR-013); a system could hold one without the other. RQA-NFR-027 is additionally, conjunctively derived here together with CL-024: C7/CL-024 supplies the 'only when explicitly configured' gating principle, C9/CL-026 supplies the content types (code, diffs, metadata, evidence) and the act (sending to an external provider) that principle gates: neither clause states the prohibition alone, but read together they entail it. See requirements-quality-assessment.md's Correct row for RQA-NFR-027 for the caveat this inferential (not literal single-clause) derivation still carries. |
-| **CL-028** | AC01 | RQA-FR-001, RQA-FR-002 | Verdict-validates-against-protocol (RQA-FR-001) is a distinct testable fact from cross-harness/model/provider semantic equivalence (RQA-FR-002); a solution could satisfy one without the other. |
-| **CL-029** | AC02 | RQA-FR-003, RQA-FR-004 | Per-repository policy producing different outcomes (RQA-FR-003) is distinct from a policy change's propagation timing/mechanism (RQA-FR-004). |
-| **CL-030** | AC03 | RQA-FR-005, RQA-FR-006, RQA-FR-007 | Three independently checkable facts: zero re-review on no material change (RQA-FR-005), selective re-review on material change (RQA-FR-006), and recording/inspectability of the reused/regenerated sets (RQA-FR-007). |
-| **CL-031** | AC04 | RQA-FR-008, RQA-FR-009 | Categorisation of a finding (RQA-FR-008) is distinct from who/what decides whether a category blocks (RQA-FR-009). |
-| **CL-032** | AC05 | RQA-FR-010, RQA-FR-011 | Evidence-state tagging (RQA-FR-010) is distinct from the prohibition on a successful disposition while unsatisfied (RQA-FR-011); one could hold without the other. |
-| **CL-033** | AC06 | RQA-FR-012, RQA-FR-013 | Machine-reconstructible outcome context (RQA-FR-012) is distinct from the additional human-approval naming obligation (RQA-FR-013), which applies only to a subset of outcomes. |
-| **CL-034** | AC07 | RQA-FR-014, RQA-FR-015, RQA-FR-036 | Three independently fail-able parts of AC07: classification (RQA-FR-014), recording the classification (RQA-FR-015), and non-blocking treatment (RQA-FR-036) — a system could classify correctly yet still block, classify and not block yet never record which, or any other combination. AC07's full trigger ('when a PR's only failing check also fails on its merge base') is carried on all three rows; round 5 sharpened RQA-FR-014's fit criterion to observe the classification in decision behaviour/basis specifically, leaving record persistence to RQA-FR-015, so the two remain independently falsifiable rather than RQA-FR-014's own criterion silently re-testing RQA-FR-015's content. |
-| **CL-035** | AC08 | RQA-FR-016, RQA-NFR-007 | Ubiquitous single-command disposition-query obligation (RQA-FR-016). **Round 7:** CL-035 additionally, jointly with CL-023 and CL-039, informs RQA-NFR-007's 'whenever progression remains possible' qualifier via AC08's 'unable to progress' disposition value RQA-FR-016 itself names — adversarial review found this qualifier's AC08 origin was already admitted in RQA-NFR-007's own Unambiguous caveat but not encoded as a reference-graph edge; the edge is added here rather than the qualifier being stripped, matching the same fix already applied to RQA-BR-010 in round 6. |
-| **CL-036** | AC09 | RQA-FR-017, RQA-FR-018 | Resolution without unnecessary escalation (RQA-FR-017) is distinct from non-invalidation of unrelated valid work (RQA-FR-018); a system could satisfy either alone. |
-| **CL-037** | AC10 | RQA-FR-019, RQA-FR-020 | The negative bound on excess review effort (RQA-FR-019) is distinct from the positive obligation to reuse valid results (RQA-FR-020). |
-| **CL-038** | AC11 | RQA-FR-021, RQA-FR-022, RQA-FR-039 | A third row appended (round 2). The positive mandated-outcome obligation (RQA-FR-021, measured recording; RQA-FR-022, produce a *configured* fallback/incomplete review/escalation when a bound is reached) is distinct from the prohibition on ever producing a successful outcome at that bound (RQA-FR-039) — a run could invoke the mandated fallback and still be incorrectly marked successful, or avoid success while producing none of the three mandated outcomes; the two propositions are independently falsifiable. |
-| **CL-039** | AC12 | RQA-FR-023, RQA-FR-024, RQA-FR-038, RQA-NFR-007 | A third row appended (round 1). The fallback-configured state (RQA-FR-023) is disjoint from the no-fallback state, which itself carries two independently fail-able obligations: inventing no ad hoc fallback (RQA-FR-024) and actually reaching a safe, recoverable stop (RQA-FR-038) — a system could invent nothing yet still fail to stop safely, or stop safely after inventing one. RQA-FR-024/RQA-FR-038 are State-driven ('while no fallback is configured...'), not Unwanted-behaviour, matching RQA-FR-023's Optional-feature framing of the same configuration axis's other state. **Round 7:** CL-039 additionally, jointly with CL-023 and CL-035, informs RQA-NFR-007's 'whenever progression remains possible' qualifier via AC12's mandated safe stop — the same edge-completion fix as CL-035's entry above. |
-| **CL-040** | AC13 | RQA-BR-010, RQA-FR-025, RQA-FR-026, RQA-FR-027 | Three independently testable facts derived as AC13's primary content: no escalation on routine conditions (RQA-FR-025), content requirement on a raised escalation (RQA-FR-026), and resumption without restart once answered (RQA-FR-027). **Round 6:** CL-040 additionally, jointly with CL-014 and CL-017, informs RQA-BR-010's 'beyond what genuinely requires human judgement' qualifier — not a fourth split child in the usual sense (RQA-BR-010 is a business requirement synthesising all three clauses' framing of what counts as genuine human judgement, not a requirement AC13 alone produces), but recorded here because the reference graph now contains the edge. |
-| **CL-041** | AC14 | RQA-FR-028, RQA-FR-029, RQA-FR-037 | A third row appended (round 1). The positive submission obligation (RQA-FR-028, 'submit when satisfied') is distinct from the prohibition on manufacturing success (RQA-FR-037) and from the per-repository merge-configurability obligation (RQA-FR-029, round 3: rewritten as a single 'if and only if' biconditional carrying one `shall`). |
-| **CL-044** | AC17 | RQA-FR-032, RQA-FR-033 | Pre-send identifiability (RQA-FR-032) is distinct from protocol/semantic invariance under provider removal (RQA-FR-033); a system could hold one without the other. |
-| **CL-055** | Security implications, bullet 1 | RQA-NFR-015, RQA-NFR-016 | The blanket untrusted-data treatment of all PR content (RQA-NFR-015) is distinct from the specific consequence for a crafted PR attempting to defeat review (RQA-NFR-016). Round 5: RQA-NFR-015's fit criterion now scopes 'no change in review behaviour' to changes made *by following the content as an instruction*, so RQA-NFR-016's mandated defensive blocking finding — itself a change in the record, attributable to the same content — satisfies RQA-NFR-016 without failing RQA-NFR-015; a prior wording of RQA-NFR-015's criterion tested the two rows against each other. |
-| **CL-056** | Security implications, bullet 2 | RQA-NFR-017, RQA-NFR-018, RQA-NFR-024, RQA-NFR-026, RQA-NFR-030 | A third row appended (round 1). Per-activity authorisation (RQA-NFR-017) is distinct from default-disabled behaviour (RQA-NFR-026): six independent toggles could all default on, or one shared off-by-default toggle could exist without per-activity granularity — each is independently falsifiable. RQA-NFR-018 (fail-closed under a malformed policy) remains a third, separate obligation. **Round 7:** CL-056 additionally, jointly with CL-060, informs RQA-NFR-024's activity-conditioned floor and RQA-NFR-030's activity-relative ceiling clause — this clause's least-privilege, per-activity principle is why CL-060's unconditional-looking credential floor is read as activity-conditioned; see the CL-060 entry below and requirements-quality-assessment.md's Correct rows for RQA-NFR-024/RQA-NFR-030. |
-| **CL-057** | Security implications, bullet 3 | RQA-NFR-019, RQA-NFR-020, RQA-NFR-021 | Three independently testable bounds on remediation authority: category scope (RQA-NFR-019), working-tree isolation (RQA-NFR-020), and the enumerated never-actions (RQA-NFR-021). 'Separately gated' was not split out as a fourth requirement because it restates CL-056's per-activity default-disabled gating rather than adding new content. |
-| **CL-058** | Security implications, bullet 4 | RQA-NFR-022, RQA-NFR-028 | **Round 2 (blocker fix).** The general, mechanism-free provenance-integrity obligation ('forgeable-proof' as a standing property against any unauthorised actor — RQA-NFR-028) is distinct from the specific untrusted-writer prohibition CL-058 also names by example (rejecting writes from the reviewed content or an unauthenticated model response — RQA-NFR-022): a system could satisfy the specific prohibition while still permitting forgery by, e.g., an unauthenticated harness or an unrelated local process, which only the general row catches. Round 3: both rows' fit criteria protect the *whole* authoritative provenance record RQA-FR-012 reconstructs (all twelve elements), not only the four identity/harness/model/provider fields a prior draft tested. |
-| **CL-059** | Security implications, bullet 5 | RQA-NFR-023, RQA-NFR-029 | **Round 2 (blocker fix).** CL-059's own text scopes the operator decision to 'whether a given repository or change may be sent at all' — two distinct granularities. The per-repository decision (RQA-NFR-023) is distinct from the per-change decision (RQA-NFR-029): a system offering only a repository-wide toggle, with no way to withhold one specific sensitive change, satisfies the former while failing the latter. |
-| **CL-060** | Security implications, bullet 6 | RQA-NFR-024, RQA-NFR-025, RQA-NFR-030 | **Round 4 (major fix).** A third row appended. The positive scope floor on the credential the system holds (RQA-NFR-024, 'shall carry pull-request write and repository-content read on the repositories configured to submit authoritative review outcomes') is distinct from the ceiling (RQA-NFR-030, 'shall have no permission broader than..., no permission on an unmanaged repository, and no permission beyond what a repository's configured activity requires'): a credential could hold both named permissions plus an extra one, an extra repository, or more than a narrower-activity repository needs, while the floor still holds (floor holds, ceiling fails), or hold neither named permission on an authoritative-outcome repository while adding nothing extra elsewhere (ceiling holds, floor fails) — independently falsifiable. **Round 7:** the activity-relative ceiling ('needs only the permissions those activities require') moved here from RQA-NFR-024's own statement, where a prior draft's semicolon-joined second clause was found not to be genuinely singular with the floor; RQA-NFR-024 is now floor-only, and RQA-NFR-030 carries all three ceiling dimensions (type, repository-scope, activity-relative) as one prohibition-class row, on the same footing as RQA-NFR-021's four-item never-enumeration. Both rows are additionally, jointly, cited from CL-056 — see that entry. RQA-NFR-025 (the enumerated prohibition on deploy-key/relay/VPS/contributor-machine credentials) remains CL-060's third, separate obligation. |
+**Source:**
+- **CL-008** (P3, [extract](prd-2006-normative-extract.md#problem)): “Blocking semantics are inconsistent. Reviewers apply materially different thresholds for CHANGES_REQUESTED, so GitHub review state has no consistent meaning.”
 
-**Cross-reference note (RQA-FR-011 / RQA-FR-037).** These two rows assert the same underlying proposition — no
-successful disposition while a required review obligation is unsatisfied — from two different source clauses
-(AC05/CL-032 and AC14/CL-041 respectively). Their coexistence is faithful dual-source traceability, not
-intentional redundancy: each acceptance criterion must map to a requirement, and the fit criteria differentiate
-them (RQA-FR-011 keys to the evidence-state condition and the human-approval substantiation gate; RQA-FR-037 keys
-to "manufacture", including internally-recorded success under closeout pressure). A reader doing gap analysis
-should not double-count their coverage as two independent obligations.
+**Fit criterion:** Two reviewers applying the same policy to equivalent findings reach the same blocking decision.
+
+### RQA-BR-005
+
+Mechanical, procedural, or creation-time findings shall not be indistinguishable in the record from substantive correctness, security, architectural or evidence findings merely because both block.
+
+*In plain terms: A trivial typo and a real security bug both blocking the PR shouldn't look the same in the record — the record should say which kind each finding is.*
+
+`Unwanted-behaviour` · `Must` · `DECIDED` · ADR: —
+
+**Source:**
+- **CL-009** (P4, [extract](prd-2006-normative-extract.md#problem)): “Mechanical and substantive findings share one blocking mechanism. Procedural issues and correctness/security/architectural/evidence failures are all expressed as CHANGES_REQUESTED.”
+- **CL-002** (Problem, paragraph 2, [extract](prd-2006-normative-extract.md#problem)): “Reviews are performed using different reviewer-defined protocols, different blocking thresholds, and inconsistent levels of evidence. Review records do not consistently capture structured provenance showing who or what performed the review or which process was followed. The same unchanged revision is frequently reviewed multiple times, while mechanical or creation-time defects can consume the same blocking mechanism as substantive correctness, security, architectural, or evidence failures.”
+
+**Fit criterion:** Given a mechanical, procedural, or creation-time finding and a substantive finding that both contribute to the same blocking outcome on a PR, a reader can still tell them apart in the record by category and decision basis; two policy-blocking findings sharing the one authoritative outcome C6/AC14 require does not, by itself, fail this check — what fails it is a record in which the two categories of finding cannot be told apart at all.
+
+### RQA-FR-003
+
+Two repositories configured with different review policies shall be able to produce demonstrably different blocking outcomes on the same diff.
+
+*In plain terms: Two repositories with different review rules are allowed to reach different pass/fail verdicts on an identical change.*
+
+`State-driven` · `Must` · `DECIDED` · ADR: —
+
+**Source:**
+- **CL-029** (AC02, [extract](prd-2006-normative-extract.md#success-criteria)): “Two repositories configured with different review policies produce demonstrably different blocking outcomes on the same diff, and a policy change takes effect on the next review with no rebuild, reinstall or redeploy.”
+
+**Fit criterion:** The same diff submitted under two differently configured repository policies produces two blocking outcomes, and the difference is attributable to the policy configuration.
+
+**See also:** [RQA-FR-004](#rqa-fr-004) (same source criterion (AC02))
+
+### RQA-FR-008
+
+Every finding shall carry a category distinguishing mechanical, procedural and creation-time findings from correctness, security, architectural and evidence findings.
+
+*In plain terms: Every finding should be labelled as either a mechanical/procedural issue or a substantive one (correctness, security, architecture, evidence).*
+
+`Ubiquitous` · `Must` · `DECIDED` · ADR: —
+
+**Source:**
+- **CL-031** (AC04, [extract](prd-2006-normative-extract.md#success-criteria)): “Every finding carries a category distinguishing mechanical, procedural and creation-time findings from correctness, security, architectural and evidence findings, and whether it blocks is decided by repository policy, not by the reviewer's severity choice alone.”
+
+**Fit criterion:** Every finding in a review record carries at least one category that makes the mechanical-vs-substantive distinction observable, drawn from one of the two named groups — mechanical/procedural/creation-time, or correctness/security/architectural/evidence — and no finding is uncategorised. A finding may additionally carry further categories outside those two groups (for example, an orthogonal 'performance' tag) without failing this check, and a finding legitimately carrying two categories from the two named groups also satisfies it, provided the distinguishing category is present and observable; this check does not close the category taxonomy to only the two named groups.
+
+### RQA-FR-009
+
+Whether a finding blocks a pull request shall be decided by repository policy, not by the reviewer's severity choice alone.
+
+*In plain terms: Whether a finding blocks the PR is decided by the repository's policy, not by how severe an individual reviewer feels it is.*
+
+`Ubiquitous` · `Must` · `DECIDED` · ADR: —
+
+**Source:**
+- **CL-031** (AC04, [extract](prd-2006-normative-extract.md#success-criteria)): “Every finding carries a category distinguishing mechanical, procedural and creation-time findings from correctness, security, architectural and evidence findings, and whether it blocks is decided by repository policy, not by the reviewer's severity choice alone.”
+
+**Fit criterion:** Given a finding's category, repository policy, and any other input the policy itself declares relevant — which may include reviewer severity as one named input alongside others — the blocking decision is reproducible from those inputs; this check fails only where reviewer severity, independent of repository policy and its other declared inputs, alone determines the blocking decision. A policy that declares severity as one input among several does not fail this check merely for including it.
 
 ---
 
-## Set-level assessment
+## Revision reuse and check attribution
 
-Applied once to the requirement set as a whole (complete, consistent, feasible, comprehensible, validatable), as
-distinct from the per-requirement nine-characteristic assessment in
-[`requirements-quality-assessment.md`](requirements-quality-assessment.md). Any inconsistency found is named here,
-not resolved — resolving it is exactly what the referenced ADR issues, once filed (see § Provenance and pin), are
-for.
+How the review avoids redoing work on an unchanged revision, and how it decides whether a failing check belongs to the pull request or to its base branch.
 
-| Characteristic | Verdict | Basis |
-|---|---|---|
-| Complete | Holds, relative to the extract. | Every one of the 50 numbered-requirement-derived clauses names at least one requirement, and CL-062 names the traceability rule instead. Round 7 closed a second instance of the traceability-completeness gap round 6 first found and fixed for RQA-BR-010: RQA-NFR-007's own Unambiguous caveat had long admitted its 'whenever progression remains possible' qualifier draws on AC08/CL-035 and AC12/CL-039 as well as C6/CL-023, and RQA-NFR-024's own reasoning depended on CL-056's least-privilege principle — neither dependency was encoded in the reference graph. All three edges are now added, with both clauses' inventory notes and the split record updated. |
-| Consistent | Does not fully hold, on one point; two further points are recorded here as a feasibility question and a design choice respectively, not as inconsistencies. **One textual contradiction — `ADR-A`:** AC09's "does not require RQA to modify code directly" directly contradicts the Security implications section's "AC09 asks RQA to modify and push a branch". Affects RQA-FR-017, RQA-FR-018, RQA-NFR-019, RQA-NFR-020, RQA-NFR-021 — all five hold as agreed obligations regardless of which way ADR-A resolves. **One externally-contingent feasibility question — `ADR-B`:** whether the credential floor and ceiling CL-060 states (RQA-NFR-024/RQA-NFR-030) can perform the merge C6/AC14 require and the remediation push Security bullet 3 describes rests on a premise this extract never states. Affects RQA-NFR-024, RQA-NFR-030 — the only two rows in the set whose `Feasible` judgement carries a caveat. **One undecided design choice — `ADR-C`:** AC15's open-harness participation and Security bullet 4's forgeable-proof provenance requirement are not logically incompatible, but #2006 never says how an external harness's self-report is authenticated. Affects RQA-FR-030, RQA-NFR-022, RQA-NFR-028. Considered and **not** raised as a fourth conflict: RQA-BR-005's corrected distinguishability reading; the local tamper-resistance premise noted below. See ADR-A, ADR-B and ADR-C in /tmp/rqa-adr-drafts/ for the full framing of each. **Considered and not raised as a fourth question:** local-first operation (C5/CL-022, RQA-NFR-006) means the authoritative provenance record RQA-NFR-028 protects is produced and stored on a machine the sole operator fully controls, which rests on an external premise about local tamper-resistance of the same kind as `ADR-B`'s GitHub-permission-model premise. This is recorded here rather than filed as a fourth ADR question because, unlike `ADR-B`, no requirement's satisfaction is contingent on resolving it — RQA-NFR-028 already states the obligation (protection against any actor lacking authority) without naming or depending on a specific tamper-resistance mechanism, so the open question is an implementation concern the requirement itself does not defer to a design choice, unlike RQA-NFR-024/RQA-NFR-030's dependence on `ADR-B`. |
-| Feasible | Holds, conditional on `ADR-B`'s externally-contingent question alone. | Nothing in the set requires resources or authority #2006 itself withholds. Full feasibility of RQA-NFR-024/RQA-NFR-030 specifically is contingent on how `ADR-B`'s premise about GitHub's permission model resolves — the only genuine feasibility contingency in the set. |
-| Comprehensible | Holds. | Every requirement statement names no mechanism, component, product or technology beyond source-mandated vocabulary the extract itself supplies, uses one dominant `shall`, and carries a fit criterion answerable without having authored it. Round 7 closed a genuine gap here: RQA-NFR-024 had carried a semicolon-joined second clause ("a repository configured for narrower activity needs only the permissions those activities require") that was independently falsifiable from its floor obligation despite using no second lexical `shall` — the same defect class as RQA-FR-022/RQA-FR-029's earlier two-`shall` bundling, just without the second `shall` token. That clause now lives on RQA-NFR-030, whose own ceiling-class obligation already covers three dimensions (permission type, repository scope, configured activity) the way RQA-NFR-021 already covers four never-actions in one row. |
-| Validatable | Holds. | Every requirement's fit criterion states an observable check that cannot pass without demonstrating the requirement; requirements-quality-assessment.md records the *verifiable* judgement individually. Round 7 repairs eleven further fit criteria found capable of a false green or a false red: RQA-NFR-028 (tested at the authority/acceptance boundary — tamper-evidence satisfies it, physical byte-immutability is not required — rather than over-strengthening CL-058's 'forgeable-proof' into storage immutability), RQA-BR-006 (tests only that the conjunction is not required, not the stronger neither-at-all reading), RQA-BR-011 (scoped to the assurance-use population, matching RQA-FR-013), RQA-BR-013 (tests only that no *immediate* interruption is raised where none is needed; a genuinely necessary, non-immediate required escalation does not fail it), RQA-FR-017 (gated on necessity, not on the asserted purpose "solely to close it"), RQA-FR-006 (statement no longer forbids the source-conforming case where an invalidated set legitimately equals every obligation), RQA-FR-018 (statement restores CL-036's "permitted by policy" antecedent), RQA-FR-038 (the security-invariant set is now explicitly bounded and each exclusion is justified, not silently narrowed), RQA-FR-008 (permits orthogonal extra categories beyond the two named groups), RQA-FR-021 and RQA-FR-031 (drop an invented mandatory estimate-branch and an invented single-physical-machine constraint respectively). |
+### RQA-BR-007
+
+Review work shall not be duplicated across a revision that has not changed.
+
+*In plain terms: If nothing changed, the review shouldn't redo work it already did.*
+
+`Unwanted-behaviour` · `Must` · `DECIDED` · ADR: —
+
+**Source:**
+- **CL-011** (P6, [extract](prd-2006-normative-extract.md#problem)): “Review work is duplicated across unchanged revisions.”
+
+**Fit criterion:** Requesting review twice on an identical revision does not repeat the same reviewer work twice.
+
+### RQA-BR-009
+
+A failing automated review or check signal shall carry an attribution — to the pull request, the base, a procedural cause, incomplete automation, unrelated infrastructure, or a genuine blocker — without requiring a human to decide which.
+
+*In plain terms: When an automated check fails, the record should say why it's being treated as a failure of this PR (versus the base branch, a flaky test, or something unrelated) — without a human having to work that out.*
+
+`Ubiquitous` · `Must` · `DECIDED` · ADR: —
+
+**Source:**
+- **CL-013** (P8, [extract](prd-2006-normative-extract.md#problem)): “Automated review and check signals require manual interpretation. Humans must decide whether a failure is attributable to the PR, inherited from base, procedural, incomplete automation, unrelated infrastructure, or a genuine blocker.”
+
+**Fit criterion:** Given a failing automated review signal or a failing check, a reader finds its attribution in the record rather than having to investigate and decide it themselves; a system that attributes only check failures and leaves automated-review-signal failures uninterpreted fails this check.
+
+### RQA-FR-005
+
+A push that changes nothing material shall re-run zero reviewer calls.
+
+*In plain terms: If a push doesn't change anything that matters to the review, no reviewer call should run again for it.*
+
+`Unwanted-behaviour` · `Must` · `DECIDED` · ADR: —
+
+**Source:**
+- **CL-030** (AC03, [extract](prd-2006-normative-extract.md#success-criteria)): “A push that changes nothing material re-runs zero reviewer calls; a push touching file X re-runs only the review obligations invalidated by that change; the reused and regenerated sets are both recorded and inspectable.”
+
+**Fit criterion:** A push whose diff is immaterial to every review obligation is followed by reliable, independently checkable evidence that zero reviewer invocations occurred — a boundary trace, an audited invocation log, or an equivalent independently corroborated observation; a bare recorded counter reading zero, with no independent corroboration, is insufficient on its own to satisfy this check.
+
+### RQA-FR-006
+
+A push that touches file X shall re-run only the review obligations that push invalidates.
+
+*In plain terms: If a push only touches one file, only the checks that file could affect should re-run — not the whole review.*
+
+`Event-driven` · `Must` · `DECIDED` · ADR: —
+
+**Source:**
+- **CL-030** (AC03, [extract](prd-2006-normative-extract.md#success-criteria)): “A push that changes nothing material re-runs zero reviewer calls; a push touching file X re-runs only the review obligations invalidated by that change; the reused and regenerated sets are both recorded and inspectable.”
+
+**Fit criterion:** For a push touching a known file, the set of obligations re-run is exactly the set invalidated by that file's change — no more, no less; where that invalidated set is every obligation (for example, a root policy-file change that legitimately invalidates all of them), re-running all of them satisfies this check, since the criterion tests set equality with what the push actually invalidates, not a bound below the total.
+
+### RQA-FR-007
+
+The set of review obligations reused from a prior revision and the set regenerated for the current revision shall each be recorded and inspectable.
+
+*In plain terms: The review should keep a visible record of which checks it reused from before and which ones it redid.*
+
+`Ubiquitous` · `Must` · `DECIDED` · ADR: —
+
+**Source:**
+- **CL-030** (AC03, [extract](prd-2006-normative-extract.md#success-criteria)): “A push that changes nothing material re-runs zero reviewer calls; a push touching file X re-runs only the review obligations invalidated by that change; the reused and regenerated sets are both recorded and inspectable.”
+
+**Fit criterion:** For any review, a reader can retrieve both the reused-obligation set and the regenerated-obligation set and see which obligation is in which.
+
+### RQA-FR-014
+
+When a pull request's only failing check also fails on its merge base, the review shall classify that failure as inherited rather than attributable.
+
+*In plain terms: If a PR's only failing check also fails on the branch it's built from, that failure is the base branch's problem, not the PR's.*
+
+`Event-driven` · `Must` · `DECIDED` · ADR: —
+
+**Source:**
+- **CL-034** (AC07, [extract](prd-2006-normative-extract.md#success-criteria)): “For a PR whose only failing check also fails on its merge base, RQA classifies that failure as inherited rather than attributable, does not treat it as a blocker, and states the classification.”
+
+**Fit criterion:** Given a pull request whose only failing check also fails on its merge base, the review's decision behaviour and decision basis treat that failure as inherited rather than attributable — for example, excluding it from the blocking-condition evaluation — independent of whether that classification is yet persisted in or exposed from the review record, which RQA-FR-015 tests separately; the check does not apply to a PR with more than one failing check.
+
+### RQA-FR-015
+
+When a pull request's only failing check also fails on its merge base, the review shall state the inherited-versus-attributable classification of that failure in the record.
+
+*In plain terms: The review record should explicitly say whether a failing check belongs to the PR or was inherited from its base.*
+
+`Event-driven` · `Must` · `DECIDED` · ADR: —
+
+**Source:**
+- **CL-034** (AC07, [extract](prd-2006-normative-extract.md#success-criteria)): “For a PR whose only failing check also fails on its merge base, RQA classifies that failure as inherited rather than attributable, does not treat it as a blocker, and states the classification.”
+
+**Fit criterion:** For a pull request whose only failing check also fails on its merge base, the inherited classification of that failure is retrievable from the review record; the check does not extend to a classification of a check failure outside AC07's own condition.
+
+### RQA-FR-036
+
+When a pull request's only failing check also fails on its merge base, the review shall not treat that failure as a blocker.
+
+*In plain terms: A failing check that's inherited from the base branch shouldn't be treated as something that blocks this PR.*
+
+`Unwanted-behaviour` · `Must` · `DECIDED` · ADR: —
+
+**Source:**
+- **CL-034** (AC07, [extract](prd-2006-normative-extract.md#success-criteria)): “For a PR whose only failing check also fails on its merge base, RQA classifies that failure as inherited rather than attributable, does not treat it as a blocker, and states the classification.”
+
+**Fit criterion:** Given a pull request whose only failing check also fails on its merge base, that failure does not contribute to a blocking disposition, even though every other required obligation is still checked normally.
 
 ---
 
-## ISO/IEC 25010:2023 sweep of the requirement set
+## Evidence and provenance
 
-Every one of the nine ISO/IEC 25010:2023 quality characteristics is checked below; each is either represented by a
-requirement or recorded as not imposed by #2006. The sweep spans the whole requirement set, not only the
-non-functional class — Functional suitability, Performance efficiency, Interaction capability and Reliability are
-each grounded partly or wholly in business- or functional-class rows, and each row below says so. The 2023
-revision's characteristic set — used here rather than 2011's — adds **Safety** and folds **Portability** into
-**Flexibility** [INFERENCE — drawn from secondary catalogue summaries of the 2023 revision, on the same footing as
-this document's other secondary-source uses; the standard's own text is paywalled and outside this task's
-clean-room inputs].
+What a review has to prove it actually checked, and what a completed review record has to be able to show about itself afterwards.
 
-| ISO/IEC 25010:2023 characteristic | Coverage | Basis |
-|---|---|---|
-| Functional suitability | Represented, but by the functional-requirement class, not this one. | #2006 imposes functional suitability through its acceptance criteria; this specification carries that obligation as RQA-FR-001…039, not as a non-functional requirement. ISO/IEC 25010:2023's nine characteristics do not map one-to-one onto this document's business/functional/non-functional split, and re-deriving the same clauses again under this heading would double-count them rather than add coverage. |
-| Performance efficiency | Represented. | RQA-BR-012 (model/token capacity), RQA-FR-019/020 (no excess review passes, reuse of valid results) and RQA-FR-021/022/039 (measured resource consumption, mandated configured outcome and prohibition at a configured bound) carry this characteristic. |
-| Compatibility | Represented. | RQA-NFR-001 (harness/model/provider independence), RQA-NFR-002/003 (open, portable integration contracts) and RQA-FR-002 (cross-harness/model/provider concept-semantic equivalence) carry this characteristic. |
-| Interaction capability | Represented. | RQA-FR-016 (single-command disposition query) and RQA-FR-012 (single-command outcome reconstruction) are the extract's most direct human-interaction obligations; RQA-BR-011/RQA-FR-013 (a human approval's basis must be named and retrievable) and RQA-FR-025/RQA-FR-026/RQA-FR-027 (routine conditions raise no immediate request; a required escalation states specifically what it needs; supplying that input resumes the lifecycle) also shape the human/system interaction surface, though narrowly — #2006 does not otherwise specify a user interface. |
-| Reliability | Represented. | RQA-NFR-010 (no ambiguous/corrupted/partial outcome on failure), RQA-FR-023/024/038 (fallback and safe-stop behaviour on unavailability) and RQA-FR-011/028/037 (no manufactured success) carry this characteristic. |
-| Security | Represented, extensively. | RQA-NFR-015…026, RQA-NFR-028, and RQA-NFR-029/030 (untrusted PR content, per-activity fail-closed authority and default-disabled state, bounded and effectively-tested remediation authority, forgeable-proof provenance across the whole authoritative record, per-repository (RQA-NFR-023) and per-change (RQA-NFR-029) external-send decisions, narrow credential floor (RQA-NFR-024) and ceiling (RQA-NFR-030)) are drawn directly from #2006's Security implications section. RQA-NFR-027 (no content sent to an unconfigured external provider) is a related security-relevant obligation but is **not** itself drawn from the Security implications section — it is conjunctively derived from C7/CL-024 and C9/CL-026 (both design constraints); see § Singular-split record's CL-024/CL-026 entries. |
-| Maintainability | Represented, narrowly. | RQA-NFR-005 (no rebuild/redeploy for a configuration change) and RQA-FR-034 (every retained architectural component justified against the baseline) carry this characteristic; #2006 does not otherwise address code-level maintainability, which is outside a requirements specification's reach in any case. |
-| Flexibility | Represented; also carries this specification's portability-adjacent coverage. | ISO/IEC 25010:2023 folds 2011's separate Portability characteristic into Flexibility [INFERENCE — the standard's full text is paywalled and outside this task's clean-room inputs; this basis is drawn from secondary catalogue summaries of the 2023 revision, on the same footing as this document's other secondary-source uses; e.g. § Methodology's reliance on REQUIREMENTS.md rather than the standard itself]. Under that grouping: RQA-NFR-001 (independence from a particular harness/agent/model/provider — the environment-adaptability content 2011's Portability characteristic covered) grounds the portability-adjacent half; RQA-NFR-004 (multi-repository, multi-organisation, public and private), RQA-NFR-006 (local-first, single-contributor operation), RQA-NFR-008 (per-repository merge configurability), RQA-NFR-012/013/027/029 (configurable and granular external-provider use) and RQA-FR-003/004 (per-repository policy, taking effect without redeploy) carry the adaptability/configurability half. |
-| Safety | Not imposed by #2006. | ISO/IEC 25010:2023 adds Safety (avoidance of states leading to death, injury, or damage to health, property or the environment) as a ninth characteristic, distinct from 2011's set [INFERENCE — same secondary-source basis as the Flexibility row above]. Nothing in the extract's Problem, Success criteria, Non-goals or Security implications sections addresses physical harm, injury, or environmental/property damage; RQA's domain (pull-request review automation) does not put #2006 in a position to impose one. Recorded here as not imposed rather than silently omitted, per the sweep's own rule that every 2023 characteristic gets a row. |
+### RQA-BR-003
+
+A review record shall establish who or what performed the review, which protocol was followed, and how the judgement was produced.
+
+*In plain terms: A finished review record should say who or what did it, what rules it followed, and how it reached its verdict.*
+
+`Ubiquitous` · `Must` · `DECIDED` · ADR: —
+
+**Source:**
+- **CL-007** (P2, [extract](prd-2006-normative-extract.md#problem)): “Review provenance is not recorded. Records do not establish who or what reviewed, which protocol was followed, or how the judgement was produced.”
+
+**Fit criterion:** Given any review record, a reader can name its performer, its protocol, and the basis of its judgement without asking the performer.
+
+### RQA-BR-008
+
+Review output shall establish whether the higher-value claims, risks and cited evidence in a pull request were verified, not only its labels, metadata or formatting.
+
+*In plain terms: A review's output should show whether the PR's actual claims and evidence were checked — not just that some checkboxes were ticked.*
+
+`Ubiquitous` · `Must` · `DECIDED` · ADR: —
+
+**Source:**
+- **CL-012** (P7, [extract](prd-2006-normative-extract.md#problem)): “Review output has poor signal-to-noise for assurance. Activity focuses on labels, metadata and formatting without establishing whether higher-value claims, risks or cited evidence were verified.”
+
+**Fit criterion:** A reader of a review record can state which claims, risks or cited evidence were verified and which were not, distinct from cosmetic observations.
+
+### RQA-BR-011
+
+A human approval used to satisfy assurance shall preserve the evidence behind that approval, not merely satisfy merge mechanics.
+
+*In plain terms: When a human's sign-off is used as proof of assurance, the evidence behind that sign-off should be kept, not thrown away once the merge button works.*
+
+`Ubiquitous` · `Must` · `DECIDED` · ADR: —
+
+**Source:**
+- **CL-015** (P10, [extract](prd-2006-normative-extract.md#problem)): “Human approvals do not consistently preserve review evidence. Approval satisfies merge mechanics without preserving assurance evidence.”
+
+**Fit criterion:** A human approval used to satisfy assurance carries retrievable evidence of what was examined, not only the fact of approval; an approval recorded only to satisfy merge mechanics, and never cited as assurance evidence, is outside this check's population and its absence of retrievable examination evidence does not fail it — the same assurance-use predicate RQA-FR-013's fit criterion applies.
+
+### RQA-BR-014
+
+Review activity on a pull request shall demonstrate that the important risks, claims and evidence associated with it were actually examined.
+
+*In plain terms: A review should be able to show that the PR's important risks, claims and evidence were actually looked at, not skipped over.*
+
+`Ubiquitous` · `Must` · `DECIDED` · ADR: —
+
+**Source:**
+- **CL-005** (Problem, paragraph 5, [extract](prd-2006-normative-extract.md#problem)): “The operational consequence is duplicated work, resource exhaustion, human interruption, and a growing review queue. The more important consequence is reduced assurance: substantial review activity does not consistently demonstrate that the important risks, claims, and evidence associated with a pull request were actually examined.”
+
+**Fit criterion:** For a completed review, a reader can confirm from the record — not from trust in the activity's volume — that the important risks, claims and evidence were examined.
+
+### RQA-FR-010
+
+Every required review obligation shall carry an explicit evidence state from {verified, not verified, unavailable, contradictory, failed, incomplete, unknown}.
+
+*In plain terms: Every obligation a review has to check should carry a clear status — verified, failed, unknown, and so on — not be left implicit.*
+
+`Ubiquitous` · `Must` · `DECIDED` · ADR: —
+
+**Source:**
+- **CL-032** (AC05, [extract](prd-2006-normative-extract.md#success-criteria)): “Every required review obligation carries an explicit evidence state from {verified, not verified, unavailable, contradictory, failed, incomplete, unknown}, and no successful disposition can be produced while any required obligation is unsatisfied.”
+
+**Fit criterion:** Every required obligation in a review record carries exactly one evidence state from the seven-value set, and no required obligation is left without one.
+
+**See also:** [RQA-FR-011](#rqa-fr-011) (same source criterion (AC05))
+
+### RQA-FR-012
+
+For any authoritative review outcome, a single command shall reconstruct the exact PR revision, the protocol and policy in force, reviewer identity and type, harness, model, provider, evidence examined, findings produced, decision basis and disposition.
+
+*In plain terms: For any official outcome, one command should be able to pull up exactly what was reviewed, under what rules, by whom or what, and why it ended that way.*
+
+`Ubiquitous` · `Must` · `DECIDED` · ADR: —
+
+**Source:**
+- **CL-033** (AC06, [extract](prd-2006-normative-extract.md#success-criteria)): “For any authoritative review outcome, a single command reconstructs the exact PR revision, protocol and policy in force, reviewer identity and type, harness, model, provider, evidence examined, findings produced, decision basis and disposition; a human approval used to satisfy assurance names the approving human and the basis of that approval.”
+
+**Fit criterion:** Running one command against an authoritative outcome returns each of the elements AC06 names — PR revision, protocol in force, policy in force, reviewer identity, reviewer type, harness, model, provider, evidence examined, findings produced, decision basis, and disposition — with none requiring a second lookup.
+
+### RQA-FR-013
+
+A human approval used to satisfy assurance shall name the approving human and the basis of that approval.
+
+*In plain terms: When a human's approval is used to satisfy a requirement, the record should name that person and say what their approval was actually based on.*
+
+`Ubiquitous` · `Must` · `DECIDED` · ADR: —
+
+**Source:**
+- **CL-033** (AC06, [extract](prd-2006-normative-extract.md#success-criteria)): “For any authoritative review outcome, a single command reconstructs the exact PR revision, protocol and policy in force, reviewer identity and type, harness, model, provider, evidence examined, findings produced, decision basis and disposition; a human approval used to satisfy assurance names the approving human and the basis of that approval.”
+
+**Fit criterion:** Every recorded human approval used to satisfy assurance names a specific human and states the basis for that approval; an approval recorded only to satisfy merge mechanics, and never cited as assurance evidence, is outside this check's population and its absence of a named basis does not fail it.
+
+### RQA-NFR-022
+
+A provenance record shall never be writable by the reviewed content or by an unauthenticated model response.
+
+*In plain terms: The record of who reviewed what, and how, must never be something the PR's own content or an unverified AI response could write into.*
+
+`Unwanted-behaviour` · `Must` · `DECIDED` · ADR: [`ADR-C`](adr-drafts/ADR-C-external-harness-provenance-authentication.md)
+
+**Source:**
+- **CL-058** (Security implications, bullet 4, [extract](prd-2006-normative-extract.md#security-implications)): “Provenance must be forgeable-proof. AC06 records reviewer identity, harness, model and provider. If that record can be written by the reviewed content or by an unauthenticated model response, the audit trail is worse than none.”
+
+**Fit criterion:** Attempting to set any element of the authoritative provenance record RQA-FR-012 reconstructs — PR revision, protocol in force, policy in force, reviewer identity, reviewer type, harness, model, provider, evidence examined, findings produced, decision basis, and disposition — from PR content or from an unauthenticated model response is rejected rather than accepted into the record; a check that exercises only the reviewer-identity/harness/model/provider fields and leaves the other eight elements untested does not satisfy this row.
+
+### RQA-NFR-028
+
+A provenance record shall be protected against forgery or alteration by any actor lacking authority to write it.
+
+*In plain terms: The official review record has to be protected so nobody without the right authority can quietly forge or edit it.*
+
+`Ubiquitous` · `Must` · `DECIDED` · ADR: [`ADR-C`](adr-drafts/ADR-C-external-harness-provenance-authentication.md)
+
+**Source:**
+- **CL-058** (Security implications, bullet 4, [extract](prd-2006-normative-extract.md#security-implications)): “Provenance must be forgeable-proof. AC06 records reviewer identity, harness, model and provider. If that record can be written by the reviewed content or by an unauthenticated model response, the audit trail is worse than none.”
+
+**Fit criterion:** For any authoritative outcome, no element of the provenance record RQA-FR-012 reconstructs — PR revision, protocol in force, policy in force, reviewer identity, reviewer type, harness, model, provider, evidence examined, findings produced, decision basis, and disposition — can be created or altered by an actor lacking authority to write it and then be **accepted as authentic and authoritative without detection**; tamper-evidence satisfies this check — for example, a signed or otherwise integrity-checked record whose unauthorised alteration produces a detectably invalid result that the system refuses to treat as authoritative. This row does not require the underlying storage bytes to be physically unalterable; it requires that an unauthorised alteration, if made, cannot pass as authentic. RQA-NFR-022 tests the two source-named writers against this same acceptance boundary, this row tests every other unauthorised actor against it.
 
 ---
 
-## Bidirectional clause↔requirement check
+## Lifecycle, disposition and merge
 
-**Method.** Two checks, both re-run after every change to the clause list or a requirement table:
+How a pull request's status is tracked end to end, how a review reaches its final verdict, and when merging after that verdict is allowed.
 
-1. **Reference-graph check**: every requirement's `cl` (source-clause) reference is checked against the clause
-   inventory: (a) every clause in the inventory carries exactly one of the four dispositions and no clause ID is
-   duplicated or missing (65 clauses, verified); (b) every requirement across all three classes names a clause ID
-   that exists in the inventory (verified — zero references to a non-existent clause); (c) every clause disposed
-   **Derived** is named by at least one requirement, and CL-062 (**Derived — traceability rule**) is named by the
-   traceability rule in § Traceability rule rather than by a numbered requirement — the one deliberate exception
-   to "derived clause names a requirement" (verified — zero numbered-requirement-derived clauses are
-   unreferenced).
-2. **Note-cell equality check**: for every **Derived** clause, every requirement ID that check 1's reference graph
-   actually associates with that clause is verified present, as a substring, in that clause's inventory Note
-   cell. The check does not flag a Note cell that additionally cites an unrelated clause's requirement ID for
-   cross-reference explanation — its purpose is catching silent omission, not penalising legitimate
-   cross-reference. This check is scoped to **Derived** clauses only, and — as rounds 6 and 7 both confirm
-   concretely — it can only catch an omission from an edge already present in a requirement's `cl` list; it
-   cannot detect a semantically genuine source clause a requirement's `cl` list never named in the first place.
-   Both round 6 (RQA-BR-010's CL-017/CL-040) and round 7 (RQA-NFR-007's CL-035/CL-039, RQA-NFR-024's CL-056)
-   omissions were found by adversarial review reading the QA document's own prose against the reference graph,
-   not by this automated check — recorded here as a standing limitation, not a one-off.
+### RQA-FR-011
 
-**Result: PASS in both directions, on both checks.**
+No successful disposition shall be produced while any required review obligation is unsatisfied.
 
-- Clause → requirement: all 50 numbered-requirement-derived clauses are named by ≥1 requirement (0 unreferenced);
-  CL-062 is named by the traceability rule, its recorded exception.
-- Requirement → clause: all 83 requirements (14 business, 39 functional, 30 non-functional) name at least one
-  existing derived clause, and none names a clause disposed as context or scope exclusion (0 such references).
-  RQA-BR-005 names two source clauses (CL-009 and CL-002), RQA-BR-010 names three (CL-014, CL-017, CL-040),
-  RQA-NFR-007 names three (CL-023, CL-035, CL-039 — round 7), RQA-NFR-024 and RQA-NFR-030 each name two
-  (CL-060, CL-056 — round 7), and RQA-NFR-027 names two (CL-024 and CL-026), so there are 91 requirement→clause
-  derivation edges across the 83 requirement rows.
-- Note-cell equality: every Derived clause's Note cell names every requirement its `cl` reference set actually
-  contains (0 stale cells within the check's Derived-only scope).
-- Total requirements: 83 = 14 + 39 + 30 (RQA-FR-036…039 and RQA-NFR-026…030 were appended across rework rounds; no
-  existing ID was renumbered or retired). Total clauses: 65 = 50 numbered-requirement-derived + 1
-  traceability-rule-derived (CL-062) + 8 scope exclusion + 6 context.
+*In plain terms: A review can't hand out a passing result while something it's required to check is still unresolved.*
+
+`State-driven` · `Must` · `DECIDED` · ADR: —
+
+**Source:**
+- **CL-032** (AC05, [extract](prd-2006-normative-extract.md#success-criteria)): “Every required review obligation carries an explicit evidence state from {verified, not verified, unavailable, contradictory, failed, incomplete, unknown}, and no successful disposition can be produced while any required obligation is unsatisfied.”
+
+**Fit criterion:** A review in which some required obligation is neither in the 'verified' evidence state nor demonstrably satisfied through a recorded, named human approval under RQA-FR-013 that substantiates that specific obligation's content never yields a successful disposition; a named approval with no substantiated basis for the specific obligation it is claimed to satisfy does not, by itself, count that obligation as satisfied, and AC05's own evidence-state vocabulary is not bypassed by naming an approver alone.
+
+**See also:** [RQA-FR-010](#rqa-fr-010) (same source criterion (AC05)), [RQA-FR-037](#rqa-fr-037) (dual-source restatement of the same proposition, AC14)
+
+### RQA-FR-016
+
+For any managed pull request, one command shall return its current disposition from {being reviewed, blocked, awaiting remediation, awaiting human judgement, review-complete, unable to progress} and the reason, without a human reconciling historical reviews, comments or checks.
+
+*In plain terms: One command should tell you a PR's current status — in review, blocked, waiting on a fix, waiting on a person, done, or stuck — and why, without a human digging through history.*
+
+`Ubiquitous` · `Must` · `DECIDED` · ADR: —
+
+**Source:**
+- **CL-035** (AC08, [extract](prd-2006-normative-extract.md#success-criteria)): “For any managed PR, one command returns its current disposition from {being reviewed, blocked, awaiting remediation, awaiting human judgement, review-complete, unable to progress} and the reason, without a human reconciling historical reviews, comments or checks.”
+
+**Fit criterion:** Driving a managed PR through its observable lifecycle transitions and, after each transition, querying the one command shows a result and reason equal to the PR's independently established current state at that point — not merely one of the six legal values with a plausible-sounding reason regardless of the PR's actual state; a command that returns a stale or generic answer after a transition has occurred fails this check even if the value it returns is individually legal.
+
+**See also:** [RQA-NFR-007](#rqa-nfr-007) (shares source criterion AC08)
+
+### RQA-FR-028
+
+When the review's obligations are satisfied, the review shall submit APPROVED or CHANGES_REQUESTED.
+
+*In plain terms: Once every obligation is met, the review submits an official APPROVED or CHANGES_REQUESTED verdict.*
+
+`State-driven` · `Must` · `DECIDED` · ADR: —
+
+**Source:**
+- **CL-041** (AC14, [extract](prd-2006-normative-extract.md#success-criteria)): “RQA submits APPROVED or CHANGES_REQUESTED when the obligations are satisfied and cannot manufacture a successful outcome when they are not; one repository can be configured to merge after review and another configured not to, with both behaving accordingly.”
+
+**Fit criterion:** Every review whose required obligations are all satisfied results in a submitted APPROVED or CHANGES_REQUESTED outcome; a satisfied review that submits neither fails this check.
+
+### RQA-FR-029
+
+The system shall merge after a successful review if and only if the repository is configured to merge after review.
+
+*In plain terms: The system only auto-merges after a passing review if that repository has turned auto-merge-after-review on.*
+
+`State-driven` · `Must` · `DECIDED` · ADR: —
+
+**Source:**
+- **CL-041** (AC14, [extract](prd-2006-normative-extract.md#success-criteria)): “RQA submits APPROVED or CHANGES_REQUESTED when the obligations are satisfied and cannot manufacture a successful outcome when they are not; one repository can be configured to merge after review and another configured not to, with both behaving accordingly.”
+
+**Fit criterion:** One repository configured to merge-after-review merges following a successful disposition; a second repository configured not to does not, on an otherwise identical successful disposition — both directions of the biconditional are exercised, not merely the enabled case.
+
+### RQA-FR-037
+
+The review shall never manufacture a successful outcome when its required obligations are not satisfied.
+
+*In plain terms: The review must never claim success while something it's required to satisfy is actually unsatisfied — no matter what pressure there is to close it out.*
+
+`State-driven` · `Must` · `DECIDED` · ADR: —
+
+**Source:**
+- **CL-041** (AC14, [extract](prd-2006-normative-extract.md#success-criteria)): “RQA submits APPROVED or CHANGES_REQUESTED when the obligations are satisfied and cannot manufacture a successful outcome when they are not; one repository can be configured to merge after review and another configured not to, with both behaving accordingly.”
+
+**Fit criterion:** A review whose required obligations are unsatisfied never results in a submitted APPROVED outcome, an internally recorded review-complete or other successful disposition (including the 'review-complete' value RQA-FR-016 names), or any other representation the protocol treats as a successful outcome, regardless of any other pressure to close it out; a check that exercises only the submitted APPROVED path and ignores an internally-recorded success signal does not satisfy this row.
+
+**See also:** [RQA-FR-011](#rqa-fr-011) (dual-source restatement of the same proposition, AC05)
+
+### RQA-NFR-007
+
+The system shall manage every step of a pull request's review lifecycle, carrying it through to an authoritative APPROVED or CHANGES_REQUESTED outcome whenever progression remains possible.
+
+*In plain terms: The system should carry a PR through every stage of review on its own, all the way to an official APPROVED or CHANGES_REQUESTED, whenever that's actually possible.*
+
+`State-driven` · `Must` · `DECIDED` · ADR: —
+
+**Source:**
+- **CL-023** (C6, [extract](prd-2006-normative-extract.md#problem)): “End-to-end GitHub review responsibility. Must manage the lifecycle through authoritative APPROVED or CHANGES_REQUESTED. Whether RQA also merges is configurable per repository.”
+- **CL-035** (AC08, [extract](prd-2006-normative-extract.md#success-criteria)): “For any managed PR, one command returns its current disposition from {being reviewed, blocked, awaiting remediation, awaiting human judgement, review-complete, unable to progress} and the reason, without a human reconciling historical reviews, comments or checks.”
+- **CL-039** (AC12, [extract](prd-2006-normative-extract.md#success-criteria)): “With a configured reviewer, model or provider made unavailable, RQA continues through an explicitly configured fallback; with no fallback configured it invents none and stops in a clear, safe, recoverable non-success state.”
+
+**Fit criterion:** Every managed PR reaches an authoritative APPROVED or CHANGES_REQUESTED outcome, or the record carries evidence that no source-conforming next transition was available at the point the PR entered RQA-FR-038's safe non-success stop or RQA-FR-016's 'unable to progress' disposition; a PR labelled with either non-success alternative while an available reviewer, a valid policy, and no unresolved decision existed fails this check even though the label itself is a legal value. A recorded human approval (RQA-FR-013) or the input a raised escalation names being supplied and resuming the lifecycle (RQA-FR-026, RQA-FR-027) does not itself fail this check, because the system still initiates, tracks and incorporates that input.
+
+**See also:** [RQA-FR-016](#rqa-fr-016) (shares source criterion AC08), [RQA-FR-023](#rqa-fr-023) (shares source criterion AC12, Capacity and resilience), [RQA-FR-024](#rqa-fr-024) (shares source criterion AC12, Capacity and resilience), [RQA-FR-038](#rqa-fr-038) (shares source criterion AC12, Capacity and resilience)
+
+### RQA-NFR-008
+
+Whether the system also merges after an authoritative outcome shall be configurable per repository.
+
+*In plain terms: Whether the system also merges the PR after approving it is a per-repository on/off switch.*
+
+`Ubiquitous` · `Must` · `DECIDED` · ADR: —
+
+**Source:**
+- **CL-023** (C6, [extract](prd-2006-normative-extract.md#problem)): “End-to-end GitHub review responsibility. Must manage the lifecycle through authoritative APPROVED or CHANGES_REQUESTED. Whether RQA also merges is configurable per repository.”
+
+**Fit criterion:** Two repositories can independently be set to merge-after-review or not, and each behaves as configured.
+
+---
+
+## Remediation and escalation
+
+When the system may fix something itself, when it must instead ask a human, and the limits on both.
+
+### RQA-BR-006
+
+A cheaply remediable, deterministic finding accompanied by its exact remedy shall not require a further contributor and a further review cycle to resolve.
+
+*In plain terms: If a finding is simple, certain, and comes with its own fix, nobody should have to open a new review cycle just to apply that fix.*
+
+`State-driven` · `Must` · `DECIDED` · ADR: —
+
+**Source:**
+- **CL-010** (P5, [extract](prd-2006-normative-extract.md#problem)): “Cheaply remediable findings create unnecessary review cycles. An agent can identify a deterministic defect and supply the exact remedy, yet the fix still needs another contributor and another review cycle.”
+
+**Fit criterion:** A deterministic defect with a supplied remedy is resolved without requiring **both** a second contributor turn **and** a second full review cycle together; a resolution needing one of the two alone — for example, one lightweight contributor acknowledgement with no further review cycle — satisfies this check. This tests only ¬(A∧B), the weaker of the two source-admitted readings (see this row's Unambiguous caveat), per round 7's correction of a prior criterion that operationalised the stronger ¬A∧¬B reading #2006's own text does not force; what fails this check is the combination occurring together, not either element occurring alone.
+
+### RQA-BR-010
+
+Progression of a pull request through review shall not depend on manual owner intervention beyond what genuinely requires human judgement.
+
+*In plain terms: A PR should be able to move forward on its own unless it genuinely needs a person's judgement — an owner shouldn't be a bottleneck for things a machine can safely decide.*
+
+`Unwanted-behaviour` · `Must` · `DECIDED` · ADR: —
+
+**Source:**
+- **CL-014** (P9, [extract](prd-2006-normative-extract.md#problem)): “Progression depends heavily on manual owner intervention.”
+- **CL-017** (P12, [extract](prd-2006-normative-extract.md#problem)): “PR review consumes scarce human attention and causes unnecessary interruption. Routine, mechanical or non-urgent PR issues impose context-switching costs where no human judgement is required.”
+- **CL-040** (AC13, [extract](prd-2006-normative-extract.md#success-criteria)): “Routine, mechanical and non-urgent conditions raise no immediate human request; a required escalation names the specific unresolved decision, conflicting judgement, evidence gap, required information or authority requirement; and supplying that input resumes the lifecycle without restarting the review.”
+
+**Fit criterion:** A pull request whose findings require no human judgement is driven through every applicable lifecycle transition RQA-FR-016 names, and none of those transitions depends on owner action; a system that automates the first transition and then requires an owner to act on a later one, even where that later transition itself requires no judgement, fails this check.
+
+### RQA-BR-013
+
+Routine, mechanical or non-urgent pull-request conditions shall not interrupt a human where no human judgement is required.
+
+*In plain terms: Small, routine, non-urgent issues shouldn't page a human if a human's judgement genuinely isn't needed to resolve them.*
+
+`State-driven` · `Must` · `DECIDED` · ADR: —
+
+**Source:**
+- **CL-017** (P12, [extract](prd-2006-normative-extract.md#problem)): “PR review consumes scarce human attention and causes unnecessary interruption. Routine, mechanical or non-urgent PR issues impose context-switching costs where no human judgement is required.”
+
+**Fit criterion:** No condition genuinely requiring no human judgement ever raises a notification demanding a human's immediate attention. A condition that does require human judgement may still raise a specific, non-immediate required escalation (RQA-FR-026's own population) without failing this check — what this row prohibits is an immediate-attention interruption for a condition that did not need one, not every notification whatsoever; whether or when a condition is subsequently resolved or progressed remains a lifecycle-row concern (e.g. RQA-FR-016, RQA-FR-017), not this row's own test.
+
+### RQA-FR-017
+
+A finding classified as mechanical and permitted by policy shall be resolved without unnecessarily creating human intervention or a complete re-review cycle.
+
+*In plain terms: If policy says a finding is safe and mechanical to fix, fixing it shouldn't drag in a human or force a full re-review.*
+
+`State-driven` · `Must` · `DECIDED` · ADR: [`ADR-A`](adr-drafts/ADR-A-ac09-remediation-code-modification-contradiction.md)
+
+**Source:**
+- **CL-036** (AC09, [extract](prd-2006-normative-extract.md#success-criteria)): “A finding classified as mechanical and permitted by policy is resolved without unnecessarily creating human intervention or a complete re-review cycle, and resolving it does not invalidate unrelated review work that remains valid. Per the baseline, this does not require RQA to modify code directly.”
+
+**Fit criterion:** A mechanical, policy-permitted finding is resolved, and every human-intervention request or full re-review cycle generated in the course of resolving it is one a source-derived authority, evidence, or judgement gap genuinely makes necessary — necessity determined by repository policy where policy speaks to it; an intervention generated for any other reason while resolving the finding (for example, an unnecessary re-confirmation request unconnected to an authority, evidence, or judgement gap) fails this check even if it is not the request that formally closes the finding.
+
+### RQA-FR-018
+
+Resolving a finding classified as mechanical and permitted by policy shall not invalidate unrelated review work that remains valid.
+
+*In plain terms: Fixing one mechanical finding shouldn't throw away other review work that's still valid.*
+
+`Unwanted-behaviour` · `Must` · `DECIDED` · ADR: [`ADR-A`](adr-drafts/ADR-A-ac09-remediation-code-modification-contradiction.md)
+
+**Source:**
+- **CL-036** (AC09, [extract](prd-2006-normative-extract.md#success-criteria)): “A finding classified as mechanical and permitted by policy is resolved without unnecessarily creating human intervention or a complete re-review cycle, and resolving it does not invalidate unrelated review work that remains valid. Per the baseline, this does not require RQA to modify code directly.”
+
+**Fit criterion:** After a mechanical finding is resolved, every unrelated obligation that was previously satisfied remains valid and satisfied. Whether that unrelated obligation is also, redundantly, re-run is RQA-FR-020's own test (reuse of a valid result), not this row's — an unrelated obligation that is redundantly re-run but remains satisfied and valid does not fail this check; what fails it is a previously valid obligation becoming invalid or unsatisfied as a side effect of the remediation.
+
+### RQA-FR-025
+
+A routine, mechanical or non-urgent condition shall not raise an immediate human request.
+
+*In plain terms: A routine, minor, non-urgent issue shouldn't immediately ping a human.*
+
+`State-driven` · `Must` · `DECIDED` · ADR: —
+
+**Source:**
+- **CL-040** (AC13, [extract](prd-2006-normative-extract.md#success-criteria)): “Routine, mechanical and non-urgent conditions raise no immediate human request; a required escalation names the specific unresolved decision, conflicting judgement, evidence gap, required information or authority requirement; and supplying that input resumes the lifecycle without restarting the review.”
+
+**Fit criterion:** No review event classified routine, mechanical or non-urgent generates a human-facing request that demands immediate attention.
+
+### RQA-FR-026
+
+A required escalation shall name the specific unresolved decision, conflicting judgement, evidence gap, required information or authority requirement that produced it.
+
+*In plain terms: When the review does have to escalate to a human, it must say exactly what decision, disagreement, missing evidence, missing information, or authority it's stuck on.*
+
+`Ubiquitous` · `Must` · `DECIDED` · ADR: —
+
+**Source:**
+- **CL-040** (AC13, [extract](prd-2006-normative-extract.md#success-criteria)): “Routine, mechanical and non-urgent conditions raise no immediate human request; a required escalation names the specific unresolved decision, conflicting judgement, evidence gap, required information or authority requirement; and supplying that input resumes the lifecycle without restarting the review.”
+
+**Fit criterion:** Every escalation record names one of the five listed causes concretely, not as a generic 'needs attention' notice.
+
+### RQA-FR-027
+
+Supplying the input a raised escalation names shall resume the lifecycle without restarting the review.
+
+*In plain terms: Once someone answers what an escalation asked for, the review picks back up from there — it doesn't start over.*
+
+`Event-driven` · `Must` · `DECIDED` · ADR: —
+
+**Source:**
+- **CL-040** (AC13, [extract](prd-2006-normative-extract.md#success-criteria)): “Routine, mechanical and non-urgent conditions raise no immediate human request; a required escalation names the specific unresolved decision, conflicting judgement, evidence gap, required information or authority requirement; and supplying that input resumes the lifecycle without restarting the review.”
+
+**Fit criterion:** After the requested input is supplied for an open escalation, the review continues from its prior state rather than beginning again from the start.
+
+### RQA-NFR-019
+
+Remediation authority shall be bounded to only the finding categories a repository's policy names as mechanical.
+
+*In plain terms: The system can only auto-fix the specific categories of issue that a repository's policy has explicitly labelled safe to auto-fix.*
+
+`Ubiquitous` · `Must` · `DECIDED` · ADR: [`ADR-A`](adr-drafts/ADR-A-ac09-remediation-code-modification-contradiction.md)
+
+**Source:**
+- **CL-057** (Security implications, bullet 3, [extract](prd-2006-normative-extract.md#security-implications)): “Remediation authority is the largest new exposure. AC09 asks RQA to modify and push a branch. That authority must be separately gated, bounded to categories policy names as mechanical, isolated from the repository working tree, and never able to force-push, merge, bypass protection, or touch a protected branch.”
+
+**Fit criterion:** Attempting a remediation action against a finding outside the categories the repository's policy names as mechanical is denied before it takes effect — the authority to perform it does not exist for that category; a run whose history merely happens not to have attempted one, with the broader authority still present, does not satisfy this check.
+
+### RQA-NFR-020
+
+Remediation shall be isolated from the repository's working tree.
+
+*In plain terms: Auto-fixing has to happen somewhere separate from the repository's real working copy — it can't touch it directly.*
+
+`Ubiquitous` · `Must` · `DECIDED` · ADR: [`ADR-A`](adr-drafts/ADR-A-ac09-remediation-code-modification-contradiction.md)
+
+**Source:**
+- **CL-057** (Security implications, bullet 3, [extract](prd-2006-normative-extract.md#security-implications)): “Remediation authority is the largest new exposure. AC09 asks RQA to modify and push a branch. That authority must be separately gated, bounded to categories policy names as mechanical, isolated from the repository working tree, and never able to force-push, merge, bypass protection, or touch a protected branch.”
+
+**Fit criterion:** Attempting a remediation action against the repository's working tree — the boundary CL-057 itself names — is denied before it takes effect; the check does not require establishing whether a contributor was concurrently or 'actively' using that tree, because CL-057 names the working tree itself as the isolation boundary, not contributor activity within it.
+
+### RQA-NFR-021
+
+Remediation shall never force-push, merge, bypass branch protection, or touch a protected branch.
+
+*In plain terms: Auto-fixing must never force-push, merge on its own, bypass branch protection, or touch a protected branch.*
+
+`Unwanted-behaviour` · `Must` · `DECIDED` · ADR: [`ADR-A`](adr-drafts/ADR-A-ac09-remediation-code-modification-contradiction.md)
+
+**Source:**
+- **CL-057** (Security implications, bullet 3, [extract](prd-2006-normative-extract.md#security-implications)): “Remediation authority is the largest new exposure. AC09 asks RQA to modify and push a branch. That authority must be separately gated, bounded to categories policy names as mechanical, isolated from the repository working tree, and never able to force-push, merge, bypass protection, or touch a protected branch.”
+
+**Fit criterion:** Attempting a force-push, a merge, a branch-protection bypass, or a write to a protected branch under remediation authority is denied before it takes effect; remediation authority is never able to perform any of the four, regardless of what a particular run's history shows — a run whose history is clean only because none was attempted, while the capability to perform one still exists, does not satisfy this check.
+
+---
+
+## Capacity and resilience
+
+Using shared AI capacity no more than a policy requires, and behaving safely when a resource limit, reviewer, model or provider is unavailable.
+
+### RQA-BR-012
+
+Review activity shall use scarce model capacity efficiently, given that capacity is shared with implementation work.
+
+*In plain terms: Reviews compete with real engineering work for the same AI capacity, so a review shouldn't burn more of it than the situation calls for.*
+
+`Ubiquitous` · `Must` · `DECIDED` · ADR: —
+
+**Source:**
+- **CL-016** (P11, [extract](prd-2006-normative-extract.md#problem)): “PR review consumes scarce model capacity inefficiently. Capacity is shared with implementation work.”
+
+**Fit criterion:** Comparing recorded model/token consumption for a review against what that review's policy states as required assurance shows no material excess; a system that merely records consumption without this comparison being able to show non-excess does not satisfy the check.
+
+### RQA-FR-019
+
+For a given policy, no reviewer pass, independent pass, repeated analysis, reasoning strategy or higher-cost method not required by that policy's stated assurance shall be performed.
+
+*In plain terms: A policy shouldn't trigger more review passes, checks, or expensive analysis than it actually asks for.*
+
+`State-driven` · `Must` · `DECIDED` · ADR: —
+
+**Source:**
+- **CL-037** (AC10, [extract](prd-2006-normative-extract.md#success-criteria)): “For a given policy, RQA performs no reviewer pass, independent pass, repeated analysis, reasoning strategy or higher-cost method that is not required by that policy's stated assurance, and valid existing results are reused rather than regenerated.”
+
+**Fit criterion:** Comparing every effort type CL-037 names — reviewer pass, independent pass, repeated analysis, reasoning strategy, and higher-cost method — that a review actually performed against its policy's stated assurance requirement shows none beyond what the policy requires; a pass that uses an unrequired repeated analysis, reasoning strategy, or higher-cost method fails this check even where the raw pass count matches policy.
+
+### RQA-FR-020
+
+A valid existing result shall be reused rather than regenerated.
+
+*In plain terms: If a valid result already exists, it should be reused instead of computed again.*
+
+`Ubiquitous` · `Must` · `DECIDED` · ADR: —
+
+**Source:**
+- **CL-037** (AC10, [extract](prd-2006-normative-extract.md#success-criteria)): “For a given policy, RQA performs no reviewer pass, independent pass, repeated analysis, reasoning strategy or higher-cost method that is not required by that policy's stated assurance, and valid existing results are reused rather than regenerated.”
+
+**Fit criterion:** Where a prior result remains valid for the current revision, the review record shows it reused rather than a new equivalent result generated.
+
+### RQA-FR-021
+
+Resource consumption shall be recorded from what the execution environment actually exposes and be distinguishable from an estimate.
+
+*In plain terms: How much compute/resources a review used should come from real measurements, not be confused with a guess.*
+
+`Ubiquitous` · `Must` · `DECIDED` · ADR: —
+
+**Source:**
+- **CL-038** (AC11, [extract](prd-2006-normative-extract.md#success-criteria)): “Resource consumption is recorded from what the execution environment actually exposes and is distinguishable from an estimate; a configured bound, when reached, produces a configured fallback, an explicitly incomplete review, or an escalation — never a successful outcome.”
+
+**Fit criterion:** Where the execution environment exposes an actual resource-consumption reading, that actual figure — not an estimate substituted in its place — is what the record relies on; a run that has an exposed actual reading available and records only an estimate instead fails this check. Where the environment ever produces only an estimate (no actual reading exposed), an observer can distinguish that record's estimated reading from an actual one by its own inspectable provenance. This check does not require a system whose environment always exposes actuals to manufacture an estimate-only scenario for testing — the estimate-distinguishability test applies only where an estimate is genuinely in use.
+
+### RQA-FR-022
+
+When a configured resource bound is reached, the review shall produce a configured fallback, an explicitly incomplete review, or an escalation.
+
+*In plain terms: If a review hits a configured resource limit, it should end in one of three ways: fall back to what's configured, finish as an explicitly incomplete review, or escalate — nothing else.*
+
+`Event-driven` · `Must` · `DECIDED` · ADR: —
+
+**Source:**
+- **CL-038** (AC11, [extract](prd-2006-normative-extract.md#success-criteria)): “Resource consumption is recorded from what the execution environment actually exposes and is distinguishable from an estimate; a configured bound, when reached, produces a configured fallback, an explicitly incomplete review, or an escalation — never a successful outcome.”
+
+**Fit criterion:** Every review run in which a configured bound was reached ends in one of the three named outcomes; where the outcome is a fallback, it is the fallback already in force in configuration before the bound was reached, not one invented ad hoc — a run that substitutes an unconfigured alternative and calls it 'a fallback' fails this check even though a fallback-shaped outcome occurred.
+
+### RQA-FR-023
+
+Where a fallback is explicitly configured, the review shall continue through that fallback when a configured reviewer, model or provider becomes unavailable.
+
+*In plain terms: If a fallback is set up in advance, the review keeps going through it when a reviewer, model or provider goes down.*
+
+`Optional-feature` · `Must` · `DECIDED` · ADR: —
+
+**Source:**
+- **CL-039** (AC12, [extract](prd-2006-normative-extract.md#success-criteria)): “With a configured reviewer, model or provider made unavailable, RQA continues through an explicitly configured fallback; with no fallback configured it invents none and stops in a clear, safe, recoverable non-success state.”
+
+**Fit criterion:** Given a configured fallback and an unavailable configured reviewer, model or provider, the review proceeds via the fallback rather than halting.
+
+**See also:** [RQA-NFR-007](#rqa-nfr-007) (shares source criterion AC12)
+
+### RQA-FR-024
+
+While no fallback is configured for a reviewer, model or provider, the review shall invent no fallback when that reviewer, model or provider becomes unavailable.
+
+*In plain terms: If no fallback is set up, the review must not invent one on the spot when a reviewer, model or provider goes down.*
+
+`State-driven` · `Must` · `DECIDED` · ADR: —
+
+**Source:**
+- **CL-039** (AC12, [extract](prd-2006-normative-extract.md#success-criteria)): “With a configured reviewer, model or provider made unavailable, RQA continues through an explicitly configured fallback; with no fallback configured it invents none and stops in a clear, safe, recoverable non-success state.”
+
+**Fit criterion:** With no fallback configured and a configured reviewer, model or provider unavailable, the review never substitutes an unconfigured alternative in its place.
+
+**See also:** [RQA-NFR-007](#rqa-nfr-007) (shares source criterion AC12)
+
+### RQA-FR-038
+
+While no fallback is configured for a reviewer, model or provider, the review shall stop in a clear, safe, recoverable non-success state when that reviewer, model or provider becomes unavailable.
+
+*In plain terms: If no fallback is configured and a reviewer, model or provider goes down, the review has to stop cleanly and safely, in a state that can be picked back up later.*
+
+`State-driven` · `Must` · `DECIDED` · ADR: —
+
+**Source:**
+- **CL-039** (AC12, [extract](prd-2006-normative-extract.md#success-criteria)): “With a configured reviewer, model or provider made unavailable, RQA continues through an explicitly configured fallback; with no fallback configured it invents none and stops in a clear, safe, recoverable non-success state.”
+
+**Fit criterion:** With no fallback configured and a configured reviewer, model or provider unavailable, the review halts in a state independently observable to hold every standing security invariant this specification states — RQA-NFR-010 (no ambiguous/corrupted/partial outcome), RQA-NFR-018 (no widened authority), RQA-NFR-019…021 (remediation bounds), RQA-NFR-022/RQA-NFR-028 (forgeable-proof provenance), and RQA-NFR-024/RQA-NFR-030 (credential floor and ceiling) — and from which a subsequent run can resume. This set is bounded to the standing invariants that describe a state a stopped run can be *left in*; it deliberately excludes RQA-NFR-015/016 (untrusted-content handling and blocking-finding behaviour, which describe ongoing review conduct, not a resting state), RQA-NFR-017/026 (per-activity authorisation configuration, a standing system setting independent of any one run's stop), and RQA-NFR-023/027/029 (external-send decisions, which govern whether content is sent during a run, not the state left behind once it stops) — each excluded for the stated reason, not silently. `Safe` is not fully closed-form: CL-039 does not itself enumerate what safety consists of beyond 'clear, safe, recoverable', so this check tests the most complete, explicitly-bounded set of source-derived standing invariants available, which requirements-quality-assessment.md records as an open-texture limitation rather than an exhaustive definition of 'safe'.
+
+**See also:** [RQA-NFR-007](#rqa-nfr-007) (shares source criterion AC12)
+
+### RQA-FR-039
+
+When a configured resource bound is reached, the review shall never produce a successful outcome.
+
+*In plain terms: Hitting a configured resource limit should never, by itself, produce a passing review.*
+
+`Unwanted-behaviour` · `Must` · `DECIDED` · ADR: —
+
+**Source:**
+- **CL-038** (AC11, [extract](prd-2006-normative-extract.md#success-criteria)): “Resource consumption is recorded from what the execution environment actually exposes and is distinguishable from an estimate; a configured bound, when reached, produces a configured fallback, an explicitly incomplete review, or an escalation — never a successful outcome.”
+
+**Fit criterion:** No review run in which a configured bound was reached ends in a successful disposition, independent of which of RQA-FR-022's three outcomes it produced instead.
+
+### RQA-NFR-009
+
+An alternative model or provider shall be used only when explicitly configured.
+
+*In plain terms: The system only switches to a backup model or provider when that's been explicitly turned on — never automatically.*
+
+`State-driven` · `Must` · `DECIDED` · ADR: —
+
+**Source:**
+- **CL-024** (C7, [extract](prd-2006-normative-extract.md#problem)): “Configured resilience. Alternative models/providers only when explicitly configured. Failure must not leave an ambiguous, corrupted or partially authoritative outcome.”
+
+**Fit criterion:** With no alternative model or provider configured, none is substituted; one only activates once configuration names it.
+
+### RQA-NFR-010
+
+A failure during review shall never leave an ambiguous, corrupted or partially authoritative outcome.
+
+*In plain terms: If something goes wrong mid-review, the result should never come out half-finished, corrupted, or ambiguous about whether it counts as official.*
+
+`Unwanted-behaviour` · `Must` · `DECIDED` · ADR: —
+
+**Source:**
+- **CL-024** (C7, [extract](prd-2006-normative-extract.md#problem)): “Configured resilience. Alternative models/providers only when explicitly configured. Failure must not leave an ambiguous, corrupted or partially authoritative outcome.”
+
+**Fit criterion:** Every failure during a review run is independently checked against three distinct invariants — the outcome is not ambiguous, not corrupted, and not partially authoritative — and passes only if all three hold; a clearly labelled but corrupted non-authoritative record fails this check even though it is unambiguous.
+
+---
+
+## Harness interoperability and operation
+
+Running across different AI tooling, repositories and organisations, and operating from one person's own machine.
+
+### RQA-FR-004
+
+A change to a repository's review policy shall take effect on that repository's next review with no rebuild, reinstall or redeploy.
+
+*In plain terms: Changing a repository's review rules should work on the very next review — no reinstall, no redeploy.*
+
+`Event-driven` · `Must` · `DECIDED` · ADR: —
+
+**Source:**
+- **CL-029** (AC02, [extract](prd-2006-normative-extract.md#success-criteria)): “Two repositories configured with different review policies produce demonstrably different blocking outcomes on the same diff, and a policy change takes effect on the next review with no rebuild, reinstall or redeploy.”
+
+**Fit criterion:** After a policy configuration change, the very next review on that repository reflects the new policy without any build, install or deployment step having been performed in between.
+
+**See also:** [RQA-FR-003](#rqa-fr-003) (same source criterion (AC02)), [RQA-NFR-005](#rqa-nfr-005) (near-duplicate obligation, C4)
+
+### RQA-FR-030
+
+A harness not built into the system shall be able to participate in a review by satisfying the published interaction contract alone, with no change to the system's own source.
+
+*In plain terms: An AI harness that isn't built into the system should still be able to take part in a review, purely by speaking the published interface — with no code changes to the system itself.*
+
+`Ubiquitous` · `Must` · `DECIDED` · ADR: [`ADR-C`](adr-drafts/ADR-C-external-harness-provenance-authentication.md)
+
+**Source:**
+- **CL-042** (AC15, [extract](prd-2006-normative-extract.md#success-criteria)): “A harness not built into RQA participates in a review by satisfying the published interaction contract alone, with no change to RQA's own source.”
+
+**Fit criterion:** A harness never previously integrated participates in a review using only the published interaction contract, with one fixed, unmodified revision of the system's own source held constant throughout both admission and execution of that review — inspectable as identical at every point during the review, not merely equal again at the end; a transient patch applied to admit the harness and reverted afterward fails this check even though the source is identical before and after.
+
+### RQA-FR-031
+
+One operator running locally shall be able to review pull requests across at least two independently configured repositories under different GitHub owners or organisations, with no centrally hosted service.
+
+*In plain terms: One person, running this locally, should be able to review PRs across at least two separately configured repositories under different GitHub owners, with no shared hosted service involved.*
+
+`Ubiquitous` · `Must` · `DECIDED` · ADR: —
+
+**Source:**
+- **CL-043** (AC16, [extract](prd-2006-normative-extract.md#success-criteria)): “One operator running locally reviews PRs across at least two independently configured repositories under different GitHub owners or organisations, with no centrally hosted service.”
+
+**Fit criterion:** One operator, running locally with no centrally hosted service, completes a review on each of two repositories under two different GitHub owners or organisations; this check does not require both reviews to run from the same physical machine — one operator reviewing one repository from a local desktop and the other from a local laptop, with no central service involved in either, still satisfies it, since CL-043 requires one operator running locally, not one physical machine.
+
+### RQA-NFR-001
+
+The system shall operate across uncontrolled contributor environments without depending on a particular harness, agent, model or provider.
+
+*In plain terms: The system should work no matter what tooling a contributor happens to use — it shouldn't be locked to one harness, agent, model or provider.*
+
+`Ubiquitous` · `Must` · `DECIDED` · ADR: —
+
+**Source:**
+- **CL-018** (C1, [extract](prd-2006-normative-extract.md#problem)): “Tooling independence. Must operate across uncontrolled contributor environments; cannot depend on a particular harness, agent, model or provider. Contributors may use a thin skill/plugin/hook conforming to a common interaction contract.”
+
+**Fit criterion:** The system's conformance to the published interaction contract is demonstrated through materially independent implementations, including at least one environment not previously used in that demonstration, and inspection shows the system's core review logic carries no hard-coded dependency requiring one particular harness, agent, model or provider to be present; a per-provider adapter implementing a common interface is not itself evidence of forbidden dependence — only a core logic path that fails or behaves differently without one specific harness/agent/model/provider is. A system hard-coded to exactly two known combinations does not satisfy this check merely by running under both of them.
+
+### RQA-NFR-002
+
+Where a contributor chooses to use a thin skill, plugin or hook conforming to the published interaction contract for a non-built-in environment, the system shall accommodate that environment's participation through the contract.
+
+*In plain terms: If a contributor's environment isn't built in but follows the published interface, the system should let it take part anyway.*
+
+`Optional-feature` · `Could` · `DECIDED` · ADR: [#2064](https://github.com/launchpad-26/buzz/issues/2064) (repo-wide policy/contract document placement)
+
+**Source:**
+- **CL-018** (C1, [extract](prd-2006-normative-extract.md#problem)): “Tooling independence. Must operate across uncontrolled contributor environments; cannot depend on a particular harness, agent, model or provider. Contributors may use a thin skill/plugin/hook conforming to a common interaction contract.”
+
+**Fit criterion:** A contributor's environment integrates via a thin skill, plugin or hook that conforms to the published interaction contract, and the system accommodates that environment's participation through the contract; this check does not require the system to separately implement acceptance of each of the three named mechanism forms — a system that lets the environment speak the contract directly, without a dedicated skill/plugin/hook acceptance path, still satisfies this check provided a contributor's conforming use of one is accommodated when it occurs.
+
+### RQA-NFR-003
+
+Where practical, an integration boundary shall use open, portable, implementation-neutral contracts and formats.
+
+*In plain terms: Wherever it's practical, the interfaces between components should use open, portable formats rather than anything proprietary.*
+
+`State-driven` · `Must` · `DECIDED` · ADR: [#2064](https://github.com/launchpad-26/buzz/issues/2064) (repo-wide policy/contract document placement)
+
+**Source:**
+- **CL-019** (C2, [extract](prd-2006-normative-extract.md#problem)): “Open interoperability. Integration boundaries use open, portable, implementation-neutral contracts and formats where practical.”
+
+**Fit criterion:** For the contract an integration boundary uses, and separately for the format it uses, all three qualities — open, portable, and implementation-neutral — hold conjunctively, or an independent evaluator can verify a specific, evidenced reason why holding all three was impractical for that artifact; an artifact meeting only one or two of the three qualities, with no evidenced impracticality reason covering the others, fails this check. The evaluator's verification does not require the implementation itself to carry a prescribed record of that reason — the reason must be evidenced and checkable, not necessarily stored by the system under test.
+
+### RQA-NFR-004
+
+The system shall operate across multiple repositories and multiple organisations, including both public and private repositories under different owners.
+
+*In plain terms: The system should be able to work across many repositories and organisations at once, whether they're public or private.*
+
+`Ubiquitous` · `Must` · `DECIDED` · ADR: —
+
+**Source:**
+- **CL-020** (C3, [extract](prd-2006-normative-extract.md#problem)): “Multi-repository and cross-organisation operation. Public and private repositories, different owners, different organisations.”
+
+**Fit criterion:** The system completes a review on a repository under one organisation and a second repository under a genuinely different organisation — not merely a second owner account within the same organisation — with one covering a public repository and the other a private one. Both organisations are necessarily GitHub organisations, since C8/RQA-NFR-011 scope the whole specification to GitHub; this fit criterion does not itself re-derive that scoping from CL-020, which is platform-neutral, and names no platform.
+
+### RQA-NFR-005
+
+Updating a repository's policy or configuration shall not require rebuilding or redeploying the system.
+
+*In plain terms: Changing a repository's settings shouldn't require rebuilding or redeploying anything.*
+
+`Unwanted-behaviour` · `Must` · `DECIDED` · ADR: —
+
+**Source:**
+- **CL-021** (C4, [extract](prd-2006-normative-extract.md#problem)): “Repository-specific policy and configuration. Updating configuration must not require rebuilding or redeploying RQA.”
+
+**Fit criterion:** A policy or configuration change is applied and takes effect without any build or deployment step being run.
+
+**See also:** [RQA-FR-004](#rqa-fr-004) (near-duplicate obligation, AC02)
+
+### RQA-NFR-006
+
+One contributor shall be able to run the complete review workflow locally, with no central hosting, tenancy or SaaS functionality required.
+
+*In plain terms: A single person should be able to run the whole review workflow on their own machine — no shared server, no multi-tenant hosting required.*
+
+`Ubiquitous` · `Must` · `DECIDED` · ADR: —
+
+**Source:**
+- **CL-022** (C5, [extract](prd-2006-normative-extract.md#problem)): “Local-first operation. No central hosting, tenancy or SaaS functionality required; one contributor can run the complete workflow locally.”
+
+**Fit criterion:** A single contributor completes an end-to-end review from their own machine with no centrally hosted RQA service in the loop; GitHub itself, as the platform under review, is necessarily reached over the network and is not what this check tests.
+
+---
+
+## External provider sensitivity
+
+Sending code or evidence to an external AI provider only when explicitly allowed, and only as far as that permission goes.
+
+### RQA-FR-032
+
+The active external provider path shall be identifiable before evidence is sent to it.
+
+*In plain terms: Before any evidence is sent out, it should be clear which external AI provider is actually being used.*
+
+`Optional-feature` · `Must` · `DECIDED` · ADR: —
+
+**Source:**
+- **CL-044** (AC17, [extract](prd-2006-normative-extract.md#success-criteria)): “The active external provider path is identifiable before evidence is sent, and removing that provider from configuration leaves RQA's review protocol and semantics unchanged.”
+
+**Fit criterion:** Before any evidence leaves the system for an external provider, the specific provider path it will use can be named.
+
+### RQA-FR-033
+
+Removing the active external provider from configuration shall leave the review protocol and semantics unchanged.
+
+*In plain terms: If the external AI provider is removed from configuration, the review's rules and meaning stay exactly the same.*
+
+`Event-driven` · `Must` · `DECIDED` · ADR: —
+
+**Source:**
+- **CL-044** (AC17, [extract](prd-2006-normative-extract.md#success-criteria)): “The active external provider path is identifiable before evidence is sent, and removing that provider from configuration leaves RQA's review protocol and semantics unchanged.”
+
+**Fit criterion:** With the external provider removed from configuration, the same published protocol definition still validates reviews and the same concept semantics still hold.
+
+### RQA-NFR-012
+
+Where an external provider is explicitly configured, the system shall permit code, diffs, metadata and evidence to be sent to it.
+
+*In plain terms: If an operator has turned on an external AI provider, the system is allowed to send it code, diffs, metadata and evidence.*
+
+`Optional-feature` · `Could` · `DECIDED` · ADR: —
+
+**Source:**
+- **CL-026** (C9, [extract](prd-2006-normative-extract.md#problem)): “External model use is permitted. Code, diffs, metadata and evidence may be sent to explicitly configured external providers; users choose review paths appropriate to sensitivity.”
+
+**Fit criterion:** With an external provider configured, each of code, diffs, metadata and evidence — every type the statement names — can individually be sent to it; the statement names an inclusive list of permitted content types, not any single alternative among them, so a system that can send only one of the four types does not satisfy this check.
+
+### RQA-NFR-013
+
+An operator shall be able to choose a review path appropriate to a repository's sensitivity.
+
+*In plain terms: An operator should be able to pick a review approach that matches how sensitive a given repository is.*
+
+`Ubiquitous` · `Must` · `DECIDED` · ADR: —
+
+**Source:**
+- **CL-026** (C9, [extract](prd-2006-normative-extract.md#problem)): “External model use is permitted. Code, diffs, metadata and evidence may be sent to explicitly configured external providers; users choose review paths appropriate to sensitivity.”
+
+**Fit criterion:** An operator can select, per repository, a review path that avoids sending that repository's content to an external provider, distinct from one that permits it.
+
+### RQA-NFR-023
+
+The decision to permit sending a given repository's content to an external provider shall be made per repository, not globally.
+
+*In plain terms: Whether a given repository's content is allowed to go to an external AI provider is decided one repository at a time — never as one global switch.*
+
+`Ubiquitous` · `Must` · `DECIDED` · ADR: —
+
+**Source:**
+- **CL-059** (Security implications, bullet 5, [extract](prd-2006-normative-extract.md#security-implications)): “External providers receive repository content (C9). The active provider path must be identifiable before evidence is sent, so an operator can decide whether a given repository or change may be sent at all. Private repositories under AC16 make this a per-repository decision, not a global one.”
+
+**Fit criterion:** Configuring one repository to permit external-provider sends and a second to forbid it produces different sending behaviour on each, from one shared installation.
+
+### RQA-NFR-027
+
+Where no external provider is explicitly configured, no code, diff, metadata or evidence shall be sent to any external provider.
+
+*In plain terms: If no external AI provider has been turned on, nothing — no code, diff, metadata or evidence — leaves the system for one.*
+
+`State-driven` · `Must` · `DECIDED` · ADR: —
+
+**Source:**
+- **CL-024** (C7, [extract](prd-2006-normative-extract.md#problem)): “Configured resilience. Alternative models/providers only when explicitly configured. Failure must not leave an ambiguous, corrupted or partially authoritative outcome.”
+- **CL-026** (C9, [extract](prd-2006-normative-extract.md#problem)): “External model use is permitted. Code, diffs, metadata and evidence may be sent to explicitly configured external providers; users choose review paths appropriate to sensitivity.”
+
+**Fit criterion:** With no external provider configured, no code, diff, metadata or evidence leaves the system for one.
+
+### RQA-NFR-029
+
+An operator shall be able to deny sending an individual change's content to an external provider even where its repository otherwise permits external-provider sends.
+
+*In plain terms: An operator can block one specific sensitive change from being sent to an external provider, even if that repository normally allows it.*
+
+`Ubiquitous` · `Must` · `DECIDED` · ADR: —
+
+**Source:**
+- **CL-059** (Security implications, bullet 5, [extract](prd-2006-normative-extract.md#security-implications)): “External providers receive repository content (C9). The active provider path must be identifiable before evidence is sent, so an operator can decide whether a given repository or change may be sent at all. Private repositories under AC16 make this a per-repository decision, not a global one.”
+
+**Fit criterion:** A repository configured to permit external-provider sends in general still allows one specific, individually flagged change to be withheld from every external provider; a system offering only a repository-wide toggle, with no way to withhold one sensitive change, fails this check.
+
+---
+
+## Authority, credentials and untrusted content
+
+What permissions the system is allowed to hold, how those permissions turn on, and how it treats a pull request's own content as untrusted.
+
+### RQA-NFR-015
+
+Pull-request content shall be treated as untrusted data, never as instructions, at every authority level including advisory-only.
+
+*In plain terms: Nothing in a pull request — its diff, description, or comments — should ever be treated as an instruction to the reviewer. It's just data to inspect, always.*
+
+`Unwanted-behaviour` · `Must` · `DECIDED` · ADR: —
+
+**Source:**
+- **CL-055** (Security implications, bullet 1, [extract](prd-2006-normative-extract.md#security-implications)): “PR content is untrusted data, never instructions. A PR author controls the diff, body and comments that RQA reads. A crafted PR attempting to induce a clean review or a fabricated evidence state is itself a blocking finding. This applies at every authority level, including advisory-only.”
+
+**Fit criterion:** Adversarial injection content placed in a PR's diff, body or comments produces no change in review behaviour or evidence state attributable to **following that content as an instruction** — the review neither approves, alters a finding, nor changes an evidence state because the content told it to — at each configured authority level including advisory-only. This check explicitly allows, and RQA-NFR-016 separately requires, the defensive response to the same content: classifying it and recording a blocking finding is not itself a change made because the content instructed it, and does not fail this check; a system that silently ignores the attempted injection with no defensive response fails RQA-NFR-016, not this row.
+
+### RQA-NFR-016
+
+A pull request crafted to induce a clean review or a fabricated evidence state shall itself be recorded as a blocking finding, at every authority level including advisory-only.
+
+*In plain terms: If a PR is crafted to trick the review into passing or to fake its own evidence, that attempt itself should be recorded as a blocking finding.*
+
+`Ubiquitous` · `Must` · `DECIDED` · ADR: —
+
+**Source:**
+- **CL-055** (Security implications, bullet 1, [extract](prd-2006-normative-extract.md#security-implications)): “PR content is untrusted data, never instructions. A PR author controls the diff, body and comments that RQA reads. A crafted PR attempting to induce a clean review or a fabricated evidence state is itself a blocking finding. This applies at every authority level, including advisory-only.”
+
+**Fit criterion:** Given a PR containing content designed to manufacture a clean review or false evidence state, the review record contains a blocking finding describing that attempt, whether the system is running advisory-only or at any other configured authority level.
+
+### RQA-NFR-017
+
+Each of review, comment, approve, request-changes, remediate and merge shall be separately authorised.
+
+*In plain terms: Reviewing, commenting, approving, requesting changes, auto-fixing, and merging are each switched on or off separately — turning one on doesn't turn on the others.*
+
+`Ubiquitous` · `Must` · `DECIDED` · ADR: —
+
+**Source:**
+- **CL-056** (Security implications, bullet 2, [extract](prd-2006-normative-extract.md#security-implications)): “Authority is per-activity and fail-closed. Review, comment, approve, request-changes, remediate and merge are separately configured and default to disabled; a malformed or unreadable policy must never widen authority.”
+
+**Fit criterion:** Each of the six named activities has its own authorisation setting, independent of the other five.
+
+### RQA-NFR-018
+
+A malformed or unreadable policy shall never widen authority beyond what was already granted.
+
+*In plain terms: If a policy file is broken or unreadable, that failure should never accidentally grant more permission than the system already had.*
+
+`State-driven` · `Must` · `DECIDED` · ADR: —
+
+**Source:**
+- **CL-056** (Security implications, bullet 2, [extract](prd-2006-normative-extract.md#security-implications)): “Authority is per-activity and fail-closed. Review, comment, approve, request-changes, remediate and merge are separately configured and default to disabled; a malformed or unreadable policy must never widen authority.”
+
+**Fit criterion:** Deliberately corrupting or truncating the policy input never results in an activity gaining authorisation it did not already have, regardless of what form that policy input takes — a tracked file, a database record, an API response, or any other representation; the check also exercises a policy input that is unreadable for a reason other than malformation — permission denied, unavailable, or timed out — and confirms the same non-widening result holds there too, not only for the malformed-input path.
+
+### RQA-NFR-024
+
+The credential the system holds shall carry pull-request write and repository-content read on the repositories where the system is configured to submit authoritative review outcomes.
+
+*In plain terms: On any repository where the system is set up to give an official verdict, its access token needs at least write-to-PRs and read-the-code permissions.*
+
+`Optional-feature` · `Must` · `DECIDED` · ADR: [`ADR-B`](adr-drafts/ADR-B-credential-scope-vs-merge-capability.md)
+
+**Source:**
+- **CL-060** (Security implications, bullet 6, [extract](prd-2006-normative-extract.md#security-implications)): “Credentials stay narrow. A GitHub token scoped to the target repositories with pull-requests write and contents read; no deploy keys, no relay or VPS credentials, no access to a contributor's machine.”
+- **CL-056** (Security implications, bullet 2, [extract](prd-2006-normative-extract.md#security-implications)): “Authority is per-activity and fail-closed. Review, comment, approve, request-changes, remediate and merge are separately configured and default to disabled; a malformed or unreadable policy must never widen authority.”
+
+**Fit criterion:** For a repository configured to submit authoritative review outcomes, inspecting the credential's granted scopes shows both pull-request write and repository-content read present on it; a credential missing either named permission on such a repository fails this check. This row states only the floor for that configuration; what a credential may hold on a repository configured for narrower activity, or beyond these two permissions anywhere, is RQA-NFR-030's own check, not this one's.
+
+### RQA-NFR-025
+
+The system shall hold no deploy-key, relay or VPS credential, and no credential granting access to a contributor's machine.
+
+*In plain terms: The system should never hold a deploy key, a relay credential, a VPS credential, or anything that could reach a contributor's own machine.*
+
+`Unwanted-behaviour` · `Must` · `DECIDED` · ADR: —
+
+**Source:**
+- **CL-060** (Security implications, bullet 6, [extract](prd-2006-normative-extract.md#security-implications)): “Credentials stay narrow. A GitHub token scoped to the target repositories with pull-requests write and contents read; no deploy keys, no relay or VPS credentials, no access to a contributor's machine.”
+
+**Fit criterion:** An inventory of credentials the system holds contains no deploy key, no relay or VPS credential, and nothing granting access to a contributor's own machine.
+
+### RQA-NFR-026
+
+Each of review, comment, approve, request-changes, remediate and merge shall default to disabled.
+
+*In plain terms: Reviewing, commenting, approving, requesting changes, auto-fixing, and merging all start out turned off until someone deliberately turns them on.*
+
+`Ubiquitous` · `Must` · `DECIDED` · ADR: —
+
+**Source:**
+- **CL-056** (Security implications, bullet 2, [extract](prd-2006-normative-extract.md#security-implications)): “Authority is per-activity and fail-closed. Review, comment, approve, request-changes, remediate and merge are separately configured and default to disabled; a malformed or unreadable policy must never widen authority.”
+
+**Fit criterion:** An unconfigured deployment has every one of the six named activities off, with no activity defaulting to enabled.
+
+### RQA-NFR-030
+
+The credential the system holds shall have no permission broader than pull-request write and repository-content read, no permission on any repository outside those it manages, and no permission on a repository beyond what the activities configured for that repository require.
+
+*In plain terms: The system's access token should never hold more than the minimum permissions needed — nothing extra, nowhere it doesn't manage, and nothing beyond what a given repository's setup actually requires.*
+
+`Unwanted-behaviour` · `Must` · `DECIDED` · ADR: [`ADR-B`](adr-drafts/ADR-B-credential-scope-vs-merge-capability.md)
+
+**Source:**
+- **CL-060** (Security implications, bullet 6, [extract](prd-2006-normative-extract.md#security-implications)): “Credentials stay narrow. A GitHub token scoped to the target repositories with pull-requests write and contents read; no deploy keys, no relay or VPS credentials, no access to a contributor's machine.”
+- **CL-056** (Security implications, bullet 2, [extract](prd-2006-normative-extract.md#security-implications)): “Authority is per-activity and fail-closed. Review, comment, approve, request-changes, remediate and merge are separately configured and default to disabled; a malformed or unreadable policy must never widen authority.”
+
+**Fit criterion:** Inspecting the credential's granted scopes shows, on every repository: nothing beyond pull-request write and repository-content read; no permission at all on a repository outside the managed set; and, on a repository configured for narrower activity than submitting authoritative review outcomes (for example, advisory-only), no more permission than that narrower activity requires — a credential carrying pull-request write on a repository configured only for advisory, non-authoritative activity fails this check by holding more than that configuration needs, even though it holds no more than the two named permission types in the abstract. All three are ceiling tests on the same credential; a credential failing any one of them fails this check.
+
+---
+
+## Scope and design baseline
+
+What repository host this covers, and the baseline every kept piece of the design has to justify itself against.
+
+### RQA-FR-034
+
+Every architectural component retained in the delivered design shall be justified as materially serving a criterion, as having no materially simpler sufficient approach, or as required by a constraint.
+
+*In plain terms: Every piece of the design that's kept has to earn its place — it either clearly helps meet a requirement, has no simpler substitute, or is required by a constraint.*
+
+`Ubiquitous` · `Must` · `DECIDED` · ADR: —
+
+**Source:**
+- **CL-045** (Closing criterion 1, [extract](prd-2006-normative-extract.md#success-criteria)): “Every architectural component retained in the delivered design is justified against this baseline under the §6 rule: it materially serves a criterion, no materially simpler approach suffices, or a constraint requires it.”
+
+**Fit criterion:** For every retained architectural component, a recorded justification substantiates — with a specific, checkable claim, not a bare label — at least one of the three named grounds: the specific criterion it materially serves, the specific materially-simpler alternative that was considered and rejected and why, or the specific constraint requiring it; a recorded claim that names a ground with no supporting specific content does not satisfy this check. This row does not prescribe who authors or evaluates the justification — CL-045/the §6 rule names neither — only that the substantiation itself is specific and checkable.
+
+### RQA-FR-035
+
+Exactly one authoritative review-agent scope shall remain open, achieved by closing or explicitly re-parenting #109 and reconciling its features #535 and #536 against this scope.
+
+*In plain terms: There should be exactly one place that owns "what does the review agent do" — old overlapping issues get closed or folded in so there's no ambiguity about scope.*
+
+`Ubiquitous` · `Must` · `DECIDED` · ADR: —
+
+**Source:**
+- **CL-046** (Closing criterion 2, [extract](prd-2006-normative-extract.md#success-criteria)): “#109 is closed or explicitly re-parented, and its features #535 and #536 are reconciled against this scope, so exactly one authoritative review-agent scope is open.”
+
+**Fit criterion:** At any point after delivery, each of three conditions is checked on its own terms, not interchangeably: #109 is confirmed to be either closed or explicitly re-parented (not merely 'reconciled'); #535 and #536 are each confirmed reconciled against this scope; and exactly one open issue can be pointed to as the authoritative review-agent scope.
+
+### RQA-NFR-011
+
+The system shall support review of GitHub-hosted repositories.
+
+*In plain terms: The system needs to work with repositories hosted on GitHub.*
+
+`Ubiquitous` · `Must` · `DECIDED` · ADR: —
+
+**Source:**
+- **CL-025** (C8, [extract](prd-2006-normative-extract.md#problem)): “GitHub scope. GitHub only; generic cross-SCM support is not required.”
+
+**Fit criterion:** The system's review-lifecycle requirements are demonstrated against a GitHub-hosted repository; a system that supports GitHub review as this specification requires satisfies this row regardless of whether it also supports a second source-control platform, since C8/Non-goal 1 release cross-SCM support as out of scope rather than prohibiting it.
+
+### RQA-NFR-014
+
+The system shall have an open-source, freely usable implementation path, and an optional external provider used alongside it need not itself be free or open source.
+
+*In plain terms: There has to be a way to run this using only free, open-source software — any paid external AI provider is optional, not required.*
+
+`Ubiquitous` · `Must` · `DECIDED` · ADR: —
+
+**Source:**
+- **CL-027** (Project requirement, [extract](prd-2006-normative-extract.md#problem)): “RQA must have an open-source, freely usable implementation path. Optional external providers need not themselves be free or open source.”
+
+**Fit criterion:** A user can assemble and run a complete implementation using only free, open-source components, and choosing to add a non-free external provider on top does not remove that path.
+
+
+---
+
+## Cold reference material
+
+The material below explains *how* this specification was built and checked. None of it changes any requirement's
+obligation; it exists so the derivation can be audited.
+
+- [**Methodology**](methodology.md) — how this document is structured relative to ISO/IEC/IEEE 29148:2018, the
+  EARS patterns used, and the vocabulary, status and priority conventions it follows.
+- [**Source-clause inventory**](clause-inventory.md) — every clause of the extract (`CL-001`–`CL-065`), and
+  what became of each one.
+- [**Singular-split record**](singular-splits.md) — where one acceptance criterion produced more than one
+  requirement, and why.
+- [**Set-level assessment**](set-assessment.md) — the specification judged as a whole, including the
+  ISO/IEC 25010:2023 sweep of the non-functional class.
+- [**Traceability**](traceability.md) — the rule that binds a multi-part acceptance criterion to all of its
+  requirements, and the two checks that confirm every clause and every requirement are correctly linked.
+- [**Revision history**](revision-history.md) — what changed across this specification's review rounds, briefly.
+- [**Quality assessment**](requirements-quality-assessment.md) — every requirement judged against the nine
+  ISO/IEC/IEEE 29148:2018 individual requirement characteristics.
+- [**ADR drafts**](adr-drafts/) — the open questions this specification surfaces but does not settle.
+- [**Normative extract**](prd-2006-normative-extract.md) — the source text everything above derives from.
