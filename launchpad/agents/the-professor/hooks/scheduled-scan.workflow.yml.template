@@ -148,11 +148,17 @@ jobs:
           #   done
           # verify-claims' dispatch — RESOLVED (redesign doc, Open Questions item 9):
           # it runs $PROFESSOR_VERIFIER_CMD as a subprocess (same override pattern as
-          # PROFESSOR_PACK_ROOT; suite default `claude --print`), fed only a claim's
-          # cited span and sentence, per claim, per changed page. FILL IN once
-          # tools/professor.py's verify-claims wrapper exists (Phase 1b):
+          # PROFESSOR_PACK_ROOT, INCLUDING no suite-applied default — this variable
+          # must be set in this job's own env; `claude --print` is the recommended
+          # value, not a fallback applied for you), fed only a claim's cited span and
+          # sentence, per claim, per changed page. Deliberately NOT a
+          # tools/professor.py subcommand (redesign doc §4's diagram note) — this is
+          # verify-claims' own dispatch logic, kept separate from the toolkit's four
+          # deterministic subcommands because this one dispatches a model, not a
+          # script. FILL IN once that dispatch logic exists (Phase 1b):
           #   for f in $(git diff --name-only HEAD -- '*.md'); do
-          #     "$PROFESSOR_PACK_ROOT/tools/professor.py" verify-claims "$f" --target . || exit 1
+          #     <run verify-claims' own procedure against "$f", which itself calls
+          #      $PROFESSOR_VERIFIER_CMD once per claim> || exit 1
           #   done
           # Fail this job if any claim's verdict is anything other than SUPPORTED.
           echo "independent re-verification placeholder — see this step's comment" >&2

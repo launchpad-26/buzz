@@ -3,7 +3,7 @@
 **A portable Skill-suite plugin, not a standalone agent** — pointed at one target repo at a
 time: it scans a repo for undocumented or stale code, drafts and updates its documentation
 library, tags every section with provenance, screens everything for sensitive content before
-it's written, and keeps the resulting library organized. The distributable unit is the six
+it's written, and keeps the resulting library organized. The distributable unit is the seven
 skills plus their tool layer, installable via a marketplace into whatever agent a team already
 runs; the bundled persona (`personas/the-professor.persona.md`) is an optional companion voice
 for a team that wants a dedicated identity running these skills, not a requirement to use them.
@@ -23,10 +23,10 @@ hard-coupled to one target, `launchpad-26/handbook`, via a module-level constant
 shelled out from that one repo's checkout. That build is accurate history and still describes
 exactly what ships in this pack's `tools/` directory today — this redesign hasn't touched it.
 
-The full proposal — why that coupling was accidental rather than necessary, the six
+The full proposal — why that coupling was accidental rather than necessary, the seven
 sub-skills that replace one, why it retires MCP in favor of a plain script-based tool layer
 (a bigger move than, and a confirmed departure from, #1402's in-flight dual-mode fix), the
-eight-phase build plan, and what's scaffolded in this branch versus left for later phases —
+eight-phase-plus-1b build plan, and what's scaffolded in this branch versus left for later phases —
 is written up in
 [`launchpad/Research/the-professor-skill-suite-redesign.md`](../../Research/the-professor-skill-suite-redesign.md).
 Read that document first, especially its §1a and §9, before forming an opinion on this

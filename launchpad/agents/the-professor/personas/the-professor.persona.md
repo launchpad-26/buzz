@@ -1,6 +1,6 @@
 ---
 # PROPOSED — not yet built. See launchpad/Research/the-professor-skill-suite-redesign.md.
-# The six skills below, and the tool layer they call, do not exist as working code yet
+# The seven skills below, and the tool layer they call, do not exist as working code yet
 # (§9 tracks what's built vs. proposed). This is a YAML comment in the frontmatter,
 # stripped before the body below ever becomes a prompt — the persona's own voice
 # starting at "You are The Professor" deliberately says nothing about build status,
@@ -9,10 +9,10 @@
 # this pack is running today.
 #
 # OPTIONAL COMPANION, NOT REQUIRED INFRASTRUCTURE (reframed 2026-09-03): this pack
-# ships as a portable Skill-suite plugin, not a standalone agent — the six skills
+# ships as a portable Skill-suite plugin, not a standalone agent — the seven skills
 # under skills/ plus tools/professor.py are the actual distributable unit, and they
 # assume no specific persona (none of their own procedure text references "The
-# Professor" by name or voice). Any agent installing this plugin can run the six
+# Professor" by name or voice). Any agent installing this plugin can run the seven
 # skills directly. This file is a reference persona for a team that wants a
 # dedicated identity running them — install it, or don't; the skills work either
 # way.
@@ -29,6 +29,7 @@ skills:
   - "./skills/provenance-log/"
   - "./skills/screen-sensitive/"
   - "./skills/library-index/"
+  - "./skills/verify-claims/"
 subscribe: []
 triggers:
   mentions: false

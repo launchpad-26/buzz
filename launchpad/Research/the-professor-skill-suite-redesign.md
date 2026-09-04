@@ -10,14 +10,14 @@ and maintain its documentation.
 ## Summary — read this first
 
 **Packaging model — reframed 2026-09-03, at Serina's direction: this is a portable Skill-suite
-plugin, not a standalone agent.** The distributable unit is the six skills plus
+plugin, not a standalone agent.** The distributable unit is the seven skills plus
 `tools/professor.py` plus `tools/contract/` — installable, via a marketplace, into whatever
 agent or persona a team already runs. `.plugin/plugin.json` is already Open Plugin Spec format,
 which is the right shape for this; nothing about that changes.
 `personas/the-professor.persona.md` becomes an **optional companion persona** — a reference
 voice/creed for a team that wants a dedicated "Professor" identity running these skills, not a
 requirement to use them. This is a re-description of what's already scaffolded, not a rebuild:
-none of the six `SKILL.md` procedures assumed a specific persona to begin with — the voice lives
+none of the seven `SKILL.md` procedures assumed a specific persona to begin with — the voice lives
 only in `persona.md`, never in the skills' own instructions — so this reframing changes how the
 pack is packaged and described, not how any skill actually works. §5's directory tree and the
 README carry this framing now; nothing else in this document needed to change because of it.
@@ -41,12 +41,12 @@ before anyone starts Phase 1, but the open *decision* that used to gate that go-
 **For a human, in three sentences:** The Professor currently drafts documentation for exactly one
 repo (`launchpad-26/handbook`) and only from sessions that happen to have registered its MCP
 server — pointing it at a different repo gets nothing, because every tool has that one repo's
-name baked in (§1). This document replaces the single skill with six and replaces the MCP server
+name baked in (§1). This document replaces the single skill with seven and replaces the MCP server
 with one plain script (§1a) — the group has now confirmed that direction over the in-flight
-`#1402` fix's dual-mode approach — and breaks the build into eight phases (§9) so it can still be
-reviewed and shipped a piece at a time instead of as one large change. Diagrams: the tool-call
-architecture is in §4, the six skills' end-to-end flow is at the top of §6, the phase dependency
-graph is in §9.
+`#1402` fix's dual-mode approach — and breaks the build into eight phases plus Phase 1b (§9) so it
+can still be reviewed and shipped a piece at a time instead of as one large change. Diagrams: the
+tool-call architecture is in §4, the seven skills' end-to-end flow is at the top of §6, the phase
+dependency graph is in §9.
 
 **For an agent asked to build this:** don't start writing code from this summary. Read in order —
 §1 (why the old build doesn't generalize), §1a (the MCP-vs-scripts decision — **resolved**, script-
@@ -85,7 +85,7 @@ with that branch regardless of which way it goes.
 
 Full detail, deliverables, files touched, and review gates for every phase are in §9.
 
-The seven capabilities this suite was scoped against, and where each is actually addressed —
+The eight capabilities this suite was scoped against, and where each is actually addressed —
 listed once, together, because individual sections cite "capability 4" or "capability 7" in
 passing without ever pointing back to a list a reader could check them against:
 
@@ -295,12 +295,15 @@ controls.
 
 **And a third thing this same pattern answers — Open Questions item 9** (`verify-claims`'
 sub-agent dispatch, §6.7): `$PROFESSOR_VERIFIER_CMD`, an environment variable naming a headless,
-single-turn CLI command (a session/target configures which one), else the suite default of
-`claude --print` — the same headless-entry-point assumption §7.1 already makes for the scheduled
-path, applied consistently here instead of invented fresh. Every dispatched claim check is a
-subprocess call to that command, fed only the cited source span and the claim text, its stdout
-captured as the verdict — a plain subprocess call in shape, even though the logic behind it is a
-model rather than a script. A harness with no such command available at all cannot run this
+single-turn CLI command that a session/target must configure — **no suite-applied default, same
+as `$PROFESSOR_PACK_ROOT`**: fails loud with a specific, actionable message if unset, rather than
+silently falling back to a guessed command. `claude --print` is the suite's recommended value to
+configure it to (the same headless-entry-point assumption §7.1 already makes for the scheduled
+path, applied consistently here instead of invented fresh) — a recommendation for what to set, not
+something the suite applies for you. Every dispatched claim check is a subprocess call to that
+configured command, fed only the cited source span and the claim text, its stdout captured as the
+verdict — a plain subprocess call in shape, even though the logic behind it is a model rather than
+a script. A harness with no such command available at all cannot run this
 suite's mandatory gate — a named limitation, not a silent one.
 
 This is the same "read it live, never quote it" discipline from §4 of the original design,
@@ -312,18 +315,19 @@ applied one level up: the *choice of contract* is resolved live, per target, ins
 
 No MCP, no registration, no dual mode — one small script-based toolkit, callable identically
 from any harness via Bash, with a hard split between what needs the network and what doesn't.
-The diagram below is the actual call graph — which of the six skills calls `tools/professor.py`
+The diagram below is the actual call graph — which of the seven skills calls `tools/professor.py`
 at all, and which of its four subcommands each one uses:
 
 ```mermaid
 flowchart LR
-    subgraph skills["The six skills"]
+    subgraph skills["The seven skills"]
         SR["scan-repo"]
         DP["draft-page"]
         UP["update-page"]
         SS["screen-sensitive"]
         PL["provenance-log"]
         LI["library-index"]
+        VC["verify-claims"]
     end
 
     subgraph toolkit["tools/professor.py — one script, no MCP dependency"]
@@ -338,9 +342,12 @@ flowchart LR
         end
     end
 
+    Verifier[("$PROFESSOR_VERIFIER_CMD\nconfigured headless CLI, per claim")]
+
     DP -->|every draft| CP
     UP -->|every rewrite| CP
     SS -->|every gate run| SC
+    VC -->|one call per claim, isolated context| Verifier
     DP -.->|citing outside the target repo| RP
     DP -.->|citing outside the target repo| PE
     UP -.->|citing outside the target repo, or a needs_external_check entry| RP
@@ -349,8 +356,13 @@ flowchart LR
 
 `scan-repo`, `provenance-log`, and `library-index` have no edge into `toolkit` at all — they
 never call `tools/professor.py` in any mode, in any circumstance (§6's per-skill table says so
-explicitly for each). Solid arrows are calls that happen on every run; dashed arrows are calls
-that happen only for the external-citation exception §1's reframing describes.
+explicitly for each). **`verify-claims` also has no edge into `toolkit`** — its dispatch (§6.7,
+Open Questions item 9) is a direct subprocess call to `$PROFESSOR_VERIFIER_CMD`, not a
+`tools/professor.py` subcommand; the tool inventory below still counts four, not five, because
+this is a genuinely separate mechanism (a model dispatch, not a deterministic script), drawn
+outside the `toolkit` box on purpose rather than folded into it. Solid arrows are calls that
+happen on every run; dashed arrows are calls that happen only for the external-citation exception
+§1's reframing describes.
 
 **A tool inventory reduction worth calling out on its own, not just a mechanical rename.** The
 original build had five tools. This design has four subcommands — but the two that disappear,
@@ -414,7 +426,7 @@ launchpad/agents/the-professor/
                                       persona's own frontmatter does, per
                                       PERSONA_PACK_SPEC.md, and personas/
                                       the-professor.persona.md below already
-                                      does list all six)
+                                      does list all seven)
   README.md                          documents the suite + the portability fix   [UPDATED]
   personas/
     the-professor.persona.md         generalized identity, still one persona     [UPDATED]
@@ -425,6 +437,7 @@ launchpad/agents/the-professor/
     provenance-log/SKILL.md          4. per-section provenance ledger            [NEW]
     screen-sensitive/SKILL.md        5. secrets/PII gate before any write        [NEW]
     library-index/SKILL.md           6. library structure + index maintenance    [NEW]
+    verify-claims/SKILL.md           7. adversarial citation-fidelity gate       [NEW]
   tools/
     professor.py                     four subcommands (§4); no MCP dependency —  [FOLLOW-UP,
                                       resolve-pin, path-exists-at, check-page,     not built
@@ -487,19 +500,32 @@ All seven skills share one persona (The Professor) and one pack — matching the
 convention of "one identity, growing skills" rather than a persona per job. Each entry below is
 the spec the scaffolded `SKILL.md` implements; see the actual files for the full procedure text.
 
-**Known-stale as of 2026-09-04**: the original six `SKILL.md` files (§6.1–§6.6) were drafted
-during this document's original design session (2026-09-03), before decisions 5, 6, and 8 below
-were made. They have not been reconciled against those decisions — expect them to still reference
-`server.py`/MCP tools rather than `professor.py`, to be missing the `PROFESSOR_PACK_ROOT`
-resolution, and to be missing `provenance-log`'s `archive` mode. Treat them as first-pass drafts,
-not implementation-ready, until a reconciliation pass runs against the decisions recorded in Open
-Questions. `verify-claims` (§6.7) is drafted later, on 2026-09-04, already written against
-`professor.py`/`PROFESSOR_PACK_ROOT` — it does not carry this same staleness, but a reconciliation
-pass across all seven is still the right move before Phase 1 treats any of them as final.
+**Known-stale as of 2026-09-04 — corrected after review.** An earlier version of this note claimed
+the original six `SKILL.md` files (§6.1–§6.6) still referenced `server.py`/MCP tools, were missing
+`PROFESSOR_PACK_ROOT`, and were missing `provenance-log`'s `archive` mode. **All three claims were
+checked and are wrong** — a real-code corpus review (Ben Mitchell / Cursor, on PR #2097) caught
+this: there are zero `server.py`/`professor-tools` references anywhere in `skills/` (every match on
+those terms is a deliberate past-tense reference to the original build, e.g. "the original
+`resolve_pin`"), `PROFESSOR_PACK_ROOT` is present in exactly the three skills that call
+`tools/professor.py` (`draft-page`, `update-page`, `screen-sensitive`), and `provenance-log` has a
+complete `## archive mode` section including the never-archive-the-latest-event rule. That earlier
+note was written from inference, not from actually checking the files — exactly the mistake this
+document's own house rules warn against.
+
+**What is genuinely still stale, verified directly:** `draft-page` and `update-page`'s own
+procedure text still only sequences two gates (`check-page`, `screen-sensitive`) — neither
+mentions `verify-claims` (§6.7) at all, and neither has the "run every gate twice, once more
+independently as the final step" requirement (§6's flow-diagram note) that this document now
+states as universal. `library-index`'s own procedure text likewise predates, and does not yet
+implement, `bootstrap`'s defer-and-report behavior (Open Questions item 1) or `sweep`'s
+contradiction-detection check (Open Questions item 3). `verify-claims/SKILL.md` itself, drafted
+2026-09-04 after these decisions, is current and does not carry any of this. A reconciliation pass
+before Phase 1 treats any of the six as final still needs to happen — just for these specific
+gaps, not the three originally (and wrongly) claimed ones.
 
 The diagram below is the end-to-end flow — how a hook or a manual run turns into a gap report,
-how each branch of that report reaches the skill that handles it, and where the two gates sit
-relative to a write. This is the shape worth internalizing before reading the six entries below
+how each branch of that report reaches the skill that handles it, and where the three gates sit
+relative to a write. This is the shape worth internalizing before reading the seven entries below
 in isolation; the branching (three different outcomes from one scan) and the convergence (two
 different skills sharing one gate sequence) are exactly what prose has to describe sequentially
 but a reader has to hold all at once.
@@ -633,7 +659,7 @@ this specific call), not a reason to let an unverified claim reach a target repo
 | **Trigger** | Called by `draft-page` and `update-page`, always, as the third gate — after `check-page` (contract/citation-resolution) and `screen-sensitive` (sensitive-data), never before either, and never in parallel with them. Runs only against content that has already passed both cheaper gates, so the most expensive check never runs against a draft that was going to be rejected anyway. **Called twice per draft, not once** — see "The final, independent pass" below. |
 | **Inputs** | The gated draft content (new page or section patch), already past `screen-sensitive`; for each individual behaviour claim in it, its specific cited source, if it has one (the exact commit + path + span `check-page` already resolved — not the rest of the draft, and not the drafting agent's own reasoning). |
 | **Outputs** | Per claim: a verdict of `SUPPORTED`, `NOT_SUPPORTED`, `PARTIALLY_SUPPORTED`, or **`UNSOURCED`** (decided 2026-09-04, by Serina, reopening Open Questions item 3 — a behaviour claim with no citation at all; identified during step 1, before any per-claim dispatch, since there is nothing to check a citation *against*), each with a one-sentence reason. Any verdict other than `SUPPORTED`, on any claim, blocks the write entirely — same disposition/reporting shape as `screen-sensitive`'s `block` (see the flow diagram above): findings reported to whoever invoked the skill, nothing touches disk. All-`SUPPORTED` passes the draft through to the write step. |
-| **Mechanism** | For each claim that has a citation, dispatch a genuinely separate check in fresh context — only the cited source span and the specific claim sentence, deliberately *not* the rest of the draft, the drafting agent's reasoning, or the other claims' verdicts. This isolation is the point: a verifier that shares context with the drafter inherits the drafter's own blind spots instead of catching them. A claim with no citation skips dispatch entirely — `UNSOURCED` is immediate, cheaper than the per-claim model call every other verdict requires. **Dispatch itself — RESOLVED 2026-09-04, decided by Serina (Open Questions item 9, §3):** a subprocess call to `$PROFESSOR_VERIFIER_CMD` (a target/session-configured headless, single-turn CLI command; suite default `claude --print`), fed only the source span and claim text, its stdout captured as the verdict — the same subprocess shape every other tool call in this suite has, even though the logic behind it is a model, not a script. |
+| **Mechanism** | For each claim that has a citation, dispatch a genuinely separate check in fresh context — only the cited source span and the specific claim sentence, deliberately *not* the rest of the draft, the drafting agent's reasoning, or the other claims' verdicts. This isolation is the point: a verifier that shares context with the drafter inherits the drafter's own blind spots instead of catching them. A claim with no citation skips dispatch entirely — `UNSOURCED` is immediate, cheaper than the per-claim model call every other verdict requires. **Dispatch itself — RESOLVED 2026-09-04, decided by Serina (Open Questions item 9, §3):** a subprocess call to `$PROFESSOR_VERIFIER_CMD` (a target/session-configured headless, single-turn CLI command — no suite-applied default, fails loud if unset, same as `$PROFESSOR_PACK_ROOT`; `claude --print` is the suite's recommended value to configure, not an automatic fallback), fed only the source span and claim text, its stdout captured as the verdict — the same subprocess shape every other tool call in this suite has, even though the logic behind it is a model, not a script. |
 | **Explicitly not solved by this gate** | The verifier itself can be wrong too — this raises confidence, it is not proof. Opinion/judgement claims are never checked, by design — the mechanical-check test from the original design's §2 ("is being wrong silent and mechanically checkable?") doesn't apply to a claim that's attributed judgement rather than a factual assertion. **Cross-page contradiction is no longer out of scope for the suite** (decided 2026-09-04, reopening item 3) — it is handled by `library-index` `sweep` (§6.6), not here, because it needs the whole library, not one draft in isolation. |
 | **The final, independent pass** | Decided 2026-09-04, by Serina — Open Questions item 3's second half generalized into a suite-wide rule (§6's flow-diagram note, below): every gate a draft passes during drafting runs **again, independently, as the true final step**, immediately before a write is finalized or a PR opens — on every path, interactive or scheduled, not only Phase 6's CI. The first pass exists so the drafting agent can fix what it flags; the second pass is the actual gate of record, because "unskippable" is a prompt instruction to the agent during drafting, not proof the agent complied. This doubles `verify-claims`' own per-claim model-call cost — accepted deliberately, same reasoning as the gate's original mandatory decision: accuracy first, cost is a build/ops problem to solve, not a reason to trust a single pass. |
 | **The architectural difference this gate introduces, now resolved** | Every other tool in this suite is a plain deterministic script — the entire point of retiring MCP (§1a) was "works identically via Bash, from any harness, no special capability required." `verify-claims` still dispatches a model call, not a script, but the *dispatch itself* is a plain subprocess call to a configured command (`$PROFESSOR_VERIFIER_CMD`, above), same shape as every other tool call — Open Questions item 9's portability concern is answered, not left open. A harness with no headless single-turn CLI at all still cannot run this mandatory gate — a named limitation, not a silent one. |
@@ -997,11 +1023,12 @@ the specific required error message, not a crash.
 
 ### Phase 1b — Claim verification gate
 
-**Delivers:** the `verify-claims` (§6.7) tool-side support — a subprocess wrapper (in
-`tools/professor.py` or a sibling module) that dispatches each claim check to
-`$PROFESSOR_VERIFIER_CMD` (a target/session-configured headless single-turn CLI command; suite
-default `claude --print`, per §3/§6.7's mechanism row — **Open Questions item 9 RESOLVED
-2026-09-04**, no longer left open for this phase to invent) and collects its
+**Delivers:** the `verify-claims` (§6.7) tool-side support — the skill's own dispatch logic
+(**not** a `tools/professor.py` subcommand; §4's diagram note explains why this is deliberately
+kept separate from the toolkit's four subcommands) that runs `$PROFESSOR_VERIFIER_CMD` as a
+subprocess (a target/session-configured, always-required headless single-turn CLI command — no
+suite-applied default; §3/§6.7's mechanism row, **Open Questions item 9 RESOLVED 2026-09-04**, no
+longer left open for this phase to invent) and collects its
 `SUPPORTED`/`NOT_SUPPORTED`/`PARTIALLY_SUPPORTED`/**`UNSOURCED`** verdict (the fourth verdict added
 2026-09-04, reopening Open Questions item 3) — wired into `draft-page` and `update-page` as the
 third gate, after `check-page` and `screen-sensitive`, per §6.7's own sequencing, **and wired to
@@ -1009,11 +1036,12 @@ run a second, independent time as the true final step** (§6's flow-diagram note
 2026-09-04) — this phase delivers both invocations, not just the mid-draft one. **Decided
 2026-09-04, by Serina: mandatory and unskippable**, same severity as `screen-sensitive` — no
 sampling, no CI-only mode, no configuration flag that turns it off.
-**Files touched:** whatever `tools/professor.py` (or a sibling module) needs for the
-`$PROFESSOR_VERIFIER_CMD` subprocess dispatch and verdict parsing; `draft-page/SKILL.md` and
-`update-page/SKILL.md` get the third gate step, and the final independent re-run, added to their
-own procedure text if not already reflected there once this phase reconciles the six known-stale
-drafts (§6's intro) — `verify-claims/SKILL.md` itself is already current, not one of the six.
+**Files touched:** whatever this skill's own dispatch logic needs for the
+`$PROFESSOR_VERIFIER_CMD` subprocess call and verdict parsing (deliberately not
+`tools/professor.py` itself); `draft-page/SKILL.md` and `update-page/SKILL.md` get the third gate
+step, and the final independent re-run, added to their own procedure text if not already
+reflected there once this phase reconciles the six known-stale drafts (§6's intro) —
+`verify-claims/SKILL.md` itself is already current, not one of the six.
 **Depends on:** Phase 1 (needs the tool layer's existing subcommands and `$PROFESSOR_PACK_ROOT`
 resolution as the foundation this phase's dispatch wrapper builds on).
 **Review gate:** run `verify-claims` against a real drafted claim with a genuinely supporting
@@ -1364,9 +1392,12 @@ convention, not deleted once answered).
    **Decision: reuse the headless-entry-point assumption §7.1 already makes, rather than invent a
    second one.** `$PROFESSOR_VERIFIER_CMD` (§3, §6.7) — a target/session-configured environment
    variable naming a headless, single-turn CLI command, same override pattern as
-   `$PROFESSOR_PACK_ROOT` and the contract/gate/ruleset/`defer-hook` overrides — with `claude
-   --print` as the suite's documented default, since that command is already named in §7.1's own
-   `RUNNER_COMMAND` comment for the exact same "run a skill non-interactively" need. Every
+   `$PROFESSOR_PACK_ROOT` and the contract/gate/ruleset/`defer-hook` overrides, **including no
+   suite-applied default** — it fails loud if unset, exactly as `$PROFESSOR_PACK_ROOT` does, rather
+   than silently falling back to a guessed command. `claude --print` is the suite's recommended
+   value to configure it to, not something the suite applies automatically, since that command is
+   already named in §7.1's own `RUNNER_COMMAND` comment for the exact same "run a skill
+   non-interactively" need. Every
    dispatched claim check becomes a subprocess call to that command — a plain subprocess call in
    shape, identical to every other tool call in this suite, even though the logic behind it is a
    model rather than a script. **Named limitation, not solved away**: a harness with no headless

@@ -27,13 +27,15 @@ pack is a deterministic script.
 **Decided 2026-09-04, by Serina (Open Questions item 9): dispatch itself is still a
 plain subprocess call, same shape as every other tool call in this suite.** Run
 `$PROFESSOR_VERIFIER_CMD` (a target/session-configured environment variable naming a
-headless, single-turn CLI command — suite default `claude --print`, same override
-pattern as `$PROFESSOR_PACK_ROOT`), feeding it only the cited source span and the
-claim's exact sentence, and capture its stdout as the verdict. Confirm
-`$PROFESSOR_VERIFIER_CMD` resolves before dispatching anything — same fail-loud
-requirement as `$PROFESSOR_PACK_ROOT` elsewhere in this pack, not a silent fallback to
-a guessed command. A harness with no headless single-turn CLI available at all cannot
-run this gate — that limitation is real and named, not solved by this decision.
+headless, single-turn CLI command — no suite-applied default, same override pattern
+and same no-default rule as `$PROFESSOR_PACK_ROOT`; `claude --print` is the suite's
+recommended value to configure it to, not a fallback the suite applies for you),
+feeding it only the cited source span and the claim's exact sentence, and capture its
+stdout as the verdict. Confirm `$PROFESSOR_VERIFIER_CMD` resolves before dispatching
+anything — same fail-loud requirement as `$PROFESSOR_PACK_ROOT` elsewhere in this
+pack, not a silent fallback to a guessed command. A harness with no headless
+single-turn CLI available at all cannot run this gate — that limitation is real and
+named, not solved by this decision.
 
 **Decided 2026-09-04, by Serina: this skill runs twice per draft, not once** — once
 during drafting (so `draft-page`/`update-page` can fix what it flags), and once more,
