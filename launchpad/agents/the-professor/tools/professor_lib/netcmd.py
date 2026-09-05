@@ -1,18 +1,191 @@
 """`resolve-pin` / `path-exists-at` -- the network-backed half of professor.py's
 tool layer (redesign doc §4's `netcmd` subgraph: "external citations only").
 
-Step 1 stub: reachable without crashing, not yet implemented. Step 2 replaces this
-with a real port of `server.py`'s `resolve_pin`/`path_exists_at`.
+Thin ports of `server.py`'s `resolve_pin`/`path_exists_at` -- same validation
+(40-hex-char SHA check, `_RATE_LIMIT_OR_AUTH_STATUSES` handling, `path`'s `?`/`&`
+rejection, `commit` shape check), same `gh api` calls -- minus the `@mcp.tool()`
+decorator and the `mcp` import (redesign doc §9, Phase 1: "resolve-pin and
+path-exists-at are thin ports of the current server.py functions minus the
+@mcp.tool() decorators and the mcp import").
+
+This is always the network-backed, GitHub-API path (§4 places both in the
+`netcmd` half of the tool-call diagram, for citing sources genuinely external to
+whatever repo is being documented) -- `check-page`'s citation-existence check
+(step 4) must NOT reuse this for a citation to its own `--target`'s tree; only a
+citation to a genuinely different, external repo goes through here.
 """
 
+import json
+import subprocess
 import sys
+
+_RATE_LIMIT_OR_AUTH_STATUSES = {"401", "403", "429"}
+
+
+def _run_gh_api(args: list[str]) -> subprocess.CompletedProcess:
+    return subprocess.run(
+        ["gh", "api", *args],
+        capture_output=True,
+        text=True,
+        timeout=30,
+    )
+
+
+def _parse_error_status(result: subprocess.CompletedProcess) -> tuple[str | None, str]:
+    """Read a failed `gh api` call's JSON error body, if any, for its `status` and
+    `message` fields -- same trap `server.py`'s tools guard against: an
+    unauthenticated or rate-limited response is an ordinary-looking JSON body that
+    can be mistaken for a genuine bad ref/repo/path if it's allowed to fall through
+    undetected.
+    """
+    status = None
+    message = result.stderr.strip() or result.stdout.strip()
+    try:
+        error_body = json.loads(result.stdout)
+        status = error_body.get("status")
+        message = error_body.get("message", message)
+    except json.JSONDecodeError:
+        pass
+    return status, message
 
 
 def resolve_pin(repo: str, ref: str) -> int:
-    print("resolve-pin: not yet implemented (step 2)", file=sys.stderr)
-    return 1
+    """Resolve `ref` (branch, tag, or SHA) on `repo` to its full 40-character
+    commit SHA. Prints the SHA to stdout on success.
+    """
+    result = _run_gh_api([f"repos/{repo}/commits/{ref}", "-q", ".sha"])
+
+    if result.returncode != 0:
+        status, message = _parse_error_status(result)
+        if status in _RATE_LIMIT_OR_AUTH_STATUSES:
+            print(
+                f"resolve-pin({repo!r}, {ref!r}): GitHub API returned HTTP "
+                f"{status} ({message}). This looks like a rate limit or an "
+                "authentication problem, not a bad repo/ref -- check "
+                "`gh auth status` and GitHub's current rate limit before "
+                "treating this as a real defect.",
+                file=sys.stderr,
+            )
+        else:
+            print(
+                f"resolve-pin({repo!r}, {ref!r}) failed "
+                f"(HTTP {status or 'unknown'}): {message}",
+                file=sys.stderr,
+            )
+        return 1
+
+    sha = result.stdout.strip()
+    if len(sha) != 40 or any(c not in "0123456789abcdef" for c in sha):
+        print(
+            f"resolve-pin({repo!r}, {ref!r}): gh api reported success but "
+            f"returned {sha!r}, which is not a 40-character hex SHA. Refusing "
+            "to print it -- this can happen when a rate-limited or partial "
+            "response slips past error detection.",
+            file=sys.stderr,
+        )
+        return 1
+
+    print(sha)
+    return 0
 
 
 def path_exists_at(repo: str, commit: str, path: str) -> int:
-    print("path-exists-at: not yet implemented (step 2)", file=sys.stderr)
+    """Return (via exit code and stdout) whether `path` exists in `repo` at
+    `commit`. Prints `true` or `false` to stdout on success.
+    """
+    if len(commit) != 40 or any(c not in "0123456789abcdef" for c in commit):
+        print(
+            f"path-exists-at({repo!r}, {commit!r}, {path!r}): `commit` is not "
+            "a 40-character hex SHA. This tool checks existence at a pinned "
+            "commit, not a branch or tag -- resolve it with resolve-pin "
+            "first.",
+            file=sys.stderr,
+        )
+        return 1
+    if "?" in path or "&" in path:
+        print(
+            f"path-exists-at({repo!r}, {commit!r}, {path!r}): `path` contains "
+            "'?' or '&', which cannot appear in a real repository path. "
+            "Refusing rather than risk it being interpreted as part of the "
+            "request's query string.",
+            file=sys.stderr,
+        )
+        return 1
+
+    result = subprocess.run(
+        [
+            "gh",
+            "api",
+            f"repos/{repo}/contents/{path}",
+            "--method",
+            "GET",
+            "-f",
+            f"ref={commit}",
+        ],
+        capture_output=True,
+        text=True,
+        timeout=30,
+    )
+
+    if result.returncode == 0:
+        print("true")
+        return 0
+
+    status, message = _parse_error_status(result)
+
+    if status == "404":
+        print("false")
+        return 0
+
+    if status in _RATE_LIMIT_OR_AUTH_STATUSES:
+        print(
+            f"path-exists-at({repo!r}, {commit!r}, {path!r}): GitHub API "
+            f"returned HTTP {status} ({message}). This looks like a rate "
+            "limit or an authentication problem, not a real answer about "
+            "whether the path exists -- check `gh auth status` and GitHub's "
+            "current rate limit before treating this as 'path does not "
+            "exist'.",
+            file=sys.stderr,
+        )
+        return 1
+
+    print(
+        f"path-exists-at({repo!r}, {commit!r}, {path!r}) failed "
+        f"(HTTP {status or 'unknown'}): {message}",
+        file=sys.stderr,
+    )
     return 1
+
+
+def path_exists_at_bool(repo: str, commit: str, path: str) -> bool | None:
+    """In-process variant returning a real `bool` (or `None` on error), for
+    step 4's `check-page` to call directly when a citation names a genuinely
+    external repo -- never a self-subprocess call to `professor.py` itself.
+    """
+    if len(commit) != 40 or any(c not in "0123456789abcdef" for c in commit):
+        return None
+    if "?" in path or "&" in path:
+        return None
+
+    result = subprocess.run(
+        [
+            "gh",
+            "api",
+            f"repos/{repo}/contents/{path}",
+            "--method",
+            "GET",
+            "-f",
+            f"ref={commit}",
+        ],
+        capture_output=True,
+        text=True,
+        timeout=30,
+    )
+
+    if result.returncode == 0:
+        return True
+
+    status, _ = _parse_error_status(result)
+    if status == "404":
+        return False
+    return None
