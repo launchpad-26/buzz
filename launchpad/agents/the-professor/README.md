@@ -1,7 +1,40 @@
 # The Professor
 
-A mentoring persona pack that drafts documentation pages: it resolves pins,
-tags claims with provenance, and writes them up in a single consistent voice.
+**A portable Skill-suite plugin, not a standalone agent** — pointed at one target repo at a
+time: it scans a repo for undocumented or stale code, drafts and updates its documentation
+library, tags every section with provenance, screens everything for sensitive content before
+it's written, verifies that every claim's citation actually supports it, and keeps the resulting
+library organized. The distributable unit is the seven skills plus their tool layer, installable
+via a marketplace into whatever agent a team already runs; the bundled persona
+(`personas/the-professor.persona.md`) is an optional companion voice for a team that wants a
+dedicated identity running these skills, not a requirement to use them.
+A future goal (explicitly not scoped into any phase yet) is packaging this as a Docker image —
+see the redesign document's Summary for why that would also make `$PROFESSOR_PACK_ROOT`
+resolution (Open Questions item 6, already resolved) unnecessary for a session running inside
+that container, not just add a deployment option.
+
+## Redesign proposal (2026-09-03): from one handbook to any repo — Phase 0 resolved, Phases 1–7 not yet built
+
+**Nothing below this line describes what's built.** The group's consensus (2026-09-03) is to
+retire MCP entirely — that settles this proposal's central architectural question — but no
+script, gate, or dry run exists yet; Phases 1–7 are still a proposal awaiting a go-ahead.
+Everything below this section describes the pack as it was actually built for
+[#9](https://github.com/launchpad-26/buzz/issues/9) — a single skill (`draft-page`)
+hard-coupled to one target, `launchpad-26/handbook`, via a module-level constant in
+`tools/server.py`, an MCP server (`professor-tools`) for its five tools, and a gate script
+shelled out from that one repo's checkout. That build is accurate history and still describes
+exactly what ships in this pack's `tools/` directory today — this redesign hasn't touched it.
+
+The full proposal — why that coupling was accidental rather than necessary, the seven
+sub-skills that replace one, why it retires MCP in favor of a plain script-based tool layer
+(a bigger move than, and a confirmed departure from, #1402's in-flight dual-mode fix), the
+eight-phase-plus-1b build plan, and what's scaffolded in this branch versus left for later phases —
+is written up in
+[`launchpad/Research/the-professor-skill-suite-redesign.md`](../../Research/the-professor-skill-suite-redesign.md).
+Read that document first, especially its §1a and §9, before forming an opinion on this
+README alone. This README's older sections below are preserved as the record of what
+was actually observed running the original single-skill build, which the redesign
+document cites and builds on rather than repeats.
 
 ## Model
 

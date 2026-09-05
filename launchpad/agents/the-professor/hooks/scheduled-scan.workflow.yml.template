@@ -1,0 +1,366 @@
+# Template — copy into the TARGET repo's own .github/workflows/, not this one.
+# See hooks/README.md for the full explanation and the two other trigger mechanisms.
+#
+# This template assumes a headless entry point that can run one skill's procedure
+# non-interactively (e.g. `claude --print` given the scan-repo skill's prompt text,
+# per the pattern the-professor-skill-suite-redesign.md's relationship note describes
+# for #1402's own fresh-session verification, or an equivalent for whatever harness
+# the target repo's maintainers use). No such entry point is built by this branch —
+# fill in RUNNER_COMMAND once one exists.
+#
+# NOT SAFE TO DEPLOY AS-IS — RUNNER_COMMAND isn't filled in, and PROFESSOR_PACK_REF
+# below must be pinned to a real tag/commit. Phase 6 (redesign doc §9) is where those
+# get built, not this file.
+#
+# PROMPT-INJECTION THREAT MODEL — RESOLVED 2026-09-04 (redesign doc, Open Questions
+# item 7). This job feeds a repo's own content back into an agent as drafting input —
+# the classic indirect-injection shape. `verify-claims` and `screen-sensitive` (this
+# pack's own gates) already narrow specific outcomes (a fabricated claim, an
+# exfiltrated secret); CI re-verification and never-push-direct (below) mean nothing
+# merges unreviewed. Neither covers the runner's OWN permission surface, so:
+#
+#   1. RUNNER_COMMAND must be scoped to exactly tools/professor.py's subcommands plus
+#      read-only git/gh calls — no general shell access, no other network egress. This
+#      is a real requirement on whatever fills RUNNER_COMMAND in, not a suggestion.
+#   2. Mandatory human review of the PR this job opens is the accepted final backstop
+#      — not a claim that injection is prevented, an explicit acceptance that layered
+#      gates plus a human before merge is the posture, same as any unattended CI job
+#      touching an LLM.
+#
+# CREDENTIAL DECISION — RESOLVED 2026-09-04 (redesign doc, Open Questions item 2): the
+# default GITHUB_TOKEN below is the answer, not a placeholder waiting on a PAT/GitHub
+# App. This holds because this template runs in the SAME repo it targets (you copy it
+# into your own .github/workflows/) — GITHUB_TOKEN is auto-issued per run, scoped only
+# to this repo, and needs no secret to create or rotate. A separately provisioned
+# credential is only for a different shape (one place scanning many repos it doesn't
+# host workflows in), which this template does not attempt.
+#
+# ONE REAL SETTING YOU MUST CHECK, THAT THIS FILE CANNOT SET FOR YOU: this repo's own
+# Settings -> Actions -> General -> Workflow permissions must have "Allow GitHub
+# Actions to create and approve pull requests" checked. That toggle is separate from
+# the read/write default below and from the `permissions:` block — without it,
+# create-pull-request fails even though everything here looks correctly scoped.
+
+name: professor-scan
+
+on:
+  schedule:
+    # Daily by default — capability 5's "daily (or configurable-interval)". Change
+    # the cron expression to whatever interval this repo's maintainers want; nothing
+    # else in this workflow depends on the specific value.
+    - cron: "0 6 * * *"
+  workflow_dispatch: {}   # manual trigger, for testing the workflow itself
+
+# TWO JOBS, DELIBERATELY — RESOLVED 2026-09-05 (redesign doc §7.1, corrected after a
+# real gap a review found: this document used to claim CI re-verification was "a
+# separate job" while this template ran it as a later step in the SAME job, sharing
+# the same checkout and credentials as the drafting run). Real independence needs a
+# real boundary:
+#   - `scan-and-draft` never gets write access at all (no `contents`/`pull-requests`
+#     permission) — it only reads the target repo, runs the drafting agent over its
+#     content, and uploads a patch of the result as a build artifact. If prompt
+#     injection compromises this job, it has nothing to write with.
+#   - `verify-and-open-pr` never runs the drafting agent — no open-ended reasoning
+#     over arbitrary repo content, with tool access and a place to act on a
+#     decision. It DOES still run verify-claims' narrow, isolated per-claim dispatch
+#     (corrected 2026-09-05 — an earlier version of this comment overclaimed zero
+#     model calls here at all), whose only possible output is a constrained verdict
+#     per claim — no tool access of its own, no ability to touch the write-scoped
+#     credential directly. It downloads the patch, applies it to a FRESH checkout
+#     (not the one the drafting job touched), independently re-runs all three gates
+#     against every file the patch touches — modified AND newly added, `git apply
+#     --index` stages both — and only then, if everything passes, opens the PR with
+#     the write-scoped credential this job alone holds.
+# This also fixes a second bug the same review found: the old single-job version's
+# re-verification loop used `git diff --name-only HEAD`, which only lists modified
+# TRACKED files — it silently skipped every newly-drafted page, draft-page's actual
+# output. Re-deriving the changed-file list from the applied patch (below) doesn't
+# have that gap: a freshly-applied patch's files are staged, tracked or not.
+permissions:
+  contents: read   # top-level default; each job below states its own, narrower need
+
+env:
+  # Pin this to a real tag or commit SHA before this template is ever actually used —
+  # an unpinned branch means every run executes whatever the pack's default branch
+  # currently holds, not a version anyone reviewed for this target repo.
+  PROFESSOR_PACK_REF: "REPLACE-WITH-A-PINNED-TAG-OR-COMMIT-SHA"
+  # One variable, used by every step that needs to find the pack — never a bare
+  # `tools/professor.py` assumption, which silently breaks the moment the checkout
+  # path below changes. `${{ github.workspace }}` is the target repo's own checkout
+  # root; the pack lands one level under the sibling `.professor-pack` checkout.
+  PROFESSOR_PACK_ROOT: "${{ github.workspace }}/.professor-pack/launchpad/agents/the-professor"
+
+jobs:
+  scan-and-draft:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read   # never write access — see this file's header for why
+    steps:
+      - name: Check out this repo
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0   # scan-repo's change detection needs real git history,
+                            # not a shallow clone — a shallow checkout would make
+                            # every path look "changed since the beginning of time"
+          persist-credentials: false   # this job never pushes anything; don't leave
+                                        # a credential configured that it doesn't need
+
+      - name: Check out The Professor's skill pack, pinned
+        uses: actions/checkout@v4
+        with:
+          repository: launchpad-26/buzz
+          ref: ${{ env.PROFESSOR_PACK_REF }}
+          path: .professor-pack
+          sparse-checkout: |
+            launchpad/agents/the-professor
+          persist-credentials: false
+
+      - name: Run scan-repo, then draft-page/update-page for every gap, then library-index sweep and provenance-log archive
+        env:
+          PROFESSOR_TARGET: ${{ github.workspace }}
+        run: |
+          # RUNNER_COMMAND — fill in once a headless skill-runner exists. Must be
+          # scoped to exactly tools/professor.py's subcommands plus read-only git/gh
+          # calls — no general shell access, no other network egress (see this file's
+          # header, "PROMPT-INJECTION THREAT MODEL" — this is Phase 6's own required
+          # part 1, not optional hardening to add later). This job holds no write
+          # credential at all (see this file's header, "TWO JOBS, DELIBERATELY") —
+          # that's the primary defense, this scoping requirement is the second layer,
+          # not the only one. Must:
+          #   1. run scan-repo's procedure against $PROFESSOR_TARGET
+          #   2. for each `new`/`needs_baseline` entry, run draft-page (baseline mode
+          #      for the latter); for each `stale` entry (including every
+          #      needs_external_check one), run update-page — all three already run
+          #      check-page, screen-sensitive, AND verify-claims' first pass before
+          #      any write (corrected 2026-09-05 — an earlier version of this line
+          #      only named two of the three gates)
+          #   3. run library-index in sweep mode once, regardless of whether step 2
+          #      drafted or updated anything — Phase 6 (redesign doc §9) claims this
+          #      workflow exercises "library health," and that's only true if sweep
+          #      actually runs every time, not only alongside a content change
+          #   4. hand every `removed` entry from step 1 to library-index for
+          #      reconciliation, per scan-repo's own §5 hand-off
+          #   5. run provenance-log in archive mode for every page in the library,
+          #      also unconditionally — the archive threshold (default 365 days) is
+          #      the reason this runs on a schedule at all, not only when content
+          #      changes; a run with nothing to draft/update should still archive
+          #   6. leave every write on the local checkout uncommitted — this job never
+          #      commits or pushes; the next job applies a patch instead
+          #   7. exit non-zero if any gate (check-page/screen-content/verify-claims)
+          #      reported a `block` it could not resolve, or if any step above failed
+          #      outright — the next step must not run on a non-zero exit here
+          #   Use "$PROFESSOR_PACK_ROOT/tools/professor.py" for every gate/subcommand
+          #   call — never a bare "tools/professor.py", which assumes the pack lives
+          #   inside the target repo's own checkout, which it doesn't (see the pack
+          #   checkout step above; $PROFESSOR_PACK_ROOT is set once, in this
+          #   workflow's top-level `env:`, for every step to share).
+          echo "RUNNER_COMMAND placeholder — see this file's header comment" >&2
+          exit 1
+
+      - name: Turn every change into a patch, excluding the pack checkout
+        if: ${{ success() }}
+        run: |
+          # Stage everything the drafting run touched — modified AND newly created
+          # pages both, via -A — except the pack checkout itself, which is never
+          # part of the TARGET repo's own diff. `git diff --cached` after this
+          # correctly includes untracked new files, unlike a plain `git diff HEAD`
+          # (the bug a review found in this template's own prior version).
+          git add -A -- . ':(exclude).professor-pack'
+          git diff --cached --binary > "${{ runner.temp }}/professor-changes.patch"
+          # Empty patch is a valid outcome (nothing to draft/update this run) —
+          # the next job's own steps are all conditioned on the patch having content.
+
+      - name: Upload the patch for the verification job to apply independently
+        if: ${{ success() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: professor-changes
+          path: ${{ runner.temp }}/professor-changes.patch
+          retention-days: 1
+
+  verify-and-open-pr:
+    needs: scan-and-draft
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write         # the only job with write access at all — see this
+                               # file's header, "TWO JOBS, DELIBERATELY"
+      pull-requests: write    # also requires this repo's own "Allow GitHub Actions
+                               # to create and approve pull requests" setting (see
+                               # file header)
+    steps:
+      - name: Check out this repo, fresh — not the checkout scan-and-draft used
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false   # create-pull-request gets its own token
+                                        # explicitly, below — don't also leave one
+                                        # sitting in git config for this checkout
+
+      - name: Check out The Professor's skill pack, pinned — also fresh
+        uses: actions/checkout@v4
+        with:
+          repository: launchpad-26/buzz
+          ref: ${{ env.PROFESSOR_PACK_REF }}
+          path: .professor-pack
+          sparse-checkout: |
+            launchpad/agents/the-professor
+          persist-credentials: false
+
+      - name: Download the patch the drafting job produced
+        uses: actions/download-artifact@v4
+        with:
+          name: professor-changes
+          path: ${{ runner.temp }}
+
+      - name: Stop here if there was nothing to draft or update this run
+        id: has-changes
+        run: |
+          if [ -s "${{ runner.temp }}/professor-changes.patch" ]; then
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Apply the patch to this fresh checkout
+        if: steps.has-changes.outputs.changed == 'true'
+        run: git apply --index "${{ runner.temp }}/professor-changes.patch"
+
+      - name: Confirm the patch only touches this suite's own expected surface
+        if: steps.has-changes.outputs.changed == 'true'
+        run: |
+          # Added 2026-09-05, after a review pointed out the gates below only ever
+          # check '*.md' files, while `git add -A` (drafting job) stages EVERY
+          # change — a compromised or misdirected drafting run could in principle
+          # write outside the doc library (a script, a workflow file, a config
+          # anywhere else in the repo) and nothing downstream would notice, because
+          # nothing downstream looks outside '*.md'.
+          #
+          # NARROWED 2026-09-05, a second review found the first version of this
+          # allowlist too broad: a bare `.professor/*` also permits touching
+          # TARGET-SUPPLIED OVERRIDE FILES (`.professor/check-page`,
+          # `.professor/defer-hook`, `.professor/contract.md`,
+          # `.professor/sensitive-patterns.md`) — files this suite only ever READS
+          # (§3's override resolution), never writes. A patch that rewrites one of
+          # those isn't "unexpected," it's exactly the attack this check exists to
+          # catch: silently weakening or replacing the gate a later step is about to
+          # trust. The suite's own tool surface only ever WRITES pages under the
+          # resolved library root plus these four specific `.professor/` metadata
+          # paths — nothing else, and never an override file. FILL IN once the
+          # library root is resolvable here (same resolution `library-index`
+          # `bootstrap` uses, redesign doc §6.6):
+          #   git diff --cached --name-only -z | while IFS= read -r -d '' f; do
+          #     case "$f" in
+          #       <library-root>/*.md) ;;
+          #       .professor/library.json|.professor/scan-state.json) ;;
+          #       .professor/provenance/*.jsonl) ;;
+          #       *) echo "::error::patch touches unexpected path: $f" >&2; exit 1 ;;
+          #     esac
+          #   done
+
+      - name: Independently re-verify every changed page against all three gates
+        if: steps.has-changes.outputs.changed == 'true'
+        run: |
+          # This step exists because "unskippable" (screen-sensitive's and
+          # verify-claims' own SKILL.md files both say this) is a prompt instruction
+          # to the drafting agent, not an enforced boundary — an agent under time
+          # pressure could still write a page without running a gate, and nothing
+          # upstream of this step would catch that. CI is the actual boundary (the
+          # original design's own "enforce at the boundary where the violation
+          # happens" rule) — this is this workflow's own enforcement of the
+          # suite-wide "every gate runs twice" rule (redesign doc §6's flow-diagram
+          # note, decided 2026-09-04): re-run check-page, screen-content, AND
+          # verify-claims here, independently, against every page the applied patch
+          # touches, and fail the job if any of the three reports a finding —
+          # regardless of what the drafting job already claimed to have checked. This
+          # job runs in a completely separate checkout with no memory of the
+          # drafting job's runtime state, so "independent" is real here, not just a
+          # separate step in the same mutable job (the gap a review found in this
+          # template's own prior version — see this file's header).
+          #
+          # `git diff --cached --name-only` after `git apply --index` (previous step)
+          # correctly lists every file the patch touched, modified or newly added —
+          # `git apply --index` stages new files too, so this doesn't have the
+          # "misses untracked files" bug the old single-job version's `git diff
+          # --name-only HEAD` had.
+          # check-page is page-content-specific (frontmatter, claim rule, citation
+          # resolution) — '*.md' only. screen-content has no such restriction and
+          # also runs against '.professor/*.json'/'.professor/**/*.jsonl' (added
+          # 2026-09-05) — commit_author/commit_at/pr fields in a provenance ledger
+          # are read from git metadata, which is still repo-content-derived text,
+          # not something this suite authored itself. FILL IN once tools/professor.py
+          # exists (redesign doc §9, Phase 1):
+          #   git diff --cached --name-only -z -- '*.md' | while IFS= read -r -d '' f; do
+          #     "$PROFESSOR_PACK_ROOT/tools/professor.py" check-page "$f" --target . || exit 1
+          #     "$PROFESSOR_PACK_ROOT/tools/professor.py" screen-content "$f" --target . || exit 1
+          #   done
+          #   git diff --cached --name-only -z -- '.professor/*.json' '.professor/**/*.jsonl' | while IFS= read -r -d '' f; do
+          #     "$PROFESSOR_PACK_ROOT/tools/professor.py" screen-content "$f" --target . || exit 1
+          #   done
+          # verify-claims' dispatch — RESOLVED (redesign doc, Open Questions item 9):
+          # it runs $PROFESSOR_VERIFIER_CMD as a subprocess (same override pattern as
+          # PROFESSOR_PACK_ROOT, INCLUDING no suite-applied default — this variable
+          # must be set in this job's own env; `claude --print` is the recommended
+          # value, not a fallback applied for you), fed only a claim's cited span and
+          # sentence, per claim, per changed page. Deliberately NOT a
+          # tools/professor.py subcommand (redesign doc §4's diagram note) — this is
+          # verify-claims' own dispatch logic, kept separate from the toolkit's four
+          # deterministic subcommands because this one dispatches a model, not a
+          # script. FILL IN once that dispatch logic exists (Phase 1b):
+          #   git diff --cached --name-only -z -- '*.md' | while IFS= read -r -d '' f; do
+          #     <run verify-claims' own procedure against "$f", which itself calls
+          #      $PROFESSOR_VERIFIER_CMD once per claim> || exit 1
+          #   done
+          # Fail this job if any claim's verdict is anything other than SUPPORTED.
+          echo "independent re-verification placeholder — see this step's comment" >&2
+          exit 1
+
+      - name: Remove the pack checkout before anything inspects the diff
+        if: ${{ success() && steps.has-changes.outputs.changed == 'true' }}
+        run: |
+          # $PROFESSOR_PACK_ROOT's checkout (the "Check out The Professor's skill
+          # pack" step, above) lives inside this job's own workspace, sibling to the
+          # target repo's checkout, which means it's inside the tree
+          # create-pull-request scans for changes by default. Nothing about the pack
+          # itself should ever appear in a PR against the TARGET repo — remove it
+          # before the PR step runs, don't rely on that step's own path filtering to
+          # catch it.
+          rm -rf "${{ github.workspace }}/.professor-pack"
+
+      - name: Open a PR with anything drafted or updated
+        if: ${{ success() && steps.has-changes.outputs.changed == 'true' }}
+                                 # never on a prior failure — a blocked gate or a
+                                 # failed step must not still produce a PR;
+                                 # `!cancelled()` (a prior version of this template)
+                                 # is the wrong condition, since it runs on failure
+                                 # too and only skips on cancellation
+        uses: peter-evans/create-pull-request@v6
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}   # explicit — this checkout deliberately
+                                                # set persist-credentials: false above
+          commit-message: "docs: professor scheduled scan"
+          branch: professor/scheduled-scan
+          title: "The Professor: scheduled documentation scan"
+          body: |
+            Automated run of `scan-repo`, `draft-page`/`update-page`, and a
+            `library-index` sweep, on the schedule configured in this workflow. Every
+            change here passed `check-page`, `screen-sensitive`, and `verify-claims`
+            during drafting, in a separate job with no write access, and was
+            independently re-verified against all three gates again in this job, in
+            a completely fresh checkout — not just trusted from the drafting run.
+            This PR is the review point the gate hands off to, per the original
+            design's own "the enforcement
+            boundary decides where output goes" rule: nothing here merges to the
+            default branch without this pull request being reviewed.
+
+            <!-- RUNNER_COMMAND should append, per updated page, a line naming the
+            code change each update actually responds to — pulled straight from the
+            sources this run's own provenance-log calls already resolved (redesign
+            doc §8), not a second lookup:
+              - docs/relay/tenant-scoping.md: crates/buzz-relay/src/tenant.rs changed
+                in #1987 (Jane Dev, 2026-08-30)
+            A reviewer approving a docs-only PR should be able to see *why* it
+            exists without opening a second tab to check what changed and who
+            changed it. -->
+          # Nothing pushes directly to the default branch — the gate's guarantee
+          # only reaches a pull request, same reasoning as
+          # the-professor-design.md §8, "Also unspecified: where drafts go."
