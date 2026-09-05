@@ -264,6 +264,77 @@ def check_citation_check_error_on_api_failure() -> str | None:
     return None
 
 
+def check_local_citation_error_shapes() -> str | None:
+    """Three distinct "could not verify" shapes for a *local* citation must
+    never collapse into `citation-not-found` -- step 4 of the 2026-09-05 fix
+    round, the local-side counterpart to `check_citation_check_error_on_api_
+    failure` above (which already covers the network side). Uses
+    `local-citation-error-shapes.md`, checked only against deliberately
+    broken `--target` directories, never against this pack's own real repo.
+    `broken-nonexistent-citation.md` (checked elsewhere, via
+    `check_check_page_fixtures`) confirms a genuine confirmed-absent local
+    citation still produces `citation-not-found` unaffected by this change.
+    """
+    fixture_path = FIXTURES_DIR / "local-citation-error-shapes.md"
+
+    def _rules_for(target_dir: str):
+        result = _run_professor(
+            ["check-page", str(fixture_path), "--target", target_dir], pack_root="/tmp"
+        )
+        if result.returncode != 0:
+            return None, f"check-page against --target {target_dir!r} failed: {result.stderr}"
+        try:
+            report = json.loads(result.stdout)
+        except json.JSONDecodeError:
+            return (
+                None,
+                f"check-page against --target {target_dir!r} did not print valid "
+                f"JSON: {result.stdout!r}",
+            )
+        return [f["rule"] for f in report.get("findings", [])], None
+
+    # Case 1: --target points at a path that doesn't exist at all.
+    nonexistent_target = f"/tmp/professor-check-nonexistent-target-{os.getpid()}"
+    rules, error = _rules_for(nonexistent_target)
+    if error:
+        return error
+    if rules != ["citation-check-error"]:
+        return (
+            "--target pointing at a nonexistent path: expected "
+            f"['citation-check-error'], got {rules!r}"
+        )
+
+    # Case 2: --target is an empty, non-git directory.
+    with tempfile.TemporaryDirectory() as nongit_dir:
+        rules, error = _rules_for(nongit_dir)
+        if error:
+            return error
+        if rules != ["citation-check-error"]:
+            return (
+                "--target an empty non-git directory: expected "
+                f"['citation-check-error'], got {rules!r}"
+            )
+
+    # Case 3: --target is a real, empty git repo with no matching history --
+    # the commit the fixture cites was never committed there at all.
+    with tempfile.TemporaryDirectory() as emptygit_dir:
+        init_result = subprocess.run(
+            ["git", "init", "-q", emptygit_dir], capture_output=True, text=True, timeout=15
+        )
+        if init_result.returncode != 0:
+            return f"could not git init a scratch repo for the empty-git-repo case: {init_result.stderr}"
+        rules, error = _rules_for(emptygit_dir)
+        if error:
+            return error
+        if rules != ["citation-check-error"]:
+            return (
+                "--target an empty git repo with no matching history: expected "
+                f"['citation-check-error'], got {rules!r}"
+            )
+
+    return None
+
+
 def check_local_citation_never_calls_gh() -> str | None:
     """`compliant-local.md`'s citation is entirely local (no `repo:` prefix) --
     `gh` must never be invoked for it. `compliant-external.md`'s citation
@@ -453,6 +524,15 @@ def main() -> int:
         print(f"FAIL [citation-check-error on API failure]: {error}")
         return 1
     print("ok: citation-check-error on API failure (not collapsed into citation-not-found)")
+
+    error = check_local_citation_error_shapes()
+    if error:
+        print(f"FAIL [local-citation error shapes]: {error}")
+        return 1
+    print(
+        "ok: local-citation error shapes (nonexistent --target, non-git "
+        "--target, empty git repo all citation-check-error, never citation-not-found)"
+    )
 
     error = check_local_citation_never_calls_gh()
     if error:

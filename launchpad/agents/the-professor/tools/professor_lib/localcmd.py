@@ -94,16 +94,61 @@ def _parse_frontmatter(content: str):
     return parsed, content[match.end():], []
 
 
-def _local_citation_exists(target: str, commit: str, path: str) -> bool:
+def _local_citation_exists(target: str, commit: str, path: str) -> tuple[bool | None, str | None]:
     """Plain local git check -- no network, ever, for a citation to --target's
     own tree. This is the whole point of step 4's local/external split.
+
+    Returns `(True, None)` if `path` exists at `commit`, `(False, None)` if
+    `commit` is confirmed to exist locally but `path` genuinely does not (a
+    real citation defect), or `(None, message)` if the check itself could
+    not be completed -- a missing or non-git `--target` directory, or
+    `commit` simply absent from this local clone's own history. That last
+    case is deliberately NOT the same outcome as a confirmed-absent path: a
+    shallow clone (this checkout's own repo is one -- see CLAUDE.md) can be
+    missing a commit that is entirely real upstream, so "can't find this
+    commit locally" must never be reported as "this citation is wrong".
+    `path_exists_at_bool` (netcmd.py) already makes this same True/False/None
+    distinction on the network side (prior fix round's step 1); this was the
+    matching, until-now-uncorrected gap on the local side (step 4 of the
+    2026-09-05 round).
+
+    Checked in two stages so the two failure modes can't be confused with
+    each other: first whether `commit` itself resolves at all
+    (`git cat-file -e <commit>^{commit}`, which fails distinctly for "no
+    such directory", "not a git repo", and "no such commit in this repo's
+    history"), and only once that succeeds, whether `path` exists within it.
     """
+    commit_check = subprocess.run(
+        ["git", "-C", target, "cat-file", "-e", f"{commit}^{{commit}}"],
+        capture_output=True,
+        text=True,
+        timeout=15,
+    )
+    if commit_check.returncode != 0:
+        stderr = commit_check.stderr.strip()
+        if "cannot change to" in stderr:
+            return None, (
+                f"_local_citation_exists({target!r}, {commit!r}, {path!r}): "
+                f"--target does not exist as a directory: {stderr}"
+            )
+        if "not a git repository" in stderr:
+            return None, (
+                f"_local_citation_exists({target!r}, {commit!r}, {path!r}): "
+                f"--target is not a git repository: {stderr}"
+            )
+        return None, (
+            f"_local_citation_exists({target!r}, {commit!r}, {path!r}): commit "
+            "could not be confirmed present in --target's local history "
+            "(a shallow clone can be missing a commit that is real "
+            f"upstream): {stderr}"
+        )
+
     result = subprocess.run(
         ["git", "-C", target, "cat-file", "-e", f"{commit}:{path}"],
         capture_output=True,
         timeout=15,
     )
-    return result.returncode == 0
+    return result.returncode == 0, None
 
 
 def _local_file_line_count(target: str, commit: str, path: str) -> int | None:
@@ -319,8 +364,9 @@ def _check_section(marker_line, heading_line, section_text, target: str) -> list
             body_citation_keys.add(_citation_key(citation))
 
             if citation["repo"] is None:
-                exists = _local_citation_exists(target, citation["sha"], citation["path"])
-                error_message = None
+                exists, error_message = _local_citation_exists(
+                    target, citation["sha"], citation["path"]
+                )
             else:
                 from professor_lib.netcmd import path_exists_at_bool
 
