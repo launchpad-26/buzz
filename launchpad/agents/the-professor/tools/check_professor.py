@@ -60,6 +60,7 @@ CHECK_PAGE_EXPECTED_RULES = {
     "broken-missing-citation.md": ["missing-citation"],
     "broken-preamble-uncited-claim.md": ["missing-citation"],
     "broken-out-of-bounds-range.md": ["out-of-bounds-range"],
+    "broken-end-line-explicit-zero.md": ["out-of-bounds-range"],
     "broken-external-out-of-bounds-range.md": ["out-of-bounds-range"],
     "external-citation-range-not-evaluated.md": ["citation-range-not-evaluated"],
     "broken-no-provenance-marker.md": ["missing-provenance-marker"],

@@ -487,7 +487,13 @@ def _check_section(marker_line, heading_line, section_text, target: str) -> list
             if citation["start"] is not None:
                 if citation["repo"] is None:
                     total_lines = _local_file_line_count(target, citation["sha"], citation["path"])
-                    end = citation["end"] or citation["start"]
+                    # citation["end"] is None when no end was specified at
+                    # all (falls back to start, a single-line citation) --
+                    # NOT the same as an explicit 0, which is a malformed
+                    # line number in its own right and must not silently
+                    # fall back to start (`or` treats 0 as falsy, which is
+                    # the bug step 10 of the 2026-09-05 fix round corrects).
+                    end = citation["start"] if citation["end"] is None else citation["end"]
                     if (
                         total_lines is None
                         or citation["start"] < 1
@@ -519,7 +525,13 @@ def _check_section(marker_line, heading_line, section_text, target: str) -> list
                     # report an explicit not-evaluated result for that case
                     # rather than silently passing an unverified upper bound
                     # as clean.
-                    end = citation["end"] or citation["start"]
+                    # citation["end"] is None when no end was specified at
+                    # all (falls back to start, a single-line citation) --
+                    # NOT the same as an explicit 0, which is a malformed
+                    # line number in its own right and must not silently
+                    # fall back to start (`or` treats 0 as falsy, which is
+                    # the bug step 10 of the 2026-09-05 fix round corrects).
+                    end = citation["start"] if citation["end"] is None else citation["end"]
                     if citation["start"] < 1 or end < citation["start"]:
                         findings.append(
                             _finding(
