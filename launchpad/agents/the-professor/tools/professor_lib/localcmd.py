@@ -484,17 +484,63 @@ def _check_section(marker_line, heading_line, section_text, target: str) -> list
                 )
                 continue
 
-            if citation["start"] is not None and citation["repo"] is None:
-                total_lines = _local_file_line_count(target, citation["sha"], citation["path"])
-                end = citation["end"] or citation["start"]
-                if total_lines is None or citation["start"] < 1 or end > total_lines or end < citation["start"]:
-                    findings.append(
-                        _finding(
-                            "out-of-bounds-range",
-                            f"section {heading_name!r} cites {raw!r}, a line range "
-                            f"out of bounds for a file of {total_lines} lines",
+            if citation["start"] is not None:
+                if citation["repo"] is None:
+                    total_lines = _local_file_line_count(target, citation["sha"], citation["path"])
+                    end = citation["end"] or citation["start"]
+                    if (
+                        total_lines is None
+                        or citation["start"] < 1
+                        or end > total_lines
+                        or end < citation["start"]
+                    ):
+                        findings.append(
+                            _finding(
+                                "out-of-bounds-range",
+                                f"section {heading_name!r} cites {raw!r}, a line range "
+                                f"out of bounds for a file of {total_lines} lines",
+                            )
                         )
-                    )
+                else:
+                    # An external citation's line range used to skip bounds
+                    # validation entirely -- silently passing regardless of
+                    # how absurd the range was (step 9 of the 2026-09-05 fix
+                    # round). Some of it IS mechanically checkable with no
+                    # network at all: a start below line 1, or an end before
+                    # the start, can never be a real range no matter what the
+                    # file actually contains. The upper bound, though, can
+                    # only be confirmed against the cited file's real line
+                    # count, which would require fetching its content over
+                    # the network -- a capability netcmd.py doesn't implement
+                    # (it only resolves refs and checks path existence, per
+                    # its own module docstring). Matching this pack's own
+                    # convention for "can't mechanically evaluate this"
+                    # (screen_content's roster-names dispatch finding),
+                    # report an explicit not-evaluated result for that case
+                    # rather than silently passing an unverified upper bound
+                    # as clean.
+                    end = citation["end"] or citation["start"]
+                    if citation["start"] < 1 or end < citation["start"]:
+                        findings.append(
+                            _finding(
+                                "out-of-bounds-range",
+                                f"section {heading_name!r} cites {raw!r}, a line "
+                                "range that is structurally invalid regardless of "
+                                "the cited file's actual contents",
+                            )
+                        )
+                    else:
+                        findings.append(
+                            _finding(
+                                "citation-range-not-evaluated",
+                                f"section {heading_name!r} cites {raw!r}: this "
+                                "tool cannot confirm an external citation's line "
+                                "range against the cited file's real length "
+                                "without fetching its content over the network, "
+                                "which it does not currently implement -- not "
+                                "evaluated, not silently passed as clean",
+                            )
+                        )
 
     if marker_line is not None:
         expected_keys, malformed_entries = _parse_marker_sources(marker_sources_attr)
