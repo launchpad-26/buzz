@@ -16,9 +16,11 @@ genuinely different, external repo reuses `netcmd.path_exists_at_bool` in-proces
 """
 
 import json
+import math
 import re
 import subprocess
 import sys
+from collections import Counter
 from pathlib import Path
 
 import yaml
@@ -390,6 +392,38 @@ WEBHOOK_URL_RE = re.compile(
     r"https?://[^\s]*(?:hook|webhook)[^\s]*/[A-Za-z0-9_/-]{10,}", re.IGNORECASE
 )
 
+# sensitive-patterns.md's "[pattern] API keys / access tokens" category has a
+# second clause beyond the fixed-prefix table above: "a high-entropy opaque
+# string adjacent to words like key/token/secret" (2026-09-05 fix round, step
+# 1). The keyword must appear as its own word -- \b-bounded on both sides --
+# never merely as a substring inside the candidate token itself, or an
+# ordinary identifier like API_KEY or access_token would false-positive on
+# its own name every time (no separator between the keyword and the rest of
+# the identifier means no real word boundary there).
+HIGH_ENTROPY_KEYWORD_RE = re.compile(r"\b(?:key|token|secret|password)\b", re.IGNORECASE)
+
+# A candidate opaque string: 20+ run of letters/digits/underscore/hyphen.
+# Real secrets in the wild (API tokens, generated passwords) are usually
+# 20+ characters; shorter runs are too easily an ordinary word or
+# identifier fragment for entropy alone to distinguish reliably.
+OPAQUE_STRING_RE = re.compile(r"\b[A-Za-z0-9_\-]{20,}\b")
+
+# Threshold picked from this pack's own fixture corpus, not an arbitrary
+# round number: hex commit SHAs (real "opaque-looking" strings already in
+# the fixtures) measure ~3.6-3.7 bits/char, ordinary identifiers/prose words
+# measure ~3.0-3.4, and a genuinely random 32-character alphanumeric secret
+# (this step's own reproduction fixture) measures ~5.0. 4.0 sits comfortably
+# above every non-secret string already in this corpus and comfortably below
+# a real random token, leaving margin on both sides rather than sitting on
+# either boundary.
+HIGH_ENTROPY_THRESHOLD = 4.0
+
+# "same line, or within a small token window" (step 1's own done-when
+# wording) -- 40 characters comfortably spans a short assignment like
+# `token = <value>` or `API_KEY: <value>` without reaching into an unrelated
+# neighboring sentence.
+HIGH_ENTROPY_WINDOW_CHARS = 40
+
 EMAIL_RE = re.compile(r"\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}\b")
 
 INTERNAL_HOST_RE = re.compile(
@@ -440,6 +474,38 @@ def _spans_within_window(span_a: tuple, span_b: tuple, window: int) -> bool:
     else:
         gap = 0
     return gap <= window
+
+
+def _shannon_entropy(s: str) -> float:
+    """Shannon entropy of `s`, in bits per character. See HIGH_ENTROPY_THRESHOLD
+    above for how the cutoff against this was chosen."""
+    if not s:
+        return 0.0
+    counts = Counter(s)
+    n = len(s)
+    return -sum((c / n) * math.log2(c / n) for c in counts.values())
+
+
+def _high_entropy_tokens_near_keywords(content: str):
+    """Yield each opaque, high-entropy candidate string that appears within
+    HIGH_ENTROPY_WINDOW_CHARS of a standalone key/token/secret/password word
+    -- the "[pattern] API keys / access tokens" category's high-entropy
+    clause (step 1 of the 2026-09-05 fix round). Reused by step 2's webhook
+    URL check for a query-param/path-segment value adjacent to a
+    token/key/secret/auth-shaped parameter name.
+    """
+    keyword_spans = [m.span() for m in HIGH_ENTROPY_KEYWORD_RE.finditer(content)]
+    if not keyword_spans:
+        return
+    for candidate in OPAQUE_STRING_RE.finditer(content):
+        token = candidate.group(0)
+        if _shannon_entropy(token) < HIGH_ENTROPY_THRESHOLD:
+            continue
+        candidate_span = candidate.span()
+        for keyword_span in keyword_spans:
+            if _spans_within_window(keyword_span, candidate_span, HIGH_ENTROPY_WINDOW_CHARS):
+                yield token
+                break
 
 
 def _roster_names_co_occur(content: str) -> bool:
@@ -494,6 +560,9 @@ def screen_content(file_path: str, pack_root: str) -> int:
     for pattern in API_KEY_PATTERNS:
         for match in pattern.finditer(content):
             findings.append(_screen_finding("api-key-token", "block", match.group(0)))
+
+    for token in _high_entropy_tokens_near_keywords(content):
+        findings.append(_screen_finding("api-key-token", "block", token))
 
     for match in PRIVATE_KEY_RE.finditer(content):
         findings.append(_screen_finding("private-key", "block", match.group(0)))

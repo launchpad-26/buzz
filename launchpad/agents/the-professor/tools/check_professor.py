@@ -79,6 +79,7 @@ FRONTMATTER_BRANCH_EXPECTED_MESSAGE_SUBSTRING = {
 SCREEN_CONTENT_EXPECTED = {
     "clean.md": {"disposition_by_category": {}},
     "block-api-key.md": {"disposition_by_category": {"api-key-token": "block"}},
+    "block-high-entropy-token.md": {"disposition_by_category": {"api-key-token": "block"}},
     "block-private-key.md": {"disposition_by_category": {"private-key": "block"}},
     "block-connection-string.md": {"disposition_by_category": {"connection-string": "block"}},
     "block-webhook-url.md": {"disposition_by_category": {"webhook-url-token": "block"}},
