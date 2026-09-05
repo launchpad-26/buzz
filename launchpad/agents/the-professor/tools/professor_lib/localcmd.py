@@ -31,6 +31,7 @@ SECTION_MARKER_RE = re.compile(
     r'^<!--\s*professor:section\s+sources="([^"]*)"\s+updated_by=\S+\s+updated_at=\S+\s*-->\s*$'
 )
 HEADING_RE = re.compile(r"^#+\s+.*$")
+FENCE_RE = re.compile(r"^\s*```")
 
 SENTENCE_SPLIT_RE = re.compile(r"(?<=[.!?])\s+")
 
@@ -121,9 +122,21 @@ def _split_sections(body: str):
     """Yield (marker_line_or_None, heading_line, section_text) for each
     heading in `body`, in order. `section_text` runs from just after the
     heading to just before the next heading (or end of body).
+
+    Fence-aware: a `#`-prefixed comment line inside a fenced (```) code block
+    is not a markdown heading, and must not be treated as one -- otherwise a
+    Python/shell/etc. example containing a `#` comment mis-splits the real
+    section around it, orphaning its citations.
     """
     lines = body.splitlines()
-    heading_indices = [i for i, line in enumerate(lines) if HEADING_RE.match(line)]
+    heading_indices = []
+    in_fence = False
+    for i, line in enumerate(lines):
+        if FENCE_RE.match(line):
+            in_fence = not in_fence
+            continue
+        if not in_fence and HEADING_RE.match(line):
+            heading_indices.append(i)
 
     for pos, idx in enumerate(heading_indices):
         heading_line = lines[idx]
