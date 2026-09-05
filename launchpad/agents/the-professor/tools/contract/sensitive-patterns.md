@@ -6,8 +6,13 @@ this list, and its disposition — **redact** (replace the span, keep the page) 
 **block** (refuse the write entirely). See `screen-sensitive/SKILL.md` for how a
 result in either disposition gets handled, and
 `launchpad/Research/the-professor-skill-suite-redesign.md` §9 for the status of the
-script that will eventually apply this mechanically (not yet built — screened by hand
-against this list until then, per that skill's own instruction, not skipped).
+script that applies this mechanically. **That script now exists for every
+[pattern] category below:** `tools/professor.py screen-content` implements them
+directly, no model call involved. The one **[dispatch]** category (member/roster
+names) still isn't pattern-matched — see `screen-sensitive/SKILL.md` for how that
+one is handled instead. This file remains the spec `screen-content` implements for
+every [pattern] category, not a placeholder screened by hand while the script
+doesn't exist yet.
 
 **Two dispositions of a different kind, added 2026-09-05 after a review found every
 category below being described as equally "mechanical" wasn't accurate.** Every
