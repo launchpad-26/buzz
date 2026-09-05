@@ -50,6 +50,7 @@ CHECK_PAGE_EXPECTED_RULES = {
     "compliant-local.md": [],
     "compliant-external.md": [],
     "compliant-fenced-code.md": [],
+    "compliant-long-shortsha.md": [],
     "broken-nonexistent-citation.md": ["citation-not-found"],
     "broken-missing-citation.md": ["missing-citation"],
     "broken-out-of-bounds-range.md": ["out-of-bounds-range"],

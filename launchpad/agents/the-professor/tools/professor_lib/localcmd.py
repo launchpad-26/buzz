@@ -164,12 +164,48 @@ def _parse_citation_string(raw: str):
 
 def _citation_key(citation: dict) -> tuple:
     """Normalized key for comparing a body citation against a marker source
-    entry: (repo, path, short-sha, span-string-or-None).
+    entry: (repo, path, full-40-char-sha, span-string-or-None).
+
+    The SHA is kept at its full length here, not truncated to a fixed 7
+    characters -- a marker may legitimately use an 8+ character abbreviation
+    of the same commit, and truncating both to a hardcoded length would make
+    an equivalent abbreviation compare unequal. See `_keys_match` below, which
+    does the actual length-tolerant comparison at match time instead.
     """
     span = None
     if citation["start"] is not None:
         span = f"L{citation['start']}" if citation["end"] is None else f"L{citation['start']}-L{citation['end']}"
-    return (citation["repo"], citation["path"], citation["sha"][:7], span)
+    return (citation["repo"], citation["path"], citation["sha"], span)
+
+
+def _keys_match(expected_keys: set, actual_keys: set) -> bool:
+    """Length-tolerant comparison between a marker's parsed source keys
+    (possibly-abbreviated SHAs, any length >= 1 hex char) and a section's
+    actual citation keys (always a full 40-char SHA). Two SHA abbreviations
+    of the same commit can legitimately differ in length (a marker using an
+    8-character shortsha vs. another using 7), so equality is judged by
+    truncating both sides to the shorter of the two lengths for each
+    candidate pair, not by requiring identical-length strings. Every expected
+    key must match exactly one actual key and vice versa (a true bijection),
+    same strength as the plain `==` this replaces.
+    """
+    if len(expected_keys) != len(actual_keys):
+        return False
+    remaining_actual = set(actual_keys)
+    for repo, path, sha, span in expected_keys:
+        match = None
+        for candidate in remaining_actual:
+            c_repo, c_path, c_sha, c_span = candidate
+            if repo != c_repo or path != c_path or span != c_span:
+                continue
+            shared_len = min(len(sha), len(c_sha))
+            if sha[:shared_len] == c_sha[:shared_len]:
+                match = candidate
+                break
+        if match is None:
+            return False
+        remaining_actual.discard(match)
+    return True
 
 
 def _parse_marker_sources(sources_attr: str) -> set:
@@ -305,7 +341,7 @@ def _check_section(marker_line, heading_line, section_text, target: str) -> list
     if marker_line is not None:
         expected_keys = _parse_marker_sources(marker_sources_attr)
         actual_keys = body_citation_keys
-        if expected_keys != actual_keys:
+        if not _keys_match(expected_keys, actual_keys):
             findings.append(
                 _finding(
                     "mismatched-provenance-marker",
