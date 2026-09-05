@@ -13,17 +13,24 @@ see the redesign document's Summary for why that would also make `$PROFESSOR_PAC
 resolution (Open Questions item 6, already resolved) unnecessary for a session running inside
 that container, not just add a deployment option.
 
-## Redesign proposal (2026-09-03): from one handbook to any repo — Phase 0 resolved, Phases 1–7 not yet built
+## Redesign proposal (2026-09-03): from one handbook to any repo — Phase 0 and Phase 1 resolved, Phases 1b–7 not yet built
 
-**Nothing below this line describes what's built.** The group's consensus (2026-09-03) is to
-retire MCP entirely — that settles this proposal's central architectural question — but no
-script, gate, or dry run exists yet; Phases 1–7 are still a proposal awaiting a go-ahead.
-Everything below this section describes the pack as it was actually built for
-[#9](https://github.com/launchpad-26/buzz/issues/9) — a single skill (`draft-page`)
-hard-coupled to one target, `launchpad-26/handbook`, via a module-level constant in
-`tools/server.py`, an MCP server (`professor-tools`) for its five tools, and a gate script
-shelled out from that one repo's checkout. That build is accurate history and still describes
-exactly what ships in this pack's `tools/` directory today — this redesign hasn't touched it.
+**Phase 1 (the tool layer) is now built** (issue #2100): `tools/professor.py`, a plain
+script with four subcommands (`resolve-pin`, `path-exists-at`, `check-page`,
+`screen-content`) — no MCP dependency, callable identically from any harness via Bash.
+`tools/server.py`, `tools/check_server.py`, and `.mcp.json` (the MCP server this section
+used to describe) have been deleted; `.plugin/plugin.json` no longer carries an
+`mcp_config` field. `tools/check_professor.py` is the real-subprocess test harness that
+replaces `check_server.py`. Phases 1b–7 (claim verification, the seven sub-skills
+themselves, library indexing, scheduled scanning, and hardening) remain a proposal
+awaiting their own go-ahead — nothing below this line describes those yet. The group's
+consensus (2026-09-03) to retire MCP entirely is the proposal's central architectural
+question, and Phase 1 is the first concrete evidence it holds up in code, not just on
+paper.
+
+The rest of this README's older sections below are preserved as the record of what was
+originally observed running #9's single-skill, MCP-based build — accurate history, but no
+longer a description of what ships in this pack's `tools/` directory today.
 
 The full proposal — why that coupling was accidental rather than necessary, the seven
 sub-skills that replace one, why it retires MCP in favor of a plain script-based tool layer
@@ -205,7 +212,8 @@ For #9's bounded acceptance criteria — *"drafts a page, passes the gate withou
 
 ### Tool Server: Read-Only Confirmed
 
-All five tools in `launchpad/agents/the-professor/tools/server.py` are read-only. Confirmed review:
+**Historical record of the original #9 build** (`tools/server.py`, now deleted — see
+"Redesign proposal" above): all five original MCP tools were read-only. Confirmed review:
 
 - **`read_contract()`** (lines 112–121): Fetches the handbook's page contract from GitHub via `gh api`. Reads and returns; no writes.
 - **`list_categories()`** (lines 124–137): Fetches and parses mkdocs.yml from the handbook. Reads and returns a list; no writes.
@@ -213,4 +221,10 @@ All five tools in `launchpad/agents/the-professor/tools/server.py` are read-only
 - **`path_exists_at(repo, commit, path)`** (lines 203–257): Checks if a path exists at a given commit via `gh api`. Reads and returns a boolean; no writes.
 - **`check_page(draft_content)`** (lines 344–439): Runs the handbook's provenance gate against a draft page. Refreshes a local handbook checkout via `git fetch` and `git reset` (read operations), writes the draft to an isolated scratch temp directory for testing only, shells out to the handbook's real gate scripts, and returns their results. No pushes, commits, or PR creation. The only write is to a temporary isolated directory with no persistence beyond the call.
 
-None of the five tools performs a write, push, commit, or PR-create call to GitHub or the handbook repository. The tool surface is entirely read-only.
+None of the five original tools performed a write, push, commit, or PR-create call to
+GitHub or the handbook repository. The same holds for their Phase 1 replacement: all four
+of `tools/professor.py`'s subcommands (`resolve-pin`, `path-exists-at`, `check-page`,
+`screen-content`) are read-only queries too — `resolve-pin`/`path-exists-at` fetch from
+GitHub via `gh api`, `check-page`/`screen-content` read a draft file and (for `check-page`)
+the target repo's own git history, and none of the four writes, commits, or pushes
+anywhere.
