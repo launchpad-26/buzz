@@ -308,6 +308,128 @@ def check_page(file_path: str, target: str, pack_root: str) -> int:
     return 0
 
 
+API_KEY_PATTERNS = [
+    re.compile(r"\bsk-[A-Za-z0-9]{10,}\b"),
+    re.compile(r"\bAKIA[A-Z0-9]{8,}\b"),
+    re.compile(r"\bghp_[A-Za-z0-9]{10,}\b"),
+    re.compile(r"\bxox[bp]-[A-Za-z0-9-]{6,}\b"),
+]
+
+PRIVATE_KEY_RE = re.compile(r"-----BEGIN [A-Z0-9 ]*PRIVATE KEY-----")
+
+CONNECTION_STRING_RE = re.compile(r"://[^\s:@/]+:[^\s@/]+@[^\s/]+")
+PASSWORD_LITERAL_RE = re.compile(r"\b(?:password|passwd|pwd)\s*[:=]\s*\S+", re.IGNORECASE)
+
+WEBHOOK_URL_RE = re.compile(
+    r"https?://[^\s]*(?:hook|webhook)[^\s]*/[A-Za-z0-9_/-]{10,}", re.IGNORECASE
+)
+
+EMAIL_RE = re.compile(r"\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}\b")
+
+INTERNAL_HOST_RE = re.compile(
+    r"\b(?:10\.\d{1,3}\.\d{1,3}\.\d{1,3}"
+    r"|172\.(?:1[6-9]|2\d|3[01])\.\d{1,3}\.\d{1,3}"
+    r"|192\.168\.\d{1,3}\.\d{1,3}"
+    r"|[\w-]+\.internal)\b"
+)
+
+PHYSICAL_ADDRESS_RE = re.compile(
+    r"\b\d{1,6}\s+[A-Z][a-zA-Z]+(?:\s+[A-Z][a-zA-Z]+)?\s+"
+    r"(?:Street|St|Avenue|Ave|Road|Rd|Boulevard|Blvd|Lane|Ln|Drive|Dr)\b"
+)
+
+# [dispatch] category (sensitive-patterns.md): recognizing "used as
+# access-control data" is a semantic judgment this pattern match cannot make --
+# this only detects the *structural* shape (an access-control-sounding phrase
+# near a list of Title-Case name-like tokens), then reports it as
+# "not_evaluated" rather than a pass or a verdict. The real judgment needs
+# $PROFESSOR_VERIFIER_CMD dispatch, built in Phase 1b (a separate, not-yet-filed
+# Feature per this plan's LEFT OUT) -- explicitly out of scope here.
+ROSTER_CONTEXT_RE = re.compile(
+    r"\b(?:allowlist|roster|restricted to|access list|hardcoded reviewer list)\b",
+    re.IGNORECASE,
+)
+NAME_LIST_RE = re.compile(r"\b[A-Z][a-z]+ [A-Z][a-z]+\b")
+
+MARKER_COMMENT_RE = re.compile(r"<!--\s*professor:section.*?-->", re.DOTALL)
+
+
+def _screen_finding(category: str, disposition: str, matched_text: str) -> dict:
+    return {
+        "category": category,
+        "disposition": disposition,
+        "match": matched_text,
+        "replacement": f"[REDACTED: {category}]" if disposition == "redact" else None,
+    }
+
+
 def screen_content(file_path: str, pack_root: str) -> int:
-    print("screen-content: not yet implemented (step 6)", file=sys.stderr)
-    return 1
+    path = Path(file_path)
+    if not path.is_file():
+        print(f"screen-content: no such file: {file_path}", file=sys.stderr)
+        return 1
+
+    content = path.read_text(encoding="utf-8")
+
+    # An email inside the frontmatter's `author` field or inside a
+    # `professor:section` provenance marker is attribution, not disclosure
+    # (sensitive-patterns.md's own "structurally-identifiable attribution
+    # context" carve-out) -- excluded by span, not by guessing intent.
+    excluded_spans = []
+    fm_match = FRONTMATTER_RE.match(content)
+    if fm_match:
+        excluded_spans.append((fm_match.start(), fm_match.end()))
+    for marker_match in MARKER_COMMENT_RE.finditer(content):
+        excluded_spans.append((marker_match.start(), marker_match.end()))
+
+    def _in_excluded_span(pos: int) -> bool:
+        return any(start <= pos < end for start, end in excluded_spans)
+
+    findings = []
+
+    for pattern in API_KEY_PATTERNS:
+        for match in pattern.finditer(content):
+            findings.append(_screen_finding("api-key-token", "block", match.group(0)))
+
+    for match in PRIVATE_KEY_RE.finditer(content):
+        findings.append(_screen_finding("private-key", "block", match.group(0)))
+
+    for match in CONNECTION_STRING_RE.finditer(content):
+        findings.append(_screen_finding("connection-string", "block", match.group(0)))
+    for match in PASSWORD_LITERAL_RE.finditer(content):
+        findings.append(_screen_finding("connection-string", "block", match.group(0)))
+
+    for match in WEBHOOK_URL_RE.finditer(content):
+        findings.append(_screen_finding("webhook-url-token", "block", match.group(0)))
+
+    for match in EMAIL_RE.finditer(content):
+        if _in_excluded_span(match.start()):
+            continue
+        findings.append(_screen_finding("email-address", "redact", match.group(0)))
+
+    for match in INTERNAL_HOST_RE.finditer(content):
+        findings.append(
+            _screen_finding("internal-hostname-private-ip", "redact", match.group(0))
+        )
+
+    for match in PHYSICAL_ADDRESS_RE.finditer(content):
+        findings.append(_screen_finding("physical-address", "redact", match.group(0)))
+
+    if ROSTER_CONTEXT_RE.search(content) and NAME_LIST_RE.search(content):
+        findings.append(
+            {
+                "category": "roster-names",
+                "disposition": "not_evaluated",
+                "match": None,
+                "replacement": None,
+                "message": (
+                    "structurally matches the roster/access-control-names "
+                    "category, which needs $PROFESSOR_VERIFIER_CMD model "
+                    "dispatch (Phase 1b, not yet built) -- not evaluated here, "
+                    "not silently passed as clean."
+                ),
+            }
+        )
+
+    print(json.dumps({"findings": findings}, indent=2))
+    return 0
