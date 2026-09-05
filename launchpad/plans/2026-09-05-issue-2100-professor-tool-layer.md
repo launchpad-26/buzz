@@ -39,8 +39,18 @@ STEP 2  Port `resolve-pin`/`path-exists-at` from `server.py`'s `resolve_pin`/   
         `path_exists_at`: same validation (40-hex-char SHA check, the
         `_RATE_LIMIT_OR_AUTH_STATUSES` handling, `path`'s `?`/`&` rejection,
         `commit` shape check), same `gh api` calls, minus `@mcp.tool()` and the
-        `mcp` import — `resolve-pin --repo <r> --ref <ref>` and
-        `path-exists-at --repo <r> --commit <c> --path <p>` as plain args.
+        `mcp` import — `resolve-pin <repo> <ref>` and
+        `path-exists-at <repo> <commit> <path>` as positional args, matching
+        every documented invocation in `skills/draft-page/SKILL.md` and
+        `skills/update-page/SKILL.md` exactly (**corrected 2026-09-06,
+        superseding this step's own earlier `--repo`/`--ref`/`--commit`/`--path`
+        flag decision** — see the OPEN section's own updated note below for
+        why the flag shape was wrong and how it was found). `resolve-pin`'s
+        output is a JSON object `{"commit", "commit_author", "commit_at",
+        "pr"}` (also corrected 2026-09-06 — the original design doc always
+        specified this structured shape for Phase 1, §4/§8; it was missed in
+        the first build pass and caught by a whole-branch review, not a
+        per-diff one).
         This subcommand pair is always the network-backed, GitHub-API path —
         §4 places both in the `netcmd` (network) half of the tool-call diagram,
         for citing sources genuinely external to whatever repo is being
@@ -49,14 +59,15 @@ STEP 2  Port `resolve-pin`/`path-exists-at` from `server.py`'s `resolve_pin`/   
                                                                     ← RUNS HERE
         done when: from a `/tmp` working directory outside this checkout,
         `PROFESSOR_PACK_ROOT=/tmp python3 <abs-path>/tools/professor.py resolve-pin
-        --repo block/buzz --ref main` prints a 40-char SHA that matches
-        `git ls-remote https://github.com/block/buzz main` independently (verified
-        directly: `git ls-remote https://github.com/block/buzz launchpad` returns
-        nothing — `launchpad` is this **fork**'s default branch name, not a ref on
-        upstream `block/buzz` — so the worked example must resolve a ref that
-        actually exists on the repo it names); the same session's
-        `path-exists-at --repo block/buzz --commit <that-sha> --path Cargo.toml`
-        prints `true`, and `--path this-path-does-not-exist` prints `false`.
+        block/buzz main` prints a JSON object whose `commit` field is a 40-char
+        SHA matching `git ls-remote https://github.com/block/buzz main`
+        independently (verified directly: `git ls-remote https://github.com/
+        block/buzz launchpad` returns nothing — `launchpad` is this **fork**'s
+        default branch name, not a ref on upstream `block/buzz` — so the worked
+        example must resolve a ref that actually exists on the repo it names);
+        the same session's `path-exists-at block/buzz <that-sha> Cargo.toml`
+        prints `true`, and `path-exists-at block/buzz <that-sha>
+        this-path-does-not-exist` prints `false`.
 
 STEP 3  Author the `check-page` fixture set under                              [independent]
         `launchpad/agents/the-professor/tools/contract/fixtures/`: fixtures that
@@ -232,24 +243,32 @@ OPEN      Whether `check-page`'s citation-existence check should cache
           same file/commit repeatedly) — the design doc doesn't specify this,
           and step 4 doesn't need it to pass step 3's fixtures, so it's left as
           an implementation detail for whoever builds step 4, not decided here.
-          Exact CLI flag names/shapes beyond what §4 states explicitly
-          (`check-page` takes `--target <root>`; `resolve-pin`/`path-exists-at`
-          take `repo` as an argument) are not specified in the design doc —
-          this plan uses `--repo`/`--ref`/`--commit`/`--path` as the most direct
-          reading of §4's prose; a builder finding a cleaner shape should still
-          match the invocation grep in §4 ("`professor.py resolve-pin`") staying
-          true. **Reconciled against issues #2100/#2101, found and fixed
-          2026-09-05**: those two issue bodies originally showed a materially
-          different, narrower shape (`resolve-pin <ref>`,
-          `path-exists-at <path>@<ref>`, no visible `repo` argument at all) —
-          an imprecise paraphrase written when the issues were filed, before
-          this plan worked out the actual invocation. §4 is unambiguous that
-          `resolve-pin`/`path-exists-at` "keep taking `repo` as an argument
-          exactly as the original tools did," and a bare `<ref>` with no repo
-          can't resolve anything — the issue text was wrong, not the design
-          doc. Both issue bodies have been corrected to match this plan's
-          `--repo`/`--ref`/`--commit`/`--path` shape; a builder reading either
-          issue directly now sees the same shape this plan implements.
+          **RESOLVED 2026-09-06, superseding the 2026-09-05 entry below.**
+          `check-page` takes `--target <root>`; `resolve-pin`/`path-exists-at`
+          take **positional** `<repo> <ref>` / `<repo> <commit> <path>` — this
+          plan's original `--repo`/`--ref`/`--commit`/`--path` flag choice was
+          wrong, found by a whole-branch `review-final` pass (not a per-diff
+          reviewer, which had no reason to compare the tool's CLI against the
+          `SKILL.md` files that actually call it) against
+          `skills/draft-page/SKILL.md`/`skills/update-page/SKILL.md`, which
+          both document positional args and were never wrong — the flag
+          choice below was the plan's own error, invented from §4's prose
+          without checking the two files that actually invoke this interface.
+          `resolve-pin`'s output is also corrected: a JSON object
+          `{"commit", "commit_author", "commit_at", "pr"}`, per the design
+          doc's own explicit (and previously missed) "output schema changes"
+          requirement — not the bare SHA this plan originally assumed.
+
+          *(2026-09-05 entry, superseded above, kept for history):* Exact CLI
+          flag names/shapes beyond what §4 states explicitly were not
+          specified in the design doc; this plan used
+          `--repo`/`--ref`/`--commit`/`--path` as a reading of §4's prose, and
+          issues #2100/#2101 were edited the same day to match that flag
+          shape. Both the plan's choice and that edit were wrong — corrected
+          2026-09-06 back to positional args, and issues #2100/#2101 have been
+          re-edited again to match. A builder reading either issue directly
+          now sees the same positional shape this plan and the shipped code
+          both implement.
 LEFT OUT  Everything Task #2100's own "Out of scope" section already names:
           `verify-claims`' `$PROFESSOR_VERIFIER_CMD` dispatch (Phase 1b, separate
           Feature); reconciling the six known-stale `SKILL.md` drafts against
