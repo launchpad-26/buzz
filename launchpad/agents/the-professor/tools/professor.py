@@ -130,6 +130,18 @@ def _build_parser() -> argparse.ArgumentParser:
         help="Run sensitive-patterns.md's [pattern] categories against a draft's content.",
     )
     screen_content_parser.add_argument("file", help="path to the file to screen")
+    screen_content_parser.add_argument(
+        "--target",
+        required=False,
+        default=None,
+        help=(
+            "root of the target repo (accepted for parity with check-page's own "
+            "--target, and because skills/screen-sensitive/SKILL.md documents "
+            "invoking this subcommand with it -- not yet used to resolve a "
+            "target-specific ruleset override; see .professor/sensitive-"
+            "patterns.md resolution in that skill's own step 1)"
+        ),
+    )
     screen_content_parser.set_defaults(func=_cmd_screen_content)
 
     return parser

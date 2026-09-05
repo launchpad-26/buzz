@@ -394,6 +394,31 @@ def check_invalid_utf8_produces_structured_error() -> str | None:
     return None
 
 
+def check_screen_content_accepts_target_flag() -> str | None:
+    """`professor.py`'s `screen-content` subparser never defined `--target`,
+    but `skills/screen-sensitive/SKILL.md` documents invoking it as
+    `professor.py screen-content <scratch-file> --target <target-root>` --
+    confirmed failing with "error: unrecognized arguments: --target /tmp"
+    before this fix (bonus item found during adjudication, treated as High:
+    the mandatory screening gate couldn't be invoked as documented at all).
+    Only checks that the documented shape now parses; it does not assert
+    `--target` changes screen-content's behaviour, since this fix doesn't
+    add ruleset-resolution logic -- see professor.py's own help text for
+    that scope note.
+    """
+    with tempfile.TemporaryDirectory() as target_dir:
+        result = _run_professor(
+            ["screen-content", str(FIXTURES_DIR / "clean.md"), "--target", target_dir],
+            pack_root="/tmp",
+        )
+        if result.returncode != 0:
+            return (
+                "screen-content <file> --target <dir> failed to parse/run: "
+                f"exit {result.returncode}, stderr {result.stderr!r}"
+            )
+    return None
+
+
 def check_local_citation_never_calls_gh() -> str | None:
     """`compliant-local.md`'s citation is entirely local (no `repo:` prefix) --
     `gh` must never be invoked for it. `compliant-external.md`'s citation
@@ -604,6 +629,12 @@ def main() -> int:
         print(f"FAIL [invalid UTF-8 structured error]: {error}")
         return 1
     print("ok: invalid UTF-8 produces a structured error, never a raw traceback (check-page and screen-content)")
+
+    error = check_screen_content_accepts_target_flag()
+    if error:
+        print(f"FAIL [screen-content accepts --target]: {error}")
+        return 1
+    print("ok: screen-content accepts --target, matching SKILL.md's documented invocation shape")
 
     error = check_check_page_fixtures()
     if error:
