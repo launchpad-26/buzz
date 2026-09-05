@@ -170,7 +170,7 @@ SCREEN_CONTENT_EXPECTED = {
         "disposition_by_category": {"internal-hostname-private-ip": "redact"}
     },
     "redact-physical-address.md": {"disposition_by_category": {"physical-address": "redact"}},
-    "dispatch-roster-names.md": {"disposition_by_category": {"roster-names": "not_evaluated"}},
+    "dispatch-roster-names.md": {"disposition_by_category": {"roster-names": "not-evaluated"}},
     "clean-unrelated-roster-and-names.md": {"disposition_by_category": {}},
 }
 

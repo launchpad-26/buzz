@@ -795,7 +795,7 @@ PHYSICAL_ADDRESS_RE = re.compile(
 # access-control data" is a semantic judgment this pattern match cannot make --
 # this only detects the *structural* shape (an access-control-sounding phrase
 # near a list of Title-Case name-like tokens), then reports it as
-# "not_evaluated" rather than a pass or a verdict. The real judgment needs
+# "not-evaluated" rather than a pass or a verdict. The real judgment needs
 # $PROFESSOR_VERIFIER_CMD dispatch, built in Phase 1b (a separate, not-yet-filed
 # Feature per this plan's LEFT OUT) -- explicitly out of scope here.
 ROSTER_CONTEXT_RE = re.compile(
@@ -1090,7 +1090,15 @@ def screen_content(file_path: str, pack_root: str, target: str | None = None) ->
             {
                 "rule": "roster-names",
                 "category": "roster-names",
-                "disposition": "not_evaluated",
+                # Hyphenated, matching every other "can't mechanically
+                # evaluate this" rule/category name in this codebase
+                # (missing-citation, out-of-bounds-range,
+                # citation-range-not-evaluated) -- this used to be spelled
+                # with an underscore instead, the one remaining inconsistent
+                # spelling after step 2 changed target-ruleset-override's
+                # own not_evaluated to block (step 6 of the 2026-09-06 fix
+                # round).
+                "disposition": "not-evaluated",
                 "location": {"line": _line_number(content, name_span[0])},
                 "match": None,
                 "replacement": None,
