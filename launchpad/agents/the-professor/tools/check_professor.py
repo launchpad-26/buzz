@@ -122,8 +122,8 @@ REQUIRED_UNSET_ERROR_TEXT = (
 )
 
 SUBCOMMAND_ARGS_FOR_UNSET_CHECK = {
-    "resolve-pin": ["resolve-pin", "--repo", "x/y", "--ref", "main"],
-    "path-exists-at": ["path-exists-at", "--repo", "x/y", "--commit", "a" * 40, "--path", "z"],
+    "resolve-pin": ["resolve-pin", "x/y", "main"],
+    "path-exists-at": ["path-exists-at", "x/y", "a" * 40, "z"],
     "check-page": ["check-page", "x.md", "--target", "/tmp"],
     "screen-content": ["screen-content", "x.md"],
 }
@@ -173,13 +173,17 @@ def check_pack_root_resolution_outside_checkout() -> str | None:
     """
     with tempfile.TemporaryDirectory() as outside_cwd:
         result = _run_professor(
-            ["resolve-pin", "--repo", EXTERNAL_REPO, "--ref", EXTERNAL_REF],
+            ["resolve-pin", EXTERNAL_REPO, EXTERNAL_REF],
             pack_root="/tmp/an-arbitrary-pack-root-that-need-not-exist",
             cwd=outside_cwd,
         )
         if result.returncode != 0:
             return f"resolve-pin from outside checkout failed: {result.stderr}"
-        sha = result.stdout.strip()
+        try:
+            report = json.loads(result.stdout)
+        except json.JSONDecodeError:
+            return f"resolve-pin from outside checkout did not return valid JSON: {result.stdout!r}"
+        sha = report.get("commit", "")
         if len(sha) != 40 or any(c not in "0123456789abcdef" for c in sha):
             return f"resolve-pin from outside checkout did not return a 40-char SHA: {sha!r}"
         return None
@@ -188,11 +192,18 @@ def check_pack_root_resolution_outside_checkout() -> str | None:
 def check_resolve_pin_matches_git_ls_remote() -> tuple[str | None, str | None]:
     """Returns (error_or_None, resolved_sha_or_None)."""
     result = _run_professor(
-        ["resolve-pin", "--repo", EXTERNAL_REPO, "--ref", EXTERNAL_REF], pack_root="/tmp"
+        ["resolve-pin", EXTERNAL_REPO, EXTERNAL_REF], pack_root="/tmp"
     )
     if result.returncode != 0:
         return f"resolve-pin failed: {result.stderr}", None
-    sha = result.stdout.strip()
+    try:
+        report = json.loads(result.stdout)
+    except json.JSONDecodeError:
+        return f"resolve-pin did not print valid JSON: {result.stdout!r}", None
+    for field in ("commit", "commit_author", "commit_at", "pr"):
+        if field not in report:
+            return f"resolve-pin's JSON is missing required field {field!r}: {report!r}", None
+    sha = report["commit"]
     if len(sha) != 40 or any(c not in "0123456789abcdef" for c in sha):
         return f"resolve-pin did not return a 40-char hex SHA: {sha!r}", None
 
@@ -213,16 +224,67 @@ def check_resolve_pin_matches_git_ls_remote() -> tuple[str | None, str | None]:
     return None, sha
 
 
+# A real block/buzz commit whose message subject carries a trailing "(#NNNN)"
+# (a normal squash-merge commit) -- confirms `pr` is the correct integer, not
+# just present. Fixed rather than always re-reading `main`'s current HEAD, so
+# this assertion doesn't silently start failing the day `main`'s tip happens
+# to be a non-squash-merge commit.
+PR_PRESENT_COMMIT = "b0466ac465336cb773fbf7355ec05f7d61f4a3aa"  # "...(#6456)"
+PR_PRESENT_EXPECTED_PR = 6456
+
+# block/buzz's own root commit ("Initial commit") -- predates the repo having
+# any pull requests at all, so its message can never carry a trailing
+# "(#NNNN)". Confirms `pr` is JSON `null`, not merely absent or guessed.
+PR_ABSENT_COMMIT = "916f096fe9a12d493d156eb45719c5fd01d14287"
+
+
+def check_resolve_pin_pr_field() -> str | None:
+    """`pr` must be the correct integer when the cited commit's message
+    subject carries a trailing "(#NNNN)", and JSON `null` -- never inferred
+    by a separate network call -- when it does not.
+    """
+    present_result = _run_professor(
+        ["resolve-pin", EXTERNAL_REPO, PR_PRESENT_COMMIT], pack_root="/tmp"
+    )
+    if present_result.returncode != 0:
+        return f"resolve-pin({PR_PRESENT_COMMIT}) failed: {present_result.stderr}"
+    try:
+        present_report = json.loads(present_result.stdout)
+    except json.JSONDecodeError:
+        return f"resolve-pin({PR_PRESENT_COMMIT}) did not print valid JSON: {present_result.stdout!r}"
+    if present_report.get("pr") != PR_PRESENT_EXPECTED_PR:
+        return (
+            f"resolve-pin({PR_PRESENT_COMMIT}): expected pr={PR_PRESENT_EXPECTED_PR}, "
+            f"got {present_report.get('pr')!r}"
+        )
+
+    absent_result = _run_professor(
+        ["resolve-pin", EXTERNAL_REPO, PR_ABSENT_COMMIT], pack_root="/tmp"
+    )
+    if absent_result.returncode != 0:
+        return f"resolve-pin({PR_ABSENT_COMMIT}) failed: {absent_result.stderr}"
+    try:
+        absent_report = json.loads(absent_result.stdout)
+    except json.JSONDecodeError:
+        return f"resolve-pin({PR_ABSENT_COMMIT}) did not print valid JSON: {absent_result.stdout!r}"
+    if absent_report.get("pr") is not None:
+        return (
+            f"resolve-pin({PR_ABSENT_COMMIT}): expected pr=null, got "
+            f"{absent_report.get('pr')!r}"
+        )
+    return None
+
+
 def check_path_exists_at_true_and_false(sha: str) -> str | None:
     true_result = _run_professor(
-        ["path-exists-at", "--repo", EXTERNAL_REPO, "--commit", sha, "--path", EXTERNAL_EXISTING_PATH],
+        ["path-exists-at", EXTERNAL_REPO, sha, EXTERNAL_EXISTING_PATH],
         pack_root="/tmp",
     )
     if true_result.returncode != 0 or true_result.stdout.strip() != "true":
         return f"path-exists-at(real path) did not return true: {true_result.stdout!r} {true_result.stderr!r}"
 
     false_result = _run_professor(
-        ["path-exists-at", "--repo", EXTERNAL_REPO, "--commit", sha, "--path", EXTERNAL_MISSING_PATH],
+        ["path-exists-at", EXTERNAL_REPO, sha, EXTERNAL_MISSING_PATH],
         pack_root="/tmp",
     )
     if false_result.returncode != 0 or false_result.stdout.strip() != "false":
@@ -596,6 +658,12 @@ def main() -> int:
         print(f"FAIL [resolve-pin matches git ls-remote]: {error}")
         return 1
     print(f"ok: resolve-pin matches git ls-remote ({sha})")
+
+    error = check_resolve_pin_pr_field()
+    if error:
+        print(f"FAIL [resolve-pin pr field]: {error}")
+        return 1
+    print("ok: resolve-pin's pr field (correct integer when present, null when absent)")
 
     error = check_path_exists_at_true_and_false(sha)
     if error:

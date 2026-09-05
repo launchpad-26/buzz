@@ -16,10 +16,19 @@ citation to a genuinely different, external repo goes through here.
 """
 
 import json
+import re
 import subprocess
 import sys
 
 _RATE_LIMIT_OR_AUTH_STATUSES = {"401", "403", "429"}
+
+# GitHub's default squash-merge format appends "(#NNNN)" to the end of the
+# commit subject (message's first line) -- the same rule `draft-page`/
+# `update-page`'s SKILL.md apply to `git log`'s `%s` for a target-repo's own
+# commit, applied here to the API response's `.commit.message` field instead
+# (redesign doc, "output schema changes"). Only ever read from this one
+# `gh api` response already being made -- never a second network call.
+TRAILING_PR_RE = re.compile(r"\(#(\d+)\)\s*$")
 
 
 def _run_gh_api(args: list[str]) -> subprocess.CompletedProcess:
@@ -51,9 +60,16 @@ def _parse_error_status(result: subprocess.CompletedProcess) -> tuple[str | None
 
 def resolve_pin(repo: str, ref: str) -> int:
     """Resolve `ref` (branch, tag, or SHA) on `repo` to its full 40-character
-    commit SHA. Prints the SHA to stdout on success.
+    commit SHA, plus the author, date, and originating PR (if any) -- all
+    read from the one `gh api repos/{repo}/commits/{ref}` call already being
+    made, never a second round-trip. Prints a JSON object to stdout on
+    success: `{"commit": "<sha>", "commit_author": "<name> <<email>>",
+    "commit_at": "<ISO 8601>", "pr": <int|null>}` (redesign doc's "output
+    schema changes" -- Phase 1 replaces the old bare-SHA-string output with
+    this structured shape, since `draft-page`/`update-page`'s SKILL.md both
+    already destructure these four fields from this call).
     """
-    result = _run_gh_api([f"repos/{repo}/commits/{ref}", "-q", ".sha"])
+    result = _run_gh_api([f"repos/{repo}/commits/{ref}"])
 
     if result.returncode != 0:
         status, message = _parse_error_status(result)
@@ -74,18 +90,52 @@ def resolve_pin(repo: str, ref: str) -> int:
             )
         return 1
 
-    sha = result.stdout.strip()
-    if len(sha) != 40 or any(c not in "0123456789abcdef" for c in sha):
+    try:
+        commit_data = json.loads(result.stdout)
+    except json.JSONDecodeError:
         print(
             f"resolve-pin({repo!r}, {ref!r}): gh api reported success but "
-            f"returned {sha!r}, which is not a 40-character hex SHA. Refusing "
-            "to print it -- this can happen when a rate-limited or partial "
+            f"did not return valid JSON: {result.stdout!r}. Refusing to "
+            "print it -- this can happen when a rate-limited or partial "
             "response slips past error detection.",
             file=sys.stderr,
         )
         return 1
 
-    print(sha)
+    sha = commit_data.get("sha", "")
+    if not isinstance(sha, str) or len(sha) != 40 or any(
+        c not in "0123456789abcdef" for c in sha
+    ):
+        print(
+            f"resolve-pin({repo!r}, {ref!r}): gh api reported success but "
+            f"`.sha` was {sha!r}, which is not a 40-character hex SHA. "
+            "Refusing to print it -- this can happen when a rate-limited or "
+            "partial response slips past error detection.",
+            file=sys.stderr,
+        )
+        return 1
+
+    commit = commit_data.get("commit") or {}
+    author = commit.get("author") or {}
+    author_name = author.get("name", "")
+    author_email = author.get("email", "")
+    commit_author = f"{author_name} <{author_email}>"
+    commit_at = author.get("date")
+    message = commit.get("message") or ""
+    subject = message.splitlines()[0] if message else ""
+    pr_match = TRAILING_PR_RE.search(subject)
+    pr = int(pr_match.group(1)) if pr_match else None
+
+    print(
+        json.dumps(
+            {
+                "commit": sha,
+                "commit_author": commit_author,
+                "commit_at": commit_at,
+                "pr": pr,
+            }
+        )
+    )
     return 0
 
 

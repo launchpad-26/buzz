@@ -98,19 +98,17 @@ def _build_parser() -> argparse.ArgumentParser:
         "resolve-pin",
         help="Resolve a repo ref (branch/tag/SHA) to its full 40-char commit SHA.",
     )
-    resolve_pin_parser.add_argument("--repo", required=True, help="owner/repo")
-    resolve_pin_parser.add_argument("--ref", required=True, help="branch, tag, or SHA")
+    resolve_pin_parser.add_argument("repo", help="owner/repo")
+    resolve_pin_parser.add_argument("ref", help="branch, tag, or SHA")
     resolve_pin_parser.set_defaults(func=_cmd_resolve_pin)
 
     path_exists_parser = subparsers.add_parser(
         "path-exists-at",
         help="Check whether a path exists in a repo at a pinned commit.",
     )
-    path_exists_parser.add_argument("--repo", required=True, help="owner/repo")
-    path_exists_parser.add_argument(
-        "--commit", required=True, help="full 40-char hex commit SHA"
-    )
-    path_exists_parser.add_argument("--path", required=True, help="repo-relative path")
+    path_exists_parser.add_argument("repo", help="owner/repo")
+    path_exists_parser.add_argument("commit", help="full 40-char hex commit SHA")
+    path_exists_parser.add_argument("path", help="repo-relative path")
     path_exists_parser.set_defaults(func=_cmd_path_exists_at)
 
     check_page_parser = subparsers.add_parser(
