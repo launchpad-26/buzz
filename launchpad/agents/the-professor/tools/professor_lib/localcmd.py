@@ -185,6 +185,44 @@ def _fence_marker(line: str):
     return run[0], len(run), match.group(2)
 
 
+def _strip_fenced_lines(text: str) -> str:
+    """Returns `text` with every line inside a fenced (``` or ~~~) code
+    block removed, including the fence marker lines themselves -- so claim
+    scanning never sees fenced example content at all: neither checked for
+    a missing citation, nor contributing an example citation to the
+    section's marker-matching set (step 7 of the 2026-09-05 fix round).
+
+    Recomputes fence state from scratch over `text` (a single section's own
+    body), using the same fence-matching rule `_split_sections` uses (step
+    6): a closing fence must use the same character and be at least as long
+    as the opener. A section's text runs strictly between two headings, and
+    heading detection is itself fence-aware, so a real fence can never
+    straddle a section boundary -- recomputing per section is equivalent to,
+    and simpler than, carrying state over from the splitter.
+    """
+    lines = text.splitlines()
+    kept = []
+    in_fence = False
+    fence_char = None
+    fence_len = 0
+    for line in lines:
+        marker = _fence_marker(line)
+        if in_fence:
+            if marker is not None:
+                char, length, trailing = marker
+                if char == fence_char and length >= fence_len and trailing.strip() == "":
+                    in_fence = False
+                    fence_char = None
+                    fence_len = 0
+            continue
+        if marker is not None:
+            fence_char, fence_len, _ = marker
+            in_fence = True
+            continue
+        kept.append(line)
+    return "\n".join(kept)
+
+
 def _split_sections(body: str):
     """Yield (marker_line_or_None, heading_line_or_None, section_text) for
     each heading in `body`, in order, plus one leading entry for any text
@@ -354,7 +392,7 @@ def _check_section(marker_line, heading_line, section_text, target: str) -> list
 
     body_citation_keys = set()
 
-    for sentence in SENTENCE_SPLIT_RE.split(section_text):
+    for sentence in SENTENCE_SPLIT_RE.split(_strip_fenced_lines(section_text)):
         behaviour_matches = list(BEHAVIOUR_TAG_RE.finditer(sentence))
         opinion_matches = list(OPINION_TAG_RE.finditer(sentence))
 

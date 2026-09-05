@@ -53,6 +53,7 @@ CHECK_PAGE_EXPECTED_RULES = {
     "compliant-fenced-code.md": [],
     "compliant-tilde-fenced-code.md": [],
     "compliant-nested-fence-length.md": [],
+    "compliant-fenced-fake-claim-and-citation.md": [],
     "compliant-long-shortsha.md": [],
     "compliant-range-at-end.md": [],
     "broken-nonexistent-citation.md": ["citation-not-found"],
