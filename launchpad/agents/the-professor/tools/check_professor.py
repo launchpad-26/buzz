@@ -338,9 +338,18 @@ def check_screen_content_fixtures() -> str | None:
         findings = report.get("findings", [])
         expected_by_category = expectation["disposition_by_category"]
 
+        # Exact-set comparison, matching check-page's own rigor: not just
+        # "the expected categories are present" but "no unexpected/extra
+        # category showed up either".
+        actual_categories = {f["category"] for f in findings}
+        expected_categories = set(expected_by_category.keys())
+        if actual_categories != expected_categories:
+            return (
+                f"screen-content({fixture_name}): expected categories "
+                f"{expected_categories!r}, got {actual_categories!r}"
+            )
+
         if not expected_by_category:
-            if findings:
-                return f"screen-content({fixture_name}): expected no findings, got {findings!r}"
             continue
 
         for category, disposition in expected_by_category.items():
