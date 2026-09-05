@@ -88,6 +88,10 @@ SCREEN_CONTENT_EXPECTED = {
         "disposition_by_category": {"webhook-url-token": "block", "api-key-token": "block"}
     },
     "redact-email.md": {"disposition_by_category": {"email-address": "redact"}},
+    "redact-email-non-author-frontmatter-field.md": {
+        "disposition_by_category": {"email-address": "redact"}
+    },
+    "clean-email-in-author-field.md": {"disposition_by_category": {}},
     "redact-internal-host.md": {
         "disposition_by_category": {"internal-hostname-private-ip": "redact"}
     },

@@ -548,6 +548,13 @@ ROSTER_NAME_WINDOW_CHARS = 120
 
 MARKER_COMMENT_RE = re.compile(r"<!--\s*professor:section.*?-->", re.DOTALL)
 
+# sensitive-patterns.md's email carve-out is narrower than "the whole
+# frontmatter block" -- it's specifically "a citation's `author` frontmatter
+# field, or inside a `professor:section` provenance comment" (step 5 of the
+# 2026-09-05 fix round). Matches the `author:` line's value only, within the
+# already-captured frontmatter body text.
+AUTHOR_FIELD_RE = re.compile(r"^author:[ \t]*(.*)$", re.MULTILINE)
+
 
 def _spans_within_window(span_a: tuple, span_b: tuple, window: int) -> bool:
     """True if two (start, end) character spans are within `window` characters
@@ -649,14 +656,27 @@ def screen_content(file_path: str, pack_root: str) -> int:
 
     content = path.read_text(encoding="utf-8")
 
-    # An email inside the frontmatter's `author` field or inside a
-    # `professor:section` provenance marker is attribution, not disclosure
+    # An email inside the frontmatter's `author` field VALUE, or inside a
+    # `professor:section` provenance marker, is attribution, not disclosure
     # (sensitive-patterns.md's own "structurally-identifiable attribution
-    # context" carve-out) -- excluded by span, not by guessing intent.
+    # context" carve-out) -- excluded by span, not by guessing intent. The
+    # carve-out is the `author` field's value specifically, not the entire
+    # frontmatter block -- an email in some other frontmatter field (e.g. a
+    # `title` or `contact` value) is not attribution and must still screen
+    # (step 5 of the 2026-09-05 fix round).
     excluded_spans = []
     fm_match = FRONTMATTER_RE.match(content)
     if fm_match:
-        excluded_spans.append((fm_match.start(), fm_match.end()))
+        frontmatter_body = fm_match.group(1)
+        frontmatter_offset = fm_match.start(1)
+        author_match = AUTHOR_FIELD_RE.search(frontmatter_body)
+        if author_match:
+            excluded_spans.append(
+                (
+                    frontmatter_offset + author_match.start(1),
+                    frontmatter_offset + author_match.end(1),
+                )
+            )
     for marker_match in MARKER_COMMENT_RE.finditer(content):
         excluded_spans.append((marker_match.start(), marker_match.end()))
 
