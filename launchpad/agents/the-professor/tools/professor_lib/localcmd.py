@@ -591,7 +591,15 @@ def check_page(file_path: str, target: str, pack_root: str) -> int:
         print(f"check-page: no such file: {file_path}", file=sys.stderr)
         return 1
 
-    content = path.read_text(encoding="utf-8")
+    try:
+        content = path.read_text(encoding="utf-8")
+    except UnicodeDecodeError as exc:
+        # A raw traceback here is inconsistent with this module's own
+        # convention elsewhere (e.g. "check-page: no such file: ...") --
+        # step 11 of the 2026-09-05 fix round replaces it with the same
+        # structured-error shape.
+        print(f"check-page: {file_path} is not valid UTF-8: {exc}", file=sys.stderr)
+        return 1
     _, body, frontmatter_findings = _parse_frontmatter(content)
 
     if frontmatter_findings:
@@ -814,7 +822,13 @@ def screen_content(file_path: str, pack_root: str) -> int:
         print(f"screen-content: no such file: {file_path}", file=sys.stderr)
         return 1
 
-    content = path.read_text(encoding="utf-8")
+    try:
+        content = path.read_text(encoding="utf-8")
+    except UnicodeDecodeError as exc:
+        # Same structured-error convention as check-page's own guard above
+        # (step 11 of the 2026-09-05 fix round) -- never a raw traceback.
+        print(f"screen-content: {file_path} is not valid UTF-8: {exc}", file=sys.stderr)
+        return 1
 
     # An email inside the frontmatter's `author` field VALUE, or inside a
     # `professor:section` provenance marker, is attribution, not disclosure

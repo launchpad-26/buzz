@@ -347,6 +347,53 @@ def check_local_citation_error_shapes() -> str | None:
     return None
 
 
+def check_invalid_utf8_produces_structured_error() -> str | None:
+    """Invalid UTF-8 input used to raise an uncaught UnicodeDecodeError
+    traceback instead of a structured tool error, inconsistent with this
+    module's own convention elsewhere (e.g. "check-page: no such file:
+    ...") -- step 11 of the 2026-09-05 fix round. `invalid-utf8.md` is a
+    real fixture containing a raw 0xFF byte, deliberately not registered in
+    CHECK_PAGE_EXPECTED_RULES/SCREEN_CONTENT_EXPECTED above: it can never
+    produce a findings JSON body at all, only a structured error and a
+    non-zero exit.
+    """
+    fixture_path = FIXTURES_DIR / "invalid-utf8.md"
+
+    check_page_result = _run_professor(
+        ["check-page", str(fixture_path), "--target", str(REPO_ROOT)], pack_root="/tmp"
+    )
+    if check_page_result.returncode == 0:
+        return "check-page(invalid-utf8.md): expected non-zero exit, got 0"
+    if "Traceback" in check_page_result.stderr:
+        return (
+            "check-page(invalid-utf8.md): got a raw traceback instead of a "
+            f"structured error: {check_page_result.stderr!r}"
+        )
+    if "not valid UTF-8" not in check_page_result.stderr:
+        return (
+            "check-page(invalid-utf8.md): expected a structured 'not valid "
+            f"UTF-8' error, got {check_page_result.stderr!r}"
+        )
+
+    screen_content_result = _run_professor(
+        ["screen-content", str(fixture_path)], pack_root="/tmp"
+    )
+    if screen_content_result.returncode == 0:
+        return "screen-content(invalid-utf8.md): expected non-zero exit, got 0"
+    if "Traceback" in screen_content_result.stderr:
+        return (
+            "screen-content(invalid-utf8.md): got a raw traceback instead of a "
+            f"structured error: {screen_content_result.stderr!r}"
+        )
+    if "not valid UTF-8" not in screen_content_result.stderr:
+        return (
+            "screen-content(invalid-utf8.md): expected a structured 'not valid "
+            f"UTF-8' error, got {screen_content_result.stderr!r}"
+        )
+
+    return None
+
+
 def check_local_citation_never_calls_gh() -> str | None:
     """`compliant-local.md`'s citation is entirely local (no `repo:` prefix) --
     `gh` must never be invoked for it. `compliant-external.md`'s citation
@@ -551,6 +598,12 @@ def main() -> int:
         print(f"FAIL [local-vs-network boundary]: {error}")
         return 1
     print("ok: local-vs-network boundary (compliant-local.md never calls gh, compliant-external.md does)")
+
+    error = check_invalid_utf8_produces_structured_error()
+    if error:
+        print(f"FAIL [invalid UTF-8 structured error]: {error}")
+        return 1
+    print("ok: invalid UTF-8 produces a structured error, never a raw traceback (check-page and screen-content)")
 
     error = check_check_page_fixtures()
     if error:
