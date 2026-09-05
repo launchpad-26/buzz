@@ -83,6 +83,9 @@ SCREEN_CONTENT_EXPECTED = {
     "block-private-key.md": {"disposition_by_category": {"private-key": "block"}},
     "block-connection-string.md": {"disposition_by_category": {"connection-string": "block"}},
     "block-webhook-url.md": {"disposition_by_category": {"webhook-url-token": "block"}},
+    "block-webhook-url-token-param.md": {
+        "disposition_by_category": {"webhook-url-token": "block", "api-key-token": "block"}
+    },
     "redact-email.md": {"disposition_by_category": {"email-address": "redact"}},
     "redact-internal-host.md": {
         "disposition_by_category": {"internal-hostname-private-ip": "redact"}

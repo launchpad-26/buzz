@@ -392,6 +392,23 @@ WEBHOOK_URL_RE = re.compile(
     r"https?://[^\s]*(?:hook|webhook)[^\s]*/[A-Za-z0-9_/-]{10,}", re.IGNORECASE
 )
 
+# sensitive-patterns.md's actual spec for this category is "a URL whose query
+# string or path segment is itself an auth token" -- the "hook"/"webhook"
+# substring check above is not that; it just happens to catch the common
+# case where a webhook domain also carries one. This regex finds any URL,
+# independent of what its domain contains, so its query string and path can
+# be inspected for an embedded high-entropy value (step 2 of the 2026-09-05
+# fix round). Excludes backtick and other Markdown delimiter characters so a
+# URL wrapped in `...` doesn't swallow the closing backtick into the match.
+URL_RE = re.compile(r"https?://[A-Za-z0-9\-._~:/?#\[\]@!$&'()*+,;=%]+", re.IGNORECASE)
+
+# A query-string param named token/key/secret/auth (case-insensitive) --
+# reuses the same high-entropy-adjacent-to-keyword idea as step 1's
+# HIGH_ENTROPY_KEYWORD_RE, but scoped to a URL's own `name=value` shape
+# rather than freeform prose, since a query param's name IS the adjacency
+# signal here (no separate window search needed).
+URL_AUTH_QUERY_PARAM_RE = re.compile(r"[?&](?:token|key|secret|auth)=([^&\s]+)", re.IGNORECASE)
+
 # sensitive-patterns.md's "[pattern] API keys / access tokens" category has a
 # second clause beyond the fixed-prefix table above: "a high-entropy opaque
 # string adjacent to words like key/token/secret" (2026-09-05 fix round, step
@@ -508,6 +525,27 @@ def _high_entropy_tokens_near_keywords(content: str):
                 break
 
 
+def _url_embedded_auth_token(url: str) -> str | None:
+    """Returns the embedded auth-token-shaped value if `url` carries one,
+    else None -- sensitive-patterns.md's "a URL whose query string or path
+    segment is itself an auth token" clause (step 2), independent of whether
+    "hook"/"webhook" appears anywhere in the URL's domain.
+    """
+    path_part, _, query_part = url.partition("?")
+
+    if query_part:
+        for match in URL_AUTH_QUERY_PARAM_RE.finditer("?" + query_part):
+            value = match.group(1)
+            if len(value) >= 20 and _shannon_entropy(value) >= HIGH_ENTROPY_THRESHOLD:
+                return value
+
+    for segment in path_part.split("/"):
+        if len(segment) >= 20 and _shannon_entropy(segment) >= HIGH_ENTROPY_THRESHOLD:
+            return segment
+
+    return None
+
+
 def _roster_names_co_occur(content: str) -> bool:
     """True only if a roster-context phrase and a name-list-shaped phrase
     appear within a localized window of each other, not merely anywhere in
@@ -574,6 +612,11 @@ def screen_content(file_path: str, pack_root: str) -> int:
 
     for match in WEBHOOK_URL_RE.finditer(content):
         findings.append(_screen_finding("webhook-url-token", "block", match.group(0)))
+
+    for url_match in URL_RE.finditer(content):
+        url = url_match.group(0)
+        if _url_embedded_auth_token(url) is not None:
+            findings.append(_screen_finding("webhook-url-token", "block", url))
 
     for match in EMAIL_RE.finditer(content):
         if _in_excluded_span(match.start()):
