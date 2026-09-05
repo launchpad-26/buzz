@@ -55,6 +55,7 @@ CHECK_PAGE_EXPECTED_RULES = {
     "compliant-range-at-end.md": [],
     "broken-nonexistent-citation.md": ["citation-not-found"],
     "broken-missing-citation.md": ["missing-citation"],
+    "broken-preamble-uncited-claim.md": ["missing-citation"],
     "broken-out-of-bounds-range.md": ["out-of-bounds-range"],
     "broken-no-provenance-marker.md": ["missing-provenance-marker"],
     "broken-mismatched-marker.md": ["mismatched-provenance-marker"],

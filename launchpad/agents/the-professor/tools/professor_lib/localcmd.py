@@ -121,14 +121,26 @@ def _local_file_line_count(target: str, commit: str, path: str) -> int | None:
 
 
 def _split_sections(body: str):
-    """Yield (marker_line_or_None, heading_line, section_text) for each
-    heading in `body`, in order. `section_text` runs from just after the
+    """Yield (marker_line_or_None, heading_line_or_None, section_text) for
+    each heading in `body`, in order, plus one leading entry for any text
+    that precedes the first heading. `section_text` runs from just after the
     heading to just before the next heading (or end of body).
 
     Fence-aware: a `#`-prefixed comment line inside a fenced (```) code block
     is not a markdown heading, and must not be treated as one -- otherwise a
     Python/shell/etc. example containing a `#` comment mis-splits the real
     section around it, orphaning its citations.
+
+    Any tagged claim text before the document's first heading used to fall
+    into no section at all and was never checked (step 3 of the 2026-09-05
+    fix round). The span before the first heading is yielded here as an
+    implicit preamble unit -- `heading_line=None` signals it to
+    `_check_section` below, which still scans it for claims/citations like
+    any section's body, but never requires a provenance marker for it: the
+    contract's marker rule is specifically "directly above its heading", and
+    a preamble structurally has none. Extending the marker model to a
+    heading-less span would be the larger change; treating the preamble as
+    an implicit unit that only the claim rule applies to is the smaller one.
     """
     lines = body.splitlines()
     heading_indices = []
@@ -139,6 +151,11 @@ def _split_sections(body: str):
             continue
         if not in_fence and HEADING_RE.match(line):
             heading_indices.append(i)
+
+    if heading_indices and heading_indices[0] > 0:
+        preamble_text = "\n".join(lines[: heading_indices[0]])
+        if preamble_text.strip():
+            yield None, None, preamble_text
 
     for pos, idx in enumerate(heading_indices):
         heading_line = lines[idx]
@@ -232,19 +249,26 @@ def _parse_marker_sources(sources_attr: str) -> set:
 
 def _check_section(marker_line, heading_line, section_text, target: str) -> list:
     findings = []
-    heading_name = heading_line.strip()
 
-    if marker_line is None:
-        findings.append(
-            _finding(
-                "missing-provenance-marker",
-                f"section {heading_name!r} has no provenance marker directly above its heading",
-            )
-        )
+    if heading_line is None:
+        # The implicit preamble unit (step 3): no heading exists for a
+        # marker to sit "directly above", so the marker requirement simply
+        # doesn't apply here -- only the claim rule below does.
+        heading_name = "(preamble, before first heading)"
         marker_sources_attr = None
     else:
-        marker_match = SECTION_MARKER_RE.match(marker_line)
-        marker_sources_attr = marker_match.group(1)
+        heading_name = heading_line.strip()
+        if marker_line is None:
+            findings.append(
+                _finding(
+                    "missing-provenance-marker",
+                    f"section {heading_name!r} has no provenance marker directly above its heading",
+                )
+            )
+            marker_sources_attr = None
+        else:
+            marker_match = SECTION_MARKER_RE.match(marker_line)
+            marker_sources_attr = marker_match.group(1)
 
     body_citation_keys = set()
 
