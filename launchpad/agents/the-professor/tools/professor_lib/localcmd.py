@@ -66,8 +66,24 @@ MARKER_SOURCE_RE = re.compile(
 )
 
 
-def _finding(rule: str, message: str) -> dict:
-    return {"rule": rule, "message": message}
+def _finding(rule: str, message: str, location: dict | None = None) -> dict:
+    """Builds one check-page finding dict. `rule` is duplicated onto a
+    `category` key (step 3 of the 2026-09-06 fix round): check-page and
+    screen-content findings used to be two incompatible shapes
+    (`{"rule", "message"}` vs. `{"category", "disposition", ...}`), but
+    skills/screen-sensitive/SKILL.md requires block findings be reported "in
+    the same shape check_page's findings list uses... so review has one
+    consistent place to look regardless of which gate produced the finding."
+    Keeping both `rule` and `category` as aliases (rather than renaming one)
+    means every existing caller keyed on `rule` keeps working unchanged, and
+    a screen-content-oriented reader can key on `category` in both places
+    too. `location` is the same `{"line": <1-based line number>}` shape
+    screen-content's findings use (see `_screen_finding` below) -- for
+    check-page this is the line of the section heading the finding belongs
+    to (or line 1 for frontmatter-level findings, which have no section to
+    localize to).
+    """
+    return {"rule": rule, "category": rule, "message": message, "location": location}
 
 
 def _parse_frontmatter(content: str):
@@ -77,25 +93,41 @@ def _parse_frontmatter(content: str):
     match = FRONTMATTER_RE.match(content)
     if not match:
         return None, content, [
-            _finding("frontmatter", "no frontmatter block found at the start of the file")
+            _finding(
+                "frontmatter",
+                "no frontmatter block found at the start of the file",
+                location={"line": 1},
+            )
         ]
 
     try:
         parsed = yaml.safe_load(match.group(1))
     except yaml.YAMLError as exc:
         return None, content[match.end():], [
-            _finding("frontmatter", f"frontmatter block is not valid YAML: {exc}")
+            _finding(
+                "frontmatter",
+                f"frontmatter block is not valid YAML: {exc}",
+                location={"line": 1},
+            )
         ]
 
     if not isinstance(parsed, dict):
         return None, content[match.end():], [
-            _finding("frontmatter", "frontmatter block did not parse to a mapping")
+            _finding(
+                "frontmatter",
+                "frontmatter block did not parse to a mapping",
+                location={"line": 1},
+            )
         ]
 
     missing = [f for f in REQUIRED_FRONTMATTER_FIELDS if f not in parsed or parsed[f] in (None, "")]
     if missing:
         return None, content[match.end():], [
-            _finding("frontmatter", f"frontmatter is missing required field(s): {', '.join(missing)}")
+            _finding(
+                "frontmatter",
+                f"frontmatter is missing required field(s): {', '.join(missing)}",
+                location={"line": 1},
+            )
         ]
 
     return parsed, content[match.end():], []
@@ -224,10 +256,14 @@ def _strip_fenced_lines(text: str) -> str:
 
 
 def _split_sections(body: str):
-    """Yield (marker_line_or_None, heading_line_or_None, section_text) for
-    each heading in `body`, in order, plus one leading entry for any text
-    that precedes the first heading. `section_text` runs from just after the
-    heading to just before the next heading (or end of body).
+    """Yield (marker_line_or_None, heading_line_or_None, section_text,
+    location) for each heading in `body`, in order, plus one leading entry
+    for any text that precedes the first heading. `section_text` runs from
+    just after the heading to just before the next heading (or end of body).
+    `location` is `{"line": <1-based, body-relative line number>}` -- the
+    section's own heading line, or line 1 for the preamble (step 3 of the
+    2026-09-06 fix round, giving every finding a `location` field matching
+    screen-content's own finding shape).
 
     Fence-aware: a `#`-prefixed comment line inside a fenced (``` or ~~~)
     code block is not a markdown heading, and must not be treated as one --
@@ -275,7 +311,10 @@ def _split_sections(body: str):
     if heading_indices and heading_indices[0] > 0:
         preamble_text = "\n".join(lines[: heading_indices[0]])
         if preamble_text.strip():
-            yield None, None, preamble_text
+            # Body-relative, 1-based line 1 -- the preamble always starts at
+            # the body's own first line (step 3 of the 2026-09-06 fix round:
+            # every section gets a `location` a finding within it can carry).
+            yield None, None, preamble_text, {"line": 1}
 
     for pos, idx in enumerate(heading_indices):
         heading_line = lines[idx]
@@ -285,7 +324,13 @@ def _split_sections(body: str):
 
         end = heading_indices[pos + 1] if pos + 1 < len(heading_indices) else len(lines)
         section_text = "\n".join(lines[idx + 1 : end])
-        yield marker_line, heading_line, section_text
+        # Body-relative, 1-based line number of the section's own heading
+        # (step 3 of the 2026-09-06 fix round) -- cheap (already have `idx`)
+        # and locates the section a finding belongs to precisely enough; a
+        # per-sentence line number within the section would need re-deriving
+        # position through the sentence splitter, a larger change than this
+        # step calls for.
+        yield marker_line, heading_line, section_text, {"line": idx + 1}
 
 
 def _parse_citation_string(raw: str):
@@ -378,7 +423,7 @@ def _parse_marker_sources(sources_attr: str) -> tuple[set, list]:
     return keys, malformed_entries
 
 
-def _check_section(marker_line, heading_line, section_text, target: str) -> list:
+def _check_section(marker_line, heading_line, section_text, target: str, location: dict) -> list:
     findings = []
 
     if heading_line is None:
@@ -394,6 +439,7 @@ def _check_section(marker_line, heading_line, section_text, target: str) -> list
                 _finding(
                     "missing-provenance-marker",
                     f"section {heading_name!r} has no provenance marker directly above its heading",
+                    location=location,
                 )
             )
             marker_sources_attr = None
@@ -413,6 +459,7 @@ def _check_section(marker_line, heading_line, section_text, target: str) -> list
                     "mixed-claim",
                     f"section {heading_name!r} has a sentence reading as both a "
                     f"behaviour claim and an opinion claim: {sentence.strip()!r}",
+                    location=location,
                 )
             )
             # Deliberately does NOT `continue` here: the sentence's citation is
@@ -433,6 +480,7 @@ def _check_section(marker_line, heading_line, section_text, target: str) -> list
                         "missing-citation",
                         f"section {heading_name!r} has a behaviour claim with no "
                         f"citation at all: {sentence.strip()!r}",
+                        location=location,
                     )
                 )
                 continue
@@ -443,6 +491,7 @@ def _check_section(marker_line, heading_line, section_text, target: str) -> list
                     _finding(
                         "missing-citation",
                         f"section {heading_name!r} has an unparseable citation: {raw!r}",
+                        location=location,
                     )
                 )
                 continue
@@ -470,6 +519,7 @@ def _check_section(marker_line, heading_line, section_text, target: str) -> list
                         "citation-check-error",
                         f"section {heading_name!r} cites {raw!r}: could not be "
                         f"verified -- {error_message}",
+                        location=location,
                     )
                 )
                 continue
@@ -480,6 +530,7 @@ def _check_section(marker_line, heading_line, section_text, target: str) -> list
                         "citation-not-found",
                         f"section {heading_name!r} cites {raw!r}, which does not "
                         "exist at that commit",
+                        location=location,
                     )
                 )
                 continue
@@ -505,6 +556,7 @@ def _check_section(marker_line, heading_line, section_text, target: str) -> list
                                 "out-of-bounds-range",
                                 f"section {heading_name!r} cites {raw!r}, a line range "
                                 f"out of bounds for a file of {total_lines} lines",
+                                location=location,
                             )
                         )
                 else:
@@ -539,6 +591,7 @@ def _check_section(marker_line, heading_line, section_text, target: str) -> list
                                 f"section {heading_name!r} cites {raw!r}, a line "
                                 "range that is structurally invalid regardless of "
                                 "the cited file's actual contents",
+                                location=location,
                             )
                         )
                     else:
@@ -551,6 +604,7 @@ def _check_section(marker_line, heading_line, section_text, target: str) -> list
                                 "without fetching its content over the network, "
                                 "which it does not currently implement -- not "
                                 "evaluated, not silently passed as clean",
+                                location=location,
                             )
                         )
 
@@ -571,6 +625,7 @@ def _check_section(marker_line, heading_line, section_text, target: str) -> list
                     f"section {heading_name!r}'s provenance marker has unparseable "
                     f"sources entr{'y' if len(malformed_entries) == 1 else 'ies'}: "
                     f"{malformed_entries!r}",
+                    location=location,
                 )
             )
         elif not _keys_match(expected_keys, actual_keys):
@@ -579,6 +634,7 @@ def _check_section(marker_line, heading_line, section_text, target: str) -> list
                     "mismatched-provenance-marker",
                     f"section {heading_name!r}'s provenance marker sources "
                     f"{expected_keys!r} don't match its actual citations {actual_keys!r}",
+                    location=location,
                 )
             )
 
@@ -642,8 +698,10 @@ def check_page(file_path: str, target: str, pack_root: str) -> int:
         return 0
 
     findings = []
-    for marker_line, heading_line, section_text in _split_sections(body):
-        findings.extend(_check_section(marker_line, heading_line, section_text, target))
+    for marker_line, heading_line, section_text, location in _split_sections(body):
+        findings.extend(
+            _check_section(marker_line, heading_line, section_text, target, location)
+        )
 
     print(json.dumps({"findings": findings, "skipped": False}, indent=2))
     return 0
@@ -827,20 +885,23 @@ def _url_embedded_auth_token(url: str) -> str | None:
     return None
 
 
-def _roster_names_co_occur(content: str) -> bool:
-    """True only if a roster-context phrase and a name-list-shaped phrase
-    appear within a localized window of each other, not merely anywhere in
-    the same document.
+def _roster_names_first_match(content: str):
+    """Returns the first `(roster_span, name_span)` pair where a
+    roster-context phrase and a name-list-shaped phrase co-occur within a
+    localized window of each other, or `None` if none do. Returning the
+    match spans (not just a bool) lets the caller compute a `location` for
+    the resulting finding (step 3 of the 2026-09-06 fix round), matching
+    every other finding this module produces.
     """
     roster_spans = [m.span() for m in ROSTER_CONTEXT_RE.finditer(content)]
     if not roster_spans:
-        return False
+        return None
     for name_match in NAME_LIST_RE.finditer(content):
         name_span = name_match.span()
         for roster_span in roster_spans:
             if _spans_within_window(roster_span, name_span, ROSTER_NAME_WINDOW_CHARS):
-                return True
-    return False
+                return roster_span, name_span
+    return None
 
 
 def _line_number(content: str, offset: int) -> int:
@@ -1017,11 +1078,15 @@ def screen_content(file_path: str, pack_root: str, target: str | None = None) ->
     for match in PHYSICAL_ADDRESS_RE.finditer(content):
         findings.append(_screen_finding(content, "physical-address", "redact", match))
 
-    if _roster_names_co_occur(content):
+    roster_match = _roster_names_first_match(content)
+    if roster_match is not None:
+        _, name_span = roster_match
         findings.append(
             {
+                "rule": "roster-names",
                 "category": "roster-names",
                 "disposition": "not_evaluated",
+                "location": {"line": _line_number(content, name_span[0])},
                 "match": None,
                 "replacement": None,
                 "message": (
