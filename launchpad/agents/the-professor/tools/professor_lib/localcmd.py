@@ -245,10 +245,27 @@ def _check_section(marker_line, heading_line, section_text, target: str) -> list
 
             if citation["repo"] is None:
                 exists = _local_citation_exists(target, citation["sha"], citation["path"])
+                error_message = None
             else:
                 from professor_lib.netcmd import path_exists_at_bool
 
-                exists = path_exists_at_bool(citation["repo"], citation["sha"], citation["path"])
+                exists, error_message = path_exists_at_bool(
+                    citation["repo"], citation["sha"], citation["path"]
+                )
+
+            if exists is None:
+                # A rate-limited/auth-failed/otherwise-erroring API response is
+                # NOT the same outcome as a confirmed 404 -- collapsing them
+                # would silently misreport a transient API failure as a real
+                # documentation defect. Surface it as its own outcome instead.
+                findings.append(
+                    _finding(
+                        "citation-check-error",
+                        f"section {heading_name!r} cites {raw!r}: could not be "
+                        f"verified -- {error_message}",
+                    )
+                )
+                continue
 
             if not exists:
                 findings.append(

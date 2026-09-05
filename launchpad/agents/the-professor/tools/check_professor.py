@@ -82,12 +82,20 @@ SUBCOMMAND_ARGS_FOR_UNSET_CHECK = {
 }
 
 
-def _run_professor(args: list[str], *, pack_root: str | None, cwd: str | None = None):
+def _run_professor(
+    args: list[str],
+    *,
+    pack_root: str | None,
+    cwd: str | None = None,
+    path_prepend: str | None = None,
+):
     env = dict(os.environ)
     if pack_root is None:
         env["PROFESSOR_PACK_ROOT"] = ""
     else:
         env["PROFESSOR_PACK_ROOT"] = pack_root
+    if path_prepend is not None:
+        env["PATH"] = path_prepend + os.pathsep + env.get("PATH", "")
     return subprocess.run(
         ["python3", str(PROFESSOR_PY), *args],
         capture_output=True,
@@ -173,6 +181,51 @@ def check_path_exists_at_true_and_false(sha: str) -> str | None:
     if false_result.returncode != 0 or false_result.stdout.strip() != "false":
         return f"path-exists-at(fabricated path) did not return false: {false_result.stdout!r} {false_result.stderr!r}"
 
+    return None
+
+
+def check_citation_check_error_on_api_failure() -> str | None:
+    """A rate-limited/auth-failed `gh api` response must produce a distinct
+    `citation-check-error` finding, never the same `citation-not-found` outcome
+    a genuine 404 produces -- step 1 of the 2026-09-05 fix round guards
+    against exactly this regression: an error collapsed into "doesn't exist".
+    """
+    with tempfile.TemporaryDirectory() as decoy_dir:
+        decoy_path = Path(decoy_dir)
+        gh_script = decoy_path / "gh"
+        gh_script.write_text(
+            "#!/bin/sh\n"
+            'echo \'{"status": "403", "message": "API rate limit exceeded for user"}\'\n'
+            "exit 1\n"
+        )
+        gh_script.chmod(gh_script.stat().st_mode | 0o111)
+
+        fixture_path = FIXTURES_DIR / "compliant-external.md"
+        result = _run_professor(
+            ["check-page", str(fixture_path), "--target", str(REPO_ROOT)],
+            pack_root="/tmp",
+            path_prepend=str(decoy_path),
+        )
+        if result.returncode != 0:
+            return f"check-page(compliant-external.md, decoy 403 gh) failed: {result.stderr}"
+        try:
+            report = json.loads(result.stdout)
+        except json.JSONDecodeError:
+            return (
+                "check-page(compliant-external.md, decoy 403 gh) did not print "
+                f"valid JSON: {result.stdout!r}"
+            )
+        rules = [f["rule"] for f in report.get("findings", [])]
+        if "citation-not-found" in rules:
+            return (
+                "check-page(compliant-external.md, decoy 403 gh): a rate-limit-"
+                f"shaped API failure was misreported as citation-not-found: {rules!r}"
+            )
+        if "citation-check-error" not in rules:
+            return (
+                "check-page(compliant-external.md, decoy 403 gh): expected a "
+                f"citation-check-error finding naming the API failure, got {rules!r}"
+            )
     return None
 
 
@@ -262,6 +315,12 @@ def main() -> int:
         print(f"FAIL [path-exists-at true/false]: {error}")
         return 1
     print("ok: path-exists-at true/false")
+
+    error = check_citation_check_error_on_api_failure()
+    if error:
+        print(f"FAIL [citation-check-error on API failure]: {error}")
+        return 1
+    print("ok: citation-check-error on API failure (not collapsed into citation-not-found)")
 
     error = check_check_page_fixtures()
     if error:

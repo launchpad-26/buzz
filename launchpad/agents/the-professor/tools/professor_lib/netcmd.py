@@ -157,15 +157,29 @@ def path_exists_at(repo: str, commit: str, path: str) -> int:
     return 1
 
 
-def path_exists_at_bool(repo: str, commit: str, path: str) -> bool | None:
-    """In-process variant returning a real `bool` (or `None` on error), for
-    step 4's `check-page` to call directly when a citation names a genuinely
-    external repo -- never a self-subprocess call to `professor.py` itself.
+def path_exists_at_bool(repo: str, commit: str, path: str) -> tuple[bool | None, str | None]:
+    """In-process variant returning a real `bool` (or `None` on error) plus an
+    explanatory message when the result is `None`, for step 4's `check-page` to
+    call directly when a citation names a genuinely external repo -- never a
+    self-subprocess call to `professor.py` itself.
+
+    `None` means "could not verify" (rate limit, auth problem, or some other
+    API failure) -- a caller must not collapse this into the same outcome as a
+    confirmed `False` (a genuine 404). This mirrors `path_exists_at`'s own
+    rate-limit/auth distinction above, just returned as data instead of
+    printed to stderr, since this in-process variant has no stderr of its own
+    for a caller to inspect.
     """
     if len(commit) != 40 or any(c not in "0123456789abcdef" for c in commit):
-        return None
+        return None, (
+            f"path-exists-at-bool({repo!r}, {commit!r}, {path!r}): `commit` is "
+            "not a 40-character hex SHA."
+        )
     if "?" in path or "&" in path:
-        return None
+        return None, (
+            f"path-exists-at-bool({repo!r}, {commit!r}, {path!r}): `path` "
+            "contains '?' or '&', which cannot appear in a real repository path."
+        )
 
     result = subprocess.run(
         [
@@ -183,9 +197,22 @@ def path_exists_at_bool(repo: str, commit: str, path: str) -> bool | None:
     )
 
     if result.returncode == 0:
-        return True
+        return True, None
 
-    status, _ = _parse_error_status(result)
+    status, message = _parse_error_status(result)
     if status == "404":
-        return False
-    return None
+        return False, None
+
+    if status in _RATE_LIMIT_OR_AUTH_STATUSES:
+        return None, (
+            f"path-exists-at-bool({repo!r}, {commit!r}, {path!r}): GitHub API "
+            f"returned HTTP {status} ({message}). This looks like a rate limit "
+            "or an authentication problem, not a real answer about whether the "
+            "path exists -- check `gh auth status` and GitHub's current rate "
+            "limit before treating this as a confirmed citation defect."
+        )
+
+    return None, (
+        f"path-exists-at-bool({repo!r}, {commit!r}, {path!r}) failed "
+        f"(HTTP {status or 'unknown'}): {message}"
+    )
