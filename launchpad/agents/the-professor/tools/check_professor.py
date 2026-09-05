@@ -51,6 +51,8 @@ CHECK_PAGE_EXPECTED_RULES = {
     "compliant-local.md": [],
     "compliant-external.md": [],
     "compliant-fenced-code.md": [],
+    "compliant-tilde-fenced-code.md": [],
+    "compliant-nested-fence-length.md": [],
     "compliant-long-shortsha.md": [],
     "compliant-range-at-end.md": [],
     "broken-nonexistent-citation.md": ["citation-not-found"],

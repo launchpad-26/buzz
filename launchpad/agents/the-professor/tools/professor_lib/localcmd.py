@@ -33,7 +33,14 @@ SECTION_MARKER_RE = re.compile(
     r'^<!--\s*professor:section\s+sources="([^"]*)"\s+updated_by=\S+\s+updated_at=\S+\s*-->\s*$'
 )
 HEADING_RE = re.compile(r"^#+\s+.*$")
-FENCE_RE = re.compile(r"^\s*```")
+
+# CommonMark recognizes both ``` and ~~~ as fence markers (step 6 of the
+# 2026-09-05 fix round -- the original FENCE_RE only matched backticks).
+# Matches a candidate fence marker line: leading whitespace, then a run of
+# 3+ backticks or 3+ tildes, then whatever follows (an info string for an
+# opener, or -- for a valid closer -- nothing but trailing whitespace,
+# checked by the caller via CommonMark's own closing-fence rule).
+FENCE_MARKER_RE = re.compile(r"^\s*(`{3,}|~{3,})(.*)$")
 
 SENTENCE_SPLIT_RE = re.compile(r"(?<=[.!?])\s+")
 
@@ -165,16 +172,34 @@ def _local_file_line_count(target: str, commit: str, path: str) -> int | None:
     return len(result.stdout.splitlines())
 
 
+def _fence_marker(line: str):
+    """Returns `(char, length, trailing)` if `line` looks like a fence marker
+    line, else `None`. `char` is `` ` `` or `~`, `length` is how many of that
+    character opened it, `trailing` is whatever follows the run (an info
+    string for an opener; must be blank for a valid closer).
+    """
+    match = FENCE_MARKER_RE.match(line)
+    if not match:
+        return None
+    run = match.group(1)
+    return run[0], len(run), match.group(2)
+
+
 def _split_sections(body: str):
     """Yield (marker_line_or_None, heading_line_or_None, section_text) for
     each heading in `body`, in order, plus one leading entry for any text
     that precedes the first heading. `section_text` runs from just after the
     heading to just before the next heading (or end of body).
 
-    Fence-aware: a `#`-prefixed comment line inside a fenced (```) code block
-    is not a markdown heading, and must not be treated as one -- otherwise a
-    Python/shell/etc. example containing a `#` comment mis-splits the real
-    section around it, orphaning its citations.
+    Fence-aware: a `#`-prefixed comment line inside a fenced (``` or ~~~)
+    code block is not a markdown heading, and must not be treated as one --
+    otherwise a Python/shell/etc. example containing a `#` comment mis-splits
+    the real section around it, orphaning its citations. Tracks the actual
+    marker character and length opened, per CommonMark's own closing-fence
+    rule (same character, length >= the opener's), so a shorter or
+    different-character marker nested inside an outer fence (e.g. a 4-
+    backtick block containing a 3-backtick example) doesn't prematurely
+    close it (step 6 of the 2026-09-05 fix round).
 
     Any tagged claim text before the document's first heading used to fall
     into no section at all and was never checked (step 3 of the 2026-09-05
@@ -190,11 +215,23 @@ def _split_sections(body: str):
     lines = body.splitlines()
     heading_indices = []
     in_fence = False
+    fence_char = None
+    fence_len = 0
     for i, line in enumerate(lines):
-        if FENCE_RE.match(line):
-            in_fence = not in_fence
+        marker = _fence_marker(line)
+        if in_fence:
+            if marker is not None:
+                char, length, trailing = marker
+                if char == fence_char and length >= fence_len and trailing.strip() == "":
+                    in_fence = False
+                    fence_char = None
+                    fence_len = 0
             continue
-        if not in_fence and HEADING_RE.match(line):
+        if marker is not None:
+            fence_char, fence_len, _ = marker
+            in_fence = True
+            continue
+        if HEADING_RE.match(line):
             heading_indices.append(i)
 
     if heading_indices and heading_indices[0] > 0:
