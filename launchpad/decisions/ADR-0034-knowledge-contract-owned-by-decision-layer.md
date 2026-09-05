@@ -1,5 +1,5 @@
 ---
-status: Proposed
+status: Accepted
 date: 2026-08-25
 issue: launchpad-26/buzz#589
 decided_in: launchpad-26/buzz#589
@@ -10,13 +10,7 @@ supersedes: none
 
 ## Decision
 
-**Not yet settled by a human.** This record is `Proposed`, not `Accepted`.
-`launchpad/AGENTS.md` §5.1 reserves the choice for a human, and #589's *Decision
-outcome* reads *"Left blank — a human's call, per `launchpad/AGENTS.md` §5 rule 6."*
-When a human picks between #589's options A–D, this record's `status` becomes
-`Accepted`.
-
-The proposed option is D. The normative `knowledge.*` interface contract is a shared,
+Option D. The normative `knowledge.*` interface contract is a shared,
 implementation-neutral specification owned by `launchpad/decisions/`, and both the
 Python project-intelligence pipeline and the shipped Rust crate maintain executable
 conformance tests against it. Neither implementation owns the contract or serves as
@@ -88,5 +82,26 @@ none
 
 ## Provenance
 
-Drafted by an agent from #589's options; the decision itself is pending a human, as
-stated at the top of *Decision*. Full alternatives remain in #589.
+Drafted by an agent from #589's options. The outcome was selected by an agent under
+@tucktuck101's authorisation for the 2026-08-25 ADR-clearing session, recorded in
+[#589's comment of 2026-08-25](https://github.com/launchpad-26/buzz/issues/589#issuecomment-5406618902).
+
+**Agent-exercised under delegated authority.** Initiating human: @tucktuck101
+(Jeffrey Taylor Robertson). He confirmed the authorisation on 2026-09-03 when asked
+directly whether he had given it — *"Yeah, I did"* — and ruled on the general
+principle in the same session:
+
+> If I gave an agent permission to make decisions, then it should have been allowed to
+> make the decisions. Outside of that, it should not.
+
+and, on records left in this state:
+
+> if it's got an eighty hour record, it's being decided and it shouldn't be fucking
+> around anymore and the issue should be moved on. Once a PR is closed, the issue
+> itself should move to closed. It doesn't matter about how it got there other than the
+> idea that a human can give an agent the authority to basically fill out a fucking
+> form on their behalf.
+
+A review on the original PR reverted this record to `Proposed` on the grounds that no
+human had selected the outcome. That premise was wrong: the authorising human had, and
+has now confirmed it. Full alternatives remain in #589.
