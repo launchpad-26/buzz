@@ -73,6 +73,7 @@ SCREEN_CONTENT_EXPECTED = {
     },
     "redact-physical-address.md": {"disposition_by_category": {"physical-address": "redact"}},
     "dispatch-roster-names.md": {"disposition_by_category": {"roster-names": "not_evaluated"}},
+    "clean-unrelated-roster-and-names.md": {"disposition_by_category": {}},
 }
 
 # The exact, complete message professor.py's pack-root guard emits -- not a

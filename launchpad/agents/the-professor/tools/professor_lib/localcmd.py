@@ -417,7 +417,45 @@ ROSTER_CONTEXT_RE = re.compile(
 )
 NAME_LIST_RE = re.compile(r"\b[A-Z][a-z]+ [A-Z][a-z]+\b")
 
+# The two patterns above must co-occur within a localized window (roughly a
+# sentence) to count as a real roster-in-context match -- matching them
+# file-wide means any page with an unrelated Title-Case phrase anywhere and
+# an unrelated roster-context phrase anywhere else spuriously triggers this
+# category. 120 characters comfortably spans a single sentence's own
+# roster-phrase-to-name-list gap without spanning separate sentences/sections.
+ROSTER_NAME_WINDOW_CHARS = 120
+
 MARKER_COMMENT_RE = re.compile(r"<!--\s*professor:section.*?-->", re.DOTALL)
+
+
+def _spans_within_window(span_a: tuple, span_b: tuple, window: int) -> bool:
+    """True if two (start, end) character spans are within `window` characters
+    of each other (overlapping counts as a gap of 0)."""
+    a_start, a_end = span_a
+    b_start, b_end = span_b
+    if b_start >= a_end:
+        gap = b_start - a_end
+    elif a_start >= b_end:
+        gap = a_start - b_end
+    else:
+        gap = 0
+    return gap <= window
+
+
+def _roster_names_co_occur(content: str) -> bool:
+    """True only if a roster-context phrase and a name-list-shaped phrase
+    appear within a localized window of each other, not merely anywhere in
+    the same document.
+    """
+    roster_spans = [m.span() for m in ROSTER_CONTEXT_RE.finditer(content)]
+    if not roster_spans:
+        return False
+    for name_match in NAME_LIST_RE.finditer(content):
+        name_span = name_match.span()
+        for roster_span in roster_spans:
+            if _spans_within_window(roster_span, name_span, ROSTER_NAME_WINDOW_CHARS):
+                return True
+    return False
 
 
 def _screen_finding(category: str, disposition: str, matched_text: str) -> dict:
@@ -481,7 +519,7 @@ def screen_content(file_path: str, pack_root: str) -> int:
     for match in PHYSICAL_ADDRESS_RE.finditer(content):
         findings.append(_screen_finding("physical-address", "redact", match.group(0)))
 
-    if ROSTER_CONTEXT_RE.search(content) and NAME_LIST_RE.search(content):
+    if _roster_names_co_occur(content):
         findings.append(
             {
                 "category": "roster-names",
