@@ -60,6 +60,20 @@ CHECK_PAGE_EXPECTED_RULES = {
     "broken-mismatched-marker.md": ["mismatched-provenance-marker"],
     "broken-mixed-claim.md": ["mixed-claim"],
     "broken-frontmatter.md": ["frontmatter"],
+    "broken-frontmatter-unparseable-yaml.md": ["frontmatter"],
+    "broken-frontmatter-non-mapping.md": ["frontmatter"],
+    "broken-frontmatter-missing-field.md": ["frontmatter"],
+}
+
+# _parse_frontmatter has four distinct failure branches, all sharing the
+# "frontmatter" rule label above -- this maps each dedicated fixture to a
+# substring unique to the branch it targets, so the suite can assert on
+# *which* branch actually fired, not just that some "frontmatter" finding did.
+FRONTMATTER_BRANCH_EXPECTED_MESSAGE_SUBSTRING = {
+    "broken-frontmatter.md": "no frontmatter block found",
+    "broken-frontmatter-unparseable-yaml.md": "not valid YAML",
+    "broken-frontmatter-non-mapping.md": "did not parse to a mapping",
+    "broken-frontmatter-missing-field.md": "missing required field(s)",
 }
 
 SCREEN_CONTENT_EXPECTED = {
@@ -325,6 +339,35 @@ def check_check_page_fixtures() -> str | None:
     return None
 
 
+def check_frontmatter_branches_are_distinct() -> str | None:
+    """All four of `_parse_frontmatter`'s failure branches share the
+    "frontmatter" rule label -- this asserts each dedicated fixture's actual
+    message names the specific branch it targets, so the four don't collapse
+    into one untested label.
+    """
+    for fixture_name, expected_substring in FRONTMATTER_BRANCH_EXPECTED_MESSAGE_SUBSTRING.items():
+        fixture_path = FIXTURES_DIR / fixture_name
+        result = _run_professor(
+            ["check-page", str(fixture_path), "--target", str(REPO_ROOT)], pack_root="/tmp"
+        )
+        if result.returncode != 0:
+            return f"check-page({fixture_name}) failed: {result.stderr}"
+        try:
+            report = json.loads(result.stdout)
+        except json.JSONDecodeError:
+            return f"check-page({fixture_name}) did not print valid JSON: {result.stdout!r}"
+        findings = report.get("findings", [])
+        if len(findings) != 1:
+            return f"check-page({fixture_name}): expected exactly one finding, got {findings!r}"
+        message = findings[0].get("message", "")
+        if expected_substring not in message:
+            return (
+                f"check-page({fixture_name}): expected message to contain "
+                f"{expected_substring!r}, got {message!r}"
+            )
+    return None
+
+
 def check_screen_content_fixtures() -> str | None:
     for fixture_name, expectation in SCREEN_CONTENT_EXPECTED.items():
         fixture_path = FIXTURES_DIR / fixture_name
@@ -417,6 +460,15 @@ def main() -> int:
         print(f"FAIL [check-page fixtures]: {error}")
         return 1
     print(f"ok: check-page fixtures ({len(CHECK_PAGE_EXPECTED_RULES)} fixtures)")
+
+    error = check_frontmatter_branches_are_distinct()
+    if error:
+        print(f"FAIL [frontmatter branches distinct]: {error}")
+        return 1
+    print(
+        "ok: frontmatter branches distinct "
+        f"({len(FRONTMATTER_BRANCH_EXPECTED_MESSAGE_SUBSTRING)} branches)"
+    )
 
     error = check_screen_content_fixtures()
     if error:
