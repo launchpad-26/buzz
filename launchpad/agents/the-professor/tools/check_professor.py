@@ -31,6 +31,7 @@ this plan's own step 7 done-when.
 
 import json
 import os
+import shutil
 import subprocess
 import sys
 import tempfile
@@ -231,6 +232,65 @@ def check_citation_check_error_on_api_failure() -> str | None:
     return None
 
 
+def check_local_citation_never_calls_gh() -> str | None:
+    """`compliant-local.md`'s citation is entirely local (no `repo:` prefix) --
+    `gh` must never be invoked for it. `compliant-external.md`'s citation
+    names a genuinely external repo -- `gh` MUST be invoked for it. Both sides
+    matter: a check that only asserted one side couldn't tell "always calls
+    gh" and "never calls gh" apart from the correct, conditional behaviour
+    this plan's own step 4 required (§4's local/external split).
+    """
+    real_gh = shutil.which("gh")
+    if real_gh is None:
+        return "no real `gh` found on PATH to build the passthrough decoy from"
+
+    with tempfile.TemporaryDirectory() as decoy_dir:
+        decoy_path = Path(decoy_dir)
+        log_path = decoy_path / "gh-invocations.log"
+        gh_script = decoy_path / "gh"
+        gh_script.write_text(
+            "#!/bin/sh\n"
+            f'echo "invoked: $@" >> "{log_path}"\n'
+            f'exec "{real_gh}" "$@"\n'
+        )
+        gh_script.chmod(gh_script.stat().st_mode | 0o111)
+
+        local_fixture = FIXTURES_DIR / "compliant-local.md"
+        local_result = _run_professor(
+            ["check-page", str(local_fixture), "--target", str(REPO_ROOT)],
+            pack_root="/tmp",
+            path_prepend=str(decoy_path),
+        )
+        if local_result.returncode != 0:
+            return (
+                "check-page(compliant-local.md) with decoy gh on PATH failed: "
+                f"{local_result.stderr}"
+            )
+        if log_path.exists():
+            return (
+                "check-page(compliant-local.md): gh was invoked for a purely "
+                f"local citation -- log contents: {log_path.read_text()!r}"
+            )
+
+        external_fixture = FIXTURES_DIR / "compliant-external.md"
+        external_result = _run_professor(
+            ["check-page", str(external_fixture), "--target", str(REPO_ROOT)],
+            pack_root="/tmp",
+            path_prepend=str(decoy_path),
+        )
+        if external_result.returncode != 0:
+            return (
+                "check-page(compliant-external.md) with decoy gh on PATH failed: "
+                f"{external_result.stderr}"
+            )
+        if not log_path.exists():
+            return (
+                "check-page(compliant-external.md): gh was never invoked for a "
+                "genuinely external citation"
+            )
+    return None
+
+
 def check_check_page_fixtures() -> str | None:
     for fixture_name, expected_rules in CHECK_PAGE_EXPECTED_RULES.items():
         fixture_path = FIXTURES_DIR / fixture_name
@@ -323,6 +383,12 @@ def main() -> int:
         print(f"FAIL [citation-check-error on API failure]: {error}")
         return 1
     print("ok: citation-check-error on API failure (not collapsed into citation-not-found)")
+
+    error = check_local_citation_never_calls_gh()
+    if error:
+        print(f"FAIL [local-vs-network boundary]: {error}")
+        return 1
+    print("ok: local-vs-network boundary (compliant-local.md never calls gh, compliant-external.md does)")
 
     error = check_check_page_fixtures()
     if error:
