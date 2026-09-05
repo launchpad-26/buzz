@@ -75,7 +75,18 @@ SCREEN_CONTENT_EXPECTED = {
     "dispatch-roster-names.md": {"disposition_by_category": {"roster-names": "not_evaluated"}},
 }
 
-REQUIRED_UNSET_ERROR_TEXT = "PROFESSOR_PACK_ROOT"
+# The exact, complete message professor.py's pack-root guard emits -- not a
+# substring match on the env var's name. A bare uncaught KeyError traceback
+# (`KeyError: 'PROFESSOR_PACK_ROOT'`) would also satisfy a substring check on
+# the variable name alone, which can't distinguish the designed fail-loud
+# message from the exact "generic crash three steps later" anti-pattern this
+# plan's step 1 explicitly forbade.
+REQUIRED_UNSET_ERROR_TEXT = (
+    "professor.py: $PROFESSOR_PACK_ROOT is not set. This tool needs it to "
+    "resolve where this pack's own files (contract specs, etc.) live -- set "
+    "$PROFESSOR_PACK_ROOT to this pack's root directory (the directory "
+    "containing this `tools/` folder) before calling professor.py."
+)
 
 SUBCOMMAND_ARGS_FOR_UNSET_CHECK = {
     "resolve-pin": ["resolve-pin", "--repo", "x/y", "--ref", "main"],
@@ -114,10 +125,10 @@ def check_pack_root_unset_fails_loud() -> str | None:
         result = _run_professor(args, pack_root=None)
         if result.returncode == 0:
             return f"{name}: expected non-zero exit with $PROFESSOR_PACK_ROOT unset, got 0"
-        if REQUIRED_UNSET_ERROR_TEXT not in result.stderr:
+        if result.stderr.strip() != REQUIRED_UNSET_ERROR_TEXT:
             return (
-                f"{name}: error message did not name {REQUIRED_UNSET_ERROR_TEXT!r}: "
-                f"{result.stderr!r}"
+                f"{name}: error message did not match the exact required text "
+                f"{REQUIRED_UNSET_ERROR_TEXT!r}: got {result.stderr!r}"
             )
     return None
 
