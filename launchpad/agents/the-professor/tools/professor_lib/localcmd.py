@@ -644,15 +644,20 @@ def _check_section(marker_line, heading_line, section_text, target: str, locatio
 def _require_pack_spec(pack_root: str, spec_name: str, subcommand: str) -> str | None:
     """Confirm `<pack_root>/tools/contract/<spec_name>` exists and is
     non-empty -- genuinely validating that `pack_root` points at a real
-    Professor pack installation, not just a non-empty string (step 4 of the
-    2026-09-06 fix round). `professor.py`'s own `$PROFESSOR_PACK_ROOT`
-    unset-check message claims this variable is needed "to resolve where
-    this pack's own files (contract specs, etc.) live" -- this is what
-    makes that claim genuinely true, rather than `pack_root` being threaded
-    through as a parameter neither `check_page` nor `screen_content` ever
-    referenced. Does not require deriving the actual checks from the
-    spec's parsed content (a much larger, explicitly out-of-scope change) --
-    only that the file genuinely exists and is non-empty.
+    Professor pack installation, not just a non-empty string (step 4 of a
+    prior, 2026-09-05 fix round). This is what makes `pack_root` genuinely
+    load-bearing for `check_page`/`screen_content` specifically, rather than
+    being threaded through as a parameter neither ever referenced.
+    `professor.py`'s own shared `$PROFESSOR_PACK_ROOT` unset-check message no
+    longer claims this contract-spec-resolution reasoning applies to all four
+    subcommands (step 4 of the 2026-09-06 fix round reworded it to be
+    generically true instead, since `resolve-pin`/`path-exists-at` accept
+    `pack_root` and never use it) -- this function's own error message below
+    is where the contract-spec-specific detail belongs, raised only by the
+    two subcommands it's actually true for. Does not require deriving the
+    actual checks from the spec's parsed content (a much larger, explicitly
+    out-of-scope change) -- only that the file genuinely exists and is
+    non-empty.
 
     Returns an error message string if invalid, else `None`.
     """

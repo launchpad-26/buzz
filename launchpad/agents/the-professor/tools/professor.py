@@ -51,12 +51,19 @@ def _require_pack_root() -> str:
     """
     pack_root = os.environ.get(PROFESSOR_PACK_ROOT_ENV, "")
     if not pack_root:
+        # Generic wording, true for all four subcommands (step 4 of the
+        # 2026-09-06 fix round): this used to claim the variable was needed
+        # "to resolve where this pack's own files (contract specs, etc.)
+        # live" for every subcommand, but `resolve-pin`/`path-exists-at`
+        # accept `pack_root` and never use it -- only `check-page`/
+        # `screen-content` do. The contract-spec-specific detail belongs in
+        # `_require_pack_spec`'s own error (localcmd.py), raised by those two
+        # subcommands specifically, not asserted here as a universal truth.
         print(
-            f"professor.py: ${PROFESSOR_PACK_ROOT_ENV} is not set. This tool needs "
-            f"it to resolve where this pack's own files (contract specs, etc.) live "
-            f"-- set ${PROFESSOR_PACK_ROOT_ENV} to this pack's root directory "
-            f"(the directory containing this `tools/` folder) before calling "
-            f"professor.py.",
+            f"professor.py: ${PROFESSOR_PACK_ROOT_ENV} is not set. Every "
+            f"subcommand requires it to be set -- set ${PROFESSOR_PACK_ROOT_ENV} "
+            f"to this pack's root directory (the directory containing this "
+            f"`tools/` folder) before calling professor.py.",
             file=sys.stderr,
         )
         sys.exit(1)

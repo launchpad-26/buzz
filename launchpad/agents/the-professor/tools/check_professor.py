@@ -181,10 +181,10 @@ SCREEN_CONTENT_EXPECTED = {
 # message from the exact "generic crash three steps later" anti-pattern this
 # plan's step 1 explicitly forbade.
 REQUIRED_UNSET_ERROR_TEXT = (
-    "professor.py: $PROFESSOR_PACK_ROOT is not set. This tool needs it to "
-    "resolve where this pack's own files (contract specs, etc.) live -- set "
-    "$PROFESSOR_PACK_ROOT to this pack's root directory (the directory "
-    "containing this `tools/` folder) before calling professor.py."
+    "professor.py: $PROFESSOR_PACK_ROOT is not set. Every subcommand "
+    "requires it to be set -- set $PROFESSOR_PACK_ROOT to this pack's root "
+    "directory (the directory containing this `tools/` folder) before "
+    "calling professor.py."
 )
 
 SUBCOMMAND_ARGS_FOR_UNSET_CHECK = {
