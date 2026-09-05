@@ -3,11 +3,12 @@
 This is the suite's **default** documentation contract — used for any target repo
 that doesn't define its own at `.professor/contract.md`. See
 `launchpad/Research/the-professor-skill-suite-redesign.md` §3 for the resolution
-order this file participates in, and §9 for the status of the gate script that will
-eventually check a draft against this contract mechanically (not yet built — this
-file is the spec, checked by hand today per `screen-sensitive`'s own "run it by hand
-until the script exists" instruction, and by `draft-page`/`update-page` following it
-directly).
+order this file participates in, and §9 for the status of the gate script that
+checks a draft against this contract mechanically. **That gate now exists:**
+`tools/professor.py check-page` implements this contract's rules directly (see
+"What a gate checking this contract should flag" below for exactly which ones) —
+this file remains the spec `check-page` implements, not a placeholder checked by
+hand while the script doesn't exist yet.
 
 This contract is deliberately smaller than the handbook's own (the one
 `launchpad-26/handbook`'s `docs/page-contract.md` defines, and that this pack's
