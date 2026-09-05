@@ -617,10 +617,14 @@ def check_screen_content_target_ruleset_override() -> str | None:
     exists, else the bundled default. `screen_content` can't actually
     interpret a target's override content (its categories are hardcoded
     Python), so it must report an explicit `target-ruleset-override`
-    (`not_evaluated`) finding instead of silently screening against the
-    bundled default -- step 3 of the 2026-09-06 fix round. A target with NO
-    override (or no `--target` at all) must still produce the normal
-    bundled-default result, unchanged.
+    (`block`) finding instead of silently screening against the bundled
+    default -- step 3 of the 2026-09-06 fix round, changed from
+    `not_evaluated` to `block` (fail closed) in step 2 of the 2026-09-06
+    round: `not_evaluated` had no defined consumer action, and the
+    nearest-sounding outcome in the invoking skill's own procedure was
+    "pass", which meant an overridden target's draft was effectively
+    screened not at all. A target with NO override (or no `--target` at
+    all) must still produce the normal bundled-default result, unchanged.
     """
     with tempfile.TemporaryDirectory() as override_target:
         (Path(override_target) / ".professor").mkdir()
@@ -643,10 +647,10 @@ def check_screen_content_target_ruleset_override() -> str | None:
                 "screen-content(clean.md, override present): expected exactly one "
                 f"'target-ruleset-override' finding, got {findings!r}"
             )
-        if findings[0]["disposition"] != "not_evaluated":
+        if findings[0]["disposition"] != "block":
             return (
                 "screen-content(clean.md, override present): expected disposition "
-                f"'not_evaluated', got {findings[0]['disposition']!r}"
+                f"'block', got {findings[0]['disposition']!r}"
             )
 
     with tempfile.TemporaryDirectory() as no_override_target:

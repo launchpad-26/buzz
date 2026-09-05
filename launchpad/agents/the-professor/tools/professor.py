@@ -135,11 +135,12 @@ def _build_parser() -> argparse.ArgumentParser:
         help=(
             "root of the target repo. If <target>/.professor/sensitive-"
             "patterns.md exists, this tool reports an explicit "
-            "target-ruleset-override (not_evaluated) result instead of "
-            "silently screening against the bundled default -- its "
-            "pattern-matching categories are hardcoded Python, not parsed "
-            "from a markdown ruleset file at runtime, so it cannot honour "
-            "a target-specific override's content."
+            "target-ruleset-override (block) result instead of silently "
+            "screening against the bundled default -- its pattern-matching "
+            "categories are hardcoded Python, not parsed from a markdown "
+            "ruleset file at runtime, so it cannot honour a target-specific "
+            "override's content and fails closed rather than risk a silent "
+            "pass."
         ),
     )
     screen_content_parser.set_defaults(func=_cmd_screen_content)

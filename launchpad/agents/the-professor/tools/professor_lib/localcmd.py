@@ -905,13 +905,19 @@ def screen_content(file_path: str, pack_root: str, target: str | None = None) ->
     # the bundled default. This tool's actual pattern-matching rules are
     # hardcoded Python, not parsed from a markdown ruleset file at runtime,
     # so a target's override can't be dynamically interpreted the way this
-    # tool is built today. Judgment call (step 3 of the 2026-09-06 fix
-    # round), matching this pack's own convention for "can't mechanically
-    # evaluate this" (the roster-names `not_evaluated` disposition, the
-    # external-citation-range `citation-range-not-evaluated` result): report
-    # an explicit, honest result naming the override and stop -- never
-    # silently proceed with the bundled defaults as if nothing were
-    # overridden.
+    # tool is built today.
+    #
+    # This used to report `not_evaluated` and exit 0 -- but SKILL.md only
+    # documents three outcomes (pass/redact/block), so the invoking skill had
+    # no defined action for `not_evaluated`, and the nearest-sounding outcome
+    # in its own procedure is "pass" (nothing flagged). That made an
+    # overridden target's draft effectively screened not at all, while
+    # exiting 0. Fixed (step 2 of the 2026-09-06 fix round): fail closed --
+    # an uninterpretable custom ruleset must never silently become a pass.
+    # Reports `block` instead, with a fourth, now-documented outcome in
+    # SKILL.md's own procedure: blocked until a human resolves it, either by
+    # removing the override or by this tool gaining real custom-ruleset
+    # support in a later phase.
     if target is not None:
         override_path = Path(target) / ".professor" / "sensitive-patterns.md"
         if override_path.is_file():
@@ -920,8 +926,10 @@ def screen_content(file_path: str, pack_root: str, target: str | None = None) ->
                     {
                         "findings": [
                             {
+                                "rule": "target-ruleset-override",
                                 "category": "target-ruleset-override",
-                                "disposition": "not_evaluated",
+                                "disposition": "block",
+                                "location": {"line": 1},
                                 "match": None,
                                 "replacement": None,
                                 "message": (
@@ -930,8 +938,11 @@ def screen_content(file_path: str, pack_root: str, target: str | None = None) ->
                                     "target -- this tool's pattern-matching categories "
                                     "are hardcoded Python, not parsed from a markdown "
                                     "ruleset file at runtime, so a target-specific "
-                                    "override cannot be honoured. Not evaluated against "
-                                    "the bundled defaults, not silently passed as clean."
+                                    "override cannot be honoured. Blocked, fail-closed, "
+                                    "rather than silently passed as clean against the "
+                                    "bundled defaults -- resolve by removing the "
+                                    "override, or by this tool gaining real support for "
+                                    "custom rulesets in a later phase."
                                 ),
                             }
                         ]
