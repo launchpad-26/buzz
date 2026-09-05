@@ -347,14 +347,25 @@ def _keys_match(expected_keys: set, actual_keys: set) -> bool:
     return True
 
 
-def _parse_marker_sources(sources_attr: str) -> set:
+def _parse_marker_sources(sources_attr: str) -> tuple[set, list]:
+    """Returns `(keys, malformed_entries)`. A `sources` entry that fails to
+    match `MARKER_SOURCE_RE` is a real parse failure, not an absent one --
+    it must never be silently discarded as if it were an empty-but-valid
+    entry, which previously left `keys` looking "empty and therefore
+    matching" even when the marker's actual text was garbage (step 8 of the
+    2026-09-05 fix round). `malformed_entries` carries each such raw entry so
+    the caller can flag it distinctly, rather than mistaking "nothing left
+    to compare" for "correctly compared and found equal".
+    """
     keys = set()
+    malformed_entries = []
     for entry in sources_attr.split(";"):
         entry = entry.strip()
         if not entry:
             continue
         match = MARKER_SOURCE_RE.match(entry)
         if not match:
+            malformed_entries.append(entry)
             continue
         span = None
         if match.group("start"):
@@ -364,7 +375,7 @@ def _parse_marker_sources(sources_attr: str) -> set:
                 else f"L{match.group('start')}-L{match.group('end')}"
             )
         keys.add((match.group("repo"), match.group("path"), match.group("shortsha"), span))
-    return keys
+    return keys, malformed_entries
 
 
 def _check_section(marker_line, heading_line, section_text, target: str) -> list:
@@ -486,9 +497,25 @@ def _check_section(marker_line, heading_line, section_text, target: str) -> list
                     )
 
     if marker_line is not None:
-        expected_keys = _parse_marker_sources(marker_sources_attr)
+        expected_keys, malformed_entries = _parse_marker_sources(marker_sources_attr)
         actual_keys = body_citation_keys
-        if not _keys_match(expected_keys, actual_keys):
+        if malformed_entries:
+            # A sources entry that failed to parse is a real parse failure,
+            # never an absent-but-valid one -- flagging it distinctly means
+            # it can never be silently absorbed into "matches, because
+            # there's nothing left to compare" (step 8 of the 2026-09-05 fix
+            # round). Reported instead of, not alongside, the bijection
+            # check below: with part of the marker unparseable, that
+            # comparison can't be meaningfully run at all.
+            findings.append(
+                _finding(
+                    "malformed-provenance-marker",
+                    f"section {heading_name!r}'s provenance marker has unparseable "
+                    f"sources entr{'y' if len(malformed_entries) == 1 else 'ies'}: "
+                    f"{malformed_entries!r}",
+                )
+            )
+        elif not _keys_match(expected_keys, actual_keys):
             findings.append(
                 _finding(
                     "mismatched-provenance-marker",

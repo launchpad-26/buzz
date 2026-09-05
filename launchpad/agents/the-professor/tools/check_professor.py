@@ -62,6 +62,8 @@ CHECK_PAGE_EXPECTED_RULES = {
     "broken-out-of-bounds-range.md": ["out-of-bounds-range"],
     "broken-no-provenance-marker.md": ["missing-provenance-marker"],
     "broken-mismatched-marker.md": ["mismatched-provenance-marker"],
+    "broken-marker-partial-garbage.md": ["malformed-provenance-marker"],
+    "broken-marker-total-garbage.md": ["malformed-provenance-marker"],
     "broken-mixed-claim.md": ["mixed-claim"],
     "broken-frontmatter.md": ["frontmatter"],
     "broken-frontmatter-unparseable-yaml.md": ["frontmatter"],
