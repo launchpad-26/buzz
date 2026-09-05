@@ -42,6 +42,15 @@ PROFESSOR_PY = TOOLS_DIR / "professor.py"
 FIXTURES_DIR = TOOLS_DIR / "contract" / "fixtures"
 REPO_ROOT = TOOLS_DIR.parents[3]  # tools/ -> the-professor/ -> agents/ -> launchpad/ -> repo root
 
+# A real, valid Professor pack root -- this worktree's own the-professor/
+# directory, which genuinely contains tools/contract/{page-contract,
+# sensitive-patterns}.md (step 4 of the 2026-09-06 fix round: check_page and
+# screen_content now confirm pack_root points at a real pack installation, so
+# check-page/screen-content calls below can no longer use an arbitrary /tmp
+# pack_root the way resolve-pin/path-exists-at calls still can -- pack_root
+# is irrelevant to those two subcommands).
+PACK_ROOT = TOOLS_DIR.parent
+
 EXTERNAL_REPO = "block/buzz"
 EXTERNAL_REF = "main"
 EXTERNAL_EXISTING_PATH = "Cargo.toml"
@@ -189,6 +198,70 @@ def check_pack_root_resolution_outside_checkout() -> str | None:
         return None
 
 
+def check_pack_root_spec_validation() -> str | None:
+    """`check-page`/`screen-content` must genuinely confirm `pack_root` points
+    at a real Professor pack installation -- reading
+    `<pack_root>/tools/contract/{page-contract,sensitive-patterns}.md` at the
+    start of the call -- rather than accepting any non-empty string (step 4
+    of the 2026-09-06 fix round). A `pack_root` missing the relevant spec
+    file must fail with a specific, clear error naming the missing file,
+    distinct from the "unset" error `check_pack_root_unset_fails_loud`
+    covers; a real, valid pack root (this worktree's own the-professor/)
+    must keep working exactly as before.
+    """
+    with tempfile.TemporaryDirectory() as bad_pack_root:
+        check_page_result = _run_professor(
+            ["check-page", str(FIXTURES_DIR / "clean.md"), "--target", str(REPO_ROOT)],
+            pack_root=bad_pack_root,
+        )
+        if check_page_result.returncode == 0:
+            return f"check-page with pack_root missing page-contract.md ({bad_pack_root}): expected non-zero exit, got 0"
+        if REQUIRED_UNSET_ERROR_TEXT in check_page_result.stderr:
+            return (
+                "check-page with pack_root missing page-contract.md: got the "
+                "$PROFESSOR_PACK_ROOT-unset error text instead of a distinct "
+                f"missing-spec-file error: {check_page_result.stderr!r}"
+            )
+        if "page-contract.md" not in check_page_result.stderr:
+            return (
+                "check-page with pack_root missing page-contract.md: expected "
+                f"an error naming the missing file, got {check_page_result.stderr!r}"
+            )
+
+        screen_content_result = _run_professor(
+            ["screen-content", str(FIXTURES_DIR / "clean.md")],
+            pack_root=bad_pack_root,
+        )
+        if screen_content_result.returncode == 0:
+            return f"screen-content with pack_root missing sensitive-patterns.md ({bad_pack_root}): expected non-zero exit, got 0"
+        if REQUIRED_UNSET_ERROR_TEXT in screen_content_result.stderr:
+            return (
+                "screen-content with pack_root missing sensitive-patterns.md: got "
+                "the $PROFESSOR_PACK_ROOT-unset error text instead of a distinct "
+                f"missing-spec-file error: {screen_content_result.stderr!r}"
+            )
+        if "sensitive-patterns.md" not in screen_content_result.stderr:
+            return (
+                "screen-content with pack_root missing sensitive-patterns.md: "
+                f"expected an error naming the missing file, got {screen_content_result.stderr!r}"
+            )
+
+    valid_check_page = _run_professor(
+        ["check-page", str(FIXTURES_DIR / "clean.md"), "--target", str(REPO_ROOT)],
+        pack_root=str(PACK_ROOT),
+    )
+    if valid_check_page.returncode != 0:
+        return f"check-page with a real, valid pack_root failed unexpectedly: {valid_check_page.stderr}"
+
+    valid_screen_content = _run_professor(
+        ["screen-content", str(FIXTURES_DIR / "clean.md")], pack_root=str(PACK_ROOT)
+    )
+    if valid_screen_content.returncode != 0:
+        return f"screen-content with a real, valid pack_root failed unexpectedly: {valid_screen_content.stderr}"
+
+    return None
+
+
 def check_resolve_pin_matches_git_ls_remote() -> tuple[str | None, str | None]:
     """Returns (error_or_None, resolved_sha_or_None)."""
     result = _run_professor(
@@ -312,7 +385,7 @@ def check_citation_check_error_on_api_failure() -> str | None:
         fixture_path = FIXTURES_DIR / "compliant-external.md"
         result = _run_professor(
             ["check-page", str(fixture_path), "--target", str(REPO_ROOT)],
-            pack_root="/tmp",
+            pack_root=str(PACK_ROOT),
             path_prepend=str(decoy_path),
         )
         if result.returncode != 0:
@@ -353,7 +426,7 @@ def check_local_citation_error_shapes() -> str | None:
 
     def _rules_for(target_dir: str):
         result = _run_professor(
-            ["check-page", str(fixture_path), "--target", target_dir], pack_root="/tmp"
+            ["check-page", str(fixture_path), "--target", target_dir], pack_root=str(PACK_ROOT)
         )
         if result.returncode != 0:
             return None, f"check-page against --target {target_dir!r} failed: {result.stderr}"
@@ -422,7 +495,7 @@ def check_invalid_utf8_produces_structured_error() -> str | None:
     fixture_path = FIXTURES_DIR / "invalid-utf8.md"
 
     check_page_result = _run_professor(
-        ["check-page", str(fixture_path), "--target", str(REPO_ROOT)], pack_root="/tmp"
+        ["check-page", str(fixture_path), "--target", str(REPO_ROOT)], pack_root=str(PACK_ROOT)
     )
     if check_page_result.returncode == 0:
         return "check-page(invalid-utf8.md): expected non-zero exit, got 0"
@@ -438,7 +511,7 @@ def check_invalid_utf8_produces_structured_error() -> str | None:
         )
 
     screen_content_result = _run_professor(
-        ["screen-content", str(fixture_path)], pack_root="/tmp"
+        ["screen-content", str(fixture_path)], pack_root=str(PACK_ROOT)
     )
     if screen_content_result.returncode == 0:
         return "screen-content(invalid-utf8.md): expected non-zero exit, got 0"
@@ -471,7 +544,7 @@ def check_screen_content_accepts_target_flag() -> str | None:
     with tempfile.TemporaryDirectory() as target_dir:
         result = _run_professor(
             ["screen-content", str(FIXTURES_DIR / "clean.md"), "--target", target_dir],
-            pack_root="/tmp",
+            pack_root=str(PACK_ROOT),
         )
         if result.returncode != 0:
             return (
@@ -499,7 +572,7 @@ def check_screen_content_target_ruleset_override() -> str | None:
         )
         result = _run_professor(
             ["screen-content", str(FIXTURES_DIR / "clean.md"), "--target", override_target],
-            pack_root="/tmp",
+            pack_root=str(PACK_ROOT),
         )
         if result.returncode != 0:
             return f"screen-content(clean.md, override present) failed: {result.stderr}"
@@ -522,7 +595,7 @@ def check_screen_content_target_ruleset_override() -> str | None:
     with tempfile.TemporaryDirectory() as no_override_target:
         result = _run_professor(
             ["screen-content", str(FIXTURES_DIR / "clean.md"), "--target", no_override_target],
-            pack_root="/tmp",
+            pack_root=str(PACK_ROOT),
         )
         if result.returncode != 0:
             return f"screen-content(clean.md, no override) failed: {result.stderr}"
@@ -564,7 +637,7 @@ def check_local_citation_never_calls_gh() -> str | None:
         local_fixture = FIXTURES_DIR / "compliant-local.md"
         local_result = _run_professor(
             ["check-page", str(local_fixture), "--target", str(REPO_ROOT)],
-            pack_root="/tmp",
+            pack_root=str(PACK_ROOT),
             path_prepend=str(decoy_path),
         )
         if local_result.returncode != 0:
@@ -581,7 +654,7 @@ def check_local_citation_never_calls_gh() -> str | None:
         external_fixture = FIXTURES_DIR / "compliant-external.md"
         external_result = _run_professor(
             ["check-page", str(external_fixture), "--target", str(REPO_ROOT)],
-            pack_root="/tmp",
+            pack_root=str(PACK_ROOT),
             path_prepend=str(decoy_path),
         )
         if external_result.returncode != 0:
@@ -601,7 +674,7 @@ def check_check_page_fixtures() -> str | None:
     for fixture_name, expected_rules in CHECK_PAGE_EXPECTED_RULES.items():
         fixture_path = FIXTURES_DIR / fixture_name
         result = _run_professor(
-            ["check-page", str(fixture_path), "--target", str(REPO_ROOT)], pack_root="/tmp"
+            ["check-page", str(fixture_path), "--target", str(REPO_ROOT)], pack_root=str(PACK_ROOT)
         )
         if result.returncode != 0:
             return f"check-page({fixture_name}) failed: {result.stderr}"
@@ -627,7 +700,7 @@ def check_frontmatter_branches_are_distinct() -> str | None:
     for fixture_name, expected_substring in FRONTMATTER_BRANCH_EXPECTED_MESSAGE_SUBSTRING.items():
         fixture_path = FIXTURES_DIR / fixture_name
         result = _run_professor(
-            ["check-page", str(fixture_path), "--target", str(REPO_ROOT)], pack_root="/tmp"
+            ["check-page", str(fixture_path), "--target", str(REPO_ROOT)], pack_root=str(PACK_ROOT)
         )
         if result.returncode != 0:
             return f"check-page({fixture_name}) failed: {result.stderr}"
@@ -650,7 +723,7 @@ def check_frontmatter_branches_are_distinct() -> str | None:
 def check_screen_content_fixtures() -> str | None:
     for fixture_name, expectation in SCREEN_CONTENT_EXPECTED.items():
         fixture_path = FIXTURES_DIR / fixture_name
-        result = _run_professor(["screen-content", str(fixture_path)], pack_root="/tmp")
+        result = _run_professor(["screen-content", str(fixture_path)], pack_root=str(PACK_ROOT))
         if result.returncode != 0:
             return f"screen-content({fixture_name}) failed: {result.stderr}"
         try:
@@ -700,6 +773,10 @@ def main() -> int:
         (
             "pack-root resolution from outside checkout",
             check_pack_root_resolution_outside_checkout,
+        ),
+        (
+            "pack-root spec validation (check-page/screen-content)",
+            check_pack_root_spec_validation,
         ),
     ]
 

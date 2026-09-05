@@ -585,7 +585,42 @@ def _check_section(marker_line, heading_line, section_text, target: str) -> list
     return findings
 
 
+def _require_pack_spec(pack_root: str, spec_name: str, subcommand: str) -> str | None:
+    """Confirm `<pack_root>/tools/contract/<spec_name>` exists and is
+    non-empty -- genuinely validating that `pack_root` points at a real
+    Professor pack installation, not just a non-empty string (step 4 of the
+    2026-09-06 fix round). `professor.py`'s own `$PROFESSOR_PACK_ROOT`
+    unset-check message claims this variable is needed "to resolve where
+    this pack's own files (contract specs, etc.) live" -- this is what
+    makes that claim genuinely true, rather than `pack_root` being threaded
+    through as a parameter neither `check_page` nor `screen_content` ever
+    referenced. Does not require deriving the actual checks from the
+    spec's parsed content (a much larger, explicitly out-of-scope change) --
+    only that the file genuinely exists and is non-empty.
+
+    Returns an error message string if invalid, else `None`.
+    """
+    spec_path = Path(pack_root) / "tools" / "contract" / spec_name
+    if not spec_path.is_file():
+        return (
+            f"{subcommand}: $PROFESSOR_PACK_ROOT ({pack_root!r}) does not contain "
+            f"{spec_path} -- this does not look like a valid Professor pack "
+            "installation."
+        )
+    if spec_path.stat().st_size == 0:
+        return (
+            f"{subcommand}: {spec_path} exists but is empty -- this does not look "
+            "like a valid Professor pack installation."
+        )
+    return None
+
+
 def check_page(file_path: str, target: str, pack_root: str) -> int:
+    spec_error = _require_pack_spec(pack_root, "page-contract.md", "check-page")
+    if spec_error:
+        print(spec_error, file=sys.stderr)
+        return 1
+
     path = Path(file_path)
     if not path.is_file():
         print(f"check-page: no such file: {file_path}", file=sys.stderr)
@@ -817,6 +852,11 @@ def _screen_finding(category: str, disposition: str, matched_text: str) -> dict:
 
 
 def screen_content(file_path: str, pack_root: str, target: str | None = None) -> int:
+    spec_error = _require_pack_spec(pack_root, "sensitive-patterns.md", "screen-content")
+    if spec_error:
+        print(spec_error, file=sys.stderr)
+        return 1
+
     path = Path(file_path)
     if not path.is_file():
         print(f"screen-content: no such file: {file_path}", file=sys.stderr)
