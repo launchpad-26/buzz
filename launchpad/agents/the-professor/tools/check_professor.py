@@ -463,10 +463,10 @@ def check_screen_content_accepts_target_flag() -> str | None:
     confirmed failing with "error: unrecognized arguments: --target /tmp"
     before this fix (bonus item found during adjudication, treated as High:
     the mandatory screening gate couldn't be invoked as documented at all).
-    Only checks that the documented shape now parses; it does not assert
-    `--target` changes screen-content's behaviour, since this fix doesn't
-    add ruleset-resolution logic -- see professor.py's own help text for
-    that scope note.
+    Only checks that the documented shape now parses against a target with
+    no override present; `check_screen_content_target_ruleset_override`
+    below covers the override-detection behaviour itself (step 3 of the
+    2026-09-06 fix round).
     """
     with tempfile.TemporaryDirectory() as target_dir:
         result = _run_professor(
@@ -477,6 +477,63 @@ def check_screen_content_accepts_target_flag() -> str | None:
             return (
                 "screen-content <file> --target <dir> failed to parse/run: "
                 f"exit {result.returncode}, stderr {result.stderr!r}"
+            )
+    return None
+
+
+def check_screen_content_target_ruleset_override() -> str | None:
+    """`skills/screen-sensitive/SKILL.md` promises a two-step ruleset
+    resolution order: `<target>/.professor/sensitive-patterns.md` if it
+    exists, else the bundled default. `screen_content` can't actually
+    interpret a target's override content (its categories are hardcoded
+    Python), so it must report an explicit `target-ruleset-override`
+    (`not_evaluated`) finding instead of silently screening against the
+    bundled default -- step 3 of the 2026-09-06 fix round. A target with NO
+    override (or no `--target` at all) must still produce the normal
+    bundled-default result, unchanged.
+    """
+    with tempfile.TemporaryDirectory() as override_target:
+        (Path(override_target) / ".professor").mkdir()
+        (Path(override_target) / ".professor" / "sensitive-patterns.md").write_text(
+            "# a target-specific override\n"
+        )
+        result = _run_professor(
+            ["screen-content", str(FIXTURES_DIR / "clean.md"), "--target", override_target],
+            pack_root="/tmp",
+        )
+        if result.returncode != 0:
+            return f"screen-content(clean.md, override present) failed: {result.stderr}"
+        try:
+            report = json.loads(result.stdout)
+        except json.JSONDecodeError:
+            return f"screen-content(clean.md, override present) did not print valid JSON: {result.stdout!r}"
+        findings = report.get("findings", [])
+        if [f["category"] for f in findings] != ["target-ruleset-override"]:
+            return (
+                "screen-content(clean.md, override present): expected exactly one "
+                f"'target-ruleset-override' finding, got {findings!r}"
+            )
+        if findings[0]["disposition"] != "not_evaluated":
+            return (
+                "screen-content(clean.md, override present): expected disposition "
+                f"'not_evaluated', got {findings[0]['disposition']!r}"
+            )
+
+    with tempfile.TemporaryDirectory() as no_override_target:
+        result = _run_professor(
+            ["screen-content", str(FIXTURES_DIR / "clean.md"), "--target", no_override_target],
+            pack_root="/tmp",
+        )
+        if result.returncode != 0:
+            return f"screen-content(clean.md, no override) failed: {result.stderr}"
+        try:
+            report = json.loads(result.stdout)
+        except json.JSONDecodeError:
+            return f"screen-content(clean.md, no override) did not print valid JSON: {result.stdout!r}"
+        if report.get("findings", []) != []:
+            return (
+                "screen-content(clean.md, no override): expected the normal "
+                f"bundled-default (empty) result, got {report.get('findings')!r}"
             )
     return None
 
@@ -703,6 +760,12 @@ def main() -> int:
         print(f"FAIL [screen-content accepts --target]: {error}")
         return 1
     print("ok: screen-content accepts --target, matching SKILL.md's documented invocation shape")
+
+    error = check_screen_content_target_ruleset_override()
+    if error:
+        print(f"FAIL [screen-content target-ruleset-override]: {error}")
+        return 1
+    print("ok: screen-content reports an explicit target-ruleset-override, never silently bundled-default")
 
     error = check_check_page_fixtures()
     if error:

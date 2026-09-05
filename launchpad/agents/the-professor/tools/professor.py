@@ -84,7 +84,7 @@ def _cmd_check_page(args: argparse.Namespace, pack_root: str) -> int:
 def _cmd_screen_content(args: argparse.Namespace, pack_root: str) -> int:
     from professor_lib.localcmd import screen_content
 
-    return screen_content(file_path=args.file, pack_root=pack_root)
+    return screen_content(file_path=args.file, pack_root=pack_root, target=args.target)
 
 
 def _build_parser() -> argparse.ArgumentParser:
@@ -133,11 +133,13 @@ def _build_parser() -> argparse.ArgumentParser:
         required=False,
         default=None,
         help=(
-            "root of the target repo (accepted for parity with check-page's own "
-            "--target, and because skills/screen-sensitive/SKILL.md documents "
-            "invoking this subcommand with it -- not yet used to resolve a "
-            "target-specific ruleset override; see .professor/sensitive-"
-            "patterns.md resolution in that skill's own step 1)"
+            "root of the target repo. If <target>/.professor/sensitive-"
+            "patterns.md exists, this tool reports an explicit "
+            "target-ruleset-override (not_evaluated) result instead of "
+            "silently screening against the bundled default -- its "
+            "pattern-matching categories are hardcoded Python, not parsed "
+            "from a markdown ruleset file at runtime, so it cannot honour "
+            "a target-specific override's content."
         ),
     )
     screen_content_parser.set_defaults(func=_cmd_screen_content)

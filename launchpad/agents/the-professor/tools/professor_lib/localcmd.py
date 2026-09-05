@@ -816,7 +816,7 @@ def _screen_finding(category: str, disposition: str, matched_text: str) -> dict:
     }
 
 
-def screen_content(file_path: str, pack_root: str) -> int:
+def screen_content(file_path: str, pack_root: str, target: str | None = None) -> int:
     path = Path(file_path)
     if not path.is_file():
         print(f"screen-content: no such file: {file_path}", file=sys.stderr)
@@ -829,6 +829,47 @@ def screen_content(file_path: str, pack_root: str) -> int:
         # (step 11 of the 2026-09-05 fix round) -- never a raw traceback.
         print(f"screen-content: {file_path} is not valid UTF-8: {exc}", file=sys.stderr)
         return 1
+
+    # skills/screen-sensitive/SKILL.md promises a two-step ruleset resolution
+    # order: `<target>/.professor/sensitive-patterns.md` if it exists, else
+    # the bundled default. This tool's actual pattern-matching rules are
+    # hardcoded Python, not parsed from a markdown ruleset file at runtime,
+    # so a target's override can't be dynamically interpreted the way this
+    # tool is built today. Judgment call (step 3 of the 2026-09-06 fix
+    # round), matching this pack's own convention for "can't mechanically
+    # evaluate this" (the roster-names `not_evaluated` disposition, the
+    # external-citation-range `citation-range-not-evaluated` result): report
+    # an explicit, honest result naming the override and stop -- never
+    # silently proceed with the bundled defaults as if nothing were
+    # overridden.
+    if target is not None:
+        override_path = Path(target) / ".professor" / "sensitive-patterns.md"
+        if override_path.is_file():
+            print(
+                json.dumps(
+                    {
+                        "findings": [
+                            {
+                                "category": "target-ruleset-override",
+                                "disposition": "not_evaluated",
+                                "match": None,
+                                "replacement": None,
+                                "message": (
+                                    f"{override_path} exists, overriding the bundled "
+                                    "default sensitive-patterns.md ruleset for this "
+                                    "target -- this tool's pattern-matching categories "
+                                    "are hardcoded Python, not parsed from a markdown "
+                                    "ruleset file at runtime, so a target-specific "
+                                    "override cannot be honoured. Not evaluated against "
+                                    "the bundled defaults, not silently passed as clean."
+                                ),
+                            }
+                        ]
+                    },
+                    indent=2,
+                )
+            )
+            return 0
 
     # An email inside the frontmatter's `author` field VALUE, or inside a
     # `professor:section` provenance marker, is attribution, not disclosure
