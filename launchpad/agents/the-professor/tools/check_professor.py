@@ -56,6 +56,63 @@ EXTERNAL_REF = "main"
 EXTERNAL_EXISTING_PATH = "Cargo.toml"
 EXTERNAL_MISSING_PATH = "THIS_FILE_DOES_NOT_EXIST_9f8e7d6c.md"
 
+# The local-citation commit every check-page fixture below pins to (a real
+# commit in this checkout's own history, per localcmd.py's shallow-clone-
+# safety comment around line 114: a shallow clone can legitimately be
+# missing a commit that is entirely real upstream). Fixed rather than
+# re-derived from HEAD, matching every other fixture in this file.
+FIXTURE_PINNED_COMMIT = "c552723895f5bfbf399db7e3135a22026597e70a"
+
+
+def _commit_present_in_local_history(target: str, commit: str) -> bool:
+    """Whether `commit` resolves in `target`'s local git history -- the same
+    `git cat-file -e <commit>^{commit}` check `_local_citation_exists`
+    (localcmd.py) makes, reused here so the harness asks the identical
+    question rather than a second, possibly-diverging one (step 5 of the
+    2026-09-06 fix round).
+    """
+    result = subprocess.run(
+        ["git", "-C", target, "cat-file", "-e", f"{commit}^{{commit}}"],
+        capture_output=True,
+        text=True,
+        timeout=15,
+    )
+    return result.returncode == 0
+
+
+def check_fixture_commit_shallow_clone_safety() -> str | None:
+    """`check_check_page_fixtures` below skips (rather than fails) any
+    fixture assertion that depends on `FIXTURE_PINNED_COMMIT` when that
+    commit is not present in this checkout's local history -- a shallow
+    clone (`git clone --depth 1`, or GitHub Actions' default checkout depth)
+    can legitimately be missing a commit that is entirely real upstream, and
+    must never be misreported as "this fixture's expected rule is wrong"
+    (step 5 of the 2026-09-06 fix round).
+
+    This asserts both halves: the pinned commit really is present in this
+    (non-shallow, or at least deep-enough) checkout today, and the
+    detection helper itself correctly reports "not present" for a fabricated
+    SHA guaranteed not to exist locally -- simulating the shallow-clone
+    failure mode without needing an actual shallow clone of this repo.
+    """
+    if not _commit_present_in_local_history(str(REPO_ROOT), FIXTURE_PINNED_COMMIT):
+        return (
+            f"FIXTURE_PINNED_COMMIT {FIXTURE_PINNED_COMMIT!r} is not present in "
+            f"{REPO_ROOT}'s local history -- check_check_page_fixtures should be "
+            "skipping its dependent assertions right now; this checkout may "
+            "itself be an unexpectedly shallow clone"
+        )
+
+    fabricated_commit = "f" * 40
+    if _commit_present_in_local_history(str(REPO_ROOT), fabricated_commit):
+        return (
+            f"a fabricated, guaranteed-absent commit {fabricated_commit!r} was "
+            "reported as present -- the shallow-clone-safety detection itself "
+            "is broken"
+        )
+    return None
+
+
 CHECK_PAGE_EXPECTED_RULES = {
     "compliant-local.md": [],
     "compliant-external.md": [],
@@ -671,8 +728,20 @@ def check_local_citation_never_calls_gh() -> str | None:
 
 
 def check_check_page_fixtures() -> str | None:
+    # A shallow clone can be missing FIXTURE_PINNED_COMMIT even though it is
+    # entirely real upstream -- any fixture citing it would then fail with
+    # citation-check-error instead of its expected rule, misattributing a
+    # missing-history problem to a code defect (step 5 of the 2026-09-06 fix
+    # round). Checked once, upfront, rather than per-fixture inside the loop.
+    pinned_commit_present = _commit_present_in_local_history(
+        str(REPO_ROOT), FIXTURE_PINNED_COMMIT
+    )
+    skipped = []
     for fixture_name, expected_rules in CHECK_PAGE_EXPECTED_RULES.items():
         fixture_path = FIXTURES_DIR / fixture_name
+        if not pinned_commit_present and FIXTURE_PINNED_COMMIT in fixture_path.read_text():
+            skipped.append(fixture_name)
+            continue
         result = _run_professor(
             ["check-page", str(fixture_path), "--target", str(REPO_ROOT)], pack_root=str(PACK_ROOT)
         )
@@ -688,6 +757,11 @@ def check_check_page_fixtures() -> str | None:
                 f"check-page({fixture_name}): expected rules {expected_rules!r}, "
                 f"got {actual_rules!r}"
             )
+    if skipped:
+        print(
+            f"skipped: fixture commit {FIXTURE_PINNED_COMMIT} not present in this "
+            f"shallow clone -- {len(skipped)} fixture(s) skipped: {sorted(skipped)!r}"
+        )
     return None
 
 
@@ -843,6 +917,12 @@ def main() -> int:
         print(f"FAIL [screen-content target-ruleset-override]: {error}")
         return 1
     print("ok: screen-content reports an explicit target-ruleset-override, never silently bundled-default")
+
+    error = check_fixture_commit_shallow_clone_safety()
+    if error:
+        print(f"FAIL [fixture commit shallow-clone safety]: {error}")
+        return 1
+    print("ok: fixture commit shallow-clone safety (present here; fabricated SHA correctly absent)")
 
     error = check_check_page_fixtures()
     if error:
