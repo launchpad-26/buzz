@@ -784,12 +784,13 @@ def _shannon_entropy(s: str) -> float:
 
 
 def _high_entropy_tokens_near_keywords(content: str):
-    """Yield each opaque, high-entropy candidate string that appears within
-    HIGH_ENTROPY_WINDOW_CHARS of a standalone key/token/secret/password word
-    -- the "[pattern] API keys / access tokens" category's high-entropy
-    clause (step 1 of the 2026-09-05 fix round). Reused by step 2's webhook
-    URL check for a query-param/path-segment value adjacent to a
-    token/key/secret/auth-shaped parameter name.
+    """Yield each opaque, high-entropy candidate match (the re.Match itself,
+    not just its text -- so a caller can still locate it, step 1 of the
+    2026-09-06 fix round) that appears within HIGH_ENTROPY_WINDOW_CHARS of a
+    standalone key/token/secret/password word -- the "[pattern] API keys /
+    access tokens" category's high-entropy clause (step 1 of the 2026-09-05
+    fix round). Reused by step 2's webhook URL check for a query-param/path-
+    segment value adjacent to a token/key/secret/auth-shaped parameter name.
     """
     keyword_spans = [m.span() for m in HIGH_ENTROPY_KEYWORD_RE.finditer(content)]
     if not keyword_spans:
@@ -801,7 +802,7 @@ def _high_entropy_tokens_near_keywords(content: str):
         candidate_span = candidate.span()
         for keyword_span in keyword_spans:
             if _spans_within_window(keyword_span, candidate_span, HIGH_ENTROPY_WINDOW_CHARS):
-                yield token
+                yield candidate
                 break
 
 
@@ -842,11 +843,40 @@ def _roster_names_co_occur(content: str) -> bool:
     return False
 
 
-def _screen_finding(category: str, disposition: str, matched_text: str) -> dict:
+def _line_number(content: str, offset: int) -> int:
+    """1-based line number of `offset` within `content` -- the cheapest
+    location signal already available at every finding call site (a plain
+    count of preceding newlines), used for every finding's `location` field
+    (step 1/3 of the 2026-09-06 fix round).
+    """
+    return content.count("\n", 0, offset) + 1
+
+
+def _screen_finding(content: str, category: str, disposition: str, match) -> dict:
+    """Builds one screen-content finding dict. `match` is the re.Match whose
+    span the finding is about.
+
+    `skills/screen-sensitive/SKILL.md` (its "Act on the result" section)
+    requires a `block` finding report "category and location, never the
+    flagged content itself" and never quote the flagged span back anywhere a
+    tool result might be cached or logged. Before this fix, `match` carried
+    the verbatim matched text for EVERY disposition, including `block` -- on
+    real secret content, that put the actual credential in this tool's own
+    stdout, which then lands in tool-result logs and session transcripts,
+    exactly the disclosure `block` exists to prevent (step 1 of the
+    2026-09-06 fix round). Only `redact`-disposition findings keep `match`
+    now -- `redact` genuinely needs the exact span to perform its
+    replacement, which is a real, narrower need `block` does not share.
+    Every finding, regardless of disposition, still carries `location` (a
+    1-based line number) so a reviewer can find the flagged content without
+    this tool ever re-printing it.
+    """
     return {
+        "rule": category,
         "category": category,
         "disposition": disposition,
-        "match": matched_text,
+        "location": {"line": _line_number(content, match.start())},
+        "match": match.group(0) if disposition == "redact" else None,
         "replacement": f"[REDACTED: {category}]" if disposition == "redact" else None,
     }
 
@@ -942,39 +972,39 @@ def screen_content(file_path: str, pack_root: str, target: str | None = None) ->
 
     for pattern in API_KEY_PATTERNS:
         for match in pattern.finditer(content):
-            findings.append(_screen_finding("api-key-token", "block", match.group(0)))
+            findings.append(_screen_finding(content, "api-key-token", "block", match))
 
-    for token in _high_entropy_tokens_near_keywords(content):
-        findings.append(_screen_finding("api-key-token", "block", token))
+    for match in _high_entropy_tokens_near_keywords(content):
+        findings.append(_screen_finding(content, "api-key-token", "block", match))
 
     for match in PRIVATE_KEY_RE.finditer(content):
-        findings.append(_screen_finding("private-key", "block", match.group(0)))
+        findings.append(_screen_finding(content, "private-key", "block", match))
 
     for match in CONNECTION_STRING_RE.finditer(content):
-        findings.append(_screen_finding("connection-string", "block", match.group(0)))
+        findings.append(_screen_finding(content, "connection-string", "block", match))
     for match in PASSWORD_LITERAL_RE.finditer(content):
-        findings.append(_screen_finding("connection-string", "block", match.group(0)))
+        findings.append(_screen_finding(content, "connection-string", "block", match))
 
     for match in WEBHOOK_URL_RE.finditer(content):
-        findings.append(_screen_finding("webhook-url-token", "block", match.group(0)))
+        findings.append(_screen_finding(content, "webhook-url-token", "block", match))
 
     for url_match in URL_RE.finditer(content):
         url = url_match.group(0)
         if _url_embedded_auth_token(url) is not None:
-            findings.append(_screen_finding("webhook-url-token", "block", url))
+            findings.append(_screen_finding(content, "webhook-url-token", "block", url_match))
 
     for match in EMAIL_RE.finditer(content):
         if _in_excluded_span(match.start()):
             continue
-        findings.append(_screen_finding("email-address", "redact", match.group(0)))
+        findings.append(_screen_finding(content, "email-address", "redact", match))
 
     for match in INTERNAL_HOST_RE.finditer(content):
         findings.append(
-            _screen_finding("internal-hostname-private-ip", "redact", match.group(0))
+            _screen_finding(content, "internal-hostname-private-ip", "redact", match)
         )
 
     for match in PHYSICAL_ADDRESS_RE.finditer(content):
-        findings.append(_screen_finding("physical-address", "redact", match.group(0)))
+        findings.append(_screen_finding(content, "physical-address", "redact", match))
 
     if _roster_names_co_occur(content):
         findings.append(
