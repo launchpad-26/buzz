@@ -184,6 +184,19 @@ class SharedSeverityOrderTests(unittest.TestCase):
         self.assertIs(verdicts.SEVERITY_ORDER, review.SEVERITY_ORDER)
 
 
+class SharedPredicateTests(unittest.TestCase):
+    """#283: ``is_nonempty_str`` moved into findings.py (verdicts.py already
+    depends on findings.py, not the reverse), and verdicts.py re-exports it
+    rather than keeping its own copy -- a second private copy of one contract
+    rule is how this bug class happened the first time. Mirrors
+    SharedSeverityOrderTests above, and test_findings.py's
+    SharedSeverityTests.test_severity_order_is_the_same_object_as_reviews.
+    """
+
+    def test_is_nonempty_str_is_the_same_object_as_findings(self):
+        self.assertIs(verdicts.is_nonempty_str, findings.is_nonempty_str)
+
+
 class WellFormedPairTests(unittest.TestCase):
     def test_well_formed_pair_validates_clean(self):
         input_doc, output_doc = make_well_formed_pair()
