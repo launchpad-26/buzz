@@ -186,10 +186,36 @@ class State:
             self.db.execute("PRAGMA foreign_keys=ON")
             self._migrate()
             self._assert_fingerprint()
+        except StatePersistenceError:
+            # _assert_fingerprint() raises this directly (not a
+            # sqlite3.Error/OSError) when the on-disk schema doesn't match
+            # this suite's expected shape. Close before propagating -- same
+            # leak the clause below closes, but this exception is already
+            # the right type and must not be wrapped a second time.
+            self._close_after_init_failure()
+            raise
         except (sqlite3.Error, OSError) as exc:
+            self._close_after_init_failure()
             raise StatePersistenceError(
                 f"gh-admin state persistence did not open cleanly at {self.db_path}: {exc}"
             ) from exc
+
+    def _close_after_init_failure(self) -> None:
+        """Close `self.db` when __init__ fails after opening it.
+
+        `self.db` is only assigned once `sqlite3.connect()` above has
+        succeeded -- if connect() itself is what raised, the attribute was
+        never set, so this is a no-op rather than an AttributeError. A
+        secondary error from close() itself is suppressed so it can't mask
+        the original failure being propagated.
+        """
+        db = getattr(self, "db", None)
+        if db is None:
+            return
+        try:
+            db.close()
+        except sqlite3.Error:
+            pass
 
     def try_runtime_lock(self, command: str) -> RuntimeLock | None:
         """Acquire the state-dir command lock, or return None when another run owns it."""
@@ -329,7 +355,23 @@ class State:
             );
             """
         )
+        # Additive column migrations for databases created by an earlier
+        # version. `CREATE TABLE IF NOT EXISTS` above cannot add a column to
+        # an existing table, so each new column a later sibling task needs
+        # is applied idempotently here via `_add_column_if_missing`, mirroring
+        # review-queue-automation's `common.py` (`self._add_column_if_missing(
+        # "jobs", "snapshot_hash", "TEXT")`). No column needs adding yet, so
+        # there is no call site here today -- this is the path existing for
+        # the next sibling task under Feature #1845 that does need one.
         self.commit()
+
+    def _add_column_if_missing(self, table: str, column: str, decl: str) -> bool:
+        """Add `column` to `table` when absent. Returns True when it was added."""
+        existing = {row["name"] for row in self.db.execute(f"PRAGMA table_info({table})")}
+        if column in existing:
+            return False
+        self.db.execute(f"ALTER TABLE {table} ADD COLUMN {column} {decl}")
+        return True
 
     def _assert_fingerprint(self) -> None:
         rows = self.execute(
