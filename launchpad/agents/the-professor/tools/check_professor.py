@@ -80,7 +80,7 @@ def _commit_present_in_local_history(target: str, commit: str) -> bool:
     return result.returncode == 0
 
 
-def check_fixture_commit_shallow_clone_safety() -> str | None:
+def check_fixture_commit_shallow_clone_safety() -> tuple[str | None, bool]:
     """`check_check_page_fixtures` below skips (rather than fails) any
     fixture assertion that depends on `FIXTURE_PINNED_COMMIT` when that
     commit is not present in this checkout's local history -- a shallow
@@ -89,28 +89,34 @@ def check_fixture_commit_shallow_clone_safety() -> str | None:
     must never be misreported as "this fixture's expected rule is wrong"
     (step 5 of the 2026-09-06 fix round).
 
-    This asserts both halves: the pinned commit really is present in this
-    (non-shallow, or at least deep-enough) checkout today, and the
-    detection helper itself correctly reports "not present" for a fabricated
-    SHA guaranteed not to exist locally -- simulating the shallow-clone
-    failure mode without needing an actual shallow clone of this repo.
+    Returns `(error_or_None, shallow_clone)`. A prior round's version of this
+    function returned a hard failure whenever `FIXTURE_PINNED_COMMIT` was
+    absent -- a mandatory check running immediately before
+    `check_check_page_fixtures` in `main()`'s own sequence, so that hard
+    failure pre-empted `check_check_page_fixtures`'s own, already-correct
+    skip logic before it ever had a chance to run: a genuinely shallow clone
+    still failed the whole harness instead of skipping cleanly (step 7 of the
+    2026-09-06 fix round). Fixed here by separating the two distinct
+    conditions this function was conflating: `shallow_clone=True` (with no
+    error) is the ordinary, expected shallow-clone case -- the caller reports
+    a clean, named skip for it, not a failure. Only a genuinely broken
+    detection mechanism -- a fabricated, guaranteed-absent commit incorrectly
+    reported as present, checked unconditionally, regardless of whether the
+    real pinned commit happens to be present -- still returns a hard error.
     """
-    if not _commit_present_in_local_history(str(REPO_ROOT), FIXTURE_PINNED_COMMIT):
-        return (
-            f"FIXTURE_PINNED_COMMIT {FIXTURE_PINNED_COMMIT!r} is not present in "
-            f"{REPO_ROOT}'s local history -- check_check_page_fixtures should be "
-            "skipping its dependent assertions right now; this checkout may "
-            "itself be an unexpectedly shallow clone"
-        )
-
     fabricated_commit = "f" * 40
     if _commit_present_in_local_history(str(REPO_ROOT), fabricated_commit):
         return (
             f"a fabricated, guaranteed-absent commit {fabricated_commit!r} was "
             "reported as present -- the shallow-clone-safety detection itself "
-            "is broken"
+            "is broken",
+            False,
         )
-    return None
+
+    if not _commit_present_in_local_history(str(REPO_ROOT), FIXTURE_PINNED_COMMIT):
+        return None, True
+
+    return None, False
 
 
 CHECK_PAGE_EXPECTED_RULES = {
@@ -967,11 +973,22 @@ def main() -> int:
         return 1
     print("ok: screen-content reports an explicit target-ruleset-override, never silently bundled-default")
 
-    error = check_fixture_commit_shallow_clone_safety()
+    error, shallow_clone = check_fixture_commit_shallow_clone_safety()
     if error:
         print(f"FAIL [fixture commit shallow-clone safety]: {error}")
         return 1
-    print("ok: fixture commit shallow-clone safety (present here; fabricated SHA correctly absent)")
+    if shallow_clone:
+        print(
+            "skip: fixture commit shallow-clone safety -- "
+            f"{FIXTURE_PINNED_COMMIT} not present in this checkout's local "
+            "history (a genuinely shallow clone); dependent check-page "
+            "fixtures are skipped below rather than failed"
+        )
+    else:
+        print(
+            "ok: fixture commit shallow-clone safety (present here; fabricated "
+            "SHA correctly absent)"
+        )
 
     error = check_check_page_fixtures()
     if error:
