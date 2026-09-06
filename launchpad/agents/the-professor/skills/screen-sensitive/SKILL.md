@@ -114,10 +114,13 @@ always `block` — it does not merge with the pattern/dispatch findings the way
 - **`redact`** — one or more spans matched a category the ruleset marks as
   redact-not-block (e.g. an internal hostname that's useful context but shouldn't be
   published verbatim, or a name dispatch classified `ROSTER_DATA`/`AMBIGUOUS`).
-  Replace each flagged span with `[REDACTED: <category>]`, and
-  log the redaction — which category, which section, never the redacted value itself
-  — so a reviewer can see what was removed without the removed content ever having
-  been written anywhere, including a log.
+  `screen-content` never hands back the flagged text itself — its `match` field is
+  always `null`, for every disposition. Use each finding's `location` (which line)
+  and `category` (which kind) to find the span in the draft file you already hold
+  in your own context, and replace it there with `[REDACTED: <category>]`. Log the
+  redaction — which category, which section, never the redacted value itself — so a
+  reviewer can see what was removed without the removed content ever having been
+  written anywhere, including a log.
 - **`block`** — one or more spans matched a category the ruleset marks as
   block-not-redact (a live credential, a private key, anything where even a
   redaction-shaped placeholder in the page's history is a bad trade against just not

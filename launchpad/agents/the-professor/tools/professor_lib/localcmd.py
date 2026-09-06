@@ -938,26 +938,33 @@ def _screen_finding(content: str, category: str, disposition: str, match) -> dic
     span the finding is about.
 
     `skills/screen-sensitive/SKILL.md` (its "Act on the result" section)
-    requires a `block` finding report "category and location, never the
-    flagged content itself" and never quote the flagged span back anywhere a
-    tool result might be cached or logged. Before this fix, `match` carried
-    the verbatim matched text for EVERY disposition, including `block` -- on
-    real secret content, that put the actual credential in this tool's own
-    stdout, which then lands in tool-result logs and session transcripts,
-    exactly the disclosure `block` exists to prevent (step 1 of the
-    2026-09-06 fix round). Only `redact`-disposition findings keep `match`
-    now -- `redact` genuinely needs the exact span to perform its
-    replacement, which is a real, narrower need `block` does not share.
-    Every finding, regardless of disposition, still carries `location` (a
-    1-based line number) so a reviewer can find the flagged content without
-    this tool ever re-printing it.
+    requires a finding report "category and location, never the flagged
+    content itself" and never quote the flagged span back anywhere a tool
+    result might be cached or logged. `match` is now `null` unconditionally,
+    for every disposition (step 4 of the 2026-09-06 fix round) -- an earlier
+    round suppressed it only for `block`, on the theory that only `block`
+    findings needed it, but a second independent review found the ordinary,
+    non-overlapping `redact` case (`email-address`,
+    `internal-hostname-private-ip`, `physical-address` -- the majority of
+    real `redact` findings) still printed the exact matched text, which is
+    exactly the disclosure channel the SKILL.md forbids. The calling skill
+    (`draft-page`/`update-page`) already has the full draft file in its own
+    context -- it does not need this tool to hand back the secret text at
+    all, only WHERE (`location`) and WHAT KIND (`category`) to redact, so it
+    can read that line itself and perform the replacement. `replacement`
+    (the literal `"[REDACTED: <category>]"` placeholder string) is
+    unaffected by this change -- it never carried the secret, only the
+    placeholder text, and still exists only for `redact` findings. Every
+    finding, regardless of disposition, still carries `location` (a 1-based
+    line number) so a reviewer can find the flagged content without this
+    tool ever re-printing it.
     """
     return {
         "rule": category,
         "category": category,
         "disposition": disposition,
         "location": {"line": _line_number(content, match.start())},
-        "match": match.group(0) if disposition == "redact" else None,
+        "match": None,
         "replacement": f"[REDACTED: {category}]" if disposition == "redact" else None,
     }
 
