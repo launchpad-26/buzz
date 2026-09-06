@@ -125,6 +125,8 @@ CHECK_PAGE_EXPECTED_RULES = {
     "broken-nonexistent-citation.md": ["citation-not-found"],
     "broken-missing-citation.md": ["missing-citation"],
     "broken-preamble-uncited-claim.md": ["missing-citation"],
+    "broken-setext-only-heading.md": ["missing-citation"],
+    "broken-no-headings-at-all.md": ["missing-citation"],
     "broken-out-of-bounds-range.md": ["out-of-bounds-range"],
     "broken-end-line-explicit-zero.md": ["out-of-bounds-range"],
     "broken-external-out-of-bounds-range.md": ["out-of-bounds-range"],

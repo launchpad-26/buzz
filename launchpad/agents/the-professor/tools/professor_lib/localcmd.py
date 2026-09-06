@@ -24,6 +24,7 @@ from collections import Counter
 from pathlib import Path
 
 import yaml
+from markdown_it import MarkdownIt
 
 REQUIRED_FRONTMATTER_FIELDS = ["title", "category", "author", "generated_by", "generated_at"]
 
@@ -32,15 +33,14 @@ FRONTMATTER_RE = re.compile(r"\A---\r?\n(.*?)\r?\n---\r?\n", re.DOTALL)
 SECTION_MARKER_RE = re.compile(
     r'^<!--\s*professor:section\s+sources="([^"]*)"\s+updated_by=\S+\s+updated_at=\S+\s*-->\s*$'
 )
-HEADING_RE = re.compile(r"^#+\s+.*$")
-
-# CommonMark recognizes both ``` and ~~~ as fence markers (step 6 of the
-# 2026-09-05 fix round -- the original FENCE_RE only matched backticks).
-# Matches a candidate fence marker line: leading whitespace, then a run of
-# 3+ backticks or 3+ tildes, then whatever follows (an info string for an
-# opener, or -- for a valid closer -- nothing but trailing whitespace,
-# checked by the caller via CommonMark's own closing-fence rule).
-FENCE_MARKER_RE = re.compile(r"^\s*(`{3,}|~{3,})(.*)$")
+# Structure detection (headings, fenced code) is delegated to markdown-it-py
+# (step 2 of the 2026-09-06 fix round) rather than hand-rolled regexes -- the
+# old ATX-only HEADING_RE never matched Setext headings (`Heading\n=====`),
+# silently skipping every claim in a Setext-only or headingless document.
+# A single shared parser instance: CommonMark, no plugins -- this pack's own
+# claim-tagging convention and provenance markers are HTML comments/plain
+# text, not CommonMark extensions, so the default rule set is what's needed.
+_MARKDOWN_PARSER = MarkdownIt("commonmark")
 
 SENTENCE_SPLIT_RE = re.compile(r"(?<=[.!?])\s+")
 
@@ -87,8 +87,14 @@ def _finding(rule: str, message: str, location: dict | None = None) -> dict:
 
 
 def _parse_frontmatter(content: str):
-    """Returns (frontmatter_dict, body, findings). frontmatter_dict is None if
-    missing/unparseable/missing a required field -- caller must short-circuit.
+    """Returns (frontmatter_dict, body, findings, frontmatter_line_count).
+    frontmatter_dict is None if missing/unparseable/missing a required field
+    -- caller must short-circuit. `frontmatter_line_count` is how many lines
+    of `content` the frontmatter block itself consumed (0 if there is none)
+    -- added back to every line number `_split_sections` reports for `body`,
+    so `check_page`'s locations become file-relative, matching
+    `screen-content`'s coordinate system (step 2 of the 2026-09-06 fix
+    round), instead of counting only from after the frontmatter.
     """
     match = FRONTMATTER_RE.match(content)
     if not match:
@@ -98,7 +104,9 @@ def _parse_frontmatter(content: str):
                 "no frontmatter block found at the start of the file",
                 location={"line": 1},
             )
-        ]
+        ], 0
+
+    frontmatter_line_count = content[: match.end()].count("\n")
 
     try:
         parsed = yaml.safe_load(match.group(1))
@@ -109,7 +117,7 @@ def _parse_frontmatter(content: str):
                 f"frontmatter block is not valid YAML: {exc}",
                 location={"line": 1},
             )
-        ]
+        ], frontmatter_line_count
 
     if not isinstance(parsed, dict):
         return None, content[match.end():], [
@@ -118,7 +126,7 @@ def _parse_frontmatter(content: str):
                 "frontmatter block did not parse to a mapping",
                 location={"line": 1},
             )
-        ]
+        ], frontmatter_line_count
 
     missing = [f for f in REQUIRED_FRONTMATTER_FIELDS if f not in parsed or parsed[f] in (None, "")]
     if missing:
@@ -128,9 +136,9 @@ def _parse_frontmatter(content: str):
                 f"frontmatter is missing required field(s): {', '.join(missing)}",
                 location={"line": 1},
             )
-        ]
+        ], frontmatter_line_count
 
-    return parsed, content[match.end():], []
+    return parsed, content[match.end():], [], frontmatter_line_count
 
 
 def _local_citation_exists(target: str, commit: str, path: str) -> tuple[bool | None, str | None]:
@@ -204,17 +212,34 @@ def _local_file_line_count(target: str, commit: str, path: str) -> int | None:
     return len(result.stdout.splitlines())
 
 
-def _fence_marker(line: str):
-    """Returns `(char, length, trailing)` if `line` looks like a fence marker
-    line, else `None`. `char` is `` ` `` or `~`, `length` is how many of that
-    character opened it, `trailing` is whatever follows the run (an info
-    string for an opener; must be blank for a valid closer).
+def _heading_ranges(text: str):
+    """Yield `(start_idx, end_idx)` 0-based, half-open line ranges for each
+    heading block found in `text`, in document order, via markdown-it-py's
+    `heading_open` token. Covers both ATX (`# Heading`, one line) and Setext
+    (`Heading\\n=====`, two lines) forms -- both produce the same token type,
+    closing the bug where the old ATX-only HEADING_RE silently skipped every
+    claim in a Setext-only or headingless document (step 2 of the 2026-09-06
+    fix round). `end_idx` is the line just after the heading's own line(s) --
+    i.e. where the section body starts.
+
+    Fence-aware for free: markdown-it-py already treats fenced code as
+    opaque, so a `#`-prefixed comment line inside a fenced block is never
+    misread as a heading (verified directly against this parser).
     """
-    match = FENCE_MARKER_RE.match(line)
-    if not match:
-        return None
-    run = match.group(1)
-    return run[0], len(run), match.group(2)
+    for token in _MARKDOWN_PARSER.parse(text):
+        if token.type == "heading_open" and token.map is not None:
+            yield token.map[0], token.map[1]
+
+
+def _fenced_line_ranges(text: str):
+    """Yield `(start_idx, end_idx)` 0-based, half-open line ranges covered by
+    each fenced (``` or ~~~) code block in `text`, via markdown-it-py's
+    `fence` token -- covers the fence marker lines themselves as well as the
+    content between them.
+    """
+    for token in _MARKDOWN_PARSER.parse(text):
+        if token.type == "fence" and token.map is not None:
+            yield token.map[0], token.map[1]
 
 
 def _strip_fenced_lines(text: str) -> str:
@@ -224,56 +249,34 @@ def _strip_fenced_lines(text: str) -> str:
     a missing citation, nor contributing an example citation to the
     section's marker-matching set (step 7 of the 2026-09-05 fix round).
 
-    Recomputes fence state from scratch over `text` (a single section's own
-    body), using the same fence-matching rule `_split_sections` uses (step
-    6): a closing fence must use the same character and be at least as long
-    as the opener. A section's text runs strictly between two headings, and
-    heading detection is itself fence-aware, so a real fence can never
-    straddle a section boundary -- recomputing per section is equivalent to,
-    and simpler than, carrying state over from the splitter.
+    Reparses `text` (a single section's own body) fresh with markdown-it-py.
+    A section's text runs strictly between two headings, and heading
+    detection is itself fence-aware, so a real fence can never straddle a
+    section boundary -- reparsing per section is equivalent to, and simpler
+    than, carrying fence state over from the splitter.
     """
     lines = text.splitlines()
-    kept = []
-    in_fence = False
-    fence_char = None
-    fence_len = 0
-    for line in lines:
-        marker = _fence_marker(line)
-        if in_fence:
-            if marker is not None:
-                char, length, trailing = marker
-                if char == fence_char and length >= fence_len and trailing.strip() == "":
-                    in_fence = False
-                    fence_char = None
-                    fence_len = 0
-            continue
-        if marker is not None:
-            fence_char, fence_len, _ = marker
-            in_fence = True
-            continue
-        kept.append(line)
+    fenced_indices = set()
+    for start, end in _fenced_line_ranges(text):
+        fenced_indices.update(range(start, end))
+    kept = [line for i, line in enumerate(lines) if i not in fenced_indices]
     return "\n".join(kept)
 
 
-def _split_sections(body: str):
+def _split_sections(body: str, line_offset: int = 0):
     """Yield (marker_line_or_None, heading_line_or_None, section_text,
     location) for each heading in `body`, in order, plus one leading entry
     for any text that precedes the first heading. `section_text` runs from
     just after the heading to just before the next heading (or end of body).
-    `location` is `{"line": <1-based, body-relative line number>}` -- the
-    section's own heading line, or line 1 for the preamble (step 3 of the
-    2026-09-06 fix round, giving every finding a `location` field matching
-    screen-content's own finding shape).
-
-    Fence-aware: a `#`-prefixed comment line inside a fenced (``` or ~~~)
-    code block is not a markdown heading, and must not be treated as one --
-    otherwise a Python/shell/etc. example containing a `#` comment mis-splits
-    the real section around it, orphaning its citations. Tracks the actual
-    marker character and length opened, per CommonMark's own closing-fence
-    rule (same character, length >= the opener's), so a shorter or
-    different-character marker nested inside an outer fence (e.g. a 4-
-    backtick block containing a 3-backtick example) doesn't prematurely
-    close it (step 6 of the 2026-09-05 fix round).
+    `location` is `{"line": <1-based, file-relative line number>}` -- the
+    section's own heading line, or line 1-plus-offset for the preamble.
+    `line_offset` is the number of lines consumed by the frontmatter block
+    that preceded `body` in the original file (0 if none) -- adding it here
+    means every location this function yields is already file-relative,
+    matching screen-content's own coordinate system, rather than counting
+    only from after the frontmatter (step 2 of the 2026-09-06 fix round,
+    closing the location-coordinate mismatch in the same step that fixes
+    heading detection, rather than as separate follow-up work).
 
     Any tagged claim text before the document's first heading used to fall
     into no section at all and was never checked (step 3 of the 2026-09-05
@@ -287,50 +290,38 @@ def _split_sections(body: str):
     an implicit unit that only the claim rule applies to is the smaller one.
     """
     lines = body.splitlines()
-    heading_indices = []
-    in_fence = False
-    fence_char = None
-    fence_len = 0
-    for i, line in enumerate(lines):
-        marker = _fence_marker(line)
-        if in_fence:
-            if marker is not None:
-                char, length, trailing = marker
-                if char == fence_char and length >= fence_len and trailing.strip() == "":
-                    in_fence = False
-                    fence_char = None
-                    fence_len = 0
-            continue
-        if marker is not None:
-            fence_char, fence_len, _ = marker
-            in_fence = True
-            continue
-        if HEADING_RE.match(line):
-            heading_indices.append(i)
+    headings = list(_heading_ranges(body))
 
-    if heading_indices and heading_indices[0] > 0:
-        preamble_text = "\n".join(lines[: heading_indices[0]])
+    # `preamble_end` is where the preamble stops: the first heading's own
+    # start line, or the end of the body if there are no headings at all. A
+    # document with zero headings used to fall through this check entirely
+    # (the old condition required at least one heading to exist before it
+    # would even look for a preamble), silently skipping every claim in a
+    # headingless document -- the second new fixture step 2 requires closes
+    # exactly this gap, not just the Setext-heading-detection one.
+    preamble_end = headings[0][0] if headings else len(lines)
+    if preamble_end > 0:
+        preamble_text = "\n".join(lines[:preamble_end])
         if preamble_text.strip():
-            # Body-relative, 1-based line 1 -- the preamble always starts at
-            # the body's own first line (step 3 of the 2026-09-06 fix round:
-            # every section gets a `location` a finding within it can carry).
-            yield None, None, preamble_text, {"line": 1}
+            # File-relative, 1-based -- the preamble always starts at the
+            # body's own first line, which is `line_offset` lines into the
+            # real file (step 2 of the 2026-09-06 fix round; step 3 of the
+            # prior round established every finding needs a `location`).
+            yield None, None, preamble_text, {"line": 1 + line_offset}
 
-    for pos, idx in enumerate(heading_indices):
-        heading_line = lines[idx]
+    for pos, (start_idx, end_idx) in enumerate(headings):
+        heading_line = lines[start_idx]
         marker_line = None
-        if idx > 0 and SECTION_MARKER_RE.match(lines[idx - 1].strip()):
-            marker_line = lines[idx - 1].strip()
+        if start_idx > 0 and SECTION_MARKER_RE.match(lines[start_idx - 1].strip()):
+            marker_line = lines[start_idx - 1].strip()
 
-        end = heading_indices[pos + 1] if pos + 1 < len(heading_indices) else len(lines)
-        section_text = "\n".join(lines[idx + 1 : end])
-        # Body-relative, 1-based line number of the section's own heading
-        # (step 3 of the 2026-09-06 fix round) -- cheap (already have `idx`)
-        # and locates the section a finding belongs to precisely enough; a
-        # per-sentence line number within the section would need re-deriving
-        # position through the sentence splitter, a larger change than this
-        # step calls for.
-        yield marker_line, heading_line, section_text, {"line": idx + 1}
+        section_end = headings[pos + 1][0] if pos + 1 < len(headings) else len(lines)
+        section_text = "\n".join(lines[end_idx:section_end])
+        # File-relative, 1-based line number of the section's own heading
+        # (step 2 of the 2026-09-06 fix round unifies this with
+        # screen-content's coordinate system; step 3 of the prior round
+        # established the field itself).
+        yield marker_line, heading_line, section_text, {"line": start_idx + 1 + line_offset}
 
 
 def _parse_citation_string(raw: str):
@@ -696,14 +687,16 @@ def check_page(file_path: str, target: str, pack_root: str) -> int:
         # structured-error shape.
         print(f"check-page: {file_path} is not valid UTF-8: {exc}", file=sys.stderr)
         return 1
-    _, body, frontmatter_findings = _parse_frontmatter(content)
+    _, body, frontmatter_findings, frontmatter_line_count = _parse_frontmatter(content)
 
     if frontmatter_findings:
         print(json.dumps({"findings": frontmatter_findings, "skipped": True}, indent=2))
         return 0
 
     findings = []
-    for marker_line, heading_line, section_text, location in _split_sections(body):
+    for marker_line, heading_line, section_text, location in _split_sections(
+        body, line_offset=frontmatter_line_count
+    ):
         findings.extend(
             _check_section(marker_line, heading_line, section_text, target, location)
         )
