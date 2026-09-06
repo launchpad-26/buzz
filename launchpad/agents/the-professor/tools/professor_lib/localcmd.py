@@ -815,8 +815,17 @@ CONNECTION_STRING_RE = re.compile(r"://[^\s:@/]+:[^\s@/]+@[^\s/]+")
 # demonstrated evasion -- `\b` treats `_` as a word character, so neither
 # `DB_PASSWORD=hunter2` nor `db_password: hunter2` ever produced a `\b`
 # boundary immediately before "password" at all, and silently never matched.
+# A JSON Schema definition (`{"password": {"type": "string"}}`) used to
+# false-positive: the optional-quote tolerance above lets a bare `{` open the
+# matched "value" (`{"type":`), even though a credential value is always a
+# scalar (string/number), never a nested object/array opener (step 8 of the
+# 2026-09-06 fix round). The negative lookahead below refuses to let the
+# value start with `{` or `[` -- the plain unquoted case, the underscore-
+# separated case, and a genuinely quoted scalar value all still match
+# exactly as before, since none of them ever has `{`/`[` as the first
+# character after the separator.
 PASSWORD_LITERAL_RE = re.compile(
-    r'(?<![A-Za-z0-9])(?:password|passwd|pwd)\s*"?\s*[:=]\s*"?\S+', re.IGNORECASE
+    r'(?<![A-Za-z0-9])(?:password|passwd|pwd)\s*"?\s*[:=]\s*"?(?![{\[])\S+', re.IGNORECASE
 )
 
 WEBHOOK_URL_RE = re.compile(
