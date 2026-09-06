@@ -17,10 +17,6 @@ evidence:
     entry_class: FACT
     evidence:
       - "docs/remote-agents.md:1-24"
-  - statement: "The provider protocol is one process per operation: the desktop writes one JSON request object to the provider's stdin and reads one JSON response object from its stdout, with a non-zero exit code treated as failure regardless of stdout content."
-    entry_class: FACT
-    evidence:
-      - "docs/remote-agents.md:361-377"
   - statement: "crates/buzz-backend-kubernetes/src/wire.rs types the stdin/stdout contract: a `Request` enum tagged on `op` with `Info` and `Deploy` variants, and a flat, untagged `Response` enum (`Info`/`Deploy`/`Error`) so the desktop can read `ok`/`error`/`agent_id` off the top level."
     entry_class: FACT
     evidence:
@@ -77,6 +73,8 @@ evidence:
 relationships:
   - type: part-of
     target: capabilities-agents-agent
+  - type: references
+    target: layers-compute-backend-provider
 ---
 
 # Backend provider: capability
@@ -167,6 +165,11 @@ This node does not describe:
 
 ## Relationships
 
+- references: `layers-compute-backend-provider` — owns the provider protocol
+  mechanics (the `info`/`deploy` operations, one process per operation over
+  stdin/stdout JSON, and why a non-zero exit wins over parseable stdout).
+  This node states only that such a pluggable contract exists and defers the
+  mechanics to that node rather than restating them.
 - references: `architecture-containers-agent-runtime` — the `buzz-acp` /
   `buzz-agent` / `buzz-dev-mcp` harness composition this capability launches
   onto a remote substrate. The harness's own conversational and connection
@@ -189,6 +192,7 @@ node's cited revision.
 
 | Not covered here | Owned by |
 |---|---|
+| The provider protocol's mechanics (one process per operation, stdin/stdout JSON, non-zero exit wins) | `layers-compute-backend-provider` |
 | The provider protocol's full normative detail (invariants I1-I5, the deploy reconciliation state machine, the Kubernetes binding's pod/secret/GC shape) | `docs/remote-agents.md` |
 | The relay's own Kubernetes deployment | `architecture-deployment-kubernetes` |
 | The step-by-step deploy flow | a future flow-shaped node (not yet drafted) |
