@@ -316,4 +316,4 @@ rename among these variables (`BUZZ_ACP_PRIVATE_KEY` → `BUZZ_PRIVATE_KEY`).
   checkout) handles `BUZZ_PRIVATE_KEY` the same way `buzz-backend-kubernetes`
   does.** Out of reach of this checkout; not claimed either way.
 
-Back to the corpus root: [`launchpad/docs/corpus/README.md`](../../../README.md).
+Back to the corpus root: [`launchpad/docs/corpus/README.md`](../../README.md).
