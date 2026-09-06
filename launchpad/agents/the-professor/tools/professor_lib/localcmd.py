@@ -965,10 +965,53 @@ def _high_entropy_tokens_near_keywords(content: str):
     if not keyword_spans:
         return
     for candidate in OPAQUE_STRING_RE.finditer(content):
-        token = candidate.group(0)
-        if _shannon_entropy(token) < HIGH_ENTROPY_THRESHOLD:
-            continue
         candidate_span = candidate.span()
+
+        # A keyword can appear INSIDE the very identifier being scored (e.g.
+        # `public_key_fingerprint_sha256`) rather than as a separate, merely
+        # adjacent token (`API_KEY=<token>`, where "=" keeps the two as
+        # distinct OPAQUE_STRING_RE matches entirely) -- step 7 of the
+        # 2026-09-06 fix round. The two are structurally different: in the
+        # first case, the keyword's own match IS part of the candidate span
+        # being scored, so the keyword can inflate its own surrounding
+        # identifier's entropy score into a false positive
+        # (`public_key_fingerprint_sha256` alone measures ~4.25 bits/char,
+        # above HIGH_ENTROPY_THRESHOLD, purely from the "key" it contains).
+        #
+        # Fix: when a keyword match is fully contained within this
+        # candidate's own span, exclude it from what gets scored -- not by
+        # splicing the flanking text back together (which just reintroduces
+        # the same inflation from a different angle: e.g. stripping only
+        # "key" from "public_key_fingerprint_sha256" still leaves ~4.10), but
+        # by scoring the un-merged flanking fragments independently, each
+        # still required to meet OPAQUE_STRING_RE's own >=20-character
+        # floor to count as a real candidate at all. That floor is exactly
+        # why "public_key_fingerprint_sha256" (candidate = 30 chars) no
+        # longer flags: split around "key", the two fragments are "public_"
+        # (7 chars) and "_fingerprint_sha256" (19 chars) -- neither reaches
+        # 20 on its own.
+        embedded_keywords = [
+            kw for kw in keyword_spans
+            if kw[0] >= candidate_span[0] and kw[1] <= candidate_span[1]
+        ]
+        if embedded_keywords:
+            fragments = []
+            cursor = candidate_span[0]
+            for kw_start, kw_end in sorted(embedded_keywords):
+                if kw_start > cursor:
+                    fragments.append(content[cursor:kw_start])
+                cursor = kw_end
+            if cursor < candidate_span[1]:
+                fragments.append(content[cursor:candidate_span[1]])
+            if not any(
+                len(fragment) >= 20 and _shannon_entropy(fragment) >= HIGH_ENTROPY_THRESHOLD
+                for fragment in fragments
+            ):
+                continue
+        else:
+            if _shannon_entropy(candidate.group(0)) < HIGH_ENTROPY_THRESHOLD:
+                continue
+
         for keyword_span in keyword_spans:
             if _spans_within_window(keyword_span, candidate_span, HIGH_ENTROPY_WINDOW_CHARS):
                 yield candidate
