@@ -111,10 +111,27 @@ def _parse_frontmatter(content: str):
     try:
         parsed = yaml.safe_load(match.group(1))
     except yaml.YAMLError as exc:
+        # PyYAML's own exception text (and its `problem_mark`'s own __str__)
+        # echoes back the offending source line verbatim -- e.g. a fake
+        # frontmatter value like `title: [FakeReviewPassword@example.com`
+        # reproduced whole in the "not valid YAML" message (step 9 of the
+        # 2026-09-06 fix round). Neither `exc` nor `problem_mark` is
+        # embedded here; only the LINE NUMBER is pulled out of
+        # `problem_mark`, since that is a plain integer with no content of
+        # its own to leak.
+        problem_mark = getattr(exc, "problem_mark", None)
+        line_hint = (
+            f" (line {problem_mark.line + 1} of the frontmatter block)"
+            if problem_mark is not None
+            else ""
+        )
         return None, content[match.end():], [
             _finding(
                 "frontmatter",
-                f"frontmatter block is not valid YAML: {exc}",
+                f"frontmatter block is not valid YAML{line_hint} -- rule "
+                "name and location only, the parser's own exception text is "
+                "never reproduced here, since it echoes back the offending "
+                "source line",
                 location={"line": 1},
             )
         ], frontmatter_line_count
