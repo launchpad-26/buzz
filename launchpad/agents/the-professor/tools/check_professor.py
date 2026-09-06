@@ -130,6 +130,7 @@ CHECK_PAGE_EXPECTED_RULES = {
     "compliant-range-at-end.md": [],
     "broken-nonexistent-citation.md": ["citation-not-found"],
     "broken-missing-citation.md": ["missing-citation"],
+    "broken-unparseable-citation.md": ["missing-citation"],
     "broken-preamble-uncited-claim.md": ["missing-citation"],
     "broken-setext-only-heading.md": ["missing-citation"],
     "broken-no-headings-at-all.md": ["missing-citation"],
@@ -475,6 +476,16 @@ def check_citation_check_error_on_api_failure() -> str | None:
                 "check-page(compliant-external.md, decoy 403 gh): a rate-limit-"
                 f"shaped API failure was misreported as citation-not-found: {rules!r}"
             )
+        raw_citation = "block/buzz:Cargo.toml@f038cbbb0d4092a72ffd93f17916f84d2b39bb43"
+        for finding in report.get("findings", []):
+            if finding.get("rule") == "citation-check-error" and raw_citation in finding.get(
+                "message", ""
+            ):
+                return (
+                    "check-page(compliant-external.md, decoy 403 gh): "
+                    "citation-check-error message quotes the raw citation "
+                    f"string verbatim: {finding['message']!r}"
+                )
         if "citation-check-error" not in rules:
             return (
                 "check-page(compliant-external.md, decoy 403 gh): expected a "
@@ -963,6 +974,84 @@ def check_password_literal_three_shapes() -> str | None:
     return None
 
 
+# For each fixture, the exact substrings its check-page findings' messages
+# must never contain: the flagged sentence's own raw prose (minus its inline
+# tag), and/or the raw citation string as literally typed in the fixture's
+# `(behaviour: ...)` tag (step 5 of the 2026-09-06 fix round). This is a
+# regression check on the prior round's own "never quote flagged content"
+# fix (406b87c10/ddbcdc2e2) -- it does not re-derive the forbidden text from
+# the fixture file at runtime, since the point is to assert the LITERAL
+# strings the adjudication named, not whatever the fixture happens to say
+# today.
+MESSAGE_LEAK_FORBIDDEN_SUBSTRINGS = {
+    # missing-citation (the "(behaviour: none)" branch)
+    "broken-missing-citation.md": [
+        "resolve_pin` always retries a rate-limited call up to three times before giving up",
+    ],
+    # missing-citation (the unparseable-citation branch specifically)
+    "broken-unparseable-citation.md": [
+        "resolve_pin` always retries a rate-limited call up to three times before giving up",
+        "this is not a citation at all",
+    ],
+    # mixed-claim
+    "broken-mixed-claim.md": [
+        "This retry logic should really be replaced with exponential backoff",
+        "launchpad/agents/the-professor/tools/server.py@c552723895f5bfbf399db7e3135a22026597e70a#L144-L201",
+    ],
+    # citation-not-found
+    "broken-nonexistent-citation.md": [
+        "launchpad/agents/the-professor/tools/this-file-does-not-exist.py@c552723895f5bfbf399db7e3135a22026597e70a",
+    ],
+    # out-of-bounds-range (local)
+    "broken-out-of-bounds-range.md": [
+        "launchpad/agents/the-professor/tools/server.py@c552723895f5bfbf399db7e3135a22026597e70a#L520-L522",
+    ],
+    # citation-range-not-evaluated (external)
+    "external-citation-range-not-evaluated.md": [
+        "block/buzz:Cargo.toml@f038cbbb0d4092a72ffd93f17916f84d2b39bb43#L1-L5",
+    ],
+}
+
+
+def check_page_messages_never_leak_raw_content() -> str | None:
+    """check-page's messages must never contain the flagged sentence's raw
+    text or the raw citation string, across every fixture that exercises one
+    of these message-construction paths: missing-citation, mixed-claim,
+    citation-not-found, out-of-bounds-range, and citation-range-not-
+    evaluated (this function), plus citation-check-error (asserted inside
+    `check_citation_check_error_on_api_failure`, which already runs
+    compliant-external.md through a decoy `gh` and has the report in hand).
+    `broken-unparseable-citation.md` is a new fixture (step 5 of the
+    2026-09-06 fix round): no existing fixture exercised
+    `_parse_citation_string` returning `None` for a citation that is present
+    but doesn't parse, as opposed to `(behaviour: none)`'s "no citation at
+    all" branch -- both share the "missing-citation" rule label but are two
+    distinct call sites in `_check_section`.
+    """
+    for fixture_name, forbidden_substrings in MESSAGE_LEAK_FORBIDDEN_SUBSTRINGS.items():
+        fixture_path = FIXTURES_DIR / fixture_name
+        result = _run_professor(
+            ["check-page", str(fixture_path), "--target", str(REPO_ROOT)], pack_root=str(PACK_ROOT)
+        )
+        if result.returncode != 0:
+            return f"check-page({fixture_name}) failed: {result.stderr}"
+        try:
+            report = json.loads(result.stdout)
+        except json.JSONDecodeError:
+            return f"check-page({fixture_name}) did not print valid JSON: {result.stdout!r}"
+        findings = report.get("findings", [])
+        if not findings:
+            return f"check-page({fixture_name}): expected at least one finding, got none"
+        all_messages = " ".join(f.get("message", "") for f in findings)
+        for forbidden in forbidden_substrings:
+            if forbidden in all_messages:
+                return (
+                    f"check-page({fixture_name}): a message leaked forbidden raw "
+                    f"content {forbidden!r} -- findings: {findings!r}"
+                )
+    return None
+
+
 def main() -> int:
     checks = [
         ("pack-root unset fails loud (all four subcommands)", check_pack_root_unset_fails_loud),
@@ -1089,6 +1178,16 @@ def main() -> int:
         print(f"FAIL [password-literal three shapes]: {error}")
         return 1
     print("ok: PASSWORD_LITERAL_RE fires on all three shapes (unquoted, JSON-quoted, underscore-separated)")
+
+    error = check_page_messages_never_leak_raw_content()
+    if error:
+        print(f"FAIL [check-page messages never leak raw content]: {error}")
+        return 1
+    print(
+        "ok: check-page messages never leak the flagged sentence's raw text or the "
+        "raw citation string (missing-citation, unparseable-citation, mixed-claim, "
+        "citation-not-found, out-of-bounds-range, citation-range-not-evaluated)"
+    )
 
     print("ALL CHECKS PASSED")
     return 0
