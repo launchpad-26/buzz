@@ -715,7 +715,18 @@ API_KEY_PATTERNS = [
 PRIVATE_KEY_RE = re.compile(r"-----BEGIN [A-Z0-9 ]*PRIVATE KEY-----")
 
 CONNECTION_STRING_RE = re.compile(r"://[^\s:@/]+:[^\s@/]+@[^\s/]+")
-PASSWORD_LITERAL_RE = re.compile(r"\b(?:password|passwd|pwd)\s*[:=]\s*\S+", re.IGNORECASE)
+
+# A JSON-shaped `"password": "value"` used to never match: the closing quote
+# after the keyword (`password"`) and the opening quote before the value
+# (`: "value"`) both sat between the keyword and its separator, or between
+# the separator and the value, and the old pattern had no room for either
+# (step 3(b) of the 2026-09-06 fix round). An optional quote is now tolerated
+# in both of those positions; the plain, unquoted literal-password shape
+# (`password: value`) still matches exactly as before since both quotes are
+# optional.
+PASSWORD_LITERAL_RE = re.compile(
+    r'\b(?:password|passwd|pwd)\s*"?\s*[:=]\s*"?\S+', re.IGNORECASE
+)
 
 WEBHOOK_URL_RE = re.compile(
     r"https?://[^\s]*(?:hook|webhook)[^\s]*/[A-Za-z0-9_/-]{10,}", re.IGNORECASE
@@ -741,12 +752,23 @@ URL_AUTH_QUERY_PARAM_RE = re.compile(r"[?&](?:token|key|secret|auth)=([^&\s]+)",
 # sensitive-patterns.md's "[pattern] API keys / access tokens" category has a
 # second clause beyond the fixed-prefix table above: "a high-entropy opaque
 # string adjacent to words like key/token/secret" (2026-09-05 fix round, step
-# 1). The keyword must appear as its own word -- \b-bounded on both sides --
-# never merely as a substring inside the candidate token itself, or an
-# ordinary identifier like API_KEY or access_token would false-positive on
-# its own name every time (no separator between the keyword and the rest of
-# the identifier means no real word boundary there).
-HIGH_ENTROPY_KEYWORD_RE = re.compile(r"\b(?:key|token|secret|password)\b", re.IGNORECASE)
+# 1). A plain `\b`-bounded version of this (an earlier round's own choice)
+# was a real, demonstrated evasion: `\b` treats `_` as a word character, so
+# neither side of the keyword in `API_KEY=<random>` or
+# `access_token=<random>` is ever a `\b` boundary at all -- the two most
+# common real-world shapes for exactly this category never matched (step
+# 3(a) of the 2026-09-06 fix round). The lookaround below uses
+# `[A-Za-z0-9]` rather than `\w`, deliberately excluding `_` from what counts
+# as "still part of the same word" -- so a boundary is satisfied by a true
+# non-word character (space, punctuation, start/end of string, matching the
+# old intent for a standalone "key") OR by an adjacent underscore (matching
+# `API_KEY`, `access_token`, `secret_key`). An ordinary word like `keyword`
+# or `tokenizer` still does not match: the character immediately after
+# `key`/`token` there is an ordinary letter, not `_` and not a non-word
+# character, so the lookahead fails exactly as it did before.
+HIGH_ENTROPY_KEYWORD_RE = re.compile(
+    r"(?<![A-Za-z0-9])(?:key|token|secret|password)(?![A-Za-z0-9])", re.IGNORECASE
+)
 
 # A candidate opaque string: 20+ run of letters/digits/underscore/hyphen.
 # Real secrets in the wild (API tokens, generated passwords) are usually
