@@ -449,7 +449,12 @@ def _check_section(marker_line, heading_line, section_text, target: str, locatio
                 _finding(
                     "mixed-claim",
                     f"section {heading_name!r} has a sentence reading as both a "
-                    f"behaviour claim and an opinion claim: {sentence.strip()!r}",
+                    "behaviour claim and an opinion claim -- rule name and "
+                    "location only, the flagged sentence's own text is never "
+                    "quoted back here (step 5 of the 2026-09-06 fix round: "
+                    "check-page's own messages are an unscreened disclosure "
+                    "path, since draft-page runs check-page before "
+                    "screen-content)",
                     location=location,
                 )
             )
@@ -470,7 +475,9 @@ def _check_section(marker_line, heading_line, section_text, target: str, locatio
                     _finding(
                         "missing-citation",
                         f"section {heading_name!r} has a behaviour claim with no "
-                        f"citation at all: {sentence.strip()!r}",
+                        "citation at all -- rule name and location only, the "
+                        "flagged sentence's own text is never quoted back here "
+                        "(step 5 of the 2026-09-06 fix round)",
                         location=location,
                     )
                 )
