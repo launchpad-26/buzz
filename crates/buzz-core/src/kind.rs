@@ -83,7 +83,9 @@ pub const KIND_NOSTR_IDENTITY_BINDING: u32 = 24243;
 pub const KIND_HTTP_AUTH: u32 = 27235;
 
 // NEW: Buzz command kinds (Pure Nostr plan)
-/// Agent metadata + owner reference (replaceable, agent-authored).
+/// Agent metadata (replaceable, agent-authored). Carries the agent's own
+/// settings such as `channel_add_policy`; ownership is declared separately
+/// via a NIP-OA `auth` tag on the agent's kind:0 metadata event.
 pub const KIND_AGENT_PROFILE: u32 = 10100;
 
 /// NIP-AE: Agent Engram (parameterized replaceable, agent-authored).
