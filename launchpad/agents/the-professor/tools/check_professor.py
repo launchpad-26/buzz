@@ -838,6 +838,23 @@ def check_screen_content_fixtures() -> str | None:
                 f"{expected_categories!r}, got {actual_categories!r}"
             )
 
+        # `match` must be `null` for EVERY finding, regardless of disposition
+        # (step 4 of the 2026-09-06 fix round) -- an earlier round suppressed
+        # it only for `block`, on the theory that only `block` findings
+        # needed it, but a second independent review found the ordinary
+        # `redact` case still printed the exact matched text. This sweeps
+        # every fixture's every finding, not just one hand-picked case, since
+        # `_screen_finding` is the single call site every category goes
+        # through and a regression there would affect all of them at once.
+        for finding in findings:
+            if finding.get("match") is not None:
+                return (
+                    f"screen-content({fixture_name}): finding {finding!r} "
+                    "leaked its matched span via a non-null 'match' field -- "
+                    "every finding must report location and category only, "
+                    "never the flagged content itself"
+                )
+
         if not expected_by_category:
             continue
 
