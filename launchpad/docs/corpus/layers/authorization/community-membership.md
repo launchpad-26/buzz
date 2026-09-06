@@ -52,12 +52,10 @@ evidence:
     entry_class: FACT
     evidence:
       - "launchpad/docs/corpus/AGENTS.md"
-  - statement: "Community membership admission (whether a pubkey is in `relay_members`/`channel_members` at all, enforced by `check_relay_membership`/`enforce_relay_membership`) and community-member authorization (what a member with a given role may do, decided by `authorize_moderation_action` and `git_perms::evaluate_ref_update`) are two distinct concerns handled by two disjoint code paths with no shared decision function between them, so they warrant two separate corpus nodes rather than one that conflates admission and permission."
+  - statement: "This node covers only community-member authorization — what an already-admitted pubkey with a given role may do; the admission/authorization boundary claim itself is owned by `layers/tenancy/community-membership.md`, which this node references rather than restates."
     entry_class: INFERENCE
     evidence:
-      - "crates/buzz-relay/src/api/mod.rs"
-      - "crates/buzz-relay/src/handlers/moderation_authz.rs"
-      - "crates/buzz-core/src/git_perms.rs"
+      - "launchpad/docs/corpus/layers/tenancy/community-membership.md"
     confidence: 0.85
   - statement: "This node must draw a clear boundary against the sibling task #1184 (`layers/tenancy/community-membership.md`), so that the two documents — one on tenancy admission, one on authorization — do not collide in meaning; this follows from the admission/authorization split being handled by disjoint code paths, not from any explicit instruction in issue #1034's own body text."
     entry_class: INFERENCE
@@ -66,6 +64,9 @@ evidence:
       - "crates/buzz-relay/src/handlers/moderation_authz.rs"
       - "crates/buzz-core/src/git_perms.rs"
     confidence: 0.8
+relationships:
+  - type: references
+    target: layers-tenancy-community-membership
 ---
 
 # Community membership authorization
@@ -78,8 +79,8 @@ that pubkey's membership has been established. It answers a narrower
 question than "is this actor a member of the community at all" — that
 narrower, prior question is **tenancy admission**, and it is a different
 concept, covered by the sibling corpus node at
-`layers/tenancy/community-membership.md` (task #1184, not yet written at
-this node's recorded revision — see *Scope and omissions*).
+`layers/tenancy/community-membership.md` (task #1184, shipped alongside this
+node; a `references` edge to it is declared in this node's frontmatter).
 
 The two questions are answered by different code paths in Buzz today.
 Admission is decided once, at the front door, by
@@ -173,9 +174,10 @@ exhaustively (their full rule sets belong to their own reference-shaped
 documentation, not a concept node), and it does not cover:
 
 - **Tenancy admission** — whether a pubkey is a community member at all.
-  Owned by task #1184's `layers/tenancy/community-membership.md`. That file
-  does not exist on `origin/launchpad` at this node's recorded revision, so
-  no `relationships` edge is declared to it here; add one once it merges.
+  Owned by task #1184's `layers/tenancy/community-membership.md`, which
+  ships alongside this node and is linked via the `references` edge in this
+  node's frontmatter. That node also owns the admission/authorization
+  boundary claim; this node defers to it rather than restating it.
 - **The join/invite flow** that creates a `relay_members`/`channel_members`
   row in the first place (`buzz-db/src/relay_members.rs`'s
   `claim_relay_membership`, `has_join_policy_acceptance`, and the invite API)

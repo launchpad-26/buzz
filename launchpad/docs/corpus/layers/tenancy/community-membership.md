@@ -64,10 +64,11 @@ evidence:
     entry_class: FACT
     evidence:
       - "launchpad/docs/corpus/AGENTS.md"
-  - statement: "`launchpad/docs/corpus/layers/authorization/community-membership.md` (task #1034, PR #1799) does not exist in this worktree's `launchpad/docs/corpus` tree at this node's recorded revision — confirmed by running `find launchpad/docs/corpus -type f` in this worktree, which lists no `layers/` directory at all — so no `relationships` edge is declared to it here."
+  - statement: "`launchpad/docs/corpus/layers/authorization/community-membership.md` (task #1034, PR #1799) does not exist in this worktree's `launchpad/docs/corpus` tree at this node's recorded revision — confirmed by running `find launchpad/docs/corpus -type f` in this worktree, which lists no `layers/` directory at all — at the time this node was first drafted. Both nodes now ship in the same change, so a `references` edge to it is declared in this node's frontmatter."
     entry_class: FACT
     evidence:
       - "find('launchpad/docs/corpus', type='f') -> no layers/ path listed, run in this worktree at 338b4d0cf2dd76cc43964bb717ce9f0a94a9c7a5"
+      - "launchpad/docs/corpus/layers/authorization/community-membership.md"
   - statement: "`authorize_moderation_action`'s module doc comment (`crates/buzz-relay/src/handlers/moderation_authz.rs`) states its checks read the actor's role from `relay_members`/`channel_members` 'under tenant.community() only,' and that 'callers must have already resolved target inside the same tenant' — i.e. the authorization seam presupposes admission has already happened and does not itself decide it. `git_perms::default_min_role`/`evaluate_ref_update` (`crates/buzz-core/src/git_perms.rs`) likewise take a caller's already-resolved `MemberRole` as input rather than deciding whether that caller is a community member at all."
     entry_class: FACT
     evidence:
@@ -87,6 +88,9 @@ evidence:
       - "https://github.com/launchpad-26/buzz/issues/1184"
       - "https://github.com/launchpad-26/buzz/issues/1034"
     confidence: 0.75
+relationships:
+  - type: references
+    target: layers-authorization-community-membership
 ---
 
 # Community membership tenancy
@@ -99,8 +103,8 @@ admitted to a Buzz community *at all* — whether a row for that
 strictly prior, narrower question than "what is this pubkey allowed to do,"
 which is a different concept: **community membership authorization**,
 covered by the sibling corpus node at
-`layers/authorization/community-membership.md` (task #1034, not merged as of
-this node's recorded revision — see *Scope and omissions*). This node's
+`layers/authorization/community-membership.md` (task #1034, shipped alongside
+this node; a `references` edge to it is declared in this node's frontmatter). This node's
 subject ends the moment a row exists or is removed; it does not cover which
 capabilities that row's `role` value grants.
 
@@ -229,10 +233,10 @@ contract, and it does not cover:
 - **Community membership authorization** — what an already-admitted
   pubkey's role permits it to do (`authorize_moderation_action`,
   `git_perms::evaluate_ref_update`, the `MemberRole` hierarchy). Owned by
-  task #1034's `layers/authorization/community-membership.md`. That file
-  does not exist in `launchpad/docs/corpus` on `origin/launchpad` at this
-  node's recorded revision (PR #1799 is open, not merged), so no
-  `relationships` edge is declared to it here; add one once it merges.
+  task #1034's `layers/authorization/community-membership.md`, which ships
+  alongside this node and is linked via the `references` edge in this
+  node's frontmatter. This node owns the admission/authorization boundary
+  claim; the authorization node defers to it rather than restating it.
 - **Channel-level membership** (`channel_members`, `get_member_role`,
   `is_member` in `crates/buzz-db/src/store/channel_members.rs`, and the kind:9001/9022
   channel join/leave/kick flows in
