@@ -163,6 +163,9 @@ SCREEN_CONTENT_EXPECTED = {
     "clean.md": {"disposition_by_category": {}},
     "block-api-key.md": {"disposition_by_category": {"api-key-token": "block"}},
     "block-high-entropy-token.md": {"disposition_by_category": {"api-key-token": "block"}},
+    "block-high-entropy-token-underscore-boundary.md": {
+        "disposition_by_category": {"api-key-token": "block"}
+    },
     "block-private-key.md": {"disposition_by_category": {"private-key": "block"}},
     "block-connection-string.md": {"disposition_by_category": {"connection-string": "block"}},
     "block-password-literal.md": {"disposition_by_category": {"connection-string": "block"}},
