@@ -172,22 +172,40 @@ def _local_citation_exists(target: str, commit: str, path: str) -> tuple[bool | 
         timeout=15,
     )
     if commit_check.returncode != 0:
+        # Neither git's own stderr text NOR the citation's own `commit`/
+        # `path` values are reproduced in the returned message below (step
+        # 6(c) of the 2026-09-06 fix round) -- they are only inspected here,
+        # internally, to classify which of the three failure modes occurred.
+        # git's own error text can echo back the queried path/commit
+        # verbatim (e.g. "fatal: Not a valid object name <sha>"), and the
+        # citation's own path/commit are themselves document content that
+        # could be secret-shaped -- both are exactly the disclosure channel
+        # this tool's own messages elsewhere already avoid for flagged
+        # sentence/citation text, so the same principle applies here.
+        # `target` (the --target flag's own value, an operator-supplied
+        # argument rather than draft content) is still named, since it is
+        # useful, lower-risk operational context.
         stderr = commit_check.stderr.strip()
         if "cannot change to" in stderr:
             return None, (
-                f"_local_citation_exists({target!r}, {commit!r}, {path!r}): "
-                f"--target does not exist as a directory: {stderr}"
+                f"_local_citation_exists(target={target!r}): --target does "
+                "not exist as a directory. Neither git's own error output "
+                "nor the queried commit/path are reproduced here, since "
+                "either can be secret-shaped document content."
             )
         if "not a git repository" in stderr:
             return None, (
-                f"_local_citation_exists({target!r}, {commit!r}, {path!r}): "
-                f"--target is not a git repository: {stderr}"
+                f"_local_citation_exists(target={target!r}): --target is "
+                "not a git repository. Neither git's own error output nor "
+                "the queried commit/path are reproduced here, for the same "
+                "reason."
             )
         return None, (
-            f"_local_citation_exists({target!r}, {commit!r}, {path!r}): commit "
-            "could not be confirmed present in --target's local history "
-            "(a shallow clone can be missing a commit that is real "
-            f"upstream): {stderr}"
+            f"_local_citation_exists(target={target!r}): commit could not "
+            "be confirmed present in --target's local history (a shallow "
+            "clone can be missing a commit that is real upstream). Neither "
+            "git's own error output nor the queried commit/path are "
+            "reproduced here, for the same reason."
         )
 
     result = subprocess.run(
@@ -448,15 +466,23 @@ def _check_section(marker_line, heading_line, section_text, target: str, locatio
         # The implicit preamble unit (step 3): no heading exists for a
         # marker to sit "directly above", so the marker requirement simply
         # doesn't apply here -- only the claim rule below does.
-        heading_name = "(preamble, before first heading)"
+        #
+        # `heading_ref` (not the heading's own raw text) is what every
+        # message below names -- a heading is document content and can be
+        # secret-shaped, exactly like the flagged sentence/citation text
+        # this function already never quotes (step 6(a) of the 2026-09-06
+        # fix round: the prior round's fix reached those two, not this one).
+        # `location` already pinpoints which line the finding is about, so
+        # nothing actionable is lost by not also quoting the heading itself.
+        heading_ref = "the preamble (before the first heading)"
         marker_sources_attr = None
     else:
-        heading_name = heading_line.strip()
+        heading_ref = "this section's heading"
         if marker_line is None:
             findings.append(
                 _finding(
                     "missing-provenance-marker",
-                    f"section {heading_name!r} has no provenance marker directly above its heading",
+                    f"{heading_ref} has no provenance marker directly above it",
                     location=location,
                 )
             )
@@ -475,7 +501,7 @@ def _check_section(marker_line, heading_line, section_text, target: str, locatio
             findings.append(
                 _finding(
                     "mixed-claim",
-                    f"section {heading_name!r} has a sentence reading as both a "
+                    f"{heading_ref} has a sentence reading as both a "
                     "behaviour claim and an opinion claim -- rule name and "
                     "location only, the flagged sentence's own text is never "
                     "quoted back here (step 5 of the 2026-09-06 fix round: "
@@ -501,7 +527,7 @@ def _check_section(marker_line, heading_line, section_text, target: str, locatio
                 findings.append(
                     _finding(
                         "missing-citation",
-                        f"section {heading_name!r} has a behaviour claim with no "
+                        f"{heading_ref} has a behaviour claim with no "
                         "citation at all -- rule name and location only, the "
                         "flagged sentence's own text is never quoted back here "
                         "(step 5 of the 2026-09-06 fix round)",
@@ -515,7 +541,7 @@ def _check_section(marker_line, heading_line, section_text, target: str, locatio
                 findings.append(
                     _finding(
                         "missing-citation",
-                        f"section {heading_name!r} has a behaviour claim with an "
+                        f"{heading_ref} has a behaviour claim with an "
                         "unparseable citation -- rule name and location only, the "
                         "citation string as typed is never quoted back here "
                         "(follow-up to step 5 of the 2026-09-06 fix round)",
@@ -542,12 +568,24 @@ def _check_section(marker_line, heading_line, section_text, target: str, locatio
                 # NOT the same outcome as a confirmed 404 -- collapsing them
                 # would silently misreport a transient API failure as a real
                 # documentation defect. Surface it as its own outcome instead.
+                # Deliberately does NOT call `_citation_ref(citation)` here,
+                # unlike every other citation-related finding below (step
+                # 6(c) of the 2026-09-06 fix round): those other rules
+                # (citation-not-found, out-of-bounds-range, citation-range-
+                # not-evaluated) only ever fire once a citation has already
+                # been confirmed to resolve, so echoing its path/sha back
+                # structurally is reporting an established fact about the
+                # target's own real history. `citation-check-error` is the
+                # opposite case -- the check never completed, so nothing
+                # about this citation's path/sha has been confirmed genuine
+                # at all, and it is still raw, unverified document content
+                # that could be secret-shaped. Reporting rule name and
+                # location only, same as `error_message` itself now does.
                 findings.append(
                     _finding(
                         "citation-check-error",
-                        f"section {heading_name!r} cites a citation "
-                        f"({_citation_ref(citation)}) that could not be verified "
-                        f"-- {error_message}",
+                        f"{heading_ref} cites a citation that could not be "
+                        f"verified -- {error_message}",
                         location=location,
                     )
                 )
@@ -557,7 +595,7 @@ def _check_section(marker_line, heading_line, section_text, target: str, locatio
                 findings.append(
                     _finding(
                         "citation-not-found",
-                        f"section {heading_name!r} cites a citation "
+                        f"{heading_ref} cites a citation "
                         f"({_citation_ref(citation)}) that does not exist at "
                         "that commit",
                         location=location,
@@ -584,7 +622,7 @@ def _check_section(marker_line, heading_line, section_text, target: str, locatio
                         findings.append(
                             _finding(
                                 "out-of-bounds-range",
-                                f"section {heading_name!r} cites a line range "
+                                f"{heading_ref} cites a line range "
                                 f"({_citation_ref(citation)}) out of bounds for a "
                                 f"file of {total_lines} lines",
                                 location=location,
@@ -619,7 +657,7 @@ def _check_section(marker_line, heading_line, section_text, target: str, locatio
                         findings.append(
                             _finding(
                                 "out-of-bounds-range",
-                                f"section {heading_name!r} cites a line range "
+                                f"{heading_ref} cites a line range "
                                 f"({_citation_ref(citation)}) that is structurally "
                                 "invalid regardless of the cited file's actual "
                                 "contents",
@@ -630,7 +668,7 @@ def _check_section(marker_line, heading_line, section_text, target: str, locatio
                         findings.append(
                             _finding(
                                 "citation-range-not-evaluated",
-                                f"section {heading_name!r} cites a line range "
+                                f"{heading_ref} cites a line range "
                                 f"({_citation_ref(citation)}): this tool cannot "
                                 "confirm an external citation's line range "
                                 "against the cited file's real length without "
@@ -655,9 +693,12 @@ def _check_section(marker_line, heading_line, section_text, target: str, locatio
             findings.append(
                 _finding(
                     "malformed-provenance-marker",
-                    f"section {heading_name!r}'s provenance marker has unparseable "
-                    f"sources entr{'y' if len(malformed_entries) == 1 else 'ies'}: "
-                    f"{malformed_entries!r}",
+                    f"{heading_ref}'s provenance marker has "
+                    f"{len(malformed_entries)} unparseable sources "
+                    f"entr{'y' if len(malformed_entries) == 1 else 'ies'} -- rule "
+                    "name, location, and count only, the malformed entry's own "
+                    "text is never quoted back here (step 6(b) of the "
+                    "2026-09-06 fix round: it may itself be secret-shaped)",
                     location=location,
                 )
             )
@@ -665,7 +706,7 @@ def _check_section(marker_line, heading_line, section_text, target: str, locatio
             findings.append(
                 _finding(
                     "mismatched-provenance-marker",
-                    f"section {heading_name!r}'s provenance marker sources "
+                    f"{heading_ref}'s provenance marker sources "
                     f"{expected_keys!r} don't match its actual citations {actual_keys!r}",
                     location=location,
                 )
