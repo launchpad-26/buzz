@@ -392,4 +392,4 @@ keeps the two `managed_agents` override axes from colliding.
   `mobile/` was not inspected for this node, and sibling task #1056
   (mobile-configuration) is the node expected to settle it.
 
-Back to the corpus root: [`launchpad/docs/corpus/README.md`](../../../README.md).
+Back to the corpus root: [`launchpad/docs/corpus/README.md`](../../README.md).

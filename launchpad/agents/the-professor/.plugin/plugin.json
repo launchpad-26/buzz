@@ -3,7 +3,7 @@
   "id": "com.launchpad-26.the-professor",
   "name": "The Professor",
   "version": "0.1.0",
-  "description": "A mentoring persona designed to guide learning through questions and insights.",
+  "description": "PROPOSED (see launchpad/Research/the-professor-skill-suite-redesign.md — not yet built): a portable Skill-suite plugin — scan a target repo, draft and maintain its documentation library, and keep per-section provenance, pointed at any repo, not just one handbook. The seven skills are the distributable unit, installable into whatever agent already exists; the bundled persona is an optional companion, not a requirement.",
   "personas": [
     "personas/the-professor.persona.md"
   ],

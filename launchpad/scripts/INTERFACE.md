@@ -45,9 +45,10 @@ than `SUCCESS` as "failed" will misread a running external check as a failed one
 is no separate field distinguishing the two node shapes; a `StatusState` value in
 `conclusion` is the only signal.
 
-**Two gates, asked separately.** `launchpad/AGENTS.md` §6 states that the `launchpad`
-branch requires at least two approving reviews, that the ruleset enforcing it is
-unreadable without `admin:org`, and that a live PR's `reviewDecision` confirms review is
+**Two gates, asked separately.** `launchpad/AGENTS.md` §6 is the source of truth for the
+`launchpad` branch's review requirement — read it there rather than trusting a number
+restated here; the figure has drifted before (§6 itself corrected a stale reviewer-count
+claim once ADR-0052 landed). A live PR's `reviewDecision` confirms review is
 *required* without exposing the count. So `configured` answers "is a required **status
 check** gate visible", and `review_required` answers "is a **review** gate in force",
 from the one signal this token can read. A consumer must not read `configured: false` as
