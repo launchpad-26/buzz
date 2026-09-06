@@ -337,6 +337,33 @@ def _parse_citation_string(raw: str):
     }
 
 
+def _citation_ref(citation: dict) -> str:
+    """Structural description of an already-parsed citation for use in a
+    `_check_section` message -- `repo=`/`path=`/`sha=`/`range=` fields
+    reported separately, never the citation's raw as-typed string
+    reassembled or quoted back whole (follow-up to the 2026-09-06 fix
+    round's step 5, which stopped `mixed-claim`/`missing-citation` from
+    quoting the flagged sentence's own text; this closes the same gap for
+    the five messages in this function that still quoted the parsed
+    citation string instead). Citation strings are lower-risk than
+    free-form sentence prose -- they're structured refs, not likely to
+    literally contain a secret -- but the same "never quote flagged
+    content" principle applies for consistency now that it's established
+    elsewhere in this function.
+    """
+    parts = [f"path={citation['path']!r}", f"sha={citation['sha']!r}"]
+    if citation["repo"] is not None:
+        parts.insert(0, f"repo={citation['repo']!r}")
+    if citation["start"] is not None:
+        span = (
+            f"L{citation['start']}"
+            if citation["end"] is None
+            else f"L{citation['start']}-L{citation['end']}"
+        )
+        parts.append(f"range={span!r}")
+    return ", ".join(parts)
+
+
 def _citation_key(citation: dict) -> tuple:
     """Normalized key for comparing a body citation against a marker source
     entry: (repo, path, full-40-char-sha, span-string-or-None).
@@ -488,7 +515,10 @@ def _check_section(marker_line, heading_line, section_text, target: str, locatio
                 findings.append(
                     _finding(
                         "missing-citation",
-                        f"section {heading_name!r} has an unparseable citation: {raw!r}",
+                        f"section {heading_name!r} has a behaviour claim with an "
+                        "unparseable citation -- rule name and location only, the "
+                        "citation string as typed is never quoted back here "
+                        "(follow-up to step 5 of the 2026-09-06 fix round)",
                         location=location,
                     )
                 )
@@ -515,8 +545,9 @@ def _check_section(marker_line, heading_line, section_text, target: str, locatio
                 findings.append(
                     _finding(
                         "citation-check-error",
-                        f"section {heading_name!r} cites {raw!r}: could not be "
-                        f"verified -- {error_message}",
+                        f"section {heading_name!r} cites a citation "
+                        f"({_citation_ref(citation)}) that could not be verified "
+                        f"-- {error_message}",
                         location=location,
                     )
                 )
@@ -526,8 +557,9 @@ def _check_section(marker_line, heading_line, section_text, target: str, locatio
                 findings.append(
                     _finding(
                         "citation-not-found",
-                        f"section {heading_name!r} cites {raw!r}, which does not "
-                        "exist at that commit",
+                        f"section {heading_name!r} cites a citation "
+                        f"({_citation_ref(citation)}) that does not exist at "
+                        "that commit",
                         location=location,
                     )
                 )
@@ -552,8 +584,9 @@ def _check_section(marker_line, heading_line, section_text, target: str, locatio
                         findings.append(
                             _finding(
                                 "out-of-bounds-range",
-                                f"section {heading_name!r} cites {raw!r}, a line range "
-                                f"out of bounds for a file of {total_lines} lines",
+                                f"section {heading_name!r} cites a line range "
+                                f"({_citation_ref(citation)}) out of bounds for a "
+                                f"file of {total_lines} lines",
                                 location=location,
                             )
                         )
@@ -586,9 +619,10 @@ def _check_section(marker_line, heading_line, section_text, target: str, locatio
                         findings.append(
                             _finding(
                                 "out-of-bounds-range",
-                                f"section {heading_name!r} cites {raw!r}, a line "
-                                "range that is structurally invalid regardless of "
-                                "the cited file's actual contents",
+                                f"section {heading_name!r} cites a line range "
+                                f"({_citation_ref(citation)}) that is structurally "
+                                "invalid regardless of the cited file's actual "
+                                "contents",
                                 location=location,
                             )
                         )
@@ -596,12 +630,13 @@ def _check_section(marker_line, heading_line, section_text, target: str, locatio
                         findings.append(
                             _finding(
                                 "citation-range-not-evaluated",
-                                f"section {heading_name!r} cites {raw!r}: this "
-                                "tool cannot confirm an external citation's line "
-                                "range against the cited file's real length "
-                                "without fetching its content over the network, "
-                                "which it does not currently implement -- not "
-                                "evaluated, not silently passed as clean",
+                                f"section {heading_name!r} cites a line range "
+                                f"({_citation_ref(citation)}): this tool cannot "
+                                "confirm an external citation's line range "
+                                "against the cited file's real length without "
+                                "fetching its content over the network, which it "
+                                "does not currently implement -- not evaluated, "
+                                "not silently passed as clean",
                                 location=location,
                             )
                         )
