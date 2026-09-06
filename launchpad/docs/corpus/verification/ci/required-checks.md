@@ -12,16 +12,18 @@ evidence:
     entry_class: FACT
     evidence:
       - "commit 473205a7457b208455f188847bfb27b01aa83cac"
-  - statement: "launchpad-26/buzz's default branch is `launchpad`, and it has no classic GitHub branch-protection rule configured: the branch-protection REST endpoint returns HTTP 404 for it."
+  - statement: "launchpad-26/buzz's default branch is `launchpad`, and it IS protected by a classic GitHub branch-protection rule: an admin-scoped read of the branch-protection endpoint (recorded in launchpad/AGENTS.md, measured 2026-08-28, and independently by ADR-0052) shows `required_approving_review_count: 1`, `dismiss_stale_reviews` on, `required_status_checks` empty, and `enforce_admins` off. A token without repository `admin` permission receives HTTP 404 from that endpoint — a 404 there indicates missing read access, not absent protection."
     entry_class: FACT
     evidence:
       - "gh_api('repos/launchpad-26/buzz') -> default_branch: launchpad"
-      - "gh_api('repos/launchpad-26/buzz/branches/launchpad/protection') -> 404 Not Found (Branch not protected)"
+      - "launchpad/AGENTS.md"
+      - "launchpad/decisions/ADR-0052-delegated-authority-and-feature-batching.md"
+      - "gh_api('repos/launchpad-26/buzz/branches/launchpad/protection') -> 404 Not Found when called with a token lacking repo admin (this authoring session's token)"
   - statement: "launchpad-26/buzz carries zero repository-level rulesets."
     entry_class: FACT
     evidence:
       - "gh_api('repos/launchpad-26/buzz/rulesets') -> []"
-  - statement: "No active rule -- at repository or organization level -- currently applies to the `launchpad` branch. GitHub's own REST reference for this endpoint states it returns 'all active rules that apply ... regardless of the level at which they are configured (e.g. repository or organization)', so an empty result here is not merely 'no repository ruleset', it is 'nothing GitHub currently enforces on this branch, from any level of configuration'."
+  - statement: "No active *ruleset-sourced* rule -- at repository or organization level -- currently applies to the `launchpad` branch. GitHub's own REST reference for this endpoint states it returns 'all active rules that apply ... regardless of the level at which they are configured (e.g. repository or organization)', so the empty result covers rulesets at both levels. It does not cover classic branch protection, which is a separate mechanism and does exist on this branch (see above) -- so the empty result establishes 'no ruleset applies', not 'nothing GitHub currently enforces on this branch'."
     entry_class: FACT
     evidence:
       - "gh_api('repos/launchpad-26/buzz/rules/branches/launchpad') -> []"
@@ -67,10 +69,11 @@ evidence:
     entry_class: FACT
     evidence:
       - "gh_pr_list(state='all', limit=30, repo='launchpad-26/buzz') -> 39 distinct statusCheckRollup names observed, none containing 'DCO'"
-  - statement: "Taken together -- no branch protection, no repository or organization ruleset, no merge queue, and no observed DCO-named check on any sampled pull request -- CLAUDE.md's 'required DCO Check' does not currently describe an enforced, merge-blocking gate on launchpad-26/buzz's `launchpad` branch; nothing in this fork's own configuration is currently in a position to fail a PR over a missing `Signed-off-by` trailer at the recorded revision, whatever DCO enforcement upstream `block/buzz` itself may or may not have."
+  - statement: "Taken together -- an empty `required_status_checks` list on the branch-protection rule, no repository or organization ruleset, no merge queue, and no observed DCO-named check on any sampled pull request -- CLAUDE.md's 'required DCO Check' does not currently describe an enforced, merge-blocking gate on launchpad-26/buzz's `launchpad` branch; nothing in this fork's own configuration is currently in a position to fail a PR over a missing `Signed-off-by` trailer at the recorded revision, whatever DCO enforcement upstream `block/buzz` itself may or may not have."
     entry_class: INFERENCE
     evidence:
-      - "gh_api('repos/launchpad-26/buzz/branches/launchpad/protection') -> 404"
+      - "launchpad/AGENTS.md"
+      - "launchpad/decisions/ADR-0052-delegated-authority-and-feature-batching.md"
       - "gh_api('repos/launchpad-26/buzz/rules/branches/launchpad') -> []"
       - "gh_pr_list(state='all', limit=30, repo='launchpad-26/buzz') -> no 'DCO' check name observed"
       - "CLAUDE.md"
@@ -96,15 +99,19 @@ branch-protection configuration on a different repository.
 
 ## Obligation
 
-> As of the recorded revision, **zero** GitHub-enforced checks are required in order to
-> merge a pull request into launchpad-26/buzz's default branch (`launchpad`): every
-> check that runs on a pull request there -- lint, tests, corpus validation, security
-> audit, ADR-boundary check, or any other -- is informational only, and a pull request
-> carrying one or more FAILURE conclusions can still be merged.
+> As of the recorded revision, **zero** GitHub-enforced *status checks* are required in
+> order to merge a pull request into launchpad-26/buzz's default branch (`launchpad`):
+> every check that runs on a pull request there -- lint, tests, corpus validation,
+> security audit, ADR-boundary check, or any other -- is informational only, and a pull
+> request carrying one or more FAILURE conclusions can still be merged. The branch is
+> not unguarded, though: a classic branch-protection rule requires **one approving
+> review** (with stale-review dismissal on), so the human review gate -- not any CI
+> check -- is what currently stands between a pull request and `launchpad`.
 
-This is deliberately a negative obligation. The question this node exists to answer is
-"which checks actually gate a merge," and the honest, verified answer at this revision
-is "none of them" -- stating that plainly is the obligation, not a workaround for one.
+This is deliberately a mostly-negative obligation. The question this node exists to
+answer is "which checks actually gate a merge," and the honest, verified answer at this
+revision is "no status check does; one approving review does" -- stating that plainly
+is the obligation, not a workaround for one.
 
 ## Verifying command(s)
 
@@ -114,15 +121,22 @@ Playwright test exercises code. The verifying procedure is a reproducible sequen
 `gh` commands run directly against the live repository and its pull-request history:
 
 ```bash
-# 1. Confirm the default branch and that no classic branch-protection rule exists.
+# 1. Confirm the default branch, and read the classic branch-protection rule.
+#    This endpoint needs a token with repository ADMIN permission; without it,
+#    GitHub returns 404, which means "no read access", NOT "no protection".
 gh api repos/launchpad-26/buzz --jq .default_branch
-gh api repos/launchpad-26/buzz/branches/launchpad/protection   # expect: 404 Not Found
+gh api repos/launchpad-26/buzz/branches/launchpad/protection
+#    expect (admin token): required_approving_review_count: 1,
+#                          required_status_checks: empty/null
+#    expect (non-admin token): 404 Not Found -- inconclusive, do not read as
+#                              "unprotected"; use AGENTS.md/ADR-0052's record
 
 # 2. Confirm no repository-level ruleset exists.
 gh api repos/launchpad-26/buzz/rulesets --jq .                 # expect: []
 
-# 3. Confirm no rule -- repository or organization level -- currently applies to the
-#    branch. Per GitHub's own docs this endpoint covers both levels.
+# 3. Confirm no ruleset-sourced rule -- repository or organization level --
+#    currently applies to the branch. Per GitHub's own docs this endpoint covers
+#    rulesets at both levels; it does NOT surface classic branch protection.
 gh api repos/launchpad-26/buzz/rules/branches/launchpad --jq . # expect: []
 
 # 4. Confirm no merge queue is configured for the branch.
@@ -140,21 +154,26 @@ gh pr list --repo launchpad-26/buzz --state merged --limit 10 \
         {number, failing: [.statusCheckRollup[] | select(.conclusion=="FAILURE") | .name]}'
 ```
 
-Step 1's 404, steps 2-4's empty/null results, and step 5 returning at least one merged
-PR with a FAILURE conclusion are jointly what "verified" means below. Any one of them
-coming back non-empty (a real ruleset, a real branch-protection object, a real merge
-queue) would falsify the obligation as stated and this node would need to move to
-`status: flagged` or be rewritten, not quietly reworded.
+Step 1 showing an empty `required_status_checks` list (admin token), steps 2-4's
+empty/null results, and step 5 returning at least one merged PR with a FAILURE
+conclusion are jointly what "verified" means below. A required-status-check entry
+appearing in step 1, a ruleset in steps 2-3, or a merge queue in step 4 would falsify
+the obligation as stated and this node would need to move to `status: flagged` or be
+rewritten, not quietly reworded.
 
 ## Current enforcement status
 
 **Verified**, as of commit `473205a7457b208455f188847bfb27b01aa83cac` (checked
-2026-09-01). All five checks in the command sequence above were run directly against
-`launchpad-26/buzz` and returned the results the obligation predicts, and the finding
-is independently corroborated by two accepted decision records that measured the same
-GitHub configuration on different dates: ADR-0020 (2026-08-21: "`required_status_checks`
-on `launchpad` returns 404 -- not configured") and ADR-0052 (2026-08-28:
-"`required_status_checks` is empty ... on both trunks"). This is a **deliberate,
+2026-09-01). Steps 2-5 of the command sequence above were run directly against
+`launchpad-26/buzz` and returned the results the obligation predicts. Step 1's
+protection object could not be read by the authoring session's token (404: no repo
+admin); its contents are taken from the admin-scoped read recorded in
+`launchpad/AGENTS.md` (measured 2026-08-28: one approving review required,
+`required_status_checks` empty) and independently corroborated by two accepted decision
+records that measured the same GitHub configuration on different dates: ADR-0020
+(2026-08-21: "`required_status_checks` on `launchpad` returns 404 -- not configured")
+and ADR-0052 (2026-08-28: "`required_approving_review_count` is 1,
+`required_status_checks` is empty ... on both trunks"). This is a **deliberate,
 decided-on deferral**, not an oversight discovered here for the first time --
 ADR-0019/ADR-0052 defer enforcement until `launchpad-26/buzz-infrastructure`#105 (the
 CI/CD pipeline programme) lands, with a stated revisit date of 2026-09-05.
@@ -167,8 +186,14 @@ then be stating something no longer true until re-checked. See Limits.
 
 ## Limits
 
-- **This node proves absence of enforcement at one point in time, not a permanent
-  property.** Branch protection, rulesets and merge queues are repository settings, not
+- **A 404 from the branch-protection endpoint is permission-dependent.** That endpoint
+  requires repository `admin`; a non-admin token's 404 means "cannot read", not "not
+  protected". An earlier draft of this node recorded the absence of read access as the
+  absence of protection -- the same inference error #2083 corrected in
+  `launchpad/scripts/INTERFACE.md`. Any re-verification of step 1 must use an
+  admin-scoped token or fall back to `launchpad/AGENTS.md`/ADR-0052's recorded reads.
+- **This node proves absence of required status checks at one point in time, not a
+  permanent property.** Branch protection, rulesets and merge queues are repository settings, not
   files under version control here; they can change without a corresponding commit, so
   a reader relying on this node after 2026-09-01 (or after `launchpad-26/buzz-infrastructure`#105
   lands, per ADR-0052's own revisit trigger) should re-run the command sequence above
