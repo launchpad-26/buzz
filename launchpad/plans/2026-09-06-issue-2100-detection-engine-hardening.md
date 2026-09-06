@@ -168,23 +168,43 @@ STEP 3  Harden the two demonstrated regex evasions directly, no library        [
         names is exactly the kind of change that can also start matching
         unrelated words it shouldn't.
 
-STEP 4  Add a post-processing overlap-merge pass in `screen_content()`,        [needs 1]
-        run once after all category detectors have produced their raw
-        findings and before the final `findings` list is assembled: group
-        findings whose spans overlap, and for any group containing at least
-        one `block`-disposition finding, force every finding in that group to
-        report `match: null` (matching `block`'s own existing suppression),
-        regardless of that individual finding's own disposition. This step
-        does not depend on step 3 — the reproduction below already works
-        against the UNHARDENED detectors, confirmed in ALREADY TRUE above.
-        done when: `password: FakeReviewPassword@example.com` now produces a
-        `block` finding with `match: null` AND the overlapping
-        `email-address` finding also reports `match: null` — no finding in
-        the output contains the credential text anywhere; a fixture with two
-        genuinely non-overlapping findings (an email in one sentence, an
-        unrelated internal hostname in another) still reports both with
-        their normal per-disposition `match` behavior, proving the merge
-        only suppresses genuinely overlapping spans, not everything.
+STEP 4  Stop `screen-content` from ever printing the flagged text, for any     [needs 1]
+        disposition — not just `block`, and not just where a span happens to
+        overlap another finding. A second, independent `review-plan` pass
+        (2026-09-06) found that the block-only suppression an earlier round
+        added leaves the ordinary, non-overlapping case wide open: any
+        standalone `redact` finding (`email-address`,
+        `internal-hostname-private-ip`, `physical-address` — the majority of
+        real `redact` findings, not a rare edge case) still prints the exact
+        matched text in `_screen_finding`'s `match` field, which is exactly
+        the disclosure channel `skills/screen-sensitive/SKILL.md` forbids
+        ("never the redacted value itself"). The first draft of this fix
+        (a post-processing pass that merges overlapping spans and only
+        suppresses `match` for a group containing a `block` finding) was
+        over-engineered for what's actually needed — simpler and more
+        complete: `_screen_finding` always sets `match: null`, unconditionally,
+        for every disposition. The calling skill (`draft-page`/`update-page`)
+        already has the full draft file in its own context (it wrote it) — it
+        does not need this tool to hand back the secret text at all, only
+        WHERE (`location.line`, already present) and WHAT KIND (`category`,
+        already present) to redact, so it can read that line itself and
+        perform the replacement using tools it already has. `replacement`
+        (the literal `"[REDACTED: <category>]"` string to substitute in)
+        stays exactly as it is now — it never carried the secret, only the
+        placeholder text.
+        done when: running `screen-content` against the existing
+        `redact-email.md` fixture (an ordinary, non-overlapping case) now
+        reports `match: null` — previously this printed the literal email
+        address; running it against `password: FakeReviewPassword@example.com`
+        (the overlapping-block+redact case from the third review round)
+        also reports `match: null` on both findings, closed by the same
+        one-line change rather than a separate merge pass; grep the tool's
+        full output across every existing screen-content fixture and confirm
+        `match` is `null` in every single result, with no exceptions. Update
+        `skills/screen-sensitive/SKILL.md`'s "Act on the result" section if
+        it currently describes reading `match` to perform a redaction — it
+        should describe using `location`+`category` to find and redact the
+        span in the draft file directly.
 
 STEP 5  Generalize check-page's "never quote flagged content" rule (already   [needs 2]
         applied to screen-content's block findings in an earlier round) to
@@ -247,11 +267,17 @@ PARALLEL  Step 1 and step 7 are independent of everything else (1 fixes the
           check_professor.py's control flow, not the detection code) — but
           per build-change's own rule, do not actually dispatch them in
           parallel within one working tree; build sequentially regardless.
-          Steps 3, 5, 6 all need step 2's parsing rewrite landed first (they
-          consume its data or touch adjacent code in the same functions) but
-          are themselves mutually independent of each other's logic. Step 4
-          needs only step 1 (not step 3 — the reproduction it fixes doesn't
-          require the hardened detectors). Step 8 is last, needs everything.
+          Steps 5 and 6 need step 2's parsing rewrite landed first (they
+          consume its data or touch adjacent code in the same functions).
+          **Step 3 needs only step 1, not step 2** — a second `review-plan`
+          pass (2026-09-06) caught an earlier draft of this note wrongly
+          grouping step 3 with 5/6: `screen_content()` (what step 3 edits)
+          never calls `_split_sections()` (what step 2 rewrites; that
+          function is called only from `check_page()`), so step 3 has no
+          real dependency on step 2 landing first. Step 4 also needs only
+          step 1, for the same reason (it edits `_screen_finding`, in
+          `screen_content()`'s code path, not `check_page()`'s). Step 8 is
+          last, needs everything.
 GATES     `review-code` and `review-tests` both apply, same as the original
           plan's own GATES line. This is the fourth round to touch the
           detection surface specifically, and three independent whole-branch
