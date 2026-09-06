@@ -210,7 +210,7 @@ def _run_professor(
     if path_prepend is not None:
         env["PATH"] = path_prepend + os.pathsep + env.get("PATH", "")
     return subprocess.run(
-        ["python3", str(PROFESSOR_PY), *args],
+        [str(PROFESSOR_PY), *args],
         capture_output=True,
         text=True,
         env=env,

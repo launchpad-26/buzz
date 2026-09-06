@@ -1,7 +1,7 @@
 #!/usr/bin/env -S uv run --script
 # /// script
 # requires-python = ">=3.11"
-# dependencies = ["pyyaml"]
+# dependencies = ["pyyaml", "markdown-it-py"]
 # ///
 """The Professor's tool layer — a plain script, no MCP dependency.
 
