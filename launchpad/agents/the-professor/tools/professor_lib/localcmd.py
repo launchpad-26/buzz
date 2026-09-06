@@ -766,8 +766,16 @@ CONNECTION_STRING_RE = re.compile(r"://[^\s:@/]+:[^\s@/]+@[^\s/]+")
 # in both of those positions; the plain, unquoted literal-password shape
 # (`password: value`) still matches exactly as before since both quotes are
 # optional.
+#
+# The left boundary uses the same underscore-tolerant lookbehind as
+# HIGH_ENTROPY_KEYWORD_RE below, not a plain `\b` (step 1 of the 2026-09-06
+# fix round, follow-up to step 3(a) of the prior round: that round fixed only
+# HIGH_ENTROPY_KEYWORD_RE's boundary, leaving this regex with the same
+# demonstrated evasion -- `\b` treats `_` as a word character, so neither
+# `DB_PASSWORD=hunter2` nor `db_password: hunter2` ever produced a `\b`
+# boundary immediately before "password" at all, and silently never matched.
 PASSWORD_LITERAL_RE = re.compile(
-    r'\b(?:password|passwd|pwd)\s*"?\s*[:=]\s*"?\S+', re.IGNORECASE
+    r'(?<![A-Za-z0-9])(?:password|passwd|pwd)\s*"?\s*[:=]\s*"?\S+', re.IGNORECASE
 )
 
 WEBHOOK_URL_RE = re.compile(
