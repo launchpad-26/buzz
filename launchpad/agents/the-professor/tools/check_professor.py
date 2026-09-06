@@ -928,6 +928,36 @@ def check_roster_names_multiple_candidates() -> str | None:
     return None
 
 
+def check_roster_names_three_names_one_context() -> str | None:
+    """`dispatch-roster-names.md` (the pre-existing fixture, three names --
+    Alex Example, Jamie Example, Morgan Example -- in a single roster
+    context) is only ever swept by `check_screen_content_fixtures`'s general
+    category comparison, which collapses any number of `roster-names`
+    findings down to the single category `roster-names` in a Python `set` --
+    it cannot tell "one finding" from "three". `_roster_names_matches`
+    enumerates one finding per candidate NAME, not one per roster context
+    (step 10 of the 2026-09-06 fix round, closing the same gap
+    `check_roster_names_multiple_candidates` above already closed for
+    `dispatch-roster-names-two-pairs.md`, just left unchecked for this
+    older, three-names-in-one-context fixture until now).
+    """
+    fixture_path = FIXTURES_DIR / "dispatch-roster-names.md"
+    result = _run_professor(["screen-content", str(fixture_path)], pack_root=str(PACK_ROOT))
+    if result.returncode != 0:
+        return f"screen-content(dispatch-roster-names.md) failed: {result.stderr}"
+    try:
+        report = json.loads(result.stdout)
+    except json.JSONDecodeError:
+        return f"screen-content(dispatch-roster-names.md) did not print valid JSON: {result.stdout!r}"
+    findings = report.get("findings", [])
+    if len(findings) != 3:
+        return (
+            "screen-content(dispatch-roster-names.md): expected exactly 3 "
+            f"roster-names findings (one per name), got {len(findings)}: {findings!r}"
+        )
+    return None
+
+
 def check_password_literal_three_shapes() -> str | None:
     """`block-password-literal.md` exercises PASSWORD_LITERAL_RE for real
     (step 2 of the 2026-09-06 fix round) -- until now, zero fixtures touched
@@ -1172,6 +1202,12 @@ def main() -> int:
         print(f"FAIL [roster-names multiple candidates]: {error}")
         return 1
     print("ok: roster-names enumerates every candidate, not just the first (2 distinct findings)")
+
+    error = check_roster_names_three_names_one_context()
+    if error:
+        print(f"FAIL [roster-names three names, one context]: {error}")
+        return 1
+    print("ok: dispatch-roster-names.md's three names each produce their own finding (3 distinct findings)")
 
     error = check_password_literal_three_shapes()
     if error:
