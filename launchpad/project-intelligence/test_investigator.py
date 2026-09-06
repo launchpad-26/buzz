@@ -193,20 +193,14 @@ class InspectGitHistoryTest(unittest.TestCase):
     """
 
     FILE = "crates/buzz-core/src/kind.rs"
-    # The issue's own worked example: `git log -L 850,850:crates/buzz-core/src/kind.rs`
-    # names this exact commit for this exact line. Foundational, pre-fork
-    # history ("Initial backend revisions..."), not a line under active
-    # rebase risk.
+    # An arbitrary in-range coordinate for exercising single-line ranges. No
+    # test asserts WHICH commit this line resolves to: kind.rs changes often
+    # enough that any pinned hash rots the moment a line is inserted above it
+    # (the same defect class as the stale path:line citations in #2075).
     LINE = 850
-    EXPECTED_HASH_PREFIX = "cd3b45f948"
-
-    def test_a_single_line_range_returns_the_real_commit(self) -> None:
-        # This is the exact case that returned [] before this fix (issue #569).
-        commits = investigator.inspect_git_history(self.FILE, self.LINE, self.LINE)
-        self.assertTrue(commits, "single-line range must not come back empty")
-        self.assertTrue(any(c.hash.startswith(self.EXPECTED_HASH_PREFIX) for c in commits))
 
     def test_the_single_line_result_is_a_subset_of_a_wider_window(self) -> None:
+        # This is the exact case that returned [] before this fix (issue #569).
         # Cross-checks precision against a wider query for the same line,
         # without hard-coding the wider range's full commit set (which could
         # grow over time as the file keeps changing) -- only the subset
