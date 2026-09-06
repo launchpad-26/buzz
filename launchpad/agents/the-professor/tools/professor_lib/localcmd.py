@@ -912,23 +912,30 @@ def _url_embedded_auth_token(url: str) -> str | None:
     return None
 
 
-def _roster_names_first_match(content: str):
-    """Returns the first `(roster_span, name_span)` pair where a
-    roster-context phrase and a name-list-shaped phrase co-occur within a
-    localized window of each other, or `None` if none do. Returning the
-    match spans (not just a bool) lets the caller compute a `location` for
-    the resulting finding (step 3 of the 2026-09-06 fix round), matching
-    every other finding this module produces.
+def _roster_names_matches(content: str):
+    """Yields every `(roster_span, name_span)` pair where a roster-context
+    phrase and a name-list-shaped phrase co-occur within a localized window
+    of each other -- every candidate, not just the first (step 6 of the
+    2026-09-06 fix round). The singular `_roster_names_first_match` this
+    replaces returned only one match by name and by its one call site, which
+    can't satisfy `skills/screen-sensitive/SKILL.md`'s documented "once per
+    name screen-content flags" dispatch contract on a page with more than one
+    roster-shaped name pair -- every candidate past the first one was
+    silently dropped. Each qualifying name candidate yields exactly one
+    match (breaking out of the inner loop on the first roster-context phrase
+    that falls within its window), even if more than one such phrase is
+    nearby -- the caller needs one finding per candidate *name* span, not one
+    per roster-name pairing.
     """
     roster_spans = [m.span() for m in ROSTER_CONTEXT_RE.finditer(content)]
     if not roster_spans:
-        return None
+        return
     for name_match in NAME_LIST_RE.finditer(content):
         name_span = name_match.span()
         for roster_span in roster_spans:
             if _spans_within_window(roster_span, name_span, ROSTER_NAME_WINDOW_CHARS):
-                return roster_span, name_span
-    return None
+                yield roster_span, name_span
+                break
 
 
 def _line_number(content: str, offset: int) -> int:
@@ -1112,9 +1119,7 @@ def screen_content(file_path: str, pack_root: str, target: str | None = None) ->
     for match in PHYSICAL_ADDRESS_RE.finditer(content):
         findings.append(_screen_finding(content, "physical-address", "redact", match))
 
-    roster_match = _roster_names_first_match(content)
-    if roster_match is not None:
-        _, name_span = roster_match
+    for _, name_span in _roster_names_matches(content):
         findings.append(
             {
                 "rule": "roster-names",

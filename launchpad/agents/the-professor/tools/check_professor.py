@@ -173,6 +173,9 @@ SCREEN_CONTENT_EXPECTED = {
     },
     "redact-physical-address.md": {"disposition_by_category": {"physical-address": "redact"}},
     "dispatch-roster-names.md": {"disposition_by_category": {"roster-names": "not-evaluated"}},
+    "dispatch-roster-names-two-pairs.md": {
+        "disposition_by_category": {"roster-names": "not-evaluated"}
+    },
     "clean-unrelated-roster-and-names.md": {"disposition_by_category": {}},
 }
 
@@ -847,6 +850,46 @@ def check_screen_content_fixtures() -> str | None:
     return None
 
 
+def check_roster_names_multiple_candidates() -> str | None:
+    """`_roster_names_matches` (renamed from the singular
+    `_roster_names_first_match`, step 6 of the 2026-09-06 fix round) must
+    enumerate every candidate name-list span co-occurring with a roster-
+    context phrase, not just the first one found -- `dispatch-roster-
+    names-two-pairs.md` has two separate roster-shaped name pairs in two
+    different sentences (sections), each in its own window, far enough
+    apart that neither pair's roster-context phrase falls within the other
+    pair's window. `check_screen_content_fixtures`'s own category-set
+    comparison can't distinguish "one roster-names finding" from "two" (a
+    Python `set` collapses duplicates), so this is a dedicated count+location
+    assertion, not folded into that generic sweep.
+    """
+    fixture_path = FIXTURES_DIR / "dispatch-roster-names-two-pairs.md"
+    result = _run_professor(["screen-content", str(fixture_path)], pack_root=str(PACK_ROOT))
+    if result.returncode != 0:
+        return f"screen-content(dispatch-roster-names-two-pairs.md) failed: {result.stderr}"
+    try:
+        report = json.loads(result.stdout)
+    except json.JSONDecodeError:
+        return (
+            "screen-content(dispatch-roster-names-two-pairs.md) did not print "
+            f"valid JSON: {result.stdout!r}"
+        )
+    findings = report.get("findings", [])
+    if len(findings) != 2:
+        return (
+            "screen-content(dispatch-roster-names-two-pairs.md): expected exactly "
+            f"2 roster-names findings, got {len(findings)}: {findings!r}"
+        )
+    lines = [f["location"]["line"] for f in findings]
+    if lines != [11, 16]:
+        return (
+            "screen-content(dispatch-roster-names-two-pairs.md): expected findings "
+            f"at lines [11, 16] (verified against the fixture file with grep -n), "
+            f"got {lines!r}"
+        )
+    return None
+
+
 def main() -> int:
     checks = [
         ("pack-root unset fails loud (all four subcommands)", check_pack_root_unset_fails_loud),
@@ -950,6 +993,12 @@ def main() -> int:
         print(f"FAIL [screen-content fixtures]: {error}")
         return 1
     print(f"ok: screen-content fixtures ({len(SCREEN_CONTENT_EXPECTED)} fixtures)")
+
+    error = check_roster_names_multiple_candidates()
+    if error:
+        print(f"FAIL [roster-names multiple candidates]: {error}")
+        return 1
+    print("ok: roster-names enumerates every candidate, not just the first (2 distinct findings)")
 
     print("ALL CHECKS PASSED")
     return 0
