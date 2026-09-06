@@ -165,6 +165,7 @@ SCREEN_CONTENT_EXPECTED = {
     "block-high-entropy-token.md": {"disposition_by_category": {"api-key-token": "block"}},
     "block-private-key.md": {"disposition_by_category": {"private-key": "block"}},
     "block-connection-string.md": {"disposition_by_category": {"connection-string": "block"}},
+    "block-password-literal.md": {"disposition_by_category": {"connection-string": "block"}},
     "block-webhook-url.md": {"disposition_by_category": {"webhook-url-token": "block"}},
     "block-webhook-url-token-param.md": {
         "disposition_by_category": {"webhook-url-token": "block", "api-key-token": "block"}
@@ -896,6 +897,52 @@ def check_roster_names_multiple_candidates() -> str | None:
     return None
 
 
+def check_password_literal_three_shapes() -> str | None:
+    """`block-password-literal.md` exercises PASSWORD_LITERAL_RE for real
+    (step 2 of the 2026-09-06 fix round) -- until now, zero fixtures touched
+    this regex at all; `block-connection-string.md` only ever exercised
+    CONNECTION_STRING_RE. Three distinct shapes on three distinct lines: a
+    plain unquoted literal (`password: hunter2`), a JSON-quoted value
+    (`{"password": "hunter2"}`), and an underscore-separated keyword
+    (`DB_PASSWORD=hunter2`, step 1's own fix). `check_screen_content_fixtures`'s
+    category-set comparison can't distinguish "this regex fired once" from
+    "it fired on all three shapes" (a `set` collapses the category either
+    way), so this is a dedicated count+location assertion, same reasoning as
+    `check_roster_names_multiple_candidates` above. In particular, reverting
+    step 1's underscore-boundary fix alone still leaves the first two shapes
+    matching (both already sit next to a non-word character), so a bare
+    category check would not catch that regression -- only the count would.
+    """
+    fixture_path = FIXTURES_DIR / "block-password-literal.md"
+    result = _run_professor(["screen-content", str(fixture_path)], pack_root=str(PACK_ROOT))
+    if result.returncode != 0:
+        return f"screen-content(block-password-literal.md) failed: {result.stderr}"
+    try:
+        report = json.loads(result.stdout)
+    except json.JSONDecodeError:
+        return f"screen-content(block-password-literal.md) did not print valid JSON: {result.stdout!r}"
+    findings = report.get("findings", [])
+    if len(findings) != 3:
+        return (
+            "screen-content(block-password-literal.md): expected exactly 3 "
+            f"connection-string findings (one per shape), got {len(findings)}: "
+            f"{findings!r}"
+        )
+    if any(f["category"] != "connection-string" for f in findings):
+        return (
+            "screen-content(block-password-literal.md): expected every finding's "
+            f"category to be 'connection-string', got {[f['category'] for f in findings]!r}"
+        )
+    lines = [f["location"]["line"] for f in findings]
+    if lines != [11, 12, 13]:
+        return (
+            "screen-content(block-password-literal.md): expected findings at "
+            f"lines [11, 12, 13] (verified against the fixture file with grep -n), "
+            f"got {lines!r}"
+        )
+    return None
+
+
 def main() -> int:
     checks = [
         ("pack-root unset fails loud (all four subcommands)", check_pack_root_unset_fails_loud),
@@ -1016,6 +1063,12 @@ def main() -> int:
         print(f"FAIL [roster-names multiple candidates]: {error}")
         return 1
     print("ok: roster-names enumerates every candidate, not just the first (2 distinct findings)")
+
+    error = check_password_literal_three_shapes()
+    if error:
+        print(f"FAIL [password-literal three shapes]: {error}")
+        return 1
+    print("ok: PASSWORD_LITERAL_RE fires on all three shapes (unquoted, JSON-quoted, underscore-separated)")
 
     print("ALL CHECKS PASSED")
     return 0
