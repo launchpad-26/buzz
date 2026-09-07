@@ -192,8 +192,10 @@ def find_non_canonical_nodes(corpus_root: Path) -> list[str]:
     return errors
 
 
-def _looks_like_more_frontmatter(text: str) -> bool:
-    """True if `text` itself parses as a YAML mapping, rather than as prose.
+def _looks_like_more_frontmatter(
+    text: str, known_keys: frozenset[str] | None = None
+) -> bool:
+    """True if `text` looks like genuine held-back frontmatter, not prose.
 
     Used to detect a stray '---\\n' line inside the intended frontmatter block
     (#1482): the correct close is the SECOND '---\\n' occurrence in the file, but a
@@ -204,12 +206,29 @@ def _looks_like_more_frontmatter(text: str) -> bool:
     horizontal rule, or a fenced code-block example quoting a frontmatter block, both
     confirmed present in the real corpus) does not parse as a YAML *mapping*; only
     genuine held-back frontmatter content does.
+
+    Mapping-shaped is necessary but not sufficient, though (#2114): an ordinary body
+    paragraph that opens with a label and a colon -- "Note: this section covers
+    startup." -- is *also* valid YAML, parsing as the one-key mapping
+    `{"Note": "this section covers startup."}`. Every such paragraph, followed
+    anywhere later in the document by an unrelated horizontal rule, tripped the old
+    mapping-only check and raised this function's caller's stray-delimiter error
+    against a perfectly sound node. Requiring at least one parsed key to intersect
+    `known_keys` -- the same schema-derived set `_load_frontmatter`'s caller already
+    threads through for naming a duplicate key -- distinguishes genuine held-back
+    frontmatter (whose keys are schema fields like `id` or `relationships`) from
+    prose that merely happens to contain a colon. `known_keys=None` (direct unit
+    calls with no schema in hand) keeps the original mapping-only check.
     """
     try:
         loaded = yaml.safe_load(text)
     except yaml.YAMLError:
         return False
-    return isinstance(loaded, dict)
+    if not isinstance(loaded, dict):
+        return False
+    if known_keys is None:
+        return True
+    return any(key in known_keys for key in loaded)
 
 
 def _load_frontmatter(path: Path, known_keys: frozenset[str] = frozenset()) -> dict:
@@ -231,7 +250,12 @@ def _load_frontmatter(path: Path, known_keys: frozenset[str] = frozenset()) -> d
     # Checked only when a further delimiter exists at all: with exactly one closing
     # delimiter in the whole file (`len(parts) == 3`), there is nothing to hide behind
     # and no ambiguity to resolve.
-    if len(parts) > 3 and _looks_like_more_frontmatter(parts[2]):
+    # `known_keys or None`: an empty set means no schema was supplied (the default
+    # this function's own signature falls back to), which is not the same as a
+    # schema that genuinely defines zero fields -- treat that case as "unknown",
+    # falling back to the original mapping-only check, rather than as "nothing ever
+    # matches", which would silently disable the stray-delimiter check entirely.
+    if len(parts) > 3 and _looks_like_more_frontmatter(parts[2], known_keys or None):
         raise ValueError(
             "stray '---' delimiter inside frontmatter -- content after it (up to "
             "the next '---') still parses as YAML mapping keys, so it was silently "

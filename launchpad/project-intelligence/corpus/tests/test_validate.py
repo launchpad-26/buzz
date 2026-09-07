@@ -160,6 +160,40 @@ class StrayFrontmatterDelimiterTest(unittest.TestCase):
         )
         self.assertFalse(validate._looks_like_more_frontmatter("plain scalar text"))
 
+    def test_prose_with_a_colon_then_an_unrelated_rule_validates_cleanly(self) -> None:
+        # #2114: a body paragraph like "Note: this section covers startup." is also
+        # valid YAML -- it parses as the one-key mapping {"Note": "..."} -- which
+        # made every such paragraph, followed anywhere later by an unrelated
+        # horizontal rule, trip the old mapping-only check and raise a false stray-
+        # delimiter error against a perfectly sound node. Confirmed against the
+        # pre-fix code directly: this exact body reported the stray-delimiter
+        # ValueError there.
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            (root / "node.md").write_text(
+                "---\n"
+                "id: prose-colon-then-rule\n"
+                "type: verification\n"
+                "status: active\n"
+                "origin: launchpad\n"
+                "audiences:\n"
+                "  - agent\n"
+                "evidence:\n"
+                '  - statement: "Fixture for #2114."\n'
+                "    entry_class: FACT\n"
+                "    evidence:\n"
+                '      - "launchpad/project-intelligence/corpus/validate.py"\n'
+                "---\n"
+                "\n"
+                "Note: this section covers startup.\n"
+                "\n"
+                "---\n"
+                "\n"
+                "More prose after an unrelated horizontal rule.\n"
+            )
+            report = validate.validate_corpus(root)
+            self.assertEqual(report.errors, [])
+
 
 class MissingClosingDelimiterTest(unittest.TestCase):
     """A node that opens with '---' and never closes it used to crash the same split
