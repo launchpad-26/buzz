@@ -425,12 +425,19 @@ def _parse_git_tool_arguments(args: str) -> tuple[str, str] | None:
 
     fields = [_strip_argument_quotes(field) for field in text.split(",")]
     fields = [field for field in fields if field]
-    if len(fields) == 1 and ":" in fields[0]:
-        ref, _, path = fields[0].partition(":")
-        if ref and path:
-            return (ref, path)
+    if not fields:
         return None
-    if len(fields) >= 2 and fields[0] and fields[1]:
+    # The combined `sha:path` form can carry a trailing annotation too, e.g.
+    # `git_show('abc123:launchpad/README.md', run 2026-08-27)`. Splitting on
+    # commas then yields two fields, so this must be checked before the
+    # positional two-field case below -- otherwise the annotation gets
+    # misread as `path` and the colon stays stuck to `ref`.
+    ref, sep, path = fields[0].partition(":")
+    if sep and ref and path:
+        return (ref, path)
+    if len(fields) == 1:
+        return None
+    if fields[0] and fields[1]:
         return (fields[0], fields[1])
     return None
 

@@ -481,6 +481,18 @@ class GitToolCitationParseTest(unittest.TestCase):
     def test_unparseable_arguments_return_none(self) -> None:
         self.assertIsNone(evidence._parse_git_tool_arguments(""))
 
+    def test_combined_form_ignores_trailing_annotation(self) -> None:
+        """Bug #2118: splitting `'abc123:path', run 2026-08-27` on commas
+        yields two fields, so the `len(fields) >= 2` branch wrongly read the
+        colon-joined first field as `ref` (still containing the colon) and
+        the annotation as `path`. The combined `ref:path` form must be
+        recognized -- and its trailing fields ignored as annotation -- before
+        the positional two-field case is tried."""
+        args = evidence._parse_git_tool_arguments(
+            "'abc123:launchpad/README.md', run 2026-08-27"
+        )
+        self.assertEqual(args, ("abc123", "launchpad/README.md"))
+
 
 class GitToolCitationVerifierTest(unittest.TestCase):
     """DECISION-1: this verifier is fail-only. It may report `error` when a
