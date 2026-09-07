@@ -739,7 +739,14 @@ def _verify_grep_tool(parsed: ParsedCitation, repo_root: Path) -> VerificationRe
                 "commit, so a no-match result would prove nothing"
             )
 
-    command = ["git", "grep", "-q", "-E"]
+    command = ["git", "grep", "-q"]
+    # Only `grep_extended_regex` promises ERE syntax. The other tool names
+    # (`grep`, `grep_repo`, `grep_recursive`, `grep_case_sensitive`, ...) imply
+    # basic-regex semantics, so `-E` must not be added for them -- otherwise a
+    # bare `|` in a cited pattern is replayed as alternation when the cited
+    # tool never offered that.
+    if parsed.tool == "grep_extended_regex":
+        command.append("-E")
     if parsed.tool in _CASE_INSENSITIVE_GREP_TOOLS:
         command.append("-i")
     # `-e` keeps a pattern that begins with `-` in the pattern slot instead of

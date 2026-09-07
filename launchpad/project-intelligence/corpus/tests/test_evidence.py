@@ -703,13 +703,39 @@ class GrepReplayVerifierTest(unittest.TestCase):
         """`|` is legitimate in a grep pattern and must not trip the shell
         guard -- the pattern reaches git as an argument, never a shell string.
         If this starts failing, the guard has become over-broad and the
-        pinned citations silently stop being checked."""
+        pinned citations silently stop being checked.
+
+        Uses `grep_extended_regex` specifically: per #2119, only that tool
+        name gets `-E` in the replay, so `|` is only alternation (rather than
+        a literal pipe character) for this tool."""
         result = self._verify(
-            f"grep_case_insensitive('EvidenceKind|ParsedCitation', "
+            f"grep_extended_regex('EvidenceKind|ParsedCitation', "
             f"path='launchpad/project-intelligence/corpus', ref='{self.HEAD}') "
             f"-> zero matches"
         )
         self.assertEqual(result.status, "error")
+
+    def test_non_extended_grep_tool_replay_omits_extended_regex_flag(self) -> None:
+        """Bug #2119: the replay always passed `-E` regardless of which grep
+        tool was cited. `grep_case_sensitive` (like `grep`, `grep_repo`,
+        `grep_recursive`) implies basic-regex semantics -- only
+        `grep_extended_regex` should get `-E`."""
+        calls: list[list[str]] = []
+        real_run = evidence.subprocess.run
+
+        def spy(command, *args, **kwargs):
+            calls.append(command)
+            return real_run(command, *args, **kwargs)
+
+        with unittest.mock.patch.object(evidence.subprocess, "run", spy):
+            self._verify(
+                f"grep_case_sensitive('EvidenceKind', "
+                f"path='launchpad/project-intelligence/corpus', ref='{self.HEAD}') "
+                f"-> 1 matches"
+            )
+        grep_calls = [call for call in calls if call[:2] == ["git", "grep"]]
+        self.assertEqual(len(grep_calls), 1)
+        self.assertNotIn("-E", grep_calls[0])
 
     def test_pattern_beginning_with_a_dash_is_not_read_as_an_option(self) -> None:
         result = self._verify(
