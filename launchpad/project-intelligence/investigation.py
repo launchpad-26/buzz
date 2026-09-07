@@ -284,7 +284,26 @@ def _tests(target: str, findings: Findings, trace: Trace, tools: Tools) -> None:
 def _history(findings: Findings, trace: Trace, tools: Tools) -> None:
     match = findings.match
     line = findings.definition_line or 1
-    commits = tools.inspect_git_history(match.file, line, line)  # type: ignore[union-attr]
+    # #569 made inspect_git_history() raise RuntimeError, rather than return
+    # [], when git can't resolve the range -- e.g. the line doesn't exist in
+    # HEAD (an untracked file, or uncommitted lines near the bottom). That is
+    # the right behaviour for the tool, but this call site had no guard at
+    # all (#2117): a case that used to quietly report "no commits touching
+    # that line" instead crashed the whole investigate() call. Caught here so
+    # it degrades to the same not-found shape the empty-result case already
+    # produces, with the exception's own message folded into the trace detail
+    # so the failure is still visible to an auditor.
+    try:
+        commits = tools.inspect_git_history(match.file, line, line)  # type: ignore[union-attr]
+    except RuntimeError as e:
+        findings.history = []
+        trace.record(
+            "inspect_git_history",
+            f"{match.file}:{line}-{line}",  # type: ignore[union-attr]
+            found=False,
+            detail=f"no commits touching that line (inspect_git_history raised: {e})",
+        )
+        return
     findings.history = list(commits)
     trace.record(
         "inspect_git_history",

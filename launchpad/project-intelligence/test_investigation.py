@@ -189,6 +189,35 @@ class StopRuleTest(unittest.TestCase):
         call = next(c for c in trace.calls if c.tool == "inspect_git_history")
         self.assertIn("6-6", call.args)
 
+    def test_a_runtime_error_from_inspect_git_history_degrades_to_not_found(self) -> None:
+        """#2117: inspect_git_history() now raises RuntimeError (per #569) when
+        git can't resolve the range -- e.g. the definition line doesn't exist
+        in HEAD. _history() had no guard at all, so that turned a case which
+        used to quietly report "no commits" into a crash of the whole
+        investigate() call. It must degrade to the same not-found shape the
+        legitimate empty-result case already produces, not propagate."""
+
+        def _raise(f: str, s: int, e: int) -> list:
+            raise RuntimeError(f"git log -L failed for {f}:{s}-{e}: fatal: no such path")
+
+        tools = _tools()
+        tools = Tools(
+            search_symbols=tools.search_symbols,
+            read_file=tools.read_file,
+            find_references=tools.find_references,
+            search_text=tools.search_text,
+            inspect_git_history=_raise,
+        )
+        trace = Trace()
+        findings = investigate(
+            decompose("how did `is_shared_gated_kind` evolve?"), "buzz-core", trace, tools
+        )
+        self.assertEqual(findings.history, [])
+        call = next(c for c in trace.calls if c.tool == "inspect_git_history")
+        self.assertFalse(call.found)
+        self.assertIn("no commits touching that line", call.detail)
+        self.assertIn("fatal: no such path", call.detail)
+
     def test_a_symbol_that_does_not_exist_stops_after_locating(self) -> None:
         """Nothing downstream has a subject, so continuing would query for a
         symbol the index says is not there."""
