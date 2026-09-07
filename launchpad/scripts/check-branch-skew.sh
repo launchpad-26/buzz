@@ -46,7 +46,7 @@ is_cohort_remote() {
   # Lowercase before matching: GitHub treats org/repo names case-insensitively,
   # so git@github.com:Launchpad-26/Buzz.git is the same functioning repo and
   # must not silently fall back to first-match (review finding on this fix).
-  url="${url,,}"
+  url=$(printf '%s' "$url" | tr '[:upper:]' '[:lower:]')
   while [ "${url%/}" != "$url" ]; do url="${url%/}"; done
   url="${url%.git}"
   while [ "${url%/}" != "$url" ]; do url="${url%/}"; done
