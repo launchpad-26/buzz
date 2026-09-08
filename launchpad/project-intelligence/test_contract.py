@@ -71,7 +71,6 @@ class ContractFactsTest(unittest.TestCase):
             ("1e-9", knowledge.MINIMUM_CANDIDATE_SCORE),
             ("DEPENDENCY_HOPS` (2)", knowledge.DEPENDENCY_HOPS),
             ("IMPACT_DIRECT_HOPS` = 1", knowledge.IMPACT_DIRECT_HOPS),
-            ("HISTORY_LINE_WINDOW` (10)", investigation.HISTORY_LINE_WINDOW),
         ):
             with self.subTest(literal=literal):
                 self.assertIn(literal, self.doc)
@@ -79,7 +78,10 @@ class ContractFactsTest(unittest.TestCase):
         self.assertEqual(knowledge.DEPENDENCY_HOPS, 2)
         self.assertEqual(knowledge.IMPACT_DIRECT_HOPS, 1)
         self.assertEqual(knowledge.IMPACT_SECONDARY_HOPS, 2)
-        self.assertEqual(investigation.HISTORY_LINE_WINDOW, 10)
+        self.assertFalse(
+            hasattr(investigation, "HISTORY_LINE_WINDOW"),
+            "HISTORY_LINE_WINDOW was #569's workaround; it should stay removed now #569 is fixed",
+        )
 
     def test_every_method_in_the_interface_is_documented(self) -> None:
         for name in knowledge.all_methods():

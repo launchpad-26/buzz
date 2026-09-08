@@ -250,15 +250,87 @@ class CommitSummary:
     message: str
 
 
+# git log's field separator for inspect_git_history: NUL. Not a printable
+# control character (an earlier version used 0x1e/0x1f "unit/record
+# separator" bytes on the theory that a commit subject would never contain
+# them -- cross-vendor review (Codex, #569) found that wrong: git accepts
+# 0x1e/0x1f in a commit message verbatim, confirmed by actually creating one
+# (`git commit -F` with those bytes in the message succeeds). NUL is
+# different in kind, not just convention: git refuses to create a commit
+# whose message contains one at all ("a NUL byte in commit log message not
+# allowed"), confirmed the same way. That is what makes it safe here, not a
+# guess about what commit authors typically do.
+#
+# Framing: each record is emitted as %x00 followed by its four NUL-separated
+# fields, so splitting the whole output on NUL and dropping the leading empty
+# string (from the very first record's own leading NUL) gives a flat list
+# that is exactly a multiple of 4 long -- chunk it back into records rather
+# than searching for a record boundary. git's own between-entry blank line
+# lands on the trailing edge of each record's message field (there is no
+# field after it to absorb it), so that field alone is rstripped.
+#
+# Two different constants because they serve two different sides of the same
+# byte: `_GIT_LOG_FORMAT_SEP` is the four-character literal text git's
+# `--pretty=format:` syntax recognizes and turns into an actual NUL byte when
+# it writes output -- it goes into the subprocess argv, which cannot itself
+# contain a raw NUL (`subprocess.run` raises `ValueError: embedded null
+# byte`). `_GIT_LOG_OUTPUT_SEP` is the real NUL byte that shows up once git
+# has run, used only to split the captured stdout string in Python -- never
+# passed to a subprocess as an argument.
+_GIT_LOG_FORMAT_SEP = "%x00"
+_GIT_LOG_OUTPUT_SEP = "\x00"
+
+
 def inspect_git_history(file: str, start_line: int, end_line: int) -> list[CommitSummary]:
-    """Commits touching a file range -- a thin wrapper over RepoQL's `=> history`
-    modifier, the same primitive #206 already proved (enrich_git_ownership())."""
+    """Commits touching a file's line range, via `git log -L start,end:file`
+    directly rather than RepoQL's `=> history` modifier.
+
+    issue #569: RepoQL's `#line=N,N => history` fragment returned zero commits
+    for a degenerate single-line range (start_line == end_line), even where
+    `git log -L N,N:file` names a real one for that exact line -- measured on
+    crates/buzz-core/src/kind.rs (0 commits for (850, 850), 4 for (840, 860)),
+    independently confirmed twice: once by this issue and once already
+    recorded in investigation.py's own HISTORY_LINE_WINDOW comment. Reading
+    this function's own source rules out the alternative hypothesis that the
+    bug was here -- there was no line-count-dependent branch, just a direct
+    `data.get("commits", [])` passthrough. RepoQL's own fragment resolution
+    was the only place left in the chain this function could see, though its
+    exact internal behavior for `#line=N,N` was not directly observable
+    (unreachable for live testing in the environment this fix was built in --
+    see the commit message). Rather than guess at that internal semantics,
+    this calls `git log -L` directly: the same primitive RepoQL's own history
+    modifier is meant to mirror, and the same "avoid depending on RepoQL
+    where a git-native tool already answers the question" trade-off
+    search_text() above makes for grep -- "one less tool affected if the
+    RepoQL host is unavailable" applies here too.
+
+    Raises ValueError for start_line > end_line, and RuntimeError (via a
+    non-zero `git log` exit) for a file or line range git itself cannot
+    resolve -- an out-of-range line or nonexistent file is a real error, not
+    a silent empty result.
+    """
     _validate_repo_relative_path(file, "file")
-    data = _rql_read_json(f"file:///{file}#line={start_line},{end_line} => history")
-    return [
-        CommitSummary(hash=c["hash"], date=c["date"], author=c["author"], message=c["message"])
-        for c in data.get("commits", [])
-    ]
+    _resolve_within_repo(file)  # containment check; git now runs directly, not through RepoQL's own sandboxing
+    if start_line > end_line:
+        raise ValueError(f"start_line ({start_line}) must be <= end_line ({end_line})")
+    sep = _GIT_LOG_FORMAT_SEP
+    fmt = f"{sep}%H{sep}%aI{sep}%an{sep}%s"
+    cmd = ["git", "log", "--no-patch", f"--pretty=format:{fmt}", "-L", f"{start_line},{end_line}:{file}"]
+    result = subprocess.run(cmd, capture_output=True, text=True, cwd=REPO_ROOT)
+    if result.returncode != 0:
+        raise RuntimeError(
+            f"inspect_git_history: git log -L failed for {file}:{start_line}-{end_line}: {result.stderr.strip()}"
+        )
+    fields = result.stdout.split(_GIT_LOG_OUTPUT_SEP)
+    if fields and fields[0] == "":
+        fields = fields[1:]  # the leading NUL every record (including the first) starts with
+    commits = []
+    for i in range(0, len(fields), 4):
+        commit_hash, date, author, message = fields[i : i + 4]
+        # git inserts a blank line between log entries; with nothing after
+        # the message field to absorb it, it lands here as a trailing "\n".
+        commits.append(CommitSummary(hash=commit_hash, date=date, author=author, message=message.rstrip("\n")))
+    return commits
 
 
 @dataclass(frozen=True)
