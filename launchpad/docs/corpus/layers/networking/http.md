@@ -185,8 +185,8 @@ cannot drift.
 | The Nostr bridge — `POST /events`, `/query`, `/count` | Callers without a socket need the same operations; the bridge is the exception AGENTS.md names as generic rather than endpoint-specific. |
 | Blossom media upload and download | Blob bytes, not frames. |
 | Git smart HTTP | An unmodified `git` client speaks its own protocol. |
-| Webhook trigger | An external service initiates, and does not hold a Nostr key. |
-| Health probes | Kubernetes speaks HTTP and nothing else. |
+| Webhook trigger | An external service initiates; `router.rs` marks the route "secret-authenticated, no NIP-98". |
+| Health probes | Orchestrator probes are HTTP GETs, not Nostr clients. |
 | Operator, invite, moderation, workflow-run and admin routes | Browser-originated management traffic. |
 | SPA and static asset serving | A browser must be handed documents before it can run any client code. |
 
@@ -338,6 +338,12 @@ the UDS listener changes what `ConnectInfo`-dependent middleware sees.
 - **`build_cors_layer`'s three branches are untested.** The permissive, parsed-list
   and refuse-to-fall-back branches were read from source; no test constructs a router
   with a malformed `BUZZ_CORS_ORIGINS` and asserts the resulting layer.
+- **Git history was not consulted.** Every claim above rests on the source as it
+  stands at the recorded revision. Issues were consulted (the #609 sibling list and
+  #1127's own definition of done, both recorded as `TEAM_KNOWLEDGE` above), but no
+  commit, pull request or blame was read to establish *why* any of these choices was
+  made — so the rationale offered for the surface's narrowness is `AGENTS.md`'s
+  stated position plus one `INFERENCE`, not a reconstructed decision history.
 - **Deployment reality was not checked.** Whether `health_port`, `metrics_port` and
   `bind_addr` are actually exposed differently in the staging Kubernetes deployment
   was not verified against the deployment repositories — only against the relay's own
