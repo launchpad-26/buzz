@@ -250,26 +250,31 @@ def check_pack_root_unset_fails_loud() -> str | None:
         result = _run_professor(args, pack_root=None)
         if result.returncode == 0:
             return f"{name}: expected non-zero exit with $PROFESSOR_PACK_ROOT unset, got 0"
-        # Asserted as the END of stderr, not the whole of it. professor.py's
-        # shebang is `uv run --script`, and on a cold cache uv prints its own
-        # progress ("Installed 3 packages in 8ms") to stderr before the script
-        # runs at all -- which broke a whole-string comparison. CI runs cold by
-        # definition, so a whole-string match made the new professor-tools job
-        # red on every run.
+        # Known launcher chatter is removed, then the REMAINDER must equal the
+        # required text exactly. professor.py's shebang is `uv run --script`,
+        # and on a cold cache uv writes its own progress ("Installed 3 packages
+        # in 8ms") to stderr before the script runs at all -- which broke a
+        # whole-string comparison, and CI runs cold by definition.
         #
-        # This does not weaken what the check is for. The reason it compares
-        # exact text is to tell the designed fail-loud message from a bare
-        # `KeyError: 'PROFESSOR_PACK_ROOT'` traceback, which also names the
-        # variable; a traceback does not END with this message, so endswith
-        # still rejects it. The explicit no-traceback assertion below closes
-        # the remaining gap directly rather than by implication.
-        stderr = result.stderr.strip()
-        if "Traceback" in stderr:
-            return f"{name}: raw traceback on stderr rather than the fail-loud message: {stderr!r}"
-        if not stderr.endswith(REQUIRED_UNSET_ERROR_TEXT):
+        # An `endswith` was tried first and is NOT sufficient: a program that
+        # printed "ERROR: unexpected initialization failure" and then the
+        # required text would satisfy it, hiding a real failure occurring
+        # before the guard. Stripping a closed allowlist of launcher prefixes
+        # keeps the assertion exact for anything the application itself writes,
+        # which is the whole point of comparing exact text here.
+        launcher_noise = (
+            "Installed", "Resolved", "Prepared", "Downloading", "Downloaded",
+            "Built", "Building", "Uninstalled", "Updating", "Audited",
+        )
+        application_stderr = "\n".join(
+            line for line in result.stderr.strip().splitlines()
+            if not line.strip().startswith(launcher_noise)
+        ).strip()
+        if application_stderr != REQUIRED_UNSET_ERROR_TEXT:
             return (
-                f"{name}: stderr did not end with the exact required text "
-                f"{REQUIRED_UNSET_ERROR_TEXT!r}: got {result.stderr!r}"
+                f"{name}: stderr (after removing known launcher output) did not "
+                f"match the exact required text {REQUIRED_UNSET_ERROR_TEXT!r}: "
+                f"got {application_stderr!r} from {result.stderr!r}"
             )
     return None
 
@@ -588,15 +593,38 @@ def check_line_count_failure_is_not_a_citation_defect() -> str | None:
     if real_git is None:
         return "test setup error: no `git` on PATH to pass through to"
 
+    # Both ways the read can fail, because they took different code paths and
+    # only one was fixed first: `show` never returning (proc.run raises
+    # TimeoutExpired, so `run_error` is set) and `show` returning non-zero
+    # (proc.run succeeds, so the failure is only visible in `returncode`). The
+    # second was still reported as out-of-bounds-range after the first was
+    # fixed -- found by an independent review, not by this suite.
+    for label, show_action in (
+        ("timeout", "exec sleep 60"),
+        ("non-zero exit", "exit 128"),
+    ):
+        error = _line_count_failure_case(real_git, label, show_action)
+        if error:
+            return error
+    return None
+
+
+def _line_count_failure_case(real_git: str, label: str, show_action: str) -> str | None:
     fixture_path = FIXTURES_DIR / "compliant-range-at-end.md"
     with tempfile.TemporaryDirectory() as decoy_dir:
         decoy = Path(decoy_dir) / "git"
+        log_path = Path(decoy_dir) / "git-invocations.log"
+        # `-C <dir>` is the only option this pack passes before the subcommand,
+        # so the subcommand is argument 3. Matching by position rather than
+        # "any argument equal to show" keeps the decoy from intercepting a
+        # future call that merely mentions `show` in a revision or path.
+        # `exec sleep` rather than `sleep` so no shell is left parented to the
+        # killed process once the 15s timeout fires.
         decoy.write_text(
             "#!/bin/sh\n"
-            "for a in \"$@\"; do\n"
-            "  if [ \"$a\" = show ]; then sleep 60; exit 0; fi\n"
-            "done\n"
-            f"exec {real_git} \"$@\"\n"
+            f'echo "invoked: $@" >> "{log_path}"\n'
+            f'if [ "$1" = "-C" ] && [ "$3" = "show" ]; then {show_action}; fi\n'
+            f'exec {real_git} "$@"\n'
         )
         decoy.chmod(0o755)
 
@@ -606,16 +634,16 @@ def check_line_count_failure_is_not_a_citation_defect() -> str | None:
             path_prepend=decoy_dir,
         )
         if result.returncode != 0:
-            return f"check-page(decoy hanging git show) failed: {result.stderr}"
+            return f"check-page(decoy git show / {label}) failed: {result.stderr}"
         try:
             report = json.loads(result.stdout)
         except json.JSONDecodeError:
-            return f"check-page(decoy hanging git show) did not print valid JSON: {result.stdout!r}"
+            return f"check-page(decoy git show / {label}) did not print valid JSON: {result.stdout!r}"
 
         categories = [f["category"] for f in report.get("findings", [])]
         if "out-of-bounds-range" in categories:
             return (
-                "a git show timeout was reported as out-of-bounds-range -- an "
+                f"a git show failure ({label}) was reported as out-of-bounds-range -- an "
                 "unreadable file is being blamed on the citation: "
                 f"{report.get('findings')!r}"
             )
@@ -623,6 +651,24 @@ def check_line_count_failure_is_not_a_citation_defect() -> str | None:
             return (
                 "expected exactly one citation-check-error when the line count "
                 f"cannot be read, got {categories!r}"
+            )
+
+        # The category alone cannot prove WHERE the failure happened: an
+        # existence check that also shelled out to `git show` could produce the
+        # same category and pass this vacuously. Assert both that the decoy
+        # actually intercepted a `show`, and that the finding is the
+        # bounds-specific one.
+        invocations = log_path.read_text() if log_path.exists() else ""
+        if " show " not in f" {invocations} ":
+            return (
+                "the decoy git never saw a `show` subcommand, so this check did "
+                f"not exercise the line-count path at all: {invocations!r}"
+            )
+        message = report["findings"][0].get("message", "")
+        if "line range" not in message:
+            return (
+                "expected the bounds-specific citation-check-error, got a "
+                f"different one ({label}): {message!r}"
             )
 
     return None
@@ -887,7 +933,7 @@ def check_screen_content_target_ruleset_override() -> str | None:
     return None
 
 
-def check_local_citation_never_calls_gh() -> str | None:
+def check_local_citation_never_calls_gh(offline: bool = False) -> str | None:
     """`compliant-local.md`'s citation is entirely local (no `repo:` prefix) --
     `gh` must never be invoked for it. `compliant-external.md`'s citation
     names a genuinely external repo -- `gh` MUST be invoked for it. Both sides
@@ -895,18 +941,33 @@ def check_local_citation_never_calls_gh() -> str | None:
     gh" and "never calls gh" apart from the correct, conditional behaviour
     this plan's own step 4 required (§4's local/external split).
     """
+    # This check is about WHETHER `gh` is invoked, never about what it answers,
+    # so under --offline the decoy stops passing through to the real binary and
+    # answers 404 itself. Before that, the decoy logged the call and then
+    # exec'd the real `gh`, which made a live GitHub request even in the
+    # supposedly network-free run -- and passed regardless of whether that
+    # request succeeded, so the network trip bought nothing.
     real_gh = shutil.which("gh")
-    if real_gh is None:
+    if real_gh is None and not offline:
         return "no real `gh` found on PATH to build the passthrough decoy from"
 
     with tempfile.TemporaryDirectory() as decoy_dir:
         decoy_path = Path(decoy_dir)
         log_path = decoy_path / "gh-invocations.log"
         gh_script = decoy_path / "gh"
+        # A 404-shaped body is the one answer that keeps check-page's own
+        # behaviour ordinary here: it is a definite "path absent", not the
+        # rate-limit/auth shape that would divert into citation-check-error
+        # and change which findings the assertions below see.
+        tail = (
+            'printf \'{"status":"404","message":"Not Found"}\\n\'\nexit 1\n'
+            if offline
+            else f'exec "{real_gh}" "$@"\n'
+        )
         gh_script.write_text(
             "#!/bin/sh\n"
             f'echo "invoked: $@" >> "{log_path}"\n'
-            f'exec "{real_gh}" "$@"\n'
+            + tail
         )
         gh_script.chmod(gh_script.stat().st_mode | 0o111)
 
@@ -1373,7 +1434,7 @@ def _run_network_free_checks(offline: bool) -> int:
         (
             "local-vs-network boundary (compliant-local.md never calls gh, "
             "compliant-external.md does)",
-            check_local_citation_never_calls_gh,
+            lambda: check_local_citation_never_calls_gh(offline=offline),
         ),
         (
             "invalid UTF-8 produces a structured error, never a raw traceback "

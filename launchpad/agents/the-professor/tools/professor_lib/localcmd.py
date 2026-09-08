@@ -265,7 +265,21 @@ def _local_file_line_count(
     if run_error is not None:
         return None, run_error
     if result.returncode != 0:
-        return None, None
+        # Also an inability to read, not evidence the file is absent. By the
+        # time this runs, `_local_citation_exists` has already confirmed the
+        # path resolves at this commit and a citation that did not resolve left
+        # via `citation-not-found` long before here -- so a non-zero `git show`
+        # at this point is an anomaly (a corrupt object, a permissions problem,
+        # a path that is a tree rather than a blob), never the ordinary
+        # "missing file" case. Returning a bare `None` for it put us straight
+        # back into reporting the citation's RANGE as out of bounds for
+        # "a file of None lines".
+        return None, (
+            f"_local_file_line_count(target={target!r}): `git show` exited "
+            f"{result.returncode} for a path that already resolved at this "
+            "commit. Neither git's own error output nor the queried "
+            "commit/path are reproduced here."
+        )
     # A trailing newline means the last line still counts; splitlines handles
     # both a trailing-newline file and one without correctly.
     return len(result.stdout.splitlines()), None
@@ -958,10 +972,12 @@ PHYSICAL_ADDRESS_RE = re.compile(
 # [dispatch] category (sensitive-patterns.md): recognizing "used as
 # access-control data" is a semantic judgment this pattern match cannot make --
 # this only detects the *structural* shape (an access-control-sounding phrase
-# near a list of Title-Case name-like tokens), then reports it as
-# "not-evaluated" rather than a pass or a verdict. The real judgment needs
-# $PROFESSOR_VERIFIER_CMD dispatch, built in Phase 1b (a separate, not-yet-filed
-# Feature per this plan's LEFT OUT) -- explicitly out of scope here.
+# near a list of Title-Case name-like tokens), then hands it on for a role
+# judgment it cannot make itself. It carries an interim `redact` disposition
+# (issue #2110) rather than a verdict, because a disposition the consuming
+# skill defines no action for is one it can drop silently. The real judgment
+# needs $PROFESSOR_VERIFIER_CMD dispatch, built in Phase 1b (#2131) --
+# explicitly out of scope here.
 ROSTER_CONTEXT_RE = re.compile(
     r"\b(?:allowlist|roster|restricted to|access list|hardcoded reviewer list)\b",
     re.IGNORECASE,
