@@ -20,6 +20,17 @@ name: launchpad — CodeQL
 # meaningful application code, so it is left out of the matrix rather than
 # padding it for a file or two.
 #
+# java-kotlin is also left out, found out the hard way rather than
+# guessed: autobuild against this checkout fails with "Could not detect a
+# suitable build command for the source checkout" -- the ~94KB of Kotlin
+# here isn't behind a Maven/Gradle project autobuild can find, so it is
+# not a first-class buildable component either. Revisit if that changes.
+#
+# swift runs on its own macos-latest job, not the shared ubuntu matrix:
+# CodeQL's own init step fails outright on Linux with "Swift analysis is
+# only supported on macOS runner images" -- confirmed live on this PR,
+# not assumed from documentation.
+#
 # Advisory, not required, to start: a first run against a codebase this
 # size will very likely surface a backlog of pre-existing findings, and a
 # gate that starts out usually red teaches everyone to ignore it — the
@@ -48,7 +59,7 @@ permissions:
 jobs:
   analyze:
     name: Analyze (${{ matrix.language }})
-    runs-on: ubuntu-latest
+    runs-on: ${{ matrix.os }}
     timeout-minutes: 60
     permissions:
       contents: read
@@ -57,7 +68,11 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        language: [rust, javascript-typescript, python, swift, java-kotlin, actions]
+        os: [ubuntu-latest]
+        language: [rust, javascript-typescript, python, actions]
+        include:
+          - os: macos-latest
+            language: swift
 
     steps:
       - name: Checkout
