@@ -24,6 +24,19 @@ asking gitignore's own matcher whether a sample path would be ignored: a
 functionally-equivalent but differently-spelled pattern (`*.env` vs `.env`)
 would pass a matcher-based check while silently changing what's actually
 covered, and this check exists to catch that kind of drift, not paper over it.
+
+A required pattern present as a literal line can still be stripped of its
+effect by a later line that negates it exactly (`!*.pem` appearing after
+`*.pem`) — gitignore's own last-rule-wins semantics mean the negation, not
+the original pattern, decides whether a matching path is actually ignored.
+This check accounts for exactly that case: a pattern only counts as covered
+if no exact `!pattern` line appears after its own last occurrence (a
+negation earlier in the file does not un-cover a pattern re-asserted later —
+the same order-sensitivity `git check-ignore` itself has). This remains a
+literal-string check, not a gitignore-matcher one, for the same reason the
+positive-pattern check above is: a differently-spelled negation (e.g. a
+character-class variant of the same glob) is not caught, the same accepted
+trade-off as for positive coverage.
 """
 
 from __future__ import annotations
@@ -62,6 +75,26 @@ def _read_lines(path: Path) -> List[str] | None:
         return None
 
 
+def _last_index(lines: List[str], target: str) -> int | None:
+    """The index of the last line equal to `target`, or None if absent."""
+    for i in range(len(lines) - 1, -1, -1):
+        if lines[i] == target:
+            return i
+    return None
+
+
+def _negated_after(lines: List[str], pattern: str) -> bool:
+    """Whether an exact `!pattern` line appears after `pattern`'s last
+    occurrence — gitignore's last-rule-wins semantics mean that negation,
+    not the pattern itself, decides whether a matching path is ignored.
+    """
+    pattern_index = _last_index(lines, pattern)
+    if pattern_index is None:
+        return False
+    negation_index = _last_index(lines, "!" + pattern)
+    return negation_index is not None and negation_index > pattern_index
+
+
 def run(repo_root: Path) -> CheckResult:
     missing: List[str] = []
     unreadable: List[str] = []
@@ -75,6 +108,11 @@ def run(repo_root: Path) -> CheckResult:
         for pattern in patterns:
             if pattern not in line_set:
                 missing.append(f"{rel_path}: {pattern!r}")
+            elif _negated_after(lines, pattern):
+                missing.append(
+                    f"{rel_path}: {pattern!r} present but negated by a later "
+                    f"{'!' + pattern!r} line"
+                )
 
     if unreadable:
         return CheckResult(
