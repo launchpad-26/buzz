@@ -81,21 +81,46 @@ of calling the real subcommand is exactly the "skipping the step because the too
 is incomplete" failure mode this design exists to prevent, applied to tooling that
 isn't incomplete anymore.
 
+## 1a. A target-specific ruleset override this tool can't honour
+
+**Added 2026-09-06, a fourth outcome alongside the three below** — `screen-content`
+resolves the ruleset itself (step 1 above), in the same two-step order as the
+contract: `.professor/sensitive-patterns.md` in the target, else the bundled
+default. If a target-specific override exists, `screen-content` cannot actually
+interpret its content — its pattern-matching categories are hardcoded Python, not
+parsed from a markdown ruleset file at runtime. Rather than silently falling back
+to screening against the bundled default as if nothing were overridden, it reports
+an explicit `target-ruleset-override` finding with **disposition `block`**.
+
+Treat this exactly like a `block` result in step 2 below: the write does not
+proceed. This is deliberately fail-closed — an earlier version reported
+`not_evaluated` here, an outcome this skill's procedure never defined a consumer
+action for, and the nearest-sounding outcome by default reasoning was "pass", which
+meant an overridden target's draft was effectively screened not at all. Resolve it
+by removing the override, or by this tool gaining real support for custom rulesets
+in a later phase — not by proceeding with the write anyway.
+
 ## 2. Act on the result
 
 **One combined outcome, from both checks** — `screen-content`'s pattern findings and
 step 1's dispatch verdicts (`ROSTER_DATA`/`AMBIGUOUS`, both `redact`) are merged into
 a single `pass`/`redact`/`block` result for this skill, never reported or acted on
-separately; whichever category applies, apply the discipline below.
+separately; whichever category applies, apply the discipline below. (A
+target-ruleset-override result, step 1a above, is its own fourth outcome and is
+always `block` — it does not merge with the pattern/dispatch findings the way
+`redact` and `block` findings from those two checks do with each other.)
 
 - **`pass`** — nothing flagged, by either check. The write proceeds unchanged.
 - **`redact`** — one or more spans matched a category the ruleset marks as
   redact-not-block (e.g. an internal hostname that's useful context but shouldn't be
   published verbatim, or a name dispatch classified `ROSTER_DATA`/`AMBIGUOUS`).
-  Replace each flagged span with `[REDACTED: <category>]`, and
-  log the redaction — which category, which section, never the redacted value itself
-  — so a reviewer can see what was removed without the removed content ever having
-  been written anywhere, including a log.
+  `screen-content` never hands back the flagged text itself — its `match` field is
+  always `null`, for every disposition. Use each finding's `location` (which line)
+  and `category` (which kind) to find the span in the draft file you already hold
+  in your own context, and replace it there with `[REDACTED: <category>]`. Log the
+  redaction — which category, which section, never the redacted value itself — so a
+  reviewer can see what was removed without the removed content ever having been
+  written anywhere, including a log.
 - **`block`** — one or more spans matched a category the ruleset marks as
   block-not-redact (a live credential, a private key, anything where even a
   redaction-shaped placeholder in the page's history is a bad trade against just not

@@ -3,11 +3,12 @@
 This is the suite's **default** documentation contract — used for any target repo
 that doesn't define its own at `.professor/contract.md`. See
 `launchpad/Research/the-professor-skill-suite-redesign.md` §3 for the resolution
-order this file participates in, and §9 for the status of the gate script that will
-eventually check a draft against this contract mechanically (not yet built — this
-file is the spec, checked by hand today per `screen-sensitive`'s own "run it by hand
-until the script exists" instruction, and by `draft-page`/`update-page` following it
-directly).
+order this file participates in, and §9 for the status of the gate script that
+checks a draft against this contract mechanically. **That gate now exists:**
+`tools/professor.py check-page` implements this contract's rules directly (see
+"What a gate checking this contract should flag" below for exactly which ones) —
+this file remains the spec `check-page` implements, not a placeholder checked by
+hand while the script doesn't exist yet.
 
 This contract is deliberately smaller than the handbook's own (the one
 `launchpad-26/handbook`'s `docs/page-contract.md` defines, and that this pack's
@@ -55,6 +56,40 @@ unchanged from the original handbook contract, because it isn't about which repo
 page covers — it's about not letting a fact and a judgement call hide inside the same
 sentence, which matters regardless of scope.
 
+## Inline claim tags (mechanical marker for the claim rule)
+
+**Added 2026-09-05, during the fix round for issue #2100's tool-layer build, not by
+this contract's original authors reviewing and approving this exact syntax.** The
+claim rule above states *what* a behaviour claim and an opinion claim are; it does not
+say how a mechanical check tells, sentence by sentence, which kind a given sentence
+is — prose alone cannot carry that distinction deterministically. `check-page`'s
+implementation already requires an explicit inline tag to make the distinction
+mechanical, so this section documents that tag convention as part of the contract,
+formalizing what the shipped code already does rather than proposing something new.
+
+A sentence asserting a **behaviour claim** carries a trailing
+`(behaviour: <citation>)` tag, where `<citation>` is one of:
+
+- `<path>@<40-hex-sha>` — a citation to the target repo's own tree (whole-file claim)
+- `<path>@<40-hex-sha>#L<n>[-L<m>]` — the same, with the line range the claim actually
+  describes (see the claim rule's own span requirement above)
+- `<repo>:<path>@<40-hex-sha>[#L<n>[-L<m>]]` — a citation to a genuinely external
+  repo, for a claim about a dependency rather than the target repo itself
+- `(behaviour: none)` — a behaviour claim written with no citation at all,
+  deliberately still tagged so a gate can flag it as the specific rule-1 violation it
+  is, rather than a claim the gate never noticed was a behaviour claim in the first
+  place
+
+A sentence asserting an **opinion claim** carries a trailing `(opinion)` tag, no
+citation — attributed to the page's `author` field per the claim rule above.
+
+A sentence carrying neither tag makes no claim a gate can mechanically evaluate (for
+example, connective prose, a heading, or a purely structural sentence) and is not
+itself a rule violation; a gate checking this contract only evaluates sentences that
+carry one of these two tags. See "What a gate checking this contract should flag"
+below — its "behaviour claim with no citation" bullet is the `(behaviour: none)` case
+above, and its "mixed-claim" bullet is a sentence carrying both tags at once.
+
 ## Provenance
 
 Every section carries an inline provenance marker (the HTML comment format
@@ -72,6 +107,11 @@ separately, against already-published pages, not something `check-page` can veri
 draft time.
 
 ## What a gate checking this contract should flag (spec for §9's script)
+
+Mechanically, "a behaviour claim" and "an opinion claim" below mean a sentence
+carrying the `(behaviour: ...)` or `(opinion)` inline tag defined in "Inline claim
+tags" above — that section is what makes the two bullets immediately below
+mechanically checkable at all, rather than a matter of prose judgement.
 
 - A citation whose path does not exist in the repo/commit it names
 - A behaviour claim with no citation at all

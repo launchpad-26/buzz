@@ -113,6 +113,17 @@ paths = [
     # present in both Cargo.lock files in this repo (root and
     # desktop/src-tauri/) — one finding each, both checksum data.
     '''(^|/)Cargo\.lock$''',
+    # Issue #2100's the-professor detection-engine fixtures, same purpose and
+    # reasoning as the security_audit_fixtures/secrets/ entry above: these
+    # fixtures exist specifically to prove professor.py's screen-content
+    # detectors (API-key, private-key, webhook-token-param, high-entropy
+    # near-keyword) actually fire, so the strings inside them must be
+    # readable by gitleaks as real-looking secrets for the fixture to do its
+    # job. Synthetic, not leaked — verified against
+    # block-high-entropy-token.md, block-high-entropy-token-underscore-boundary.md,
+    # block-private-key.md, and block-webhook-url-token-param.md, the four
+    # fixtures the default ruleset currently matches in this directory.
+    '''launchpad/agents/the-professor/tools/contract/fixtures/.*''',
 ]
 regexes = [
     '''<[A-Za-z0-9 ]+>''',
@@ -158,4 +169,19 @@ regexes = [
     # and trip nothing). Matched literally, not by shape, so this entry
     # cannot accidentally swallow any other 64-hex string anywhere else.
     '''38980a43aba04331ba61b5e7b64b90e250cd411d042050eaf102a408acc6c379''',
+    # launchpad/plans/2026-09-06-issue-2100-detection-engine-hardening.md's
+    # "confirmed:" evidence lines quote this literal example value to record
+    # a real regex-evasion bug reproduced against professor.py's
+    # screen-content detector. It is prose, not a fixture file, so it should
+    # not need path-based exclusion — but the same literal value was already
+    # committed once in an earlier, superseded draft of this plan (a
+    # different commit than the one carrying the doc's current text), and a
+    # git-history scan re-reads every commit's diff regardless of what a
+    # later commit changed it to. Rewording the current text can't retroactively
+    # un-flag that superseded commit, so this value is allowlisted by its
+    # literal text instead, the same narrow style as the public-key literal
+    # above: it matches only this one synthetic token, in any commit, and
+    # cannot swallow any other secret-shaped string in this file or
+    # elsewhere.
+    '''Q7mK2vR9xN4pL8sT3wY6zB1cD5fG0hJq''',
 ]
