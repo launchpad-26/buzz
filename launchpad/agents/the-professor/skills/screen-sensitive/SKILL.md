@@ -67,6 +67,26 @@ skill's own `pass`/`redact`/`block` outcome in step 2 below exactly like
 `screen-content`'s findings — the dispatch mechanism, not the disposition or the
 reporting shape, is what differs from the rest of this gate.
 
+**Interim behaviour until Phase 1b ships the dispatch — added 2026-09-09, issue
+#2110.** The dispatch above does not exist yet. Until it does, `screen-content`
+returns every roster-names candidate with disposition **`redact`** directly, and no
+dispatch happens: treat those findings exactly like any other `redact` in step 2,
+with no extra step and nothing to interpret.
+
+This is deliberately the same fail-closed correction §1a below records for
+`target-ruleset-override`. An earlier version returned `not-evaluated` here — an
+outcome step 2 defines no consumer action for, so a caller following this procedure
+literally had nothing to do with it and could drop it silently, which is
+indistinguishable from `pass` in effect. An undecided candidate therefore takes the
+disposition the ruleset itself assigns an undecided one: `sensitive-patterns.md`
+lists this category under Redact, and the `AMBIGUOUS` verdict above already resolves
+to `redact` for exactly this reason. Over-redacting an attribution name is
+recoverable by a human reading the draft; publishing an access-control roster is not.
+
+Once Phase 1b lands, `ATTRIBUTION` candidates stop being flagged at all and this
+paragraph goes away — the interim rule is strictly more conservative than the
+dispatch that replaces it, never less.
+
 **Until that subcommand exists, this whole skill is a Phase 1 dependency, not a
 standing design choice.** A manual pass — reading `tools/contract/sensitive-patterns.md`
 (or the target's override, same resolution order) and checking the scratch file's

@@ -18,13 +18,14 @@ genuinely different, external repo reuses `netcmd.path_exists_at_bool` in-proces
 import json
 import math
 import re
-import subprocess
 import sys
 from collections import Counter
 from pathlib import Path
 
 import yaml
 from markdown_it import MarkdownIt
+
+from . import proc
 
 REQUIRED_FRONTMATTER_FIELDS = ["title", "category", "author", "generated_by", "generated_at"]
 
@@ -54,14 +55,21 @@ SENTENCE_SPLIT_RE = re.compile(r"(?<=[.!?])\s+")
 BEHAVIOUR_TAG_RE = re.compile(r"\(behaviour:\s*([^)]*)\)")
 OPINION_TAG_RE = re.compile(r"\(opinion\)")
 
+# SHAs are matched case-insensitively (issue #2105), matching
+# `netcmd.normalize_sha`'s own rule -- git accepts an uppercase object name, so
+# an uppercase citation is valid, not malformed. Every captured SHA is lowered
+# at the point of capture, because `_keys_match` below compares a body
+# citation's SHA against a marker's abbreviation by string truncation: an
+# uppercase citation and a lowercase marker naming the same commit would
+# otherwise compare unequal and be reported as a mismatch that isn't one.
 CITATION_RE = re.compile(
-    r"^(?:(?P<repo>[^:@#]+):)?(?P<path>[^@#]+)@(?P<sha>[0-9a-f]{40})"
+    r"^(?:(?P<repo>[^:@#]+):)?(?P<path>[^@#]+)@(?P<sha>[0-9a-fA-F]{40})"
     r"(?:#L(?P<start>\d+)(?:-L(?P<end>\d+))?)?$"
 )
 
 # Marker `sources="..."` entries: `[repo:]path@shortsha[#Lx[-Ly]]`, semicolon-separated.
 MARKER_SOURCE_RE = re.compile(
-    r"^(?:(?P<repo>[^:@#]+):)?(?P<path>[^@#]+)@(?P<shortsha>[0-9a-f]+)"
+    r"^(?:(?P<repo>[^:@#]+):)?(?P<path>[^@#]+)@(?P<shortsha>[0-9a-fA-F]+)"
     r"(?:#L(?P<start>\d+)(?:-L(?P<end>\d+))?)?$"
 )
 
@@ -182,12 +190,13 @@ def _local_citation_exists(target: str, commit: str, path: str) -> tuple[bool | 
     such directory", "not a git repo", and "no such commit in this repo's
     history"), and only once that succeeds, whether `path` exists within it.
     """
-    commit_check = subprocess.run(
+    commit_check, run_error = proc.run(
         ["git", "-C", target, "cat-file", "-e", f"{commit}^{{commit}}"],
-        capture_output=True,
-        text=True,
         timeout=15,
+        what=f"_local_citation_exists(target={target!r})",
     )
+    if run_error is not None:
+        return None, run_error
     if commit_check.returncode != 0:
         # Neither git's own stderr text NOR the citation's own `commit`/
         # `path` values are reproduced in the returned message below (step
@@ -225,22 +234,27 @@ def _local_citation_exists(target: str, commit: str, path: str) -> tuple[bool | 
             "reproduced here, for the same reason."
         )
 
-    result = subprocess.run(
+    result, run_error = proc.run(
         ["git", "-C", target, "cat-file", "-e", f"{commit}:{path}"],
-        capture_output=True,
         timeout=15,
+        what=f"_local_citation_exists(target={target!r})",
     )
+    if run_error is not None:
+        return None, run_error
     return result.returncode == 0, None
 
 
 def _local_file_line_count(target: str, commit: str, path: str) -> int | None:
-    result = subprocess.run(
+    # A run failure (no `git`, timeout) is indistinguishable here from "the file
+    # isn't there" -- both return None, which callers already treat as "no line
+    # count available" and never as a citation defect. `_local_citation_exists`
+    # above runs first for every citation and surfaces the real reason.
+    result, run_error = proc.run(
         ["git", "-C", target, "show", f"{commit}:{path}"],
-        capture_output=True,
-        text=True,
         timeout=15,
+        what=f"_local_file_line_count(target={target!r})",
     )
-    if result.returncode != 0:
+    if run_error is not None or result.returncode != 0:
         return None
     # A trailing newline means the last line still counts; splitlines() handles
     # both a trailing-newline file and one without correctly.
@@ -366,7 +380,7 @@ def _parse_citation_string(raw: str):
     return {
         "repo": match.group("repo"),
         "path": match.group("path"),
-        "sha": match.group("sha"),
+        "sha": match.group("sha").lower(),
         "start": int(match.group("start")) if match.group("start") else None,
         "end": int(match.group("end")) if match.group("end") else None,
     }
@@ -472,7 +486,9 @@ def _parse_marker_sources(sources_attr: str) -> tuple[set, list]:
                 if not match.group("end")
                 else f"L{match.group('start')}-L{match.group('end')}"
             )
-        keys.add((match.group("repo"), match.group("path"), match.group("shortsha"), span))
+        keys.add(
+            (match.group("repo"), match.group("path"), match.group("shortsha").lower(), span)
+        )
     return keys, malformed_entries
 
 
@@ -1277,23 +1293,32 @@ def screen_content(file_path: str, pack_root: str, target: str | None = None) ->
             {
                 "rule": "roster-names",
                 "category": "roster-names",
-                # Hyphenated, matching every other "can't mechanically
-                # evaluate this" rule/category name in this codebase
-                # (missing-citation, out-of-bounds-range,
-                # citation-range-not-evaluated) -- this used to be spelled
-                # with an underscore instead, the one remaining inconsistent
-                # spelling after step 2 changed target-ruleset-override's
-                # own not_evaluated to block (step 6 of the 2026-09-06 fix
-                # round).
-                "disposition": "not-evaluated",
+                # INTERIM disposition, issue #2110: `redact`, not
+                # `not-evaluated`. `screen-sensitive/SKILL.md` §2 defines
+                # consumer actions for pass/redact/block only, so a caller
+                # following that procedure literally has nothing to do with a
+                # `not-evaluated` finding and can drop it on the floor -- the
+                # same fail-open shape step 2 of the 2026-09-06 fix round
+                # already closed for target-ruleset-override. Until Phase 1b
+                # (#2131) adds the $PROFESSOR_VERIFIER_CMD dispatch that can
+                # tell ATTRIBUTION from ROSTER_DATA, every candidate takes the
+                # disposition the ruleset itself assigns an undecided one:
+                # sensitive-patterns.md lists this category under Redact, and
+                # SKILL.md's own AMBIGUOUS verdict resolves to `redact` for
+                # exactly this "when in doubt, the safer disposition" reason.
+                # Over-redacting an attribution name is recoverable; silently
+                # publishing an access-control roster is not.
+                "disposition": "redact",
                 "location": {"line": _line_number(content, name_span[0])},
                 "match": None,
-                "replacement": None,
+                "replacement": "[REDACTED: roster-names]",
                 "message": (
                     "structurally matches the roster/access-control-names "
-                    "category, which needs $PROFESSOR_VERIFIER_CMD model "
-                    "dispatch (Phase 1b, not yet built) -- not evaluated here, "
-                    "not silently passed as clean."
+                    "category. Distinguishing attribution from access-control "
+                    "data needs $PROFESSOR_VERIFIER_CMD model dispatch "
+                    "(Phase 1b, #2131, not yet built); until it exists every "
+                    "candidate is redacted rather than left for the caller to "
+                    "interpret."
                 ),
             }
         )

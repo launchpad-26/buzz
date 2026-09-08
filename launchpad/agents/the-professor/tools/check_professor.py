@@ -183,9 +183,14 @@ SCREEN_CONTENT_EXPECTED = {
         "disposition_by_category": {"internal-hostname-private-ip": "redact"}
     },
     "redact-physical-address.md": {"disposition_by_category": {"physical-address": "redact"}},
-    "dispatch-roster-names.md": {"disposition_by_category": {"roster-names": "not-evaluated"}},
+    # Interim `redact`, not `not-evaluated` -- issue #2110. See the comment on
+    # the roster-names finding in localcmd.py's screen_content: a disposition
+    # SKILL.md §2 defines no consumer action for is a fail-open, so an
+    # undecided candidate takes the ruleset's own Redact disposition until
+    # Phase 1b (#2131) can tell attribution from access-control data.
+    "dispatch-roster-names.md": {"disposition_by_category": {"roster-names": "redact"}},
     "dispatch-roster-names-two-pairs.md": {
-        "disposition_by_category": {"roster-names": "not-evaluated"}
+        "disposition_by_category": {"roster-names": "redact"}
     },
     "clean-unrelated-roster-and-names.md": {"disposition_by_category": {}},
 }
@@ -217,13 +222,18 @@ def _run_professor(
     pack_root: str | None,
     cwd: str | None = None,
     path_prepend: str | None = None,
+    path_override: str | None = None,
 ):
     env = dict(os.environ)
     if pack_root is None:
         env["PROFESSOR_PACK_ROOT"] = ""
     else:
         env["PROFESSOR_PACK_ROOT"] = pack_root
-    if path_prepend is not None:
+    if path_override is not None:
+        # Replaces PATH outright rather than prepending, so `gh`/`git` genuinely
+        # cannot be found -- the missing-binary case issue #2112 is about.
+        env["PATH"] = path_override
+    elif path_prepend is not None:
         env["PATH"] = path_prepend + os.pathsep + env.get("PATH", "")
     return subprocess.run(
         [str(PROFESSOR_PY), *args],
@@ -435,6 +445,109 @@ def check_path_exists_at_true_and_false(sha: str) -> str | None:
     )
     if false_result.returncode != 0 or false_result.stdout.strip() != "false":
         return f"path-exists-at(fabricated path) did not return false: {false_result.stdout!r} {false_result.stderr!r}"
+
+    return None
+
+
+def check_uppercase_sha_is_accepted(sha: str) -> str | None:
+    """An uppercase-hex commit SHA must resolve identically to its lowercase
+    form (issue #2105), not be rejected as malformed.
+
+    Both answers are asserted, not just the `true` one: a validation bug that
+    accepted uppercase but then passed the un-normalized value through could
+    still produce a wrong `false`, which would look like a citation defect
+    rather than a tool defect.
+    """
+    upper = sha.upper()
+    if upper == sha:
+        return f"test setup error: {sha!r} has no uppercase form to test with"
+
+    true_result = _run_professor(
+        ["path-exists-at", EXTERNAL_REPO, upper, EXTERNAL_EXISTING_PATH],
+        pack_root="/tmp",
+    )
+    if true_result.returncode != 0 or true_result.stdout.strip() != "true":
+        return (
+            "path-exists-at(uppercase SHA, real path) did not return true: "
+            f"{true_result.stdout!r} {true_result.stderr!r}"
+        )
+
+    false_result = _run_professor(
+        ["path-exists-at", EXTERNAL_REPO, upper, EXTERNAL_MISSING_PATH],
+        pack_root="/tmp",
+    )
+    if false_result.returncode != 0 or false_result.stdout.strip() != "false":
+        return (
+            "path-exists-at(uppercase SHA, fabricated path) did not return false: "
+            f"{false_result.stdout!r} {false_result.stderr!r}"
+        )
+
+    return None
+
+
+def check_missing_binary_is_structured_not_traceback() -> str | None:
+    """A missing `gh` or `git` binary must produce a structured error naming the
+    binary, never a raw `FileNotFoundError` traceback (issue #2112).
+
+    Both halves of the tool layer are exercised, because they shell out to
+    different binaries through the same helper: `path-exists-at` needs `gh`,
+    and `check-page` on a local citation needs `git`. Asserting the absence of
+    "Traceback" is the point of the check -- an exit code alone cannot
+    distinguish a handled error from an unhandled crash, since both are
+    non-zero.
+    """
+    # PATH cannot simply be emptied: professor.py's shebang is
+    # `#!/usr/bin/env -S uv run --script`, so wiping PATH kills `uv` before
+    # Python starts and the run fails for the wrong reason. Instead PATH is
+    # narrowed to a directory holding nothing but a symlink to `uv` -- the
+    # interpreter resolves, `gh` and `git` genuinely do not.
+    uv_path = shutil.which("uv")
+    if uv_path is None:
+        return "test setup error: `uv` not on PATH, cannot construct a gh/git-free PATH"
+
+    with tempfile.TemporaryDirectory() as empty_bin:
+        os.symlink(uv_path, os.path.join(empty_bin, "uv"))
+        if shutil.which("gh", path=empty_bin) or shutil.which("git", path=empty_bin):
+            return "test setup error: gh/git still resolvable on the narrowed PATH"
+
+        gh_result = _run_professor(
+            [
+                "path-exists-at",
+                EXTERNAL_REPO,
+                "0" * 40,
+                EXTERNAL_EXISTING_PATH,
+            ],
+            pack_root="/tmp",
+            path_override=empty_bin,
+        )
+        if gh_result.returncode == 0:
+            return "path-exists-at with no `gh` on PATH unexpectedly succeeded"
+        if "Traceback" in gh_result.stderr:
+            return (
+                "path-exists-at with no `gh` on PATH produced a raw traceback: "
+                f"{gh_result.stderr!r}"
+            )
+        if "not installed or not on PATH" not in gh_result.stderr:
+            return (
+                "path-exists-at with no `gh` on PATH did not name the missing "
+                f"binary: {gh_result.stderr!r}"
+            )
+
+        page_result = _run_professor(
+            [
+                "check-page",
+                str(FIXTURES_DIR / "compliant-local.md"),
+                "--target",
+                str(REPO_ROOT),
+            ],
+            pack_root=str(PACK_ROOT),
+            path_override=empty_bin,
+        )
+        if "Traceback" in page_result.stderr:
+            return (
+                "check-page with no `git` on PATH produced a raw traceback: "
+                f"{page_result.stderr!r}"
+            )
 
     return None
 
@@ -1119,6 +1232,18 @@ def main() -> int:
         print(f"FAIL [path-exists-at true/false]: {error}")
         return 1
     print("ok: path-exists-at true/false")
+
+    error = check_uppercase_sha_is_accepted(sha)
+    if error:
+        print(f"FAIL [uppercase SHA accepted]: {error}")
+        return 1
+    print("ok: an uppercase-hex SHA resolves identically to its lowercase form")
+
+    error = check_missing_binary_is_structured_not_traceback()
+    if error:
+        print(f"FAIL [missing binary structured error]: {error}")
+        return 1
+    print("ok: a missing gh/git binary is a structured error, never a raw traceback")
 
     error = check_citation_check_error_on_api_failure()
     if error:
