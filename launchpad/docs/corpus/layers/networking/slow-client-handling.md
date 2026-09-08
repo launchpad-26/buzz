@@ -76,6 +76,19 @@ evidence:
     entry_class: FACT
     evidence:
       - "launchpad/docs/corpus/architecture/flows/websocket-connection.md"
+  - statement: "The merged layers-configuration-relay-configuration node is the canonical owner of both variables as configuration: its environment-variable table carries a BUZZ_SEND_BUFFER row (integer, default 1000, \"Per-connection outbound message buffer size (messages)\") and a BUZZ_SLOW_CLIENT_GRACE_LIMIT row (integer, default 15, \"Consecutive buffer-full events tolerated before a slow client is cancelled\"), so this node cites those values as inputs to the mechanism rather than re-owning the configuration surface."
+    entry_class: FACT
+    evidence:
+      - "launchpad/docs/corpus/layers/configuration/relay-configuration.md"
+  - statement: "The grace limit of 15 has a recorded motivation rather than being an arbitrary default: commit 142a5c909542f1e1d2119ca4562129d492aca94c (\"fix(relay): raise grace limit, add replay backpressure, and NOTICE on oversized frames (#1226)\") deleted a hardcoded const SLOW_CLIENT_GRACE_LIMIT: u8 = 3 whose own doc comment read \"Prevents transient read stalls from hard-disconnecting agents mid-inference\", and replaced it with the configurable Config::slow_client_grace_limit defaulting to 15 — so the raise from 3 to 15 was made because a limit of 3 was disconnecting agents during transient read stalls."
+    entry_class: FACT
+    evidence:
+      - "git_show(142a5c909542f1e1d2119ca4562129d492aca94c, paths='crates/buzz-relay/src/config.rs crates/buzz-relay/src/connection.rs') -> removes 'const SLOW_CLIENT_GRACE_LIMIT: u8 = 3' and its 'Prevents transient read stalls from hard-disconnecting agents mid-inference' doc comment; adds 'slow_client_grace_limit' to Config and 'BUZZ_SLOW_CLIENT_GRACE_LIMIT ... unwrap_or(15)' to Config::from_env"
+  - statement: "ADR-0018 records that the relay's production sizing decision was made \"without the measurements it named\" and that the relay is \"very likely running cluster-sized defaults\" naming BUZZ_SEND_BUFFER at 1,000 per connection among them, so the send-buffer default is explicitly documented as unmeasured against production load rather than as a tuned value."
+    entry_class: FACT
+    evidence:
+      - "launchpad/decisions/ADR-0018-cohort-relay-vps-specification.md"
+      - "launchpad/docs/corpus/verification/performance/relay.md"
   - statement: "Setting BUZZ_SLOW_CLIENT_GRACE_LIMIT to 0 disables grace entirely rather than disabling the disconnect, because the counter is read after its increment and so is at least 1 whenever the comparison runs, making count >= 0 true on the very first buffer-full event."
     entry_class: INFERENCE
     evidence:
@@ -99,6 +112,10 @@ relationships:
     target: layers-observability-metrics
   - type: references
     target: layers-lifecycle-concurrency
+  - type: references
+    target: layers-configuration-relay-configuration
+  - type: references
+    target: verification-performance-relay
 ---
 
 # Slow client handling: backpressure, grace, and disconnect
@@ -248,10 +265,28 @@ real socket.
 
 ## Configuration
 
-| Knob | Environment variable | Default | Effect |
-|---|---|---|---|
-| `Config::send_buffer_size` | `BUZZ_SEND_BUFFER` | `1000` messages | How much lag a connection may absorb before any frame is refused. |
-| `Config::slow_client_grace_limit` | `BUZZ_SLOW_CLIENT_GRACE_LIMIT` | `15` | Consecutive refusals tolerated before the connection is cancelled. |
+Two settings shape this flow: `BUZZ_SEND_BUFFER` (`Config::send_buffer_size`, default
+`1000` messages) sets how much lag a connection may absorb before any frame is refused,
+and `BUZZ_SLOW_CLIENT_GRACE_LIMIT` (`Config::slow_client_grace_limit`, default `15`) sets
+how many consecutive refusals are tolerated before cancellation.
+
+**The variables themselves are `layers-configuration-relay-configuration`'s**, which
+carries the canonical environment-variable table including both rows and their defaults.
+This section does not restate that table; it records only what is specific to this
+mechanism.
+
+**Why 15.** The limit is not arbitrary. It was raised from a hardcoded `3` in commit
+`142a5c9095` ("fix(relay): raise grace limit, add replay backpressure, and NOTICE on
+oversized frames", #1226), which deleted a `const SLOW_CLIENT_GRACE_LIMIT: u8 = 3` whose
+doc comment read *"Prevents transient read stalls from hard-disconnecting agents
+mid-inference"* and replaced it with the configurable default. A grace of 3 was
+disconnecting agents during transient read stalls; the same change made the value tunable.
+
+**The `1000` is explicitly unmeasured.** `ADR-0018` ratifies the relay's production
+sizing "without the measurements it named" and records that the relay is "very likely
+running cluster-sized defaults", naming `BUZZ_SEND_BUFFER` at 1,000 per connection among
+them. `verification-performance-relay` owns that gap. Treat the send-buffer default as
+a value nobody has load-tested, not as a tuned one.
 
 Two operational cautions, both read from `crates/buzz-relay/src/config.rs`:
 
@@ -267,7 +302,8 @@ Two operational cautions, both read from `crates/buzz-relay/src/config.rs`:
   `INFERENCE` at confidence 0.9.
 
 Neither variable appears in `.env.example`, which otherwise documents 74 `BUZZ_`
-settings including commented tuning entries for the Redis and Postgres pool sizes. See
+settings including commented tuning entries for the Redis and Postgres pool sizes — so
+an operator working from that file alone would not know either setting exists. See
 *Scope and omissions*.
 
 ## Boundary
@@ -291,6 +327,13 @@ This node does not describe:
   interval. It detects a client that has stopped *responding*; this node covers a client
   that has stopped *reading*. The two meet only where a full control channel makes the
   heartbeat's `try_send` fail.
+- **The two environment variables as configuration.** Their types, defaults, and place
+  in the relay's full variable table belong to
+  `layers-configuration-relay-configuration`. This node explains what they *do* to the
+  flow, not what the configuration surface is.
+- **Whether the defaults are the right values.** Load testing, measured ceilings and the
+  absence of both are `verification-performance-relay`'s, which already records the
+  send-buffer default as unmeasured.
 - **The relay's metric catalogue.** What shape `buzz_ws_backpressure_disconnects_total`
   is and how metrics are exposed is `layers-observability-metrics`'.
 - **The writer task's concurrency design.** `send_loop_inner`'s biased `select!`,
@@ -309,6 +352,10 @@ This node does not describe:
   belongs to.
 - `references` `layers-lifecycle-concurrency` — the bounded-`mpsc` and writer-loop
   primitives this flow runs on.
+- `references` `layers-configuration-relay-configuration` — the canonical owner of both
+  environment variables as configuration.
+- `references` `verification-performance-relay` — the node recording that the
+  send-buffer default is unmeasured against production load.
 
 Each target was confirmed present on `origin/launchpad` before being written. The
 sibling networking node covering connection admission and limits (#1123) is authored but
@@ -321,8 +368,9 @@ hard error in CI.
 **This node covers** what happens to a WebSocket client that cannot keep up with the
 frames the relay is sending it: the bounded per-connection buffer, the shared
 consecutive-failure counter and its reset semantics, the two producer sites that drive
-it, the configurable grace limit and its two environment variables with their defaults
-and their lack of validation, the ungraced control-channel escalation, the metric and
+it, the configurable grace limit and its two environment variables — their effect on the
+flow, the recorded reason the grace limit was raised from 3 to 15, and their lack of
+validation — the ungraced control-channel escalation, the metric and
 log lines emitted, the bare `Close(None)` the client finally receives, and the unit
 tests covering the counter arithmetic.
 
@@ -334,6 +382,8 @@ tests covering the counter arithmetic.
 | The surrounding connection lifecycle and shared cleanup | `architecture-flows-websocket-connection` |
 | Connection admission and `max_connections` | `layers/networking/connection-limits.md` (task #1123, not merged at the recorded revision) |
 | Heartbeat/missed-pong liveness detection | not yet written; no merged node claims it |
+| Both environment variables as configuration (types, defaults, full variable table) | `layers-configuration-relay-configuration` |
+| Whether the defaults are correctly sized; load testing and measured ceilings | `verification-performance-relay` |
 | The relay's metric catalogue and exposition | `layers-observability-metrics` |
 | The writer loop's batching and select design | `layers-lifecycle-concurrency` |
 | Client-side recovery from a dropped frame | not yet written; the historical `REQ` read path is the mechanism, and no merged node documents recovery-after-backpressure |
@@ -358,11 +408,14 @@ tests covering the counter arithmetic.
   from that file alone would not know either setting exists. This is recorded here as a
   finding, not fixed — changing `.env.example` is a product change outside this
   documentation task's scope.
-- **No production tuning evidence was found.** Whether `1000` and `15` are values
-  anyone has measured against real traffic, or defaults chosen once and never revisited,
-  is not established by anything in this repository — no ADR, benchmark or issue was
-  found stating a rationale for either number. The defaults are documented here as facts
-  about the code, not as endorsed operating values.
+- **The two defaults have unequal provenance, and neither is measured.** The `15` has a
+  recorded motivation — commit `142a5c9095` raised it from `3` because a limit of `3` was
+  disconnecting agents during transient read stalls — but no measurement is attached to
+  `15` specifically rather than any other larger number. The `1000` has an explicit
+  disclaimer instead: `ADR-0018` records it as a cluster-sized default ratified without
+  the load measurements the decision itself named. **A search for a benchmark or load
+  test establishing either number found none**, and `verification-performance-relay`
+  independently owns that gap. Treat both as unvalidated operating values.
 - **The relay was not run.** Every claim in this node is read from source at the
   recorded revision. No relay was started, no client was stalled, and no metric or log
   line was observed being emitted.
