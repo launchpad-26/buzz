@@ -272,9 +272,12 @@ sequenceDiagram
 
 ## Outcome
 
-**Success.** The client holds a response produced by exactly one handler, and
-the relay has recorded a metrics observation keyed to the matched route pattern
-plus an `http.request` trace span. On the one upgrading route, the HTTP exchange
+**Success.** The client holds a response produced by exactly one handler, and an
+`http.request` trace span has been opened for it. A metrics observation keyed to
+the matched route pattern is recorded too — but only for a request that matched
+a route and whose pattern is not `/health`, `/metrics` or `/_`-prefixed; a
+fallback-served or probe request deliberately records none. On the one upgrading
+route, the HTTP exchange
 has ended with 101 and the connection is now a WebSocket bound to a resolved
 community, owned from that point by `handle_connection`.
 (`crates/buzz-relay/src/router.rs`, `crates/buzz-relay/src/metrics.rs`)
