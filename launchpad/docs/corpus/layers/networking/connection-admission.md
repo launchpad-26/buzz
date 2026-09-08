@@ -103,6 +103,14 @@ evidence:
     entry_class: FACT
     evidence:
       - "crates/buzz-relay/src/tenant.rs"
+  - statement: "ADR-0018 records, as a ratified-but-uncomfortable consequence, that the cohort relay very likely runs cluster-sized defaults including BUZZ_MAX_CONNECTIONS at 10,000 on a 1.9 GiB host, that the only place the cohort ever templated the value is an archived Ansible role, and that the relay will therefore accept far more load than the host can hold before any limit trips."
+    entry_class: FACT
+    evidence:
+      - "launchpad/decisions/ADR-0018-cohort-relay-vps-specification.md"
+  - statement: "ADR-0018 explicitly defers the relay's connection, send-buffer and Postgres pool ceilings to a follow-up ADR that it states is not decided there, so the sized value of the connection budget is an open decision rather than a settled one."
+    entry_class: FACT
+    evidence:
+      - "launchpad/decisions/ADR-0018-cohort-relay-vps-specification.md"
   - statement: "Issue #1121's definition of done requires exactly one hand-authored canonical document, schema-valid front matter, one independently maintainable idea, a one-sentence definition before deeper explanation, explicit boundaries and non-goals, links to related concepts/implementation/verification rather than duplicated content, and examples that do not introduce a second canonical concept."
     entry_class: TEAM_KNOWLEDGE
     provided_by: "launchpad-26/buzz#1121 definition of done, read with gh issue view while authoring this node"
@@ -233,6 +241,15 @@ that fairness role — and, at this revision, nothing calls it. `layers-data-red
 already records that gap in detail; it is named here because it explains why the
 budget is the only quantity admission counts.
 
+**What the budget should be set to is an open decision, not a settled one.** ADR-0018
+ratifies the cohort relay's host specification while stating plainly that the relay is
+very likely running the cluster-sized default of 10,000 connections on a 1.9 GiB host,
+that the only place the cohort ever templated the value is an archived Ansible role,
+and that the consequence is a relay which "will accept far more load than the host can
+hold before any limit trips." It then defers the connection, send-buffer and pool
+ceilings to a follow-up ADR it explicitly does not decide. This node records that
+state and does not resolve it: the admission mechanism is settled, its sizing is not.
+
 ## Use cases
 
 Understanding admission as a separate stage is what lets you answer questions that
@@ -309,8 +326,11 @@ and does not rule on whether it is intended.
   `.env.example`.** Both were read from `config.rs`, where the defaults are 10,000 and
   512 KiB; an operator working from the environment template alone would not learn
   either knob exists.
-- **No accepted decision record was found for the admission ordering.** The reasons
-  quoted above come from comments in `router.rs` and `tenant.rs`, which are
-  authoritative for current behaviour but are not a decision record; whether the
-  two-door asymmetry was ever decided rather than accreted could not be established
-  from the repository.
+- **No accepted decision record was found for the admission *ordering* or the
+  two-door asymmetry.** Searching `launchpad/decisions/` surfaced ADR-0018 (which
+  bears on the budget's *size*, and is cited above) and ADR-0024 (which mentions
+  "relay admission" only in passing as a span boundary), but nothing deciding where
+  each gate sits relative to the upgrade. The reasons quoted above come from comments
+  in `router.rs` and `tenant.rs` — authoritative for current behaviour, but not a
+  decision record. Whether the asymmetry was decided or accreted could not be
+  established from the repository.
