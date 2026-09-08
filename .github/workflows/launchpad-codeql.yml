@@ -1,0 +1,86 @@
+name: launchpad — CodeQL
+
+# Static/dataflow analysis for this fork (#2135). Neither existing security
+# workflow does this: launchpad-security-audit.yml is pattern/diff based
+# (gitleaks, upstream-drift), and codex-security-review.yml is an LLM-based
+# advisory review, heuristic rather than deterministic. Nothing here checks
+# for SQL injection, path traversal, unsafe deserialization, or the other
+# vulnerability classes CodeQL's dataflow analysis catches.
+#
+# A new file, not an edit to any upstream one, so this does not need the
+# fork's "may we modify upstream files?" question resolved first.
+#
+# Languages: GitHub's own code-scanning/default-setup endpoint reports
+# actions, java-kotlin, javascript-typescript, python, rust, swift as
+# supported for this repo (confirmed 2026-09-09 via `gh api
+# repos/launchpad-26/buzz/code-scanning/default-setup`). Dart — roughly
+# 5.4M characters of this repo, presumably the Flutter mobile app — is not
+# on that list and stays uncovered; that is a real, named gap, not an
+# oversight. Ruby is technically present (~1.3KB) but too small to be
+# meaningful application code, so it is left out of the matrix rather than
+# padding it for a file or two.
+#
+# Advisory, not required, to start: a first run against a codebase this
+# size will very likely surface a backlog of pre-existing findings, and a
+# gate that starts out usually red teaches everyone to ignore it — the
+# same lesson already drawn from this repo's own CI failure-rate numbers.
+# Promoting this to a required status check is follow-up work, once that
+# backlog is triaged and branch protection actually exists to enforce it.
+#
+# Triggers:
+#   pull_request   fast feedback on new code, default query suite scope
+#   push           baseline on launchpad itself after merge
+#   schedule       full periodic sweep independent of PR activity, off-hour
+#                  to avoid GitHub's top-of-hour queue (same convention as
+#                  launchpad-security-audit.yml's 03:17 UTC cron)
+on:
+  pull_request:
+  push:
+    branches: [launchpad]
+  schedule:
+    - cron: "41 4 * * 1"
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+  security-events: write # required to upload SARIF results
+
+jobs:
+  analyze:
+    name: Analyze (${{ matrix.language }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    permissions:
+      contents: read
+      security-events: write
+      actions: read # needed for the `actions` language (workflow analysis)
+    strategy:
+      fail-fast: false
+      matrix:
+        language: [rust, javascript-typescript, python, swift, java-kotlin, actions]
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Initialize CodeQL
+        uses: github/codeql-action/init@6f5948dfacef28e207b48d0905cf90c03365536d # v3.37.9
+        with:
+          languages: ${{ matrix.language }}
+          queries: security-extended
+
+      # Not verified: autobuild's behaviour against this repo's Rust
+      # workspace and the Tauri desktop build specifically. Autobuild
+      # handles many Cargo projects fine but is a known weak point for
+      # more complex build graphs — if this step fails for `rust` or
+      # `swift`, replace it with the project's own explicit build command
+      # rather than fighting autobuild.
+      - name: Autobuild
+        uses: github/codeql-action/autobuild@6f5948dfacef28e207b48d0905cf90c03365536d # v3.37.9
+
+      - name: Perform CodeQL analysis
+        uses: github/codeql-action/analyze@6f5948dfacef28e207b48d0905cf90c03365536d # v3.37.9
+        with:
+          category: "/language:${{ matrix.language }}"
