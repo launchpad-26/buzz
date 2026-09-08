@@ -250,9 +250,25 @@ def check_pack_root_unset_fails_loud() -> str | None:
         result = _run_professor(args, pack_root=None)
         if result.returncode == 0:
             return f"{name}: expected non-zero exit with $PROFESSOR_PACK_ROOT unset, got 0"
-        if result.stderr.strip() != REQUIRED_UNSET_ERROR_TEXT:
+        # Asserted as the END of stderr, not the whole of it. professor.py's
+        # shebang is `uv run --script`, and on a cold cache uv prints its own
+        # progress ("Installed 3 packages in 8ms") to stderr before the script
+        # runs at all -- which broke a whole-string comparison. CI runs cold by
+        # definition, so a whole-string match made the new professor-tools job
+        # red on every run.
+        #
+        # This does not weaken what the check is for. The reason it compares
+        # exact text is to tell the designed fail-loud message from a bare
+        # `KeyError: 'PROFESSOR_PACK_ROOT'` traceback, which also names the
+        # variable; a traceback does not END with this message, so endswith
+        # still rejects it. The explicit no-traceback assertion below closes
+        # the remaining gap directly rather than by implication.
+        stderr = result.stderr.strip()
+        if "Traceback" in stderr:
+            return f"{name}: raw traceback on stderr rather than the fail-loud message: {stderr!r}"
+        if not stderr.endswith(REQUIRED_UNSET_ERROR_TEXT):
             return (
-                f"{name}: error message did not match the exact required text "
+                f"{name}: stderr did not end with the exact required text "
                 f"{REQUIRED_UNSET_ERROR_TEXT!r}: got {result.stderr!r}"
             )
     return None
@@ -547,6 +563,66 @@ def check_missing_binary_is_structured_not_traceback() -> str | None:
             return (
                 "check-page with no `git` on PATH produced a raw traceback: "
                 f"{page_result.stderr!r}"
+            )
+
+    return None
+
+
+def check_line_count_failure_is_not_a_citation_defect() -> str | None:
+    """A failure to READ a cited file must never be reported as a defect in the
+    citation's line range.
+
+    `_local_file_line_count` returns None when it cannot obtain a count, and the
+    range check treats None as out-of-bounds -- so before this was separated, a
+    `git show` that timed out or a missing `git` binary made check-page report
+    the document as wrong. Existence succeeding does not imply the later content
+    read succeeds: `_local_citation_exists` runs `git cat-file`, a different
+    call that can succeed moments before `git show` fails.
+
+    Exercised with a decoy `git` that passes every subcommand through to the
+    real one EXCEPT `show`, which hangs long enough to trip the 15s timeout.
+    That is the narrowest way to make exactly the second call fail while the
+    first still succeeds, which is the ordering the bug depended on.
+    """
+    real_git = shutil.which("git")
+    if real_git is None:
+        return "test setup error: no `git` on PATH to pass through to"
+
+    fixture_path = FIXTURES_DIR / "compliant-range-at-end.md"
+    with tempfile.TemporaryDirectory() as decoy_dir:
+        decoy = Path(decoy_dir) / "git"
+        decoy.write_text(
+            "#!/bin/sh\n"
+            "for a in \"$@\"; do\n"
+            "  if [ \"$a\" = show ]; then sleep 60; exit 0; fi\n"
+            "done\n"
+            f"exec {real_git} \"$@\"\n"
+        )
+        decoy.chmod(0o755)
+
+        result = _run_professor(
+            ["check-page", str(fixture_path), "--target", str(REPO_ROOT)],
+            pack_root=str(PACK_ROOT),
+            path_prepend=decoy_dir,
+        )
+        if result.returncode != 0:
+            return f"check-page(decoy hanging git show) failed: {result.stderr}"
+        try:
+            report = json.loads(result.stdout)
+        except json.JSONDecodeError:
+            return f"check-page(decoy hanging git show) did not print valid JSON: {result.stdout!r}"
+
+        categories = [f["category"] for f in report.get("findings", [])]
+        if "out-of-bounds-range" in categories:
+            return (
+                "a git show timeout was reported as out-of-bounds-range -- an "
+                "unreadable file is being blamed on the citation: "
+                f"{report.get('findings')!r}"
+            )
+        if categories != ["citation-check-error"]:
+            return (
+                "expected exactly one citation-check-error when the line count "
+                f"cannot be read, got {categories!r}"
             )
 
     return None
@@ -1189,7 +1265,7 @@ MESSAGE_LEAK_FORBIDDEN_SUBSTRINGS = {
 }
 
 
-def check_page_messages_never_leak_raw_content() -> str | None:
+def check_page_messages_never_leak_raw_content(offline: bool = False) -> str | None:
     """check-page's messages must never contain the flagged sentence's raw
     text or the raw citation string, across every fixture that exercises one
     of these message-construction paths: missing-citation, mixed-claim,
@@ -1204,8 +1280,19 @@ def check_page_messages_never_leak_raw_content() -> str | None:
     all" branch -- both share the "missing-citation" rule label but are two
     distinct call sites in `_check_section`.
     """
+    skipped_external = []
     for fixture_name, forbidden_substrings in MESSAGE_LEAK_FORBIDDEN_SUBSTRINGS.items():
         fixture_path = FIXTURES_DIR / fixture_name
+        if offline and fixture_name in EXTERNAL_CITATION_FIXTURES:
+            # This check has its own fixture list, so it bypassed the offline
+            # exclusion `check_check_page_fixtures` applies and really did
+            # reach the GitHub API under --offline. It still "passed", because
+            # the citation-check-error a blocked call produces happens to
+            # contain none of the forbidden substrings -- so the check quietly
+            # stopped exercising the message path it exists to cover, while
+            # reporting success.
+            skipped_external.append(fixture_name)
+            continue
         result = _run_professor(
             ["check-page", str(fixture_path), "--target", str(REPO_ROOT)], pack_root=str(PACK_ROOT)
         )
@@ -1225,6 +1312,11 @@ def check_page_messages_never_leak_raw_content() -> str | None:
                     f"check-page({fixture_name}): a message leaked forbidden raw "
                     f"content {forbidden!r} -- findings: {findings!r}"
                 )
+    if skipped_external:
+        print(
+            "skipped: --offline -- external-citation fixture(s) not run "
+            f"(they reach the GitHub API): {sorted(skipped_external)!r}"
+        )
     return None
 
 
@@ -1268,6 +1360,10 @@ def _run_network_free_checks(offline: bool) -> int:
         (
             "citation-check-error on API failure (not collapsed into citation-not-found)",
             check_citation_check_error_on_api_failure,
+        ),
+        (
+            "an unreadable line count is a citation-check-error, never out-of-bounds-range",
+            check_line_count_failure_is_not_a_citation_defect,
         ),
         (
             "local-citation error shapes (nonexistent --target, non-git --target, "
@@ -1329,7 +1425,7 @@ def _run_network_free_checks(offline: bool) -> int:
             "raw citation string (missing-citation, unparseable-citation, "
             "mixed-claim, citation-not-found, out-of-bounds-range, "
             "citation-range-not-evaluated)",
-            check_page_messages_never_leak_raw_content,
+            lambda: check_page_messages_never_leak_raw_content(offline=offline),
         ),
     ]
 

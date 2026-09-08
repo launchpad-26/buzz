@@ -242,21 +242,33 @@ def _local_citation_exists(target: str, commit: str, path: str) -> tuple[bool | 
     return result.returncode == 0, None
 
 
-def _local_file_line_count(target: str, commit: str, path: str) -> int | None:
-    # A run failure (no `git`, timeout) is indistinguishable here from "the file
-    # isn't there" -- both return None, which callers already treat as "no line
-    # count available" and never as a citation defect. `_local_citation_exists`
-    # above runs first for every citation and surfaces the real reason.
+def _local_file_line_count(
+    target: str, commit: str, path: str
+) -> tuple[int | None, str | None]:
+    """Returns `(line_count, None)`, or `(None, message)` when the count could
+    not be obtained at all.
+
+    The two must stay distinguishable. A caller that cannot get a line count has
+    not learned that the citation's range is wrong -- it has learned nothing
+    about the range. An earlier version returned a bare `None` for both a
+    missing file and a failed `git show`, and the range check below treats
+    `None` as out-of-bounds, so a timeout or a missing `git` binary was reported
+    as a citation defect in the document. `_local_citation_exists` running first
+    does not make that safe: it proves the commit and path resolve, not that the
+    later content read succeeds.
+    """
     result, run_error = proc.run(
         ["git", "-C", target, "show", f"{commit}:{path}"],
         timeout=15,
         what=f"_local_file_line_count(target={target!r})",
     )
-    if run_error is not None or result.returncode != 0:
-        return None
+    if run_error is not None:
+        return None, run_error
+    if result.returncode != 0:
+        return None, None
     # A trailing newline means the last line still counts; splitlines handles
     # both a trailing-newline file and one without correctly.
-    return len(result.stdout.splitlines())
+    return len(result.stdout.splitlines()), None
 
 
 def _heading_ranges(text: str):
@@ -265,7 +277,8 @@ def _heading_ranges(text: str):
     `heading_open` token. Covers both ATX (`# Heading`, one line) and Setext
     (`Heading\\n=====`, two lines) forms -- both produce the same token type,
     closing the bug where the old ATX-only HEADING_RE silently skipped every
-    claim in a Setext-only or headingless document. `end_idx` is the line just after the heading's own line(s) --
+    claim in a Setext-only or headingless document. `end_idx` is the line
+    just after the heading's own line(s) --
     i.e. where the section body starts.
 
     Fence-aware for free: markdown-it-py already treats fenced code as
@@ -323,7 +336,8 @@ def _split_sections(body: str, line_offset: int = 0):
     only from after the frontmatter.
 
     Any tagged claim text before the document's first heading used to fall
-    into no section at all and was never checked. The span before the first heading is yielded here as an
+    into no section at all and was never checked. The span before the first
+    heading is yielded here as an
     implicit preamble unit -- `heading_line=None` signals it to
     `_check_section` below, which still scans it for claims/citations like
     any section's body, but never requires a provenance marker for it: the
@@ -359,8 +373,8 @@ def _split_sections(body: str, line_offset: int = 0):
 
         section_end = headings[pos + 1][0] if pos + 1 < len(headings) else len(lines)
         section_text = "\n".join(lines[end_idx:section_end])
-        # File-relative, 1-based line number of the section's own heading
-        #.
+        # File-relative, 1-based line number of the section's own heading,
+        # sharing screen-content's coordinate system.
         yield marker_line, heading_line, section_text, {"line": start_idx + 1 + line_offset}
 
 
@@ -455,7 +469,8 @@ def _parse_marker_sources(sources_attr: str) -> tuple[set, list]:
     match `MARKER_SOURCE_RE` is a real parse failure, not an absent one --
     it must never be silently discarded as if it were an empty-but-valid
     entry, which previously left `keys` looking "empty and therefore
-    matching" even when the marker's actual text was garbage. `malformed_entries` carries each such raw entry so
+    matching" even when the marker's actual text was garbage.
+    `malformed_entries` carries each such raw entry so
     the caller can flag it distinctly, rather than mistaking "nothing left
     to compare" for "correctly compared and found equal".
     """
@@ -626,15 +641,33 @@ def _check_section(marker_line, heading_line, section_text, target: str, locatio
 
             if citation["start"] is not None:
                 if citation["repo"] is None:
-                    total_lines = _local_file_line_count(target, citation["sha"], citation["path"])
+                    total_lines, count_error = _local_file_line_count(
+                        target, citation["sha"], citation["path"]
+                    )
                     # citation["end"] is None when no end was specified at
                     # all (falls back to start, a single-line citation) --
                     # NOT the same as an explicit 0, which is a malformed
                     # line number in its own right and must not silently
                     # fall back to start (`or` treats 0 as falsy, which is
-                    # the bug corrects).
+                    # the bug this branch corrects).
                     end = citation["start"] if citation["end"] is None else citation["end"]
-                    if (
+                    if count_error is not None:
+                        # The range was not checked, and "not checked" is not
+                        # "wrong" -- report the inability, never a defect in
+                        # the document.
+                        findings.append(
+                            _finding(
+                                "citation-check-error",
+                                f"{heading_ref} cites a line range whose bounds "
+                                "could not be checked: the file's line count "
+                                "could not be read. This is not a finding about "
+                                "the citation -- neither the underlying error "
+                                "text nor the citation itself is reproduced "
+                                "here.",
+                                location=location,
+                            )
+                        )
+                    elif (
                         total_lines is None
                         or citation["start"] < 1
                         or end > total_lines
@@ -652,7 +685,8 @@ def _check_section(marker_line, heading_line, section_text, target: str, locatio
                 else:
                     # An external citation's line range used to skip bounds
                     # validation entirely -- silently passing regardless of
-                    # how absurd the range was. Some of it IS mechanically checkable with no
+                    # how absurd the range was. Some of it IS mechanically
+                    # checkable with no
                     # network at all: a start below line 1, or an end before
                     # the start, can never be a real range no matter what the
                     # file actually contains. The upper bound, though, can
@@ -671,7 +705,7 @@ def _check_section(marker_line, heading_line, section_text, target: str, locatio
                     # NOT the same as an explicit 0, which is a malformed
                     # line number in its own right and must not silently
                     # fall back to start (`or` treats 0 as falsy, which is
-                    # the bug corrects).
+                    # the bug this guard corrects).
                     end = citation["start"] if citation["end"] is None else citation["end"]
                     if citation["start"] < 1 or end < citation["start"]:
                         findings.append(
@@ -706,7 +740,8 @@ def _check_section(marker_line, heading_line, section_text, target: str, locatio
             # A sources entry that failed to parse is a real parse failure,
             # never an absent-but-valid one -- flagging it distinctly means
             # it can never be silently absorbed into "matches, because
-            # there's nothing left to compare". Reported instead of, not alongside, the bijection
+            # there's nothing left to compare". Reported instead of, not
+            # alongside, the bijection
             # check below: with part of the marker unparseable, that
             # comparison can't be meaningfully run at all.
             findings.append(
@@ -737,7 +772,8 @@ def _check_section(marker_line, heading_line, section_text, target: str, locatio
 def _require_pack_spec(pack_root: str, spec_name: str, subcommand: str) -> str | None:
     """Confirm `<pack_root>/tools/contract/<spec_name>` exists and is
     non-empty -- genuinely validating that `pack_root` points at a real
-    Professor pack installation, not just a non-empty string. This is what makes `pack_root` genuinely
+    Professor pack installation, not just a non-empty string. This is what
+    makes `pack_root` genuinely
     load-bearing for `check_page`/`screen_content` specifically, rather than
     being threaded through as a parameter neither ever referenced.
     `professor.py`'s own shared `$PROFESSOR_PACK_ROOT` unset-check message no
@@ -831,7 +867,8 @@ CONNECTION_STRING_RE = re.compile(r"://[^\s:@/]+:[^\s@/]+@[^\s/]+")
 # A JSON Schema definition (`{"password": {"type": "string"}}`) used to
 # false-positive: the optional-quote tolerance above lets a bare `{` open the
 # matched "value" (`{"type":`), even though a credential value is always a
-# scalar (string/number), never a nested object/array opener. The negative lookahead below refuses to let the
+# scalar (string/number), never a nested object/array opener. The negative
+# lookahead below refuses to let the
 # value start with `{` or `[` -- the plain unquoted case, the underscore-
 # separated case, and a genuinely quoted scalar value all still match
 # exactly as before, since none of them ever has `{`/`[` as the first
@@ -849,7 +886,8 @@ WEBHOOK_URL_RE = re.compile(
 # substring check above is not that; it just happens to catch the common
 # case where a webhook domain also carries one. This regex finds any URL,
 # independent of what its domain contains, so its query string and path can
-# be inspected for an embedded high-entropy value. Excludes backtick and other Markdown delimiter characters so a
+# be inspected for an embedded high-entropy value. Excludes backtick and
+# other Markdown delimiter characters so a
 # URL wrapped in `...` doesn't swallow the closing backtick into the match.
 URL_RE = re.compile(r"https?://[A-Za-z0-9\-._~:/?#\[\]@!$&'()*+,;=%]+", re.IGNORECASE)
 
@@ -862,7 +900,8 @@ URL_AUTH_QUERY_PARAM_RE = re.compile(r"[?&](?:token|key|secret|auth)=([^&\s]+)",
 
 # sensitive-patterns.md's "[pattern] API keys / access tokens" category has a
 # second clause beyond the fixed-prefix table above: "a high-entropy opaque
-# string adjacent to words like key/token/secret". A plain `\b`-bounded version of this (an earlier round's own choice)
+# string adjacent to words like key/token/secret". A plain `\b`-bounded
+# version of this (an earlier round's own choice)
 # was a real, demonstrated evasion: `\b` treats `_` as a word character, so
 # neither side of the keyword in `API_KEY=<random>` or
 # `access_token=<random>` is ever a `\b` boundary at all -- the two most
@@ -941,7 +980,8 @@ MARKER_COMMENT_RE = re.compile(r"<!--\s*professor:section.*?-->", re.DOTALL)
 
 # sensitive-patterns.md's email carve-out is narrower than "the whole
 # frontmatter block" -- it's specifically "a citation's `author` frontmatter
-# field, or inside a `professor:section` provenance comment". Matches the `author:` line's value only, within the
+# field, or inside a `professor:section` provenance comment". Matches the
+# `author:` line's value only, within the
 # already-captured frontmatter body text.
 AUTHOR_FIELD_RE = re.compile(r"^author:[ \t]*(.*)$", re.MULTILINE)
 
@@ -1058,7 +1098,8 @@ def _url_embedded_auth_token(url: str) -> str | None:
 def _roster_names_matches(content: str):
     """Yields every `(roster_span, name_span)` pair where a roster-context
     phrase and a name-list-shaped phrase co-occur within a localized window
-    of each other -- every candidate, not just the first. The singular `_roster_names_first_match` this
+    of each other -- every candidate, not just the first. The singular
+    `_roster_names_first_match` this
     replaces returned only one match by name and by its one call site, which
     can't satisfy `skills/screen-sensitive/SKILL.md`'s documented "once per
     name screen-content flags" dispatch contract on a page with more than one
@@ -1198,8 +1239,7 @@ def screen_content(file_path: str, pack_root: str, target: str | None = None) ->
     # context" carve-out) -- excluded by span, not by guessing intent. The
     # carve-out is the `author` field's value specifically, not the entire
     # frontmatter block -- an email in some other frontmatter field (e.g. a
-    # `title` or `contact` value) is not attribution and must still screen
-    #.
+    # `title` or `contact` value) is not attribution and must still screen.
     excluded_spans = []
     fm_match = FRONTMATTER_RE.match(content)
     if fm_match:
@@ -1266,7 +1306,8 @@ def screen_content(file_path: str, pack_root: str, target: str | None = None) ->
                 # consumer actions for pass/redact/block only, so a caller
                 # following that procedure literally has nothing to do with a
                 # `not-evaluated` finding and can drop it on the floor -- the
-                # same fail-open shape # already closed for target-ruleset-override. Until Phase 1b
+                # same fail-open shape already closed for
+                # target-ruleset-override. Until Phase 1b
                 # (#2131) adds the $PROFESSOR_VERIFIER_CMD dispatch that can
                 # tell ATTRIBUTION from ROSTER_DATA, every candidate takes the
                 # disposition the ruleset itself assigns an undecided one:

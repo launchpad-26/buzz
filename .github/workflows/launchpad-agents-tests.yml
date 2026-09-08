@@ -111,6 +111,22 @@ jobs:
       - name: Install uv
         run: pip install uv
 
+      # professor.py's dependencies are declared PEP 723 inline, so the FIRST
+      # run of it builds the script environment and uv reports that on stderr
+      # ("Installed 3 packages in 8ms"). The harness compares one subcommand's
+      # stderr against an exact expected message, and CI runs cold by
+      # definition, so without this step that launcher output lands in the
+      # middle of the assertion and the job fails on every run. Warming it here
+      # keeps the noise in a step where nothing is being asserted.
+      #
+      # The harness no longer depends on this working: its assertion matches the
+      # END of stderr and rejects a traceback explicitly. This step is the belt
+      # to that braces -- it also keeps the harness's own log readable.
+      - name: Warm the script environment
+        run: |
+          PROFESSOR_PACK_ROOT=launchpad/agents/the-professor \
+            launchpad/agents/the-professor/tools/professor.py --help > /dev/null
+
       - name: Run the Professor tool-layer harness (network-free checks)
         run: |
           set -o pipefail
