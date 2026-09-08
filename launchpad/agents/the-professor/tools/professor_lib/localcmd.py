@@ -74,24 +74,24 @@ MARKER_SOURCE_RE = re.compile(
 )
 
 
-def _finding(rule: str, message: str, location: dict | None = None) -> dict:
-    """Builds one check-page finding dict. `rule` is duplicated onto a
-    `category` key: check-page and
-    screen-content findings used to be two incompatible shapes
-    (`{"rule", "message"}` vs. `{"category", "disposition",...}`), but
-    skills/screen-sensitive/SKILL.md requires block findings be reported "in
-    the same shape check_page's findings list uses... so review has one
-    consistent place to look regardless of which gate produced the finding."
-    Keeping both `rule` and `category` as aliases (rather than renaming one)
-    means every existing caller keyed on `rule` keeps working unchanged, and
-    a screen-content-oriented reader can key on `category` in both places
-    too. `location` is the same `{"line": <1-based line number>}` shape
+def _finding(category: str, message: str, location: dict | None = None) -> dict:
+    """Builds one check-page finding dict.
+
+    `category` is the single name for what kind of finding this is, shared
+    with `screen-content` (`_screen_finding` below) so both gates report the
+    same shape -- skills/screen-sensitive/SKILL.md requires block findings be
+    reported "in the same shape check_page's findings list uses... so review
+    has one consistent place to look regardless of which gate produced the
+    finding," and that SKILL.md names the key `category`. An earlier build
+    emitted `rule` alongside it as an alias; one name is enough now that every
+    consumer is in this repository. `location` is the same
+    `{"line": <1-based line number>}` shape
     screen-content's findings use (see `_screen_finding` below) -- for
     check-page this is the line of the section heading the finding belongs
     to (or line 1 for frontmatter-level findings, which have no section to
     localize to).
     """
-    return {"rule": rule, "category": rule, "message": message, "location": location}
+    return {"category": category, "message": message, "location": location}
 
 
 def _parse_frontmatter(content: str):
@@ -1115,7 +1115,6 @@ def _screen_finding(content: str, category: str, disposition: str, match) -> dic
     tool ever re-printing it.
     """
     return {
-        "rule": category,
         "category": category,
         "disposition": disposition,
         "location": {"line": _line_number(content, match.start())},
@@ -1168,7 +1167,6 @@ def screen_content(file_path: str, pack_root: str, target: str | None = None) ->
                     {
                         "findings": [
                             {
-                                "rule": "target-ruleset-override",
                                 "category": "target-ruleset-override",
                                 "disposition": "block",
                                 "location": {"line": 1},
@@ -1262,7 +1260,6 @@ def screen_content(file_path: str, pack_root: str, target: str | None = None) ->
     for _, name_span in _roster_names_matches(content):
         findings.append(
             {
-                "rule": "roster-names",
                 "category": "roster-names",
                 # INTERIM disposition, issue #2110: `redact`, not
                 # `not-evaluated`. `screen-sensitive/SKILL.md` §2 defines

@@ -583,7 +583,7 @@ def check_citation_check_error_on_api_failure() -> str | None:
                 "check-page(compliant-external.md, decoy 403 gh) did not print "
                 f"valid JSON: {result.stdout!r}"
             )
-        rules = [f["rule"] for f in report.get("findings", [])]
+        rules = [f["category"] for f in report.get("findings", [])]
         if "citation-not-found" in rules:
             return (
                 "check-page(compliant-external.md, decoy 403 gh): a rate-limit-"
@@ -591,7 +591,7 @@ def check_citation_check_error_on_api_failure() -> str | None:
             )
         raw_citation = "block/buzz:Cargo.toml@f038cbbb0d4092a72ffd93f17916f84d2b39bb43"
         for finding in report.get("findings", []):
-            if finding.get("rule") == "citation-check-error" and raw_citation in finding.get(
+            if finding.get("category") == "citation-check-error" and raw_citation in finding.get(
                 "message", ""
             ):
                 return (
@@ -634,7 +634,7 @@ def check_local_citation_error_shapes() -> str | None:
                 f"check-page against --target {target_dir!r} did not print valid "
                 f"JSON: {result.stdout!r}",
             )
-        return [f["rule"] for f in report.get("findings", [])], None
+        return [f["category"] for f in report.get("findings", [])], None
 
     # Case 1: --target points at a path that doesn't exist at all.
     nonexistent_target = f"/tmp/professor-check-nonexistent-target-{os.getpid()}"
@@ -922,7 +922,7 @@ def check_check_page_fixtures(offline: bool = False) -> str | None:
             report = json.loads(result.stdout)
         except json.JSONDecodeError:
             return f"check-page({fixture_name}) did not print valid JSON: {result.stdout!r}"
-        actual_rules = [f["rule"] for f in report.get("findings", [])]
+        actual_rules = [f["category"] for f in report.get("findings", [])]
         if actual_rules != expected_rules:
             return (
                 f"check-page({fixture_name}): expected rules {expected_rules!r}, "
