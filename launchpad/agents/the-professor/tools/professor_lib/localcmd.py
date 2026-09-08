@@ -9,8 +9,8 @@ attention, not silently invented scope: a mechanical check for "a behaviour clai
 with no citation" needs *some* explicit signal in the source text, since prose
 alone cannot carry that distinction deterministically).
 
-Citation existence (rule 1) is NOT a single reused code path, per this plan's
-step 4: a citation to `--target`'s own repo is checked with a plain local
+Citation existence (rule 1) is deliberately not a single reused code path: a
+citation to `--target`'s own repo is checked with a plain local
 `git cat-file` call -- no network, ever, for that case. Only a citation naming a
 genuinely different, external repo reuses `netcmd.path_exists_at_bool` in-process.
 """
@@ -35,8 +35,8 @@ SECTION_MARKER_RE = re.compile(
     r'^<!--\s*professor:section\s+sources="([^"]*)"\s+updated_by=\S+\s+updated_at=\S+\s*-->\s*$'
 )
 # Structure detection (headings, fenced code) is delegated to markdown-it-py
-# (step 2 of the 2026-09-06 fix round) rather than hand-rolled regexes -- the
-# old ATX-only HEADING_RE never matched Setext headings (`Heading\n=====`),
+# rather than hand-rolled regexes -- the old ATX-only HEADING_RE never
+# matched Setext headings (`Heading\n=====`),
 # silently skipping every claim in a Setext-only or headingless document.
 # A single shared parser instance: CommonMark, no plugins -- this pack's own
 # claim-tagging convention and provenance markers are HTML comments/plain
@@ -47,10 +47,10 @@ SENTENCE_SPLIT_RE = re.compile(r"(?<=[.!?])\s+")
 
 # This build's own inline claim-tagging convention (see module docstring).
 # A behaviour claim: `(behaviour: <citation>)` where <citation> is one of
-#   <path>@<40-hex-sha>                       -- self (--target's own tree)
-#   <path>@<40-hex-sha>#L<n>[-L<m>]            -- self, line-specific
-#   <repo>:<path>@<40-hex-sha>[#L<n>[-L<m>]]   -- external
-#   none                                       -- explicitly no citation (rule 2)
+# <path>@<40-hex-sha> -- self (--target's own tree)
+# <path>@<40-hex-sha>#L<n>[-L<m>] -- self, line-specific
+# <repo>:<path>@<40-hex-sha>[#L<n>[-L<m>]] -- external
+# none -- explicitly no citation (rule 2)
 # An opinion claim: `(opinion)`, no citation.
 BEHAVIOUR_TAG_RE = re.compile(r"\(behaviour:\s*([^)]*)\)")
 OPINION_TAG_RE = re.compile(r"\(opinion\)")
@@ -76,9 +76,9 @@ MARKER_SOURCE_RE = re.compile(
 
 def _finding(rule: str, message: str, location: dict | None = None) -> dict:
     """Builds one check-page finding dict. `rule` is duplicated onto a
-    `category` key (step 3 of the 2026-09-06 fix round): check-page and
+    `category` key: check-page and
     screen-content findings used to be two incompatible shapes
-    (`{"rule", "message"}` vs. `{"category", "disposition", ...}`), but
+    (`{"rule", "message"}` vs. `{"category", "disposition",...}`), but
     skills/screen-sensitive/SKILL.md requires block findings be reported "in
     the same shape check_page's findings list uses... so review has one
     consistent place to look regardless of which gate produced the finding."
@@ -101,8 +101,8 @@ def _parse_frontmatter(content: str):
     of `content` the frontmatter block itself consumed (0 if there is none)
     -- added back to every line number `_split_sections` reports for `body`,
     so `check_page`'s locations become file-relative, matching
-    `screen-content`'s coordinate system (step 2 of the 2026-09-06 fix
-    round), instead of counting only from after the frontmatter.
+    `screen-content`'s coordinate system, instead of counting only from
+    after the frontmatter.
     """
     match = FRONTMATTER_RE.match(content)
     if not match:
@@ -122,9 +122,8 @@ def _parse_frontmatter(content: str):
         # PyYAML's own exception text (and its `problem_mark`'s own __str__)
         # echoes back the offending source line verbatim -- e.g. a fake
         # frontmatter value like `title: [FakeReviewPassword@example.com`
-        # reproduced whole in the "not valid YAML" message (step 9 of the
-        # 2026-09-06 fix round). Neither `exc` nor `problem_mark` is
-        # embedded here; only the LINE NUMBER is pulled out of
+        # reproduced whole in the "not valid YAML" message. Neither `exc` nor
+        # `problem_mark` is embedded here; only the LINE NUMBER is pulled out of
         # `problem_mark`, since that is a plain integer with no content of
         # its own to leak.
         problem_mark = getattr(exc, "problem_mark", None)
@@ -168,7 +167,7 @@ def _parse_frontmatter(content: str):
 
 def _local_citation_exists(target: str, commit: str, path: str) -> tuple[bool | None, str | None]:
     """Plain local git check -- no network, ever, for a citation to --target's
-    own tree. This is the whole point of step 4's local/external split.
+    own tree. This is the whole point of the local/external split.
 
     Returns `(True, None)` if `path` exists at `commit`, `(False, None)` if
     `commit` is confirmed to exist locally but `path` genuinely does not (a
@@ -180,9 +179,8 @@ def _local_citation_exists(target: str, commit: str, path: str) -> tuple[bool | 
     missing a commit that is entirely real upstream, so "can't find this
     commit locally" must never be reported as "this citation is wrong".
     `path_exists_at_bool` (netcmd.py) already makes this same True/False/None
-    distinction on the network side (prior fix round's step 1); this was the
-    matching, until-now-uncorrected gap on the local side (step 4 of the
-    2026-09-05 round).
+    distinction on the network side; this was the
+    matching, until-now-uncorrected gap on the local side.
 
     Checked in two stages so the two failure modes can't be confused with
     each other: first whether `commit` itself resolves at all
@@ -199,8 +197,8 @@ def _local_citation_exists(target: str, commit: str, path: str) -> tuple[bool | 
         return None, run_error
     if commit_check.returncode != 0:
         # Neither git's own stderr text NOR the citation's own `commit`/
-        # `path` values are reproduced in the returned message below (step
-        # 6(c) of the 2026-09-06 fix round) -- they are only inspected here,
+        # `path` values are reproduced in the returned message below --
+        # they are only inspected here,
         # internally, to classify which of the three failure modes occurred.
         # git's own error text can echo back the queried path/commit
         # verbatim (e.g. "fatal: Not a valid object name <sha>"), and the
@@ -256,7 +254,7 @@ def _local_file_line_count(target: str, commit: str, path: str) -> int | None:
     )
     if run_error is not None or result.returncode != 0:
         return None
-    # A trailing newline means the last line still counts; splitlines() handles
+    # A trailing newline means the last line still counts; splitlines handles
     # both a trailing-newline file and one without correctly.
     return len(result.stdout.splitlines())
 
@@ -267,8 +265,7 @@ def _heading_ranges(text: str):
     `heading_open` token. Covers both ATX (`# Heading`, one line) and Setext
     (`Heading\\n=====`, two lines) forms -- both produce the same token type,
     closing the bug where the old ATX-only HEADING_RE silently skipped every
-    claim in a Setext-only or headingless document (step 2 of the 2026-09-06
-    fix round). `end_idx` is the line just after the heading's own line(s) --
+    claim in a Setext-only or headingless document. `end_idx` is the line just after the heading's own line(s) --
     i.e. where the section body starts.
 
     Fence-aware for free: markdown-it-py already treats fenced code as
@@ -296,7 +293,7 @@ def _strip_fenced_lines(text: str) -> str:
     block removed, including the fence marker lines themselves -- so claim
     scanning never sees fenced example content at all: neither checked for
     a missing citation, nor contributing an example citation to the
-    section's marker-matching set (step 7 of the 2026-09-05 fix round).
+    section's marker-matching set.
 
     Reparses `text` (a single section's own body) fresh with markdown-it-py.
     A section's text runs strictly between two headings, and heading
@@ -323,13 +320,10 @@ def _split_sections(body: str, line_offset: int = 0):
     that preceded `body` in the original file (0 if none) -- adding it here
     means every location this function yields is already file-relative,
     matching screen-content's own coordinate system, rather than counting
-    only from after the frontmatter (step 2 of the 2026-09-06 fix round,
-    closing the location-coordinate mismatch in the same step that fixes
-    heading detection, rather than as separate follow-up work).
+    only from after the frontmatter.
 
     Any tagged claim text before the document's first heading used to fall
-    into no section at all and was never checked (step 3 of the 2026-09-05
-    fix round). The span before the first heading is yielded here as an
+    into no section at all and was never checked. The span before the first heading is yielded here as an
     implicit preamble unit -- `heading_line=None` signals it to
     `_check_section` below, which still scans it for claims/citations like
     any section's body, but never requires a provenance marker for it: the
@@ -346,16 +340,15 @@ def _split_sections(body: str, line_offset: int = 0):
     # document with zero headings used to fall through this check entirely
     # (the old condition required at least one heading to exist before it
     # would even look for a preamble), silently skipping every claim in a
-    # headingless document -- the second new fixture step 2 requires closes
-    # exactly this gap, not just the Setext-heading-detection one.
+    # headingless document. A dedicated fixture covers exactly this gap,
+    # separately from the Setext-heading-detection one.
     preamble_end = headings[0][0] if headings else len(lines)
     if preamble_end > 0:
         preamble_text = "\n".join(lines[:preamble_end])
         if preamble_text.strip():
             # File-relative, 1-based -- the preamble always starts at the
             # body's own first line, which is `line_offset` lines into the
-            # real file (step 2 of the 2026-09-06 fix round; step 3 of the
-            # prior round established every finding needs a `location`).
+            # real file.
             yield None, None, preamble_text, {"line": 1 + line_offset}
 
     for pos, (start_idx, end_idx) in enumerate(headings):
@@ -367,9 +360,7 @@ def _split_sections(body: str, line_offset: int = 0):
         section_end = headings[pos + 1][0] if pos + 1 < len(headings) else len(lines)
         section_text = "\n".join(lines[end_idx:section_end])
         # File-relative, 1-based line number of the section's own heading
-        # (step 2 of the 2026-09-06 fix round unifies this with
-        # screen-content's coordinate system; step 3 of the prior round
-        # established the field itself).
+        #.
         yield marker_line, heading_line, section_text, {"line": start_idx + 1 + line_offset}
 
 
@@ -390,11 +381,11 @@ def _citation_ref(citation: dict) -> str:
     """Structural description of an already-parsed citation for use in a
     `_check_section` message -- `repo=`/`path=`/`sha=`/`range=` fields
     reported separately, never the citation's raw as-typed string
-    reassembled or quoted back whole (follow-up to the 2026-09-06 fix
-    round's step 5, which stopped `mixed-claim`/`missing-citation` from
-    quoting the flagged sentence's own text; this closes the same gap for
-    the five messages in this function that still quoted the parsed
-    citation string instead). Citation strings are lower-risk than
+    reassembled or quoted back whole. An earlier fix stopped
+    `mixed-claim`/`missing-citation` quoting the flagged sentence's own
+    text; this closes the same gap for the five messages in this function
+    that still quoted the parsed citation string. Citation strings are
+    lower-risk than
     free-form sentence prose -- they're structured refs, not likely to
     literally contain a secret -- but the same "never quote flagged
     content" principle applies for consistency now that it's established
@@ -464,8 +455,7 @@ def _parse_marker_sources(sources_attr: str) -> tuple[set, list]:
     match `MARKER_SOURCE_RE` is a real parse failure, not an absent one --
     it must never be silently discarded as if it were an empty-but-valid
     entry, which previously left `keys` looking "empty and therefore
-    matching" even when the marker's actual text was garbage (step 8 of the
-    2026-09-05 fix round). `malformed_entries` carries each such raw entry so
+    matching" even when the marker's actual text was garbage. `malformed_entries` carries each such raw entry so
     the caller can flag it distinctly, rather than mistaking "nothing left
     to compare" for "correctly compared and found equal".
     """
@@ -496,15 +486,13 @@ def _check_section(marker_line, heading_line, section_text, target: str, locatio
     findings = []
 
     if heading_line is None:
-        # The implicit preamble unit (step 3): no heading exists for a
+        # The implicit preamble unit: no heading exists for a
         # marker to sit "directly above", so the marker requirement simply
         # doesn't apply here -- only the claim rule below does.
-        #
         # `heading_ref` (not the heading's own raw text) is what every
         # message below names -- a heading is document content and can be
         # secret-shaped, exactly like the flagged sentence/citation text
-        # this function already never quotes (step 6(a) of the 2026-09-06
-        # fix round: the prior round's fix reached those two, not this one).
+        # this function already never quotes.
         # `location` already pinpoints which line the finding is about, so
         # nothing actionable is lost by not also quoting the heading itself.
         heading_ref = "the preamble (before the first heading)"
@@ -548,7 +536,7 @@ def _check_section(marker_line, heading_line, section_text, target: str, locatio
             # still a real citation the section's provenance marker accounts
             # for, and skipping it would make an unrelated rule (mismatched
             # marker) fire alongside mixed-claim -- "no fixture trips more
-            # than the rule it targets" (step 4's own done-when). The
+            # than the rule it targets". The
             # citation is still registered/verified below like any other.
 
         if not behaviour_matches:
@@ -602,8 +590,8 @@ def _check_section(marker_line, heading_line, section_text, target: str, locatio
                 # would silently misreport a transient API failure as a real
                 # documentation defect. Surface it as its own outcome instead.
                 # Deliberately does NOT call `_citation_ref(citation)` here,
-                # unlike every other citation-related finding below (step
-                # 6(c) of the 2026-09-06 fix round): those other rules
+                # unlike every other citation-related finding below: those
+                # other rules
                 # (citation-not-found, out-of-bounds-range, citation-range-
                 # not-evaluated) only ever fire once a citation has already
                 # been confirmed to resolve, so echoing its path/sha back
@@ -644,7 +632,7 @@ def _check_section(marker_line, heading_line, section_text, target: str, locatio
                     # NOT the same as an explicit 0, which is a malformed
                     # line number in its own right and must not silently
                     # fall back to start (`or` treats 0 as falsy, which is
-                    # the bug step 10 of the 2026-09-05 fix round corrects).
+                    # the bug corrects).
                     end = citation["start"] if citation["end"] is None else citation["end"]
                     if (
                         total_lines is None
@@ -664,8 +652,7 @@ def _check_section(marker_line, heading_line, section_text, target: str, locatio
                 else:
                     # An external citation's line range used to skip bounds
                     # validation entirely -- silently passing regardless of
-                    # how absurd the range was (step 9 of the 2026-09-05 fix
-                    # round). Some of it IS mechanically checkable with no
+                    # how absurd the range was. Some of it IS mechanically checkable with no
                     # network at all: a start below line 1, or an end before
                     # the start, can never be a real range no matter what the
                     # file actually contains. The upper bound, though, can
@@ -684,7 +671,7 @@ def _check_section(marker_line, heading_line, section_text, target: str, locatio
                     # NOT the same as an explicit 0, which is a malformed
                     # line number in its own right and must not silently
                     # fall back to start (`or` treats 0 as falsy, which is
-                    # the bug step 10 of the 2026-09-05 fix round corrects).
+                    # the bug corrects).
                     end = citation["start"] if citation["end"] is None else citation["end"]
                     if citation["start"] < 1 or end < citation["start"]:
                         findings.append(
@@ -719,8 +706,7 @@ def _check_section(marker_line, heading_line, section_text, target: str, locatio
             # A sources entry that failed to parse is a real parse failure,
             # never an absent-but-valid one -- flagging it distinctly means
             # it can never be silently absorbed into "matches, because
-            # there's nothing left to compare" (step 8 of the 2026-09-05 fix
-            # round). Reported instead of, not alongside, the bijection
+            # there's nothing left to compare". Reported instead of, not alongside, the bijection
             # check below: with part of the marker unparseable, that
             # comparison can't be meaningfully run at all.
             findings.append(
@@ -751,15 +737,12 @@ def _check_section(marker_line, heading_line, section_text, target: str, locatio
 def _require_pack_spec(pack_root: str, spec_name: str, subcommand: str) -> str | None:
     """Confirm `<pack_root>/tools/contract/<spec_name>` exists and is
     non-empty -- genuinely validating that `pack_root` points at a real
-    Professor pack installation, not just a non-empty string (step 4 of a
-    prior, 2026-09-05 fix round). This is what makes `pack_root` genuinely
+    Professor pack installation, not just a non-empty string. This is what makes `pack_root` genuinely
     load-bearing for `check_page`/`screen_content` specifically, rather than
     being threaded through as a parameter neither ever referenced.
     `professor.py`'s own shared `$PROFESSOR_PACK_ROOT` unset-check message no
     longer claims this contract-spec-resolution reasoning applies to all four
-    subcommands (step 4 of the 2026-09-06 fix round reworded it to be
-    generically true instead, since `resolve-pin`/`path-exists-at` accept
-    `pack_root` and never use it) -- this function's own error message below
+    subcommands -- this function's own error message below
     is where the contract-spec-specific detail belongs, raised only by the
     two subcommands it's actually true for. Does not require deriving the
     actual checks from the spec's parsed content (a much larger, explicitly
@@ -798,8 +781,8 @@ def check_page(file_path: str, target: str, pack_root: str) -> int:
         content = path.read_text(encoding="utf-8")
     except UnicodeDecodeError as exc:
         # A raw traceback here is inconsistent with this module's own
-        # convention elsewhere (e.g. "check-page: no such file: ...") --
-        # step 11 of the 2026-09-05 fix round replaces it with the same
+        # convention elsewhere (e.g. "check-page: no such file:...") --
+        # replaces it with the same
         # structured-error shape.
         print(f"check-page: {file_path} is not valid UTF-8: {exc}", file=sys.stderr)
         return 1
@@ -835,24 +818,20 @@ CONNECTION_STRING_RE = re.compile(r"://[^\s:@/]+:[^\s@/]+@[^\s/]+")
 # A JSON-shaped `"password": "value"` used to never match: the closing quote
 # after the keyword (`password"`) and the opening quote before the value
 # (`: "value"`) both sat between the keyword and its separator, or between
-# the separator and the value, and the old pattern had no room for either
-# (step 3(b) of the 2026-09-06 fix round). An optional quote is now tolerated
-# in both of those positions; the plain, unquoted literal-password shape
-# (`password: value`) still matches exactly as before since both quotes are
-# optional.
-#
+# the separator and the value, and the old pattern had no room for either. An
+# optional quote is now tolerated in both of those positions; the plain,
+# unquoted literal-password shape (`password: value`) still matches exactly as
+# before, since both quotes are optional.
 # The left boundary uses the same underscore-tolerant lookbehind as
-# HIGH_ENTROPY_KEYWORD_RE below, not a plain `\b` (step 1 of the 2026-09-06
-# fix round, follow-up to step 3(a) of the prior round: that round fixed only
-# HIGH_ENTROPY_KEYWORD_RE's boundary, leaving this regex with the same
+# HIGH_ENTROPY_KEYWORD_RE below, not a plain `\b`. An earlier fix corrected
+# only HIGH_ENTROPY_KEYWORD_RE's boundary and left this regex carrying the same
 # demonstrated evasion -- `\b` treats `_` as a word character, so neither
 # `DB_PASSWORD=hunter2` nor `db_password: hunter2` ever produced a `\b`
 # boundary immediately before "password" at all, and silently never matched.
 # A JSON Schema definition (`{"password": {"type": "string"}}`) used to
 # false-positive: the optional-quote tolerance above lets a bare `{` open the
 # matched "value" (`{"type":`), even though a credential value is always a
-# scalar (string/number), never a nested object/array opener (step 8 of the
-# 2026-09-06 fix round). The negative lookahead below refuses to let the
+# scalar (string/number), never a nested object/array opener. The negative lookahead below refuses to let the
 # value start with `{` or `[` -- the plain unquoted case, the underscore-
 # separated case, and a genuinely quoted scalar value all still match
 # exactly as before, since none of them ever has `{`/`[` as the first
@@ -870,13 +849,12 @@ WEBHOOK_URL_RE = re.compile(
 # substring check above is not that; it just happens to catch the common
 # case where a webhook domain also carries one. This regex finds any URL,
 # independent of what its domain contains, so its query string and path can
-# be inspected for an embedded high-entropy value (step 2 of the 2026-09-05
-# fix round). Excludes backtick and other Markdown delimiter characters so a
+# be inspected for an embedded high-entropy value. Excludes backtick and other Markdown delimiter characters so a
 # URL wrapped in `...` doesn't swallow the closing backtick into the match.
 URL_RE = re.compile(r"https?://[A-Za-z0-9\-._~:/?#\[\]@!$&'()*+,;=%]+", re.IGNORECASE)
 
 # A query-string param named token/key/secret/auth (case-insensitive) --
-# reuses the same high-entropy-adjacent-to-keyword idea as step 1's
+# reuses the same high-entropy-adjacent-to-keyword idea as
 # HIGH_ENTROPY_KEYWORD_RE, but scoped to a URL's own `name=value` shape
 # rather than freeform prose, since a query param's name IS the adjacency
 # signal here (no separate window search needed).
@@ -884,13 +862,12 @@ URL_AUTH_QUERY_PARAM_RE = re.compile(r"[?&](?:token|key|secret|auth)=([^&\s]+)",
 
 # sensitive-patterns.md's "[pattern] API keys / access tokens" category has a
 # second clause beyond the fixed-prefix table above: "a high-entropy opaque
-# string adjacent to words like key/token/secret" (2026-09-05 fix round, step
-# 1). A plain `\b`-bounded version of this (an earlier round's own choice)
+# string adjacent to words like key/token/secret". A plain `\b`-bounded version of this (an earlier round's own choice)
 # was a real, demonstrated evasion: `\b` treats `_` as a word character, so
 # neither side of the keyword in `API_KEY=<random>` or
 # `access_token=<random>` is ever a `\b` boundary at all -- the two most
-# common real-world shapes for exactly this category never matched (step
-# 3(a) of the 2026-09-06 fix round). The lookaround below uses
+# common real-world shapes for exactly this category never matched. The
+# lookaround below uses
 # `[A-Za-z0-9]` rather than `\w`, deliberately excluding `_` from what counts
 # as "still part of the same word" -- so a boundary is satisfied by a true
 # non-word character (space, punctuation, start/end of string, matching the
@@ -919,8 +896,8 @@ OPAQUE_STRING_RE = re.compile(r"\b[A-Za-z0-9_\-]{20,}\b")
 # either boundary.
 HIGH_ENTROPY_THRESHOLD = 4.0
 
-# "same line, or within a small token window" (step 1's own done-when
-# wording) -- 40 characters comfortably spans a short assignment like
+# "same line, or within a small token window" -- 40 characters
+# comfortably spans a short assignment like
 # `token = <value>` or `API_KEY: <value>` without reaching into an unrelated
 # neighboring sentence.
 HIGH_ENTROPY_WINDOW_CHARS = 40
@@ -964,8 +941,7 @@ MARKER_COMMENT_RE = re.compile(r"<!--\s*professor:section.*?-->", re.DOTALL)
 
 # sensitive-patterns.md's email carve-out is narrower than "the whole
 # frontmatter block" -- it's specifically "a citation's `author` frontmatter
-# field, or inside a `professor:section` provenance comment" (step 5 of the
-# 2026-09-05 fix round). Matches the `author:` line's value only, within the
+# field, or inside a `professor:section` provenance comment". Matches the `author:` line's value only, within the
 # already-captured frontmatter body text.
 AUTHOR_FIELD_RE = re.compile(r"^author:[ \t]*(.*)$", re.MULTILINE)
 
@@ -996,12 +972,11 @@ def _shannon_entropy(s: str) -> float:
 
 def _high_entropy_tokens_near_keywords(content: str):
     """Yield each opaque, high-entropy candidate match (the re.Match itself,
-    not just its text -- so a caller can still locate it, step 1 of the
-    2026-09-06 fix round) that appears within HIGH_ENTROPY_WINDOW_CHARS of a
-    standalone key/token/secret/password word -- the "[pattern] API keys /
-    access tokens" category's high-entropy clause (step 1 of the 2026-09-05
-    fix round). Reused by step 2's webhook URL check for a query-param/path-
-    segment value adjacent to a token/key/secret/auth-shaped parameter name.
+    not just its text, so a caller can still locate it) that appears within
+    HIGH_ENTROPY_WINDOW_CHARS of a standalone key/token/secret/password word
+    -- the "[pattern] API keys / access tokens" category's high-entropy
+    clause. Reused by the webhook URL check for a query-param or path-segment
+    value adjacent to a token/key/secret/auth-shaped parameter name.
     """
     keyword_spans = [m.span() for m in HIGH_ENTROPY_KEYWORD_RE.finditer(content)]
     if not keyword_spans:
@@ -1012,14 +987,13 @@ def _high_entropy_tokens_near_keywords(content: str):
         # A keyword can appear INSIDE the very identifier being scored (e.g.
         # `public_key_fingerprint_sha256`) rather than as a separate, merely
         # adjacent token (`API_KEY=<token>`, where "=" keeps the two as
-        # distinct OPAQUE_STRING_RE matches entirely) -- step 7 of the
-        # 2026-09-06 fix round. The two are structurally different: in the
+        # distinct OPAQUE_STRING_RE matches entirely). The two are
+        # structurally different: in the
         # first case, the keyword's own match IS part of the candidate span
         # being scored, so the keyword can inflate its own surrounding
         # identifier's entropy score into a false positive
         # (`public_key_fingerprint_sha256` alone measures ~4.25 bits/char,
         # above HIGH_ENTROPY_THRESHOLD, purely from the "key" it contains).
-        #
         # Fix: when a keyword match is fully contained within this
         # candidate's own span, exclude it from what gets scored -- not by
         # splicing the flanking text back together (which just reintroduces
@@ -1063,7 +1037,7 @@ def _high_entropy_tokens_near_keywords(content: str):
 def _url_embedded_auth_token(url: str) -> str | None:
     """Returns the embedded auth-token-shaped value if `url` carries one,
     else None -- sensitive-patterns.md's "a URL whose query string or path
-    segment is itself an auth token" clause (step 2), independent of whether
+    segment is itself an auth token" clause, independent of whether
     "hook"/"webhook" appears anywhere in the URL's domain.
     """
     path_part, _, query_part = url.partition("?")
@@ -1084,8 +1058,7 @@ def _url_embedded_auth_token(url: str) -> str | None:
 def _roster_names_matches(content: str):
     """Yields every `(roster_span, name_span)` pair where a roster-context
     phrase and a name-list-shaped phrase co-occur within a localized window
-    of each other -- every candidate, not just the first (step 6 of the
-    2026-09-06 fix round). The singular `_roster_names_first_match` this
+    of each other -- every candidate, not just the first. The singular `_roster_names_first_match` this
     replaces returned only one match by name and by its one call site, which
     can't satisfy `skills/screen-sensitive/SKILL.md`'s documented "once per
     name screen-content flags" dispatch contract on a page with more than one
@@ -1110,8 +1083,7 @@ def _roster_names_matches(content: str):
 def _line_number(content: str, offset: int) -> int:
     """1-based line number of `offset` within `content` -- the cheapest
     location signal already available at every finding call site (a plain
-    count of preceding newlines), used for every finding's `location` field
-    (step 1/3 of the 2026-09-06 fix round).
+    count of preceding newlines), used for every finding's `location` field.
     """
     return content.count("\n", 0, offset) + 1
 
@@ -1124,7 +1096,7 @@ def _screen_finding(content: str, category: str, disposition: str, match) -> dic
     requires a finding report "category and location, never the flagged
     content itself" and never quote the flagged span back anywhere a tool
     result might be cached or logged. `match` is now `null` unconditionally,
-    for every disposition (step 4 of the 2026-09-06 fix round) -- an earlier
+    for every disposition -- an earlier
     round suppressed it only for `block`, on the theory that only `block`
     findings needed it, but a second independent review found the ordinary,
     non-overlapping `redact` case (`email-address`,
@@ -1167,7 +1139,7 @@ def screen_content(file_path: str, pack_root: str, target: str | None = None) ->
         content = path.read_text(encoding="utf-8")
     except UnicodeDecodeError as exc:
         # Same structured-error convention as check-page's own guard above
-        # (step 11 of the 2026-09-05 fix round) -- never a raw traceback.
+        # -- never a raw traceback.
         print(f"screen-content: {file_path} is not valid UTF-8: {exc}", file=sys.stderr)
         return 1
 
@@ -1177,13 +1149,12 @@ def screen_content(file_path: str, pack_root: str, target: str | None = None) ->
     # hardcoded Python, not parsed from a markdown ruleset file at runtime,
     # so a target's override can't be dynamically interpreted the way this
     # tool is built today.
-    #
     # This used to report `not_evaluated` and exit 0 -- but SKILL.md only
     # documents three outcomes (pass/redact/block), so the invoking skill had
     # no defined action for `not_evaluated`, and the nearest-sounding outcome
     # in its own procedure is "pass" (nothing flagged). That made an
     # overridden target's draft effectively screened not at all, while
-    # exiting 0. Fixed (step 2 of the 2026-09-06 fix round): fail closed --
+    # exiting 0. Fixed: fail closed --
     # an uninterpretable custom ruleset must never silently become a pass.
     # Reports `block` instead, with a fourth, now-documented outcome in
     # SKILL.md's own procedure: blocked until a human resolves it, either by
@@ -1230,7 +1201,7 @@ def screen_content(file_path: str, pack_root: str, target: str | None = None) ->
     # carve-out is the `author` field's value specifically, not the entire
     # frontmatter block -- an email in some other frontmatter field (e.g. a
     # `title` or `contact` value) is not attribution and must still screen
-    # (step 5 of the 2026-09-05 fix round).
+    #.
     excluded_spans = []
     fm_match = FRONTMATTER_RE.match(content)
     if fm_match:
@@ -1298,8 +1269,7 @@ def screen_content(file_path: str, pack_root: str, target: str | None = None) ->
                 # consumer actions for pass/redact/block only, so a caller
                 # following that procedure literally has nothing to do with a
                 # `not-evaluated` finding and can drop it on the floor -- the
-                # same fail-open shape step 2 of the 2026-09-06 fix round
-                # already closed for target-ruleset-override. Until Phase 1b
+                # same fail-open shape # already closed for target-ruleset-override. Until Phase 1b
                 # (#2131) adds the $PROFESSOR_VERIFIER_CMD dispatch that can
                 # tell ATTRIBUTION from ROSTER_DATA, every candidate takes the
                 # disposition the ruleset itself assigns an undecided one:
