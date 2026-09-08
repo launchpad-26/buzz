@@ -98,7 +98,14 @@ jobs:
   professor-tools:
     runs-on: ubuntu-latest
     steps:
+      # Full history, unlike the job above. Several check-page fixtures cite a
+      # real commit by SHA, and the harness resolves those against this
+      # checkout's own history with `git cat-file`. At the default depth that
+      # commit is absent, so those checks skip and the line-count check cannot
+      # run at all -- which is exactly what happened on this job's first run.
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - uses: actions/setup-python@v5
         with:
@@ -119,9 +126,10 @@ jobs:
       # middle of the assertion and the job fails on every run. Warming it here
       # keeps the noise in a step where nothing is being asserted.
       #
-      # The harness no longer depends on this working: its assertion matches the
-      # END of stderr and rejects a traceback explicitly. This step is the belt
-      # to that braces -- it also keeps the harness's own log readable.
+      # The harness no longer depends on this working: its assertion strips a
+      # closed allowlist of launcher prefixes and then requires an exact match
+      # on what remains, so launcher output cannot satisfy it and cannot break
+      # it. This step is the belt to that braces, and keeps the log readable.
       - name: Warm the script environment
         run: |
           PROFESSOR_PACK_ROOT=launchpad/agents/the-professor \

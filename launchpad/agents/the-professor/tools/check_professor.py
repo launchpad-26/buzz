@@ -593,6 +593,21 @@ def check_line_count_failure_is_not_a_citation_defect() -> str | None:
     if real_git is None:
         return "test setup error: no `git` on PATH to pass through to"
 
+    # A shallow clone (GitHub Actions' default checkout depth) can be missing
+    # FIXTURE_PINNED_COMMIT entirely. `_local_citation_exists` then fails at
+    # `git cat-file` and the citation leaves via citation-check-error before
+    # the line-count path is reached at all -- which is the SAME category this
+    # check asserts, so without the "did the decoy actually see a show?"
+    # assertion below it would have passed vacuously rather than skipped.
+    # Found on this job's first real CI run, by that assertion.
+    if not _commit_present_in_local_history(str(REPO_ROOT), FIXTURE_PINNED_COMMIT):
+        print(
+            f"skipped: line-count failure check -- {FIXTURE_PINNED_COMMIT} is not "
+            "in this checkout's local history (a shallow clone), so the citation "
+            "never reaches the line-count path. Named rather than silently passed."
+        )
+        return None
+
     # Both ways the read can fail, because they took different code paths and
     # only one was fixed first: `show` never returning (proc.run raises
     # TimeoutExpired, so `run_error` is set) and `show` returning non-zero
