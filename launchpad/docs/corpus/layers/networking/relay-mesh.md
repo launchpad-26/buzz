@@ -53,10 +53,14 @@ evidence:
     evidence:
       - "crates/buzz-relay/src/state.rs"
       - "crates/buzz-pubsub/src/conn_control.rs"
-  - statement: "Cross-pod Nostr event fan-out likewise does not ride the mesh: buzz-pubsub's own architecture note describes a dedicated Redis pub/sub connection subscribing to community- and channel-scoped keys and forwarding to N WebSocket receivers through an in-process broadcast channel, and the same crate carries cross-pod cache invalidation and connection control as sibling modules."
+  - statement: "Cross-pod Nostr event fan-out likewise does not ride the mesh: buzz-pubsub declares itself as 'Redis pub/sub fan-out, presence tracking, and typing indicators', and its architecture note describes a dedicated Redis pub/sub connection subscribing to community- and channel-scoped keys and forwarding to N WebSocket receivers through an in-process broadcast channel, with cross-pod cache invalidation and connection control as sibling modules in the same crate."
     entry_class: FACT
     evidence:
       - "crates/buzz-pubsub/src/lib.rs"
+  - statement: "The other two cross-pod planes are already documented by merged corpus nodes: architecture-deployment-multi-relay records that relay replicas share Postgres (event store, repo-name uniqueness), Redis (pub/sub fan-out across replicas, and the mesh's fenced lease store) and S3-compatible object storage (git object/ref state, media), that a relay pod holds no durable state of its own, and that a chart-side guard refuses to install a multi-replica release with no Redis source configured -- so Redis is a hard dependency beyond one replica, not a soft one."
+    entry_class: FACT
+    evidence:
+      - "launchpad/docs/corpus/architecture/deployment/multi-relay.md"
   - statement: "The mesh moves bytes but never decides ownership: every session-bearing frame carries the fenced tuple {session_id, generation, owner_runtime_id}, receivers MUST reject a stale generation at every hop, and the crate states the rule as 'mesh membership is a hint; the fenced generation (Redis CAS lease) is the arbiter. The mesh may say \"don't dial\" -- it may never say \"take over.\"' The Redis-backed session directory that holds the lease lives relay-side, not in the mesh crate."
     entry_class: FACT
     evidence:
@@ -130,10 +134,11 @@ only relationship between the two.
 
 ## What "one logical relay" means here
 
-A Buzz community is reached at one relay host, but that host may be served by
-many interchangeable relay processes. Making N processes behave as one relay is
-not a single mechanism — it is three planes with different jobs, and the mesh is
-only the third:
+A relay deployment may be served by many interchangeable pods, none of which
+holds durable state of its own. Making N processes behave as one relay is not a
+single mechanism — it is three planes with different jobs, and the mesh is only
+the third. The first two rows below are the neighbouring nodes' subject, restated
+here only far enough to place the third:
 
 | Plane | What it carries | Always on? |
 |---|---|---|
