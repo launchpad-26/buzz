@@ -870,7 +870,23 @@ def check_local_citation_never_calls_gh() -> str | None:
     return None
 
 
-def check_check_page_fixtures() -> str | None:
+# Fixtures whose citations name a repo other than `--target`, so `check-page`
+# resolves them through `netcmd` and really does reach the GitHub API. They are
+# excluded from `--offline` (issue #2111): with outbound HTTP blocked they
+# report `citation-check-error` instead of their expected rules, which is the
+# tool behaving correctly and the *check* being misclassified.
+#
+# Derived by hand and asserted below rather than detected at runtime -- a
+# regex over fixture text would silently drop a fixture from the offline run
+# the moment someone wrote a citation it did not anticipate.
+EXTERNAL_CITATION_FIXTURES = {
+    "compliant-external.md",
+    "external-citation-range-not-evaluated.md",
+    "broken-external-out-of-bounds-range.md",
+}
+
+
+def check_check_page_fixtures(offline: bool = False) -> str | None:
     # A shallow clone can be missing FIXTURE_PINNED_COMMIT even though it is
     # entirely real upstream -- any fixture citing it would then fail with
     # citation-check-error instead of its expected rule, misattributing a
@@ -879,9 +895,21 @@ def check_check_page_fixtures() -> str | None:
     pinned_commit_present = _commit_present_in_local_history(
         str(REPO_ROOT), FIXTURE_PINNED_COMMIT
     )
+    unknown_external = EXTERNAL_CITATION_FIXTURES - set(CHECK_PAGE_EXPECTED_RULES)
+    if unknown_external:
+        return (
+            "EXTERNAL_CITATION_FIXTURES names fixture(s) that are not in "
+            f"CHECK_PAGE_EXPECTED_RULES: {sorted(unknown_external)!r} -- the "
+            "offline exclusion list has drifted from the fixture set."
+        )
+
     skipped = []
+    skipped_external = []
     for fixture_name, expected_rules in CHECK_PAGE_EXPECTED_RULES.items():
         fixture_path = FIXTURES_DIR / fixture_name
+        if offline and fixture_name in EXTERNAL_CITATION_FIXTURES:
+            skipped_external.append(fixture_name)
+            continue
         if not pinned_commit_present and FIXTURE_PINNED_COMMIT in fixture_path.read_text():
             skipped.append(fixture_name)
             continue
@@ -904,6 +932,11 @@ def check_check_page_fixtures() -> str | None:
         print(
             f"skipped: fixture commit {FIXTURE_PINNED_COMMIT} not present in this "
             f"shallow clone -- {len(skipped)} fixture(s) skipped: {sorted(skipped)!r}"
+        )
+    if skipped_external:
+        print(
+            "skipped: --offline -- external-citation fixture(s) not run "
+            f"(they reach the GitHub API): {sorted(skipped_external)!r}"
         )
     return None
 
@@ -1195,16 +1228,108 @@ def check_page_messages_never_leak_raw_content() -> str | None:
     return None
 
 
-def main() -> int:
-    checks = [
+def _run_network_free_checks(offline: bool) -> int:
+    """Every check that reaches no network and needs no `gh` credentials.
+
+    These are the checks CI can run (issue #2111). "Network-free" here means no
+    call leaves the machine: several of them still exercise the `gh` code path,
+    but through a decoy `gh` placed on PATH (`check_citation_check_error_on_api_failure`,
+    `check_local_citation_never_calls_gh`) or with no `gh` at all
+    (`check_missing_binary_is_structured_not_traceback`). Local `git` against
+    this checkout is likewise not network.
+
+    The shallow-clone check is deliberately in this half: it reads only this
+    checkout's own local history.
+    """
+    error, shallow_clone = check_fixture_commit_shallow_clone_safety()
+    if error:
+        print(f"FAIL [fixture commit shallow-clone safety]: {error}")
+        return 1
+    if shallow_clone:
+        print(
+            "skip: fixture commit shallow-clone safety -- "
+            f"{FIXTURE_PINNED_COMMIT} not present in this checkout's local "
+            "history (a genuinely shallow clone); dependent check-page "
+            "fixtures are skipped below rather than failed"
+        )
+    else:
+        print(
+            "ok: fixture commit shallow-clone safety (present here; fabricated "
+            "SHA correctly absent)"
+        )
+
+    checks: list[tuple[str, object]] = [
         ("pack-root unset fails loud (all four subcommands)", check_pack_root_unset_fails_loud),
+        ("pack-root spec validation (check-page/screen-content)", check_pack_root_spec_validation),
         (
-            "pack-root resolution from outside checkout",
-            check_pack_root_resolution_outside_checkout,
+            "a missing gh/git binary is a structured error, never a raw traceback",
+            check_missing_binary_is_structured_not_traceback,
         ),
         (
-            "pack-root spec validation (check-page/screen-content)",
-            check_pack_root_spec_validation,
+            "citation-check-error on API failure (not collapsed into citation-not-found)",
+            check_citation_check_error_on_api_failure,
+        ),
+        (
+            "local-citation error shapes (nonexistent --target, non-git --target, "
+            "empty git repo all citation-check-error, never citation-not-found)",
+            check_local_citation_error_shapes,
+        ),
+        (
+            "local-vs-network boundary (compliant-local.md never calls gh, "
+            "compliant-external.md does)",
+            check_local_citation_never_calls_gh,
+        ),
+        (
+            "invalid UTF-8 produces a structured error, never a raw traceback "
+            "(check-page and screen-content)",
+            check_invalid_utf8_produces_structured_error,
+        ),
+        (
+            "screen-content accepts --target, matching SKILL.md's documented "
+            "invocation shape",
+            check_screen_content_accepts_target_flag,
+        ),
+        (
+            "screen-content reports an explicit target-ruleset-override, never "
+            "silently bundled-default",
+            check_screen_content_target_ruleset_override,
+        ),
+        (
+            "check-page fixtures ("
+            f"{len(CHECK_PAGE_EXPECTED_RULES) - (len(EXTERNAL_CITATION_FIXTURES) if offline else 0)}"
+            " fixtures)",
+            lambda: check_check_page_fixtures(offline=offline),
+        ),
+        (
+            "frontmatter branches distinct "
+            f"({len(FRONTMATTER_BRANCH_EXPECTED_MESSAGE_SUBSTRING)} branches)",
+            check_frontmatter_branches_are_distinct,
+        ),
+        (
+            f"screen-content fixtures ({len(SCREEN_CONTENT_EXPECTED)} fixtures)",
+            check_screen_content_fixtures,
+        ),
+        (
+            "roster-names enumerates every candidate, not just the first "
+            "(2 distinct findings)",
+            check_roster_names_multiple_candidates,
+        ),
+        (
+            "dispatch-roster-names.md's three names each produce their own finding "
+            "(3 distinct findings)",
+            check_roster_names_three_names_one_context,
+        ),
+        (
+            "PASSWORD_LITERAL_RE fires on all three shapes (unquoted, JSON-quoted, "
+            "underscore-separated)",
+            check_password_literal_three_shapes,
+        ),
+        (
+            "check-page messages never leak the flagged sentence's raw text or the "
+            "raw citation string (missing-citation, unparseable-citation, "
+            "mixed-claim, citation-not-found, out-of-bounds-range, "
+            "citation-range-not-evaluated)",
+            check_page_messages_never_leak_raw_content,
         ),
     ]
 
@@ -1214,6 +1339,29 @@ def main() -> int:
             print(f"FAIL [{name}]: {error}")
             return 1
         print(f"ok: {name}")
+
+    return 0
+
+
+def _run_network_checks() -> int:
+    """The checks that make real GitHub API calls and need `gh` authenticated.
+
+    Kept out of `_run_network_free_checks` and skippable with `--offline`
+    (issue #2111): CI has neither the credentials nor a reason to spend a rate
+    limit on them, but they are the only checks that prove `resolve-pin` and
+    `path-exists-at` actually work against GitHub, so they must still be run
+    by hand or on a schedule -- never dropped.
+
+    Written as a straight-line block rather than folded into the declarative
+    list above because the SHA `resolve-pin` returns is threaded into three
+    later checks; there is real state here, and hiding it in a registry would
+    obscure that.
+    """
+    error = check_pack_root_resolution_outside_checkout()
+    if error:
+        print(f"FAIL [pack-root resolution from outside checkout]: {error}")
+        return 1
+    print("ok: pack-root resolution from outside checkout")
 
     error, sha = check_resolve_pin_matches_git_ls_remote()
     if error:
@@ -1239,116 +1387,39 @@ def main() -> int:
         return 1
     print("ok: an uppercase-hex SHA resolves identically to its lowercase form")
 
-    error = check_missing_binary_is_structured_not_traceback()
-    if error:
-        print(f"FAIL [missing binary structured error]: {error}")
-        return 1
-    print("ok: a missing gh/git binary is a structured error, never a raw traceback")
+    return 0
 
-    error = check_citation_check_error_on_api_failure()
-    if error:
-        print(f"FAIL [citation-check-error on API failure]: {error}")
-        return 1
-    print("ok: citation-check-error on API failure (not collapsed into citation-not-found)")
 
-    error = check_local_citation_error_shapes()
-    if error:
-        print(f"FAIL [local-citation error shapes]: {error}")
-        return 1
-    print(
-        "ok: local-citation error shapes (nonexistent --target, non-git "
-        "--target, empty git repo all citation-check-error, never citation-not-found)"
-    )
-
-    error = check_local_citation_never_calls_gh()
-    if error:
-        print(f"FAIL [local-vs-network boundary]: {error}")
-        return 1
-    print("ok: local-vs-network boundary (compliant-local.md never calls gh, compliant-external.md does)")
-
-    error = check_invalid_utf8_produces_structured_error()
-    if error:
-        print(f"FAIL [invalid UTF-8 structured error]: {error}")
-        return 1
-    print("ok: invalid UTF-8 produces a structured error, never a raw traceback (check-page and screen-content)")
-
-    error = check_screen_content_accepts_target_flag()
-    if error:
-        print(f"FAIL [screen-content accepts --target]: {error}")
-        return 1
-    print("ok: screen-content accepts --target, matching SKILL.md's documented invocation shape")
-
-    error = check_screen_content_target_ruleset_override()
-    if error:
-        print(f"FAIL [screen-content target-ruleset-override]: {error}")
-        return 1
-    print("ok: screen-content reports an explicit target-ruleset-override, never silently bundled-default")
-
-    error, shallow_clone = check_fixture_commit_shallow_clone_safety()
-    if error:
-        print(f"FAIL [fixture commit shallow-clone safety]: {error}")
-        return 1
-    if shallow_clone:
+def main() -> int:
+    args = sys.argv[1:]
+    offline = "--offline" in args
+    unknown = [a for a in args if a != "--offline"]
+    if unknown:
         print(
-            "skip: fixture commit shallow-clone safety -- "
-            f"{FIXTURE_PINNED_COMMIT} not present in this checkout's local "
-            "history (a genuinely shallow clone); dependent check-page "
-            "fixtures are skipped below rather than failed"
+            f"check_professor.py: unrecognized argument(s) {unknown!r}. "
+            "The only accepted flag is --offline (skip the GitHub-API checks).",
+            file=sys.stderr,
         )
-    else:
+        return 2
+
+    if _run_network_free_checks(offline) != 0:
+        return 1
+
+    if offline:
+        # Named individually rather than counted, so a check silently moving out
+        # of the network half cannot pass unnoticed as a smaller number.
         print(
-            "ok: fixture commit shallow-clone safety (present here; fabricated "
-            "SHA correctly absent)"
+            "skip: --offline -- not run: pack-root resolution from outside "
+            "checkout, resolve-pin matches git ls-remote, resolve-pin's pr "
+            "field, path-exists-at true/false, uppercase SHA accepted. These "
+            "need an authenticated `gh` and reach the GitHub API; run "
+            "check_professor.py with no flags to include them."
         )
+        print("ALL NETWORK-FREE CHECKS PASSED")
+        return 0
 
-    error = check_check_page_fixtures()
-    if error:
-        print(f"FAIL [check-page fixtures]: {error}")
+    if _run_network_checks() != 0:
         return 1
-    print(f"ok: check-page fixtures ({len(CHECK_PAGE_EXPECTED_RULES)} fixtures)")
-
-    error = check_frontmatter_branches_are_distinct()
-    if error:
-        print(f"FAIL [frontmatter branches distinct]: {error}")
-        return 1
-    print(
-        "ok: frontmatter branches distinct "
-        f"({len(FRONTMATTER_BRANCH_EXPECTED_MESSAGE_SUBSTRING)} branches)"
-    )
-
-    error = check_screen_content_fixtures()
-    if error:
-        print(f"FAIL [screen-content fixtures]: {error}")
-        return 1
-    print(f"ok: screen-content fixtures ({len(SCREEN_CONTENT_EXPECTED)} fixtures)")
-
-    error = check_roster_names_multiple_candidates()
-    if error:
-        print(f"FAIL [roster-names multiple candidates]: {error}")
-        return 1
-    print("ok: roster-names enumerates every candidate, not just the first (2 distinct findings)")
-
-    error = check_roster_names_three_names_one_context()
-    if error:
-        print(f"FAIL [roster-names three names, one context]: {error}")
-        return 1
-    print("ok: dispatch-roster-names.md's three names each produce their own finding (3 distinct findings)")
-
-    error = check_password_literal_three_shapes()
-    if error:
-        print(f"FAIL [password-literal three shapes]: {error}")
-        return 1
-    print("ok: PASSWORD_LITERAL_RE fires on all three shapes (unquoted, JSON-quoted, underscore-separated)")
-
-    error = check_page_messages_never_leak_raw_content()
-    if error:
-        print(f"FAIL [check-page messages never leak raw content]: {error}")
-        return 1
-    print(
-        "ok: check-page messages never leak the flagged sentence's raw text or the "
-        "raw citation string (missing-citation, unparseable-citation, mixed-claim, "
-        "citation-not-found, out-of-bounds-range, citation-range-not-evaluated)"
-    )
 
     print("ALL CHECKS PASSED")
     return 0
