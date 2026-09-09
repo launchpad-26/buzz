@@ -49,7 +49,7 @@ evidence:
     entry_class: FACT
     evidence:
       - "crates/buzz-relay/src/tenant.rs:244-251"
-      - "crates/buzz-relay/src/tenant.rs:260-334"
+      - "crates/buzz-relay/src/tenant.rs:260-333"
   - statement: "Justfile's `test-unit` recipe comment states explicitly, of its own `cargo nextest run -p buzz-relay --lib` invocation, that it is scoped to `test(/^api::admin::/)` only and that 'just test-unit did not enumerate buzz-relay --lib' as a whole; scripts/run-tests.sh, the script `just test` runs, contains no invocation of the `buzz-relay` package at all; and no `.github/workflows/*.yml` job in this repository invokes `tenant::tests` or an unscoped `buzz-relay --lib` run either -- so the tenant.rs unit-test suite cited above is not executed by any test command this repository runs."
     entry_class: FACT
     evidence:

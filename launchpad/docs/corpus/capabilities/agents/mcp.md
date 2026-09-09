@@ -34,7 +34,7 @@ evidence:
   - statement: "buzz-dev-mcp's own binary entrypoint is a multicall dispatcher: invoked as rg, tree, git-credential-nostr or git-sign-nostr it runs that personality synchronously and exits before any async runtime is built; invoked as buzz or with no recognized argv0 it falls through to async_main, which builds a tokio runtime and, for any name other than buzz, starts serving the MCP tool_router over stdio."
     entry_class: FACT
     evidence:
-      - "crates/buzz-dev-mcp/src/main.rs:138-186"
+      - "crates/buzz-dev-mcp/src/lib.rs:138-186"
   - statement: "The MCP server is wired to an agent subprocess by buzz-acp: an McpServer{name, command, args, env} struct is one of the required fields of the ACP session/new call buzz-acp's AcpClient sends to the agent it spawns."
     entry_class: FACT
     evidence:

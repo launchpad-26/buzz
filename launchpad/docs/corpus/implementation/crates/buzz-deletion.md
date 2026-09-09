@@ -94,7 +94,7 @@ evidence:
   - statement: "buzz-deletion's own test module contains both plain unit tests that run unconditionally (e.g. submit_host_prefers_explicit_host, deletion_s3_key_pair_from variants, permanent_failures_are_typed_not_string_classified, redis_absence_requires_terminal_cursor_and_all_pages_empty) and #[tokio::test] integration tests marked #[ignore = \"requires Postgres\"] or #[ignore = \"requires Postgres and S3-compatible storage\"] that exercise real stage transitions, chunk-resume-after-crash behavior, and serving-write-guard heartbeat/lease-loss semantics against a live database and object store."
     entry_class: FACT
     evidence:
-      - "crates/buzz-deletion/src/lib.rs:1601-2392"
+      - "crates/buzz-deletion/src/lib.rs:1601-2391"
   - statement: "A repository-wide grep of ARCHITECTURE.md and the top-level AGENTS.md finds zero mentions of buzz-deletion by name; both documents' crate lists and dependency diagrams predate this crate."
     entry_class: FACT
     evidence:

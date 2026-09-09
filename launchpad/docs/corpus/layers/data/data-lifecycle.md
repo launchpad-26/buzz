@@ -65,7 +65,7 @@ evidence:
     evidence:
       - "migrations/0019_mesh_status_retention.sql"
       - "migrations/0009_nip_rs_database_guards.sql"
-      - "crates/buzz-db/src/lib.rs:5200-5216"
+      - "crates/buzz-db/src/store/replaceable.rs:151-167"
   - statement: "The mesh-status migration states its own reason for the hard-purge exception directly: 'Only the live head has product value; retaining every superseded 45-second payload creates unbounded physical history.' The NIP-RS migration states the equivalent reason: 'NIP-RS payloads have no historical product value.'"
     entry_class: FACT
     evidence:

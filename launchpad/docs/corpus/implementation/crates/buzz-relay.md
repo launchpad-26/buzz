@@ -21,7 +21,7 @@ evidence:
     entry_class: FACT
     evidence:
       - "crates/buzz-relay/src/protocol.rs:1-64"
-      - "crates/buzz-relay/src/protocol.rs:381-459"
+      - "crates/buzz-relay/src/protocol.rs:381-458"
   - statement: "crates/buzz-relay/src/connection.rs's module doc states the WebSocket connection lifecycle as \"semaphore -> challenge -> recv/send/heartbeat loops -> cleanup\"; ConnectionState (conn_id, tenant: TenantContext resolved before any frame is read, remote_addr, auth_state: RwLock<AuthState>, subscriptions: Mutex<HashMap<String, Vec<Filter>>>, send_tx/ctrl_tx as two separate mpsc channels with priority drain for control frames, a CancellationToken, and a shared backpressure_count/grace_limit pair) is the per-socket state handed to every handler; AuthState is a three-variant enum (Pending{challenge}, Authenticated(AuthContext), Failed) tracking NIP-42 progress, and AUTH_TIMEOUT (5s) bounds how long an unauthenticated socket may hold a connection slot."
     entry_class: FACT
     evidence:
