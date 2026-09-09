@@ -319,6 +319,19 @@ misconfiguration behaviour, the metrics middleware and its cardinality blind spo
 the trace root, the deliberately separate health and metrics listeners, and the way
 the UDS listener changes what `ConnectInfo`-dependent middleware sees.
 
+**It does not cover, and these are gaps rather than silence:**
+
+| Not covered here | Owned by |
+|---|---|
+| The `POST /events` lifecycle — tenant binding, NIP-98, replay, admission, ingest, status mapping | `architecture-flows-http-event-submission` |
+| The test obligation on `POST /events` and its gated status | `verification-contracts-http` |
+| Blossom media internals — BUD maturity, upload and download semantics | `capabilities-media-blossom` |
+| Git smart HTTP — pkt-line framing, `info/refs` negotiation, content types | `capabilities-git-smart-http` |
+| The relay crate's overall structure and its NIP-11 document | `implementation-crates-buzz-relay` |
+| The admin host's security boundary — the fixed `ADMIN_CSP`, the asset allowlist, the non-browsable bundle, admin-host-first ordering | Not filed as its own task at this revision; see *A second concept found and not folded in* below |
+| The `/hooks/{id}` webhook surface as a subject in its own right | A sibling task in Feature #609, unmerged at this revision and therefore carrying no relationship edge |
+| Host resolution, connection admission, the WebSocket transport, TLS termination, and in-band Nostr verb dispatch | Sibling tasks in Feature #609 (#1126, #1121, #1134, #1133, #1131), all unmerged at this revision |
+
 **Expected but not verified when this node was written:**
 
 - **Nothing was run.** No relay was started, no request was issued, and no test was

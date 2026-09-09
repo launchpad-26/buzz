@@ -132,8 +132,9 @@ evidence:
     entry_class: TEAM_KNOWLEDGE
     provided_by: "launchpad-26/buzz#1124 definition of done"
   - statement: "No corpus node, issue or decision record establishing an intended rate-limit, IP-allowlist or request-signing policy for /hooks/{id} was located while drafting; the absence documented here is an observation about current code, not an accepted decision that the surface should stay unlimited."
-    entry_class: TEAM_KNOWLEDGE
-    provided_by: "author's own search of launchpad/docs/corpus and launchpad/decisions while drafting this node; recorded as uncorroborated rather than promoted to a claim about intent"
+    entry_class: FACT
+    evidence:
+      - "grep_r(pattern='hooks/|webhook', path='launchpad/docs/corpus launchpad/decisions') -> no node, issue or decision record establishing an intended rate-limit, IP-allowlist or request-signing policy for /hooks/{id}; the absence is an observation about current code, not an accepted decision"
 relationships:
   - type: references
     target: capabilities-workflows-webhook-trigger
