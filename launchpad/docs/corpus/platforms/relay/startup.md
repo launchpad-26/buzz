@@ -115,11 +115,11 @@ evidence:
     evidence:
       - "crates/buzz-relay/src/state.rs:775-793"
       - "crates/buzz-relay/src/main.rs:446-458"
-  - statement: "Inter-relay mesh boot (buzz_relay::mesh_boot::boot_mesh, main.rs:465-487) is gated by the BUZZ_MESH kill switch: the surrounding comment states boot_mesh returns None when the switch is off, in which case nothing is bound, published, or spawned and the relay behaves byte-identically to a build without the mesh; when the switch is on, a misconfigured mesh (bind or Redis failure) is fatal here, per the same comment's stated rationale that an operator who asked for the mesh should get it or be told why not."
+  - statement: "Inter-relay mesh boot (buzz_relay::mesh_boot::boot_mesh) is invoked from main.rs:465-487, after the HTTP listener is bound and before the git object-storage probe, and is gated by the BUZZ_MESH kill switch. The kill switch's own semantics -- no-op when off, fatal on misconfiguration when on -- are owned by layers/lifecycle/startup.md, which this node references rather than restates; what this node adds is where in the relay binary's boot sequence that gate sits."
     entry_class: FACT
     evidence:
       - "crates/buzz-relay/src/main.rs:460-487"
-  - statement: "The git object-storage conformance probe (main.rs:493-525) runs by default (opt-out via BUZZ_GIT_CONFORMANCE_PROBE=false) and is fail-fast: state.git_store.run_conformance_probe(cfg) admits the configured S3/MinIO backend against a linearizable conditional-write axiom (A3) before any git traffic is served, and the preceding comment states failure here is fatal because a backend that cannot satisfy pointer CAS invalidates the manifest-pointer protocol -- explicitly calling this 'a deployment gate, not a proof.'"
+  - statement: "The git object-storage conformance probe is invoked as state.git_store.run_conformance_probe(cfg) at main.rs:493-525, immediately after mesh boot and before any git traffic is served. That the probe is default-on, opt-out via BUZZ_GIT_CONFORMANCE_PROBE=false, and fatal on failure is owned by layers/lifecycle/startup.md and referenced rather than restated here; what this node adds is the probe's position in the relay binary's boot sequence and its call site."
     entry_class: FACT
     evidence:
       - "crates/buzz-relay/src/main.rs:489-525"
@@ -147,6 +147,9 @@ evidence:
     entry_class: FACT
     evidence:
       - "git_ls_tree(ref='origin/launchpad', path='launchpad/docs/corpus/platforms') -> path does not exist at commit 131b02f989684117d9ab1dd426f1673fa638e523"
+relationships:
+  - type: references
+    target: layers-lifecycle-startup
 ---
 
 # Startup sequence (buzz-relay)
@@ -259,16 +262,19 @@ This node does not describe:
 
 ## Relationships
 
-None declared. `platforms-relay-graceful-shutdown` (#1271) is the closest
-conceptual neighbor -- this node's sequence hands off directly to the
-function that node documents -- but it exists only on the unmerged branch
-`task/1271-relay-graceful-shutdown`, not on `origin/launchpad`, so per this
-batch's convention (and `AGENTS.md`'s rule that a declared relationship
-target must resolve against the merge-target branch) no edge to it is
-declared here. The same applies to `platforms-relay-connection-manager`
-(#1267), `platforms-relay-app-state` (#1263), and
-`platforms-relay-mesh-bootstrap` (#1276), each named in prose above but
-unmerged. Edges to all four should be added once their respective PRs merge.
+- `references`: `layers-lifecycle-startup` — that node owns the layer-level
+  startup claims this node would otherwise restate: the mesh kill switch's
+  no-op/fatal semantics and the conformance probe's default-on, opt-out,
+  fail-fast disposition. This node states where each sits in the relay
+  binary's boot sequence and defers the behaviour itself.
+
+`platforms-relay-graceful-shutdown` (#1271), `platforms-relay-connection-manager`
+(#1267), `platforms-relay-app-state` (#1263) and `platforms-relay-mesh-bootstrap`
+(#1276) are each named in prose above but are drafted only on their own unmerged
+sibling branches, so no edge is declared to them here — a declared target must
+resolve against the merge-target branch. Edges should be added once those PRs
+merge. `layers-lifecycle-startup` is different: it is already on
+`origin/launchpad`, verified with `git cat-file -e` against that ref.
 
 ## Scope and omissions
 

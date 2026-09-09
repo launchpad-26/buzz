@@ -107,6 +107,8 @@ relationships:
     target: architecture-principles-host-selects-community
   - type: references
     target: architecture-deployment-multi-community
+  - type: references
+    target: capabilities-communities-community-provisioning
 ---
 
 # Relay community provisioning
@@ -211,6 +213,11 @@ This node does not describe:
   revision, and no `architecture/components/*.md` node exists in the corpus
   to decompose the relay container into building blocks this node could sit
   under.
+- `references`: `capabilities-communities-community-provisioning` — the
+  capability-level node on the same subject. There is no statement overlap
+  between the two, so nothing is de-duplicated here; the edge exists because
+  two nodes covering one subject with no link between them leaves both
+  orphaned on that topic, which is what the review on #1981 flagged.
 
 ## Scope and omissions
 

@@ -63,7 +63,7 @@ evidence:
     entry_class: FACT
     evidence:
       - "crates/buzz-relay/src/router.rs:409-419"
-  - statement: "router.rs's WebSocket-upgrade handler checks state.shutting_down a second time, independently of the readiness probe, immediately before completing a WebSocket upgrade; if the flag is set it returns 503 \"relay restarting\" instead of upgrading, with an inline comment explaining that readiness 503 alone only stops Kubernetes from routing new traffic, while a direct or already-in-flight upgrade can still reach this handler during the 5-second pre-drain grace window."
+  - statement: "The second, independent shutting_down check that refuses a WebSocket upgrade during the pre-drain window is implemented in this relay's router.rs, alongside the readiness handler that reads the same flag. The check's existence and rationale are owned by layers/lifecycle/graceful-shutdown.md, which this node references rather than restates; what this node adds is that both readers of the flag live in router.rs and observe the same Arc<AtomicBool> the serve() shutdown task sets, and that the grace window in this relay is 5 seconds."
     entry_class: FACT
     evidence:
       - "crates/buzz-relay/src/router.rs:358-372"
@@ -107,6 +107,9 @@ evidence:
     evidence:
       - "crates/buzz-relay/src/state.rs:397-507"
       - "commit 062eeffc8 (task/1267-relay-connection-manager, unmerged) -- the corpus node itself, not the code it documents"
+relationships:
+  - type: references
+    target: layers-lifecycle-graceful-shutdown
 ---
 
 # Graceful shutdown (buzz-relay)
@@ -202,17 +205,20 @@ This node does not describe:
 
 ## Relationships
 
-None declared. `architecture-flows-websocket-connection` exists on
-`origin/launchpad` but its subject (the connection's own request/response
-sequence) does not overlap this node's subject (process-level shutdown
-orchestration) closely enough to warrant a `references` edge -- see the
-`INFERENCE` entry above. `platforms-relay-connection-manager` (#1267) is the
-closest conceptual neighbor and is named throughout this node's prose, but it
-exists only on the unmerged branch `task/1267-relay-connection-manager`, not
-on `origin/launchpad`, so per this batch's convention (and `AGENTS.md`'s rule
-that a declared relationship target must resolve against the merge-target
-branch) no edge to it is declared here. The edge should be added once #1267
-merges.
+- `references`: `layers-lifecycle-graceful-shutdown` — that node owns the
+  claim that the WebSocket-upgrade handler independently re-checks
+  `shutting_down` and why it must. This node states where that check lives in
+  this relay and what its grace window is, and defers the claim itself.
+
+`architecture-flows-websocket-connection` exists on `origin/launchpad`, but its
+subject (the connection's own request/response sequence) does not overlap this
+node's subject (process-level shutdown orchestration) closely enough to warrant
+an edge — see the `INFERENCE` entry above. `platforms-relay-connection-manager`
+(#1267) is the closest conceptual neighbor and is named throughout this node's
+prose, but exists only on its own unmerged branch, so no edge is declared to it;
+that edge should be added once #1267 merges. `layers-lifecycle-graceful-shutdown`
+is already on `origin/launchpad`, verified with `git cat-file -e` against that
+ref.
 
 ## Scope and omissions
 
