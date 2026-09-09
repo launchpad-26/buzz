@@ -134,8 +134,9 @@ evidence:
       - ".env.example"
       - "crates/buzz-relay/src/config.rs"
   - statement: "The shared Redis-backed admission path was introduced by commit 73fc0ec6cf, '[codex] Enforce shared relay admission limits (BUZZ-SEC-019) (#1917)', which is the most recent commit touching crates/buzz-relay/src/admission.rs."
-    entry_class: TEAM_KNOWLEDGE
-    provided_by: "git log --oneline -5 -- crates/buzz-relay/src/admission.rs, run while authoring this node"
+    entry_class: FACT
+    evidence:
+      - "git_log(oneline, n=5, path='crates/buzz-relay/src/admission.rs') -> 73fc0ec6cf '[codex] Enforce shared relay admission limits (BUZZ-SEC-019) (#1917)' is the most recent commit touching that path"
   - statement: "Issue #1123's definition of done requires exactly one hand-authored canonical corpus document, schema-valid front matter, one independently maintainable idea, traceable FACT/INFERENCE/TEAM_KNOWLEDGE claims, links rather than duplicated neighbour content, a check against the recorded provenance revision, a clean validator run, a one-sentence definition before deeper explanation, an explicit boundary statement, and examples that introduce no second canonical concept."
     entry_class: TEAM_KNOWLEDGE
     provided_by: "launchpad-26/buzz#1123 definition of done"
