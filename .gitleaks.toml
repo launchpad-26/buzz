@@ -103,6 +103,22 @@ regexes = ['''postgres(?:ql)?://[^:@/\s]+:[^@\s]+@(?:localhost|127\.0\.0\.1)(?::
 # itself — via gitleaks' own default generic-api-key rule.
 [allowlist]
 description = "Paths this scan reads but never reports on, and one documentation placeholder idiom"
+# #614's media-api.md corpus node originally shipped prose ("missing/malformed
+# auth header, revoked/mismatched token") that trips generic-api-key. A later
+# commit (6a14fd478) reworded the *current* text and confirmed clean on its
+# own — but PR-mode gitleaks (security_audit_secrets_check.py's
+# `FETCH_HEAD..HEAD`) scans every commit's own diff across that range, not
+# just the file's current content. 86dd310f5 (the original commit that added
+# this text) is unique to this feature branch, not an ancestor of launchpad,
+# so its diff — carrying the pre-reword phrase forever — is rescanned on
+# every CI run regardless of what a later commit changes the line to. No
+# forward-only, non-history-rewriting commit can un-flag an already-merged
+# commit's own patch; only a rebase (disallowed on a shared PR branch here)
+# or an allowlist entry can. Scoped to this one commit, which only ever
+# touched this single doc file with reviewed, non-secret prose.
+commits = [
+    '''86dd310f5ba81410179db1bb6397095c256481d2''',
+]
 paths = [
     '''launchpad/scripts/security_audit_fixtures/secrets/.*''',
     # Same class of false positive .intersect/sadscan.yaml already documents
