@@ -35,7 +35,7 @@ evidence:
   - statement: "The Tracer trait is the only surface production code touches (record() plus an enabled() gate defaulting to true), and NoopTracer is the zero-cost production default whose enabled() returns false so hot-path emitters can skip building emit inputs entirely."
     entry_class: FACT
     evidence:
-      - "crates/buzz-conformance/src/lib.rs:312-354"
+      - "crates/buzz-conformance/src/lib.rs:312-353"
   - statement: "checker::check_trace runs four stages against a Scenario (trace plus a set of required_critical_actions): reject an empty trace as a coverage breach; check each step's schema_version equals SCHEMA_VERSION; run transitions::check_step per step, stopping at the first failure (fail-closed); and after all steps pass, fail as a coverage breach if any declared required_critical_actions kind never appeared in the trace."
     entry_class: FACT
     evidence:
@@ -93,7 +93,7 @@ evidence:
   - statement: "LIMITS.md's CI command section requires three test surfaces to stay green on every PR: `cargo test -p buzz-conformance --lib` (LIMITS.md's own comment says 9 schema/checker unit tests), `cargo test -p buzz-conformance --test replay_fixtures` (LIMITS.md's own comment says 5 replay-fixture tests), and `cargo test -p buzz-relay --lib conformance::` (LIMITS.md's own comment says 2 EmitGuard coverage-breach self-tests) -- LIMITS.md sums these as 16 tests total -- and states the integration replay (live relay -> JsonlTracer -> check_trace) is the next ratchet, not yet landed."
     entry_class: FACT
     evidence:
-      - "crates/buzz-conformance/LIMITS.md:85-126"
+      - "crates/buzz-conformance/LIMITS.md:85-125"
   - statement: "Counted directly against the current source rather than trusting LIMITS.md's own comment: `crates/buzz-conformance/src/checker.rs`'s `#[cfg(test)] mod tests` carries exactly 9 `#[test]` functions (matching LIMITS.md); `crates/buzz-conformance/tests/replay_fixtures.rs` carries 6 `#[test]` functions, not 5 -- `foreign_row_leak_is_non_interference` and `missing_required_action_is_coverage_breach` both exist in the file today; and `crates/buzz-relay/src/conformance/mod.rs`'s `#[cfg(test)] mod tests` (matched in full by the `conformance::` substring filter in LIMITS.md's own CI command) carries 10 `#[test]` functions, not 2 -- LIMITS.md's '2' names only the two EmitGuard-Drop-specific self-tests (`emit_guard_drop_is_silent_when_an_emit_reached_the_tracer`, `emit_guard_drop_records_exactly_one_impl_bug_when_no_emit`) and does not account for the other 8 tests in the same module (`counting_tracer_delegates_enabled_to_inner`, two `record_req_authcheck_*` tests, three `project_row_communities_*` tests, and two `record_read_*_rows_*` tests) that the literal command it prescribes also runs. The actual count for the three commands as written is 9 + 6 + 10 = 25, not the 16 LIMITS.md sums."
     entry_class: FACT
     evidence:

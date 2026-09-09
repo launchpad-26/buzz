@@ -82,7 +82,7 @@ evidence:
   - statement: "`assemble-manifest` runs only when `setup` and all four platform jobs succeeded; it builds a combined `latest.json` via `desktop/scripts/generate-oss-latest-json.sh`, extracts the release-notes block matching `## v<version>` from `CHANGELOG.md` and fails if that block is empty, creates or re-verifies a draft `desktop-v<version>` GitHub Release targeted at the exact tag-bound commit, uploads every staged artifact, and only then flips the release from draft to published."
     entry_class: FACT
     evidence:
-      - ".github/workflows/release.yml:778-950"
+      - ".github/workflows/release.yml:778-949"
   - statement: "Desktop publishes two separate GitHub releases: the versioned `desktop-v<version>` release, and a separate rolling `buzz-desktop-latest` release whose `latest.json` is what auto-update clients actually read. Publishing the versioned release does not by itself expose it through in-app auto-update."
     entry_class: FACT
     evidence:

@@ -90,7 +90,7 @@ evidence:
   - statement: "buzz-cli has no other command that reads a workflow_runs row (by run id or otherwise) -- cmd_get_workflow_runs is the CLI's only run-facing command, and its query targets the wrong data source entirely."
     entry_class: INFERENCE
     evidence:
-      - "crates/buzz-cli/src/commands/workflows.rs:1-260"
+      - "crates/buzz-cli/src/commands/workflows.rs:1-256"
     confidence: 0.7
   - statement: "The already-merged flow node's own Scope and omissions section independently states that a relay restart mid-run (a Running row whose spawned task was killed) was not traced and that no sweeping/reconciling code path for stuck Running rows was located, though its absence was not exhaustively confirmed -- the same gap this node's finalize_run write-failure finding compounds from a different angle (a live process that simply fails one DB write, not a killed process)."
     entry_class: FACT
