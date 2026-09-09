@@ -120,7 +120,7 @@ relationships:
 
 # NIP-RS: interface
 
-NIP-RS ([`docs/nips/NIP-RS.md`](../../../../../docs/nips/NIP-RS.md)) is Buzz's
+NIP-RS ([`docs/nips/NIP-RS.md`](../../../../../../docs/nips/NIP-RS.md)) is Buzz's
 own custom, draft/optional Nostr protocol extension. It is not an interface a
 caller calls synchronously; it is a **peer-to-peer sync boundary between a
 single user's own client instances**, mediated entirely through Nostr relays.
