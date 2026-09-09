@@ -20,7 +20,31 @@ import re
 import subprocess
 import sys
 
+from . import proc
+
 _RATE_LIMIT_OR_AUTH_STATUSES = {"401", "403", "429"}
+
+_HEX = set("0123456789abcdef")
+
+
+def normalize_sha(value: object) -> str | None:
+    """Return `value` as a lowercase 40-character hex SHA, or `None` if it is
+    not one.
+
+    Case-insensitive by deliberate choice (issue #2105). Git itself accepts an
+    uppercase object name and GitHub's API resolves one, so rejecting
+    `ABC123...` as "not a 40-character hex SHA" describes the wrong defect: it
+    sends the caller looking for a typo in a value that is perfectly valid.
+    Callers use the returned lowercase form from that point on, so everything
+    downstream -- comparisons, messages, citations -- stays in git's canonical
+    casing regardless of what was typed.
+    """
+    if not isinstance(value, str) or len(value) != 40:
+        return None
+    lowered = value.lower()
+    if any(c not in _HEX for c in lowered):
+        return None
+    return lowered
 
 # GitHub's default squash-merge format appends "(#NNNN)" to the end of the
 # commit subject (message's first line) -- the same rule `draft-page`/
@@ -31,13 +55,8 @@ _RATE_LIMIT_OR_AUTH_STATUSES = {"401", "403", "429"}
 TRAILING_PR_RE = re.compile(r"\(#(\d+)\)\s*$")
 
 
-def _run_gh_api(args: list[str]) -> subprocess.CompletedProcess:
-    return subprocess.run(
-        ["gh", "api", *args],
-        capture_output=True,
-        text=True,
-        timeout=30,
-    )
+def _run_gh_api(args: list[str], what: str) -> tuple[subprocess.CompletedProcess | None, str | None]:
+    return proc.run(["gh", "api", *args], timeout=30, what=what)
 
 
 def _parse_error_status(result: subprocess.CompletedProcess) -> tuple[str | None, str]:
@@ -69,7 +88,12 @@ def resolve_pin(repo: str, ref: str) -> int:
     this structured shape, since `draft-page`/`update-page`'s SKILL.md both
     already destructure these four fields from this call).
     """
-    result = _run_gh_api([f"repos/{repo}/commits/{ref}"])
+    result, run_error = _run_gh_api(
+        [f"repos/{repo}/commits/{ref}"], f"resolve-pin({repo!r}, {ref!r})"
+    )
+    if run_error is not None:
+        print(run_error, file=sys.stderr)
+        return 1
 
     if result.returncode != 0:
         status, message = _parse_error_status(result)
@@ -102,10 +126,9 @@ def resolve_pin(repo: str, ref: str) -> int:
         )
         return 1
 
-    sha = commit_data.get("sha", "")
-    if not isinstance(sha, str) or len(sha) != 40 or any(
-        c not in "0123456789abcdef" for c in sha
-    ):
+    sha = normalize_sha(commit_data.get("sha", ""))
+    if sha is None:
+        sha = commit_data.get("sha", "")
         print(
             f"resolve-pin({repo!r}, {ref!r}): gh api reported success but "
             f"`.sha` was {sha!r}, which is not a 40-character hex SHA. "
@@ -143,15 +166,17 @@ def path_exists_at(repo: str, commit: str, path: str) -> int:
     """Return (via exit code and stdout) whether `path` exists in `repo` at
     `commit`. Prints `true` or `false` to stdout on success.
     """
-    if len(commit) != 40 or any(c not in "0123456789abcdef" for c in commit):
+    normalized = normalize_sha(commit)
+    if normalized is None:
         print(
             f"path-exists-at({repo!r}, {commit!r}, {path!r}): `commit` is not "
-            "a 40-character hex SHA. This tool checks existence at a pinned "
-            "commit, not a branch or tag -- resolve it with resolve-pin "
-            "first.",
+            "a 40-character hex SHA (upper or lower case). This tool checks "
+            "existence at a pinned commit, not a branch or tag -- resolve it "
+            "with resolve-pin first.",
             file=sys.stderr,
         )
         return 1
+    commit = normalized
     if "?" in path or "&" in path:
         print(
             f"path-exists-at({repo!r}, {commit!r}, {path!r}): `path` contains "
@@ -162,20 +187,13 @@ def path_exists_at(repo: str, commit: str, path: str) -> int:
         )
         return 1
 
-    result = subprocess.run(
-        [
-            "gh",
-            "api",
-            f"repos/{repo}/contents/{path}",
-            "--method",
-            "GET",
-            "-f",
-            f"ref={commit}",
-        ],
-        capture_output=True,
-        text=True,
-        timeout=30,
+    result, run_error = _run_gh_api(
+        [f"repos/{repo}/contents/{path}", "--method", "GET", "-f", f"ref={commit}"],
+        f"path-exists-at({repo!r}, {commit!r}, {path!r})",
     )
+    if run_error is not None:
+        print(run_error, file=sys.stderr)
+        return 1
 
     if result.returncode == 0:
         print("true")
@@ -220,31 +238,25 @@ def path_exists_at_bool(repo: str, commit: str, path: str) -> tuple[bool | None,
     printed to stderr, since this in-process variant has no stderr of its own
     for a caller to inspect.
     """
-    if len(commit) != 40 or any(c not in "0123456789abcdef" for c in commit):
+    normalized = normalize_sha(commit)
+    if normalized is None:
         return None, (
             f"path-exists-at-bool({repo!r}, {commit!r}, {path!r}): `commit` is "
-            "not a 40-character hex SHA."
+            "not a 40-character hex SHA (upper or lower case)."
         )
+    commit = normalized
     if "?" in path or "&" in path:
         return None, (
             f"path-exists-at-bool({repo!r}, {commit!r}, {path!r}): `path` "
             "contains '?' or '&', which cannot appear in a real repository path."
         )
 
-    result = subprocess.run(
-        [
-            "gh",
-            "api",
-            f"repos/{repo}/contents/{path}",
-            "--method",
-            "GET",
-            "-f",
-            f"ref={commit}",
-        ],
-        capture_output=True,
-        text=True,
-        timeout=30,
+    result, run_error = _run_gh_api(
+        [f"repos/{repo}/contents/{path}", "--method", "GET", "-f", f"ref={commit}"],
+        f"path-exists-at-bool({repo!r}, {commit!r}, {path!r})",
     )
+    if run_error is not None:
+        return None, run_error
 
     if result.returncode == 0:
         return True, None

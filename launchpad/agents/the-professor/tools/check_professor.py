@@ -183,9 +183,14 @@ SCREEN_CONTENT_EXPECTED = {
         "disposition_by_category": {"internal-hostname-private-ip": "redact"}
     },
     "redact-physical-address.md": {"disposition_by_category": {"physical-address": "redact"}},
-    "dispatch-roster-names.md": {"disposition_by_category": {"roster-names": "not-evaluated"}},
+    # Interim `redact`, not `not-evaluated` -- issue #2110. See the comment on
+    # the roster-names finding in localcmd.py's screen_content: a disposition
+    # SKILL.md §2 defines no consumer action for is a fail-open, so an
+    # undecided candidate takes the ruleset's own Redact disposition until
+    # Phase 1b (#2131) can tell attribution from access-control data.
+    "dispatch-roster-names.md": {"disposition_by_category": {"roster-names": "redact"}},
     "dispatch-roster-names-two-pairs.md": {
-        "disposition_by_category": {"roster-names": "not-evaluated"}
+        "disposition_by_category": {"roster-names": "redact"}
     },
     "clean-unrelated-roster-and-names.md": {"disposition_by_category": {}},
 }
@@ -217,13 +222,18 @@ def _run_professor(
     pack_root: str | None,
     cwd: str | None = None,
     path_prepend: str | None = None,
+    path_override: str | None = None,
 ):
     env = dict(os.environ)
     if pack_root is None:
         env["PROFESSOR_PACK_ROOT"] = ""
     else:
         env["PROFESSOR_PACK_ROOT"] = pack_root
-    if path_prepend is not None:
+    if path_override is not None:
+        # Replaces PATH outright rather than prepending, so `gh`/`git` genuinely
+        # cannot be found -- the missing-binary case issue #2112 is about.
+        env["PATH"] = path_override
+    elif path_prepend is not None:
         env["PATH"] = path_prepend + os.pathsep + env.get("PATH", "")
     return subprocess.run(
         [str(PROFESSOR_PY), *args],
@@ -240,10 +250,31 @@ def check_pack_root_unset_fails_loud() -> str | None:
         result = _run_professor(args, pack_root=None)
         if result.returncode == 0:
             return f"{name}: expected non-zero exit with $PROFESSOR_PACK_ROOT unset, got 0"
-        if result.stderr.strip() != REQUIRED_UNSET_ERROR_TEXT:
+        # Known launcher chatter is removed, then the REMAINDER must equal the
+        # required text exactly. professor.py's shebang is `uv run --script`,
+        # and on a cold cache uv writes its own progress ("Installed 3 packages
+        # in 8ms") to stderr before the script runs at all -- which broke a
+        # whole-string comparison, and CI runs cold by definition.
+        #
+        # An `endswith` was tried first and is NOT sufficient: a program that
+        # printed "ERROR: unexpected initialization failure" and then the
+        # required text would satisfy it, hiding a real failure occurring
+        # before the guard. Stripping a closed allowlist of launcher prefixes
+        # keeps the assertion exact for anything the application itself writes,
+        # which is the whole point of comparing exact text here.
+        launcher_noise = (
+            "Installed", "Resolved", "Prepared", "Downloading", "Downloaded",
+            "Built", "Building", "Uninstalled", "Updating", "Audited",
+        )
+        application_stderr = "\n".join(
+            line for line in result.stderr.strip().splitlines()
+            if not line.strip().startswith(launcher_noise)
+        ).strip()
+        if application_stderr != REQUIRED_UNSET_ERROR_TEXT:
             return (
-                f"{name}: error message did not match the exact required text "
-                f"{REQUIRED_UNSET_ERROR_TEXT!r}: got {result.stderr!r}"
+                f"{name}: stderr (after removing known launcher output) did not "
+                f"match the exact required text {REQUIRED_UNSET_ERROR_TEXT!r}: "
+                f"got {application_stderr!r} from {result.stderr!r}"
             )
     return None
 
@@ -439,6 +470,225 @@ def check_path_exists_at_true_and_false(sha: str) -> str | None:
     return None
 
 
+def check_uppercase_sha_is_accepted(sha: str) -> str | None:
+    """An uppercase-hex commit SHA must resolve identically to its lowercase
+    form (issue #2105), not be rejected as malformed.
+
+    Both answers are asserted, not just the `true` one: a validation bug that
+    accepted uppercase but then passed the un-normalized value through could
+    still produce a wrong `false`, which would look like a citation defect
+    rather than a tool defect.
+    """
+    upper = sha.upper()
+    if upper == sha:
+        return f"test setup error: {sha!r} has no uppercase form to test with"
+
+    true_result = _run_professor(
+        ["path-exists-at", EXTERNAL_REPO, upper, EXTERNAL_EXISTING_PATH],
+        pack_root="/tmp",
+    )
+    if true_result.returncode != 0 or true_result.stdout.strip() != "true":
+        return (
+            "path-exists-at(uppercase SHA, real path) did not return true: "
+            f"{true_result.stdout!r} {true_result.stderr!r}"
+        )
+
+    false_result = _run_professor(
+        ["path-exists-at", EXTERNAL_REPO, upper, EXTERNAL_MISSING_PATH],
+        pack_root="/tmp",
+    )
+    if false_result.returncode != 0 or false_result.stdout.strip() != "false":
+        return (
+            "path-exists-at(uppercase SHA, fabricated path) did not return false: "
+            f"{false_result.stdout!r} {false_result.stderr!r}"
+        )
+
+    return None
+
+
+def check_missing_binary_is_structured_not_traceback() -> str | None:
+    """A missing `gh` or `git` binary must produce a structured error naming the
+    binary, never a raw `FileNotFoundError` traceback (issue #2112).
+
+    Both halves of the tool layer are exercised, because they shell out to
+    different binaries through the same helper: `path-exists-at` needs `gh`,
+    and `check-page` on a local citation needs `git`. Asserting the absence of
+    "Traceback" is the point of the check -- an exit code alone cannot
+    distinguish a handled error from an unhandled crash, since both are
+    non-zero.
+    """
+    # PATH cannot simply be emptied: professor.py's shebang is
+    # `#!/usr/bin/env -S uv run --script`, so wiping PATH kills `uv` before
+    # Python starts and the run fails for the wrong reason. Instead PATH is
+    # narrowed to a directory holding nothing but a symlink to `uv` -- the
+    # interpreter resolves, `gh` and `git` genuinely do not.
+    uv_path = shutil.which("uv")
+    if uv_path is None:
+        return "test setup error: `uv` not on PATH, cannot construct a gh/git-free PATH"
+
+    with tempfile.TemporaryDirectory() as empty_bin:
+        os.symlink(uv_path, os.path.join(empty_bin, "uv"))
+        if shutil.which("gh", path=empty_bin) or shutil.which("git", path=empty_bin):
+            return "test setup error: gh/git still resolvable on the narrowed PATH"
+
+        gh_result = _run_professor(
+            [
+                "path-exists-at",
+                EXTERNAL_REPO,
+                "0" * 40,
+                EXTERNAL_EXISTING_PATH,
+            ],
+            pack_root="/tmp",
+            path_override=empty_bin,
+        )
+        if gh_result.returncode == 0:
+            return "path-exists-at with no `gh` on PATH unexpectedly succeeded"
+        if "Traceback" in gh_result.stderr:
+            return (
+                "path-exists-at with no `gh` on PATH produced a raw traceback: "
+                f"{gh_result.stderr!r}"
+            )
+        if "not installed or not on PATH" not in gh_result.stderr:
+            return (
+                "path-exists-at with no `gh` on PATH did not name the missing "
+                f"binary: {gh_result.stderr!r}"
+            )
+
+        page_result = _run_professor(
+            [
+                "check-page",
+                str(FIXTURES_DIR / "compliant-local.md"),
+                "--target",
+                str(REPO_ROOT),
+            ],
+            pack_root=str(PACK_ROOT),
+            path_override=empty_bin,
+        )
+        if "Traceback" in page_result.stderr:
+            return (
+                "check-page with no `git` on PATH produced a raw traceback: "
+                f"{page_result.stderr!r}"
+            )
+
+    return None
+
+
+def check_line_count_failure_is_not_a_citation_defect() -> str | None:
+    """A failure to READ a cited file must never be reported as a defect in the
+    citation's line range.
+
+    `_local_file_line_count` returns None when it cannot obtain a count, and the
+    range check treats None as out-of-bounds -- so before this was separated, a
+    `git show` that timed out or a missing `git` binary made check-page report
+    the document as wrong. Existence succeeding does not imply the later content
+    read succeeds: `_local_citation_exists` runs `git cat-file`, a different
+    call that can succeed moments before `git show` fails.
+
+    Exercised with a decoy `git` that passes every subcommand through to the
+    real one EXCEPT `show`, which hangs long enough to trip the 15s timeout.
+    That is the narrowest way to make exactly the second call fail while the
+    first still succeeds, which is the ordering the bug depended on.
+    """
+    real_git = shutil.which("git")
+    if real_git is None:
+        return "test setup error: no `git` on PATH to pass through to"
+
+    # A shallow clone (GitHub Actions' default checkout depth) can be missing
+    # FIXTURE_PINNED_COMMIT entirely. `_local_citation_exists` then fails at
+    # `git cat-file` and the citation leaves via citation-check-error before
+    # the line-count path is reached at all -- which is the SAME category this
+    # check asserts, so without the "did the decoy actually see a show?"
+    # assertion below it would have passed vacuously rather than skipped.
+    # Found on this job's first real CI run, by that assertion.
+    if not _commit_present_in_local_history(str(REPO_ROOT), FIXTURE_PINNED_COMMIT):
+        print(
+            f"skipped: line-count failure check -- {FIXTURE_PINNED_COMMIT} is not "
+            "in this checkout's local history (a shallow clone), so the citation "
+            "never reaches the line-count path. Named rather than silently passed."
+        )
+        return None
+
+    # Both ways the read can fail, because they took different code paths and
+    # only one was fixed first: `show` never returning (proc.run raises
+    # TimeoutExpired, so `run_error` is set) and `show` returning non-zero
+    # (proc.run succeeds, so the failure is only visible in `returncode`). The
+    # second was still reported as out-of-bounds-range after the first was
+    # fixed -- found by an independent review, not by this suite.
+    for label, show_action in (
+        ("timeout", "exec sleep 60"),
+        ("non-zero exit", "exit 128"),
+    ):
+        error = _line_count_failure_case(real_git, label, show_action)
+        if error:
+            return error
+    return None
+
+
+def _line_count_failure_case(real_git: str, label: str, show_action: str) -> str | None:
+    fixture_path = FIXTURES_DIR / "compliant-range-at-end.md"
+    with tempfile.TemporaryDirectory() as decoy_dir:
+        decoy = Path(decoy_dir) / "git"
+        log_path = Path(decoy_dir) / "git-invocations.log"
+        # `-C <dir>` is the only option this pack passes before the subcommand,
+        # so the subcommand is argument 3. Matching by position rather than
+        # "any argument equal to show" keeps the decoy from intercepting a
+        # future call that merely mentions `show` in a revision or path.
+        # `exec sleep` rather than `sleep` so no shell is left parented to the
+        # killed process once the 15s timeout fires.
+        decoy.write_text(
+            "#!/bin/sh\n"
+            f'echo "invoked: $@" >> "{log_path}"\n'
+            f'if [ "$1" = "-C" ] && [ "$3" = "show" ]; then {show_action}; fi\n'
+            f'exec {real_git} "$@"\n'
+        )
+        decoy.chmod(0o755)
+
+        result = _run_professor(
+            ["check-page", str(fixture_path), "--target", str(REPO_ROOT)],
+            pack_root=str(PACK_ROOT),
+            path_prepend=decoy_dir,
+        )
+        if result.returncode != 0:
+            return f"check-page(decoy git show / {label}) failed: {result.stderr}"
+        try:
+            report = json.loads(result.stdout)
+        except json.JSONDecodeError:
+            return f"check-page(decoy git show / {label}) did not print valid JSON: {result.stdout!r}"
+
+        categories = [f["category"] for f in report.get("findings", [])]
+        if "out-of-bounds-range" in categories:
+            return (
+                f"a git show failure ({label}) was reported as out-of-bounds-range -- an "
+                "unreadable file is being blamed on the citation: "
+                f"{report.get('findings')!r}"
+            )
+        if categories != ["citation-check-error"]:
+            return (
+                "expected exactly one citation-check-error when the line count "
+                f"cannot be read, got {categories!r}"
+            )
+
+        # The category alone cannot prove WHERE the failure happened: an
+        # existence check that also shelled out to `git show` could produce the
+        # same category and pass this vacuously. Assert both that the decoy
+        # actually intercepted a `show`, and that the finding is the
+        # bounds-specific one.
+        invocations = log_path.read_text() if log_path.exists() else ""
+        if " show " not in f" {invocations} ":
+            return (
+                "the decoy git never saw a `show` subcommand, so this check did "
+                f"not exercise the line-count path at all: {invocations!r}"
+            )
+        message = report["findings"][0].get("message", "")
+        if "line range" not in message:
+            return (
+                "expected the bounds-specific citation-check-error, got a "
+                f"different one ({label}): {message!r}"
+            )
+
+    return None
+
+
 def check_citation_check_error_on_api_failure() -> str | None:
     """A rate-limited/auth-failed `gh api` response must produce a distinct
     `citation-check-error` finding, never the same `citation-not-found` outcome
@@ -470,7 +720,7 @@ def check_citation_check_error_on_api_failure() -> str | None:
                 "check-page(compliant-external.md, decoy 403 gh) did not print "
                 f"valid JSON: {result.stdout!r}"
             )
-        rules = [f["rule"] for f in report.get("findings", [])]
+        rules = [f["category"] for f in report.get("findings", [])]
         if "citation-not-found" in rules:
             return (
                 "check-page(compliant-external.md, decoy 403 gh): a rate-limit-"
@@ -478,7 +728,7 @@ def check_citation_check_error_on_api_failure() -> str | None:
             )
         raw_citation = "block/buzz:Cargo.toml@f038cbbb0d4092a72ffd93f17916f84d2b39bb43"
         for finding in report.get("findings", []):
-            if finding.get("rule") == "citation-check-error" and raw_citation in finding.get(
+            if finding.get("category") == "citation-check-error" and raw_citation in finding.get(
                 "message", ""
             ):
                 return (
@@ -521,7 +771,7 @@ def check_local_citation_error_shapes() -> str | None:
                 f"check-page against --target {target_dir!r} did not print valid "
                 f"JSON: {result.stdout!r}",
             )
-        return [f["rule"] for f in report.get("findings", [])], None
+        return [f["category"] for f in report.get("findings", [])], None
 
     # Case 1: --target points at a path that doesn't exist at all.
     nonexistent_target = f"/tmp/professor-check-nonexistent-target-{os.getpid()}"
@@ -698,7 +948,7 @@ def check_screen_content_target_ruleset_override() -> str | None:
     return None
 
 
-def check_local_citation_never_calls_gh() -> str | None:
+def check_local_citation_never_calls_gh(offline: bool = False) -> str | None:
     """`compliant-local.md`'s citation is entirely local (no `repo:` prefix) --
     `gh` must never be invoked for it. `compliant-external.md`'s citation
     names a genuinely external repo -- `gh` MUST be invoked for it. Both sides
@@ -706,18 +956,33 @@ def check_local_citation_never_calls_gh() -> str | None:
     gh" and "never calls gh" apart from the correct, conditional behaviour
     this plan's own step 4 required (§4's local/external split).
     """
+    # This check is about WHETHER `gh` is invoked, never about what it answers,
+    # so under --offline the decoy stops passing through to the real binary and
+    # answers 404 itself. Before that, the decoy logged the call and then
+    # exec'd the real `gh`, which made a live GitHub request even in the
+    # supposedly network-free run -- and passed regardless of whether that
+    # request succeeded, so the network trip bought nothing.
     real_gh = shutil.which("gh")
-    if real_gh is None:
+    if real_gh is None and not offline:
         return "no real `gh` found on PATH to build the passthrough decoy from"
 
     with tempfile.TemporaryDirectory() as decoy_dir:
         decoy_path = Path(decoy_dir)
         log_path = decoy_path / "gh-invocations.log"
         gh_script = decoy_path / "gh"
+        # A 404-shaped body is the one answer that keeps check-page's own
+        # behaviour ordinary here: it is a definite "path absent", not the
+        # rate-limit/auth shape that would divert into citation-check-error
+        # and change which findings the assertions below see.
+        tail = (
+            'printf \'{"status":"404","message":"Not Found"}\\n\'\nexit 1\n'
+            if offline
+            else f'exec "{real_gh}" "$@"\n'
+        )
         gh_script.write_text(
             "#!/bin/sh\n"
             f'echo "invoked: $@" >> "{log_path}"\n'
-            f'exec "{real_gh}" "$@"\n'
+            + tail
         )
         gh_script.chmod(gh_script.stat().st_mode | 0o111)
 
@@ -757,7 +1022,23 @@ def check_local_citation_never_calls_gh() -> str | None:
     return None
 
 
-def check_check_page_fixtures() -> str | None:
+# Fixtures whose citations name a repo other than `--target`, so `check-page`
+# resolves them through `netcmd` and really does reach the GitHub API. They are
+# excluded from `--offline` (issue #2111): with outbound HTTP blocked they
+# report `citation-check-error` instead of their expected rules, which is the
+# tool behaving correctly and the *check* being misclassified.
+#
+# Derived by hand and asserted below rather than detected at runtime -- a
+# regex over fixture text would silently drop a fixture from the offline run
+# the moment someone wrote a citation it did not anticipate.
+EXTERNAL_CITATION_FIXTURES = {
+    "compliant-external.md",
+    "external-citation-range-not-evaluated.md",
+    "broken-external-out-of-bounds-range.md",
+}
+
+
+def check_check_page_fixtures(offline: bool = False) -> str | None:
     # A shallow clone can be missing FIXTURE_PINNED_COMMIT even though it is
     # entirely real upstream -- any fixture citing it would then fail with
     # citation-check-error instead of its expected rule, misattributing a
@@ -766,9 +1047,21 @@ def check_check_page_fixtures() -> str | None:
     pinned_commit_present = _commit_present_in_local_history(
         str(REPO_ROOT), FIXTURE_PINNED_COMMIT
     )
+    unknown_external = EXTERNAL_CITATION_FIXTURES - set(CHECK_PAGE_EXPECTED_RULES)
+    if unknown_external:
+        return (
+            "EXTERNAL_CITATION_FIXTURES names fixture(s) that are not in "
+            f"CHECK_PAGE_EXPECTED_RULES: {sorted(unknown_external)!r} -- the "
+            "offline exclusion list has drifted from the fixture set."
+        )
+
     skipped = []
+    skipped_external = []
     for fixture_name, expected_rules in CHECK_PAGE_EXPECTED_RULES.items():
         fixture_path = FIXTURES_DIR / fixture_name
+        if offline and fixture_name in EXTERNAL_CITATION_FIXTURES:
+            skipped_external.append(fixture_name)
+            continue
         if not pinned_commit_present and FIXTURE_PINNED_COMMIT in fixture_path.read_text():
             skipped.append(fixture_name)
             continue
@@ -781,7 +1074,7 @@ def check_check_page_fixtures() -> str | None:
             report = json.loads(result.stdout)
         except json.JSONDecodeError:
             return f"check-page({fixture_name}) did not print valid JSON: {result.stdout!r}"
-        actual_rules = [f["rule"] for f in report.get("findings", [])]
+        actual_rules = [f["category"] for f in report.get("findings", [])]
         if actual_rules != expected_rules:
             return (
                 f"check-page({fixture_name}): expected rules {expected_rules!r}, "
@@ -791,6 +1084,11 @@ def check_check_page_fixtures() -> str | None:
         print(
             f"skipped: fixture commit {FIXTURE_PINNED_COMMIT} not present in this "
             f"shallow clone -- {len(skipped)} fixture(s) skipped: {sorted(skipped)!r}"
+        )
+    if skipped_external:
+        print(
+            "skipped: --offline -- external-citation fixture(s) not run "
+            f"(they reach the GitHub API): {sorted(skipped_external)!r}"
         )
     return None
 
@@ -1043,7 +1341,7 @@ MESSAGE_LEAK_FORBIDDEN_SUBSTRINGS = {
 }
 
 
-def check_page_messages_never_leak_raw_content() -> str | None:
+def check_page_messages_never_leak_raw_content(offline: bool = False) -> str | None:
     """check-page's messages must never contain the flagged sentence's raw
     text or the raw citation string, across every fixture that exercises one
     of these message-construction paths: missing-citation, mixed-claim,
@@ -1058,8 +1356,19 @@ def check_page_messages_never_leak_raw_content() -> str | None:
     all" branch -- both share the "missing-citation" rule label but are two
     distinct call sites in `_check_section`.
     """
+    skipped_external = []
     for fixture_name, forbidden_substrings in MESSAGE_LEAK_FORBIDDEN_SUBSTRINGS.items():
         fixture_path = FIXTURES_DIR / fixture_name
+        if offline and fixture_name in EXTERNAL_CITATION_FIXTURES:
+            # This check has its own fixture list, so it bypassed the offline
+            # exclusion `check_check_page_fixtures` applies and really did
+            # reach the GitHub API under --offline. It still "passed", because
+            # the citation-check-error a blocked call produces happens to
+            # contain none of the forbidden substrings -- so the check quietly
+            # stopped exercising the message path it exists to cover, while
+            # reporting success.
+            skipped_external.append(fixture_name)
+            continue
         result = _run_professor(
             ["check-page", str(fixture_path), "--target", str(REPO_ROOT)], pack_root=str(PACK_ROOT)
         )
@@ -1079,19 +1388,120 @@ def check_page_messages_never_leak_raw_content() -> str | None:
                     f"check-page({fixture_name}): a message leaked forbidden raw "
                     f"content {forbidden!r} -- findings: {findings!r}"
                 )
+    if skipped_external:
+        print(
+            "skipped: --offline -- external-citation fixture(s) not run "
+            f"(they reach the GitHub API): {sorted(skipped_external)!r}"
+        )
     return None
 
 
-def main() -> int:
-    checks = [
+def _run_network_free_checks(offline: bool) -> int:
+    """Every check that reaches no network and needs no `gh` credentials.
+
+    These are the checks CI can run (issue #2111). "Network-free" here means no
+    call leaves the machine: several of them still exercise the `gh` code path,
+    but through a decoy `gh` placed on PATH (`check_citation_check_error_on_api_failure`,
+    `check_local_citation_never_calls_gh`) or with no `gh` at all
+    (`check_missing_binary_is_structured_not_traceback`). Local `git` against
+    this checkout is likewise not network.
+
+    The shallow-clone check is deliberately in this half: it reads only this
+    checkout's own local history.
+    """
+    error, shallow_clone = check_fixture_commit_shallow_clone_safety()
+    if error:
+        print(f"FAIL [fixture commit shallow-clone safety]: {error}")
+        return 1
+    if shallow_clone:
+        print(
+            "skip: fixture commit shallow-clone safety -- "
+            f"{FIXTURE_PINNED_COMMIT} not present in this checkout's local "
+            "history (a genuinely shallow clone); dependent check-page "
+            "fixtures are skipped below rather than failed"
+        )
+    else:
+        print(
+            "ok: fixture commit shallow-clone safety (present here; fabricated "
+            "SHA correctly absent)"
+        )
+
+    checks: list[tuple[str, object]] = [
         ("pack-root unset fails loud (all four subcommands)", check_pack_root_unset_fails_loud),
+        ("pack-root spec validation (check-page/screen-content)", check_pack_root_spec_validation),
         (
-            "pack-root resolution from outside checkout",
-            check_pack_root_resolution_outside_checkout,
+            "a missing gh/git binary is a structured error, never a raw traceback",
+            check_missing_binary_is_structured_not_traceback,
         ),
         (
-            "pack-root spec validation (check-page/screen-content)",
-            check_pack_root_spec_validation,
+            "citation-check-error on API failure (not collapsed into citation-not-found)",
+            check_citation_check_error_on_api_failure,
+        ),
+        (
+            "an unreadable line count is a citation-check-error, never out-of-bounds-range",
+            check_line_count_failure_is_not_a_citation_defect,
+        ),
+        (
+            "local-citation error shapes (nonexistent --target, non-git --target, "
+            "empty git repo all citation-check-error, never citation-not-found)",
+            check_local_citation_error_shapes,
+        ),
+        (
+            "local-vs-network boundary (compliant-local.md never calls gh, "
+            "compliant-external.md does)",
+            lambda: check_local_citation_never_calls_gh(offline=offline),
+        ),
+        (
+            "invalid UTF-8 produces a structured error, never a raw traceback "
+            "(check-page and screen-content)",
+            check_invalid_utf8_produces_structured_error,
+        ),
+        (
+            "screen-content accepts --target, matching SKILL.md's documented "
+            "invocation shape",
+            check_screen_content_accepts_target_flag,
+        ),
+        (
+            "screen-content reports an explicit target-ruleset-override, never "
+            "silently bundled-default",
+            check_screen_content_target_ruleset_override,
+        ),
+        (
+            "check-page fixtures ("
+            f"{len(CHECK_PAGE_EXPECTED_RULES) - (len(EXTERNAL_CITATION_FIXTURES) if offline else 0)}"
+            " fixtures)",
+            lambda: check_check_page_fixtures(offline=offline),
+        ),
+        (
+            "frontmatter branches distinct "
+            f"({len(FRONTMATTER_BRANCH_EXPECTED_MESSAGE_SUBSTRING)} branches)",
+            check_frontmatter_branches_are_distinct,
+        ),
+        (
+            f"screen-content fixtures ({len(SCREEN_CONTENT_EXPECTED)} fixtures)",
+            check_screen_content_fixtures,
+        ),
+        (
+            "roster-names enumerates every candidate, not just the first "
+            "(2 distinct findings)",
+            check_roster_names_multiple_candidates,
+        ),
+        (
+            "dispatch-roster-names.md's three names each produce their own finding "
+            "(3 distinct findings)",
+            check_roster_names_three_names_one_context,
+        ),
+        (
+            "PASSWORD_LITERAL_RE fires on all three shapes (unquoted, JSON-quoted, "
+            "underscore-separated)",
+            check_password_literal_three_shapes,
+        ),
+        (
+            "check-page messages never leak the flagged sentence's raw text or the "
+            "raw citation string (missing-citation, unparseable-citation, "
+            "mixed-claim, citation-not-found, out-of-bounds-range, "
+            "citation-range-not-evaluated)",
+            lambda: check_page_messages_never_leak_raw_content(offline=offline),
         ),
     ]
 
@@ -1101,6 +1511,29 @@ def main() -> int:
             print(f"FAIL [{name}]: {error}")
             return 1
         print(f"ok: {name}")
+
+    return 0
+
+
+def _run_network_checks() -> int:
+    """The checks that make real GitHub API calls and need `gh` authenticated.
+
+    Kept out of `_run_network_free_checks` and skippable with `--offline`
+    (issue #2111): CI has neither the credentials nor a reason to spend a rate
+    limit on them, but they are the only checks that prove `resolve-pin` and
+    `path-exists-at` actually work against GitHub, so they must still be run
+    by hand or on a schedule -- never dropped.
+
+    Written as a straight-line block rather than folded into the declarative
+    list above because the SHA `resolve-pin` returns is threaded into three
+    later checks; there is real state here, and hiding it in a registry would
+    obscure that.
+    """
+    error = check_pack_root_resolution_outside_checkout()
+    if error:
+        print(f"FAIL [pack-root resolution from outside checkout]: {error}")
+        return 1
+    print("ok: pack-root resolution from outside checkout")
 
     error, sha = check_resolve_pin_matches_git_ls_remote()
     if error:
@@ -1120,110 +1553,45 @@ def main() -> int:
         return 1
     print("ok: path-exists-at true/false")
 
-    error = check_citation_check_error_on_api_failure()
+    error = check_uppercase_sha_is_accepted(sha)
     if error:
-        print(f"FAIL [citation-check-error on API failure]: {error}")
+        print(f"FAIL [uppercase SHA accepted]: {error}")
         return 1
-    print("ok: citation-check-error on API failure (not collapsed into citation-not-found)")
+    print("ok: an uppercase-hex SHA resolves identically to its lowercase form")
 
-    error = check_local_citation_error_shapes()
-    if error:
-        print(f"FAIL [local-citation error shapes]: {error}")
-        return 1
-    print(
-        "ok: local-citation error shapes (nonexistent --target, non-git "
-        "--target, empty git repo all citation-check-error, never citation-not-found)"
-    )
+    return 0
 
-    error = check_local_citation_never_calls_gh()
-    if error:
-        print(f"FAIL [local-vs-network boundary]: {error}")
-        return 1
-    print("ok: local-vs-network boundary (compliant-local.md never calls gh, compliant-external.md does)")
 
-    error = check_invalid_utf8_produces_structured_error()
-    if error:
-        print(f"FAIL [invalid UTF-8 structured error]: {error}")
-        return 1
-    print("ok: invalid UTF-8 produces a structured error, never a raw traceback (check-page and screen-content)")
-
-    error = check_screen_content_accepts_target_flag()
-    if error:
-        print(f"FAIL [screen-content accepts --target]: {error}")
-        return 1
-    print("ok: screen-content accepts --target, matching SKILL.md's documented invocation shape")
-
-    error = check_screen_content_target_ruleset_override()
-    if error:
-        print(f"FAIL [screen-content target-ruleset-override]: {error}")
-        return 1
-    print("ok: screen-content reports an explicit target-ruleset-override, never silently bundled-default")
-
-    error, shallow_clone = check_fixture_commit_shallow_clone_safety()
-    if error:
-        print(f"FAIL [fixture commit shallow-clone safety]: {error}")
-        return 1
-    if shallow_clone:
+def main() -> int:
+    args = sys.argv[1:]
+    offline = "--offline" in args
+    unknown = [a for a in args if a != "--offline"]
+    if unknown:
         print(
-            "skip: fixture commit shallow-clone safety -- "
-            f"{FIXTURE_PINNED_COMMIT} not present in this checkout's local "
-            "history (a genuinely shallow clone); dependent check-page "
-            "fixtures are skipped below rather than failed"
+            f"check_professor.py: unrecognized argument(s) {unknown!r}. "
+            "The only accepted flag is --offline (skip the GitHub-API checks).",
+            file=sys.stderr,
         )
-    else:
+        return 2
+
+    if _run_network_free_checks(offline) != 0:
+        return 1
+
+    if offline:
+        # Named individually rather than counted, so a check silently moving out
+        # of the network half cannot pass unnoticed as a smaller number.
         print(
-            "ok: fixture commit shallow-clone safety (present here; fabricated "
-            "SHA correctly absent)"
+            "skip: --offline -- not run: pack-root resolution from outside "
+            "checkout, resolve-pin matches git ls-remote, resolve-pin's pr "
+            "field, path-exists-at true/false, uppercase SHA accepted. These "
+            "need an authenticated `gh` and reach the GitHub API; run "
+            "check_professor.py with no flags to include them."
         )
+        print("ALL NETWORK-FREE CHECKS PASSED")
+        return 0
 
-    error = check_check_page_fixtures()
-    if error:
-        print(f"FAIL [check-page fixtures]: {error}")
+    if _run_network_checks() != 0:
         return 1
-    print(f"ok: check-page fixtures ({len(CHECK_PAGE_EXPECTED_RULES)} fixtures)")
-
-    error = check_frontmatter_branches_are_distinct()
-    if error:
-        print(f"FAIL [frontmatter branches distinct]: {error}")
-        return 1
-    print(
-        "ok: frontmatter branches distinct "
-        f"({len(FRONTMATTER_BRANCH_EXPECTED_MESSAGE_SUBSTRING)} branches)"
-    )
-
-    error = check_screen_content_fixtures()
-    if error:
-        print(f"FAIL [screen-content fixtures]: {error}")
-        return 1
-    print(f"ok: screen-content fixtures ({len(SCREEN_CONTENT_EXPECTED)} fixtures)")
-
-    error = check_roster_names_multiple_candidates()
-    if error:
-        print(f"FAIL [roster-names multiple candidates]: {error}")
-        return 1
-    print("ok: roster-names enumerates every candidate, not just the first (2 distinct findings)")
-
-    error = check_roster_names_three_names_one_context()
-    if error:
-        print(f"FAIL [roster-names three names, one context]: {error}")
-        return 1
-    print("ok: dispatch-roster-names.md's three names each produce their own finding (3 distinct findings)")
-
-    error = check_password_literal_three_shapes()
-    if error:
-        print(f"FAIL [password-literal three shapes]: {error}")
-        return 1
-    print("ok: PASSWORD_LITERAL_RE fires on all three shapes (unquoted, JSON-quoted, underscore-separated)")
-
-    error = check_page_messages_never_leak_raw_content()
-    if error:
-        print(f"FAIL [check-page messages never leak raw content]: {error}")
-        return 1
-    print(
-        "ok: check-page messages never leak the flagged sentence's raw text or the "
-        "raw citation string (missing-citation, unparseable-citation, mixed-claim, "
-        "citation-not-found, out-of-bounds-range, citation-range-not-evaluated)"
-    )
 
     print("ALL CHECKS PASSED")
     return 0
