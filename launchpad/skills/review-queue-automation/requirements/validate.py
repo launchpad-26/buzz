@@ -23,7 +23,7 @@ HERE = Path(__file__).resolve().parent
 REPO_ROOT = HERE.parents[3]  # .../buzz
 # Frozen round-9b requirements baseline. This commit contains the amended specification,
 # QA assessment, clause inventory and singular-split records compared below.
-FROZEN_COMMIT = "6f95444df"
+FROZEN_COMMIT = "9267b6308"
 FROZEN_SPEC_PATH = "launchpad/skills/review-queue-automation/requirements/requirements-specification.md"
 FROZEN_QA_PATH = "launchpad/skills/review-queue-automation/requirements/requirements-quality-assessment.md"
 FROZEN_CLAUSE_PATH = "launchpad/skills/review-queue-automation/requirements/clause-inventory.md"
