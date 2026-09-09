@@ -16,7 +16,7 @@ evidence:
     entry_class: FACT
     evidence:
       - "crates/buzz-relay-mesh/src/lib.rs"
-  - statement: "The mesh is opt-in and default-off: BUZZ_MESH is matched case-insensitively against on/true/1 and resolves to disabled for an absent variable, 'off', or any other value, with an inline comment stating the reason as strict rollout no-regression -- 'an image upgrade with untouched env must not bind a new UDP port or write a new Redis key' -- and BUZZ_MESH_BIND_ADDR defaults to 0.0.0.0:3478."
+  - statement: "The mesh is opt-in and default-off: BUZZ_MESH enables it when the value is 'on' (compared case-insensitively) or exactly 'true' or '1' (both compared with ==, so 'TRUE' and 'True' do NOT enable it), and resolves to disabled for an absent variable, 'off', or any other value, with an inline comment stating the reason as strict rollout no-regression -- 'an image upgrade with untouched env must not bind a new UDP port or write a new Redis key' -- and BUZZ_MESH_BIND_ADDR defaults to 0.0.0.0:3478."
     entry_class: FACT
     evidence:
       - "crates/buzz-relay/src/config.rs"
@@ -212,10 +212,12 @@ single-pod deployment is unaffected, a horizontally-scaled deployment sets
 same handler takes the other branch: own the room locally, or forward this client
 to the pod that does.
 
-**It is opt-in, and that is deliberate.** `BUZZ_MESH` must be set explicitly to
-`on`/`true`/`1`; an absent variable, `off`, or a typo all resolve to disabled, so
-an image upgrade with untouched environment binds no new UDP port and writes no
-new Redis key. `boot_mesh` is the single construction site, and its `None` return
+**It is opt-in, and that is deliberate.** `BUZZ_MESH` must be set explicitly to `on`
+(case-insensitive) or to exactly `true` or `1`; an absent variable, `off`, or a typo all
+resolve to disabled, so an image upgrade with untouched environment binds no new UDP port
+and writes no new Redis key. Note the asymmetry, which matters to an operator choosing a
+value: only `on` is compared case-insensitively, so **`BUZZ_MESH=TRUE` leaves the mesh
+disabled** while `BUZZ_MESH=ON` enables it. `boot_mesh` is the single construction site, and its `None` return
 means the relay behaves exactly as it did before the mesh existed.
 
 **It is diagnosable from outside the process.** `GET /_mesh` returns the live peer

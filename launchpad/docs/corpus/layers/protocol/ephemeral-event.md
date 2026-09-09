@@ -15,11 +15,11 @@ evidence:
     entry_class: FACT
     evidence:
       - "crates/buzz-core/src/kind.rs"
-  - statement: "Nine declared kinds fall inside the range at this revision, and they split into two groups the registry declares in separate blocks: five relay-fanned-out ephemeral events (KIND_PRESENCE_UPDATE 20001, KIND_TYPING_INDICATOR 20002, KIND_PAIRING 24134, KIND_AGENT_OBSERVER_FRAME 24200, KIND_HUDDLE_REACTION 24810) and four authorization or proof credentials whose doc comments each say they are not stored (KIND_AUTH 22242, KIND_BLOSSOM_AUTH 24242, KIND_NOSTR_IDENTITY_BINDING 24243, KIND_HTTP_AUTH 27235)."
+  - statement: "Ten declared kinds fall inside the range at this revision, in three groups: five relay-fanned-out ephemeral events (KIND_PRESENCE_UPDATE 20001, KIND_TYPING_INDICATOR 20002, KIND_PAIRING 24134, KIND_AGENT_OBSERVER_FRAME 24200, KIND_HUDDLE_REACTION 24810); four authorization or proof credentials whose doc comments each say they are not stored (KIND_AUTH 22242, KIND_BLOSSOM_AUTH 24242, KIND_NOSTR_IDENTITY_BINDING 24243, KIND_HTTP_AUTH 27235); and one user-signed request kind, KIND_NIP43_LEAVE_REQUEST 28936, whose own doc comment calls it ephemeral and which is neither fanned out nor a credential."
     entry_class: FACT
     evidence:
       - "crates/buzz-core/src/kind.rs"
-  - statement: "Because is_ephemeral consults only the two bounds, all nine satisfy it and so does any undeclared integer in the range, which is why KIND_AUTH is rejected by a dedicated kind equality check placed before the is_ephemeral branch in both the relay's EVENT handler and buzz-db's insert paths rather than being allowed to fall through as an ephemeral event."
+  - statement: "Because is_ephemeral consults only the two bounds, all ten satisfy it and so does any undeclared integer in the range, which is why KIND_AUTH is rejected by a dedicated kind equality check placed before the is_ephemeral branch in both the relay's EVENT handler and buzz-db's insert paths rather than being allowed to fall through as an ephemeral event."
     entry_class: FACT
     evidence:
       - "crates/buzz-core/src/kind.rs"
@@ -55,11 +55,15 @@ evidence:
     entry_class: FACT
     evidence:
       - "crates/buzz-core/src/kind.rs"
-  - statement: "The remaining in-range kinds are refused on the shared ingest path by a different mechanism entirely: required_scope_for_kind ends in a default arm returning Err(\"restricted: unknown event kind\"), ingest_event rejects on that Err, and no ephemeral kind appears anywhere in the allowlist that precedes it; kind 22242 is the one exception, refused earlier still by a dedicated AUTH equality check that precedes both the transport gate and the allowlist."
+  - statement: "Most remaining in-range kinds are refused on the shared ingest path by a different mechanism entirely: required_scope_for_kind ends in a default arm returning Err(\"restricted: unknown event kind\") and ingest_event rejects on that Err. There are two exceptions, not one: kind 22242 is refused earlier still by a dedicated AUTH equality check preceding both the transport gate and the allowlist, and KIND_NIP43_LEAVE_REQUEST 28936 is the one ephemeral-range kind the allowlist actually names, mapping to Ok(Scope::ChannelsRead) alongside the two NIP-29 request kinds rather than falling through."
     entry_class: FACT
     evidence:
       - "crates/buzz-relay/src/handlers/ingest.rs"
       - "grep_in_line_range(path='crates/buzz-relay/src/handlers/ingest.rs', lines='437-547', pattern='PRESENCE|TYPING|PAIRING|OBSERVER|HUDDLE_REACTION') -> no output, exit status 1"
+  - statement: "KIND_NIP43_LEAVE_REQUEST 28936 reaches the shared ingest path and is handled there rather than fanned out or stored: ingest.rs carries a dedicated branch for it whose comment records that it removes the sender from relay_members and is NOT stored."
+    entry_class: FACT
+    evidence:
+      - "crates/buzz-relay/src/handlers/ingest.rs"
   - statement: "is_replaceable covers kinds 0, 3, KIND_CHANNEL_METADATA (41) and 10000-19999 while is_parameterized_replaceable covers 30000-39999, and both describe events that are stored under a replacement key, so neither range overlaps the ephemeral one."
     entry_class: FACT
     evidence:
@@ -75,7 +79,7 @@ evidence:
     evidence:
       - "launchpad/docs/corpus/implementation/crates/buzz-ws-client.md"
       - "crates/buzz-cli/src/client.rs"
-  - statement: "That claim's stated mechanism is wrong even though its outcome coincidentally holds: no range-based HTTP gate exists, the transport gate that does exist would also block non-ephemeral kind 1059, and kinds 20000 and 20002-29999 are refused over HTTP by the transport-agnostic scope allowlist rather than by anything conditioned on HTTP."
+  - statement: "That claim's stated mechanism is wrong: no range-based HTTP gate exists, the transport gate that does exist would also block non-ephemeral kind 1059, and the great majority of 20000-29999 is refused by the transport-agnostic scope allowlist rather than by anything conditioned on HTTP. Its outcome does not hold across the whole range either, because KIND_NIP43_LEAVE_REQUEST 28936 clears the transport gate, clears is_relay_only_kind and is named in the allowlist, so it is not blocked over HTTP by either mechanism."
     entry_class: INFERENCE
     evidence:
       - "crates/buzz-relay/src/handlers/ingest.rs"
@@ -163,9 +167,9 @@ if and only if it lies between the two constants. A kind nobody has declared —
 say 27000 — is ephemeral, and the relay and storage layer will treat it as such,
 because nothing in the decision consults the kind registry beyond those two bounds.
 
-**Nine** declared kinds fall in the range at the recorded revision, and the arithmetic
-sweeps up more than the name suggests. The registry declares them in two separate
-blocks, and only the first is what this node means by "ephemeral event":
+**Ten** declared kinds fall in the range at the recorded revision, and the arithmetic
+sweeps up more than the name suggests. They fall into three groups, and only the first
+is what this node means by "ephemeral event":
 
 | Kind | Constant | What it carries |
 |---|---|---|
@@ -186,6 +190,17 @@ where their kind integers happen to sit:
 | 24242 | `KIND_BLOSSOM_AUTH` | BUD-01 media upload authorization |
 | 24243 | `KIND_NOSTR_IDENTITY_BINDING` | one-time identity binding proof |
 | 27235 | `KIND_HTTP_AUTH` | NIP-98 HTTP auth |
+
+The tenth is neither: **`KIND_NIP43_LEAVE_REQUEST` (28936)** is a user-signed request
+whose own doc comment calls it ephemeral. It is not fanned out to subscribers and it is
+not a credential — it reaches the shared ingest path and is handled there, with
+`ingest.rs`'s branch for it recording that it removes the sender from `relay_members`
+and is *not stored*. It is the one ephemeral-range kind `required_scope_for_kind` names
+explicitly, mapping to `Scope::ChannelsRead` alongside the two NIP-29 request kinds.
+
+| Kind | Constant | What it actually is |
+|---|---|---|
+| 28936 | `KIND_NIP43_LEAVE_REQUEST` | NIP-43 user-signed leave request — handled on ingest, not fanned out, not stored |
 
 That overlap is load-bearing rather than trivia. Because `is_ephemeral(22242)` is
 `true`, an `EVENT`-submitted AUTH event would otherwise fall into the ephemeral
@@ -251,10 +266,12 @@ if auth.is_http() && (kind_u32 == KIND_GIFT_WRAP || kind_u32 == KIND_PRESENCE_UP
 **20001**. So that gate names two kinds, tests no range, blocks one non-ephemeral
 kind, and leaves the other four declared ephemeral kinds untouched.
 
-The rest of the range is nonetheless unreachable over HTTP, by a **separate and
+Most of the rest of the range is nonetheless unreachable over HTTP, by a **separate and
 transport-agnostic** mechanism: `required_scope_for_kind` ends in a default arm
 returning `Err("restricted: unknown event kind")`, `ingest_event` rejects on that
-`Err`, and no ephemeral kind appears in the allowlist above it. `ingest_event` is
+`Err`, and only one ephemeral-range kind appears in the allowlist above it —
+`KIND_NIP43_LEAVE_REQUEST` (28936), which maps to `Scope::ChannelsRead` and so is
+**not** blocked over HTTP by either mechanism. `ingest_event` is
 shared by both transports — the HTTP bridge and the WebSocket handler both call it —
 so ephemeral kinds escape that allowlist over WebSocket **only** because the ephemeral
 branch returns before `ingest_event` is reached, not because the allowlist knows
@@ -332,10 +349,13 @@ class they belong to and deliberately does not restate them.
 
 - **A merged corpus node is wrong about this node's subject, and fixing it is not this
   task.** `implementation-crates-buzz-ws-client` states as a `FACT` that "the relay
-  rejects ephemeral event kinds (20000-29999) over its HTTP surface". Its outcome
-  coincidentally holds, but no such range gate exists; the transport gate names kinds
-  1059 and 20001, and everything else in the range is refused by the transport-agnostic
-  scope allowlist (or, for 22242, by the AUTH check before it). The error originates
+  rejects ephemeral event kinds (20000-29999) over its HTTP surface". No such range gate
+  exists: the transport gate names kinds 1059 and 20001, and most of the rest of the
+  range is refused by the transport-agnostic scope allowlist (or, for 22242, by the AUTH
+  check before it). Its outcome does not hold across the whole range either —
+  `KIND_NIP43_LEAVE_REQUEST` (28936) clears the transport gate, clears
+  `is_relay_only_kind`, and is named in the allowlist, so it is not blocked over HTTP at
+  all. The error originates
   upstream of that node, in the doc comment on
   `publish_ephemeral_event` in `crates/buzz-cli/src/client.rs`, which the node quoted
   faithfully. A third merged node, `architecture-flows-http-event-submission`, already

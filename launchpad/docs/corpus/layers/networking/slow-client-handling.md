@@ -68,7 +68,7 @@ evidence:
     entry_class: FACT
     evidence:
       - "crates/buzz-relay/src/config.rs"
-  - statement: ".env.example contains 74 BUZZ_-prefixed occurrences, including a \"Relay (WebSocket server)\" section and commented tuning entries for BUZZ_REDIS_POOL_SIZE and BUZZ_DB_POOL_SIZE that name their defaults, but contains zero occurrences of either BUZZ_SEND_BUFFER or BUZZ_SLOW_CLIENT_GRACE_LIMIT."
+  - statement: ".env.example carries 74 lines containing a BUZZ_-prefixed variable, including a \"Relay (WebSocket server)\" section and commented tuning entries for BUZZ_REDIS_POOL_SIZE and BUZZ_DB_POOL_SIZE that name their defaults, but contains zero occurrences of either BUZZ_SEND_BUFFER or BUZZ_SLOW_CLIENT_GRACE_LIMIT."
     entry_class: FACT
     evidence:
       - ".env.example"
@@ -301,7 +301,7 @@ Two operational cautions, both read from `crates/buzz-relay/src/config.rs`:
   This is derived from the arithmetic rather than stated anywhere, and is recorded as an
   `INFERENCE` at confidence 0.9.
 
-Neither variable appears in `.env.example`, which otherwise documents 74 `BUZZ_`
+Neither variable appears in `.env.example`, which otherwise carries 74 lines of `BUZZ_`
 settings including commented tuning entries for the Redis and Postgres pool sizes — so
 an operator working from that file alone would not know either setting exists. See
 *Scope and omissions*.
@@ -401,8 +401,8 @@ tests covering the counter arithmetic.
   only that `send_buffer_size` and `slow_client_grace_limit` are greater than zero, not
   that they equal `1000` and `15`. The defaults documented here were read from
   `config.rs` directly; nothing would fail if a future edit changed them.
-- **Neither knob is documented in `.env.example`.** The file carries 74 `BUZZ_`
-  occurrences and a "Relay (WebSocket server)" section, and documents `BUZZ_REDIS_POOL_SIZE`
+- **Neither knob is documented in `.env.example`.** The file carries 74 lines containing a
+  `BUZZ_`-prefixed variable and a "Relay (WebSocket server)" section, and documents `BUZZ_REDIS_POOL_SIZE`
   and `BUZZ_DB_POOL_SIZE` with their defaults, but a grep for `BUZZ_SEND_BUFFER` and
   `BUZZ_SLOW_CLIENT_GRACE_LIMIT` returns nothing (exit status 1). An operator working
   from that file alone would not know either setting exists. This is recorded here as a

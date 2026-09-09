@@ -99,8 +99,10 @@ evidence:
       - "crates/buzz-relay/src/audio/handler.rs"
     confidence: 0.85
   - statement: "git log attributes heartbeat_loop's introduction to the upstream commit titled \"fix: WebSocket hardening + agent reliability (8 WS bugs, member-only discovery, mention tag fix) (#67)\", which is consistent with recv_loop's surviving inline comment marking the priority-control-channel Pong reply as \"(Bug 7 fix)\"."
-    entry_class: TEAM_KNOWLEDGE
-    provided_by: "git log -L on crates/buzz-relay/src/connection.rs's heartbeat_loop range, run directly while authoring this node"
+    entry_class: FACT
+    evidence:
+      - "git_log_L(path='crates/buzz-relay/src/connection.rs', range='heartbeat_loop') -> introduction attributed to the commit titled 'fix: WebSocket hardening + agent reliability (8 WS bugs, member-only discovery, mention tag fix) (#67)'"
+      - "crates/buzz-relay/src/connection.rs"
   - statement: "Issue #1125's definition of done requires, for a concept-typed node, that the term is defined in one sentence before deeper explanation, that boundaries and what the concept must not be confused with are stated, that the concept is linked to related concepts, implementation and verification, and that examples clarify rather than introduce a second canonical concept."
     entry_class: TEAM_KNOWLEDGE
     provided_by: "launchpad-26/buzz#1125 definition of done"
