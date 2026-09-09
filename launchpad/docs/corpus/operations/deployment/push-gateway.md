@@ -19,7 +19,7 @@ evidence:
     entry_class: FACT
     evidence:
       - "crates/buzz-push-gateway/src/config.rs"
-  - statement: "The gateway owns a scoped migration (crates/buzz-push-gateway/migrations/0001_push_gateway_authority.sql) that creates exactly six tables: push_gateway_challenges, push_gateway_installations, push_gateway_delegations, push_gateway_endpoint_quotas, push_gateway_delivery_auth_replays, and push_gateway_delivery_request_replays."
+  - statement: "crates/buzz-push-gateway/migrations/ contains four scoped migrations (0001_push_gateway_authority.sql, 0002_application_profiles.sql, 0003_challenge_issuance_quota.sql, 0004_dogfood_only_profile.sql); 0001 is the authority migration, and the six push_gateway_* tables it creates are enumerated by architecture/containers/push-gateway.md, which owns that claim and which this node references rather than restates."
     entry_class: FACT
     evidence:
       - "crates/buzz-push-gateway/migrations/0001_push_gateway_authority.sql"
@@ -116,6 +116,9 @@ evidence:
     entry_class: FACT
     evidence:
       - "launchpad/docs/corpus/templates/procedure.md"
+relationships:
+  - type: references
+    target: architecture-containers-push-gateway
 ---
 
 # Push gateway deployment: how-to
@@ -262,15 +265,27 @@ that question.
 
 ## Relationships
 
-None declared. The two natural targets — `architecture-containers-push-gateway`
-and `architecture-flows-push-notification` — are both `status: draft` at the
-recorded revision and their presence on `origin/launchpad` at merge time is
-not established here; declaring an edge to either risks resolving in this
-worktree while hard-failing validation on the branch this task merges into,
-exactly the trap `AGENTS.md`'s *Creating a node* step 9 and the naming/linking
-standards warn against. Both are named in prose above instead. A future edit
-may add `references` edges to both once each is confirmed present on
-`origin/launchpad`.
+`references: architecture-containers-push-gateway`.
+
+That node owns the canonical enumeration of the six `push_gateway_*` tables
+`0001_push_gateway_authority.sql` creates; this node states which migration is
+the authority one among the four present and defers the table list rather than
+restating it, per `AGENTS.md`'s *link, don't restate*.
+
+An earlier revision of this node declared no edges at all, on the grounds that
+both natural targets were `status: draft` and their presence on
+`origin/launchpad` at merge time was not established — declaring an edge that
+resolved in this worktree but hard-failed on the merge target is a real trap,
+and the caution was reasonable when written. It no longer applies: both
+`architecture/containers/push-gateway.md` and
+`architecture/flows/push-notification.md` are present on `origin/launchpad`,
+verified with `git cat-file -e` against that ref rather than against this
+worktree.
+
+`architecture-flows-push-notification` is still named in prose above rather
+than declared as an edge. Nothing in this node restates a claim it owns, so
+there is no ownership problem to fix there; adding it would be a scope
+decision beyond the review that prompted this change.
 
 ## Scope and omissions
 
