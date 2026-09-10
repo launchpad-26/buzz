@@ -41,9 +41,9 @@ residual** for this version, not an open question, and the architecture proceeds
 
 It is the most RQA can do under the constraint, it makes the floor a proof rather than a hope, and it
 states the residual honestly instead of hiding it. Every write still goes through one gate and one
-adapter. If the maintainer later relaxes the constraint, two credential reads change, not one: P-08's
-E-22 read and P-09's own private per-call `transport._credential()` resolution, which is deliberately
-independent of E-22 (`P-09-github-adapter.md` §4); `probe()` is the one declared exception.
+adapter, so if the maintainer later relaxes the constraint, exactly two credential-resolution paths
+change: P-08's credential read (E-22), and P-09's own per-call `transport._credential()`, which
+invokes `gh auth token` independently of E-22 on every call but `probe()`.
 
 ## Why blocking
 

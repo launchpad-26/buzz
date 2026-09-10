@@ -74,14 +74,15 @@ one instruction, verbatim:
 
 > urgh just go with the recomendations, record the adr files we need and submit a pr for them as a batch.
 
-**Deviation from `launchpad/decisions/README.md`, recorded here rather than below the conclusion it
-qualifies:** that README requires the deciding human's instruction to be quoted verbatim *and the
-comment where they said it to be linked*. **No such comment exists.** The instruction was given only
-in an agent session, which §5 rule 2 states is not a record — "not addressable, not durable, and not
-readable by whoever audits this later". Offered the choice between posting the instruction as a
-comment first and proceeding without one, @tucktuck101 selected "I proceed now, quoting this session
-verbatim", with the deviation disclosed in every record and in the pull request. An auditor therefore
-cannot reach the original instruction; this quotation is its only surviving form.
+**On the link `launchpad/decisions/README.md` asks for:** that README says the instruction must be quoted
+verbatim *and* the comment where the human said it linked. No such comment exists — the instruction was
+given in an agent session. @serina-mcfall traced this on #2175 and it resolves in the record's favour:
+[ADR-0052](ADR-0052-delegated-authority-and-feature-batching.md) condition 2 states that "an earlier draft
+also required a link to a comment from the human's own account. That requirement is withdrawn as ceremony",
+and `AGENTS.md` §5 rule 2 implements the withdrawal. The README is the one document that was never updated,
+which is filed as #2218. This record is therefore conformant with the governing decision; the quotation
+above is the instruction's only surviving form, and its fidelity — typing errors left intact — is the
+control on it.
 
 **This is the highest-risk of the four decisions**, and it was ruled on collectively rather than
 individually. It is recorded as instructed; a maintainer who wants the risk weighed on its own terms

@@ -645,15 +645,15 @@ the architecture assumed, and recorded as `launchpad/decisions/ADR-0061`–`ADR-
 annotations throughout these documents therefore stand ratified. `components.md` §9 is the
 authoritative gate and carries the parts and requirements each one shapes.
 
-- [#2157](https://github.com/launchpad-26/buzz/issues/2157) → **ADR-0061.** No verdict authority:
+- [#2157](https://github.com/launchpad-26/buzz/issues/2157) → **[ADR-0061](../../../decisions/ADR-0061-rqa-terminal-outcome-without-verdict-authority.md).** No verdict authority:
   comment where granted, then an authority-requirement escalation; `review-complete` keeps one
   meaning. Was blocking.
-- [#2158](https://github.com/launchpad-26/buzz/issues/2158) → **ADR-0062.** `gh auth token`: prove
+- [#2158](https://github.com/launchpad-26/buzz/issues/2158) → **[ADR-0062](../../../decisions/ADR-0062-rqa-credential-floor-and-ceiling.md).** `gh auth token`: prove
   exercised per-repository authority and record the broader-token residual, which RQA-NFR-030's
   ceiling half accepts rather than meets. Was blocking.
-- [#2159](https://github.com/launchpad-26/buzz/issues/2159) → **ADR-0063.** Record integrity: hash
+- [#2159](https://github.com/launchpad-26/buzz/issues/2159) → **[ADR-0063](../../../decisions/ADR-0063-rqa-record-provenance-integrity.md).** Record integrity: hash
   chain plus an operator-held HMAC. Was not blocking.
-- [#2160](https://github.com/launchpad-26/buzz/issues/2160) → **ADR-0064.** Automatic remedies: exact
+- [#2160](https://github.com/launchpad-26/buzz/issues/2160) → **[ADR-0064](../../../decisions/ADR-0064-rqa-exact-automatic-remedy.md).** Automatic remedies: exact
   files, closed formatter/check and an actual-diff semantic oracle; never a model patch. Was blocking.
 
 A fifth question, [#2217](https://github.com/launchpad-26/buzz/issues/2217) (ADR-H) — how a harness
