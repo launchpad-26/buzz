@@ -1,6 +1,6 @@
 # ADR-D — Terminal outcome of a satisfied review when verdict authority is not granted
 
-**Status:** [issue #2157](https://github.com/launchpad-26/buzz/issues/2157) open · recommendation made · *assumed accepted for #2071, pending maintainer decision*
+**Status:** decided 2026-09-11 — recommendation (b) accepted; recorded as [ADR-0061](../../../../decisions/ADR-0061-rqa-terminal-outcome-without-verdict-authority.md), which closes [issue #2157](https://github.com/launchpad-26/buzz/issues/2157). This draft is retained as the architecture's rationale, not as an open question.
 **Parent:** [#2006](https://github.com/launchpad-26/buzz/issues/2006) · **Raised by:** #2071 architecture · **Decomposition-blocking:** **blocking**
 **Parts affected:** P-02, P-11, P-09 · **Requirements:** RQA-FR-028, RQA-NFR-017, RQA-NFR-026, RQA-NFR-007, RQA-FR-016
 
