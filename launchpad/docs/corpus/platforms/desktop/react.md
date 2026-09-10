@@ -82,7 +82,9 @@ evidence:
   - statement: "desktop/biome.json (extending the repository-root biome.json) is the desktop app's sole configured linter/formatter, with the 'recommended' rule set enabled and double-quote JS string formatting; desktop/tsconfig.json sets \"strict\": true. Neither configuration file declares any rule restricting which directories a module under desktop/src/features may import from."
     entry_class: FACT
     evidence:
-      - "desktop/biome.json:1-29"
+      - "desktop/biome.json:1-3"
+      - "biome.json:18"
+      - "biome.json:29"
       - "desktop/tsconfig.json:23"
   - statement: "A repository-wide search of every desktop/src/features/**/*.{ts,tsx} import statement of the form `from \"@/features/<name>\"` found 1033 cases where the importing file's own feature directory differs from the imported feature name (for example features/onboarding/hooks.ts imports from features/agents, features/channels, features/profile and features/communities), confirming that, unlike the mobile Flutter app's documented rule that feature modules may only import from shared/, the desktop app's feature directories routinely import from one another directly and nothing in its lint configuration restricts this."
     entry_class: FACT

@@ -58,7 +58,7 @@ evidence:
   - statement: "`ptt_shortcut::install` installs `tauri_plugin_global_shortcut` with a handler closure (non-test builds only; a no-op in test builds because linking the plugin crashes the lib-test binary on Windows) that reads `AppState`'s huddle phase/voice-input-mode on every shortcut event and only acts when a huddle is connected/active and in push-to-talk mode; `sync_registration` separately registers or unregisters the fixed `Ctrl+Space` shortcut with the OS to match current huddle state, rather than reserving the key combination for the app's entire lifetime."
     entry_class: FACT
     evidence:
-      - "desktop/src-tauri/src/ptt_shortcut.rs:1-152"
+      - "desktop/src-tauri/src/ptt_shortcut.rs:1-151"
   - statement: "`build.rs` emits `cargo:rustc-cfg=buzz_updater_enabled` only when both `BUZZ_UPDATER_PUBLIC_KEY` and `BUZZ_UPDATER_ENDPOINT` were set as build-time environment variables; `run()` then gates `tauri_plugin_updater`'s registration on that same `#[cfg(buzz_updater_enabled)]`, and even within a build compiled with that cfg, the plugin is installed into the builder only when `cfg!(debug_assertions)` is false — a debug-profile binary never installs the updater plugin regardless of build-time env vars."
     entry_class: FACT
     evidence:
@@ -137,7 +137,7 @@ process's whole lifetime.
 | `tauri::Builder::plugin(...)` chain | Ordered builder calls in `run()` | Registers `tauri_plugin_single_instance`, `tauri_plugin_deep_link`, `tauri_plugin_notification`, `tauri_plugin_opener`, `tauri_plugin_window_state`, the inline `"initial-window-reveal"` plugin, `native_websocket::init()`, `tauri_plugin_dialog`, `tauri_plugin_process`, `ptt_shortcut`'s `tauri_plugin_global_shortcut`, and conditionally `tauri_plugin_updater` | `desktop/src-tauri/src/lib.rs:122-215` |
 | `huddle::window::open_huddle_window` / `close_huddle_window` | Runtime window creation/teardown | Creates/looks up a `WebviewWindowBuilder` window labeled `"huddle-{ephemeral_channel_id}"`, matching the capability file's `"huddle-*"` glob | `desktop/src-tauri/src/huddle/window.rs:9-67` |
 | `app_menu::install` | macOS-only builder call | Replaces Tauri's default menu, dropping the `close_window` items so the frontend can own Cmd+W conditionally | `desktop/src-tauri/src/app_menu.rs:1-111` |
-| `ptt_shortcut::install` / `sync_registration` | Plugin install + runtime (un)registration | Installs `tauri_plugin_global_shortcut`; `sync_registration` registers/unregisters `Ctrl+Space` to match live huddle phase/voice-input-mode, never held statically | `desktop/src-tauri/src/ptt_shortcut.rs:1-152` |
+| `ptt_shortcut::install` / `sync_registration` | Plugin install + runtime (un)registration | Installs `tauri_plugin_global_shortcut`; `sync_registration` registers/unregisters `Ctrl+Space` to match live huddle phase/voice-input-mode, never held statically | `desktop/src-tauri/src/ptt_shortcut.rs:1-151` |
 | `RunEvent` handler in `app.run(...)` | Process-lifetime event match | Hides (not closes) `"main"` on macOS `CloseRequested`; restores the huddle drawer on an active `"huddle-*"` window's `CloseRequested`; drives shutdown on `ExitRequested`/`Exit` | `desktop/src-tauri/src/lib.rs:873-936` |
 
 ## Dependencies

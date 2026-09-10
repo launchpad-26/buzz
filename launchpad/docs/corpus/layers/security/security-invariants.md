@@ -74,7 +74,7 @@ evidence:
   - statement: "`LIMITS.md`'s own words name the gap this node's *Enforcement today* section reports honestly: 'The integration replay (live relay -> JsonlTracer -> check_trace) lands with the read-seam patch onto Max's req.rs work,' described as 'the next ratchet' rather than something already landed."
     entry_class: FACT
     evidence:
-      - "crates/buzz-conformance/LIMITS.md:117-126"
+      - "crates/buzz-conformance/LIMITS.md:117-125"
   - statement: "At the recorded revision, no call site anywhere in `crates/buzz-relay` or `crates/buzz-test-client` invokes `check_trace` -- the function is called only from `buzz-conformance`'s own test suite (`proptest_checker.rs`, `replay_fixtures.rs`) against synthetic and fixture traces, not against a real relay's captured runtime traffic -- confirming `LIMITS.md`'s 'next ratchet' framing is still accurate now, not stale prose left behind after the gap closed."
     entry_class: FACT
     evidence:
