@@ -25,17 +25,64 @@ and **ADR-0031** (#1418, closed 2026-08-26) later made that permanent for the
 shipped crate — Option D (a curated, bounded natural-language question set) is
 named as the one upgrade worth reconsidering later, but is not adopted now.
 
+**This boundary is enforced, not just stated (`#552`).**
+`desktop/scripts/check-no-corpus-pipeline.mjs` (wired into `pnpm check`,
+which runs in every pre-push `desktop-check` lane and CI) fails if
+`desktop/package.json`, `desktop/vite.config.ts`, or
+`desktop/src-tauri/tauri.conf.json` ever reference
+`project-intelligence/corpus` — the pipeline's own directory. A legitimate
+build never needs to name it: the packaged artifact the Settings panel reads
+is a relative import of a committed file
+(`desktop/src/launchpad/settings/knowledge/generated/corpus.json`), produced
+out-of-band by `launchpad/project-intelligence/corpus/package.py` and never
+invoked from these build files.
+
+## Seeded content and regeneration (`#552`)
+
+The crate now embeds the packaged canonical documentation corpus:
+`generated/corpus.json`, read via `include_str!` and exposed as `nodes()`. It
+is a **committed, generated artefact** — never hand-edited. The identical
+JSON is also copied to
+`desktop/src/launchpad/settings/knowledge/generated/corpus.json`, which the
+Settings panel renders directly (a static asset import, not Tauri IPC — see
+the open question below).
+
+After any change to `launchpad/docs/corpus/`, regenerate both copies and
+commit the result:
+
+```
+just knowledge-package
+```
+
+This runs `launchpad/project-intelligence/corpus/package.py`, which reads the
+validated corpus via `validate.load_nodes()` and rewrites both output paths
+from `DEFAULT_OUTPUTS`. A CI drift guard fails if a committed copy no longer
+matches what regeneration would produce — see `just corpus-validate` and
+`DriftGuardTest` in `launchpad/project-intelligence/corpus/tests/test_package.py`.
+
 ## What is not here yet
 
-No seeded content (`#552`) and no `knowledge.*` query interface (`#553`,
-`F22`) exist in this crate yet — both are separate, later work.
+No `knowledge.*` query interface (`#553`, `F22`) exists in this crate yet —
+that is separate, later work.
 
-**Not yet wired to the desktop app, and that path is an open question.** This
-crate is a root-workspace member (`Cargo.toml`'s `members` list), but root
-`Cargo.toml` excludes `desktop/src-tauri` from that workspace. Root-workspace
-membership alone does not make this crate reachable from the Tauri backend —
-depending on it from `desktop/src-tauri` would mean editing
-`desktop/src-tauri/Cargo.toml`, a third upstream file ADR-0045's granted
-exception (the root `Cargo.toml` members list) does not cover. Whoever wires
-the crate into the desktop build (`#552` or later) needs to resolve that, not
-assume it falls out of this scaffold.
+**The Rust crate itself is not yet reachable from the Tauri backend, and that
+path is an open question.** This crate is a root-workspace member
+(`Cargo.toml`'s `members` list), but root `Cargo.toml` excludes
+`desktop/src-tauri` from that workspace. Root-workspace membership alone does
+not make this crate reachable from the Tauri backend — depending on it from
+`desktop/src-tauri` would mean editing `desktop/src-tauri/Cargo.toml`, a third
+upstream file ADR-0045's granted exception (the root `Cargo.toml` members
+list) does not cover. Whoever wires the crate itself into the desktop build
+needs to resolve that, not assume it falls out of this scaffold.
+
+This is narrower than it used to read. `#552` already gave the **desktop
+Settings surface** a real answer, deliberately bypassing this open question
+rather than waiting on it: the Settings panel reads the identical generated
+`corpus.json` as a plain static asset
+(`desktop/src/launchpad/settings/knowledge/generated/corpus.json`), not
+through this crate or Tauri IPC — see "Seeded content and regeneration"
+above and plan `OPEN` item 2 in
+`launchpad/plans/2026-08-28-issue-552-knowledge-crate-corpus.md`. So: the
+human-facing help surface ships today; only this crate's own Tauri
+reachability (needed for a future agent-facing `knowledge.*` query interface,
+`#553`) remains unresolved.
