@@ -80,13 +80,15 @@ behalf of @tucktuck101**, whose instruction is quoted verbatim:
 
 > theres a new ADR? eh just go with the recomendation and take this as my approval
 
-**Deviation from `launchpad/decisions/README.md`, recorded here rather than below the conclusion it
-qualifies:** that README requires the deciding human's instruction to be quoted verbatim *and* the
-comment where they said it to be linked. **No such comment exists** — the instruction was given in an
-agent session, which §5 rule 2 states is not a record. The same deviation was disclosed and accepted
-for ADR-0061…0064. An auditor cannot reach the original instruction; this quotation is its only
-surviving form, and its fidelity — including its typing errors, left intact — is the only control on
-it.
+**On the link `launchpad/decisions/README.md` asks for:** that README requires the deciding human's
+instruction to be quoted verbatim *and* the comment where they said it linked. No such comment exists —
+the instruction was given in an agent session. @serina-mcfall traced this on #2175 and it resolves in the
+record's favour: [ADR-0052](ADR-0052-delegated-authority-and-feature-batching.md) condition 2 states that
+"an earlier draft also required a link to a comment from the human's own account. That requirement is
+withdrawn as ceremony", and `AGENTS.md` §5 rule 2 implements the withdrawal; the README is the one
+document that was never updated, filed as #2218. This record is conformant with the governing decision.
+The quotation above is the instruction's only surviving form, and its fidelity — typing errors left
+intact — is the control on it.
 
 **A second caveat belongs at the decision, not below it:** this ADR was raised *because* an
 independent reviewer judged the change too consequential to settle in a pull-request body, and it was
