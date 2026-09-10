@@ -1,6 +1,6 @@
 # ADR-H — How a harness RQA ships no adapter for is admitted to run
 
-**Status:** open · recommendation made · *implemented in PR #2176 as (b), pending maintainer decision*
+**Status:** decided 2026-09-11 — recommendation (b) accepted; recorded as [ADR-0065](../../../../decisions/ADR-0065-external-harness-admission.md), which closes [issue #2217](https://github.com/launchpad-26/buzz/issues/2217). This draft is retained as the architecture's rationale, not as an open question.
 **Parent:** [#2006](https://github.com/launchpad-26/buzz/issues/2006) · **Raised by:** the PR #2176 review of the #2072 decomposition · **Decomposition-blocking:** **blocking**
 **Parts affected:** P-05, P-06, P-03 · **Requirements:** RQA-FR-030, RQA-NFR-001, RQA-NFR-002, RQA-NFR-015
 

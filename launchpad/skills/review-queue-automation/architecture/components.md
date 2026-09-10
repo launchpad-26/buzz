@@ -659,9 +659,9 @@ Decision outcome remains blank for a human; the architecture proceeds on the nam
 A **blocking** ADR has an option that changes a part boundary, E-NN contract or record ownership, so
 #2072 cannot cut that lane before decision. This table is the sole decomposition gate.
 
-ADR-H was raised by the PR #2176 review rather than by the original description: its recommendation
-is implemented in that pull request, and #2072's supply (#2183) and harness (#2184) lanes are cut
-against it while it is still open.
+ADR-H was raised by the PR #2176 review rather than by the original description. It was decided on
+2026-09-11 to its recommendation and recorded as `launchpad/decisions/ADR-0065`, so #2072's supply
+(#2183) and harness (#2184) lanes are no longer cut against an open option.
 
 | ADR | question | decomposition-blocking | parts affected | requirements |
 |---|---|---|---|---|
