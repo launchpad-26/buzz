@@ -82,7 +82,7 @@ evidence:
   - statement: "The README's 'Testing' section states the test strategy is real subprocess, no mocks: tests/fake_llm.rs spins up a real tokio::net::TcpListener to serve scripted LLM responses, tests/bin/fake_mcp.rs is a separate real binary controlled by env vars to simulate MCP fault paths, and regressions.rs test names each document the bug they lock down (e.g. assistant_text_preserved_across_prompts, mcp_init_timeout_kills_child, oversize_line_kills_connection)."
     entry_class: FACT
     evidence:
-      - "crates/buzz-agent/README.md:375-386"
+      - "crates/buzz-agent/README.md:375-385"
   - statement: "src/main.rs is exactly `fn main() { if let Err(e) = buzz_agent::run() { eprintln!(...); std::process::exit(1); } }` -- the binary's entire body is a call into the library's `run()` function, so the library crate (`buzz_agent`) carries the whole implementation and the binary is a thin process entry point."
     entry_class: FACT
     evidence:

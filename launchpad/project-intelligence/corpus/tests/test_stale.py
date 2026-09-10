@@ -1007,8 +1007,43 @@ class RealCorpusSmokeTest(unittest.TestCase):
         self.assertEqual(sorted(node.path for node in nodes), expected_paths)
 
         results = [stale.extract_recorded_revision(node) for node in nodes]
-        unresolved = [r for r in results if r.sha is None]
+
+        # Every node must have ESTABLISHED provenance -- a commit SHA for an
+        # authored node, an input digest for a generated one (#2173). A
+        # generated node's content is a pure function of the corpus it was
+        # built from, so no single commit authored it, and the commit that
+        # would be cited is the one that will contain it. Accepting a digest
+        # is modelling that, not exempting it: a node with NEITHER still
+        # fails here exactly as before.
+        unresolved = [r for r in results if r.sha is None and r.digest is None]
         self.assertEqual(unresolved, [])
+
+        # The digest path must not become a silent catch-all for authored
+        # nodes that lost their recorded revision. It is allowed only for
+        # nodes that actually declare themselves generated, and every such
+        # node must take it -- so a generated node whose provenance sentence
+        # is missing or malformed fails rather than passing as "authored".
+        by_id = {node.id: node for node in nodes}
+        digest_ids = {r.node_id for r in results if r.digest is not None}
+        declared_generated = {
+            node.id
+            for node in nodes
+            if any(
+                stale._GENERATED_PROVENANCE_STATEMENT_RE.search(
+                    str((entry or {}).get("statement") or "")
+                )
+                for entry in (node.data.get("evidence") or [])
+                if isinstance(entry, dict)
+            )
+        }
+        self.assertEqual(digest_ids, declared_generated)
+        self.assertNotEqual(digest_ids, set())  # the path must be exercised
+        for node_id in digest_ids:
+            self.assertIsNone(
+                next(r for r in results if r.node_id == node_id).sha,
+                f"{node_id}: resolved by digest AND by SHA -- ambiguous provenance",
+            )
+        self.assertTrue(all(by_id[i] for i in digest_ids))
 
     def test_real_corpus_run_is_well_formed_and_reproducible(self) -> None:
         """Runs the actual checker over the real corpus at real `HEAD`. Not a

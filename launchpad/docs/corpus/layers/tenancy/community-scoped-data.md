@@ -72,12 +72,12 @@ evidence:
   - statement: "A code comment labeled 'BUG-5 regression' on the `reactions_are_scoped_to_community` test states that the `reactions` table is community-scoped with primary key `(community_id, event_created_at, event_id, pubkey, emoji)`, and that before the fix, `add_reaction` omitted `community_id` (causing a `NOT NULL` violation) while every read/remove filtered by `event_id` only, which the comment names a 'latent cross-tenant bleed' — a real historical defect, not a hypothetical one."
     entry_class: FACT
     evidence:
-      - "crates/buzz-db/src/lib.rs:6779-6787"
-  - statement: "`routed_reads_are_confined_to_the_requested_community` is a `#[tokio::test]` in `crates/buzz-db/src/lib.rs`, gated `#[ignore = \"requires Postgres\"]`, that asserts across multiple replica-routing seams that a community-A read never returns a row whose content is marked as belonging to community B (`assert!(!got.iter().any(|c| c.starts_with(\"b-\")), \"{seam}: community B rows leaked into a community A read; got {got:?}\")`)."
+      - "crates/buzz-db/src/store/reaction.rs:1020-1028"
+  - statement: "`routed_reads_are_confined_to_the_requested_community` is a `#[tokio::test]` in `crates/buzz-db/src/runtime/tests.rs`, gated `#[ignore = \"requires Postgres\"]`, that asserts across multiple replica-routing seams that a community-A read never returns a row whose content is marked as belonging to community B (`assert!(!got.iter().any(|c| c.starts_with(\"b-\")), \"{seam}: community B rows leaked into a community A read; got {got:?}\")`)."
     entry_class: FACT
     evidence:
-      - "crates/buzz-db/src/lib.rs:8112-8114"
-      - "crates/buzz-db/src/lib.rs:8226-8236"
+      - "crates/buzz-db/src/runtime/tests.rs:1556-1558"
+      - "crates/buzz-db/src/runtime/tests.rs:1670-1680"
   - statement: "`CommunityId` (in `buzz-core`, zero I/O dependencies) is an opaque UUID newtype whose only constructor, `from_uuid`, is documented as accepting a UUID 'the server has already established as a community id (e.g. read back from the `communities` table during host resolution)'; the module doc states 'there is deliberately no `community_id` parsed from client input anywhere' and calls the overall guarantee 'a lint-and-review fence, not a compiler fence' because `from_uuid` is `pub`."
     entry_class: FACT
     evidence:
