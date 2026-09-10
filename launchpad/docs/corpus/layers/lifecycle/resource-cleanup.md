@@ -84,26 +84,26 @@ evidence:
       - "crates/buzz-relay/src/api/media.rs:33-40"
       - "crates/buzz-relay/src/api/media.rs:68-72"
       - "crates/buzz-relay/src/api/media.rs:74-85"
-  - statement: "Production call sites in buzz-db (for example, Db::execute_in_transaction acquiring a connection at crates/buzz-db/src/lib.rs:1107) obtain a Postgres connection via self.pool.acquire(), which returns an sqlx::pool::PoolConnection<Postgres> -- sqlx's own RAII guard type around one pooled connection, which is not itself defined in this repository but whose acquisition and use this repository's own code depends on for returning connections to the pool without an explicit release call at each call site."
+  - statement: "Production call sites in buzz-db (for example, Db::try_lock_usage_metrics acquiring a connection at crates/buzz-db/src/store/usage.rs:394-395) obtain a Postgres connection via observability::acquire(&self.pool, PoolRole), a thin instrumented wrapper whose own body calls pool.acquire() and whose signature returns an sqlx::pool::PoolConnection<Postgres> -- sqlx's own RAII guard type around one pooled connection, which is not itself defined in this repository but whose acquisition and use this repository's own code depends on for returning connections to the pool without an explicit release call at each call site."
     entry_class: FACT
     evidence:
-      - "crates/buzz-db/src/lib.rs:1107"
-      - "crates/buzz-db/src/lib.rs:64-65"
-  - statement: "A single PgPool connection's return to the pool when its PoolConnection guard drops is sqlx's own documented RAII behavior, not code this repository defines or could re-verify by reading sqlx's source from within this repository; this node treats that specific mechanic as INFERENCE rather than FACT for that reason, while treating buzz-db's own call sites that rely on it (acquire() without a matching explicit release) as directly observed FACT above."
+      - "crates/buzz-db/src/store/usage.rs:394-395"
+      - "crates/buzz-db/src/runtime/observability.rs:135-140"
+  - statement: "A single PgPool connection's return to the pool when its PoolConnection guard drops is sqlx's own documented RAII behavior, not code this repository defines or could re-verify by reading sqlx's source from within this repository; this node treats that specific mechanic as INFERENCE rather than FACT for that reason, while treating buzz-db's own call sites that rely on it (a connection acquired through observability::acquire with no matching explicit release) as directly observed FACT above."
     entry_class: INFERENCE
     evidence:
-      - "crates/buzz-db/src/lib.rs:1107"
+      - "crates/buzz-db/src/store/usage.rs:394-395"
     confidence: 0.75
-  - statement: "buzz-db's own test suite calls pool.close().await explicitly and repeatedly (for example at crates/buzz-db/src/lib.rs:6944, 7999, 8324, 8779, 8904, 8920-8921, 8997-8999) -- an eager, whole-pool teardown distinct from a single connection's per-use release, used to tear down scratch/seed databases between tests rather than relied on anywhere in this repository's own production request-handling code paths."
+  - statement: "buzz-db's own test suite calls pool.close().await explicitly and repeatedly (for example at crates/buzz-db/src/runtime/tests.rs:389, 1443, 1768, 2221, 2346, 2362-2363, 2439-2441) -- an eager, whole-pool teardown distinct from a single connection's per-use release, used to tear down scratch/seed databases between tests rather than relied on anywhere in this repository's own production request-handling code paths."
     entry_class: FACT
     evidence:
-      - "crates/buzz-db/src/lib.rs:6944"
-      - "crates/buzz-db/src/lib.rs:7999"
-      - "crates/buzz-db/src/lib.rs:8324"
-      - "crates/buzz-db/src/lib.rs:8779"
-      - "crates/buzz-db/src/lib.rs:8904"
-      - "crates/buzz-db/src/lib.rs:8920-8921"
-      - "crates/buzz-db/src/lib.rs:8997-8999"
+      - "crates/buzz-db/src/runtime/tests.rs:389"
+      - "crates/buzz-db/src/runtime/tests.rs:1443"
+      - "crates/buzz-db/src/runtime/tests.rs:1768"
+      - "crates/buzz-db/src/runtime/tests.rs:2221"
+      - "crates/buzz-db/src/runtime/tests.rs:2346"
+      - "crates/buzz-db/src/runtime/tests.rs:2362-2363"
+      - "crates/buzz-db/src/runtime/tests.rs:2439-2441"
   - statement: "architecture-containers-relay and architecture-containers-agent-runtime are both present as node ids on origin/launchpad at the time this node was authored (git ls-tree -r --name-only origin/launchpad -- launchpad/docs/corpus, re-run immediately before drafting), but neither is the standing-structure node for the specific crate (buzz-relay's git-hosting subsystem) every example in this node's Sequence lives in; no more specific relationships target exists on origin/launchpad today, so this node declares none rather than pointing at a container-level node whose content this document does not narrate."
     entry_class: FACT
     evidence:

@@ -1,7 +1,0 @@
-{
-  "mcpServers": {
-    "professor-tools": {
-      "command": "tools/server.py"
-    }
-  }
-}

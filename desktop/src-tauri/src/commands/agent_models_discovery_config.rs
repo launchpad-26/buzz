@@ -110,3 +110,7 @@ pub(super) fn draft_agent_model_discovery_env(
         crate::managed_agents::merged_user_env(&derived_env, &filtered_definition_env);
     crate::managed_agents::merged_user_env(&merged_with_def, env_vars)
 }
+
+#[cfg(test)]
+#[path = "agent_models_discovery_config_tests.rs"]
+mod tests;

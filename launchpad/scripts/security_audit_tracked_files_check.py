@@ -80,10 +80,16 @@ def _matches_sensitive_shape(path: str) -> bool:
     return any(pattern.search(path) for pattern in _SENSITIVE_PATTERNS)
 
 
-def _check_newly_hidden_tracked_files(repo_root: Path, tracked: List[str]) -> List[str]:
+def _check_newly_hidden_tracked_files(
+    repo_root: Path, tracked: List[str]
+) -> Optional[List[str]]:
     """PR mode only: lines added to a watched .gitignore in this PR that now
-    cover an already-tracked path. Returns human-readable descriptions, empty
-    if not in PR mode, the base ref can't be fetched, or nothing matches.
+    cover an already-tracked path. Returns human-readable descriptions, an
+    empty list if not in PR mode or nothing matches, and `None` if the
+    heuristic could not run at all (git fetch or diff failed) — `None` and
+    `[]` are deliberately different: a git failure is "could not determine",
+    not "nothing newly hidden", the same distinction `_tracked_paths` already
+    draws for the primary FAIL-capable scan above.
     """
     import os
 
@@ -109,9 +115,14 @@ def _check_newly_hidden_tracked_files(repo_root: Path, tracked: List[str]) -> Li
             timeout=60,
         )
     except (subprocess.CalledProcessError, subprocess.TimeoutExpired, OSError):
-        return []
+        # Could not determine — not the same as "nothing newly hidden". A
+        # bare `return []` here previously made a git failure indistinguishable
+        # from a clean scan; see the docstring above and `run()`'s handling of
+        # `None`.
+        return None
 
     findings: List[str] = []
+    diff_failed = False
     for gitignore_path in REQUIRED_COVERAGE:
         diff = subprocess.run(
             ["git", "diff", "--unified=0", f"FETCH_HEAD..HEAD", "--", gitignore_path],
@@ -122,6 +133,11 @@ def _check_newly_hidden_tracked_files(repo_root: Path, tracked: List[str]) -> Li
             errors="replace",
         )
         if diff.returncode != 0:
+            # Record and keep scanning the other watched gitignore path(s) —
+            # a real finding there must not be suppressed by an unrelated
+            # file's diff failure. Only surfaced as `None` below if nothing
+            # was found despite the failure (see the same distinction above).
+            diff_failed = True
             continue
         added_lines = [
             line[1:].strip()
@@ -147,6 +163,8 @@ def _check_newly_hidden_tracked_files(repo_root: Path, tracked: List[str]) -> Li
                     or f"/{stripped}/" in f"/{tracked_path}/"
                 ):
                     findings.append(f"{gitignore_path}: new pattern {added_pattern!r} covers tracked {tracked_path!r}")
+    if diff_failed and not findings:
+        return None
     return findings
 
 
@@ -223,6 +241,18 @@ def run(repo_root: Path) -> CheckResult:
             Status.INDETERMINATE,
             f"could not establish upstream ownership for {len(unknown_hits)} "
             f"sensitive-shaped tracked file(s): " + "; ".join(unknown_hits[:10]),
+        )
+    if newly_hidden is None:
+        # The PR-mode newly-hidden-file heuristic could not run (git fetch or
+        # diff failed) -- not the same as "checked and found nothing". A real
+        # cohort-owned or unknown-ownership hit above still takes priority
+        # over this unrelated heuristic's own failure.
+        return CheckResult(
+            NAME,
+            Status.INDETERMINATE,
+            "could not determine whether a newly-added ignore pattern covers an "
+            "already-tracked path (git fetch or diff failed in PR mode); this is "
+            "not the same as nothing newly hidden",
         )
     if newly_hidden:
         return CheckResult(

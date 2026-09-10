@@ -344,6 +344,19 @@ MUTATIONS = [
         "control (test_run_adjudication.py's NotesDeferralTests), but it lived outside "
         "STEP 10, which ADJUDICATION.md's STEP 1 text assigns this key to specifically",
     ),
+    (
+        "replay-judge-underscore-guard-dropped",
+        "run_adjudication.py",
+        '                recordings.update({k: v for k, v in data.items() if not k.startswith("_")})\n',
+        "                recordings.update(data)  # mutated: underscore-key reservation removed\n",
+        "make_replay_judge never returns a reserved underscore-prefixed key's value for any finding_id lookup",
+        ["replaying all four real fixtures in-process touches neither the network nor a subprocess"],
+        "#1413: no real recording's finding_id starts with `_`, so nothing before this "
+        "control noticed a reserved key (_provenance, _dedupe_groups) merging into the "
+        "finding_id -> judge output lookup unfiltered -- a future recording format change "
+        "that collides a real finding_id with a reserved name would silently read the "
+        "wrong value with this guard gone",
+    ),
 ]
 
 failures: list[str] = []
