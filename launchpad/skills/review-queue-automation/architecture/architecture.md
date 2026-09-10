@@ -8,8 +8,9 @@ system and its neighbours), [`container.md`](container.md) (what runs and what i
 tables, identifiers and citations that the consistency checker and the decomposition work depend on.
 Read this document first. Go to a view when you need the exact contract behind a sentence here.
 
-Nothing in this document is new information; every statement is pinned in one of the views. Where a
-sentence rests on a decision the maintainer has not yet ratified, it says so.
+Nothing in this document is new information; every statement is pinned in one of the views. The four
+decisions this description assumed are now ratified (§18); where a sentence rests on one that is not,
+it says so.
 
 ---
 
@@ -636,20 +637,28 @@ carries knowingly. It does not carry forward the shadow, backtest and calibratio
 author-triage lane, or the adaptive sweep interval of the current implementation, because no
 requirement asks for them.
 
-## 18. What is still to be decided
+## 18. The decisions this architecture could not make
 
-Four ADR sub-issues of [#2006](https://github.com/launchpad-26/buzz/issues/2006) are open. Their
-Decision outcome fields remain human-owned; local drafts preserve the recommendations this
-architecture assumes:
+Four ADR sub-issues of [#2006](https://github.com/launchpad-26/buzz/issues/2006) carried the questions
+this description could not settle. **All four were decided on 2026-09-11**, each to the recommendation
+the architecture assumed, and recorded as `launchpad/decisions/ADR-0061`–`ADR-0064`; the assumption
+annotations throughout these documents therefore stand ratified. `components.md` §9 is the
+authoritative gate and carries the parts and requirements each one shapes.
 
-- [#2157](https://github.com/launchpad-26/buzz/issues/2157) — no verdict authority: comment where
-  granted, then authority-requirement escalation. **Blocking.**
-- [#2158](https://github.com/launchpad-26/buzz/issues/2158) — `gh auth token`: prove exercised
-  per-repository authority and record the broader-token residual. **Blocking.**
-- [#2159](https://github.com/launchpad-26/buzz/issues/2159) — record integrity: hash chain plus
-  operator-key HMAC. **Not blocking.**
-- [#2160](https://github.com/launchpad-26/buzz/issues/2160) — automatic remedies: exact files, closed
-  formatter/check and actual-diff semantic oracle; never a model patch. **Blocking.**
+- [#2157](https://github.com/launchpad-26/buzz/issues/2157) → **ADR-0061.** No verdict authority:
+  comment where granted, then an authority-requirement escalation; `review-complete` keeps one
+  meaning. Was blocking.
+- [#2158](https://github.com/launchpad-26/buzz/issues/2158) → **ADR-0062.** `gh auth token`: prove
+  exercised per-repository authority and record the broader-token residual, which RQA-NFR-030's
+  ceiling half accepts rather than meets. Was blocking.
+- [#2159](https://github.com/launchpad-26/buzz/issues/2159) → **ADR-0063.** Record integrity: hash
+  chain plus an operator-held HMAC. Was not blocking.
+- [#2160](https://github.com/launchpad-26/buzz/issues/2160) → **ADR-0064.** Automatic remedies: exact
+  files, closed formatter/check and an actual-diff semantic oracle; never a model patch. Was blocking.
+
+A fifth question, [#2217](https://github.com/launchpad-26/buzz/issues/2217) (ADR-H) — how a harness
+RQA ships no adapter for is admitted to run — was raised later, by the review of the pull request that
+repaired this description, and is tracked in `components.md` §9 with the same table.
 
 ## 19. How this maps to the views
 
@@ -659,5 +668,5 @@ architecture assumes:
 | What runs, what it stores, and which part writes each record | `container.md` |
 | Each part's responsibility, the contract on every interaction, which part answers for each requirement, and where every piece of the current code ends up | `components.md` |
 | One review as an ordered sequence with every branch, and the state table behind `rqa status` | `flow-review-lifecycle.md` |
-| The four open decisions | `adr-drafts/` |
+| The rationale behind each recorded decision | `adr-drafts/`, with the accepted records in `launchpad/decisions/` |
 | Whether the views agree with each other | `python3 validate.py` |

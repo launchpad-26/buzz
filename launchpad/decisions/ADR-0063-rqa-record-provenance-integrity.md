@@ -39,8 +39,13 @@ three options place a **key-custody obligation on the operator**, which is an op
 consequence the maintainer owns.
 
 The margin this decision buys over the cheaper option is narrow, and the draft says so: a plain hash
-chain (a) already detects accidental corruption, truncation, reordering, and any edit by an actor who
-does not recompute the chain. (b) adds only the recompute case — an actor with file access but not
+chain (a) already detects accidental corruption, reordering, and any edit by an actor who does not
+recompute the chain. It does **not** detect truncation of the tail: `verify` walks the rows that are
+present and returns `ok=True` on a complete walk, with nothing to compare an endpoint against
+(`P-12-record.md` §3.2), so deleting a job's last entries leaves a prefix that verifies clean. (b)
+inherits that blind spot — a per-row HMAC authenticates the rows that remain, not their absence — so
+the margin between the two options is unchanged by it, but a maintainer should not read either as
+tamper-*proof* against deletion. (b) adds only the recompute case — an actor with file access but not
 keychain access. Because RQA itself must read the key on every append, **any process running as the
 operator can read it too**, so the margin is real but thin. Option (c), signed entries with an
 asymmetric key, buys third-party verifiability that no requirement asks for.

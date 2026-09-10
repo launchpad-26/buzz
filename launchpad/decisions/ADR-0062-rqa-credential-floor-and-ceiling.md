@@ -59,7 +59,12 @@ Requirements: RQA-NFR-024, RQA-NFR-030, RQA-NFR-025, RQA-FR-038.
 
 - **Good.** The floor becomes a proof rather than a hope: no activity runs without a grant *and* a
   demonstrated capability on that exact repository. Every write goes through one gate and one
-  adapter, so if the constraint is later relaxed, only P-08's credential read (E-22) changes.
+  adapter. If the constraint is later relaxed, **two** credential reads change, not one: P-08's E-22
+  read, and P-09's own private per-call `transport._credential()` resolution, which is independent of
+  E-22 by design so that P-08 is never a runtime dependency of the adapter it probes through
+  (`P-09-github-adapter.md` §4). `probe()` is the single declared exception, taking its credential as
+  an argument from P-08. Migrating only E-22 would move probing to a new credential while every real
+  GitHub operation kept the old one.
 - **Bad, stated plainly.** **A credential broader than the managed set remains in use, and RQA cannot
   narrow it.** RQA-NFR-030 is therefore not satisfied as written for this version; it is satisfied
   only for what RQA exercises. Any process running as the operator can reach the same token. The

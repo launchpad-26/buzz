@@ -21,7 +21,7 @@ security consequences the maintainer owns.
 
 | | option | detects | consequence |
 |---|---|---|---|
-| (a) | Plain hash chain: each entry hashes its predecessor. | Accidental corruption, truncation, reordering, and edits by anyone who does not recompute the chain. | No key. An actor with write access to the file who also recomputes the chain is not detected. |
+| (a) | Plain hash chain: each entry hashes its predecessor. | Accidental corruption, reordering, and edits by anyone who does not recompute the chain. **Not** tail truncation: `verify` walks the rows present and returns `ok=True` on a complete walk (`P-12-record.md` §3.2), so a deleted tail leaves a clean-verifying prefix; (b) inherits the same blind spot. | No key. An actor with write access to the file who also recomputes the chain is not detected. |
 | (b) | Hash chain **plus** an HMAC over the chain head with a key held outside the state directory (OS keychain), verified by `explain`. | Everything (a) detects, plus recomputation by an actor with file access but not keychain access. | One key the operator must keep; loss of the key makes old records unverifiable (still readable). |
 | (c) | Signed entries with a per-installation asymmetric key. | As (b), plus third-party verifiability. | Key custody as (b); more machinery for a property no requirement asks for (nothing outside the operator machine verifies). |
 
