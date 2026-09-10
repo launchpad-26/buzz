@@ -122,10 +122,11 @@ or the CLI.
 
 Branch from `launchpad`, commit with `-s` (the DCO check is not optional), and expect to
 need **one** approving review from a reviewer with write access — the branch is protected
-and GitHub does not let you approve your own. An approval is dismissed by any later push
-(`dismiss_stale_reviews` is on), so a change made in response to review needs approving
-again. **No status check is required to merge**: CI is informative here, not gating, so a
-green tick is not the gate — the review is.
+and GitHub does not let you approve your own. `dismiss_stale_reviews` is on, so pushing new
+commits dismisses an existing approval and a change made in response to review needs
+approving again. **No status check is required by branch protection** — the review is the
+only gate the platform enforces. That describes what GitHub blocks, not what you may skip:
+CI still has to pass before a change is fit to merge.
 
 **Run `gh repo set-default launchpad-26/buzz` once per clone.** This fork's default
 branch resolution otherwise targets `block/buzz` — the parent repository — for any `gh`
