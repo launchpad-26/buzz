@@ -88,8 +88,8 @@ services:
     image: minio/minio:RELEASE.2025-09-07T16-13-09Z
     command: server /data --console-address ":9001"
     environment:
-      MINIO_ROOT_USER: ${BUZZ_S3_ACCESS_KEY:?set BUZZ_S3_ACCESS_KEY}
-      MINIO_ROOT_PASSWORD: ${BUZZ_S3_SECRET_KEY:?set BUZZ_S3_SECRET_KEY}
+      MINIO_ROOT_USER: ${BUZZ_MINIO_ROOT_USER:?set BUZZ_MINIO_ROOT_USER}
+      MINIO_ROOT_PASSWORD: ${BUZZ_MINIO_ROOT_PASSWORD:?set BUZZ_MINIO_ROOT_PASSWORD}
     volumes:
       - buzz-minio-data:/data
     healthcheck:
@@ -108,15 +108,22 @@ services:
       minio:
         condition: service_healthy
     environment:
+      BUZZ_MINIO_ROOT_USER: ${BUZZ_MINIO_ROOT_USER:?set BUZZ_MINIO_ROOT_USER}
+      BUZZ_MINIO_ROOT_PASSWORD: ${BUZZ_MINIO_ROOT_PASSWORD:?set BUZZ_MINIO_ROOT_PASSWORD}
       BUZZ_S3_ACCESS_KEY: ${BUZZ_S3_ACCESS_KEY:?set BUZZ_S3_ACCESS_KEY}
       BUZZ_S3_SECRET_KEY: ${BUZZ_S3_SECRET_KEY:?set BUZZ_S3_SECRET_KEY}
       BUZZ_S3_BUCKET: ${BUZZ_S3_BUCKET:-buzz-media}
-    entrypoint: >
-      /bin/sh -euc '
-        mc alias set local http://minio:9000 "$${BUZZ_S3_ACCESS_KEY}" "$${BUZZ_S3_SECRET_KEY}"
-        mc mb --ignore-existing "local/$${BUZZ_S3_BUCKET}"
-        mc anonymous set none "local/$${BUZZ_S3_BUCKET}"
-      '
+    entrypoint:
+      - /bin/sh
+      - -euc
+      - |
+        mc alias set local http://minio:9000 "$$BUZZ_MINIO_ROOT_USER" "$$BUZZ_MINIO_ROOT_PASSWORD"
+        mc mb --ignore-existing "local/$$BUZZ_S3_BUCKET"
+        mc anonymous set none "local/$$BUZZ_S3_BUCKET"
+        printf '%s' "{\"Version\":\"2012-10-17\",\"Statement\":[{\"Effect\":\"Allow\",\"Action\":[\"s3:*\"],\"Resource\":[\"arn:aws:s3:::$$BUZZ_S3_BUCKET\",\"arn:aws:s3:::$$BUZZ_S3_BUCKET/*\"]}]}" > /tmp/relay-s3.json
+        mc admin user info local "$$BUZZ_S3_ACCESS_KEY" >/dev/null 2>&1 || mc admin user add local "$$BUZZ_S3_ACCESS_KEY" "$$BUZZ_S3_SECRET_KEY"
+        mc admin policy info local buzz-relay-media >/dev/null 2>&1 || mc admin policy create local buzz-relay-media /tmp/relay-s3.json
+        mc admin policy attach local buzz-relay-media --user "$$BUZZ_S3_ACCESS_KEY" || true
     restart: "no"
     networks:
       - buzz-net

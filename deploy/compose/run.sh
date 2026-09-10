@@ -5,6 +5,9 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 cd "${SCRIPT_DIR}"
 
 COMPOSE_FILES=(-f compose.yml)
+if [[ -f docker-compose.override.yml ]]; then
+  COMPOSE_FILES+=(-f docker-compose.override.yml)
+fi
 if [[ "${BUZZ_COMPOSE_TLS:-false}" == "true" ]]; then
   COMPOSE_FILES+=(-f compose.caddy.yml)
 fi
