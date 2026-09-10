@@ -25,8 +25,10 @@ organization skills, which `launchpad/AGENTS.md` §3 places in `launchpad/skills
 exception covers **both** locations. That is a minimal, deliberate clarification of ADR-0030's
 scope, not a re-decision of it, and not a new entry on §3's closed list.
 
-§3's exception list is not widened. No skill authored directly at root, with no canonical copy
-under `launchpad/`, is permitted after this.
+§3's exception list is not widened. **A cohort-owned skill must have its canonical content under
+`launchpad/`, and its root registration must be a relative symlink resolving there.** This says
+nothing about upstream-owned skills registered at root — `desktop-screenshot` and `sprout-cli`
+point at `desktop/`, which upstream owns, and are unaffected.
 
 ## Context
 
@@ -49,16 +51,21 @@ The two compliant entries are not precedent for the seven: they point at `deskto
 upstream-owned, so registering them at root moves nothing across the boundary. ADR-0030 exists
 precisely because a *cohort* file is the case that precedent did not cover.
 
-**This was deliberate at the time, not carelessness, and that is why it is a decision rather
-than a bug.** #629's own Impacted components names `.claude/skills/corpus-author/` as the
-destination, and the same shape shipped through #628, #630, #631 and the batch-author commit —
-each a filed, reviewed, merged pull request. The dates matter: `agentic-debugging` and
+**These locations were explicitly specified and shipped through reviewed pull requests, which
+is why this needed a decision rather than a quiet fix.** #629's own Impacted components names
+`.claude/skills/corpus-author/` as the destination, and the same shape shipped through #628,
+#630, #631 and the batch-author commit — each filed, reviewed and merged. That history does not
+establish that anyone weighed the boundary rule and set it aside; an intentional implementation
+choice can still be a compliance bug. What it does establish is that the placement was visible
+and repeatedly approved, so correcting it is a change of record, not a bug report.
+
+The dates matter: `agentic-debugging` and
 `review-final` landed 2026-08-18, before ADR-0030 was accepted on 2026-08-25; but
 `corpus-author`, `corpus-plan` and `corpus-review` landed 2026-08-27, `corpus-batch-author` on
-2026-08-28 and `corpus-maintain` on 2026-09-03 — all after. A rule contradicted seven times in
-the open is either the wrong rule or an unenforced one.
+2026-08-28 and `corpus-maintain` on 2026-09-03 — all after.
 
-It is the second. Nothing detects this shape: `adr_boundary_check.py` compares ADR-0005's file
+Whatever the intent behind each one, nothing stopped them — and that is the part that matters
+here. Nothing detects this shape: `adr_boundary_check.py` compares ADR-0005's file
 table against §3 and checks those files carry Launchpad values, and nothing more. Seven
 instances accumulated without a single check going red.
 
@@ -101,9 +108,11 @@ ships `check-ledger.sh`, `verdict.sh`, `test-check-ledger.sh` and `test-verdict.
 a directory symlink still satisfies ADR-0030's *"a relative symlink whose target resolves into
 `launchpad/`"*.
 
-**Bad, and load-bearing.** Those two `.sh` files are the review gate. If the executable bit does
-not survive the move, `verdict.sh` and `check-ledger.sh` stop being runnable and the gate breaks
-silently. The migration asserts mode `100755` afterwards rather than trusting `git mv`.
+**Bad, and load-bearing.** Those two `.sh` files are the review gate. Losing executable mode
+breaks direct invocation of them — `bash verdict.sh` would still run, so whether a caller fails
+loudly or falls through depends on how it invokes them, which this ADR does not establish. The
+migration asserts mode `100755` afterwards rather than trusting `git mv`, and validates the gate
+through its actual invocation paths rather than by inspection.
 
 **Neutral.** Only `.claude/skills/` is in scope; all seven live there and nowhere else. The
 migration does not add `.agents/`, `.codex/` or `.goose/` entries. If a harness needs them that
@@ -114,9 +123,13 @@ is a separate, stated choice.
 - **The migration itself**, which is filed separately. This ADR decides the shape; it moves no
   files.
 - **A guard.** Nothing detects a cohort original at root today, which is the root cause of the
-  drift this ADR corrects. A check that fails when a root skill entry is a regular file whose
-  content has no canonical copy under `launchpad/` would close the class. Naming it here so the
-  gap is recorded; specifying and building it is not this decision's scope.
+  drift this ADR corrects. A guard should require every cohort-owned root skill registration to
+  be a relative symlink resolving to canonical content under `launchpad/`, including
+  registrations made through a directory symlink; **a regular-file duplicate does not satisfy
+  it, whether or not a canonical copy also exists.** It also needs a way to tell cohort-owned
+  from upstream-owned registrations, since the latter are legitimately regular symlinks into
+  `desktop/`. Naming the requirement here so the gap is recorded; specifying and building the
+  check is not this decision's scope.
 
 ## Security implications
 
@@ -137,7 +150,9 @@ The issue was filed 2026-09-09 while auditing PRD #2099's issue tree — the sev
 surfaced as a by-product of checking whether ADR-0030 already covered the Professor's own
 root-registration need (#1397, under Feature #2151). It was deliberately kept separate from
 #2153, which records ADR-0030's exception in §3 and is in review as PR #2156. The two are halves
-of the same gap and must not contradict each other on landing: #2156's bullet currently states
-the exception does not cover a skill authored at root with no canonical copy, and points at
-#2154 as open. Once the migration lands, no such skill remains, and that sentence should be
-revisited rather than left describing a closed question.
+of the same gap and must not contradict each other on landing: #2156's bullet states that the exception does
+not cover a skill authored at root with no canonical content under `launchpad/`. **That
+restriction is permanent and this ADR preserves it** — completing the migration clears the
+seven instances, not the rule. What goes stale on merge is only the issue reference: once #2164
+lands, update it to record completion rather than describing an open question, and leave the
+restriction itself alone.
