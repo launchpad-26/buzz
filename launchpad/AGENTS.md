@@ -95,16 +95,20 @@ The deliberate exceptions, all accepted knowingly:
   **This is settled — do not raise it as a §3 violation in review.** Adding a sixth file
   to this exception is a change to that record, not a call to make in a pull request.
 - **Root skill-registration directories** — `.agents/skills/`, `.claude/skills/`,
-  `.codex/skills/` and `.goose/skills/` may each hold a relative symlink whose target
-  resolves into `launchpad/`, so a cohort-authored skill is discoverable from a session
-  started at the repository root. **A symlink, never a copy** — the cohort content stays
-  under `launchpad/` and only a filesystem pointer sits at root, so nothing can diverge
-  from its canonical file. This is a generic exception, not a per-skill one: no further
-  skill under `launchpad/agents/` needs its own ADR to be registered this way. It does
-  **not** cover a skill authored directly in a root skill directory with no canonical
-  copy under `launchpad/`; that shape is a different question, open as #2154. Reasoning
-  and the rejected alternatives are in
+  `.codex/skills/` and `.goose/skills/` may each hold a relative symlink registering a
+  cohort-authored skill whose canonical content lives under
+  `launchpad/agents/<pack>/skills/`, so that skill is discoverable from a session started
+  at the repository root. **A symlink, never a copy** — the cohort content stays under
+  `launchpad/` and only a filesystem pointer sits at root, so nothing can diverge from its
+  canonical file. This is a generic exception, not a per-skill one: no further skill
+  within that scope needs its own ADR to be registered this way. It does **not** cover a
+  skill authored directly in a root skill directory with no canonical content under
+  `launchpad/`. Reasoning and the rejected alternatives are in
   [`decisions/ADR-0030-root-skill-registration-may-symlink-into-launchpad.md`](decisions/ADR-0030-root-skill-registration-may-symlink-into-launchpad.md).
+  This bullet states ADR-0030's scope exactly. Extending it to organization skills under
+  `launchpad/skills/` is decided but not yet in force — see #2154 (ADR-0059) and its
+  migration #2164; amend this bullet when that lands, rather than reading it as already
+  covering them.
 - **Root MCP server registration** — `.mcp.json` at the repository root may register
   cohort MCP servers whose commands live under `launchpad/`. Scoped to that one file;
   a different root config file or mechanism needs its own record. Reasoning and the
