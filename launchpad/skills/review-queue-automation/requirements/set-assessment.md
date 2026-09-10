@@ -44,4 +44,3 @@ clean-room inputs].
 | Safety | Not imposed by #2006. | ISO/IEC 25010:2023 adds Safety (avoidance of states leading to death, injury, or damage to health, property or the environment) as a ninth characteristic, distinct from 2011's set [INFERENCE — same secondary-source basis as the Flexibility row above]. Nothing in the extract's Problem, Success criteria, Non-goals or Security implications sections addresses physical harm, injury, or environmental/property damage; RQA's domain (pull-request review automation) does not put #2006 in a position to impose one. Recorded here as not imposed rather than silently omitted, per the sweep's own rule that every 2023 characteristic gets a row. |
 
 ---
-
