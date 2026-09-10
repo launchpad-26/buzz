@@ -86,5 +86,3 @@ elsewhere, adding no independently testable obligation).
 the requirement tables, including the Note-cell-equality strengthening.
 
 ---
-
-

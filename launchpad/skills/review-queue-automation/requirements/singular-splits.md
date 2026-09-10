@@ -60,5 +60,3 @@ to "manufacture", including internally-recorded success under closeout pressure)
 should not double-count their coverage as two independent obligations.
 
 ---
-
-

@@ -74,4 +74,3 @@ record this exception explicitly).
   RQA-NFR-031 was appended in round 9, and RQA-NFR-032/RQA-NFR-033 in round 9b; no existing ID was renumbered
   or retired). Total clauses: 65 = 50 numbered-requirement-derived + 1
   traceability-rule-derived (CL-062) + 8 scope exclusion + 6 context.
-
