@@ -158,7 +158,7 @@ Note: `KIND_AUTH` (22242) is `pub const KIND_AUTH: u32` in `buzz-core/src/kind.r
 | Relay → Client | `["NOTICE", "message"]` | Informational message |
 | Relay → Client | `["AUTH", <challenge>]` | Authentication challenge |
 
-Max frame size: 65,536 bytes. Max subscriptions per connection: 1024. Max historical results per filter: 500.
+Max frame size: 524,288 bytes (512 KiB) by default. Max subscriptions per connection: 1024. Max historical results per filter: 500.
 
 ---
 
@@ -632,7 +632,7 @@ pub enum AuthState { Pending { challenge: String }, Authenticated(AuthContext), 
 
 | Constant | Value | Purpose |
 |----------|-------|---------|
-| `MAX_FRAME_BYTES` | 65,536 | Max WebSocket frame size |
+| `MAX_FRAME_BYTES` | 524,288 (default) | Max WebSocket frame size |
 | `MAX_SUBSCRIPTIONS` | 1024 | Per-connection subscription limit |
 | `MAX_HISTORICAL_LIMIT` | 500 | Per-filter historical query cap |
 | `handler_semaphore` capacity | 1024 | Concurrent EVENT/REQ handlers |
@@ -730,7 +730,7 @@ Every security-sensitive operation uses an explicit, verified pattern. No implic
 |---------|-----------|
 | Schnorr signatures | `verify_event()` in `buzz-core` — every event verified before storage |
 | Event ID | SHA-256 of canonical serialization verified independently of signature |
-| Frame size | `MAX_FRAME_BYTES = 65,536` — oversized frames rejected, connection closed |
+| Frame size | `MAX_FRAME_BYTES = 524,288` (default) — oversized frames rejected, connection closed |
 | Search event IDs | 64-char hex validation before URL construction — prevents path injection |
 | Workflow step IDs | Alphanumeric + underscore only — prevents evalexpr variable injection |
 | Partition names | Allowlist of table names + strict suffix/date validators — prevents DDL injection |

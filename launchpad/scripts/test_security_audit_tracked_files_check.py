@@ -37,6 +37,18 @@ def _init_repo_with_files(root: Path, files: dict[str, str]) -> None:
 # on two of these very lines. A control for a secret-detection suite must not
 # itself be the thing it detects.
 
+def _add_local_origin(work: Path, bare: Path, branch: str = "launchpad") -> None:
+    """A reachable 'origin' — a local bare repo — so PR mode's newly-hidden
+    heuristic can genuinely fetch and diff. Under the #391 fail-closed fix an
+    unreachable origin is INDETERMINATE, so any test asserting a clean PASS in
+    PR mode needs a real remote, not the absence of one.
+    """
+    subprocess.run(["git", "init", "-q", "--bare", str(bare)], check=True)
+    subprocess.run(["git", "remote", "add", "origin", str(bare)], cwd=work, check=True)
+    subprocess.run(["git", "branch", "-M", branch], cwd=work, check=True)
+    subprocess.run(["git", "push", "-q", "origin", branch], cwd=work, check=True)
+
+
 def _oid(root: Path, rel_path: str) -> str:
     """The committed blob OID of `rel_path`, for building a fake upstream tree."""
     result = subprocess.run(
@@ -68,10 +80,16 @@ class _NoUpstreamMixin:
 
 class TrackedSensitiveFilesTest(_NoUpstreamMixin, unittest.TestCase):
     def test_clean_repo_passes(self):
+        # PR mode with a reachable origin: the one test proving the check can
+        # still return a genuine end-to-end PASS — fetch succeeds, diff runs,
+        # nothing is hidden — now that an unreachable origin fails closed.
         with tempfile.TemporaryDirectory() as tmp:
-            root = Path(tmp)
+            root = Path(tmp) / "work"
+            root.mkdir()
             _init_repo_with_files(root, {"README.md": "hello\n", "src/main.py": "print(1)\n"})
-            result = run(root)
+            _add_local_origin(root, Path(tmp) / "origin.git")
+            with mock.patch.dict("os.environ", {"GITHUB_BASE_REF": "launchpad"}):
+                result = run(root)
         self.assertEqual(result.status, Status.PASS)
 
     def test_tracked_dotenv_file_fails(self):
@@ -102,10 +120,14 @@ class TrackedSensitiveFilesTest(_NoUpstreamMixin, unittest.TestCase):
     def test_env_example_never_matched_the_env_pattern_in_the_first_place(self):
         # .env.example doesn't end in exactly ".env", so it was never going
         # to match the (^|/)\.env$ pattern -- no exemption needed or wanted.
+        # Reachable origin + PR mode for the same reason as test_clean_repo_passes.
         with tempfile.TemporaryDirectory() as tmp:
-            root = Path(tmp)
+            root = Path(tmp) / "work"
+            root.mkdir()
             _init_repo_with_files(root, {".env.example": "SOME_TOKEN=CHANGE_ME\n"})
-            result = run(root)
+            _add_local_origin(root, Path(tmp) / "origin.git")
+            with mock.patch.dict("os.environ", {"GITHUB_BASE_REF": "launchpad"}):
+                result = run(root)
         self.assertEqual(result.status, Status.PASS)
 
     def test_seed_directory_fails(self):
@@ -149,17 +171,22 @@ class UpstreamOwnershipTest(unittest.TestCase):
     """
 
     def test_upstream_identical_fixture_does_not_fail_and_is_named(self):
+        # Asserts PASS, so it needs a reachable origin + PR mode too (see
+        # _add_local_origin): otherwise the unrelated newly-hidden heuristic
+        # fails closed in CI and turns this into INDETERMINATE.
         with tempfile.TemporaryDirectory() as tmp:
-            root = Path(tmp)
+            root = Path(tmp) / "work"
+            root.mkdir()
             _init_repo_with_files(
                 root, {"crates/gw/tests/fixtures/apns-test-identity.pem": "fixture bytes, deliberately not key-shaped\n"}
             )
+            _add_local_origin(root, Path(tmp) / "origin.git")
             upstream = {"crates/gw/tests/fixtures/apns-test-identity.pem":
                         _oid(root, "crates/gw/tests/fixtures/apns-test-identity.pem")}
             with mock.patch(
                 "security_audit_tracked_files_check.fetch_upstream_blobs",
                 return_value=upstream,
-            ):
+            ), mock.patch.dict("os.environ", {"GITHUB_BASE_REF": "launchpad"}):
                 result = run(root)
         self.assertEqual(result.status, Status.PASS)
         # Named, not silently dropped: a skip nobody can see is a check that stopped looking.
@@ -272,6 +299,38 @@ class NewlyHiddenTrackedFileTest(_NoUpstreamMixin, unittest.TestCase):
             with mock.patch.dict("os.environ", env, clear=True):
                 result = run(root)
         self.assertEqual(result.status, Status.PASS)
+
+
+class NewlyHiddenGitFailureTest(_NoUpstreamMixin, unittest.TestCase):
+    """Regression for #391: a git failure in the newly-hidden-file heuristic
+    must not read the same as "nothing newly hidden". PR mode is on
+    (GITHUB_BASE_REF set) but no 'origin' remote is configured, so
+    `git fetch origin <base_ref>` fails exactly as it would against an
+    unreachable or misconfigured remote in CI.
+    """
+
+    def test_fetch_failure_in_pr_mode_is_indeterminate_not_pass(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            _init_repo_with_files(root, {"README.md": "hello\n", ".gitignore": "\n"})
+            with mock.patch.dict("os.environ", {"GITHUB_BASE_REF": "launchpad"}):
+                result = run(root)
+        self.assertEqual(result.status, Status.INDETERMINATE)
+        self.assertIn("could not determine", result.detail)
+        self.assertIn("not the same as nothing newly hidden", result.detail)
+
+    def test_fetch_failure_does_not_mask_a_real_cohort_owned_hit(self):
+        # The acceptance criterion, same shape as UpstreamOwnershipTest's: a
+        # heuristic that cannot run must never suppress a real, independently
+        # detected sensitive tracked file. FAIL (from the primary scan) still
+        # wins over INDETERMINATE (from the unrelated newly-hidden heuristic).
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            _init_repo_with_files(root, {"deploy/host.pem": "fixture bytes, deliberately not key-shaped\n", ".gitignore": "\n"})
+            with mock.patch.dict("os.environ", {"GITHUB_BASE_REF": "launchpad"}):
+                result = run(root)
+        self.assertEqual(result.status, Status.FAIL)
+        self.assertIn("host.pem", result.detail)
 
 
 if __name__ == "__main__":
