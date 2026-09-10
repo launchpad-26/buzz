@@ -105,10 +105,10 @@ The deliberate exceptions, all accepted knowingly:
   skill authored directly in a root skill directory with no canonical content under
   `launchpad/`. Reasoning and the rejected alternatives are in
   [`decisions/ADR-0030-root-skill-registration-may-symlink-into-launchpad.md`](decisions/ADR-0030-root-skill-registration-may-symlink-into-launchpad.md).
-  This bullet states ADR-0030's scope exactly. Extending it to organization skills under
-  `launchpad/skills/` is decided but not yet in force — see #2154 (ADR-0059) and its
-  migration #2164; amend this bullet when that lands, rather than reading it as already
-  covering them.
+  This bullet states ADR-0030's scope exactly, which today means persona-pack skills only.
+  ADR-0059 (#2154) extends the same symlink shape to organization skills under
+  `launchpad/skills/`; **this bullet gains that location when the migration in #2164 lands**,
+  not before, so until then do not read it as already covering them.
 - **Root MCP server registration** — `.mcp.json` at the repository root may register
   cohort MCP servers whose commands live under `launchpad/`. Scoped to that one file;
   a different root config file or mechanism needs its own record. Reasoning and the
