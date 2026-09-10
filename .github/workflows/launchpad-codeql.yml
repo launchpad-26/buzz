@@ -15,10 +15,17 @@ name: launchpad — CodeQL
 # supported for this repo (confirmed 2026-09-09 via `gh api
 # repos/launchpad-26/buzz/code-scanning/default-setup`). Dart — roughly
 # 5.4M characters of this repo, presumably the Flutter mobile app — is not
-# on that list and stays uncovered; that is a real, named gap, not an
-# oversight. Ruby is technically present (~1.3KB) but too small to be
-# meaningful application code, so it is left out of the matrix rather than
-# padding it for a file or two.
+# on that list and CodeQL has no Dart support at all (no official support,
+# no roadmap, and the only third-party extractor is an unmaintained
+# prototype — see ADR-0058). That gap is covered separately, not here:
+# .github/workflows/launchpad-dart-analysis.yml (semgrep --config=p/dart,
+# advisory validation spike) plus ci.yml's `mobile` job (`flutter analyze`,
+# unconditional, strict-mode). Neither claims CodeQL-equivalent coverage —
+# launchpad-dart-analysis.yml's own header comment records that its
+# Semgrep ruleset currently resolves to zero executable rules, a real and
+# named gap of its own, not an oversight either. Ruby is technically
+# present (~1.3KB) but too small to be meaningful application code, so it
+# is left out of the matrix rather than padding it for a file or two.
 #
 # java-kotlin is also left out, found out the hard way rather than
 # guessed: autobuild against this checkout fails with "Could not detect a
