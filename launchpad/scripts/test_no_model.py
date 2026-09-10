@@ -70,6 +70,9 @@ ALLOWLIST: dict[str, frozenset[str]] = {
     # ADR-0005's boundary check. Reads tracked files for upstream-namespace
     # leftovers; no subprocess, no network.
     "adr_boundary_check.py": frozenset({"re", "sys", "pathlib"}),
+    # #1453's trailing-newline check. Reads ADR files as bytes and compares;
+    # no subprocess, no network.
+    "adr_trailing_newline_check.py": frozenset({"sys", "pathlib"}),
     # #426's batch pre-review pass. Belongs on this list rather than in
     # NOT_OURS specifically BECAUSE of what it is: ADR-0019 rules that a
     # deterministic script may gate a merge while a model verdict may only
@@ -117,6 +120,8 @@ NOT_OURS = {
     "same reason as security_audit.py",
     "security_audit_agent_surface_check.py": "the #68 agent-surface secret-scan check; "
     "same reason as security_audit.py",
+    "skill_test_matrix.py": "the #2018 skill-test coverage guard and CI matrix; a "
+    "separate task, not part of the pre-flight stage this allowlist covers",
 }
 
 

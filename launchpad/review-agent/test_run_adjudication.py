@@ -62,6 +62,7 @@ Run:  python3 -m unittest test_run_adjudication    (from launchpad/review-agent/
 from __future__ import annotations
 
 import contextlib
+import copy
 import io
 import json
 import subprocess
@@ -181,16 +182,53 @@ class CountingJudge:
 
 class ByteIdenticalPassThroughTests(unittest.TestCase):
     def test_pr_merge_base_head_and_containment_survive_untouched(self):
+        """#284: this test used to compare `output_doc[key]` against
+        `input_doc[key]` AFTER calling `adjudicate()`. `adjudicate()`'s
+        pass-through guarantee rests on building its output from a
+        `copy.deepcopy` of the input -- but if that `deepcopy` were ever
+        replaced with a plain alias, `output_doc` literally IS `input_doc`
+        (same object), so comparing `output_doc[key]` against `input_doc[key]`
+        is comparing an object against itself: it always passes, regardless
+        of whether the guarantee holds.
+
+        A snapshot taken BEFORE the call -- `test_verdicts.py`'s
+        `DeepCopyIsolationTests` shape -- is what actually tells the two
+        cases apart. Two assertions, and both matter:
+
+        1. `output_doc[key] == input_before[key]` -- the actual guarantee:
+           the four pass-through fields survive into the output unchanged.
+           This alone does not detect aliasing: none of these four fields is
+           ever mutated in place by `adjudicate()` regardless of whether it
+           aliases or deep-copies, so an alias would still pass this half.
+        2. `input_doc == input_before` (the WHOLE document, not scoped to the
+           four keys) -- this is what an alias actually breaks. Aliasing
+           makes `output_document` and `input_document` the same object, so
+           every key `adjudicate()` adds or mutates on the "output"
+           (`adjudication`, `stages`, and each finding's `verdict`/
+           `verdict_evidence`/`reported_severity`/`severity`/`severity_reason`/
+           `duplicate_of`) lands on `input_doc` too. Only a real `deepcopy`
+           leaves the caller's object untouched.
+        """
         containment_findings = [make_containment_finding("delimiter_forge")]
         input_doc = make_document(containment_findings=containment_findings)
+        input_before = copy.deepcopy(input_doc)
+
         output_doc = run_adjudication.adjudicate(input_doc, run_adjudication.stub_judge)
 
         for key in ("pr", "merge_base_sha", "head_sha", "containment"):
             self.assertEqual(
                 json.dumps(output_doc[key], sort_keys=True),
-                json.dumps(input_doc[key], sort_keys=True),
-                f"{key} was not byte-identical",
+                json.dumps(input_before[key], sort_keys=True),
+                f"{key} was not byte-identical between the output and the pre-call input",
             )
+        # The assertion that actually distinguishes a real deepcopy from an
+        # alias: input_doc, in full, must still equal the pre-call snapshot.
+        self.assertEqual(
+            input_doc,
+            input_before,
+            "input_doc changed after adjudicate() -- adjudicate() is aliasing "
+            "rather than deep-copying its input",
+        )
 
     def test_output_validates_against_both_contracts(self):
         input_doc = make_document()
@@ -347,6 +385,54 @@ class ReplayJudgeTests(unittest.TestCase):
         finding = make_raw_finding()
         result = judge(finding, {})
         self.assertEqual(result["verdict"], "UNPROVEN")
+
+    def test_reserved_underscore_key_is_never_returned_for_any_finding_id(self):
+        """#1413: `make_replay_judge` reserves top-level keys prefixed with
+        `_` (``_provenance``, ``_dedupe_groups``) and excludes them from the
+        `finding_id -> judge output` lookup it builds
+        (``recordings.update({k: v for k, v in data.items() if not
+        k.startswith("_")})``). Nothing exercised this directly before: no
+        real fixture's `finding_id` starts with `_`, so a mutation deleting
+        the guard entirely (``recordings.update(data)``) would still pass
+        every other test -- the reserved value would merge into the lookup,
+        but nothing would ever look it up.
+
+        This builds a recording carrying both an ordinary finding and a
+        reserved ``_provenance`` key holding a DISTINCT, recognizable dict,
+        then proves two things: the ordinary finding still resolves to its
+        own recorded verdict (the lookup was not broken by the presence of a
+        reserved key), and a lookup for ``finding_id="_provenance"`` --
+        genuinely attempting to read the reserved key back out through the
+        judge's own public interface -- fails closed to UNPROVEN exactly
+        like any other unrecognised finding_id, proving the reserved value
+        was never merged into the lookup at all rather than merely being
+        unused by coincidence.
+        """
+        finding = make_raw_finding()
+        reserved_payload = {"model": "reserved-value-should-never-surface", "date": "2026-01-01"}
+        with tempfile.TemporaryDirectory() as tmp:
+            recording_path = Path(tmp) / "recorded.json"
+            recording_path.write_text(
+                json.dumps(
+                    {
+                        finding["finding_id"]: {
+                            "verdict": "CONFIRMED",
+                            "verdict_evidence": "replay: read the file at head_sha, credential present.",
+                        },
+                        "_provenance": reserved_payload,
+                    }
+                )
+            )
+            judge = run_adjudication.make_replay_judge(Path(tmp))
+
+            ordinary_result = judge(finding, {})
+            reserved_lookup_finding = make_raw_finding(finding_id="_provenance")
+            reserved_result = judge(reserved_lookup_finding, {})
+
+        self.assertEqual(ordinary_result["verdict"], "CONFIRMED")
+        self.assertEqual(reserved_result["verdict"], "UNPROVEN")
+        self.assertIn("_provenance", reserved_result["verdict_evidence"])
+        self.assertNotIn("reserved-value-should-never-surface", json.dumps(reserved_result))
 
 
 class JudgeFailsClosedTests(unittest.TestCase):

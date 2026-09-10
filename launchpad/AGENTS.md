@@ -94,6 +94,21 @@ The deliberate exceptions, all accepted knowingly:
   [`decisions/ADR-0005-launchpad-deployment-boundary.md`](decisions/ADR-0005-launchpad-deployment-boundary.md).
   **This is settled — do not raise it as a §3 violation in review.** Adding a sixth file
   to this exception is a change to that record, not a call to make in a pull request.
+- **Root skill-registration directories** — `.agents/skills/`, `.claude/skills/`,
+  `.codex/skills/` and `.goose/skills/` may each hold a relative symlink registering a
+  cohort-authored skill whose canonical content lives under
+  `launchpad/agents/<pack>/skills/`, so that skill is discoverable from a session started
+  at the repository root. **A symlink, never a copy** — the cohort content stays under
+  `launchpad/` and only a filesystem pointer sits at root, so nothing can diverge from its
+  canonical file. This is a generic exception, not a per-skill one: no further skill
+  within that scope needs its own ADR to be registered this way. It does **not** cover a
+  skill authored directly in a root skill directory with no canonical content under
+  `launchpad/`. Reasoning and the rejected alternatives are in
+  [`decisions/ADR-0030-root-skill-registration-may-symlink-into-launchpad.md`](decisions/ADR-0030-root-skill-registration-may-symlink-into-launchpad.md).
+  This bullet states ADR-0030's scope exactly, which today means persona-pack skills only.
+  ADR-0059 (#2154) extends the same symlink shape to organization skills under
+  `launchpad/skills/`; **this bullet gains that location when the migration in #2164 lands**,
+  not before, so until then do not read it as already covering them.
 - **Root MCP server registration** — `.mcp.json` at the repository root may register
   cohort MCP servers whose commands live under `launchpad/`. Scoped to that one file;
   a different root config file or mechanism needs its own record. Reasoning and the

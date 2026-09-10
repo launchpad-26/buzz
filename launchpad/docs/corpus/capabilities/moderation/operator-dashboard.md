@@ -16,8 +16,8 @@ evidence:
   - statement: "The desktop app's Settings surface has a dedicated 'Moderation' panel (nav entry value 'moderation', label 'Moderation') that renders `ModerationQueueCard`, and that card exposes a 'Queue' tab (open reports, grouped by target) and an 'Audit log' tab (accepted moderation actions, newest first)."
     entry_class: FACT
     evidence:
-      - "desktop/src/features/settings/ui/SettingsPanels.tsx:209-212"
-      - "desktop/src/features/settings/ui/SettingsPanels.tsx:868-869"
+      - "desktop/src/features/settings/ui/SettingsPanels.tsx:254-256"
+      - "desktop/src/features/settings/ui/SettingsPanels.tsx:967-968"
       - "desktop/src/features/settings/ui/ModerationQueueCard.tsx:553-596"
   - statement: "The panel gates itself client-side on the viewer's own community role, read via `useMyRelayMembershipQuery`, and only renders the queue/audit tabs when that role is 'owner' or 'admin' -- otherwise it shows 'The moderation queue is available to community moderators only.'"
     entry_class: FACT
@@ -110,7 +110,7 @@ actually act on, rather than a pile of unread signals.
 **Shipped**, in the desktop app. The panel lives in Settings under "Moderation"
 and is wired into the settings navigation and the panel-rendering switch that
 picks a card per selected section (`desktop/src/features/settings/ui/
-SettingsPanels.tsx:209-212,868-869`), rendering `ModerationQueueCard`
+SettingsPanels.tsx:254-256,967-968`), rendering `ModerationQueueCard`
 (`desktop/src/features/settings/ui/ModerationQueueCard.tsx`). It reads the open
 report queue and the audit log over NIP-98-authed relay endpoints and writes
 through the same signed-event path as every other desktop mutation

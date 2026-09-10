@@ -1,0 +1,30 @@
+# Issue #1010 — interfaces/nostr/nip-17.md
+
+Stated size: no `Size` line  →  cap: 5 steps (batch corpus-doc task under parent Feature #616; task-dispatch instructions cap at 5).
+
+ALREADY TRUE: `launchpad/docs/corpus/schema/node.schema.json`, `launchpad/docs/corpus/AGENTS.md`, and `launchpad/docs/corpus/templates/interface.md` are merged on `origin/launchpad`. `launchpad/docs/corpus/interfaces/nostr/nip-17.md` does not exist yet (`launchpad/docs/corpus/interfaces/` has no tree entry at all on `origin/launchpad`). The corpus tree on `origin/launchpad` at the recorded revision contains no interface-shaped sibling node this task could legitimately point a `relationships` edge at.
+
+STEP 1  [independent]  Gather evidence: read `crates/buzz-core/src/kind.rs` (`KIND_GIFT_WRAP = 1059`, its NIP-17 doc comment, and its membership in `P_GATED_KINDS`), `crates/buzz-relay/src/handlers/ingest.rs` (HTTP-transport rejection of kind:1059, the pubkey-mismatch exemption for gift wraps, `required_scope_for_kind`'s `MessagesWrite` mapping), `crates/buzz-relay/src/handlers/event.rs` (the WebSocket-side pubkey-mismatch exemption and the gift-wrap workflow-trigger skip), `crates/buzz-relay/src/handlers/req.rs`'s `p_gated_filters_authorized` (the `#p`-gate a subscription filter must satisfy to match kind:1059), `crates/buzz-relay/src/push_runtime.rs`'s `push_filter_authorized_for_event` (push-lease-time `#p` re-check), and `crates/buzz-search/tests/fts_integration.rs`'s `excluded_kinds_are_storage_level_unsearchable` (storage-level NULL `search_tsv` for kind:1059). Cross-check every claim against `crates/buzz-test-client/tests/e2e_nostr_interop.rs`'s four `test_nip17_*` tests, which exercise acceptance-despite-pubkey-mismatch, the `#p`-filter requirement (CLOSED without it), successful delivery to the addressed recipient, and non-searchability.
+        done when: every claim planned for the body has a specific opened source (path + symbol) recorded, and the exact line ranges for each `test_nip17_*` test are noted for citation.
+
+STEP 2  [needs 1]  ← RUNS HERE  Write `launchpad/docs/corpus/interfaces/nostr/nip-17.md` with schema-valid front matter (id `interfaces-nostr-nip-17`, type `interfaces-events`, status `draft`, origin `launchpad`, audiences `[agent, developer, reviewer]`, no `relationships` — no interface- or event-kind-shaped sibling node is merged on `origin/launchpad` to point at) and the body per `templates/interface.md`'s required sections: Interface description (the kind:1059 gift-wrap envelope as the WebSocket-plus-Nostr-event boundary), Operations (submit via `EVENT`, subscribe via `REQ` with mandatory `#p`, delivery via push lease), Contract and stability (the pubkey-mismatch exemption, the mandatory `#p` gate and its CLOSED failure mode, WebSocket-only transport rejection over HTTP, `MessagesWrite` scope requirement, storage-level unsearchability), Boundary (this node does not restate NIP-17's own seal/rumor encryption format, which is client-side and outside the relay's code — only the relay-observable envelope contract), one valid example (accepted gift wrap despite pubkey mismatch) and one failure example (CLOSED for a `#p`-less subscription), and Scope and omissions per `AGENTS.md` step 8.
+        done when: the file exists with schema-valid front matter and every issue-1010 DoD bullet is addressed by a distinct section.
+
+STEP 3  [needs 2]  Run `python3 launchpad/project-intelligence/corpus/validate.py`; fix and re-run until exit 0.
+        done when: the command exits 0 with no FAIL lines attributable to the new node.
+
+STEP 4  [needs 3]  Self-verify the diff line-by-line against the issue's DoD checklist; confirm every evidence entry supports its claim, no second canonical document was created, and validate.py still passes.
+        done when: the audit is written and validate.py exits 0 on the current tree.
+
+STEP 5  [needs 4]  Run `python3 -m unittest discover -s launchpad/project-intelligence/corpus/tests -p "test_*.py"` alone as the sole prior command to earn the verification stamp, confirm it prints `OK`, then in a separate call `git add` the plan and document and commit with `git commit -s`.
+        done when: the unittest command reports `OK` and `git commit -s` succeeds without `--no-verify`.
+
+PARALLEL: none — single file, single task.
+
+GATES: `python3 launchpad/project-intelligence/corpus/validate.py` must exit 0. `review-adjudicate` and the cross-model final review pass are deferred to the batch owner's morning review — not run here.
+
+BUDGET: small — one document, no runtime code changes, evidence gathering scoped to `kind.rs`, `ingest.rs`, `event.rs`, `req.rs`, `push_runtime.rs`, `fts_integration.rs`, and `e2e_nostr_interop.rs`.
+
+OPEN: NIP-17's own upstream specification (the seal/rumor/gift-wrap encryption format defined at `github.com/nostr-protocol/nips/blob/master/17.md`) is cited as the authoritative machine/spec representation per the issue's DoD, but its content — the client-side encryption construction — is deliberately out of this node's scope per `templates/interface.md`'s Boundary guidance: the relay only observes and enforces the outer envelope (kind, tags, transport, timing), never the encrypted content, so the node cites the NIP rather than re-describing it. No relationship edges are declared because no interface- or event-kind-shaped sibling node exists yet on `origin/launchpad` to target; the schema's own rule that an unresolved target is a hard validation error makes omission the only currently-correct choice, not a placeholder to revisit "soon."
+
+LEFT OUT: No claim about client-side gift-wrap construction, sealing, or rumor unwrapping (that logic is not in this repository's relay/core crates — NIP-17 sealing is a client responsibility). No new corpus node for NIP-59 (the underlying gift-wrap NIP that NIP-17 builds on) or for the DM-visibility kind:30622 mechanism referenced alongside kind:1059 in `P_GATED_KINDS` — each is a separate, independently maintainable subject if and when it gets its own task. No change to `crates/buzz-core`, `crates/buzz-relay`, or any other runtime code.

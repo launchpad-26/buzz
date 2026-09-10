@@ -242,7 +242,7 @@ visible from this repository.
 | Not covered here | Owned by |
 |---|---|
 | Table-by-table schema contents and the multi-tenant conformance contract | `migrations/0001_initial_schema.sql`, `docs/multi-tenant-conformance.md` |
-| The replica-freshness fence's full correctness proof | `crates/buzz-db/src/replica_fence.rs` |
+| The replica-freshness fence's full correctness proof | `crates/buzz-db/src/runtime/replica_fence.rs` |
 | Production/staging Postgres provisioning and topology | `squareup/block-coder-tf-stacks` (private, not opened by this task) |
 | Relay container responsibility, technology, and boundary | a future `architecture-containers-*` node for the relay (not merged at this revision) |
 | Redis (pub/sub, presence) as a separate container | a future `architecture-containers-*` node for Redis (not merged at this revision) |

@@ -79,3 +79,75 @@ jobs:
 
       - name: Run agents unit tests
         run: python3 -m unittest discover -s launchpad/agents -p "test_*.py" -v
+
+  # The Professor's tool layer has its own harness rather than unittest cases,
+  # so `unittest discover` above never sees it (issue #2111). Until this job
+  # existed, check_professor.py was the only automated coverage for
+  # professor.py and nothing ran it -- the same "a test suite nothing runs is a
+  # claim, not a check" gap this whole workflow was created to close,
+  # reproduced one directory over.
+  #
+  # `--offline` runs only the checks that reach no network and need no `gh`
+  # credentials. The GitHub-API checks (resolve-pin, path-exists-at, and the
+  # pack-root-from-outside-checkout call) are deliberately NOT run here: this
+  # job has no authenticated `gh`, and spending a rate limit per pull request
+  # to re-prove a GitHub client works is not what CI is for. They remain a
+  # manual/scheduled responsibility -- run `check_professor.py` with no flags.
+  # The run names every check it skipped, so a check silently migrating out of
+  # the offline half is visible in the log rather than absorbed into a count.
+  professor-tools:
+    runs-on: ubuntu-latest
+    steps:
+      # Full history, unlike the job above. Several check-page fixtures cite a
+      # real commit by SHA, and the harness resolves those against this
+      # checkout's own history with `git cat-file`. At the default depth that
+      # commit is absent, so those checks skip and the line-count check cannot
+      # run at all -- which is exactly what happened on this job's first run.
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      # professor.py's shebang is `#!/usr/bin/env -S uv run --script` and its
+      # dependencies are declared PEP 723 inline, so uv -- not pip -- resolves
+      # them. Installed via pip rather than a third-party setup action to keep
+      # this job's supply chain to actions/* only.
+      - name: Install uv
+        run: pip install uv
+
+      # professor.py's dependencies are declared PEP 723 inline, so the FIRST
+      # run of it builds the script environment and uv reports that on stderr
+      # ("Installed 3 packages in 8ms"). The harness compares one subcommand's
+      # stderr against an exact expected message, and CI runs cold by
+      # definition, so without this step that launcher output lands in the
+      # middle of the assertion and the job fails on every run. Warming it here
+      # keeps the noise in a step where nothing is being asserted.
+      #
+      # The harness no longer depends on this working: its assertion strips a
+      # closed allowlist of launcher prefixes and then requires an exact match
+      # on what remains, so launcher output cannot satisfy it and cannot break
+      # it. This step is the belt to that braces, and keeps the log readable.
+      - name: Warm the script environment
+        run: |
+          PROFESSOR_PACK_ROOT=launchpad/agents/the-professor \
+            launchpad/agents/the-professor/tools/professor.py --help > /dev/null
+
+      - name: Run the Professor tool-layer harness (network-free checks)
+        run: |
+          set -o pipefail
+          python3 launchpad/agents/the-professor/tools/check_professor.py --offline \
+            | tee professor-harness.log
+
+      # Exit 0 alone cannot distinguish "every check passed" from "the harness
+      # changed shape and ran nothing", which is the vacuous-pass failure the
+      # `Confirm test cases were discovered` step above guards against for the
+      # unittest suite. The final line is the harness's own completion claim.
+      - name: Confirm the harness actually completed
+        run: |
+          if ! grep -qx "ALL NETWORK-FREE CHECKS PASSED" professor-harness.log; then
+            echo "::error::check_professor.py --offline did not print its completion line; the run may have executed nothing."
+            exit 1
+          fi

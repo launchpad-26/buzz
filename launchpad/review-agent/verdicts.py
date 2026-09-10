@@ -22,6 +22,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 
+import findings
 from review import SEVERITY_ORDER
 
 #: The three legal verdicts. ADJUDICATION.md § The verdict: "exactly one...
@@ -33,19 +34,14 @@ VERDICTS = frozenset({"CONFIRMED", "REFUTED", "UNPROVEN"})
 #: recommendation, or a pass.
 _FORBIDDEN_KEYS = frozenset({"approved", "mergeable", "merge_recommendation"})
 
-
-def is_nonempty_str(value: object) -> bool:
-    """A string carrying at least one non-whitespace character.
-
-    ADJUDICATION.md requires several fields "non-empty", and § The verdict
-    gives the reason: "An ``UNPROVEN`` with no reason is indistinguishable
-    from a stage that skipped the finding." Whitespace IS no reason by that
-    standard, so a bare truthiness test is the wrong check -- ``not "   "``
-    is False and the value sails through. The type half matters for the same
-    reason: truthiness also admits ``42``, ``True`` and ``["x"]``, none of
-    which a reader can act on.
-    """
-    return isinstance(value, str) and bool(value.strip())
+#: ADJUDICATION.md requires several fields "non-empty", and § The verdict gives the
+#: reason: "An ``UNPROVEN`` with no reason is indistinguishable from a stage that
+#: skipped the finding." Re-exported from ``findings.py`` -- #117's own module, where
+#: the identical "evidence must be non-empty" rule already applies to containment
+#: findings -- rather than redeclared here, the same reason #283's fix moved it there:
+#: a second private copy of one contract rule is how this bug class happened the first
+#: time.
+is_nonempty_str = findings.is_nonempty_str
 
 
 def is_int(value: object) -> bool:
@@ -263,13 +259,12 @@ def validate(input_document: dict, output_document: dict) -> list[str]:
     Also re-runs #117's own ``findings.validate`` against the output document,
     so a document that leaves this stage still satisfies the contract it
     arrived under -- a stage that quietly breaks its input's own rules is the
-    same defect as one that drops a finding. ``findings`` is imported here,
-    locally, rather than at module scope, the same reason `findings.py` itself
-    imports `contain` locally: this module has no other reason to depend on it.
+    same defect as one that drops a finding. ``findings`` is imported at
+    module scope now (#283): this module also re-exports
+    ``findings.is_nonempty_str`` as its own ``is_nonempty_str``, so the import
+    can no longer be deferred to this one call site.
     """
-    import findings as findings_module
-
-    violations: list[str] = list(findings_module.validate(output_document))
+    violations: list[str] = list(findings.validate(output_document))
 
     input_ids = _finding_ids(input_document)
     output_ids = _finding_ids(output_document)
@@ -530,7 +525,7 @@ def validate(input_document: dict, output_document: dict) -> list[str]:
 
     # The top-level nonce: present, unchanged from the input, and (via the
     # completion_marker check below) equal to this stage's own marker.
-    # `findings_module.validate` above already checked it against every
+    # `findings.validate` above already checked it against every
     # report's own marker.
     nonce = output_document.get("nonce")
     if nonce != input_document.get("nonce"):
