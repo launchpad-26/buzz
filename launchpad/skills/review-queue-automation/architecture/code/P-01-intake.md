@@ -417,7 +417,7 @@ carve-out to `snapshot_hash`.
 
 ## 6. Record entries written
 
-**P-01 writes no record entries.** The closed thirteen kinds are `transition`, `plan`,
+**P-01 writes no record entries.** The closed fourteen kinds are `transition`, `plan`,
 `carry_over`, `bundle`, `attestation`, `spend`, `panel`, `judgement`, `grant`, `action`,
 `escalation`, `decision`, and `legacy`; none represents intake-owned state. Concretely:
 
@@ -433,7 +433,7 @@ carve-out to `snapshot_hash`.
 - An admission refusal (§3 step 2a) has no job to record against — no job exists yet for a repository
   that fails admission — and a per-job dispatch fault (§3 step 5c, U-DISPATCH-22) is caught precisely
   because it escaped whatever transactional state Lifecycle's own containment could safely commit
-  against; recording either into the hash-chained ledger would mean inventing a fourteenth kind or
+  against; recording either into the hash-chained ledger would mean inventing a fifteenth kind or
   writing against a transaction already known to be unsound. Both go to the tick's own process log
   instead (`log`, §3) — the same "tick log" `architecture.md`'s risk table already names ("Policy file
   invalid or unreadable… The tick log names the repository and the validation error").
@@ -511,13 +511,13 @@ Accountable: RQA-BR-007, RQA-FR-031, RQA-NFR-004, RQA-NFR-006.
   per-repository loop (§3 step 2) being isolated and independent — one repo's admission or inventory
   outcome never gates another's — and by the whole of `tick()` running as one local process against
   one local `state.db`, never a shared or hosted component. Steps: 2 (the loop itself), 1 (the local
-  exclusive lock, not a server). Tests: T5, T6, T21.
+  exclusive lock, not a server). Tests: T5, T6, T17.
 - **RQA-NFR-004** — *"The system shall operate across multiple repositories and multiple
   organisations, including both public and private repositories under different owners."* Fit
   criterion: a review completes on a repository under one organisation and a genuinely different one
   under another, one public and one private. Served by the same per-repository independence as
   RQA-FR-031 above — nothing in the loop distinguishes a public repository from a private one, an
-  owner from another owner, or reads any cross-repository state. Steps: 2. Tests: T5, T6, T21.
+  owner from another owner, or reads any cross-repository state. Steps: 2. Tests: T5, T6, T17.
 - **RQA-NFR-006** — *"One contributor shall be able to run the complete review workflow locally, with
   no central hosting, tenancy or SaaS functionality required."* Fit criterion: a policy or
   configuration change is applied and takes effect without any build or deployment step (shared with

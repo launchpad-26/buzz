@@ -37,7 +37,8 @@ class SupplyPort(Protocol):
     def reserve(self, plan: Plan, route: Route) -> Reservation | Refusal: ...
     def consumed(self, attempt: Attempt, reading: int | None, reservation: Reservation) -> Spend: ...
 
-# adapters.py — a route.harness resolves to an adapter; adapter_for is the only dispatch point.
+# adapters.py — adapter_for is the only dispatch point: a non-empty route.command resolves to the
+# generic external-command adapter, otherwise route.harness resolves to a built-in adapter.
 class HarnessAdapter(Protocol):
     enforceable_efforts: frozenset[str]
     role_separated_data: Literal[True]
@@ -104,7 +105,14 @@ obligation. Every valid verdict evaluates the whole bundle; that obligation sele
 
 Start with an empty `RouteCursor`, no counted families and no attempts. `finish(complete, reason)`
 captures UTC **after** the last attempt/consumption, appends one `panel` entry containing the attempt
-ids, completeness, reason and that `evidence_cutoff`, and returns the identical shared `PanelResult`.
+ids, completeness, reason, that `evidence_cutoff` and `bound_reached`, and returns the identical
+shared `PanelResult`.
+
+`bound_reached` is set the first time `supply.reserve` returns any `Refusal` and is never cleared —
+**including `Refusal(fallback)`, which resumes candidate selection**. RQA-FR-039's fit criterion is
+"no review run in which a configured bound was reached ends in a successful disposition, independent
+of which of RQA-FR-022's three outcomes it produced instead", so taking the configured fallback is
+permitted while a successful outcome afterwards is not; P-07 §3 step 10 enforces that.
 
 For each candidate selection:
 
@@ -136,6 +144,12 @@ protocol and verdict paths; it supplies no RQA/GitHub credentials. Every registe
 declare `role_separated_data is True`, use its provider's instruction/data roles, and identify the
 published injection-conformance suite it passed. An adapter without that channel separation or with
 a failing conformance suite is absent from the registry, not a degraded route.
+
+**A harness RQA ships no adapter for runs through the generic external-command adapter** built from
+`route.command`: RQA appends the bundle directory, the immutable protocol instruction and the verdict
+output path exactly as it does for a built-in, and classifies the result by the same table below. It
+is admitted only when its clean/adversarial conformance run passes, which is the same bar every
+built-in meets — the contract is the gate, and RQA's source is not (RQA-FR-030, AC15).
 
 | Condition | Classification |
 |---|---|
@@ -225,8 +239,10 @@ P-06 writes no lifecycle transition and does not mutate job status.
 | T12 | finite routes and terminal outcomes | termination within finite routes plus one retry per invoked route |
 | T13 | usage sidecar and separately none | consumption follows each invocation with the corresponding reservation |
 | T14 | every PR-derived field and arbitrary binary bytes | no PR byte appears outside an envelope |
+| T14b | a configured route whose harness has no built-in alias but carries a non-empty `command` | the generic external-command adapter runs it with the same bundle/protocol/output arguments and the same classification table; no RQA source change is required (RQA-FR-030, AC15) |
 | T15 | paired clean/adversarial diff, body and comment fixtures, including paraphrases, under every authority mode | identical non-defensive result; adversarial result contains a semantic `InjectionAttempt`; adapter registration fails otherwise |
 | T16 | bundle assembly failure | no attempt/final bundle; shared `BundleFailure` returned |
+| T4b | a per-model bound refuses the first reservation with `Refusal(fallback)` and the configured fallback then returns a valid verdict | the panel is complete, `bound_reached is True`, and the `panel` entry records it (RQA-FR-039) |
 | T17 | append fails for plan, bundle, attestation or panel | `AppendFailed` propagates |
 
 ## 9. Requirements this part answers for

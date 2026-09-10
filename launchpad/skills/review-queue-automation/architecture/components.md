@@ -108,7 +108,7 @@ flowchart LR
 
 **Responsibility.** Finds work and holds it. Fires on the timer, resolves each configured repository, admits nothing without a valid repo-local config, takes the exclusive runtime lock, reads the PR inventory, creates at most one job per `(repo, number, head_sha)`, detects a head change and asks P-02 to supersede the prior job, claims the GitHub-verified assignee lease, and hands the claimed job to P-02.
 
-**Interfaces.** Provides: E-21. Consumes: E-01, E-02. (Contracts in §6.)
+**Interfaces.** Provides: E-21. Consumes: E-01, E-02, E-03 (admission gate, `job=None`). (Contracts in §6.)
 
 **Accountable for (4).** RQA-BR-007, RQA-FR-031, RQA-NFR-004, RQA-NFR-006
 
@@ -123,7 +123,7 @@ flowchart LR
 
 **Responsibility.** The only part that changes a job's state. Owns the closed transition table, the mapping from internal states to the six FR-016 dispositions, the total ordering of outcome authority, the containment boundary that turns a persistence or audit failure into a safe stop, crash recovery, and resume from an escalation at the recorded step. Every transition is committed in one transaction with its `transition` entry in the record (E-13); a failed append is a failed transition. Fetches PR facts, diff, files and labels through E-23 and hands them to the parts that need them, so no part other than P-09 talks to GitHub and no part other than P-02 decides what a fact means for the job.
 
-**Interfaces.** Provides: E-02, E-17. Consumes: E-03, E-04, E-05, E-07, E-09, E-10, E-11, E-12, E-14, E-23. (Contracts in §6.)
+**Interfaces.** Provides: E-02, E-17. Consumes: E-03, E-04, E-05, E-07, E-09, E-10, E-11, E-12, E-13, E-14, E-23. (Contracts in §6.)
 
 **Accountable for (8).** RQA-BR-001, RQA-BR-010, RQA-FR-016, RQA-FR-027, RQA-FR-028, RQA-FR-038, RQA-NFR-007, RQA-NFR-010
 
@@ -138,7 +138,7 @@ flowchart LR
 
 **Responsibility.** Reads the repo-local configuration on every tick, validates it fail-closed against the schema and its semantic rules, derives the policy as a copy of the validated object, versions it, pins it by content hash into a snapshot activated atomically with last-known-good retention, and hands one snapshot per job to P-02. Writes the starter config on onboarding and never overwrites one.
 
-**Interfaces.** Provides: E-03, E-17. Consumes: -. (Contracts in §6.)
+**Interfaces.** Provides: E-03, E-17. Consumes: E-13. (Contracts in §6.)
 
 **Accountable for (6).** RQA-FR-003, RQA-FR-004, RQA-NFR-005, RQA-NFR-008, RQA-NFR-013, RQA-NFR-023
 
@@ -168,7 +168,7 @@ flowchart LR
 
 **Responsibility.** Decides who may be asked and how much may be spent, before anything is asked. Resolves a configured route per obligation through the alias registry given a `RouteCursor` of what has already been excluded — so a caller that advances the cursor is guaranteed a different answer or `Unavailable` — probes it through E-24, enforces the per-repository external-send grant and the per-change deny (a policy-named label in the fact set P-02 hands it, read from GitHub through E-23 and never as an instruction), walks the configured fallback ladder subscription-first and never past it, keeps provider families distinct, counts failures per scope into a breaker, reserves budget on every configured axis inclusively before a run and refuses as a value, and records consumption as `measured` or `estimated`.
 
-**Interfaces.** Provides: E-06, E-15. Consumes: E-24. (Contracts in §6.)
+**Interfaces.** Provides: E-06, E-15. Consumes: E-13, E-24. (Contracts in §6.)
 
 **Accountable for (11).** RQA-BR-012, RQA-FR-021, RQA-FR-022, RQA-FR-023, RQA-FR-024, RQA-FR-032, RQA-FR-039, RQA-NFR-009, RQA-NFR-012, RQA-NFR-027, RQA-NFR-029
 
@@ -183,7 +183,7 @@ flowchart LR
 
 **Responsibility.** The only part that invokes a harness with PR content. Plans regenerated obligations, owns the finite panel loop, obtains a fresh P-05 reservation immediately before every invocation (including the one transient retry), nonce-envelopes every PR byte, enforces the E-19 provider-role/injection-conformance contract, validates each verdict, attests and reports every attempt, then records and returns one `PanelResult` whose evidence cutoff is captured after the final attempt. Built-in and external adapters satisfy the same contract.
 
-**Interfaces.** Provides: E-07. Consumes: E-06, E-08, E-15, E-19. (Contracts in §6.)
+**Interfaces.** Provides: E-07. Consumes: E-06, E-08, E-13, E-15, E-19. (Contracts in §6.)
 
 **Accountable for (7).** RQA-FR-019, RQA-FR-030, RQA-NFR-001, RQA-NFR-002, RQA-NFR-003, RQA-NFR-014, RQA-NFR-015
 
@@ -198,7 +198,7 @@ flowchart LR
 
 **Responsibility.** Deterministically judges exactly planned plus carried obligations. Uses the post-panel `PanelResult.evidence_cutoff`, captured GitHub checks, seven evidence states and multi-category findings; corroborates ordinary findings; turns every reported injection attempt or broken envelope into an immediately blocking `evidence` finding; and attributes failures to PR/base. It selects only exact, non-substantive, policy-allowed remedies as candidates—the reviewer assertion is a veto, while P-10 proves the real diff behavior-equivalent. It computes assurance, never succeeds with an unsatisfied obligation, and materialises/records carry-only judgements without a harness call.
 
-**Interfaces.** Provides: E-09. Consumes: -. (Contracts in §6.)
+**Interfaces.** Provides: E-09. Consumes: E-13. (Contracts in §6.)
 
 **Accountable for (13).** RQA-BR-004, RQA-BR-008, RQA-BR-009, RQA-BR-014, RQA-FR-009, RQA-FR-010, RQA-FR-011, RQA-FR-014, RQA-FR-015, RQA-FR-036, RQA-FR-037, RQA-NFR-016, RQA-NFR-031
 
@@ -213,7 +213,7 @@ flowchart LR
 
 **Responsibility.** One fail-closed gate for six activities: pinned policy plus repository capability proof. Remediation receives the finding's full non-empty category set and grants only when every member is system-mechanical and policy-allowed. No snapshot, no grant. The only credential is ephemeral `gh auth token` (ADR-E); RQA confines what it exercises and records the broader-token residual.
 
-**Interfaces.** Provides: E-04. Consumes: E-16, E-22. (Contracts in §6.)
+**Interfaces.** Provides: E-04. Consumes: E-13, E-16, E-22. (Contracts in §6.)
 
 **Accountable for (7).** RQA-NFR-017, RQA-NFR-018, RQA-NFR-019, RQA-NFR-024, RQA-NFR-025, RQA-NFR-026, RQA-NFR-030
 
@@ -228,7 +228,7 @@ flowchart LR
 
 **Responsibility.** All GitHub traffic. Reads coherent facts including exact head target/protection, full PR and predecessor-to-current diffs, immutable check observation times, and submitted review actor/outcome/head/time. Writes review, comment, merge and assignee lease under activity-bound grants, with deterministic mutation ids and visibility checks. Performs P-08 capability probes.
 
-**Interfaces.** Provides: E-01, E-12, E-14, E-16, E-23. Consumes: E-18. (Contracts in §6.)
+**Interfaces.** Provides: E-01, E-12, E-14, E-16, E-23. Consumes: E-13, E-18. (Contracts in §6.)
 
 **Accountable for (2).** RQA-FR-029, RQA-NFR-011
 
@@ -243,7 +243,7 @@ flowchart LR
 
 **Responsibility.** Under a remediation grant and pinned snapshot, validates fork/protection policy and an exact PR-head target before work, rejects non-file/traversal/glob/symlink paths, runs only a closed formatter on exact changed files in an isolated worktree, proves the actual before/after diff behavior-equivalent with the registered language oracle, checks scope/fixpoint, and pushes one commit only to that PR head branch—never force, merge, protected head, disallowed fork, or another ref. Cleans every exit (ADR-G).
 
-**Interfaces.** Provides: E-10. Consumes: E-20, E-26. (Contracts in §6.)
+**Interfaces.** Provides: E-10. Consumes: E-13, E-20, E-26. (Contracts in §6.)
 
 **Accountable for (4).** RQA-BR-006, RQA-FR-017, RQA-NFR-020, RQA-NFR-021
 
@@ -258,7 +258,7 @@ flowchart LR
 
 **Responsibility.** The human seam. Raises a durable escalation naming one of the five FR-026 causes, never pushes a notification, indexes what is pending, and records a human decision — actor, basis, the obligation it substantiates — as an entry P-02 resumes from. A behaviour-changing finding is an escalation; a routine condition never is.
 
-**Interfaces.** Provides: E-11, E-17. Consumes: -. (Contracts in §6.)
+**Interfaces.** Provides: E-11, E-17. Consumes: E-13. (Contracts in §6.)
 
 **Accountable for (6).** RQA-BR-011, RQA-BR-013, RQA-FR-013, RQA-FR-025, RQA-FR-026, RQA-NFR-033
 
@@ -271,7 +271,7 @@ flowchart LR
 **Justification (RQA-FR-034).** Serves RQA-FR-013, RQA-FR-025, RQA-FR-026, RQA-BR-011, RQA-BR-013, RQA-NFR-033. Simpler alternative rejected: folding into P-02 puts the human interface inside the state machine; the decision must be a recorded fact P-02 evaluates, not a transition a human triggers. Constraint: C5 (the human reaches it through the local CLI).
 ### P-12 — Record
 
-**Responsibility.** The one review record: a closed thirteen-kind append-only hash chain per job, including bundle/panel cutoff evidence, attempts, judgement, grants, actions, escalations and decisions. Only P-12 performs storage writes; callers construct typed payloads. `explain` reconstructs FR-012 offline. ADR-F / [#2159](https://github.com/launchpad-26/buzz/issues/2159) governs optional operator-key HMAC; an absent key marks a segment unverifiable rather than blocking append. Trace remains non-authoritative.
+**Responsibility.** The one review record: a closed fourteen-kind append-only hash chain per job, including bundle/panel cutoff evidence, attempts, judgement, grants, actions, escalations and decisions. Only P-12 performs storage writes; callers construct typed payloads. `explain` reconstructs FR-012 offline. ADR-F / [#2159](https://github.com/launchpad-26/buzz/issues/2159) governs optional operator-key HMAC; an absent key marks a segment unverifiable rather than blocking append. Trace remains non-authoritative.
 
 **Interfaces.** Provides: E-13, E-17. Consumes: E-25. (Contracts in §6.)
 
@@ -288,7 +288,7 @@ flowchart LR
 
 **Responsibility.** Decides what a new head may inherit and hands the evidence forward. Given the predecessor job's record, the changed paths and the snapshot, marks an obligation regenerated when a changed path matches one of its globs (through the protocol's one matcher), when the protocol or policy pin moved, when the predecessor did not have it `verified`, or when it is new; every other obligation is reused as `CarriedEvidence` pointing at the predecessor's judgement and attestations. Records both sets with a reason per obligation. It does not judge: P-07 consumes the carry-over.
 
-**Interfaces.** Provides: E-05. Consumes: -. (Contracts in §6.)
+**Interfaces.** Provides: E-05. Consumes: E-13. (Contracts in §6.)
 
 **Accountable for (5).** RQA-FR-005, RQA-FR-006, RQA-FR-007, RQA-FR-018, RQA-FR-020
 
@@ -364,7 +364,7 @@ part` is exactly one `P-NN`, or one of the two carriers named in §1. The gap de
 | RQA-FR-023 | P-05 | P-06 | fit |
 | RQA-FR-024 | P-05 | P-06 | fit |
 | RQA-FR-038 | P-02 | P-05, P-12 | partial gap |
-| RQA-FR-039 | P-05 | P-02 | conflicting |
+| RQA-FR-039 | P-05 | P-02, P-06, P-07 | conflicting |
 | RQA-NFR-009 | P-05 | P-03 | fit |
 | RQA-NFR-010 | P-02 | P-12 | conflicting |
 | RQA-FR-004 | P-03 | P-01 | fit |
@@ -417,7 +417,7 @@ reaches the outside only through E-18, E-19, E-20, E-22, E-24, E-25 or E-26.
 |---|---|---|---|---|---|
 | E-01 | P-01 | P-09 | `inventory(repo)`; `claim_lease(job)`; `release_lease(job)` | open pull requests with head SHA, base ref, author, labels; the assignee-lease claim and release as fixed mutation kinds | in-process calls; P-09 performs the GraphQL read and the idempotent assignee writes |
 | E-02 | P-01 | P-02 | `admit(job)` | a queued job: `(repo, number, head_sha)` and the inventory facts that created it; no lease yet | in-process call before any GitHub write; the lease is claimed at step 4 under the `review` grant |
-| E-03 | P-02 | P-03 | `snapshot_for(repo, job)` | the pinned snapshot: content hash, validated policy, six activity grants, provider permission, mechanical tool set | in-process call; pinned once per job, re-read never |
+| E-03 | P-02, P-01 | P-03 | `snapshot_for(repo, job)` | the pinned snapshot: content hash, validated policy, six activity grants, provider permission, mechanical tool set | in-process call; P-02 pins once per job and never re-reads. P-01 calls it at admission with `job=None` — the fail-closed config gate that admits nothing without a valid repo-local policy (`P-01-intake.md` §3) — and never pins |
 | E-04 | P-02 | P-08 | `grant(repo, activity, snapshot, categories?)` | `Grant` or `Deny`; the complete non-empty category set is required only for remediation | before every activity; never cached across actions |
 | E-05 | P-02 | P-13 | `carry_over(job, prior, facts, snapshot, record)` | `CarryOver`: `reused` as `CarriedEvidence` (obligation, VERIFIED, source job, source judgement seq, attestation ids), `regenerated` ids, a reason per obligation | in-process call when a job has a predecessor; without one every obligation is `regenerated` with reason `no_predecessor` |
 | E-06 | P-06 | P-05 | `route(job, obligation, snapshot, facts, cursor, ...)`; `reserve(job, plan, route, snapshot, ...)` | `(Route, RouteCursor)` or `RouteUnavailable`; `Reservation` or `Refusal`. Cursor growth makes fallback finite | in-process through `SupplyPort`; P-06 obtains a fresh reservation immediately before every invocation, including transient retry |
@@ -431,7 +431,7 @@ reaches the outside only through E-18, E-19, E-20, E-22, E-24, E-25 or E-26.
 | E-14 | P-02 | P-09 | `checks(repo, sha)` for `head_sha` and `merge_base_sha`, assembled into `Facts.checks` / `Facts.base_checks` | canonical `CheckConclusion` per check; `FAILING`, `UNSETTLED` and `PASSING` sets are the protocol for attribution and corroboration alike | in-process call inside E-23; ETag-cached REST reads. P-07 reads the result from `Facts`, it does not call GitHub |
 | E-15 | P-06 | P-05 | `consumed(job, attempt, reading, reservation, ...)` | `Spend(tokens, measured, source)`; a reservation is never written as a spend | in-process call after each attempt, through `SupplyPort` |
 | E-16 | P-08 | P-09 | `probe(repo, credential)` | proven scopes on that repository: the activities the credential can actually perform there | in-process call; REST capability probe per job, cached in `capabilities` for the job |
-| E-17 | operator | P-02 / P-12 / P-11 / P-03 | `status`; `explain`; `decide`; `onboard` | CLI commands: FR-016 disposition and reason; FR-012 reconstruction; a named decision with basis; a starter config | the CLI on the operator machine; the only human interface |
+| E-17 | operator | P-02 / P-12 / P-11 / P-03 | `status`; `explain`; `decide`; `escalations` (P-11 `pending`); `onboard` | CLI commands: FR-016 disposition and reason; FR-012 reconstruction; a named decision with basis; a starter config | the CLI on the operator machine; the only human interface |
 | E-18 | P-09 | GitHub | REST v3 and GraphQL v4 | reads: PRs, checks, files; writes: reviews, comments, merges, assignees | HTTPS with the operator's `gh auth token` credential (ADR-E) |
 | E-19 | P-06 | review harness | published role-separated interaction and injection-conformance contract | in: nonce-enveloped bundle as data, immutable protocol instruction, output path; out: verdict with mandatory `injection_attempts`; probe writes nothing | process execution; adapters failing paired clean/adversarial conformance are not registered |
 | E-20 | P-10 | GitHub | git smart HTTP | fetch of the PR head; push to the PR head branch only | git transport with the operator's `gh auth token` credential; `--force` never passed |

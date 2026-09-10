@@ -113,8 +113,11 @@ ties, and reads neither clock, filesystem, configuration, environment, network, 
    assurance shortfall. Deduplicate causes in first-occurrence order.
 10. Select disposition in order: blocking finding → `request_changes`; behavior-changing finding or
     escalation cause → `escalate`; remediation candidate → `remediate`; otherwise `approve`.
-    Approval requires every universe member verified, achieved assurance, and no injection/envelope/
-    suspicious-clean finding. An empty carry-only panel follows the same computation and records a
+    Approval requires every universe member verified, achieved assurance, no injection/envelope/
+    suspicious-clean finding, **and `panel.bound_reached is False`**. A run whose panel reports
+    `bound_reached` adds `EVIDENCE_GAP` at step 9 and therefore escalates rather than approving —
+    RQA-FR-039's "never a successful outcome", enforced on the disposition rather than assumed from
+    the supply refusal. An empty carry-only panel follows the same computation and records a
     current-job judgement.
 11. Construct the shared `Judgement`, including `reused_from`, append the §6 payload, and return it.
 
@@ -175,6 +178,7 @@ fake `RecordWriter`.
 | T6 | evidence depends only on pending check | `INCOMPLETE`; pending is not attributed/corroborating/blocking |
 | T7 | same failing check at head/base plus pending check | inherited excluded; pending ignored |
 | T7b | same-head resume facts contain a failing check completed after panel cutoff | excluded from attribution, corroboration and blocking |
+| T7c | an otherwise approvable judgement whose panel reports `bound_reached` | disposition is `escalate` with an `EVIDENCE_GAP` cause; `approve` is unreachable (RQA-FR-039, AC11) |
 | T8 | corroborated multi-category finding with one blocking category | blocking |
 | T9 | mechanical plus substantive categories | never remediation candidate |
 | T10 | otherwise mechanical with assertion `None` or `True` | not a candidate |

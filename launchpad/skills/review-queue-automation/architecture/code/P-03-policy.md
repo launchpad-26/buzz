@@ -55,7 +55,10 @@ notices at admission.
 
 ```
 authority:   { review, comment, approve, request_changes, remediate, merge }   each true/false, default false
-routes:      ordered list of { harness, model, provider, family, external: bool }, first is preferred, rest are fallbacks
+routes:      ordered list of { harness, model, provider, family, external: bool, command?: [str] },
+             first is preferred, rest are fallbacks. `command` is the operator-declared argv for a
+             harness RQA ships no alias for; it is REQUIRED for such a route and REJECTED for a
+             built-in alias. Each element is a non-empty string; the first is the executable
 external:    { allowed: bool, deny_label: "<label>" }
 policy:      { version, obligations: [ { id, paths, required_for, evidence } ],
                blocking: { categories, severities, corroboration },

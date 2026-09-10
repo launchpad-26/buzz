@@ -389,7 +389,10 @@ type, not a P-02 type. The same `deps.record` instance is passed to every call t
 
 ## 5. Store
 
-This part owns no table's DDL. It writes exactly one column of a table P-01 creates, and reads
+This part owns no table's DDL. It writes `jobs.status` on every transition and `jobs.snapshot_hash`
+exactly once — immediately after a successful first E-03 pin, in the same transaction as that
+transition (`P-03-policy.md` §3, E-03 step 9: "the caller, not `rqa.policy`, writes
+`job.snapshot_hash`"). No other part writes either column. It also reads
 three tables two other parts own, using the schemas already published in `container.md` §5 and
 `P-12-record.md` §5 (shown below for reference, not redefinition).
 
@@ -403,7 +406,7 @@ CREATE TABLE jobs (
   base_sha        TEXT NOT NULL,
   predecessor_job TEXT,
   snapshot_hash   TEXT,
-  status          TEXT NOT NULL      -- the only column this part writes
+  status          TEXT NOT NULL      -- this part writes this column, and `snapshot_hash` once (below)
 );
 -- P-01's tables; shown for reference.
 CREATE TABLE pr_facts (repo TEXT NOT NULL, number INTEGER NOT NULL, head_sha TEXT NOT NULL, ...);
