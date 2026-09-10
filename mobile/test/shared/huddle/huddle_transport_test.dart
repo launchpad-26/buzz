@@ -159,7 +159,11 @@ void main() {
       expect(transport.state.peers[2]?.pubkey, 'replacement');
 
       channel.emitText(
-        jsonEncode({'type': 'roster', 'revision': 5, 'peers': const []}),
+        jsonEncode({
+          'type': 'roster',
+          'revision': 5,
+          'peers': const <dynamic>[],
+        }),
       );
       await Future<void>.delayed(Duration.zero);
       expect(transport.state.rosterRevision, 6);

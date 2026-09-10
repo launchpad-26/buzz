@@ -121,7 +121,7 @@ class EmojiDataset {
         // Older committed assets used one string; accept that shape so the
         // parser remains safe while generated assets move to all skin variants.
         final natives = switch (record['u']) {
-          final List values => values.cast<String>(),
+          final List<dynamic> values => values.cast<String>(),
           final String value => [value],
           _ => const <String>[],
         };

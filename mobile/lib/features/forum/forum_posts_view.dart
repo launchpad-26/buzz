@@ -41,7 +41,8 @@ class ForumPostsView extends HookConsumerWidget {
 
     // Periodic refresh (every 15s, matching desktop).
     useEffect(() {
-      final timer = Stream.periodic(const Duration(seconds: 15)).listen((_) {
+      final stream = Stream<void>.periodic(const Duration(seconds: 15));
+      final timer = stream.listen((_) {
         ref.invalidate(forumPostsProvider(channel.id));
       });
       return timer.cancel;

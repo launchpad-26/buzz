@@ -165,7 +165,8 @@ class MessageContent extends HookConsumerWidget {
         ? channelNames
         : <String, String>{
             for (final channel
-                in ref.watch(channelsProvider).asData?.value ?? const [])
+                in ref.watch(channelsProvider).asData?.value ??
+                    const <Channel>[])
               channel.name.toLowerCase(): channel.id,
           };
     final resolvedChannelTap =

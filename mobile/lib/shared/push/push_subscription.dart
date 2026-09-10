@@ -169,7 +169,9 @@ class BuzzPushSubscription {
       ],
       suppress: suppress == null
           ? null
-          : BuzzPushSuppression.fromJson(Map<String, dynamic>.from(suppress)),
+          : BuzzPushSuppression.fromJson(
+              Map<String, dynamic>.from(suppress as Map<dynamic, dynamic>),
+            ),
     );
   }
 }

@@ -174,11 +174,11 @@ void main() {
               'created_at': 100,
               'channel_id': 'c1',
               'channel_name': 'general',
-              'tags': [],
+              'tags': <dynamic>[],
               'category': 'mention',
             },
           ],
-          'needs_action': [],
+          'needs_action': <dynamic>[],
           'activity': [
             {
               'id': 'a1',
@@ -188,11 +188,11 @@ void main() {
               'created_at': 200,
               'channel_id': 'c2',
               'channel_name': 'dev',
-              'tags': [],
+              'tags': <dynamic>[],
               'category': 'activity',
             },
           ],
-          'agent_activity': [],
+          'agent_activity': <dynamic>[],
         },
         'meta': {'since': 0, 'total': 2, 'generated_at': 300},
       });
