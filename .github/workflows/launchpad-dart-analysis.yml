@@ -1,0 +1,194 @@
+name: launchpad — Dart analysis (Semgrep spike)
+
+# Implements the Semgrep leg of ADR-0058
+# (launchpad/decisions/ADR-0058-dart-flutter-static-analysis-coverage.md, #2149),
+# tracked as launchpad-26/buzz#2165. The `dart analyze`/`flutter analyze` leg of
+# that ADR already ships unconditionally via ci.yml's `mobile` job (strict-mode
+# analyzer options added in mobile/analysis_options.yaml by this same PR) — this
+# file is only the second leg: `semgrep --config=p/dart` as an advisory
+# validation spike, not a settled coverage claim.
+#
+# Why a separate file rather than a job in ci.yml: ADR-0058's own Follow-up
+# section names this exact path
+# (.github/workflows/launchpad-dart-analysis.yml), and launchpad/AGENTS.md §3
+# requires new workflows to be named `launchpad-*.yml` so they never collide
+# with an upstream file of the same name — ci.yml is upstream's file, and this
+# fork prefers a fork-owned addition over an in-place edit to it where one is
+# available (AGENTS.md §3, ADR-0043).
+#
+# ============================================================================
+# VALIDATION SPIKE — real findings, not a projection (run 2026-09-11)
+# ============================================================================
+# This is the record ADR-0058 and #2165's Definition of Done both require:
+# which Dart rules from `p/dart` actually executed against this codebase, what
+# they cover, and what the gaps are. It was produced by actually installing
+# Semgrep (`pip install semgrep`, resolved 1.176.1) and running it against
+# this checkout's mobile/ tree — not by reading Semgrep's marketing copy.
+#
+# FINDING 1 — `p/dart` does not currently exist in Semgrep's public registry.
+#   Command run:
+#     semgrep --config=p/dart mobile/
+#   Raw output:
+#     [ERROR] Failed to download configuration from https://semgrep.dev/c/p/dart HTTP 404.
+#     running 0 rules from 0 configs  (1 config error)
+#     [ERROR] invalid configuration file found (1 configs were invalid)
+#   This is the literal command ADR-0058 and #2165 both specify. As of this
+#   run it fails outright — not "finds nothing", but cannot even resolve a
+#   ruleset. Checked adjacent names in case `p/dart` was simply renamed:
+#   p/dart-security, p/flutter, p/dart2, p/experimental — all 404. Checked
+#   the community rules source directly: `gh api
+#   repos/semgrep/semgrep-rules/contents/dart` returns 404 (no such
+#   directory) — there is no published Dart ruleset anywhere in Semgrep's
+#   open registry today, curated or community.
+#
+# FINDING 2 — the Dart *language* (parser) itself works correctly.
+#   `semgrep show supported-languages` lists `dart`, confirming
+#   semgrep/semgrep-dart (the tree-sitter-based parser ADR-0058 cites) is
+#   wired into this Semgrep build. A hand-written smoke-test rule matching a
+#   literal pattern (`import 'package:flutter/material.dart';`) against
+#   mobile/lib found 121 correct matches across 376 tracked Dart files, 100%
+#   parsed, no crashes or skipped files. So the gap in Finding 1 is a content
+#   gap (no rules published), not a parser gap — this job will start
+#   producing real findings the moment Semgrep publishes a Dart ruleset,
+#   with no change needed here.
+#
+# FINDING 3 — Dart's pattern-matching support is itself incomplete, beyond
+#   the missing ruleset. A second smoke-test rule using ellipsis-in-braces
+#   syntax that works in every GA language here (`class $X { ... }`) failed
+#   with `PatternParseError: Stdlib.Parsing.Parse_error` — basic
+#   metavariable/ellipsis constructs are not fully supported for Dart yet.
+#   Literal and simple patterns work (Finding 2); anything reaching for
+#   Semgrep's more expressive pattern DSL may not.
+#
+# WHAT THIS MEANS FOR COVERAGE (explicit, per ADR-0058 and #2165's DoD):
+#   - Vulnerability classes covered by `p/dart` today: NONE. Zero rules
+#     execute. This is not "thin experimental coverage" — it is currently no
+#     coverage at all from this tool.
+#   - This is NOT CodeQL-equivalent, and NOT even the "thinner but real"
+#     coverage ADR-0058's Consequences section anticipated. That section's
+#     caveat undersold the actual gap; this comment is the corrected record.
+#   - False positive/negative patterns: not assessable yet — no rules ran to
+#     produce findings to judge. Finding 3 is the closest analogue: expect
+#     Semgrep's own custom-rule authoring for Dart to be limited until its
+#     pattern-DSL support matures, which bears on any future in-repo custom
+#     rules as much as on the registry.
+#   - `dart analyze`/`flutter analyze` (ci.yml's `mobile` job, now running
+#     with strict-casts/strict-inference/strict-raw-types) remains the only
+#     Dart static-analysis signal with real content today. This job exists so
+#     that the day Semgrep ships Dart rules, coverage improves automatically
+#     instead of needing a human to notice and re-wire it.
+#
+# This job is deliberately left wired to the live `p/dart` config (not
+# vendored or hardcoded) so that if/when Semgrep publishes real Dart rules,
+# this workflow starts finding things with zero further changes — the whole
+# point of a validation spike is to re-check for free, not to freeze today's
+# empty result as permanent. continue-on-error is set at the job level for
+# exactly this reason: the expected outcome for the foreseeable future is a
+# config-fetch error, and that must never block a PR or read as a broken
+# check — advisory, not required, matching launchpad-codeql.yml's own
+# precedent for a first run against a codebase this size.
+#
+# Scope: mobile/ only (the Flutter app's Dart source) — analysis_options.yaml
+# excludes build/android/ios/web/windows/macos/linux the same way, and there
+# is no other first-class Dart source tree in this repo.
+#
+# Triggers mirror launchpad-codeql.yml: pull_request for fast feedback,
+# push to launchpad for a post-merge baseline, schedule (off-hour, same
+# convention as launchpad-security-audit.yml's 03:17 UTC / launchpad-codeql's
+# 04:41 UTC crons) to catch a newly-published ruleset even with no mobile/
+# changes in flight, workflow_dispatch for manual reruns.
+on:
+  pull_request:
+    paths:
+      - "mobile/**"
+      - ".github/workflows/launchpad-dart-analysis.yml"
+  push:
+    branches: [launchpad]
+    paths:
+      - "mobile/**"
+  schedule:
+    - cron: "53 4 * * 1"
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+
+jobs:
+  semgrep-dart:
+    name: Semgrep (p/dart, advisory)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    # Advisory only — see the header comment. This is expected to report a
+    # config-fetch error today (Finding 1) rather than pass/fail on findings,
+    # and must never gate a PR on that expected state.
+    continue-on-error: true
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+        with:
+          persist-credentials: false
+
+      # Pinned to the exact version validated in the header comment above, so
+      # a future run's findings can be compared against a known baseline
+      # rather than an unpinned "whatever shipped today". Bump deliberately,
+      # not via renovate, and re-run the validation spike when you do.
+      - name: Install Semgrep
+        run: pip install "semgrep==1.176.1"
+
+      # Never fails the step on Semgrep's own exit code (findings, or the
+      # config-fetch error Finding 1 documents) — `set +e` plus the job-level
+      # continue-on-error both express "advisory", the second so the check
+      # still shows accurately in the PR checks list rather than as a hard
+      # failure, the first so later steps (summary, artifact upload) still
+      # run even when Semgrep exits non-zero. `--json-output` writes the
+      # machine-readable copy to a file while leaving stdout as Semgrep's
+      # normal human-readable log (verified locally: a config-fetch failure
+      # still produces a valid, if empty, JSON file — see Finding 1).
+      - name: Run semgrep --config=p/dart
+        id: semgrep
+        run: |
+          set +e
+          semgrep --config=p/dart mobile/ \
+            --json-output=semgrep-dart-results.json
+          echo "exit_code=$?" >> "$GITHUB_OUTPUT"
+          true
+
+      - name: Summarize result
+        if: always()
+        run: |
+          {
+            echo "### Semgrep \`p/dart\` — advisory Dart security scan"
+            echo
+            echo "Exit code: \`${{ steps.semgrep.outputs.exit_code }}\`"
+            echo
+            if [ -f semgrep-dart-results.json ]; then
+              findings=$(jq '.results | length' semgrep-dart-results.json)
+              scanned=$(jq '.paths.scanned | length' semgrep-dart-results.json)
+              errcount=$(jq '.errors | length' semgrep-dart-results.json)
+              echo "Findings: **${findings}**"
+              echo "Files scanned: **${scanned}**"
+              if [ "${errcount}" != "0" ]; then
+                echo "Errors: **${errcount}**"
+                jq -r '.errors[] | "- `" + .type + "`: " + .message' semgrep-dart-results.json
+              fi
+            else
+              echo "No results file was produced at all — something failed before"
+              echo "Semgrep could write output, which is a different, worse state"
+              echo "than the expected config-fetch error. Check the raw job log."
+            fi
+            echo
+            echo "This check is advisory and never blocks a PR — see the workflow"
+            echo "file's header comment for the full validation-spike record behind"
+            echo "that posture (ADR-0058, launchpad-26/buzz#2165)."
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload raw Semgrep output
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: semgrep-dart-results
+          path: semgrep-dart-results.json
+          if-no-files-found: ignore
+          retention-days: 30

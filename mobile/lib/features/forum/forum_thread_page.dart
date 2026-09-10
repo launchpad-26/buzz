@@ -46,7 +46,8 @@ class ForumThreadPage extends HookConsumerWidget {
 
     // Periodic refresh (every 10s, matching desktop).
     useEffect(() {
-      final timer = Stream.periodic(const Duration(seconds: 10)).listen((_) {
+      final stream = Stream<void>.periodic(const Duration(seconds: 10));
+      final timer = stream.listen((_) {
         ref.invalidate(
           forumThreadProvider((channelId: channelId, eventId: postEventId)),
         );

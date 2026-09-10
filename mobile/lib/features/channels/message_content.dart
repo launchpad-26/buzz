@@ -25,6 +25,7 @@ import '../../shared/custom_emoji/custom_emoji_provider.dart';
 import '../../shared/custom_emoji/custom_emoji_render.dart';
 import '../../shared/emoji/emoji_data_provider.dart';
 import '../../shared/emoji/emoji_only.dart';
+import 'channel.dart';
 import 'channels_provider.dart';
 import 'media_viewer_page.dart';
 import 'message_content/link_normalizer.dart';
@@ -165,7 +166,8 @@ class MessageContent extends HookConsumerWidget {
         ? channelNames
         : <String, String>{
             for (final channel
-                in ref.watch(channelsProvider).asData?.value ?? const [])
+                in ref.watch(channelsProvider).asData?.value ??
+                    const <Channel>[])
               channel.name.toLowerCase(): channel.id,
           };
     final resolvedChannelTap =

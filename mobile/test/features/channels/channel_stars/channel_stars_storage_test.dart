@@ -36,7 +36,10 @@ void main() {
     test('empty / missing channels yields empty store', () {
       expect(ChannelStarStore.fromJson({'version': 1}).channels, isEmpty);
       expect(
-        ChannelStarStore.fromJson({'version': 1, 'channels': {}}).channels,
+        ChannelStarStore.fromJson({
+          'version': 1,
+          'channels': <String, dynamic>{},
+        }).channels,
         isEmpty,
       );
     });
