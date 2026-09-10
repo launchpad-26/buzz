@@ -3,7 +3,7 @@
  * #552 step 7.
  *
  * Unlike corpusNodes.test.mjs (pure logic over synthetic fixtures), this
- * file imports the REAL generated/corpus.json this panel actually ships,
+ * file imports the REAL desktop/public/knowledge-corpus.json this panel ships,
  * the same way corpus/tests/test_package.py's DriftGuardTest and
  * knowledge/src/lib.rs's own tests read the real committed artifact rather
  * than a fixture -- there is no substitute for checking the thing that
@@ -18,9 +18,11 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 
-import corpusJson from "./generated/corpus.json" with { type: "json" };
+import corpusJson from "../../../../public/knowledge-corpus.json" with {
+  type: "json",
+};
 
-describe("the desktop copy of generated/corpus.json", () => {
+describe("the desktop copy at public/knowledge-corpus.json", () => {
   it("is non-trivially populated, not the empty scaffold", () => {
     assert.ok(Array.isArray(corpusJson));
     assert.ok(corpusJson.length > 1);

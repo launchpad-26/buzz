@@ -8,7 +8,7 @@
 // Checks the three build-configuration files BY NAME, not a broad sweep, for
 // any reference to launchpad/project-intelligence/corpus -- the pipeline's
 // own directory. The generated JSON asset the Settings panel imports lives
-// at a different path (desktop/src/launchpad/settings/knowledge/generated/)
+// at a different path (desktop/public/knowledge-corpus.json, see #2172)
 // and is referenced only as a relative import, so a legitimate build never
 // needs to name the pipeline directory at all -- any occurrence is the
 // violation this guard exists to catch.

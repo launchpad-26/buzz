@@ -6,7 +6,7 @@
  *
  * The corpus artifact itself is produced out-of-band by
  * launchpad/project-intelligence/corpus/package.py and committed at
- * ./generated/corpus.json -- this module only reads it, per
+ * desktop/public/knowledge-corpus.json -- this module only reads it, per
  * launchpad/crates/knowledge/AGENTS.md's "one rule".
  */
 

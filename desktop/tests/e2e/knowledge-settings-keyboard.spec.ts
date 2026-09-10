@@ -2,7 +2,7 @@ import { expect, test } from "@playwright/test";
 
 import { installMockBridge } from "../helpers/bridge";
 import { openSettings } from "../helpers/settings";
-import corpusJson from "../../src/launchpad/settings/knowledge/generated/corpus.json" with {
+import corpusJson from "../../public/knowledge-corpus.json" with {
   type: "json",
 };
 import { humanizeCorpusType } from "../../src/launchpad/settings/knowledge/corpusNodes";

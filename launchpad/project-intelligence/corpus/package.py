@@ -23,14 +23,26 @@ from pathlib import Path
 DEFAULT_CORPUS_ROOT = "launchpad/docs/corpus"
 
 # Two committed copies from the same generation run: the crate's own copy,
-# and an identical desktop-facing copy the Settings panel imports directly
+# and an identical desktop-facing copy the Settings panel loads at runtime
 # (step 5, launchpad/plans/2026-08-28-issue-552-knowledge-crate-corpus.md) --
 # a static asset rather than new Tauri IPC wiring, since #551's own AGENTS.md
 # leaves the crate unreachable from desktop/src-tauri without editing a file
 # ADR-0045's granted exception does not cover.
+#
+# THE DESKTOP COPY LIVES IN desktop/public/, NOT UNDER desktop/src/, AND THAT
+# PLACEMENT IS load-bearing (#2172). This artifact is generated documentation
+# describing the whole repository, so it contains literal instances of strings
+# the repository's own scanners look for -- among them two corpus nodes that
+# document ci.yml's dead-token-guard and quote its pattern verbatim. Inside
+# desktop/src/ the guard read the corpus as client source and failed; the same
+# would be true of any future scanner over that tree, so exempting one scanner
+# would only postpone it. desktop/public/ is outside every source-code path
+# those guards scan (`desktop/src/ desktop/tests/ mobile/test/ mobile/lib/
+# .env.example`), and Vite copies it to the bundle root unchanged. Moving this
+# back under desktop/src/ reintroduces #2172.
 DEFAULT_OUTPUTS = (
     "launchpad/crates/knowledge/generated/corpus.json",
-    "desktop/src/launchpad/settings/knowledge/generated/corpus.json",
+    "desktop/public/knowledge-corpus.json",
 )
 
 # package.py lives in a directory (project-intelligence/corpus/) that isn't a

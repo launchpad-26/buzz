@@ -17,6 +17,20 @@ import {
 } from "./corpusNodes";
 
 /**
+ * The packaged corpus, served as a static asset from `desktop/public/` rather
+ * than imported from under `desktop/src/`. That placement is load-bearing, not
+ * incidental (#2172): the artefact is generated documentation describing this
+ * whole repository, so it contains literal instances of strings the
+ * repository's own scanners search for -- including two corpus nodes that
+ * document `ci.yml`'s `dead-token-guard` and quote its pattern verbatim. Under
+ * `desktop/src/` that guard read the corpus as client source and failed, and
+ * so would any future scanner over that tree. `desktop/public/` sits outside
+ * every path those guards scan, and Vite copies it to the bundle root
+ * unchanged. Do not move this back under `desktop/src/`.
+ */
+const CORPUS_ASSET_URL = "/knowledge-corpus.json";
+
+/**
  * Renders one representative node per corpus `type` present in the packaged
  * data (#552). Groups over whatever `type` values actually appear, not a
  * hardcoded list, so a future `capabilities`/`operations` node renders the
@@ -36,18 +50,22 @@ import {
  *
  * The committed, packaged corpus (#552) -- produced out-of-band by
  * launchpad/project-intelligence/corpus/package.py, never re-derived here.
- * See launchpad/crates/knowledge/AGENTS.md's "one rule". Loaded via a
- * dynamic `import()` on mount, not a top-level static import: the artefact
- * is multiple megabytes (204 nodes as of this writing, and growing with the
- * corpus), and a static import inlines it into whatever chunk eagerly loads
- * this module -- shipped to every user on cold start whether or not they
- * ever open Settings. A dynamic import puts it in its own chunk, fetched
- * only when this panel actually mounts (review-final finding on #552).
+ * See launchpad/crates/knowledge/AGENTS.md's "one rule". Fetched from
+ * CORPUS_ASSET_URL on mount, not imported: the artefact is multiple megabytes
+ * (719 nodes as of this writing, and growing with the corpus), and any import
+ * -- static or dynamic -- makes it a bundled chunk. As a static asset it is
+ * never parsed, never chunked, and never shipped to a user who does not open
+ * this panel. That preserves the cold-start property the original dynamic
+ * import was chosen for (review-final finding on #552) while also keeping the
+ * file out of desktop/src/, which is what #2172 required.
  *
- * A rejected chunk load (real after a desktop update replaces the on-disk
- * chunk files a still-open window has already resolved import specifiers
- * against) surfaces as an explicit error message rather than an unhandled
- * rejection plus a permanently empty panel with no explanation.
+ * A failed fetch -- a missing or unreadable asset after a desktop update
+ * replaces bundle files a still-open window is resolving against -- surfaces
+ * as an explicit error message rather than an unhandled rejection plus a
+ * permanently empty panel with no explanation. A non-2xx response is thrown
+ * explicitly, because fetch() resolves rather than rejects on 404 and would
+ * otherwise reach .json() and fail with a parse error naming the wrong
+ * cause.
  */
 function KnowledgeSettingsPanel() {
   const [corpusTypeGroups, setCorpusTypeGroups] = useState<
@@ -57,12 +75,17 @@ function KnowledgeSettingsPanel() {
 
   useEffect(() => {
     let cancelled = false;
-    import("./generated/corpus.json")
-      .then((module) => {
+    fetch(CORPUS_ASSET_URL)
+      .then((response) => {
+        if (!response.ok) {
+          throw new Error(`corpus asset responded ${response.status}`);
+        }
+        return response.json();
+      })
+      .then((nodes: CorpusNode[]) => {
         if (cancelled) {
           return;
         }
-        const nodes = module.default as CorpusNode[];
         setCorpusTypeGroups(groupNodesByType(nodes));
       })
       .catch(() => {

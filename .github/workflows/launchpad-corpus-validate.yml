@@ -28,7 +28,7 @@ on:
       - "launchpad/project-intelligence/requirements.txt"
       - "launchpad/docs/corpus/**"
       - "launchpad/crates/knowledge/generated/corpus.json"
-      - "desktop/src/launchpad/settings/knowledge/generated/corpus.json"
+      - "desktop/public/knowledge-corpus.json"
       - ".github/workflows/launchpad-corpus-validate.yml"
   push:
     branches: [launchpad]
@@ -37,7 +37,7 @@ on:
       - "launchpad/project-intelligence/requirements.txt"
       - "launchpad/docs/corpus/**"
       - "launchpad/crates/knowledge/generated/corpus.json"
-      - "desktop/src/launchpad/settings/knowledge/generated/corpus.json"
+      - "desktop/public/knowledge-corpus.json"
       - ".github/workflows/launchpad-corpus-validate.yml"
 
 # Read-only. These are pure unit tests plus a read-only validation scan: no
