@@ -1,5 +1,5 @@
 # Sourced by the generated .git/hooks/* dispatchers (see `rc:` in lefthook.yml)
-# before their $LEFTHOOK_BIN-first lookup. Two jobs, both anchored on the repo
+# before their $LEFTHOOK_BIN-first lookup. Three jobs, all anchored on the repo
 # root so they hold regardless of the hook's working dir:
 #   1. Pin dispatch to the Hermit-managed lefthook (bin/lefthook ->
 #      .lefthook-2.1.3.pkg) so a push from any worktree runs the pinned version
@@ -9,6 +9,20 @@
 #      the invoking shell had first (e.g. Homebrew flutter). This is the safe
 #      subset of `activate-hermit`: a plain PATH prepend, no interactive-shell
 #      machinery. It makes the hook self-pinning regardless of shell setup.
+#   3. Export CHECK_FILE_SIZES_BASE as this fork's real merge-base.
+#      scripts/check-file-sizes-core.mjs's own default falls back to
+#      `git merge-base origin/main HEAD` -- correct upstream, where `main` is
+#      the trunk, but this fork renamed its default branch to `launchpad` and
+#      `origin/main` is a disconnected leftover from before that rename. Diffing
+#      against it (or, worse, against the literal moving `origin/launchpad` ref
+#      with no merge-base at all) makes any file trunk changed after a branch
+#      was cut look like the branch grew it. Don't fix the branch name in that
+#      script -- it's shared with upstream block/buzz, where the default is
+#      genuinely correct. CHECK_FILE_SIZES_BASE is that script's own designed
+#      override for exactly this per-fork difference ("or set
+#      CHECK_FILE_SIZES_BASE to an explicit commit"); compute it here so every
+#      push gets it right without a human setting it by hand (and forgetting to
+#      unset it). An explicit override already set in the environment wins.
 _lefthook_root="$(git rev-parse --show-toplevel 2>/dev/null)"
 if [ -n "$_lefthook_root" ] && [ -d "$_lefthook_root/bin" ]; then
   PATH="$_lefthook_root/bin:$PATH"
@@ -17,5 +31,13 @@ if [ -n "$_lefthook_root" ] && [ -d "$_lefthook_root/bin" ]; then
     LEFTHOOK_BIN="$_lefthook_root/bin/lefthook"
     export LEFTHOOK_BIN
   fi
+fi
+if [ -z "$CHECK_FILE_SIZES_BASE" ] && [ -n "$_lefthook_root" ]; then
+  _fsb_base="$(git -C "$_lefthook_root" merge-base origin/launchpad HEAD 2>/dev/null)"
+  if [ -n "$_fsb_base" ]; then
+    CHECK_FILE_SIZES_BASE="$_fsb_base"
+    export CHECK_FILE_SIZES_BASE
+  fi
+  unset _fsb_base
 fi
 unset _lefthook_root
