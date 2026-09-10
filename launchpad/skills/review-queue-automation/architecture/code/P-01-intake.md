@@ -419,7 +419,7 @@ carve-out to `snapshot_hash`.
 
 **P-01 writes no record entries.** The closed fourteen kinds are `transition`, `plan`,
 `carry_over`, `bundle`, `attestation`, `spend`, `panel`, `judgement`, `grant`, `action`,
-`escalation`, `decision`, and `legacy`; none represents intake-owned state. Concretely:
+`escalation`, `decision`, `snapshot`, and `legacy`; none represents intake-owned state. Concretely:
 
 - Job creation and the `pr_facts` upsert are captured durably in `jobs`/`pr_facts` themselves — a
   plain SQLite write, not an append-only ledger entry — and neither discards a fact a reader needs;

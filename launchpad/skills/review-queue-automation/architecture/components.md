@@ -368,7 +368,7 @@ part` is exactly one `P-NN`, or one of the two carriers named in §1. The gap de
 | RQA-NFR-009 | P-05 | P-03 | fit |
 | RQA-NFR-010 | P-02 | P-12 | conflicting |
 | RQA-FR-004 | P-03 | P-01 | fit |
-| RQA-FR-030 | P-06 | P-04 | full gap |
+| RQA-FR-030 | P-06 | P-04, P-05 | full gap |
 | RQA-FR-031 | P-01 | P-03, P-08 | fit |
 | RQA-NFR-001 | P-06 | P-05 | partial gap |
 | RQA-NFR-002 | P-06 | P-04 | full gap |
@@ -431,7 +431,7 @@ reaches the outside only through E-18, E-19, E-20, E-22, E-24, E-25 or E-26.
 | E-14 | P-02 | P-09 | `checks(repo, sha)` for `head_sha` and `merge_base_sha`, assembled into `Facts.checks` / `Facts.base_checks` | canonical `CheckConclusion` per check; `FAILING`, `UNSETTLED` and `PASSING` sets are the protocol for attribution and corroboration alike | in-process call inside E-23; ETag-cached REST reads. P-07 reads the result from `Facts`, it does not call GitHub |
 | E-15 | P-06 | P-05 | `consumed(job, attempt, reading, reservation, ...)` | `Spend(tokens, measured, source)`; a reservation is never written as a spend | in-process call after each attempt, through `SupplyPort` |
 | E-16 | P-08 | P-09 | `probe(repo, credential)` | proven scopes on that repository: the activities the credential can actually perform there | in-process call; REST capability probe per job, cached in `capabilities` for the job |
-| E-17 | operator | P-02 / P-12 / P-11 / P-03 | `status`; `explain`; `decide`; `escalations` (P-11 `pending`); `onboard` | CLI commands: FR-016 disposition and reason; FR-012 reconstruction; a named decision with basis; a starter config | the CLI on the operator machine; the only human interface |
+| E-17 | operator | P-02 / P-12 / P-11 / P-03 | `status`; `explain`; `decide`; `pending` (P-11 `pending()`); `onboard` | CLI commands: FR-016 disposition and reason; FR-012 reconstruction; a named decision with basis; a starter config | the CLI on the operator machine; the only human interface |
 | E-18 | P-09 | GitHub | REST v3 and GraphQL v4 | reads: PRs, checks, files; writes: reviews, comments, merges, assignees | HTTPS with the operator's `gh auth token` credential (ADR-E) |
 | E-19 | P-06 | review harness | published role-separated interaction and injection-conformance contract | in: nonce-enveloped bundle as data, immutable protocol instruction, output path; out: verdict with mandatory `injection_attempts`; probe writes nothing | process execution; adapters failing paired clean/adversarial conformance are not registered |
 | E-20 | P-10 | GitHub | git smart HTTP | fetch of the PR head; push to the PR head branch only | git transport with the operator's `gh auth token` credential; `--force` never passed |
@@ -659,12 +659,17 @@ Decision outcome remains blank for a human; the architecture proceeds on the nam
 A **blocking** ADR has an option that changes a part boundary, E-NN contract or record ownership, so
 #2072 cannot cut that lane before decision. This table is the sole decomposition gate.
 
+ADR-H was raised by the PR #2176 review rather than by the original description: its recommendation
+is implemented in that pull request, and #2072's supply (#2183) and harness (#2184) lanes are cut
+against it while it is still open.
+
 | ADR | question | decomposition-blocking | parts affected | requirements |
 |---|---|---|---|---|
 | [ADR-D](adr-drafts/ADR-D.md) | [#2157](https://github.com/launchpad-26/buzz/issues/2157) — terminal outcome without verdict authority | **blocking** | P-02, P-11, P-09 | RQA-FR-028, RQA-NFR-017, RQA-NFR-026, RQA-NFR-007, RQA-FR-016 |
 | [ADR-E](adr-drafts/ADR-E.md) | [#2158](https://github.com/launchpad-26/buzz/issues/2158) — `gh auth token` floor and ceiling | **blocking** | P-08, P-09, P-01 | RQA-NFR-024, RQA-NFR-030, RQA-NFR-025, RQA-FR-038 |
 | [ADR-F](adr-drafts/ADR-F.md) | [#2159](https://github.com/launchpad-26/buzz/issues/2159) — provenance integrity | **not blocking** | P-12 | RQA-NFR-028, RQA-NFR-022, RQA-NFR-032 |
 | [ADR-G](adr-drafts/ADR-G.md) | [#2160](https://github.com/launchpad-26/buzz/issues/2160) — exact automatic remedy | **blocking** | P-10, P-07, P-08 | RQA-BR-006, RQA-FR-017, RQA-NFR-019, RQA-NFR-031, RQA-NFR-033 |
+| [ADR-H](adr-drafts/ADR-H.md) | [#2217](https://github.com/launchpad-26/buzz/issues/2217) — how a harness RQA ships no adapter for is admitted to run | **blocking** | P-05, P-06, P-03 | RQA-FR-030, RQA-NFR-001, RQA-NFR-002, RQA-NFR-015 |
 
 ## 10. Boundary
 

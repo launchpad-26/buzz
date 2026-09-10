@@ -105,7 +105,9 @@ def route(*, job: Job, obligation: str, snapshot: Snapshot, facts: Facts, cursor
    hold: not (`candidate.external` and not `may_send_external`); `candidate.family not in
    cursor.excluded_families`; `candidate not in cursor.excluded_routes`; and
    **either** `(candidate.harness, candidate.model)` is a key of the alias registry (`aliases.py`)
-   **or** `candidate.command` is non-empty. The second disjunct is what RQA-FR-030 requires: a
+   **or** `candidate.command` is non-empty. Eligibility here is not admission to invocation: P-06
+   §3.2 step 2 runs the conformance pair against that argv before any PR content reaches it, and
+   excludes the route through the cursor if it fails. The second disjunct is what RQA-FR-030 requires: a
    conforming harness RQA ships no alias for participates because the operator configured its argv,
    not because RQA's source was edited (AC15). A candidate failing every test is dropped silently
    here — never probed, never returned (RQA-FR-024, RQA-NFR-009): P-05 hands out only routes the
@@ -404,7 +406,12 @@ only inside `rqa/supply/spend.py` — no other part ever writes a `spend` entry.
 ## 9. Requirements this part answers for
 
 Accountable: RQA-BR-012, RQA-FR-021, RQA-FR-022, RQA-FR-023, RQA-FR-024, RQA-FR-032, RQA-FR-039,
-RQA-NFR-009, RQA-NFR-012, RQA-NFR-027, RQA-NFR-029. Each maps to a behaviour above: BR-012 (efficient
+RQA-NFR-009, RQA-NFR-012, RQA-NFR-027, RQA-NFR-029.
+
+Contributes to RQA-FR-030, which P-06 is accountable for: §3.1 step 2's second disjunct is the
+literal "with the system's own source held constant" gate — an unregistered `(harness, model)` pair is
+admitted for probing because the operator configured a `command`, never because RQA's source was
+edited. T11b is the test that discharges this part of it; P-06's T14b and T14c discharge the rest. Each maps to a behaviour above: BR-012 (efficient
 shared capacity) → §3.2 steps 1–6, the three-axis check itself, T13–T16; FR-021 (recorded from what is
 actually exposed, distinguishable from an estimate) → §3.3 step 1, T18–T19; FR-022 (bound reached →
 configured fallback, incomplete review, or escalation) → §3.2 steps 3–5 returning `Refusal(downgrade)`,
