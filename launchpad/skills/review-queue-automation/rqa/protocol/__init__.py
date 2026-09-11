@@ -34,6 +34,7 @@ from rqa.protocol.types import (
     Verdict,
 )
 from rqa.protocol.version import PROTOCOL_VERSION, protocol_hash
+from rqa.protocol.validate import ProtocolError, validate
 
 __all__ = [
     "Valid",
@@ -54,4 +55,6 @@ __all__ = [
     "PROBE_MARKER",
     "envelope",
     "extract",
+    "validate",
+    "ProtocolError",
 ]
