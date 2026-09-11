@@ -46,10 +46,15 @@ function textWithoutAttachments(event: LiveTtsEvent): string {
       (line) => !Array.from(urls).some((url) => line.includes(`](${url})`)),
     )
     .join("\n");
-  return withoutMedia.replace(
-    /(^|\n)\s*\|\|\s*\n(?:\s*\n)*\s*\|\|\s*(?=\n|$)/gu,
-    "$1",
-  );
+  // The trailing (?:\s*\n)* group here used to be redundant with the \s*
+  // that already follows it — \s matches \n, so both constructs accept
+  // exactly the same "any run of whitespace" language, just via multiple
+  // overlapping partitions of the same input. That redundancy is what
+  // caused exponential backtracking on crafted input (js/redos):
+  // event.content is remote-peer-controlled, so a malicious message could
+  // hang the receiving client's main thread. Dropping the group changes
+  // nothing about what this matches, only how many ways it can fail to.
+  return withoutMedia.replace(/(^|\n)\s*\|\|\s*\n\s*\|\|\s*(?=\n|$)/gu, "$1");
 }
 
 export function classifySpeakableAgentText(
