@@ -7,16 +7,21 @@ other module under `rqa/` may declare a name this file declares — the guard in
 declares nothing it does not own.
 
 §2 (the protocol types: `EvidenceState`, `Category`, `Finding`, `Obligation`,
-`Verdict`, …) belongs to `rqa.protocol` per `code/P-04-protocol.md` §1, and §9
-(the edge signatures and their Protocols) is a separate deliverable. Neither is
-declared here.
+`Verdict`, …) belongs to `rqa.protocol` per `code/P-04-protocol.md` §1 and is
+not declared here: it is re-exported at runtime below, so every consumer can
+import the whole seam from `rqa.contracts`. `matches` is deliberately not
+re-exported — `P-04-protocol.md` §2 mandates the qualified
+`rqa.protocol.paths.matches` import for every consumer. §9 (the edge signatures
+and their Protocols) is declared in `rqa.edges` — the guard forbids this module
+from *declaring* a §9 name — and is re-exported at the bottom of this module,
+together with the `EDGES` account of every `components.md` §6 edge row. An
+import is not a declaration: the guard blesses re-exports by construction.
 
-§§3-8 annotate fields with §2 names, while `code/P-04-protocol.md` §1 forbids
+§§3-8 annotate fields with §2 names, and `code/P-04-protocol.md` §1 forbids
 `rqa.protocol` importing another RQA part — so the runtime dependency runs
-`rqa.protocol` → `rqa.contracts`, never the reverse. `from __future__ import
-annotations` makes every §2 reference a string, so this module imports cleanly
-whether or not `rqa.protocol` exists, and the `TYPE_CHECKING` import below keeps
-the annotation text exactly as documented at no runtime cost.
+`rqa.contracts` → `rqa.protocol`, never the reverse. `from __future__ import
+annotations` keeps every annotation a string, exactly as documented, and the
+re-exported §2 names below make those strings resolvable against this module.
 
 Conventions (`CONTRACTS.md` preamble): Python 3.12; every value type a frozen
 dataclass; policy, availability and budget outcomes are values while programming
@@ -29,16 +34,26 @@ from collections.abc import Mapping
 from dataclasses import dataclass
 from datetime import datetime
 from enum import Enum
-from typing import TYPE_CHECKING, Literal, Protocol, get_args
+from typing import Literal, Protocol, get_args
 
-if TYPE_CHECKING:  # annotation-only; resolved by type checkers, never at import
-    from rqa.protocol import (
-        Category,
-        EvidenceState,
-        Finding,
-        Obligation,
-        Verdict,
-    )
+# CONTRACTS.md §2, owned and declared by `rqa.protocol` (P-04), re-exported here
+# at runtime so `rqa.contracts` is the one seam import point. Everything except
+# `matches` — see the module docstring.
+from rqa.protocol import (
+    MECHANICAL_GROUP,
+    SUBSTANTIVE_GROUP,
+    Category,
+    EvidenceState,
+    Finding,
+    HarnessIdentity,
+    InjectionAttempt,
+    Invalid,
+    Location,
+    Obligation,
+    Remedy,
+    Valid,
+    Verdict,
+)
 
 
 # --------------------------------------------------------------------------
@@ -617,3 +632,243 @@ class ExplanationUnavailable:
     repo: str
     number: int
     reason: Literal["no_record", "ambiguous_head"]
+
+
+# --------------------------------------------------------------------------
+# §9. Edge signatures and edge Protocols — declared in `rqa.edges` (the edge
+# lane's module; `tests/test_rqa_contracts_guard.py` forbids this module from
+# declaring those names), re-exported here so every provider and consumer
+# imports its edge's signature and Protocol from `rqa.contracts` rather than
+# redeclaring it. Imports are not declarations; the ownership guard allows
+# re-exports by construction.
+# --------------------------------------------------------------------------
+
+from rqa.edges import (  # noqa: E402
+    EscalationStore,
+    Explanation,
+    BreakerStore,
+    CapabilityStore,
+    GithubProbe,
+    HarnessProber,
+    KeyStore,
+    LifecycleDeps,
+    ProcessRunner,
+    SnapshotStore,
+    SpendStore,
+    SupplyPort,
+    admit,
+    carry_over,
+    checks,
+    claim_lease,
+    comment,
+    consumed,
+    decide,
+    explain,
+    facts,
+    grant,
+    inventory,
+    judge,
+    merge,
+    onboard,
+    pending,
+    plan,
+    probe,
+    raise_,
+    release_lease,
+    remediate,
+    reserve,
+    resume,
+    route,
+    run,
+    snapshot_for,
+    status,
+    submit_review,
+    tick,
+    validate,
+)
+
+# --------------------------------------------------------------------------
+# The machine-checkable account of the 26 edge rows in `components.md` §6:
+# every E-NN maps either to the callables/Protocols that realise it or to the
+# string reason it is a prose-only external edge with no Python signature.
+# `tests/test_rqa_contracts_edges.py` asserts this mapping and §6's own table
+# agree exactly, so a new edge row fails a test instead of passing unnoticed.
+# --------------------------------------------------------------------------
+
+EDGES: Mapping[str, tuple[object, ...] | str] = {
+    "E-01": (inventory, claim_lease, release_lease),
+    "E-02": (admit,),
+    "E-03": (snapshot_for,),
+    "E-04": (grant,),
+    "E-05": (carry_over,),
+    "E-06": (route, reserve),
+    "E-07": (plan, run),
+    "E-08": (validate,),
+    "E-09": (judge,),
+    "E-10": (remediate,),
+    "E-11": (raise_, pending, resume),
+    "E-12": (submit_review, comment, merge),
+    # E-13 is `RecordWriter.append(job_id, kind, payload) -> Entry` — a method
+    # on §7's `RecordWriter` Protocol above, not a free function.
+    "E-13": (RecordWriter.append,),
+    "E-14": (checks,),
+    "E-15": (consumed,),
+    "E-16": (probe,),
+    # E-17 is a command surface, not one signature (CONTRACTS.md §9): the
+    # concrete provider callables. `pending` is P-11's E-11 `pending()`.
+    "E-17": (status, explain, decide, pending, onboard, tick),
+    "E-18": "prose-only external edge: P-09 → GitHub, HTTPS REST v3 / GraphQL"
+            " v4 with the operator's `gh auth token`; the only HTTP client"
+            " import in RQA",
+    "E-19": "prose-only external edge: P-06 → review harness, process"
+            " execution under the published role-separated interaction and"
+            " injection-conformance contract (RQA-FR-030)",
+    "E-20": "prose-only external edge: P-10 → GitHub, `git fetch <sha>` and"
+            " `git push <remote> HEAD:refs/heads/<head_ref>` over smart HTTP;"
+            " never `--force`",
+    "E-21": "prose-only external edge: OS scheduler → P-01, process launch"
+            " `rqa tick`; no payload",
+    "E-22": "prose-only external edge: P-08 → GitHub CLI, process execution"
+            " of `gh auth token`; value held in memory for one probe, never"
+            " persisted",
+    "E-23": (facts,),
+    "E-24": (HarnessProber,),
+    "E-25": (KeyStore,),
+    "E-26": (ProcessRunner,),
+}
+
+__all__ = [
+    # §1. Identity and status
+    "Activity",
+    "JobStatus",
+    "Job",
+    # §2. Protocol types (re-exported from rqa.protocol; `matches` deliberately
+    # not re-exported — consumers use the qualified rqa.protocol.paths.matches)
+    "EvidenceState",
+    "Category",
+    "MECHANICAL_GROUP",
+    "SUBSTANTIVE_GROUP",
+    "Location",
+    "Remedy",
+    "Finding",
+    "InjectionAttempt",
+    "HarnessIdentity",
+    "Verdict",
+    "Valid",
+    "Invalid",
+    "Obligation",
+    # §3. Policy types
+    "ValidationErrorCode",
+    "ValidationError",
+    "ValidationFailure",
+    "External",
+    "Blocking",
+    "Mechanical",
+    "RemediationPolicy",
+    "Policy",
+    "Budget",
+    "Snapshot",
+    # §4. GitHub types
+    "CheckConclusion",
+    "FAILING",
+    "UNSETTLED",
+    "PASSING",
+    "CheckRun",
+    "SubmittedReview",
+    "PrFacts",
+    "Facts",
+    "Mutation",
+    "Stale",
+    "LeaseTaken",
+    "GithubUnavailable",
+    "CapabilityReading",
+    # §5. Supply and harness types
+    "Route",
+    "RouteCursor",
+    "Reservation",
+    "Refusal",
+    "RouteUnavailable",
+    "Spend",
+    "Plan",
+    "Attestation",
+    "AttemptFailure",
+    "Attempt",
+    "PanelResult",
+    "BundleFailure",
+    # §6. Judgement, escalation, reuse and remediation types
+    "Assurance",
+    "EscalationCause",
+    "Decision",
+    "Escalation",
+    "Judgement",
+    "CarriedEvidence",
+    "CarryOver",
+    "RemediationRefusalReason",
+    "RemediationPushed",
+    "RemediationRefused",
+    "EscalationRefusalReason",
+    "EscalationRefused",
+    # §7. Record types
+    "EntryKind",
+    "ENTRY_KINDS",
+    "Entry",
+    "AppendFailed",
+    "RecordWriter",
+    "RecordRow",
+    "RecordTrustFailureReason",
+    "RecordUntrusted",
+    "VerifiedRecordPrefix",
+    "RecordReader",
+    # §8. Authority and boundary types
+    "DenyReason",
+    "Grant",
+    "Deny",
+    "ProcessResult",
+    "ExplanationUnavailable",
+    # §9. Edge Protocols (re-exported from rqa.edges)
+    "LifecycleDeps",
+    "SnapshotStore",
+    "GithubProbe",
+    "CapabilityStore",
+    "SpendStore",
+    "BreakerStore",
+    "EscalationStore",
+    "SupplyPort",
+    "Explanation",
+    "HarnessProber",
+    "KeyStore",
+    "ProcessRunner",
+    # §9. Edge signatures (re-exported from rqa.edges)
+    "inventory",
+    "claim_lease",
+    "release_lease",
+    "admit",
+    "snapshot_for",
+    "grant",
+    "carry_over",
+    "route",
+    "reserve",
+    "plan",
+    "run",
+    "validate",
+    "judge",
+    "remediate",
+    "raise_",
+    "pending",
+    "resume",
+    "submit_review",
+    "comment",
+    "merge",
+    "checks",
+    "consumed",
+    "probe",
+    "facts",
+    # E-17 command surface (re-exported from rqa.edges)
+    "status",
+    "explain",
+    "decide",
+    "onboard",
+    "tick",
+    # The 26-edge account
+    "EDGES",
+]
