@@ -24,7 +24,7 @@ rqa/record/
                  explain_job, resolve_job, ResolvedJob, NoRecord, AmbiguousHead, Explanation,
                  ExplanationUnavailable, ReuseResolutionError, migrate_legacy, MigrationSummary,
                  MigrationTableResult, LegacySource
-  kinds.py       ENTRY_KINDS: the closed thirteen-kind set (§6)
+  kinds.py       ENTRY_KINDS: the closed fourteen-kind set (§6)
   hashing.py     canonical_json(); compute_hash(); genesis and "legacy" prev_hash sentinels
   keychain.py    E-25 KeyStore implementation backed by the platform keychain command
   store.py       record_entries/record_heads DDL; serialization; ordered row reads
@@ -63,7 +63,7 @@ from rqa.contracts import (
 
 assert ENTRY_KINDS == frozenset({
     "transition", "plan", "carry_over", "bundle", "attestation", "spend", "panel",
-    "judgement", "grant", "action", "escalation", "decision", "legacy",
+    "judgement", "grant", "action", "escalation", "decision", "snapshot", "legacy",
 })
 ```
 ```python
@@ -74,7 +74,7 @@ class RecordProgrammingError(Exception):
     unknown kind or an unserializable payload is a defect in the caller, not a recorded outcome."""
 
 class UnknownEntryKind(RecordProgrammingError):
-    """`kind` is not one of the thirteen values in ENTRY_KINDS."""
+    """`kind` is not one of the fourteen values in ENTRY_KINDS."""
 
 class PayloadNotSerializable(RecordProgrammingError):
     """`payload` contains a value canonical_json() cannot render (anything other than str, int,
@@ -419,11 +419,12 @@ chain — §6's migration note).
 |---|---|---|---|
 | `transition` | P-02 | every job-state change, including arrival (`None → queued`) | `from_state: str \| None`, `to_state: str`, `reason: str`, `repo: str`, `number: int`, `head_sha: str`, `base_sha: str`, `predecessor_job: str \| None` |
 | `plan` | P-06 | step 5, once per job | all shared `Plan` fields, including `head_sha`, `snapshot_hash`, `protocol_hash`, and `policy_version`; this is the authoritative predecessor pin for P-13 |
+| `snapshot` | P-03 | a job's first policy pin (E-03 step 9) | `hash: str`, `repo: str`, `policy_version: str`, `protocol_hash: str`, `activated_at: str` — the durable proof the job ran under a validated, archived snapshot before P-02 writes `jobs.snapshot_hash` |
 | `carry_over` | P-13 | when a job supersedes a prior head (E-05) | `reused: [str]`, `regenerated: [str]`, `basis: str`, `source_job: str` |
 | `bundle` | P-06 | before route selection, or on assembly failure | `status: "ready"\|"incomplete"`, `nonce`, `protocol_hash`, `manifest`, `reason` |
 | `attestation` | P-06 (harness attempts) or P-08 (capability probes) | every harness attempt; every `probe()` | harness subject: `attempt_id: str`, `harness: str`, `model: str`, `provider: str`, `route_family: str`, `external: bool`, `effort: str`, `started_at: str`, `ended_at: str`, `exit_code: int`, `self_reported_identity: {...} \| None` (untrusted, marked as such). Capability subject (P-08's, verbatim): `login: str`, `capabilities: [str]`, `attested_not_proven: [str]`, `probed_at: str` |
 | `spend` | P-05 | after each attempt (E-15) | `tokens: int`, `measured: bool`, `source: str`, `axis: str`, `route: {harness,model,provider} \| None`, `attempt_id: str \| None` |
-| `panel` | P-06 | every normal `run()` return | `attempt_ids: [str]`, `complete: bool`, `incomplete_reason: str \| None`, `evidence_cutoff: str` captured after final attempt/consumption |
+| `panel` | P-06 | every normal `run()` return | `attempt_ids: [str]`, `complete: bool`, `incomplete_reason: str \| None`, `evidence_cutoff: str` captured after final attempt/consumption, `bound_reached: bool` (RQA-FR-039) |
 | `judgement` | P-07 | every `judge()` return, including carry-only step 5a | JSON-safe shared judgement fields plus `snapshot_hash`, `protocol_hash`, `facts_fetched_at`, `cutoff` (`panel.evidence_cutoff`), and `rendered_body`; carry-only materialises current state and retains predecessor provenance |
 | `grant` | P-08 | every E-04 call | `activity: str`, `snapshot_hash: str`, `categories: [str] \| null`, `capability_proof_id: int \| null`, `decision: "grant"\|"deny"`, `reason/detail` |
 | `action` | P-09 | every GitHub write (E-12) | `mutation_id: str`, `operation: "review_submit"\|"comment"\|"merge"\|"assignee_claim"\|"assignee_release"`, `outcome: str`, `accepted: bool`, `github_response: {...} \| None`, `grant_entry_seq: int \| None` |
@@ -440,7 +441,7 @@ change.
 P-08 capability probes share `attestation`; no separate capability kind exists. `bundle` and `panel`
 are P-06-owned lifecycle evidence, not overloading attestation: the first can exist when assembly
 fails before an attempt, and the second durably binds the post-attempt cutoff used by judgement.
-`ENTRY_KINDS` is therefore the `CONTRACTS.md` §7 closed thirteen-kind set.
+`ENTRY_KINDS` is therefore the `CONTRACTS.md` §7 closed fourteen-kind set.
 
 `judgement`'s writer is P-07, not P-02. P-02 supplies its transaction-bound `RecordWriter`, so the
 append remains atomic with the transition and `AppendFailed` propagates. `append` is indifferent to
@@ -495,7 +496,7 @@ and this part does not write a snapshot. This file is written by this part and r
 - Does not decide a job's disposition. `explain`'s `disposition` field renders `flow-review-
   lifecycle.md` §4's closed 13-state → 6-value table against the latest recorded `transition` — a
   read-only copy of a table P-02 owns and decides, not a second decision.
-- Does not validate another part's payload semantics: it enforces one of thirteen kinds and JSON-safe
+- Does not validate another part's payload semantics: it enforces one of fourteen kinds and JSON-safe
   data. Each calling part owns its field contract.
 - Does not read `jobs`, `pr_facts`, `leases`, `snapshots`, `capabilities`, `mutations`, `spend`,
   `breakers`, `human_requests`, or any other table `container.md` §5 assigns to a different writer.
@@ -541,7 +542,7 @@ none touches a real OS keychain or a real network.
 | T17 | two payload dicts with identical key/value pairs built in different insertion order | `compute_hash` returns byte-identical results for both |
 | T18 | a job with rows `[keyed real seq=1, legacy, unkeyed real seq=2 chained to seq=1]` | `verify` returns `ok=True` with the seq-2 `unverifiable: no key` segment; `explain_job` returns `legacy=True, verified=False` and reports that segment without calling it broken |
 | T19 | a `judgement` row whose `findings` list contains three ids: one in both `blocking` and `corroborated`, one in `corroborated` only, one in neither | `explain_job`'s `findings` tuple marks the first `blocking=True, corroborated=True`, the second `blocking=False, corroborated=True`, the third `blocking=False, corroborated=False` — the three-way split RQA-BR-005/RQA-BR-008 need |
-| T21 | append one minimal JSON-safe payload for each member of `ENTRY_KINDS` | all thirteen are accepted; any fourteenth string raises `UnknownEntryKind` |
+| T21 | append one minimal JSON-safe payload for each member of `ENTRY_KINDS` | all fourteen are accepted; any fifteenth string raises `UnknownEntryKind` |
 
 Property that must hold across the suite: `grep -rn "INSERT INTO record_entries\|INSERT INTO
 record_heads" rqa/ --include=*.py` returns hits only inside `rqa/record/store.py`. No other module —
@@ -555,7 +556,7 @@ Accountable: RQA-BR-003, RQA-FR-012, RQA-NFR-022, RQA-NFR-028, RQA-NFR-032.
 - **RQA-BR-003** — *"A review record shall establish who or what performed the review, which
   protocol was followed, and how the judgement was produced."* Fit criterion: **"Given any review
   record, a reader can name its performer, protocol, cutoff and judgement basis without asking the
-  performer."** Served by the closed thirteen-kind schema (§6), especially `attestation`, `plan`,
+  performer."** Served by the closed fourteen-kind schema (§6), especially `attestation`, `plan`,
   `panel`, and `judgement`, plus `explain`; T6, T21.
 - **RQA-FR-012** — *"For any authoritative review outcome, a single command shall reconstruct the
   exact PR revision, the protocol and policy in force, reviewer identity and type, harness, model,

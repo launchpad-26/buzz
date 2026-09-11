@@ -230,6 +230,10 @@ class CapabilityReading:
 @dataclass(frozen=True)
 class Route:
     harness: str; model: str; provider: str; family: str; external: bool
+    command: tuple[str, ...] | None = None   # operator-declared argv for a harness RQA does not
+                                             # ship an alias for; None means a built-in alias.
+                                             # RQA-FR-030: a conforming harness participates
+                                             # through configuration, never a source edit.
 
 @dataclass(frozen=True)
 class RouteCursor:
@@ -276,6 +280,9 @@ class PanelResult:
     complete: bool
     incomplete_reason: str | None    # when not complete: exhausted | budget | bundle
     evidence_cutoff: datetime        # captured after the final attempt and recorded with the panel
+    bound_reached: bool              # any reservation was refused at a configured bound during this
+                                     # run, including one that then took a configured fallback.
+                                     # RQA-FR-039: such a run never ends in a successful disposition.
 
 @dataclass(frozen=True)
 class BundleFailure:
@@ -360,7 +367,7 @@ class EscalationRefused:
 ```python
 EntryKind = Literal[
     "transition", "plan", "carry_over", "bundle", "attestation", "spend", "panel",
-    "judgement", "grant", "action", "escalation", "decision", "legacy",
+    "judgement", "grant", "action", "escalation", "decision", "snapshot", "legacy",
 ]
 ENTRY_KINDS: frozenset[EntryKind]
 

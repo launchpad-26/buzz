@@ -195,7 +195,8 @@ never a replacement snapshot.
 4. After `plan` and the final `carry` are durable, transition `CLAIMED → PLANNED` unconditionally.
    If `carry.regenerated` is non-empty, continue to the one panel call. If it is empty, do not call
    `run`: construct `PanelResult(attempts=(), complete=True, incomplete_reason=None,
-   evidence_cutoff=facts.fetched_at)`, call E-09, then transition `PLANNED → JUDGED`. The real
+   evidence_cutoff=facts.fetched_at, bound_reached=False)` — no reservation was requested, so no bound
+   was reached, call E-09, then transition `PLANNED → JUDGED`. The real
    returned `Judgement`, not the state alone, continues to step 9.
 
 #### Steps 6–8 — one panel call, then judgement
@@ -389,7 +390,10 @@ type, not a P-02 type. The same `deps.record` instance is passed to every call t
 
 ## 5. Store
 
-This part owns no table's DDL. It writes exactly one column of a table P-01 creates, and reads
+This part owns no table's DDL. It writes `jobs.status` on every transition and `jobs.snapshot_hash`
+exactly once — immediately after a successful first E-03 pin, in the same transaction as that
+transition (`P-03-policy.md` §3, E-03 step 9: "the caller, not `rqa.policy`, writes
+`job.snapshot_hash`"). No other part writes either column. It also reads
 three tables two other parts own, using the schemas already published in `container.md` §5 and
 `P-12-record.md` §5 (shown below for reference, not redefinition).
 
@@ -403,7 +407,7 @@ CREATE TABLE jobs (
   base_sha        TEXT NOT NULL,
   predecessor_job TEXT,
   snapshot_hash   TEXT,
-  status          TEXT NOT NULL      -- the only column this part writes
+  status          TEXT NOT NULL      -- this part writes this column, and `snapshot_hash` once (below)
 );
 -- P-01's tables; shown for reference.
 CREATE TABLE pr_facts (repo TEXT NOT NULL, number INTEGER NOT NULL, head_sha TEXT NOT NULL, ...);
@@ -503,7 +507,7 @@ that same writer. `AppendFailed` therefore aborts the surrounding state change, 
 | T6 | Review authority returns `Deny` | `QUEUED → ESCALATED`, no E-01 claim, and one authority-requirement escalation |
 | T7 | A planned review with regenerated obligations, including fallback and retries | P-02 transitions `CLAIMED → PLANNED → REVIEWING`, calls `harness.run` exactly once, and never drives an attempt |
 | T8 | `run` returns an incomplete `PanelResult` or `BundleFailure` | `REVIEWING → STOPPED`; no failure subtype can reach `APPROVED` |
-| T9 | `carry.regenerated == ()` | `CLAIMED → PLANNED`; zero `run` calls; E-09 receives an empty complete panel with `evidence_cutoff=facts.fetched_at`; only after it returns does `PLANNED → JUDGED` occur |
+| T9 | `carry.regenerated == ()` | `CLAIMED → PLANNED`; zero `run` calls; E-09 receives an empty complete panel with `evidence_cutoff=facts.fetched_at` and `bound_reached is False`; only after it returns does `PLANNED → JUDGED` occur |
 | T10 | A complete fresh panel | E-09 receives the panel's post-attempt `evidence_cutoff`; only after judgement does `REVIEWING → JUDGED` occur |
 | T11 | A remediation judgement with a granted remediation activity | E-10 receives `job`, `finding`, `grant`, the same `facts`, the pinned `snapshot`, `state_dir`, `runner`, and `record`; `RemediationRefused` reaches only `ESCALATED` |
 | T12 | Comment, submit-review, and merge mutations | every E-12 call carries its activity-specific `Grant`; `Stale` escalates and `GithubUnavailable` stops |

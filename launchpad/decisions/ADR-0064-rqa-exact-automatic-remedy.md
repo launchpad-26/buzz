@@ -74,15 +74,21 @@ one instruction, verbatim:
 
 > urgh just go with the recomendations, record the adr files we need and submit a pr for them as a batch.
 
-**On the link `launchpad/decisions/README.md` asks for:** that README says the instruction must be quoted
-verbatim *and* the comment where the human said it linked. No such comment exists — the instruction was
-given in an agent session. @serina-mcfall traced this on #2175 and it resolves in the record's favour:
-[ADR-0052](ADR-0052-delegated-authority-and-feature-batching.md) condition 2 states that "an earlier draft
-also required a link to a comment from the human's own account. That requirement is withdrawn as ceremony",
-and `AGENTS.md` §5 rule 2 implements the withdrawal. The README is the one document that was never updated,
-which is filed as #2218. This record is therefore conformant with the governing decision; the quotation
-above is the instruction's only surviving form, and its fidelity — typing errors left intact — is the
-control on it.
+**On the comment neither `launchpad/decisions/README.md` nor `AGENTS.md` §5 got from this:** the README
+says the instruction must be quoted verbatim *and* the comment where the human said it linked, and §5's
+*Acting on a human's instruction* — condition 2, not the rule 2 of §5's other numbered list — ends with
+**"If the only place the instruction exists is a conversation, ask for it as a comment first."** No comment
+exists. The agent did ask: it offered the deciding human the choice between posting the instruction as a
+comment and proceeding without one, and he chose to proceed with the deviation disclosed. That is the step
+the clause asks for, and its outcome.
+
+The rest of the README's requirement does not bind: @serina-mcfall traced on #2175 that
+[ADR-0052](ADR-0052-delegated-authority-and-feature-batching.md)'s condition 2 states "an earlier draft also
+required a link to a comment from the human's own account. That requirement is withdrawn as ceremony", which
+`AGENTS.md` implements and the README alone never caught up with — filed as #2218. So this record conforms to
+the governing decision, the quotation above is the instruction's only surviving form, and its fidelity —
+typing errors left intact — is the only control on it. A later agent should read this as "ask, then record
+the answer", never as "a session-only ruling needs nothing".
 
 **This is the highest-risk of the four decisions**, and it was ruled on collectively rather than
 individually. It is recorded as instructed; a maintainer who wants the risk weighed on its own terms

@@ -37,7 +37,8 @@ class SupplyPort(Protocol):
     def reserve(self, plan: Plan, route: Route) -> Reservation | Refusal: ...
     def consumed(self, attempt: Attempt, reading: int | None, reservation: Reservation) -> Spend: ...
 
-# adapters.py — a route.harness resolves to an adapter; adapter_for is the only dispatch point.
+# adapters.py — adapter_for is the only dispatch point: a non-empty route.command resolves to the
+# generic external-command adapter, otherwise route.harness resolves to a built-in adapter.
 class HarnessAdapter(Protocol):
     enforceable_efforts: frozenset[str]
     role_separated_data: Literal[True]
@@ -104,23 +105,39 @@ obligation. Every valid verdict evaluates the whole bundle; that obligation sele
 
 Start with an empty `RouteCursor`, no counted families and no attempts. `finish(complete, reason)`
 captures UTC **after** the last attempt/consumption, appends one `panel` entry containing the attempt
-ids, completeness, reason and that `evidence_cutoff`, and returns the identical shared `PanelResult`.
+ids, completeness, reason, that `evidence_cutoff` and `bound_reached`, and returns the identical
+shared `PanelResult`.
+
+`bound_reached` is set the first time `supply.reserve` returns any `Refusal` and is never cleared —
+**including `Refusal(fallback)`, which resumes candidate selection**. RQA-FR-039's fit criterion is
+"no review run in which a configured bound was reached ends in a successful disposition, independent
+of which of RQA-FR-022's three outcomes it produced instead", so taking the configured fallback is
+permitted while a successful outcome afterwards is not; P-07 §3 step 10 enforces that.
 
 For each candidate selection:
 
 1. Call `supply.route(obligation, cursor)`. `RouteUnavailable` returns
    `finish(False, "exhausted")`. Retain the returned cursor before any local union.
-2. Immediately before an invocation, call `supply.reserve(plan, route)`. A reservation is consumed
+2. **Before the first invocation of a route whose `command` is non-empty**, run the published
+   clean/adversarial conformance pair against that exact argv (§3.3). It is the operator's
+   declaration, not RQA's build, so it cannot have been verified before release the way a built-in
+   adapter is. A pass appends an `attestation` entry whose subject is the conformance run — argv
+   hash, protocol hash, suite id, result — and is cached for the rest of the job by
+   `(argv_hash, protocol_hash)`; no real PR bytes reach that command before the pass is recorded.
+   A failure, a spawn error or a timeout is classified `CANDIDATE_TERMINAL`: the route is excluded
+   through the cursor, the failure is recorded, and candidate selection resumes. A built-in
+   adapter's registry membership already carries this proof and is not re-run.
+3. Immediately before an invocation, call `supply.reserve(plan, route)`. A reservation is consumed
    by exactly one invocation. `Refusal(fallback)` excludes the route family and resumes candidate
    selection; `Refusal(incomplete|escalate)` returns `finish(False, "budget")`; any other value raises
    `HarnessError`.
-3. Invoke, validate through E-08, build the attempt/attestation, append `attestation`, and call
+4. Invoke, validate through E-08, build the attempt/attestation, append `attestation`, and call
    `supply.consumed(attempt, reading, reservation)` for every outcome, including timeout or launch
    failure.
-4. A valid verdict from a new provider family counts. If `plan.participants` distinct families have
+5. A valid verdict from a new provider family counts. If `plan.participants` distinct families have
    counted, return `finish(True, None)`. A non-completing valid verdict and
    `CANDIDATE_TERMINAL` exclude the route; `PROVIDER_TERMINAL` excludes the family.
-5. On the **first** `TRANSIENT`, remain on the same route but return to step 2: obtain a new
+6. On the **first** `TRANSIENT`, remain on the same route but return to step 3: obtain a new
    reservation before the one permitted retry. If that reservation refuses, follow step 2's refusal
    branch. A second transient excludes the route; no third invocation occurs.
 
@@ -136,6 +153,14 @@ protocol and verdict paths; it supplies no RQA/GitHub credentials. Every registe
 declare `role_separated_data is True`, use its provider's instruction/data roles, and identify the
 published injection-conformance suite it passed. An adapter without that channel separation or with
 a failing conformance suite is absent from the registry, not a degraded route.
+
+**A harness RQA ships no adapter for runs through the generic external-command adapter** built from
+`route.command`: RQA appends the bundle directory, the immutable protocol instruction and the verdict
+output path exactly as it does for a built-in, and classifies the result by the same table below. It
+is admitted only when the conformance run wired into §3.2 step 2 passes against its exact argv — the
+same bar every built-in meets, applied at first use rather than at build time, because an
+operator-declared command does not exist when RQA is built. The contract is the gate; RQA's source
+is not (RQA-FR-030, AC15). A command whose conformance run fails is never invoked with PR content.
 
 | Condition | Classification |
 |---|---|
@@ -225,8 +250,11 @@ P-06 writes no lifecycle transition and does not mutate job status.
 | T12 | finite routes and terminal outcomes | termination within finite routes plus one retry per invoked route |
 | T13 | usage sidecar and separately none | consumption follows each invocation with the corresponding reservation |
 | T14 | every PR-derived field and arbitrary binary bytes | no PR byte appears outside an envelope |
+| T14b | a configured route whose harness has no built-in alias but carries a non-empty `command` | the generic external-command adapter runs it with the same bundle/protocol/output arguments and the same classification table; no RQA source change is required (RQA-FR-030, AC15) |
+| T14c | a configured `command` route whose clean/adversarial conformance run fails, errors on spawn, or times out | classified `CANDIDATE_TERMINAL` at §3.2 step 2, excluded through the cursor, recorded, and **never invoked with PR content**; a passing run appends its conformance `attestation` once and is cached for the job |
 | T15 | paired clean/adversarial diff, body and comment fixtures, including paraphrases, under every authority mode | identical non-defensive result; adversarial result contains a semantic `InjectionAttempt`; adapter registration fails otherwise |
 | T16 | bundle assembly failure | no attempt/final bundle; shared `BundleFailure` returned |
+| T4b | a per-model bound refuses the first reservation with `Refusal(fallback)` and the configured fallback then returns a valid verdict | the panel is complete, `bound_reached is True`, and the `panel` entry records it (RQA-FR-039) |
 | T17 | append fails for plan, bundle, attestation or panel | `AppendFailed` propagates |
 
 ## 9. Requirements this part answers for

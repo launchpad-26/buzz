@@ -639,9 +639,9 @@ requirement asks for them.
 
 ## 18. The decisions this architecture could not make
 
-Four ADR sub-issues of [#2006](https://github.com/launchpad-26/buzz/issues/2006) carried the questions
-this description could not settle. **All four were decided on 2026-09-11**, each to the recommendation
-the architecture assumed, and recorded as `launchpad/decisions/ADR-0061`–`ADR-0064`; the assumption
+Five ADR sub-issues of [#2006](https://github.com/launchpad-26/buzz/issues/2006) carried the questions
+this description could not settle. **All five were decided on 2026-09-11**, each to the recommendation
+the architecture assumed, and recorded as `launchpad/decisions/ADR-0061`–`ADR-0065`; the assumption
 annotations throughout these documents therefore stand ratified. `components.md` §9 is the
 authoritative gate and carries the parts and requirements each one shapes.
 
@@ -656,9 +656,10 @@ authoritative gate and carries the parts and requirements each one shapes.
 - [#2160](https://github.com/launchpad-26/buzz/issues/2160) → **[ADR-0064](../../../decisions/ADR-0064-rqa-exact-automatic-remedy.md).** Automatic remedies: exact
   files, closed formatter/check and an actual-diff semantic oracle; never a model patch. Was blocking.
 
-A fifth question, [#2217](https://github.com/launchpad-26/buzz/issues/2217) (ADR-H) — how a harness
-RQA ships no adapter for is admitted to run — was raised later, by the review of the pull request that
-repaired this description, and is tracked in `components.md` §9 with the same table.
+- [#2217](https://github.com/launchpad-26/buzz/issues/2217) → **[ADR-0065](../../../decisions/ADR-0065-external-harness-admission.md).**
+  How a harness RQA ships no adapter for is admitted to run: an operator-declared `command`, gated by
+  the clean/adversarial conformance pair before any PR content reaches it. Raised later, by the review
+  of the pull request that repaired this description. *Was blocking.*
 
 ## 19. How this maps to the views
 
