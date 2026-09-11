@@ -1,6 +1,6 @@
 # ADR-E — Meeting the credential floor and ceiling when the only credential is the operator's `gh auth token`
 
-**Status:** [issue #2158](https://github.com/launchpad-26/buzz/issues/2158) open · maintainer direction recorded · *pending formal decision outcome*
+**Status:** decided 2026-09-11 — recommendation (a) accepted; recorded as [ADR-0062](../../../../decisions/ADR-0062-rqa-credential-floor-and-ceiling.md), which closes [issue #2158](https://github.com/launchpad-26/buzz/issues/2158). This draft is retained as the architecture's rationale, not as an open question.
 **Parent:** [#2006](https://github.com/launchpad-26/buzz/issues/2006) · **Raised by:** #2071 architecture · **Decomposition-blocking:** **blocking**
 **Parts affected:** P-08, P-09, P-01 · **Requirements:** RQA-NFR-024, RQA-NFR-030, RQA-NFR-025, RQA-FR-038
 
@@ -41,7 +41,9 @@ residual** for this version, not an open question, and the architecture proceeds
 
 It is the most RQA can do under the constraint, it makes the floor a proof rather than a hope, and it
 states the residual honestly instead of hiding it. Every write still goes through one gate and one
-adapter, so if the maintainer later relaxes the constraint, only P-08's credential read (E-22) changes.
+adapter, so if the maintainer later relaxes the constraint, exactly two credential-resolution paths
+change: P-08's credential read (E-22), and P-09's own per-call `transport._credential()`, which
+invokes `gh auth token` independently of E-22 on every call but `probe()`.
 
 ## Why blocking
 

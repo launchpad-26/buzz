@@ -1,6 +1,6 @@
 # ADR-F — Provenance integrity mechanism for the review record
 
-**Status:** [issue #2159](https://github.com/launchpad-26/buzz/issues/2159) open · recommendation made · *assumed accepted for #2071, pending maintainer decision*
+**Status:** decided 2026-09-11 — recommendation (b) accepted; recorded as [ADR-0063](../../../../decisions/ADR-0063-rqa-record-provenance-integrity.md), which closes [issue #2159](https://github.com/launchpad-26/buzz/issues/2159). This draft is retained as the architecture's rationale, not as an open question.
 **Parent:** [#2006](https://github.com/launchpad-26/buzz/issues/2006) · **Raised by:** #2071 architecture · **Decomposition-blocking:** **not blocking**
 **Parts affected:** P-12 · **Requirements:** RQA-NFR-028, RQA-NFR-022, RQA-NFR-032
 
@@ -21,8 +21,8 @@ security consequences the maintainer owns.
 
 | | option | detects | consequence |
 |---|---|---|---|
-| (a) | Plain hash chain: each entry hashes its predecessor. | Accidental corruption, truncation, reordering, and edits by anyone who does not recompute the chain. | No key. An actor with write access to the file who also recomputes the chain is not detected. |
-| (b) | Hash chain **plus** an HMAC over the chain head with a key held outside the state directory (OS keychain), verified by `explain`. | Everything (a) detects, plus recomputation by an actor with file access but not keychain access. | One key the operator must keep; loss of the key makes old records unverifiable (still readable). |
+| (a) | Plain hash chain: each entry hashes its predecessor. | Accidental corruption, reordering, and edits by anyone who does not recompute the chain. **Not** tail truncation: `verify` walks the rows present and returns `ok=True` on a complete walk (`P-12-record.md` §3.2), so a deleted tail leaves a clean-verifying prefix; (b) inherits the same blind spot. | No key. An actor with write access to the file who also recomputes the chain is not detected. |
+| (b) | Hash chain **plus** an HMAC over the chain head with a key held outside the state directory (OS keychain), verified by `explain`. | Everything (a) detects, plus recomputation by an actor with file access but not keychain access. | One key the operator must keep; loss of the key makes old records unverifiable (still readable). Tail removal is undetected here too: verification has no independently retained endpoint. |
 | (c) | Signed entries with a per-installation asymmetric key. | As (b), plus third-party verifiability. | Key custody as (b); more machinery for a property no requirement asks for (nothing outside the operator machine verifies). |
 
 ## Recommendation — (b)
