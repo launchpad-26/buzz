@@ -654,14 +654,16 @@ reads authority or grants activity.
 
 ## 9. Decisions this architecture could not make
 
-Each decision has a local rationale draft and a filed ADR issue parented to #2006. The issue's
-Decision outcome remains blank for a human; the architecture proceeds on the named recommendation.
-A **blocking** ADR has an option that changes a part boundary, E-NN contract or record ownership, so
-#2072 cannot cut that lane before decision. This table is the sole decomposition gate.
+Each decision has a local rationale draft and a filed ADR issue parented to #2006. **All five were
+decided on 2026-09-11, each to the recommendation the architecture named**, and recorded as
+`launchpad/decisions/ADR-0061`–`ADR-0065`; the assumption annotations throughout these documents
+therefore stand ratified. A **blocking** ADR had an option that changes a part boundary, E-NN
+contract or record ownership, so #2072 could not cut that lane before decision; that gate is now
+cleared for all five. This table remains the record of which lanes depended on which decision.
 
-ADR-H was raised by the PR #2176 review rather than by the original description. It was decided on
-2026-09-11 to its recommendation and recorded as `launchpad/decisions/ADR-0065`, so #2072's supply
-(#2183) and harness (#2184) lanes are no longer cut against an open option.
+ADR-H was raised by the review of PR #2176 rather than by the original description; it is recorded as
+`launchpad/decisions/ADR-0065`, so #2072's supply (#2183) and harness (#2184) lanes are no longer cut
+against an open option.
 
 | ADR | question | decomposition-blocking | parts affected | requirements |
 |---|---|---|---|---|

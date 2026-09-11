@@ -1,6 +1,6 @@
 # ADR-G — What counts as an exact remedy RQA may apply itself
 
-**Status:** [issue #2160](https://github.com/launchpad-26/buzz/issues/2160) open · recommendation made · *assumed accepted for #2071, pending maintainer decision*
+**Status:** decided 2026-09-11 — recommendation (a) accepted; recorded as [ADR-0064](../../../../decisions/ADR-0064-rqa-exact-automatic-remedy.md), which closes [issue #2160](https://github.com/launchpad-26/buzz/issues/2160). This draft is retained as the architecture's rationale, not as an open question.
 **Parent:** [#2006](https://github.com/launchpad-26/buzz/issues/2006) · **Raised by:** #2071 architecture · **Decomposition-blocking:** **blocking**
 **Parts affected:** P-10, P-07, P-08 · **Requirements:** RQA-BR-006, RQA-FR-017, RQA-NFR-019, RQA-NFR-031, RQA-NFR-033
 
