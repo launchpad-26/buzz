@@ -11,11 +11,6 @@ No other module in RQA imports from `rqa.policy` except through this file. The
 public surface is exactly `P-03-policy.md` §1's re-export list and nothing more:
 `SnapshotStore` and `StoredSnapshot` are deliberately **not** re-exported — they
 stay `rqa.policy.store` names even though E-03's signature mentions the Protocol.
-
-The `onboard` half of §1's list (`onboard`, `OnboardResult`, `Written`,
-`OnboardRefusal`, `OnboardRefusalReason`) is added by the lane that builds
-`onboard.py`; the thirteen names below are the validation-and-pinning half.
-
 The shared snapshot vocabulary — `Snapshot`, `Route`, `External`, `Policy`,
 `Blocking`, `Mechanical`, `Budget`, and the validation outcomes — is imported from
 `rqa.contracts` (`CONTRACTS.md` §3 is its one definition) and re-exported here so a
@@ -37,6 +32,13 @@ from rqa.contracts import (
     ValidationErrorCode,
     ValidationFailure,
 )
+from rqa.policy.onboard import (
+    OnboardRefusal,
+    OnboardRefusalReason,
+    OnboardResult,
+    Written,
+    onboard,
+)
 from rqa.policy.snapshot import snapshot_for
 from rqa.policy.types import PolicyError, SnapshotStoreCorrupted
 
@@ -54,4 +56,9 @@ __all__ = [
     "ValidationFailure",
     "PolicyError",
     "SnapshotStoreCorrupted",
+    "onboard",
+    "OnboardResult",
+    "Written",
+    "OnboardRefusal",
+    "OnboardRefusalReason",
 ]
