@@ -24,11 +24,11 @@ records it (`P-01-intake.md` §3 step 5) and re-offers the job on a later tick. 
 an edge to `stopped` would break the one guarantee the table gives; silently returning
 the unchanged status would be the swallowed failure this boundary forbids.
 
-**Steps 3-13.** §3.2's cascade is driven from inside the `try` below, so every
-persistence failure it can raise is contained by the same boundary. It is the sibling
-task's to build (`rqa/lifecycle/steps.py` and `rest.py`); until it lands, a job rests
-where the arrival transition left it and `admit` reports *that* status rather than one it
-never reached.
+**Steps 3-13.** §3.2's cascade (`rqa/lifecycle/steps.py`, resting through `rest.py`) is
+driven from inside the `try` below, so every persistence failure it can raise is
+contained by this same boundary. The cascade itself never widens it: every state change
+it makes goes through `transition()` and the closed table, and a failure at any point
+re-reads the durable row here and stops only where an edge is licensed.
 """
 
 from __future__ import annotations
@@ -40,6 +40,7 @@ from rqa.contracts import AppendFailed, Job, JobStatus
 from rqa.lifecycle.deps import LifecycleDeps
 from rqa.lifecycle.errors import LifecycleError, UnknownJobError
 from rqa.lifecycle.states import TRANSITIONS, as_status
+from rqa.lifecycle.steps import drive
 from rqa.lifecycle.transition import safe_stop, transition
 
 __all__ = ["admit"]
@@ -54,8 +55,9 @@ def admit(*, job: Job, deps: LifecycleDeps) -> JobStatus:
     current = job
     try:
         current = _arrive(job=job, deps=deps)
-        # Steps 3-13 (§3.2) run here, inside this boundary. Until they land, the
-        # arrival transition is the whole cascade and its resting status is the answer.
+        # Steps 3-13 (§3.2): the dispatch loop runs the job to its resting status,
+        # inside this boundary.
+        current = drive(current, deps=deps)
         return as_status(current.status, what="jobs.status")
     except (AppendFailed, sqlite3.Error, OSError) as exc:
         # The failure is already rolled back (`transition._commit`'s `with connection:`),
@@ -110,9 +112,12 @@ def _has_transition_entry(*, job: Job, connection: sqlite3.Connection) -> bool:
 def _durable(*, job: Job, connection: sqlite3.Connection, cause: BaseException) -> Job:
     """The job as the committed table holds it, read with §5's own `jobs` lookup.
 
-    `cause` is chained, never inspected and never rendered into a record: it is only
-    there so a failure to find the row explains what was being contained when it
-    happened.
+    `cause` names the failure being contained in the message's *type* only and is
+    deliberately **not** chained (`from None`, gate finding G-2199-P02/M3): a contained
+    persistence exception can in principle carry whatever the failing layer put in it,
+    and nothing credential-shaped may be reachable from this raise's `__cause__` or
+    `__context__`. The structural guarantee has its own probe in
+    `tests/test_rqa_lifecycle_steps.py`.
     """
     row = connection.execute(
         "SELECT id, status FROM jobs WHERE repo = ? AND number = ? AND head_sha = ?",
@@ -122,7 +127,7 @@ def _durable(*, job: Job, connection: sqlite3.Connection, cause: BaseException) 
         raise UnknownJobError(
             f"no jobs row for {job.id!r}: a contained "
             f"{type(cause).__name__} cannot be turned into a safe stop"
-        ) from cause
+        ) from None
     return replace(job, status=as_status(row[1], what="jobs.status"))
 
 

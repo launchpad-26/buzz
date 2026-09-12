@@ -24,7 +24,21 @@ import tempfile
 
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent.parent))
 
-from rqa.contracts import AppendFailed, Job, JobStatus  # noqa: E402
+from rqa.contracts import (  # noqa: E402
+    Activity,
+    AppendFailed,
+    Blocking,
+    Budget,
+    External,
+    Grant,
+    Job,
+    JobStatus,
+    LeaseTaken,
+    Mechanical,
+    Policy,
+    RemediationPolicy,
+    Snapshot,
+)
 from rqa.lifecycle import (  # noqa: E402
     IllegalTransitionError,
     LifecycleError,
@@ -507,11 +521,75 @@ def test_a_transition_without_a_pin_never_touches_the_column() -> None:
 # -- §3.1: admit's arrival and its containment boundary --------------------------
 
 
+class _CascadePolicy:
+    """E-03 fake for the two rewired admit tests below: a validated snapshot, so the
+    real §3.2 cascade can run. `store` rides the client the way `deps.supply` carries
+    its stores."""
+
+    def __init__(self, snapshot):
+        self.snapshot = snapshot
+        self.store = object()
+
+    def snapshot_for(self, *, repo, job, store, record):
+        return self.snapshot
+
+
+class _CascadeAuthority:
+    """E-04 fake: review authority is granted, so the cascade proceeds to the claim."""
+
+    def __init__(self, snapshot):
+        self.snapshot = snapshot
+        self.github = object()
+        self.store = object()
+
+    def grant(self, *, repo, activity, snapshot, job_id, categories, record, github, store):
+        return Grant(
+            activity=activity, repo=repo, job_id=job_id, snapshot_hash=self.snapshot.hash,
+            capability_proof_id=1, categories=categories, entry_seq=0,
+        )
+
+
+def _cascade_wiring() -> dict:
+    """Neighbour wiring that drives §3.2's real dispatch row `queued → 3/4` to a rest
+    at `queued`: E-03 pins a snapshot, E-04 grants review, and the E-01 claim answers
+    `LeaseTaken`, which §3.2 step 1 rests without a transition. Landed with the
+    sibling cascade lane (D-B4-3): the all-`None` wiring these two tests originally
+    used encoded "steps 3-13 do not run inside admit", which §3.2 forbids — admit's
+    dispatch makes the E-03/E-04/E-01 calls in the same call P-01 makes."""
+    snapshot = Snapshot(
+        hash="sha256:transition-test-snapshot",
+        repo="owner/name",
+        protocol_hash="sha256:protocol",
+        authority={Activity.REVIEW: True},
+        routes=(),
+        external=External(allowed=False, deny_label="external"),
+        policy=Policy(
+            version="1.0.0",
+            obligations=(),
+            blocking=Blocking(categories=frozenset(), severities=frozenset(), corroboration=2),
+            mechanical=Mechanical(categories=frozenset(), tools=frozenset()),
+            assurance={"standard": 2},
+            remediation=RemediationPolicy(allow_forks=False),
+        ),
+        budget=Budget(None, None, None),
+    )
+    return {
+        "policy": _CascadePolicy(snapshot),
+        "authority": _CascadeAuthority(snapshot),
+        "claim_lease": lambda *, job, grant, record: LeaseTaken(login="someone-else"),
+    }
+
+
 def test_admit_writes_the_arrival_transition_once() -> None:
     """§3.1: "writes the arrival `queued` transition when necessary". Necessary means the
-    job has no `transition` entry yet, which is the only durable evidence of arrival."""
+    job has no `transition` entry yet, which is the only durable evidence of arrival.
+
+    The wiring drives the real §3.2 cascade — dispatch row `queued → 3/4` runs E-03,
+    E-04 and the E-01 claim inside this same `admit` call — and the `LeaseTaken`
+    answer rests the job at `queued`, so the arrival entry is the only one written and
+    a second admit appends no second arrival."""
     connection, record, job = bench(status=JobStatus.QUEUED)
-    deps = lifecycle_deps(connection, record)
+    deps = lifecycle_deps(connection, record, **_cascade_wiring())
     assert admit(job=job, deps=deps) is JobStatus.QUEUED
     assert len(entries(connection)) == 1
     assert admit(job=job, deps=deps) is JobStatus.QUEUED
@@ -520,9 +598,13 @@ def test_admit_writes_the_arrival_transition_once() -> None:
 
 def test_admit_reports_the_status_the_job_rests_at() -> None:
     """A re-admitted job that already has its arrival entry returns the durable status it
-    is at, not the one it arrived with."""
+    is at, not the one it arrived with.
+
+    The first admit runs §3.2's real `queued → 3/4` dispatch to a `LeaseTaken` rest at
+    `queued`; the re-admit of the escalated job dispatches to `escalated`, a resting
+    status, and must report exactly where the job rests."""
     connection, record, job = bench(status=JobStatus.QUEUED)
-    deps = lifecycle_deps(connection, record)
+    deps = lifecycle_deps(connection, record, **_cascade_wiring())
     admit(job=job, deps=deps)
     escalated = transition(
         job, JobStatus.ESCALATED, reason="authority requirement", connection=connection,

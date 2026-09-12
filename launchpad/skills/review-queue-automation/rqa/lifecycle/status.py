@@ -108,13 +108,17 @@ def _reason(payload: object, *, job_id: str) -> str:
 
     A payload that is not an object, or one without a `reason`, is a record this part
     wrote in a shape it does not write — `LifecycleError`, not a guessed narrative.
+    The decode failure is deliberately not chained (`from None`, gate finding
+    G-2199-P02/M3): a `JSONDecodeError` carries the whole undecodable document on its
+    `.doc` attribute, and nothing stored in that row may become reachable from this
+    raise's `__cause__` or `__context__`.
     """
     try:
         decoded = json.loads(payload)
-    except (TypeError, ValueError) as exc:
+    except (TypeError, ValueError):
         raise LifecycleError(
             f"the latest transition entry for job {job_id!r} is not decodable JSON"
-        ) from exc
+        ) from None
     if not isinstance(decoded, dict) or not isinstance(decoded.get("reason"), str):
         raise LifecycleError(
             f"the latest transition entry for job {job_id!r} carries no string reason"

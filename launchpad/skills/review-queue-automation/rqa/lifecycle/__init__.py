@@ -18,15 +18,16 @@ not in it: §1 does not list it, and P-01 constructs it as `from rqa.lifecycle i
 LifecycleDeps, admit` (`code/P-01-intake.md` §3 step 5). Binding the name without
 exporting it satisfies both without adding surface §1 does not specify.
 
-§1 lists nine modules and fourteen re-exports for the finished package. `steps.py`,
-`rest.py` and `resume.py` — the step-3-to-13 cascade, the resting-status successor/lease
-check, and E-11's reverse edge — are the sibling task's, landing separately with
-`resume`.
+§1 lists nine modules and fourteen re-exports, and this is the finished package:
+`steps.py`, `rest.py` and `resume.py` — the step-3-to-13 cascade, the resting-status
+successor/lease check, and E-11's reverse edge — landed with `resume`, completing the
+list. `__all__` below is exactly those fourteen names.
 """
 
 from __future__ import annotations
 
 from rqa.lifecycle.admit import admit
+from rqa.lifecycle.resume import resume
 from rqa.lifecycle.deps import LifecycleDeps  # noqa: F401 - bound for P-01, not in §1's list
 from rqa.lifecycle.errors import (
     IllegalTransitionError,
@@ -40,6 +41,7 @@ from rqa.lifecycle.transition import transition
 
 __all__ = [
     "admit",
+    "resume",
     "status",
     "transition",
     "JobStatus",
