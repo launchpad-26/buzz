@@ -16,9 +16,7 @@ The shared record vocabulary — `Entry`, `EntryKind`, `ENTRY_KINDS`, `AppendFai
 so a consumer can import the whole answer from one module. An import is not a
 declaration: this file defines nothing.
 
-§1 lists eleven modules and twenty-eight re-exports for the finished package. The
-`explain`/`migrate` half — `explain.py`, `migrate.py`, `reader.py`'s `resolve_job`,
-and their thirteen names — lands in its own lane and appends to the list below.
+§1 lists eleven modules and twenty-eight re-exports; this is the finished package.
 """
 
 from __future__ import annotations
@@ -28,14 +26,18 @@ from rqa.contracts import (
     AppendFailed,
     Entry,
     EntryKind,
+    ExplanationUnavailable,
     KeyStore,
     RecordReader,
     RecordRow,
     RecordWriter,
 )
+from rqa.record.explain import Explanation, ReuseResolutionError, explain, explain_job
 from rqa.record.hashing import PayloadNotSerializable
 from rqa.record.keychain import KeyStoreExplanationUnavailable
 from rqa.record.kinds import RecordProgrammingError, UnknownEntryKind
+from rqa.record.migrate import LegacySource, MigrationSummary, MigrationTableResult, migrate_legacy
+from rqa.record.reader import AmbiguousHead, NoRecord, ResolvedJob, resolve_job
 from rqa.record.verify import BreakKind, VerifyResult, verify
 
 __all__ = [
@@ -54,4 +56,17 @@ __all__ = [
     "verify",
     "VerifyResult",
     "BreakKind",
+    "explain",
+    "explain_job",
+    "resolve_job",
+    "ResolvedJob",
+    "NoRecord",
+    "AmbiguousHead",
+    "Explanation",
+    "ExplanationUnavailable",
+    "ReuseResolutionError",
+    "migrate_legacy",
+    "MigrationSummary",
+    "MigrationTableResult",
+    "LegacySource",
 ]
