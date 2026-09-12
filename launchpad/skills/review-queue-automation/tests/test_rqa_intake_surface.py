@@ -135,6 +135,15 @@ def test_only_rqa_github_writes_imports_intake_identity_directly() -> None:
 
 
 def test_only_the_intake_store_writes_jobs_pr_facts_and_leases() -> None:
+    """`P-01-intake.md` §5/§7: `set_status`/`set_snapshot_hash` exist only so
+    `code/P-02-lifecycle.md` can call them, and `jobs`'s "written by P-01" in
+    `container.md` §5 means row creation — those two columns are documented
+    exceptions lifecycle owns after the initial `INSERT`. `P-02-lifecycle.md`
+    §5's write protocol is exactly the two `UPDATE jobs` statements in
+    `rqa/lifecycle/transition.py`. So `rqa/lifecycle/transition.py` writing
+    `jobs` is the contract, not drift; this stays an exact-set assertion so a
+    fifth, unauthorised writer is still caught.
+    """
     writers = []
     for name, source in _tree_sources().items():
         lowered = source.lower()
@@ -147,6 +156,7 @@ def test_only_the_intake_store_writes_jobs_pr_facts_and_leases() -> None:
         ("rqa/intake/store.py", "jobs"),
         ("rqa/intake/store.py", "leases"),
         ("rqa/intake/store.py", "pr_facts"),
+        ("rqa/lifecycle/transition.py", "jobs"),
     ], writers
 
 
