@@ -43,7 +43,16 @@ EXPORTS_THIS_LANE = frozenset(
 EXPORTS_FULL = EXPORTS_THIS_LANE | frozenset({"tick", "Lease", "GithubAdapter"})
 
 #: §1: the only parts this package may import at all, at any point in the wave.
-ALLOWED_PART_PREFIXES = ("rqa.contracts", "rqa.record", "rqa.policy", "rqa.github", "rqa.intake")
+#: `rqa.lifecycle` is deliberately included: P-01 §1's closing "never imports ...
+#: directly at all" sentence enumerates eight other parts and omits `rqa.lifecycle`
+#: on purpose, while §3 step 5, §4 E-02 and `rqa/edges.py`'s `admit` declaration all
+#: require `tick.py` to import `LifecycleDeps`/`admit`/the client Protocols from it
+#: (D-B4-1, ruled). Not the same kind of exception as the never-import list — this
+#: is the one part §1's own text allows.
+ALLOWED_PART_PREFIXES = (
+    "rqa.contracts", "rqa.record", "rqa.policy", "rqa.github", "rqa.intake",
+    "rqa.lifecycle",
+)
 
 
 def _sources() -> dict[str, str]:

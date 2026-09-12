@@ -25,7 +25,9 @@ declaration: this file defines nothing.
 
 from __future__ import annotations
 
+from rqa.github import GithubAdapter
 from rqa.intake.identity import job_id, stable_hash
+from rqa.intake.lease import Lease
 from rqa.intake.store import JobStore, LeaseStore, PrFactsStore
 from rqa.intake.types import (
     AdmissionRefusal,
@@ -35,13 +37,17 @@ from rqa.intake.types import (
     PrFactsRow,
     TickResult,
 )
+from rqa.intake.tick import tick
 
 __all__ = [
+    "tick",
     "TickResult",
     "AdmissionRefusal",
     "JobFailure",
     "job_id",
     "stable_hash",
+    "GithubAdapter",
+    "Lease",
     "JobStore",
     "PrFactsStore",
     "LeaseStore",
