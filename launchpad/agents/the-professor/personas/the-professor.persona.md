@@ -1,12 +1,17 @@
 ---
-# PROPOSED — not yet built. See launchpad/Research/the-professor-skill-suite-redesign.md.
-# The seven skills below, and the tool layer they call, do not exist as working code yet
-# (§9 tracks what's built vs. proposed). This is a YAML comment in the frontmatter,
-# stripped before the body below ever becomes a prompt — the persona's own voice
-# starting at "You are The Professor" deliberately says nothing about build status,
-# the same way every persona in this fork speaks in the register of "what I do"
-# rather than "what's implemented so far"; that's a genre convention, not a claim
-# this pack is running today.
+# BUILD STATE, phase by phase. See launchpad/Research/the-professor-skill-suite-redesign.md
+# §9, which is the authority; this note only summarises it. Phase 0 is decided. Phase 1 —
+# the tool layer the skills below call, tools/professor.py — is built and hardened
+# (issues #2100 and #2132). All seven SKILL.md procedures listed under skills: are
+# written. Phase 1b is filed as issue #2131 and has not been started. Phases 2-7 are not
+# built, and no issues have been filed for them.
+#
+# This is a YAML comment in the frontmatter, stripped before the body below ever becomes
+# a prompt — the persona's own voice starting at "You are The Professor" deliberately
+# says nothing about build status, the same way every persona in this fork speaks in the
+# register of "what I do" rather than "what's implemented so far"; that's a genre
+# convention, so this note, not the voice below, is where the pack's build state is
+# recorded.
 #
 # OPTIONAL COMPANION, NOT REQUIRED INFRASTRUCTURE (reframed 2026-09-03): this pack
 # ships as a portable Skill-suite plugin, not a standalone agent — the seven skills
