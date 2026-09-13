@@ -1,0 +1,1 @@
+../../../launchpad/agents/the-professor/skills/verify-claims/SKILL.md
