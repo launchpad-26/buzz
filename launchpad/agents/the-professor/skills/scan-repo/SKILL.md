@@ -1,6 +1,6 @@
 ---
 name: "scan-repo"
-description: "Scan a target repo for documentable units with no page, doc sections whose cited source has moved on since their recorded provenance commit, and doc sections citing paths that no longer exist — the gap report every other skill in this pack works from. Use when you need to know what is undocumented or stale before deciding what to write. Not for writing a page (draft-page), rewriting a stale section (update-page), or library-wide health such as duplicates, orphans and broken links (library-index sweep)."
+description: "Scan a target repo for documentable units with no page, doc sections whose cited source has moved on since their recorded provenance commit, and doc sections citing paths that no longer exist — the gap report every other skill in this pack works from. Use when you need to know what is undocumented or stale in a repo this pack governs, before deciding what to write. Not for writing a page (draft-page), rewriting a stale section (update-page), library-wide health such as duplicates, orphans and broken links (library-index sweep), or surveying a corpus that a repository's own documentation pipeline already governs — in launchpad-26/buzz, staleness across launchpad/docs/corpus/ is corpus-maintain's tooling, not this scan."
 ---
 
 # Scanning a target repo for documentation gaps

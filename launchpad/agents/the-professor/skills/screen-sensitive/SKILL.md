@@ -1,6 +1,6 @@
 ---
 name: "screen-sensitive"
-description: "Screen drafted or rewritten documentation content for secrets, credentials, PII, and other sensitive material before it reaches disk — the unskippable gate every write goes through, never a judgement call. Use when any draft is about to be written to disk — every write, every draft, including one that is only prose. Not for checking whether a claim's citation supports it (verify-claims) or whether the page meets its contract (check-page, run by draft-page and update-page)."
+description: "Screen drafted or rewritten documentation content for secrets, credentials, PII, and other sensitive material before it reaches disk — the unskippable gate every write goes through, never a judgement call. Use when draft-page or update-page has written a draft to a scratch file and is about to publish it — every Professor write, no exceptions, including a draft that is only prose. Not for screening files this pack did not draft, checking whether a claim's citation supports it (verify-claims), or contract compliance (the check-page subcommand of tools/professor.py, which draft-page and update-page run themselves)."
 ---
 
 # Screening before any write
