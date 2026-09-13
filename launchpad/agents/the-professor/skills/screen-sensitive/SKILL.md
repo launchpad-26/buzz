@@ -1,6 +1,6 @@
 ---
 name: "screen-sensitive"
-description: "Screen drafted or rewritten documentation content for secrets, credentials, PII, and other sensitive material before it reaches disk — the unskippable gate every write goes through, never a judgement call."
+description: "Screen drafted or rewritten documentation content for secrets, credentials, PII, and other sensitive material before it reaches disk — the unskippable gate every write goes through, never a judgement call. Use when any draft is about to be written to disk — every write, every draft, including one that is only prose. Not for checking whether a claim's citation supports it (verify-claims) or whether the page meets its contract (check-page, run by draft-page and update-page)."
 ---
 
 # Screening before any write

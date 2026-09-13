@@ -1,6 +1,6 @@
 ---
 name: "library-index"
-description: "Own a target repo's documentation library as a whole: where pages go, the contents/index page, and the library's health — duplication, orphaned pages, broken cross-references."
+description: "Own a target repo's documentation library as a whole: where pages go, the contents/index page, and the library's health — duplication, orphaned pages, broken cross-references. Use when deciding where a library lives before the first page is written, or sweeping an existing library for problems that span pages. Not for a single page's content (draft-page, update-page) or finding undocumented code (scan-repo)."
 ---
 
 # Bootstrapping and maintaining the library
