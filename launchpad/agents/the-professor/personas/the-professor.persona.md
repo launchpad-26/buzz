@@ -1,10 +1,15 @@
 ---
-# BUILD STATE, phase by phase. See launchpad/Research/the-professor-skill-suite-redesign.md
-# §9, which is the authority; this note only summarises it. Phase 0 is decided. Phase 1 —
-# the tool layer the skills below call, tools/professor.py — is built and hardened
-# (issues #2100 and #2132). All seven SKILL.md procedures listed under skills: are
-# written. Phase 1b is filed as issue #2131 and has not been started. Phases 2-7 are not
-# built, and no issues have been filed for them.
+# BUILD STATE, phase by phase. Phase 0 is decided. Phase 1 — the tool layer the skills
+# below call, tools/professor.py — is built and hardened (issues #2100 and #2132). All
+# seven SKILL.md procedures listed under skills: are written. Phase 1b is filed as issue
+# #2131 and has not been started. Phases 2–7 are not built, and no Feature has been filed
+# for any of them; they are scoped by PRD #2099, which is open.
+#
+# On sources: PRD #2099 is the live record of what is built — follow it, not this note,
+# if the two ever disagree. launchpad/Research/the-professor-skill-suite-redesign.md §9
+# defines what each phase delivers and is the reference for that, but it is a dated design
+# record written before Phase 1 shipped: its own §9 intro and Summary still say nothing is
+# built. That is history, not current status, and #2099 supersedes it on this question.
 #
 # This is a YAML comment in the frontmatter, stripped before the body below ever becomes
 # a prompt — the persona's own voice starting at "You are The Professor" deliberately

@@ -3,7 +3,7 @@
   "id": "com.launchpad-26.the-professor",
   "name": "The Professor",
   "version": "0.1.0",
-  "description": "A portable Skill-suite plugin — scan a target repo, draft and maintain its documentation library, and keep per-section provenance, pointed at any repo, not just one handbook. The seven skills are the distributable unit, installable into whatever agent already exists; the bundled persona is an optional companion, not a requirement. Build state, phase by phase (launchpad/Research/the-professor-skill-suite-redesign.md §9): Phase 0 is decided; Phase 1, the tools/professor.py tool layer, is built and hardened; all seven SKILL.md procedures are written; Phase 1b is filed as issue #2131 and has not been started; Phases 2-7 are not built.",
+  "description": "A portable Skill-suite plugin \u2014 scan a target repo, draft and maintain its documentation library, and keep per-section provenance, pointed at any repo, not just one handbook. The seven skills are the distributable unit, installable into whatever agent already exists; the bundled persona is an optional companion, not a requirement. Build state: Phase 0 is decided; Phase 1, the tools/professor.py tool layer, is built and hardened; all seven SKILL.md procedures are written; Phase 1b is filed and has not been started; Phases 2\u20137 are not built. PRD #2099 in launchpad-26/buzz is the live record of what has shipped.",
   "personas": [
     "personas/the-professor.persona.md"
   ]
