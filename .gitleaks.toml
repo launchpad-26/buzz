@@ -145,6 +145,28 @@ paths = [
     # block-private-key.md, and block-webhook-url-token-param.md, the four
     # fixtures the default ruleset currently matches in this directory.
     '''launchpad/agents/the-professor/tools/contract/fixtures/.*''',
+    # Review-queue-automation's credential-secrecy fixtures (#2182, #2187), the
+    # same purpose and reasoning as the two fixture entries above: each test
+    # embeds a deliberately real-looking token so it can prove the code never
+    # lets one escape. test_rqa_authority_secrecy.py asserts rqa.github's
+    # transport keeps a canary out of every log line, exception message and
+    # persisted record; test_rqa_remediation_push.py and
+    # test_rqa_remediation_remediate.py assert push_head converts a
+    # subprocess.TimeoutExpired *carrying* the token on .output into a plain
+    # non-zero ProcessResult rather than letting the exception, and the bytes
+    # it holds, propagate. A fixture that gitleaks cannot read as a secret
+    # would not exercise the control it exists to prove.
+    # Synthetic, not leaked — classified without reproducing the values: the
+    # remediation pair is a `ghp_` prefix on a literal sequential-alphabet
+    # body, and the authority one is a named canary constant. No real
+    # credential is present and nothing here needs rotating.
+    # Scoped to these three literal paths rather than a tests/.* glob, for the
+    # reason #389 records for Cargo.lock above: a directory-wide exemption
+    # would silently cover every present and future test file in that tree
+    # against every rule, and only these three were verified.
+    '''^launchpad/skills/review-queue-automation/tests/test_rqa_authority_secrecy\.py$''',
+    '''^launchpad/skills/review-queue-automation/tests/test_rqa_remediation_push\.py$''',
+    '''^launchpad/skills/review-queue-automation/tests/test_rqa_remediation_remediate\.py$''',
 ]
 regexes = [
     # nip-oa.md's worked example tags a synthetic event with a public key
