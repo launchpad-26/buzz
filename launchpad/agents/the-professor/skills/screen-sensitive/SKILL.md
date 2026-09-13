@@ -172,8 +172,12 @@ entry, not left behind after a `block`, not quoted back in an error message.
 
 ## Summary checklist
 
+- [ ] `$PROFESSOR_PACK_ROOT` confirmed set before anything else ran — failed loud with
+      the specific message if not, never a generic error from a later step
 - [ ] `screen-content` ran with `--target` set, against the scratch file — this skill
       did not separately read and interpret the ruleset itself
+- [ ] If `screen-content` could not be run at all, the gate was reported **unrunnable**,
+      never `pass` — an unrun gate and a passed gate are different outcomes
 - [ ] Every category in the resolved ruleset was actually checked against the draft —
       not a subset "close enough" pass
 - [ ] `redact` results replaced the exact flagged span, logged by category only, never

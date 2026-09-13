@@ -141,9 +141,18 @@ them rather than trust this list.
  14. **`launchpad/AGENTS.md` line 404** — the cohort file, not the root one — requires
      *"Keep one commit per child Task."* Say which file: root `AGENTS.md` line 404 is unrelated
      Playwright documentation, and a builder checking there finds nothing and may conclude the
-     rule is invented. That is why STEP 1 makes exactly one commit for #1397 and STEP 3 exactly
-     one for #2152; an earlier draft split #2152 across two or three and broke the rule. STEP 1's
-     separate plan-document commit is not a child-Task deliverable and does not count against it.
+     rule is invented. That is why STEP 1 makes one commit for #1397 and STEP 3 one for #2152;
+     an earlier draft split #2152 across two or three and broke the rule. STEP 1's separate
+     plan-document commit is not a child-Task deliverable and does not count against it.
+
+     **As shipped, the branch has two commits per child Task, not one.** Review findings were
+     fixed after each task's original commit, and `git-safety.sh` blocks `--amend` for agents
+     with no override, so the fixes landed as new commits rather than folded in. `review-final`
+     judged this the better outcome and recommended against squashing, quoting the rule's own
+     stated purpose in `launchpad/AGENTS.md`: those commits are what a reviewer walks and what
+     `git bisect` gets, and squashing would discard the commit message explaining *why* the
+     design-doc citation was wrong. Recorded here so the plan does not assert a commit shape the
+     branch does not have.
  15. No name collisions with existing root skills, and symlinks materialise on this filesystem
      (`ls -la .claude/skills/desktop-screenshot/` shows `lrwxrwxrwx`, so WSL is not checking
      links out as plain files).
@@ -648,8 +657,22 @@ OPEN
 
 LEFT OUT
 
-  Any edit to the seven `SKILL.md` files. Both #1397 and #2151 exclude it; this work adds
-  pointers and changes no content. STEP 1's check (d) asserts this mechanically.
+  Any edit to the seven `SKILL.md` files — **with one recorded exception, added after review.**
+
+  As planned: both #1397 and #2151 exclude it, this work adds pointers and changes no content,
+  and STEP 1's check (d) asserts the *symlink commit* touches nothing under `launchpad/`.
+
+  The exception: `review-skill` found `screen-sensitive/SKILL.md` waived its
+  `$PROFESSOR_PACK_ROOT` check on the stated premise that it "is never invoked standalone" — a
+  premise this registration falsifies — while still carrying a manual-pass branch that could
+  report a secrets gate clean without screening. Serina agreed on 2026-09-14 to fix it here
+  rather than ship a fail-open, so that one file **is** edited on this branch (commit
+  `58fc4598c`).
+
+  Be precise about what check (d) did: it is scoped to `$STEP1_SHA`, a single commit, so it
+  could never have caught an edit made in a later one. It did not assert this exception away —
+  nothing mechanical did. The authorisation is recorded here and in the PR body, not only in a
+  commit message.
 
   A new ADR. ADR-0030 is Accepted and generic, and AGENTS.md §3 already carries the exception in
   writing. Writing one would re-decide a settled question.
