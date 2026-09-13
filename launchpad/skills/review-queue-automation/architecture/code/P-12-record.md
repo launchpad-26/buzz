@@ -213,9 +213,14 @@ class ReuseResolutionError(Exception):
 ```
 
 `Snapshot`, `Job`, `JobStatus`, `EvidenceState`, `Finding`, `Judgement`, `Decision`, `CarryOver`,
-`Attempt`, `Attestation`, `Mutation`, `Plan` are other parts' types, never imported here. Where §6
-below names a payload field after one of them, it means "the same value, JSON-safe, by field name" —
-not the Python type.
+`Attempt`, `Attestation`, `Mutation`, `Plan`, `Spend` are other parts' types, never imported here.
+Where §6 below names a payload field after one of them, it means "the same value, JSON-safe, by field
+name" — not the Python type: a §6 payload row defines its own JSON shape, and a payload field sharing a
+name with another part's field is that value, JSON-safe, never that Python type. The load-bearing
+instance is `spend`'s `source` field: it is not `Spend.source` (`CONTRACTS.md` line 250's closed
+`Literal["harness", "reservation"]`) and admits `"migrated"`, which is why §6's `cost_ledger` migration
+row maps into it; the same payload also carries `axis` and `attempt_id`, neither of which `Spend` has
+at all, confirming the `spend` payload is this package's own shape, never a serialised `Spend`.
 
 ## 3. Entry points — E-13 and E-17
 

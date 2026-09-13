@@ -74,7 +74,9 @@ naming a sixth top-level key). `policy.obligations[*].id/paths/required_for/evid
 `rqa.protocol.Obligation`'s own fields
 (P-04 owns the shape); `policy.mechanical.tools[*]` values are tool ids checked against
 `rqa.remediation.MECHANICAL_TOOL_SET` (P-10 owns the registry); `policy.remediation` is optional and
-defaults to `{"allow_forks": false}`; this file owns validation of everything else in the shape above.
+defaults to `{"allow_forks": false}`; each `budget` axis is optional and an omitted axis is equivalent
+to an explicit `null`, i.e. no configured ceiling on that axis (`CONTRACTS.md` §3 types every axis
+`int | None`); this file owns validation of everything else in the shape above.
 
 Validation is fail-closed at the shared boundaries: every route entry must contain all five `Route`
 fields, including a non-empty `family`; every `policy.mechanical.categories` entry must name a
