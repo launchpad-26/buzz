@@ -14,10 +14,22 @@ belongs behind a tool the persona cannot decline to run, not behind judgement.
 
 ## 1. Run the screen
 
-`<pack-root>` here means `$PROFESSOR_PACK_ROOT` (Open Questions item 6's decision,
-`draft-page` §0 has the fail-loud requirement) — already confirmed set by whichever
-skill called this one, since this skill is never invoked standalone, only as
-`draft-page`/`update-page`'s last step. Run
+`<pack-root>` here means `$PROFESSOR_PACK_ROOT` (Open Questions item 6's decision).
+**Confirm it is set before doing anything else in this skill. If it is unset, stop
+immediately and fail loud with `PROFESSOR_PACK_ROOT is not set; see this pack's README
+for how to configure it`** — the same message and the same rule `draft-page` §0 owns.
+
+Do not assume a caller already checked it. This skill previously waived the check on the
+premise that it "is never invoked standalone, only as `draft-page`/`update-page`'s last
+step". That premise stopped being true when the seven skills were registered at the repo
+root by symlink (#1397): any session can now load this skill directly, and its own
+description — screening content for secrets before it reaches disk — invites exactly
+that. Unset, `<pack-root>/tools/professor.py` expands to `/tools/professor.py`, which
+does not exist, and that failure is indistinguishable from the subcommand not being
+built. On a secrets gate, a run that reports clean without having screened anything is
+the one outcome that must not be reachable.
+
+Then run
 `<pack-root>/tools/professor.py screen-content <scratch-file> --target
 <target-root>` via Bash against the scratch file `draft-page`/`update-page` already
 wrote (their own procedures cover why it's a scratch file, never the real target
@@ -87,19 +99,18 @@ Once Phase 1b lands, `ATTRIBUTION` candidates stop being flagged at all and this
 paragraph goes away — the interim rule is strictly more conservative than the
 dispatch that replaces it, never less.
 
-**Until that subcommand exists, this whole skill is a Phase 1 dependency, not a
-standing design choice.** A manual pass — reading `tools/contract/sensitive-patterns.md`
-(or the target's override, same resolution order) and checking the scratch file's
-content against every category it lists by hand — is what happens *before* Phase 1
-(§9) ships `screen-content`, so that a real dry run (Phase 2) isn't blocked on the
-subcommand existing first. It is advisory, not the mechanical, undecideable-by-the-
-persona gate this skill's whole premise requires (§2's own test: "is being wrong
-silent and mechanically checkable" only holds once a script, not a model's own
-judgement, is doing the checking). **Do not treat a manual pass as satisfying this
-gate once `screen-content` exists** — from that point on, running it by hand instead
-of calling the real subcommand is exactly the "skipping the step because the tooling
-is incomplete" failure mode this design exists to prevent, applied to tooling that
-isn't incomplete anymore.
+**`screen-content` now exists** — Phase 1 shipped it (`tools/professor.py`, issue #2100,
+PR #2106). There is therefore no manual-pass branch in this skill any more, and this
+paragraph no longer describes an available option: a hand-read of
+`tools/contract/sensitive-patterns.md` does **not** satisfy this gate. Running it by
+hand instead of calling the real subcommand is exactly the "skipping the step because
+the tooling is incomplete" failure mode this design exists to prevent, applied to
+tooling that is no longer incomplete.
+
+If the subcommand cannot be run — `$PROFESSOR_PACK_ROOT` unset (§1 fails loud on that),
+the binary missing, or the call erroring — **stop and report the gate as unrunnable.
+Never report `pass`.** An unrun gate and a passed gate are different outcomes, and only
+one of them means the content was screened.
 
 ## 1a. A target-specific ruleset override this tool can't honour
 
