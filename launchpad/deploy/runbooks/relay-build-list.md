@@ -155,7 +155,8 @@ never committed.
 | `BUZZ_GIT_HOOK_HMAC_SECRET` | Random 64 hex | `openssl rand -hex 32` |
 | `POSTGRES_PASSWORD` | Random | `openssl rand -hex 24` |
 | `REDIS_PASSWORD` | Random | `openssl rand -hex 24` |
-| `BUZZ_S3_ACCESS_KEY` / `BUZZ_S3_SECRET_KEY` | Become MinIO's root credentials | `openssl rand -hex 16` / `-hex 32` |
+| `BUZZ_S3_ACCESS_KEY` / `BUZZ_S3_SECRET_KEY` | Relay media-bucket user (`s3:GetObject`/`PutObject`/`DeleteObject` on `BUZZ_S3_BUCKET`). Not MinIO root. Live in `.env`. | `openssl rand -hex 16` / `-hex 32` |
+| `MINIO_ROOT_USER` / `MINIO_ROOT_PASSWORD` | MinIO admin identity. Live in `.env.minio` only — never in `.env`, which the relay loads. | `openssl rand -hex 16` / `-hex 32` |
 
 `buzz-admin` ships inside the relay image, so keys can be generated before anything else is
 running — `connect_db()` is called per-subcommand and `GenerateKey` never calls it

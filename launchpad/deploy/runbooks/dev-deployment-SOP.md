@@ -1023,7 +1023,17 @@ inside the VM, then paste the result.
 | `BUZZ_S3_ACCESS_KEY=` | output of `openssl rand -hex 16` |
 | `BUZZ_S3_SECRET_KEY=` | output of `openssl rand -hex 32` |
 
-Leave everything else as supplied. In particular leave these alone — they are already correct:
+MinIO admin identity is a second file, not this one. Copy `.env.minio.example` to
+`.env.minio` and set:
+
+| Line to change | Set it to |
+|---|---|
+| `MINIO_ROOT_USER=` | output of `openssl rand -hex 16` |
+| `MINIO_ROOT_PASSWORD=` | output of `openssl rand -hex 32` |
+
+Do not put those two names in `.env`. The relay loads every key in `.env`.
+
+Leave everything else in `.env` as supplied. In particular leave these alone — they are already correct:
 
 - `BUZZ_REQUIRE_RELAY_MEMBERSHIP=true` — only approved people may connect
 - `BUZZ_AUTO_MIGRATE=true` — the relay creates its database tables on first start
