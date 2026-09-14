@@ -77,9 +77,23 @@ def test_attempt_log_is_not_world_or_group_readable() -> None:
     that `_atomic_replace` immediately supersedes via `tempfile.mkstemp` (always
     0600) + `os.replace` (a rename, so the destination takes the *source*
     inode's mode). The completed attempt-NNN.json has therefore always been
-    0600 regardless of what the reservation's own mode argument was — this test
-    asserts that post-completion state, so a future edit that regresses either
-    the reservation mode or `_atomic_replace` itself would be caught either way.
+    0600 regardless of what the reservation's own mode argument was — this
+    test asserts exactly that post-completion state, which is what #2247's
+    Definition of Done asks for.
+
+    This does NOT cover a regression to the reservation's own `os.open` mode
+    argument: that value is unobservable once `_atomic_replace` has run, since
+    the destination inode is replaced outright. Reverting `logging_otel.py`'s
+    0o600 back to 0o644 leaves this test green (verified on Linux during
+    review of #2247, not merely reasoned about — this repo's own CI runs
+    this suite on Linux, but this file's docstring was written from a
+    Windows sandbox where the suite cannot even be imported; see
+    `common.py`'s unconditional `fcntl` import). This test's job is narrower
+    than "catches any mode regression": it pins the real invariant
+    `_atomic_replace` provides, not the reservation step's own mode.
+    (Separately, #2265 tracks that this assertion also inherits the process
+    umask, so a future umask-dependent regression to `_atomic_replace` itself
+    could go uncaught under some umasks — a different gap from the one above.)
     See #2247.
     """
     jl, _ = _standard_logger()
