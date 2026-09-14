@@ -244,9 +244,12 @@ Keep it that way: nothing in `compose.dev.yml` should ever become load-bearing.
 
 ### B4 — The relay holds MinIO root credentials
 
-**Finding.** `deploy/compose/compose.yml`: `MINIO_ROOT_USER: ${BUZZ_S3_ACCESS_KEY}` and
+**Finding (original).** `deploy/compose/compose.yml` used to set
+`MINIO_ROOT_USER: ${BUZZ_S3_ACCESS_KEY}` and
 `MINIO_ROOT_PASSWORD: ${BUZZ_S3_SECRET_KEY}` — the same pair the relay gets as
-`BUZZ_S3_ACCESS_KEY`/`BUZZ_S3_SECRET_KEY`. The relay is running as MinIO's root account.
+`BUZZ_S3_ACCESS_KEY`/`BUZZ_S3_SECRET_KEY`. The relay was running as MinIO's root account.
+The public compose file now splits them: MinIO root lives in `.env.minio` (loaded only
+by `minio` and `minio-init`); the relay keeps `BUZZ_S3_*` as a bucket-scoped user.
 
 **Why it matters.** A compromised relay does not just read media, it administers the object store:
 create and delete buckets, and set bucket policy to public. The `minio-init` container correctly runs
