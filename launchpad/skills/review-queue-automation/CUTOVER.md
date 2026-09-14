@@ -127,181 +127,181 @@ successor. `unknown` appears nowhere in this table.
 | `references/runtime-ops.md` | — | #2214 | U-DOCS-14,15,17,18,19,20,21,24 | rewritten | (#2214 rewrite; NOT deletion-authorized by this map) | present |
 | `schemas/author-triage.json` | P-04 | pre-batch (P-04, 0d313897d) | U-VERDICT-03 | retired | none (binned: U-VERDICT-03 — author-triage lane dropped; NOT deletion-authorized by this map) | present |
 | `schemas/reviewer-verdict.json` | P-04 | pre-batch (P-04, 0d313897d) | U-VERDICT-02 | rewritten | rqa.protocol.schema (NOT deletion-authorized by this map — only scripts/ and tests/ are) | present |
-| `scripts/action_gate.py` | P-07 | #2191 | U-AUTHORITY-04 | migrated | rqa.judgement.judge | present |
-| `scripts/advisory.py` | P-07 | #2191 | U-RESILIENCE-05 | rewritten | rqa.judgement.render | present |
-| `scripts/approval.py` | P-11 | #2195 | U-AUTHORITY-05 | rewritten | rqa.escalation.escalate | present |
-| `scripts/approval_action.py` | P-09 | #2193 | U-AUTHORITY-08 | migrated | rqa.github.writes | present |
-| `scripts/approval_evaluate.py` | P-07 | #2191 | U-AUTHORITY-03 | rewritten | rqa.judgement.judge | present |
-| `scripts/assurance.py` | P-06 | #2190 | U-VERDICT-08 | migrated | rqa.harness.panel | present |
-| `scripts/authority.py` | P-08 | #2192 | U-AUTHORITY-01 | rewritten | rqa.authority.gate | present |
-| `scripts/budget.py` | P-05 | #2205 | U-RESILIENCE-02 | migrated | rqa.supply.breakers | present |
-| `scripts/budget.py` | P-05 | #2206 | U-RESILIENCE-01 | rewritten | rqa.supply.budget | present |
-| `scripts/cadence.py` | P-01 | #2197, #2198 | U-QUEUE-05, U-QUEUE-07 | rewritten | rqa.intake.tick | present |
-| `scripts/cadence.py` | P-03 | pre-batch (P-03, 576a6e9f4) | U-QUEUE-06 | migrated | rqa.policy.validate | present |
-| `scripts/checks.py` | P-07 | #2191 | U-VERDICT-05 | migrated | rqa.judgement.findings | present |
-| `scripts/checks.py` | P-09 | #2193 | U-VERDICT-06 | rewritten | rqa.github.conclusions | present |
-| `scripts/cli.py` | P-01 | #2197, #2198 | U-RESILIENCE-16 | migrated | rqa.cli.composition | present |
-| `scripts/common.py` | P-01 | #2197, #2198 | U-RESILIENCE-13 | migrated | rqa.intake.identity | present |
-| `scripts/common.py` | P-02 | #2199 | U-RESILIENCE-11 | migrated | rqa.lifecycle.transition | present |
-| `scripts/common.py` | P-03 | pre-batch (P-03, 576a6e9f4) | U-RESILIENCE-09 | migrated | rqa.policy.validate | present |
-| `scripts/common.py` | P-06 | #2190 | U-RESILIENCE-15 | migrated | rqa.harness.bundle | present |
-| `scripts/common.py` | P-08 | #2192 | U-RESILIENCE-10 | migrated | rqa.authority.capability | present |
-| `scripts/common.py` | P-09 | #2193 | U-RESILIENCE-12 | migrated | rqa.github.transport | present |
-| `scripts/common.py` | P-12 | pre-batch (P-12, 458c500d2) | U-RESILIENCE-14 | migrated | rqa.record.writer | present |
-| `scripts/config.py` | P-01 | #2197, #2198 | U-POLICY-07 | retired | rqa.intake.admission | present |
-| `scripts/config.py` | P-03 | pre-batch (P-03, 576a6e9f4) | U-POLICY-01, U-POLICY-02, U-POLICY-05, U-POLICY-06 | rewritten | rqa.policy.validate, rqa.policy.onboard | present |
-| `scripts/dispatcher.py` | P-01 | #2197, #2198 | U-DISPATCH-01, U-DISPATCH-02, U-DISPATCH-08, U-DISPATCH-10, U-DISPATCH-22 | rewritten | rqa.intake.admission, rqa.intake.lock, rqa.intake.tick, rqa.intake.lease | present |
-| `scripts/dispatcher.py` | P-02 | #2199 | U-DISPATCH-03, U-DISPATCH-07, U-DISPATCH-21, U-DISPATCH-23 | rewritten | rqa.lifecycle.status, rqa.lifecycle.admit, rqa.lifecycle.errors, rqa.lifecycle.states | present |
-| `scripts/dispatcher.py` | P-02 | #2200 | U-DISPATCH-17, U-DISPATCH-18 | rewritten | rqa.lifecycle.steps | present |
-| `scripts/dispatcher.py` | P-05 | #2205 | U-DISPATCH-05 | retired | none (binned: U-DISPATCH-05) | present |
-| `scripts/dispatcher.py` | P-05 | #2206 | U-DISPATCH-12, U-DISPATCH-13 | rewritten | rqa.supply.budget, rqa.supply.spend | present |
-| `scripts/dispatcher.py` | P-06 | #2190 | U-DISPATCH-14 | migrated | rqa.harness.panel | present |
-| `scripts/dispatcher.py` | P-07 | #2191 | U-DISPATCH-15 | rewritten | rqa.judgement.judge | present |
-| `scripts/dispatcher.py` | P-08 | #2192 | U-DISPATCH-09, U-DISPATCH-11 | rewritten | rqa.authority.gate | present |
-| `scripts/dispatcher.py` | P-09 | #2193 | U-DISPATCH-16 | migrated | rqa.github.writes | present |
-| `scripts/dispatcher.py` | P-12 | pre-batch (P-12, 458c500d2) | U-DISPATCH-04, U-DISPATCH-06 | retired | none (binned: U-DISPATCH-04, U-DISPATCH-06) | present |
-| `scripts/dispatcher.py` | P-12 | pre-batch (P-12, 458c500d2) | U-DISPATCH-19 | no landed successor (#2273) | none (binned: U-DISPATCH-19 — not an authorized bin, `keep`-recommended but unimplemented, see §7.3) | present |
-| `scripts/dispatcher.py` | P-12 | pre-batch (P-12, 458c500d2) | U-DISPATCH-20 | rewritten | rqa.record.writer | present |
-| `scripts/errors.py` | P-02 | #2199 | U-RESILIENCE-17 | retired | none (binned: U-RESILIENCE-17) | present |
-| `scripts/errors.py` | P-06 | #2190 | U-RESILIENCE-04 | rewritten | rqa.harness.panel | present |
-| `scripts/evidence.py` | P-06 | #2190 | U-VERDICT-07 | migrated | rqa.harness.bundle | present |
-| `scripts/explain.py` | P-12 | pre-batch (P-12, 458c500d2) | U-RESILIENCE-07 | migrated | rqa.record.explain | present |
-| `scripts/fallback.py` | P-05 | #2205 | U-RESILIENCE-03 | rewritten | rqa.supply.ladder | present |
-| `scripts/findings.py` | P-07 | #2191 | U-VERDICT-04, U-VERDICT-05 | migrated | rqa.judgement.findings | present |
-| `scripts/github_auth.py` | P-08 | #2192 | U-AUTHORITY-02 | rewritten | rqa.authority.capability | present |
-| `scripts/github_mutate.py` | P-09 | #2193 | U-AUTHORITY-08, U-AUTHORITY-09 | rewritten | rqa.github.writes | present |
-| `scripts/github_query.py` | P-09 | #2193 | U-AUTHORITY-10 | migrated | rqa.github.reads | present |
-| `scripts/github_rest.py` | P-09 | #2193 | U-AUTHORITY-11 | migrated | rqa.github.transport | present |
-| `scripts/history.py` | P-12 | pre-batch (P-12, 458c500d2) | U-QUEUE-13 | retired | none (binned: U-QUEUE-13) | present |
-| `scripts/human_cli.py` | P-02 | #2200 | U-AUTHORITY-07 | rewritten | rqa.lifecycle.resume | present |
-| `scripts/human_cli.py` | P-11 | #2195 | U-AUTHORITY-06 | rewritten | rqa.escalation.decide | present |
-| `scripts/launchd.plist.example` | P-01 | #2197, #2198 | U-QUEUE-08 | migrated | rqa.intake.tick | present |
-| `scripts/lease.py` | P-01 | #2197, #2198 | U-QUEUE-03, U-QUEUE-04 | migrated | rqa.intake.lease | present |
-| `scripts/ledger.py` | P-12 | pre-batch (P-12, 458c500d2) | U-RESILIENCE-06 | rewritten | rqa.record.writer | present |
+| `scripts/action_gate.py` | P-07 | #2191 | U-AUTHORITY-04 | migrated | rqa.judgement.judge | deleted |
+| `scripts/advisory.py` | P-07 | #2191 | U-RESILIENCE-05 | rewritten | rqa.judgement.render | deleted |
+| `scripts/approval.py` | P-11 | #2195 | U-AUTHORITY-05 | rewritten | rqa.escalation.escalate | deleted |
+| `scripts/approval_action.py` | P-09 | #2193 | U-AUTHORITY-08 | migrated | rqa.github.writes | deleted |
+| `scripts/approval_evaluate.py` | P-07 | #2191 | U-AUTHORITY-03 | rewritten | rqa.judgement.judge | deleted |
+| `scripts/assurance.py` | P-06 | #2190 | U-VERDICT-08 | migrated | rqa.harness.panel | deleted |
+| `scripts/authority.py` | P-08 | #2192 | U-AUTHORITY-01 | rewritten | rqa.authority.gate | deleted |
+| `scripts/budget.py` | P-05 | #2205 | U-RESILIENCE-02 | migrated | rqa.supply.breakers | deleted |
+| `scripts/budget.py` | P-05 | #2206 | U-RESILIENCE-01 | rewritten | rqa.supply.budget | deleted |
+| `scripts/cadence.py` | P-01 | #2197, #2198 | U-QUEUE-05, U-QUEUE-07 | rewritten | rqa.intake.tick | deleted |
+| `scripts/cadence.py` | P-03 | pre-batch (P-03, 576a6e9f4) | U-QUEUE-06 | migrated | rqa.policy.validate | deleted |
+| `scripts/checks.py` | P-07 | #2191 | U-VERDICT-05 | migrated | rqa.judgement.findings | deleted |
+| `scripts/checks.py` | P-09 | #2193 | U-VERDICT-06 | rewritten | rqa.github.conclusions | deleted |
+| `scripts/cli.py` | P-01 | #2197, #2198 | U-RESILIENCE-16 | migrated | rqa.cli.composition | deleted |
+| `scripts/common.py` | P-01 | #2197, #2198 | U-RESILIENCE-13 | migrated | rqa.intake.identity | deleted |
+| `scripts/common.py` | P-02 | #2199 | U-RESILIENCE-11 | migrated | rqa.lifecycle.transition | deleted |
+| `scripts/common.py` | P-03 | pre-batch (P-03, 576a6e9f4) | U-RESILIENCE-09 | migrated | rqa.policy.validate | deleted |
+| `scripts/common.py` | P-06 | #2190 | U-RESILIENCE-15 | migrated | rqa.harness.bundle | deleted |
+| `scripts/common.py` | P-08 | #2192 | U-RESILIENCE-10 | migrated | rqa.authority.capability | deleted |
+| `scripts/common.py` | P-09 | #2193 | U-RESILIENCE-12 | migrated | rqa.github.transport | deleted |
+| `scripts/common.py` | P-12 | pre-batch (P-12, 458c500d2) | U-RESILIENCE-14 | migrated | rqa.record.writer | deleted |
+| `scripts/config.py` | P-01 | #2197, #2198 | U-POLICY-07 | retired | rqa.intake.admission | deleted |
+| `scripts/config.py` | P-03 | pre-batch (P-03, 576a6e9f4) | U-POLICY-01, U-POLICY-02, U-POLICY-05, U-POLICY-06 | rewritten | rqa.policy.validate, rqa.policy.onboard | deleted |
+| `scripts/dispatcher.py` | P-01 | #2197, #2198 | U-DISPATCH-01, U-DISPATCH-02, U-DISPATCH-08, U-DISPATCH-10, U-DISPATCH-22 | rewritten | rqa.intake.admission, rqa.intake.lock, rqa.intake.tick, rqa.intake.lease | deleted |
+| `scripts/dispatcher.py` | P-02 | #2199 | U-DISPATCH-03, U-DISPATCH-07, U-DISPATCH-21, U-DISPATCH-23 | rewritten | rqa.lifecycle.status, rqa.lifecycle.admit, rqa.lifecycle.errors, rqa.lifecycle.states | deleted |
+| `scripts/dispatcher.py` | P-02 | #2200 | U-DISPATCH-17, U-DISPATCH-18 | rewritten | rqa.lifecycle.steps | deleted |
+| `scripts/dispatcher.py` | P-05 | #2205 | U-DISPATCH-05 | retired | none (binned: U-DISPATCH-05) | deleted |
+| `scripts/dispatcher.py` | P-05 | #2206 | U-DISPATCH-12, U-DISPATCH-13 | rewritten | rqa.supply.budget, rqa.supply.spend | deleted |
+| `scripts/dispatcher.py` | P-06 | #2190 | U-DISPATCH-14 | migrated | rqa.harness.panel | deleted |
+| `scripts/dispatcher.py` | P-07 | #2191 | U-DISPATCH-15 | rewritten | rqa.judgement.judge | deleted |
+| `scripts/dispatcher.py` | P-08 | #2192 | U-DISPATCH-09, U-DISPATCH-11 | rewritten | rqa.authority.gate | deleted |
+| `scripts/dispatcher.py` | P-09 | #2193 | U-DISPATCH-16 | migrated | rqa.github.writes | deleted |
+| `scripts/dispatcher.py` | P-12 | pre-batch (P-12, 458c500d2) | U-DISPATCH-04, U-DISPATCH-06 | retired | none (binned: U-DISPATCH-04, U-DISPATCH-06) | deleted |
+| `scripts/dispatcher.py` | P-12 | pre-batch (P-12, 458c500d2) | U-DISPATCH-19 | no landed successor (#2273) | none (binned: U-DISPATCH-19 — not an authorized bin, `keep`-recommended but unimplemented, see §7.3) | deleted |
+| `scripts/dispatcher.py` | P-12 | pre-batch (P-12, 458c500d2) | U-DISPATCH-20 | rewritten | rqa.record.writer | deleted |
+| `scripts/errors.py` | P-02 | #2199 | U-RESILIENCE-17 | retired | none (binned: U-RESILIENCE-17) | deleted |
+| `scripts/errors.py` | P-06 | #2190 | U-RESILIENCE-04 | rewritten | rqa.harness.panel | deleted |
+| `scripts/evidence.py` | P-06 | #2190 | U-VERDICT-07 | migrated | rqa.harness.bundle | deleted |
+| `scripts/explain.py` | P-12 | pre-batch (P-12, 458c500d2) | U-RESILIENCE-07 | migrated | rqa.record.explain | deleted |
+| `scripts/fallback.py` | P-05 | #2205 | U-RESILIENCE-03 | rewritten | rqa.supply.ladder | deleted |
+| `scripts/findings.py` | P-07 | #2191 | U-VERDICT-04, U-VERDICT-05 | migrated | rqa.judgement.findings | deleted |
+| `scripts/github_auth.py` | P-08 | #2192 | U-AUTHORITY-02 | rewritten | rqa.authority.capability | deleted |
+| `scripts/github_mutate.py` | P-09 | #2193 | U-AUTHORITY-08, U-AUTHORITY-09 | rewritten | rqa.github.writes | deleted |
+| `scripts/github_query.py` | P-09 | #2193 | U-AUTHORITY-10 | migrated | rqa.github.reads | deleted |
+| `scripts/github_rest.py` | P-09 | #2193 | U-AUTHORITY-11 | migrated | rqa.github.transport | deleted |
+| `scripts/history.py` | P-12 | pre-batch (P-12, 458c500d2) | U-QUEUE-13 | retired | none (binned: U-QUEUE-13) | deleted |
+| `scripts/human_cli.py` | P-02 | #2200 | U-AUTHORITY-07 | rewritten | rqa.lifecycle.resume | deleted |
+| `scripts/human_cli.py` | P-11 | #2195 | U-AUTHORITY-06 | rewritten | rqa.escalation.decide | deleted |
+| `scripts/launchd.plist.example` | P-01 | #2197, #2198 | U-QUEUE-08 | migrated | rqa.intake.tick | deleted |
+| `scripts/lease.py` | P-01 | #2197, #2198 | U-QUEUE-03, U-QUEUE-04 | migrated | rqa.intake.lease | deleted |
+| `scripts/ledger.py` | P-12 | pre-batch (P-12, 458c500d2) | U-RESILIENCE-06 | rewritten | rqa.record.writer | deleted |
 | `scripts/logging_otel.py` | P-12 | pre-batch (P-12, 458c500d2) | U-RESILIENCE-08, U-DISPATCH-19 | U-RESILIENCE-08 migrated, U-DISPATCH-19 has no landed successor (#2273, see §7.3) | rqa.record.trace (U-RESILIENCE-08); none (binned: U-DISPATCH-19 — not an authorized bin, retained as reference for #2273, see §7.3) | retained |
-| `scripts/model_registry.py` | P-05 | #2205 | U-POLICY-11, U-POLICY-12 | migrated | rqa.supply.aliases | present |
-| `scripts/modes.py` | P-06 | #2190 | U-POLICY-09 | migrated | rqa.harness.panel | present |
-| `scripts/notify.py` | P-11 | #2195 | U-AUTHORITY-12 | retired | none (binned: U-AUTHORITY-12) | present |
-| `scripts/onboarding.py` | P-01 | #2197, #2198 | U-POLICY-07 | retired | rqa.intake.admission | present |
-| `scripts/onboarding.py` | P-03 | pre-batch (P-03, 576a6e9f4) | U-POLICY-06 | rewritten | rqa.policy.onboard | present |
-| `scripts/panel.py` | P-05 | #2205 | U-VERDICT-09 | migrated | rqa.supply.ladder | present |
-| `scripts/panel.py` | P-06 | #2190 | U-VERDICT-10, U-VERDICT-11, U-VERDICT-12 | migrated | rqa.harness.panel | present |
-| `scripts/planner.py` | P-06 | #2190 | U-DISPATCH-24 | migrated | rqa.harness.risk | present |
-| `scripts/policy.py` | P-03 | pre-batch (P-03, 576a6e9f4) | U-POLICY-04 | migrated | rqa.policy.snapshot | present |
-| `scripts/queue.py` | P-01 | #2197, #2198 | U-QUEUE-01, U-QUEUE-02, U-QUEUE-14 | migrated | rqa.intake.store, rqa.intake.inventory | present |
-| `scripts/risk.py` | P-07 | #2191 | U-VERDICT-13, U-VERDICT-14, U-VERDICT-15, U-VERDICT-16, U-VERDICT-18 | rewritten | rqa.judgement.evidence, rqa.judgement.findings, rqa.judgement.judge | present |
-| `scripts/risk.py` | P-12 | pre-batch (P-12, 458c500d2) | U-VERDICT-17 | retired | none (binned: U-VERDICT-17) | present |
-| `scripts/route_probe.py` | P-05 | #2205 | U-POLICY-12, U-POLICY-13 | migrated | rqa.supply.probe | present |
-| `scripts/routing.py` | P-05 | #2205 | U-POLICY-10 | migrated | rqa.supply.ladder | present |
-| `scripts/runners.py` | P-06 | #2190 | U-DISPATCH-25 | rewritten | rqa.harness.adapters | present |
-| `scripts/scheduled-tick.sh` | P-01 | #2197, #2198 | U-QUEUE-08 | migrated | rqa.intake.tick | present |
-| `scripts/shadow.py` | P-07 | #2191 | U-VERDICT-19, U-VERDICT-20 | rewritten | rqa.judgement.judge | present |
-| `scripts/shadow.py` | P-12 | pre-batch (P-12, 458c500d2) | U-VERDICT-21 | retired | none (binned: U-VERDICT-21) | present |
-| `scripts/snapshot.py` | P-03 | pre-batch (P-03, 576a6e9f4) | U-QUEUE-09, U-QUEUE-10 | migrated | rqa.policy.snapshot | present |
-| `scripts/states.py` | P-02 | #2199 | U-QUEUE-11, U-QUEUE-12 | migrated | rqa.lifecycle.states | present |
-| `scripts/strategies.py` | P-06 | #2190 | U-POLICY-08 | rewritten | rqa.harness.risk | present |
-| `scripts/verdict.py` | P-04 | pre-batch (P-04, 0d313897d) | U-VERDICT-01, U-VERDICT-02 | rewritten | rqa.protocol.fence, rqa.protocol.validate | present |
-| `scripts/worktree.py` | P-10 | #2194 | U-DISPATCH-26 | rewritten | rqa.remediation.worktree | present |
+| `scripts/model_registry.py` | P-05 | #2205 | U-POLICY-11, U-POLICY-12 | migrated | rqa.supply.aliases | deleted |
+| `scripts/modes.py` | P-06 | #2190 | U-POLICY-09 | migrated | rqa.harness.panel | deleted |
+| `scripts/notify.py` | P-11 | #2195 | U-AUTHORITY-12 | retired | none (binned: U-AUTHORITY-12) | deleted |
+| `scripts/onboarding.py` | P-01 | #2197, #2198 | U-POLICY-07 | retired | rqa.intake.admission | deleted |
+| `scripts/onboarding.py` | P-03 | pre-batch (P-03, 576a6e9f4) | U-POLICY-06 | rewritten | rqa.policy.onboard | deleted |
+| `scripts/panel.py` | P-05 | #2205 | U-VERDICT-09 | migrated | rqa.supply.ladder | deleted |
+| `scripts/panel.py` | P-06 | #2190 | U-VERDICT-10, U-VERDICT-11, U-VERDICT-12 | migrated | rqa.harness.panel | deleted |
+| `scripts/planner.py` | P-06 | #2190 | U-DISPATCH-24 | migrated | rqa.harness.risk | deleted |
+| `scripts/policy.py` | P-03 | pre-batch (P-03, 576a6e9f4) | U-POLICY-04 | migrated | rqa.policy.snapshot | deleted |
+| `scripts/queue.py` | P-01 | #2197, #2198 | U-QUEUE-01, U-QUEUE-02, U-QUEUE-14 | migrated | rqa.intake.store, rqa.intake.inventory | deleted |
+| `scripts/risk.py` | P-07 | #2191 | U-VERDICT-13, U-VERDICT-14, U-VERDICT-15, U-VERDICT-16, U-VERDICT-18 | rewritten | rqa.judgement.evidence, rqa.judgement.findings, rqa.judgement.judge | deleted |
+| `scripts/risk.py` | P-12 | pre-batch (P-12, 458c500d2) | U-VERDICT-17 | retired | none (binned: U-VERDICT-17) | deleted |
+| `scripts/route_probe.py` | P-05 | #2205 | U-POLICY-12, U-POLICY-13 | migrated | rqa.supply.probe | deleted |
+| `scripts/routing.py` | P-05 | #2205 | U-POLICY-10 | migrated | rqa.supply.ladder | deleted |
+| `scripts/runners.py` | P-06 | #2190 | U-DISPATCH-25 | rewritten | rqa.harness.adapters | deleted |
+| `scripts/scheduled-tick.sh` | P-01 | #2197, #2198 | U-QUEUE-08 | migrated | rqa.intake.tick | deleted |
+| `scripts/shadow.py` | P-07 | #2191 | U-VERDICT-19, U-VERDICT-20 | rewritten | rqa.judgement.judge | deleted |
+| `scripts/shadow.py` | P-12 | pre-batch (P-12, 458c500d2) | U-VERDICT-21 | retired | none (binned: U-VERDICT-21) | deleted |
+| `scripts/snapshot.py` | P-03 | pre-batch (P-03, 576a6e9f4) | U-QUEUE-09, U-QUEUE-10 | migrated | rqa.policy.snapshot | deleted |
+| `scripts/states.py` | P-02 | #2199 | U-QUEUE-11, U-QUEUE-12 | migrated | rqa.lifecycle.states | deleted |
+| `scripts/strategies.py` | P-06 | #2190 | U-POLICY-08 | rewritten | rqa.harness.risk | deleted |
+| `scripts/verdict.py` | P-04 | pre-batch (P-04, 0d313897d) | U-VERDICT-01, U-VERDICT-02 | rewritten | rqa.protocol.fence, rqa.protocol.validate | deleted |
+| `scripts/worktree.py` | P-10 | #2194 | U-DISPATCH-26 | rewritten | rqa.remediation.worktree | deleted |
 | `tests/conftest.py` | P-09 | #2193 | U-DOCS-24 | rewritten | rqa.github.testing | present |
 | `tests/run_all.py` | P-01 | #2197, #2198 | U-DOCS-23 | migrated | tests/run_all.py | present |
-| `tests/test_advisory.py` | P-07 | #2191 | U-RESILIENCE-05 | rewritten | rqa.judgement.render | present |
-| `tests/test_approval_evidence.py` | P-07 | #2191 | U-VERDICT-16 | rewritten | rqa.judgement.judge | present |
-| `tests/test_approval_policy.py` | P-07 | #2191 | U-AUTHORITY-03 | rewritten | rqa.judgement.judge | present |
-| `tests/test_approval_policy.py` | P-09 | #2193 | U-AUTHORITY-08 | migrated | rqa.github.writes | present |
-| `tests/test_assurance.py` | P-06 | #2190 | U-VERDICT-08 | migrated | rqa.harness.panel | present |
-| `tests/test_budget_controls.py` | P-05 | #2205 | U-RESILIENCE-02 | migrated | rqa.supply.breakers | present |
-| `tests/test_budget_controls.py` | P-05 | #2206 | U-RESILIENCE-01 | rewritten | rqa.supply.budget | present |
-| `tests/test_cadence.py` | P-01 | #2197, #2198 | U-QUEUE-05, U-QUEUE-07 | rewritten | rqa.intake.tick | present |
-| `tests/test_cadence.py` | P-03 | pre-batch (P-03, 576a6e9f4) | U-QUEUE-06 | migrated | rqa.policy.validate | present |
-| `tests/test_checks_vocabulary.py` | P-09 | #2193 | U-VERDICT-06 | rewritten | rqa.github.conclusions | present |
-| `tests/test_config_onboarding.py` | P-01 | #2197, #2198 | U-POLICY-07 | retired | rqa.intake.admission | present |
-| `tests/test_config_onboarding.py` | P-03 | pre-batch (P-03, 576a6e9f4) | U-POLICY-01, U-POLICY-02, U-POLICY-03, U-POLICY-06 | rewritten | rqa.policy.validate, rqa.policy.schema, rqa.policy.onboard | present |
-| `tests/test_counterexample_authority.py` | P-08 | #2192 | — (no disposition unit cites this file; justified via P-08 §1 module list: rqa.authority.gate; also exercises P-09 github_mutate.py and P-03 policy.py/snapshot.py) | retired | tests/test_rqa_authority_gate.py | present |
-| `tests/test_counterexample_migration.py` | P-03 | pre-batch (P-03, 576a6e9f4) | — (no disposition unit cites this file; justified via P-03 §1 module list: rqa.policy.validate, rqa.policy.snapshot) | retired | tests/test_rqa_policy_snapshot.py | present |
-| `tests/test_counterexample_modes.py` | P-06 | #2190 | — (no disposition unit cites this file; justified via P-06 §1 module list: rqa.harness.risk, rqa.harness.panel) | retired | tests/test_rqa_harness_plan.py | present |
-| `tests/test_counterexample_routing.py` | P-05 | #2205 | — (no disposition unit cites this file; justified via P-05 §1 module list: rqa.supply.ladder, rqa.supply.aliases) | retired | tests/test_rqa_supply_route.py | present |
-| `tests/test_counterexample_schemas.py` | P-04 | pre-batch (P-04, 0d313897d) | — (no disposition unit cites this file; justified via P-04 §1 module list: rqa.protocol.validate; also exercises P-03 config.py/policy.py) | retired | tests/test_rqa_protocol_validate.py | present |
-| `tests/test_counterexample_transitions.py` | P-02 | #2199 | — (no disposition unit cites this file; justified via P-02 §1 module list: rqa.lifecycle.states) | retired | tests/test_rqa_lifecycle_states.py | present |
-| `tests/test_degradation.py` | P-06 | #2190 | U-RESILIENCE-04 | rewritten | rqa.harness.panel | present |
-| `tests/test_deterministic.py` | P-01 | #2197, #2198 | U-DOCS-25 | migrated | tests/test_rqa_intake_admission.py | present |
-| `tests/test_deterministic.py` | P-05 | #2205 | U-DOCS-27 | migrated | tests/test_rqa_supply_route.py | present |
-| `tests/test_deterministic.py` | P-06 | #2190 | U-DOCS-26 | rewritten | rqa.harness.bundle | present |
-| `tests/test_deterministic.py` | P-08 | #2192 | U-DOCS-28 | migrated | tests/test_rqa_authority_gate.py | present |
-| `tests/test_dispatch_flow.py` | P-06 | #2190 | U-DISPATCH-14 | migrated | rqa.harness.panel | present |
-| `tests/test_dispatch_flow.py` | P-07 | #2191 | U-DISPATCH-15 | rewritten | rqa.judgement.judge | present |
-| `tests/test_dispatch_flow.py` | P-09 | #2193 | U-DISPATCH-16 | migrated | rqa.github.writes | present |
-| `tests/test_dispatch_observability.py` | P-12 | pre-batch (P-12, 458c500d2) | U-DISPATCH-19 | no exercised successor (#2273), see §8 | none (binned: U-DISPATCH-19 — deleted by wave 2, coverage debt booked to #2273, see §8) | present |
-| `tests/test_docs_contract.py` | P-04 | pre-batch (P-04, 0d313897d) | U-DOCS-22 | retired | none (binned: U-DOCS-22) | present |
-| `tests/test_e2e_outcomes.py` | P-02 | #2200 | U-DOCS-56, U-DOCS-57 | rewritten | tests/test_rqa_lifecycle_paths.py | present |
-| `tests/test_errors_states.py` | P-02 | #2199 | U-QUEUE-11, U-QUEUE-12 | migrated | rqa.lifecycle.states | present |
-| `tests/test_fallback.py` | P-06 | #2190 | U-RESILIENCE-04 | rewritten | rqa.harness.panel | present |
-| `tests/test_fallback_recipes.py` | P-05 | #2205 | U-RESILIENCE-03 | rewritten | rqa.supply.ladder | present |
-| `tests/test_github_auth.py` | P-08 | #2192 | U-AUTHORITY-02 | rewritten | rqa.authority.capability | present |
-| `tests/test_github_query.py` | P-09 | #2193 | U-AUTHORITY-10 | migrated | rqa.github.reads | present |
-| `tests/test_history.py` | P-12 | pre-batch (P-12, 458c500d2) | U-QUEUE-13 | retired | none (binned: U-QUEUE-13) | present |
-| `tests/test_human_execution.py` | P-02 | #2200 | U-AUTHORITY-07 | rewritten | rqa.lifecycle.resume | present |
-| `tests/test_human_queue.py` | P-11 | #2195 | U-AUTHORITY-05 | rewritten | rqa.escalation.escalate | present |
-| `tests/test_integration.py` | P-02 | #2200 | U-DOCS-54 | migrated | tests/test_rqa_lifecycle_paths.py | present |
-| `tests/test_integration.py` | P-03 | pre-batch (P-03, 576a6e9f4) | U-DOCS-51 | migrated | tests/test_rqa_policy_snapshot.py | present |
-| `tests/test_integration.py` | P-10 | #2194 | U-DOCS-53 | rewritten | rqa.remediation.remediate | present |
-| `tests/test_integration.py` | P-11 | #2195 | U-DOCS-52 | migrated | tests/test_rqa_escalation_raise.py | present |
-| `tests/test_integration.py` | P-12 | pre-batch (P-12, 458c500d2) | U-DOCS-55 | migrated | tests/test_rqa_record_store.py | present |
-| `tests/test_lease.py` | P-01 | #2197, #2198 | U-QUEUE-03 | migrated | rqa.intake.lease | present |
-| `tests/test_lease_lifecycle.py` | P-01 | #2197, #2198 | U-QUEUE-04 | migrated | rqa.intake.lease | present |
-| `tests/test_ledger.py` | P-12 | pre-batch (P-12, 458c500d2) | U-RESILIENCE-06 | rewritten | rqa.record.writer | present |
-| `tests/test_logging.py` | P-12 | pre-batch (P-12, 458c500d2) | U-RESILIENCE-08 | no exercised successor for this legacy file itself (#2273), see §8 | none (binned: U-RESILIENCE-08 — subject retained and non-operable, deleted by wave 2, debt booked to #2273, see §8) | present |
-| `tests/test_logging_concurrency.py` | P-12 | pre-batch (P-12, 458c500d2) | U-RESILIENCE-08 | no exercised successor for this legacy file itself (#2273), see §8 | none (binned: U-RESILIENCE-08 — subject retained and non-operable, deleted by wave 2, debt booked to #2273, see §8) | present |
-| `tests/test_model_registry.py` | P-05 | #2205 | U-POLICY-11, U-POLICY-12, U-POLICY-13 | migrated | rqa.supply.aliases, rqa.supply.probe | present |
-| `tests/test_modes.py` | P-06 | #2190 | U-POLICY-09 | migrated | rqa.harness.panel | present |
-| `tests/test_mutations.py` | P-09 | #2193 | U-AUTHORITY-08 | migrated | rqa.github.writes | present |
-| `tests/test_notify.py` | P-11 | #2195 | U-AUTHORITY-12 | retired | none (binned: U-AUTHORITY-12) | present |
-| `tests/test_onboarding.py` | P-01 | #2197, #2198 | U-POLICY-07 | retired | rqa.intake.admission | present |
-| `tests/test_onboarding.py` | P-03 | pre-batch (P-03, 576a6e9f4) | U-POLICY-01, U-POLICY-06 | rewritten | rqa.policy.validate, rqa.policy.onboard | present |
-| `tests/test_panel_policy.py` | P-05 | #2205 | U-POLICY-14 | migrated | rqa.supply.ladder | present |
-| `tests/test_phase1.py` | P-03 | pre-batch (P-03, 576a6e9f4) | U-DOCS-30, U-DOCS-31 | rewritten | tests/test_rqa_policy_validate.py, tests/test_rqa_policy_snapshot.py | present |
-| `tests/test_phase1.py` | P-07 | #2191 | U-DOCS-32 | migrated | tests/test_rqa_judgement_judge.py | present |
-| `tests/test_phase1.py` | P-08 | #2192 | U-DOCS-29 | migrated | tests/test_rqa_authority_gate.py | present |
-| `tests/test_phase2.py` | P-02 | #2199 | U-DOCS-34 | migrated | tests/test_rqa_lifecycle_states.py | present |
-| `tests/test_phase2.py` | P-07 | #2191 | U-DOCS-33 | migrated | tests/test_rqa_judgement_findings.py | present |
-| `tests/test_phase2.py` | P-11 | #2195 | U-DOCS-35 | rewritten | rqa.escalation.store | present |
-| `tests/test_phase3.py` | P-05 | #2205 | U-DOCS-37 | migrated | tests/test_rqa_supply_route.py | present |
-| `tests/test_phase3.py` | P-06 | #2190 | U-DOCS-36 | rewritten | rqa.harness.risk | present |
-| `tests/test_phase4.py` | P-02 | #2199 | U-DOCS-38 | retired | none (binned: U-DOCS-38) | present |
-| `tests/test_phase4.py` | P-12 | pre-batch (P-12, 458c500d2) | U-DOCS-39, U-DOCS-40 | rewritten | tests/test_rqa_record_store.py, rqa.record.explain | present |
-| `tests/test_planner.py` | P-06 | #2190 | U-DISPATCH-24 | migrated | rqa.harness.risk | present |
-| `tests/test_policy_reload.py` | P-03 | pre-batch (P-03, 576a6e9f4) | U-POLICY-04 | migrated | rqa.policy.snapshot | present |
-| `tests/test_queue.py` | P-01 | #2197, #2198 | U-QUEUE-01, U-QUEUE-02 | migrated | rqa.intake.store, rqa.intake.inventory | present |
-| `tests/test_regression.py` | P-06 | #2190 | U-DOCS-41 | migrated | rqa.harness.panel | present |
-| `tests/test_regression.py` | P-07 | #2191 | U-DOCS-42 | migrated | tests/test_rqa_judgement_judge.py | present |
-| `tests/test_repairs.py` | P-01 | #2197, #2198 | U-DOCS-46 | retired | none (binned: U-DOCS-46) | present |
-| `tests/test_repairs.py` | P-02 | #2199 | U-DOCS-47 | migrated | tests/test_rqa_lifecycle_transition.py | present |
-| `tests/test_repairs.py` | P-04 | pre-batch (P-04, 0d313897d) | U-DOCS-48 | migrated | tests/test_rqa_protocol_validate.py | present |
-| `tests/test_repairs.py` | P-07 | #2191 | U-DOCS-43, U-DOCS-49, U-DOCS-58 | migrated | tests/test_rqa_judgement_findings.py, tests/test_rqa_judgement_judge.py | present |
-| `tests/test_repairs.py` | P-08 | #2192 | U-DOCS-44 | migrated | tests/test_rqa_authority_gate.py | present |
-| `tests/test_repairs.py` | P-09 | #2193 | U-DOCS-45, U-DOCS-50 | migrated | tests/test_rqa_github_writes.py, rqa.github.transport | present |
-| `tests/test_request_changes.py` | P-07 | #2191 | U-AUTHORITY-04 | migrated | rqa.judgement.judge | present |
-| `tests/test_rest_cache.py` | P-09 | #2193 | U-AUTHORITY-11 | migrated | rqa.github.transport | present |
-| `tests/test_rest_reader_surface.py` | P-09 | #2193 | U-AUTHORITY-11 | migrated | rqa.github.transport | present |
-| `tests/test_risk.py` | P-07 | #2191 | U-VERDICT-13, U-VERDICT-15 | migrated | rqa.judgement.evidence | present |
-| `tests/test_risk.py` | P-12 | pre-batch (P-12, 458c500d2) | U-VERDICT-17 | retired | none (binned: U-VERDICT-17) | present |
-| `tests/test_route_config.py` | P-05 | #2205 | U-POLICY-10 | migrated | rqa.supply.ladder | present |
-| `tests/test_runner_adapters.py` | P-06 | #2190 | — (no disposition unit cites this file; justified via P-06 §1 module list: rqa.harness.adapters; also exercises P-03 config.py, P-12 ledger.py, P-05 route_probe.py) | retired | tests/test_rqa_harness_adapters.py | present |
-| `tests/test_runners.py` | P-06 | #2190 | U-DISPATCH-25 | rewritten | rqa.harness.adapters | present |
-| `tests/test_runtime_ops.py` | P-02 | #2199 | U-DISPATCH-03, U-DISPATCH-07 | rewritten | rqa.lifecycle.status, rqa.lifecycle.admit | present |
-| `tests/test_runtime_ops.py` | P-05 | #2205 | U-DISPATCH-05 | retired | none (binned: U-DISPATCH-05) | present |
-| `tests/test_runtime_ops.py` | P-12 | pre-batch (P-12, 458c500d2) | U-DISPATCH-04, U-DISPATCH-06 | retired | none (binned: U-DISPATCH-04, U-DISPATCH-06) | present |
-| `tests/test_runtime_ownership.py` | P-01 | #2197, #2198 | U-DISPATCH-02 | rewritten | rqa.intake.lock | present |
-| `tests/test_runtime_ownership.py` | P-02 | #2199 | U-DISPATCH-07 | rewritten | rqa.lifecycle.admit | present |
-| `tests/test_shadow_calibration.py` | P-07 | #2191 | U-VERDICT-19, U-VERDICT-20 | rewritten | rqa.judgement.judge | present |
-| `tests/test_shadow_cli.py` | P-12 | pre-batch (P-12, 458c500d2) | U-VERDICT-21 | retired | none (binned: U-VERDICT-21) | present |
-| `tests/test_snapshot.py` | P-03 | pre-batch (P-03, 576a6e9f4) | U-QUEUE-09, U-QUEUE-10 | migrated | rqa.policy.snapshot | present |
-| `tests/test_snapshot_pinning.py` | P-03 | pre-batch (P-03, 576a6e9f4) | U-QUEUE-10 | migrated | rqa.policy.snapshot | present |
-| `tests/test_stale_head.py` | P-01 | #2197, #2198 | U-QUEUE-14 | migrated | rqa.intake.store | present |
-| `tests/test_state_persistence.py` | P-02 | #2199 | U-QUEUE-11 | migrated | rqa.lifecycle.states | present |
-| `tests/test_strategy_metadata.py` | P-06 | #2190 | U-POLICY-08 | rewritten | rqa.harness.risk | present |
-| `tests/test_verdict_fence.py` | P-04 | pre-batch (P-04, 0d313897d) | U-VERDICT-01 | migrated | rqa.protocol.fence | present |
-| `tests/test_verdict_schema.py` | P-04 | pre-batch (P-04, 0d313897d) | U-VERDICT-02 | rewritten | rqa.protocol.validate | present |
-| `tests/test_worktree.py` | P-10 | #2194 | U-DISPATCH-26 | rewritten | rqa.remediation.worktree | present |
+| `tests/test_advisory.py` | P-07 | #2191 | U-RESILIENCE-05 | rewritten | rqa.judgement.render | deleted |
+| `tests/test_approval_evidence.py` | P-07 | #2191 | U-VERDICT-16 | rewritten | rqa.judgement.judge | deleted |
+| `tests/test_approval_policy.py` | P-07 | #2191 | U-AUTHORITY-03 | rewritten | rqa.judgement.judge | deleted |
+| `tests/test_approval_policy.py` | P-09 | #2193 | U-AUTHORITY-08 | migrated | rqa.github.writes | deleted |
+| `tests/test_assurance.py` | P-06 | #2190 | U-VERDICT-08 | migrated | rqa.harness.panel | deleted |
+| `tests/test_budget_controls.py` | P-05 | #2205 | U-RESILIENCE-02 | migrated | rqa.supply.breakers | deleted |
+| `tests/test_budget_controls.py` | P-05 | #2206 | U-RESILIENCE-01 | rewritten | rqa.supply.budget | deleted |
+| `tests/test_cadence.py` | P-01 | #2197, #2198 | U-QUEUE-05, U-QUEUE-07 | rewritten | rqa.intake.tick | deleted |
+| `tests/test_cadence.py` | P-03 | pre-batch (P-03, 576a6e9f4) | U-QUEUE-06 | migrated | rqa.policy.validate | deleted |
+| `tests/test_checks_vocabulary.py` | P-09 | #2193 | U-VERDICT-06 | rewritten | rqa.github.conclusions | deleted |
+| `tests/test_config_onboarding.py` | P-01 | #2197, #2198 | U-POLICY-07 | retired | rqa.intake.admission | deleted |
+| `tests/test_config_onboarding.py` | P-03 | pre-batch (P-03, 576a6e9f4) | U-POLICY-01, U-POLICY-02, U-POLICY-03, U-POLICY-06 | rewritten | rqa.policy.validate, rqa.policy.schema, rqa.policy.onboard | deleted |
+| `tests/test_counterexample_authority.py` | P-08 | #2192 | — (no disposition unit cites this file; justified via P-08 §1 module list: rqa.authority.gate; also exercises P-09 github_mutate.py and P-03 policy.py/snapshot.py) | retired | tests/test_rqa_authority_gate.py | deleted |
+| `tests/test_counterexample_migration.py` | P-03 | pre-batch (P-03, 576a6e9f4) | — (no disposition unit cites this file; justified via P-03 §1 module list: rqa.policy.validate, rqa.policy.snapshot) | retired | tests/test_rqa_policy_snapshot.py | deleted |
+| `tests/test_counterexample_modes.py` | P-06 | #2190 | — (no disposition unit cites this file; justified via P-06 §1 module list: rqa.harness.risk, rqa.harness.panel) | retired | tests/test_rqa_harness_plan.py | deleted |
+| `tests/test_counterexample_routing.py` | P-05 | #2205 | — (no disposition unit cites this file; justified via P-05 §1 module list: rqa.supply.ladder, rqa.supply.aliases) | retired | tests/test_rqa_supply_route.py | deleted |
+| `tests/test_counterexample_schemas.py` | P-04 | pre-batch (P-04, 0d313897d) | — (no disposition unit cites this file; justified via P-04 §1 module list: rqa.protocol.validate; also exercises P-03 config.py/policy.py) | retired | tests/test_rqa_protocol_validate.py | deleted |
+| `tests/test_counterexample_transitions.py` | P-02 | #2199 | — (no disposition unit cites this file; justified via P-02 §1 module list: rqa.lifecycle.states) | retired | tests/test_rqa_lifecycle_states.py | deleted |
+| `tests/test_degradation.py` | P-06 | #2190 | U-RESILIENCE-04 | rewritten | rqa.harness.panel | deleted |
+| `tests/test_deterministic.py` | P-01 | #2197, #2198 | U-DOCS-25 | migrated | tests/test_rqa_intake_identity.py | deleted |
+| `tests/test_deterministic.py` | P-05 | #2205 | U-DOCS-27 | migrated | tests/test_rqa_supply_route.py | deleted |
+| `tests/test_deterministic.py` | P-06 | #2190 | U-DOCS-26 | rewritten | rqa.harness.bundle | deleted |
+| `tests/test_deterministic.py` | P-08 | #2192 | U-DOCS-28 | migrated | tests/test_rqa_authority_gate.py | deleted |
+| `tests/test_dispatch_flow.py` | P-06 | #2190 | U-DISPATCH-14 | migrated | rqa.harness.panel | deleted |
+| `tests/test_dispatch_flow.py` | P-07 | #2191 | U-DISPATCH-15 | rewritten | rqa.judgement.judge | deleted |
+| `tests/test_dispatch_flow.py` | P-09 | #2193 | U-DISPATCH-16 | migrated | rqa.github.writes | deleted |
+| `tests/test_dispatch_observability.py` | P-12 | pre-batch (P-12, 458c500d2) | U-DISPATCH-19 | no exercised successor (#2273), see §8 | none (binned: U-DISPATCH-19 — deleted by wave 2, coverage debt booked to #2273, see §8) | deleted |
+| `tests/test_docs_contract.py` | P-04 | pre-batch (P-04, 0d313897d) | U-DOCS-22 | retired | none (binned: U-DOCS-22) | deleted |
+| `tests/test_e2e_outcomes.py` | P-02 | #2200 | U-DOCS-56, U-DOCS-57 | rewritten | tests/test_rqa_lifecycle_paths.py | deleted |
+| `tests/test_errors_states.py` | P-02 | #2199 | U-QUEUE-11, U-QUEUE-12 | migrated | rqa.lifecycle.states | deleted |
+| `tests/test_fallback.py` | P-06 | #2190 | U-RESILIENCE-04 | rewritten | rqa.harness.panel | deleted |
+| `tests/test_fallback_recipes.py` | P-05 | #2205 | U-RESILIENCE-03 | rewritten | rqa.supply.ladder | deleted |
+| `tests/test_github_auth.py` | P-08 | #2192 | U-AUTHORITY-02 | rewritten | rqa.authority.capability | deleted |
+| `tests/test_github_query.py` | P-09 | #2193 | U-AUTHORITY-10 | migrated | rqa.github.reads | deleted |
+| `tests/test_history.py` | P-12 | pre-batch (P-12, 458c500d2) | U-QUEUE-13 | retired | none (binned: U-QUEUE-13) | deleted |
+| `tests/test_human_execution.py` | P-02 | #2200 | U-AUTHORITY-07 | rewritten | rqa.lifecycle.resume | deleted |
+| `tests/test_human_queue.py` | P-11 | #2195 | U-AUTHORITY-05 | rewritten | rqa.escalation.escalate | deleted |
+| `tests/test_integration.py` | P-02 | #2200 | U-DOCS-54 | migrated | tests/test_rqa_lifecycle_paths.py | deleted |
+| `tests/test_integration.py` | P-03 | pre-batch (P-03, 576a6e9f4) | U-DOCS-51 | migrated | tests/test_rqa_policy_snapshot.py | deleted |
+| `tests/test_integration.py` | P-10 | #2194 | U-DOCS-53 | rewritten | rqa.remediation.remediate | deleted |
+| `tests/test_integration.py` | P-11 | #2195 | U-DOCS-52 | migrated | tests/test_rqa_escalation_raise.py | deleted |
+| `tests/test_integration.py` | P-12 | pre-batch (P-12, 458c500d2) | U-DOCS-55 | migrated | tests/test_rqa_record_trace.py | deleted |
+| `tests/test_lease.py` | P-01 | #2197, #2198 | U-QUEUE-03 | migrated | rqa.intake.lease | deleted |
+| `tests/test_lease_lifecycle.py` | P-01 | #2197, #2198 | U-QUEUE-04 | migrated | rqa.intake.lease | deleted |
+| `tests/test_ledger.py` | P-12 | pre-batch (P-12, 458c500d2) | U-RESILIENCE-06 | rewritten | rqa.record.writer | deleted |
+| `tests/test_logging.py` | P-12 | pre-batch (P-12, 458c500d2) | U-RESILIENCE-08 | no exercised successor for this legacy file itself (#2273), see §8 | none (binned: U-RESILIENCE-08 — subject retained and non-operable, deleted by wave 2, debt booked to #2273, see §8) | deleted |
+| `tests/test_logging_concurrency.py` | P-12 | pre-batch (P-12, 458c500d2) | U-RESILIENCE-08 | no exercised successor for this legacy file itself (#2273), see §8 | none (binned: U-RESILIENCE-08 — subject retained and non-operable, deleted by wave 2, debt booked to #2273, see §8) | deleted |
+| `tests/test_model_registry.py` | P-05 | #2205 | U-POLICY-11, U-POLICY-12, U-POLICY-13 | migrated | rqa.supply.aliases, rqa.supply.probe | deleted |
+| `tests/test_modes.py` | P-06 | #2190 | U-POLICY-09 | migrated | rqa.harness.panel | deleted |
+| `tests/test_mutations.py` | P-09 | #2193 | U-AUTHORITY-08 | migrated | rqa.github.writes | deleted |
+| `tests/test_notify.py` | P-11 | #2195 | U-AUTHORITY-12 | retired | none (binned: U-AUTHORITY-12) | deleted |
+| `tests/test_onboarding.py` | P-01 | #2197, #2198 | U-POLICY-07 | retired | rqa.intake.admission | deleted |
+| `tests/test_onboarding.py` | P-03 | pre-batch (P-03, 576a6e9f4) | U-POLICY-01, U-POLICY-06 | rewritten | rqa.policy.validate, rqa.policy.onboard | deleted |
+| `tests/test_panel_policy.py` | P-05 | #2205 | U-POLICY-14 | migrated | rqa.supply.ladder | deleted |
+| `tests/test_phase1.py` | P-03 | pre-batch (P-03, 576a6e9f4) | U-DOCS-30, U-DOCS-31 | rewritten | tests/test_rqa_policy_validate.py, tests/test_rqa_policy_snapshot.py | deleted |
+| `tests/test_phase1.py` | P-07 | #2191 | U-DOCS-32 | migrated | tests/test_rqa_judgement_judge.py | deleted |
+| `tests/test_phase1.py` | P-08 | #2192 | U-DOCS-29 | migrated | tests/test_rqa_authority_gate.py | deleted |
+| `tests/test_phase2.py` | P-02 | #2199 | U-DOCS-34 | migrated | tests/test_rqa_lifecycle_states.py | deleted |
+| `tests/test_phase2.py` | P-07 | #2191 | U-DOCS-33 | migrated | tests/test_rqa_judgement_disposition.py | deleted |
+| `tests/test_phase2.py` | P-11 | #2195 | U-DOCS-35 | rewritten | rqa.escalation.store | deleted |
+| `tests/test_phase3.py` | P-05 | #2205 | U-DOCS-37 | migrated | tests/test_rqa_supply_route.py | deleted |
+| `tests/test_phase3.py` | P-06 | #2190 | U-DOCS-36 | rewritten | rqa.harness.risk | deleted |
+| `tests/test_phase4.py` | P-02 | #2199 | U-DOCS-38 | retired | none (binned: U-DOCS-38) | deleted |
+| `tests/test_phase4.py` | P-12 | pre-batch (P-12, 458c500d2) | U-DOCS-39, U-DOCS-40 | rewritten | tests/test_rqa_record_store.py, rqa.record.explain | deleted |
+| `tests/test_planner.py` | P-06 | #2190 | U-DISPATCH-24 | migrated | rqa.harness.risk | deleted |
+| `tests/test_policy_reload.py` | P-03 | pre-batch (P-03, 576a6e9f4) | U-POLICY-04 | migrated | rqa.policy.snapshot | deleted |
+| `tests/test_queue.py` | P-01 | #2197, #2198 | U-QUEUE-01, U-QUEUE-02 | migrated | rqa.intake.store, rqa.intake.inventory | deleted |
+| `tests/test_regression.py` | P-06 | #2190 | U-DOCS-41 | migrated | rqa.harness.panel | deleted |
+| `tests/test_regression.py` | P-07 | #2191 | U-DOCS-42 | migrated | tests/test_rqa_judgement_judge.py | deleted |
+| `tests/test_repairs.py` | P-01 | #2197, #2198 | U-DOCS-46 | retired | none (binned: U-DOCS-46) | deleted |
+| `tests/test_repairs.py` | P-02 | #2199 | U-DOCS-47 | migrated | tests/test_rqa_lifecycle_transition.py | deleted |
+| `tests/test_repairs.py` | P-04 | pre-batch (P-04, 0d313897d) | U-DOCS-48 | migrated | tests/test_rqa_protocol_validate.py | deleted |
+| `tests/test_repairs.py` | P-07 | #2191 | U-DOCS-43, U-DOCS-49, U-DOCS-58 | migrated | tests/test_rqa_judgement_findings.py, tests/test_rqa_judgement_judge.py | deleted |
+| `tests/test_repairs.py` | P-08 | #2192 | U-DOCS-44 | migrated | tests/test_rqa_authority_gate.py | deleted |
+| `tests/test_repairs.py` | P-09 | #2193 | U-DOCS-45, U-DOCS-50 | migrated | tests/test_rqa_github_writes.py, tests/test_rqa_github_transport.py, rqa.github.transport | deleted |
+| `tests/test_request_changes.py` | P-07 | #2191 | U-AUTHORITY-04 | migrated | rqa.judgement.judge | deleted |
+| `tests/test_rest_cache.py` | P-09 | #2193 | U-AUTHORITY-11 | migrated | rqa.github.transport | deleted |
+| `tests/test_rest_reader_surface.py` | P-09 | #2193 | U-AUTHORITY-11 | migrated | rqa.github.transport | deleted |
+| `tests/test_risk.py` | P-07 | #2191 | U-VERDICT-13, U-VERDICT-15 | migrated | rqa.judgement.evidence | deleted |
+| `tests/test_risk.py` | P-12 | pre-batch (P-12, 458c500d2) | U-VERDICT-17 | retired | none (binned: U-VERDICT-17) | deleted |
+| `tests/test_route_config.py` | P-05 | #2205 | U-POLICY-10 | migrated | rqa.supply.ladder | deleted |
+| `tests/test_runner_adapters.py` | P-06 | #2190 | — (no disposition unit cites this file; justified via P-06 §1 module list: rqa.harness.adapters; also exercises P-03 config.py, P-12 ledger.py, P-05 route_probe.py) | retired | tests/test_rqa_harness_adapters.py | deleted |
+| `tests/test_runners.py` | P-06 | #2190 | U-DISPATCH-25 | rewritten | rqa.harness.adapters | deleted |
+| `tests/test_runtime_ops.py` | P-02 | #2199 | U-DISPATCH-03, U-DISPATCH-07 | rewritten | rqa.lifecycle.status, rqa.lifecycle.admit | deleted |
+| `tests/test_runtime_ops.py` | P-05 | #2205 | U-DISPATCH-05 | retired | none (binned: U-DISPATCH-05) | deleted |
+| `tests/test_runtime_ops.py` | P-12 | pre-batch (P-12, 458c500d2) | U-DISPATCH-04, U-DISPATCH-06 | retired | none (binned: U-DISPATCH-04, U-DISPATCH-06) | deleted |
+| `tests/test_runtime_ownership.py` | P-01 | #2197, #2198 | U-DISPATCH-02 | rewritten | rqa.intake.lock | deleted |
+| `tests/test_runtime_ownership.py` | P-02 | #2199 | U-DISPATCH-07 | rewritten | rqa.lifecycle.admit | deleted |
+| `tests/test_shadow_calibration.py` | P-07 | #2191 | U-VERDICT-19, U-VERDICT-20 | rewritten | rqa.judgement.judge | deleted |
+| `tests/test_shadow_cli.py` | P-12 | pre-batch (P-12, 458c500d2) | U-VERDICT-21 | retired | none (binned: U-VERDICT-21) | deleted |
+| `tests/test_snapshot.py` | P-03 | pre-batch (P-03, 576a6e9f4) | U-QUEUE-09, U-QUEUE-10 | migrated | rqa.policy.snapshot | deleted |
+| `tests/test_snapshot_pinning.py` | P-03 | pre-batch (P-03, 576a6e9f4) | U-QUEUE-10 | migrated | rqa.policy.snapshot | deleted |
+| `tests/test_stale_head.py` | P-01 | #2197, #2198 | U-QUEUE-14 | migrated | rqa.intake.store | deleted |
+| `tests/test_state_persistence.py` | P-02 | #2199 | U-QUEUE-11 | migrated | rqa.lifecycle.states | deleted |
+| `tests/test_strategy_metadata.py` | P-06 | #2190 | U-POLICY-08 | rewritten | rqa.harness.risk | deleted |
+| `tests/test_verdict_fence.py` | P-04 | pre-batch (P-04, 0d313897d) | U-VERDICT-01 | migrated | rqa.protocol.fence | deleted |
+| `tests/test_verdict_schema.py` | P-04 | pre-batch (P-04, 0d313897d) | U-VERDICT-02 | rewritten | rqa.protocol.validate | deleted |
+| `tests/test_worktree.py` | P-10 | #2194 | U-DISPATCH-26 | rewritten | rqa.remediation.worktree | deleted |
 
 ## 3. The fifteen SQLite tables — quoted verbatim from `gap/gap-analysis.md` §6.3
 
