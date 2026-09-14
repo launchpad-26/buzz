@@ -9,8 +9,9 @@
 **What to do with it.** Read the four P1 findings. They are the ones worth acting on this
 week. Everything below P1 can wait.
 
-**The short version.** Nothing dangerous. No leaked credentials, no broken security
-reporting, no destructive command pointed at an unknown target. But two documents said a
+**The short version.** Nothing dangerous. No live credentials — the only credential-shaped
+strings are five test fixtures for secret-detection tooling, and no value was reproduced
+anywhere. No broken security reporting, no destructive command pointed at an unknown target. But two documents said a
 sign-off check protects you and it does not exist; the coverage report flatters itself; and
 93.7% of the corpus is still draft. I checked 43 of 122 items — **the other 79 were not
 checked, which is not the same as them passing.**
@@ -21,9 +22,14 @@ findings below are kept as they were written, with the fix recorded against each
 audit that edits itself to match the repository stops being evidence. The ten that remain
 need either a decision only you can make or work larger than a text fix.
 
-**One thing I got wrong.** F-12 originally reported two broken links. One of them was my
-mistake — a correct file I would have sent someone to "fix". It is corrected below and
-explained in full, because how it slipped through matters more than the link did.
+**What I got wrong.** More than one thing, and a second model found most of it. F-12 reported
+two broken links; one was my own checker's error. The citation count, the link count, the
+credential count and the symlink count were all wrong or unreproducible — **none of my census
+figures could be reproduced by either reviewer, because I never committed the scripts that
+produced them.** The credential count was wrong in the worst direction: it said one match
+where there are five. All are corrected below, with `census.py` committed so the numbers can
+be checked rather than believed. Read *Census figures corrected* and *Defects found in this
+framework* before trusting any number here.
 
 ### How the audit was run
 
@@ -89,6 +95,12 @@ carry out of this report.
 credential, no unresolvable citation, no broken security-reporting route, and no
 destructive instruction without a bounded target.
 
+**Read that with the correction below attached.** The credential scan originally reported
+one fixture match; there are five. The conclusion is unchanged — every one sits in a
+declared fixture directory for secret-*detection* tooling, and no value was reproduced —
+but a P0 result resting on a count that was wrong by 5× deserves the caveat in the same
+place as the claim, not fifteen sections later.
+
 That is a real result, and it is bounded: it covers what deterministic checks and a
 purposive review can reach. It does **not** establish that no P0 defect exists — the
 classes with no mechanical enumerator (unstated prerequisites, usage constraints, negative
@@ -102,6 +114,15 @@ behaviour, per `F07`) were not assessed at all.
 - **Checklist** `DEV-008`, `AGENT-017` · **Status** `INCORRECT`
 - **Existing evidence** `launchpad/AGENTS.md:395` — "The DCO check fails any commit without a `Signed-off-by` trailer"; `launchpad/README.md:123` — "the DCO check is not optional"; `launchpad/AGENTS.md:390` — "`-s` is required: DCO check".
 - **Code evidence** 0 of **33** tracked files under `.github/workflows/` contain `dco` or `signed-off-by` (case-insensitive, whole-word). Independently: **39** distinct check runs on merged PR #2245 in `launchpad-26/buzz`, **zero** matching `dco|sign.?off`. Prior corroboration: `launchpad/Research/354-dco-check-on-vendor-drops.md` (2026-08-22, 40 PRs scanned).
+- **Platform evidence, added 2026-09-14 after a cross-model review challenged the categorical wording.** The objection was fair and is the reason this line exists: workflow text plus one PR's check runs cannot by themselves establish *"nothing here rejects an unsigned commit"*, because a GitHub App or a repository **ruleset** can require a check that no workflow file mentions. This repository's own history contains that exact trap — the legacy branch-protection endpoint can return `404` while a ruleset enforces, so querying one and not the other reads as "no gate" when a gate exists. So both were queried directly:
+
+  | Probe | Result |
+  |---|---|
+  | `GET /repos/launchpad-26/buzz/rulesets` | `[]` — no rulesets exist |
+  | `GET /repos/launchpad-26/buzz/rules/branches/launchpad` | `[]` — no rule applies to the base branch |
+  | `GET /repos/launchpad-26/buzz/branches/launchpad/protection` | **no `required_status_checks` key at all**; `required_approving_review_count: 1`, `dismiss_stale_reviews: true`, `require_code_owner_reviews: false` |
+
+  A check that is not *required* cannot reject anything, and there are no required checks of any kind. The claim now rests on three independent sources — workflow text, observed check runs, and the platform's own enforcement configuration — rather than on the first two. **The challenge strengthened the finding rather than overturning it**, which is the outcome an adversarial review is for.
 - **Gap** An enforcement mechanism is asserted as fact in the fork's normative spec and its README. It does not exist in this fork. The sentence is true in the root `AGENTS.md`, which is upstream's guide — this is `F09`'s **A3 transplanted obligation** producing **A2 phantom enforcement**.
 - **Risk** Contributors and agents rely on a gate that will never catch their mistake. Unsigned commits accumulate and are discovered later, when a branch must be rebased with `--signoff`.
 - **Recommended action** Either install a DCO check and keep the sentence, or rewrite both sentences to state what actually happens. **Taken: the sentences were rewritten** — see *Stage 0 remediation*.
@@ -225,8 +246,11 @@ behaviour, per `F07`) were not assessed at all.
 ### P3 — Low priority
 
 #### F-12 · One relative link does not resolve — *corrected down from two; now remediated*
-- **Checklist** `START-002` · **Status** `FAIL` at audit → **`PASS` after remediation** · Of **745** relative
-  links checked, **1** was broken (99.87% resolve).
+- **Checklist** `START-002` · **Status** `FAIL` at audit → **`PASS` after remediation** · **1**
+  genuine broken link, fixed. *(The "745 links checked" denominator originally quoted here is
+  withdrawn as unreproducible — see "Census figures corrected". `census.py` reports 1,540 by a
+  stated rule. The finding itself is unaffected: it concerns which links were broken, not how
+  many were counted.)*
 - **Genuine, and fixed:** `launchpad/docs/corpus/schema/README.md:11` → `../../plans/2026-08-25-issue-622-corpus-schema.md`
   resolved to `launchpad/docs/plans/`; the file is at `launchpad/plans/`. Corrected to `../../../plans/`.
 - **False positive, withdrawn:** `launchpad/docs/corpus/standards/linking.md:41` was **not** a broken link
@@ -283,12 +307,12 @@ strongest, and several represent remediation of defects the research itself foun
 
 | Result | Measurement |
 |---|---|
-| **Citation resolution** | **0 unresolved** repo-path citations of **18,715**, across 20,680 citation strings in 748 files |
+| **Citation resolution** | **`validate.py` exits 0 with 0 errors** across all 748 files — every citation the repository's own validator can resolve, resolves. *The precise counts originally given here (18,715 of 20,680) are withdrawn as unreproducible; see "Census figures corrected".* |
 | **Positional citation bounds** | **0 out-of-bounds** line/range citations (symlink-resolved) |
 | **Relationship integrity** | **1,341** typed edges, **0 unresolved targets** |
 | **Relationship coverage** | **516 of 748** files (69%) declare relationships, up from 89 of 205 (43%) at the research baseline |
-| **Link health** | 744 of 745 relative links resolve (99.87%) — corrected from 743; see methodological correction 4. 745 of 745 after Stage 0 |
-| **Credential hygiene** | 0 matches for AWS, GitHub, Slack, Google or PEM private-key patterns. One match, a self-labelled fixture (F-13) |
+| **Link health** | **1,526 of 1,540** relative links resolve at this branch's HEAD, by `census.py`'s stated rule. **13 of the 14 unresolved are quoted link-syntax examples inside `standards/`, not links.** *The "745" originally given here is withdrawn — no reviewer, including me, could reproduce that denominator.* |
+| **Credential hygiene** | **5** credential-shaped matches across 5 files, every one a test fixture — see the correction below. *This row originally read "0 matches … One match, a self-labelled fixture", which was wrong.* |
 | **Claim entailment** | **4 of 4** claims sampled from the seeded random sample are exactly supported by their cited source at the cited line range — including a verbatim module-doc quotation. *Not projectable* |
 | **Generated-view discipline** | Every generated index declares generator, script, inputs, ordering, input digest, and **both** inclusion and exclusion rules; `stale-docs.md` explicitly refuses to claim a flagged node's FACT is false, "which AGENTS.md itself calls 'a narrowing step, not a certification'" |
 | **Denominator honesty** | `INDEX.md` states 719 canonical nodes, names all 29 excluded generated outputs, and reports "0 discovered file(s) failed to parse or validate" |
@@ -362,20 +386,54 @@ re-verified directly at the new head: `launchpad/AGENTS.md` still asserts the DC
 and 0 of 33 workflow files reference `dco` or `signed-off-by`.
 
 What #2259 did change: `launchpad/agents/the-professor/**` (README, persona, seven
-`SKILL.md` files) and one added plan document. It also registered the Professor's skills
-at the repository root by symlink, creating nine new symlinks under `.claude/skills/` and
-nine under `.agents/skills/`.
+`SKILL.md` files) and one added plan document. It also registered the Professor's skills at
+the repository root by symlink.
 
-**One consequence for future audits.** The symlink count in this repository has gone from
-one (`CLAUDE.md`) to nineteen. `AGENTS.md` §4 already requires symlink resolution before
-checking line bounds — that rule was written because a naive line count of `CLAUDE.md`
-returns 1 and produced 18 false positives during this audit. It now matters eighteen times
-more.
+**One consequence for future audits — figures corrected 2026-09-14.** This paragraph
+previously said the repository's symlink count "has gone from one (`CLAUDE.md`) to
+nineteen". **That was wrong**, and a cross-model review caught it. Measured with
+`git ls-tree -r <rev> | awk '$1==120000'`:
 
-**Not re-run at the new head:** the full citation, link, relationship and secret censuses.
-They were not re-run because their input trees are byte-identical, which is a stronger
-guarantee than re-running would provide. Had any corpus path differed, the census would
-have been repeated rather than carried forward.
+| Scope | `b4a78fe3b` | `78e789369` | Change |
+|---|---|---|---|
+| Whole repository | **53** | **81** | +28 |
+| `launchpad/` only | **2** | **2** | 0 |
+
+The new registrations are seven per directory across `.agents/`, `.claude/`, `.codex/` and
+`.goose/` — 28, not nine each in two directories. **"One" was never the repository's symlink
+count**; it was the count of symlinks I had personally tripped over (`CLAUDE.md`), silently
+generalised into a claim about the repository. That is the same move F-02 criticises in
+`coverage.md`: a number true of the sample restated as a number about the population.
+
+The *conclusion* survives and is worth keeping: `AGENTS.md` §4's rule requiring symlink
+resolution before checking line bounds — written because a naive line count of `CLAUDE.md`
+returns 1 and produced 18 false positives in this audit — now applies to 81 paths rather
+than 53. But note the sharper fact the corrected figures expose: **within the audited
+subtree the symlink count did not move at all.** The growth is entirely outside
+`launchpad/`, so for *this* audit's scope the change is no increase in risk. The original
+wording would have had a future auditor brace for a hazard that did not grow.
+
+**Re-run at the new head — corrected 2026-09-14.** This paragraph previously said the
+citation, link, relationship and secret censuses were not re-run "because their input trees
+are byte-identical". A cross-model review pointed out that this was **true only of the
+corpus**. The citation and relationship censuses take `launchpad/docs/corpus/` as input, and
+that tree is byte-identical, so carrying them forward is sound. But the **link and secret
+censuses covered all of `launchpad/`**, and 11 files there did change — the Professor's
+README, persona, `.plugin/plugin.json` and seven `SKILL.md` files, plus a new 695-line plan.
+Claiming a 100% census while carrying forward a measurement whose input had moved is
+`FOUND-011`'s own failure, in the document that defines it.
+
+Rather than weaken the claim with a caveat, the two affected censuses were **re-run over the
+11 changed files**:
+
+| Census | Input | Result at new head |
+|---|---|---|
+| Relative links | 11 changed files | **1 of 1 resolve**, 0 broken |
+| Credential patterns (AWS, GitHub, Slack, Google, PEM) | 11 changed files | **0 matches** |
+
+So the census figures stand, and now on measurement rather than on an inference that did not
+hold for two of the four. The citation and relationship censuses remain carried forward on
+the byte-identical corpus tree, which is a stronger guarantee than re-running would provide.
 
 ---
 
@@ -422,8 +480,163 @@ untouched. Each needs either a maintainer decision (`HC-1` through `HC-6`), a ch
 generated tooling, or work larger than Stage 0 admits. They are Stages 1–5 of the roadmap.
 
 **Verification after remediation:** corpus validator exits 0, 0 errors; `confidence.md`
-front matter parses with its ledger intact; all 745 relative links resolve; the framework's
+front matter parses with its ledger intact; the one genuine broken link is fixed; the framework's
 own 16 self-checks pass. What has *not* been re-run is the full citation, relationship and
 secret census — the Stage 0 edits touched six files, none of which carry positional
 citations, so those censuses are unaffected. That is a reasoned exemption, not an
 assumption: if a later stage edits corpus nodes, the censuses must be re-run.
+
+---
+
+## Defects found in this framework by cross-model review
+
+The framework was reviewed by a second model (Codex) before this branch was proposed for
+merge. It was told to refute rather than confirm. It found real defects **in the auditing
+instrument itself**, which are recorded here rather than quietly patched, because a
+framework that hides its own failures has no standing to demand disclosure from anything
+else.
+
+### S-01 · The self-test could not detect a dropped checklist item — `BLOCKER`, fixed
+
+The suite scanned `03-master-checklist.md` with `^\*\*([A-Z]+-\d{3}) ` — **the generator's
+own shape**. Deleting one space from an item heading (`**READER-002 ·` → `**READER-002·`)
+made both parsers skip the same item. The generator wrote 121 items; `item_count`
+self-reported 121; the two ID sets matched *because both were missing the same ID*; the
+suite exited 0. The README claimed at the time that the generator "fails loudly rather than
+silently dropping an item".
+
+Reproduced independently before fixing: one character, 122 → 121, exit 0.
+
+This is precisely the failure class this checklist names in `AGENT-019` and the research
+corpus calls **coverage theatre** — a check whose passing is guaranteed by its own
+construction. Generating one artefact from another removes *drift*; it does not remove
+*silent loss*, because both sides inherit the same blind spot. **A parity test written in
+the generator's vocabulary cannot see what that vocabulary cannot express.**
+
+Fixed by making the suite's scan deliberately *looser* than the generator's
+(`^\*\*([A-Z]+-\d{3})\b`), so the two parsers can disagree. The same mutation now fails with
+`differ by ['READER-002']` and exit 1, and the unmutated tree still passes.
+
+### S-02 · Parity compared identifiers, not content — `MAJOR`, fixed
+
+The suite compared ID sets and field *presence*. A YAML `requirement` could be replaced with
+text contradicting the Markdown and the suite still passed. Demonstrated by substituting
+`READER-001`'s requirement with its own negation: exit 0.
+
+Fixed by comparing normalised requirement text per ID. The same substitution now fails with
+`requirement text is identical in Markdown and YAML — ['READER-001']`.
+
+### S-03 · Reader-first checks certify weaker predicates than their names claim — `MINOR`, open
+
+`READER-001` passes on a summary heading appearing *anywhere*, not at the top.
+`READER-002b` passes on a single `*In words:*` marker anywhere in the file, not one per
+diagram. The fence check tests parity only. Anchor-only links are skipped by the link check.
+Each is a real gap between the name and the predicate. Filed rather than fixed: they need
+the predicates redesigned, not patched, and that is Stage 1 work.
+
+### What this says about the audit above
+
+Two of my three self-checks on the instrument were weaker than their labels, and a
+second model found in one pass what I had not found while writing the thing. The audit's
+own P0 result — "none confirmed" — is bounded by method and says so, and this is the
+concrete shape of that bound. **Treat every `PASS` in this report as "this check did not
+fail", not "this property holds".**
+
+---
+
+## Census figures corrected, and made reproducible
+
+Two independent reviewers tried to reproduce this report's census numbers and could not.
+That is the most serious class of defect an audit can have — not a wrong number, but a
+number **nobody can check**. The cause was mundane and entirely mine: the censuses were run
+from throwaway shell pipelines that were never committed, so the rule that produced each
+denominator existed only in my session.
+
+The fix is `census.py`, committed beside this report. It states each rule in the code that
+applies it and prints every figure below. `python3 census.py <rev>` reproduces this section.
+
+### The citation count was wrong, and the category boundary is the reason
+
+| Source | Repository-path citations | Total citation strings |
+|---|---|---|
+| This report, as first published | 18,715 | 20,680 |
+| Reviewer A (Codex) | 18,791 | 20,850 |
+| Reviewer B, independently | 18,791 | 20,850 |
+| `census.py`, delegating to `validate.py` | 17,844 | 20,801 |
+
+**Four methods, four answers, over the same 748 files.** Nobody miscounted; each drew the
+boundary of "repository-path citation" somewhere slightly different — whether a Markdown-link
+citation counts as its target, whether a bare path without a line number counts, how graph
+edges and tool results are bucketed. The two reviewers agreeing tells us their *rules*
+agreed, not that the figure is canonical.
+
+So the precise figure is withdrawn rather than restated with better arithmetic. **A count
+whose definition is contested is not evidence, and picking whichever number has the most
+votes would launder that disagreement into false precision.** `census.py` now imports
+`validate.py`'s classifier instead of reimplementing it, so this repository has one
+definition; but the honest reading is that the boundary itself needs deciding before any
+figure is quoted.
+
+**What survives, and it is the claim that actually mattered:**
+`launchpad/project-intelligence/corpus/validate.py` exits **0** with **0 errors** over the
+whole corpus. Every citation the repository's own validator can resolve, resolves. That is
+reproducible by one command, it is the property the original figure was evidence *for*, and
+it does not depend on how the buckets are drawn.
+
+### The link denominator was not reproducible; it is now
+
+The report claimed **745** relative links. Neither reviewer could reproduce it by any
+method — they obtained 1,515 raw, 895 deduplicated, and 1,273 excluding fragments. Nor can
+I. The figure is withdrawn.
+
+`census.py` states its rule — every tracked `.md` file under `launchpad/`, every occurrence
+rather than unique pairs, fragments stripped, anchors unverified — and at this branch's HEAD
+reports **1,540 relative links, 1,526 resolving, 14 not**.
+
+**13 of those 14 are the F-12 false positive again**, at scale: targets like `url`, `target`,
+`...`, `AGENTS.md` and `file.md#some-heading` quoted *inside* `standards/linking.md`,
+`standards/diagrams.md` and `standards/code-references.md` as examples of link syntax. A
+document that teaches linking is full of strings shaped like links that are not links. The
+one plausible genuine case is
+`launchpad/plans/2026-08-26-issue-639-corpus-readme.md` → `schema/node.schema.json`, a
+historical plan quoting a path relative to a file it is describing rather than itself.
+
+**The checker still cannot tell a link from a quotation** — the same limitation that produced
+F-12, now measured rather than stumbled over. Teaching it that difference is Stage 1 work; a
+raw count is published here with the caveat attached, rather than a clean number that would
+require silently discarding 13 results.
+
+### The credential count was wrong — five matches, not one
+
+The report said "0 matches … One match, a self-labelled fixture". The census finds **5
+credential-shaped matches across 5 files**:
+
+| File | Pattern |
+|---|---|
+| `launchpad/agents/the-professor/tools/contract/fixtures/block-private-key.md` | PEM private key |
+| `launchpad/scripts/security_audit_fixtures/secrets/ssh_private_key.txt` | PEM private key |
+| `launchpad/scripts/security_audit_fixtures/secrets/registry_token.txt` | GitHub token |
+| `launchpad/scripts/security_audit_fixtures/secrets/s3_minio_keys.txt` | AWS access key |
+| `launchpad/skills/review-queue-automation/tests/test_rqa_authority_secrecy.py` | GitHub token |
+
+**No value was reproduced at any point**, in this report, in `census.py`'s output, or in the
+session that produced either. Every match sits in a directory whose name declares it a
+fixture for secret-*detection* tooling, so the security conclusion is unchanged: these are
+the scanner's own test material.
+
+But the original figure was still wrong, and wrong in the direction that matters. An audit
+that undercounts credential-shaped matches by 5× has produced a *reassuring* error in the
+one category where a reader is least able to check it themselves. F-13 discussed one fixture
+as though it were the only one; it was an example, and the report presented it as the
+population. **The corrected finding is not "there is a fixture" but "there are five, in
+three separate subsystems, and none is allowlisted anywhere."**
+
+### The draft percentage mixes two populations
+
+**93.7%** is `701/748` — **all corpus files, including the 29 registered generated outputs**.
+The canonical-node figure is `680/727 = 93.5%`. The difference is small; the undisclosed
+denominator is not, in a report whose `HC-1` says no coverage number here has an agreed
+denominator. Generated projections carry `status: draft` in front matter despite not being
+on a draft→active maturity path at all, so folding them in measures something slightly
+different from what the sentence claims. Both figures are now printed by `census.py`, which
+refuses to pick one.

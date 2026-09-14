@@ -57,9 +57,21 @@ plus an audit of the `launchpad/` subtree against it.
 | — · Generator for output 10 | [`generate_checklist_yaml.py`](generate_checklist_yaml.py) |
 
 **Editing the checklist:** change `03-master-checklist.md`, then run
-`python3 generate_checklist_yaml.py` from this directory. Never hand-edit
-`checklist.yaml` — it is overwritten, and the generator fails loudly rather than silently
-dropping an item it cannot parse.
+`python3 generate_checklist_yaml.py` from this directory, then run
+`python3 test_documentation_review.py`. Never hand-edit `checklist.yaml` — it is
+overwritten.
+
+**The generator does *not* fail loudly on an item it cannot parse. It skips it silently.**
+That is a property of the regex, and this README claimed the opposite until 2026-09-14. A
+cross-model review deleted a single space from an item heading: the generator emitted 121
+items instead of 122, `item_count` agreed with itself at 121, and the suite exited 0 —
+because the suite scanned the Markdown with *the generator's own pattern*, so both parsers
+were blind to the same character.
+
+The check now scans with a deliberately looser pattern than the generator uses, so the two
+can disagree, and compares requirement **text** as well as IDs. Re-running that mutation now
+fails with `differ by ['READER-002']` and exit 1. **Run the suite after regenerating** — the
+generator alone still will not tell you.
 
 ---
 
@@ -72,14 +84,20 @@ including 719 canonical corpus nodes and 29 registered generated outputs.
 
 **Overall health: structurally excellent, semantically unverified.**
 
-The `launchpad/` documentation has the strongest mechanical integrity I can measure. Every
-one of **18,715 repository-path citations resolves**, and across the **20,680 citations**
-parsed in total not one positional citation points past the end of its file. All
-**1,341 relationship edges** resolve. **744 of 745** relative links
-work — and **745 of 745** after the Stage 0 fixes in this branch. (That figure was
-originally reported as 743; one of the two "broken" links was my own checker's error, not
-the repository's. Audit report, methodological correction 4.) There are no exposed
-credentials. The generated indexes declare their generator,
+The `launchpad/` documentation has the strongest mechanical integrity I can measure.
+**`validate.py` exits 0 with 0 errors across all 748 corpus files** — every repository-path
+citation it can resolve, resolves, and no positional citation points past the end of its
+file. All **1,341 relationship edges** resolve. **1,526 of 1,540** relative links work, and
+**13 of the 14 that do not are quoted link-syntax examples inside `standards/`, not
+links**. The only credential-shaped strings in the subtree are five test fixtures for
+secret-detection tooling.
+
+**Three of those figures replace numbers I first published and could not reproduce.** The
+citation counts (18,715 of 20,680), the link denominator (745) and the credential count
+(one) were all wrong or unverifiable, because I ran the censuses from shell pipelines I
+never committed. Two independent reviewers caught it. `census.py` now ships beside this
+file and prints every figure above; the rules that set each denominator are written in the
+code that applies them. **Prefer running it over trusting this paragraph.** The generated indexes declare their generator,
 inputs, ordering, input digest, and both inclusion *and* exclusion rules — and explicitly
 refuse to overclaim beyond what a `git diff` establishes.
 
@@ -303,9 +321,15 @@ Stated explicitly rather than left to inference:
 
 ## Recommended next review step
 
-**Run roadmap Stage 0 (six small fixes, about a day), then Stage 1's five deterministic
-gates.** Do not start a deep review before the gates exist — reviewer attention spent on
-defects a script can catch is the misallocation the whole framework exists to prevent.
+**Stage 0 is already done in this branch** — all six fixes. **Start at Stage 1's five
+deterministic gates.** Do not start a deep review before the gates exist — reviewer
+attention spent on defects a script can catch is the misallocation the whole framework
+exists to prevent.
+
+Stage 1 has a prerequisite that is a decision, not a task: **`HC-4`, which of the eight hard
+gates block a merge.** A check cannot be added to CI until someone decides it is enforced,
+and building it the other way round — shipping the gate, documenting it as blocking, and
+leaving it advisory — reproduces F-01 exactly.
 
 Then the first deep-review tranche should be `docs/corpus/operations/` (36 nodes) together
 with the deploy runbooks, because that is where a documentation defect becomes data loss,

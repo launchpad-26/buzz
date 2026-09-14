@@ -27,13 +27,13 @@ flowchart LR
     D --> F["43 of 122<br/>checklist items assessed"]
     E --> F
     F --> G["17 pass · 22 findings<br/>4 not applicable"]
-    A --> H["81 items<br/>NOT assessed"]
+    A --> H["79 items<br/>NOT assessed"]
     H --> I["Not a pass.<br/>Just not looked at."]
 ```
 
 *In words:* automated checks ran across all 1,651 files; deep semantic review touched only
 a handful. Together they covered 43 of the 122 checklist items, producing 17 passes, 22
-findings and 4 not-applicable results. The remaining 81 items were not assessed at all, and
+findings and 4 not-applicable results. The remaining 79 items were not assessed at all, and
 that is recorded as an absence of evidence rather than as a pass.
 
 ---
@@ -66,7 +66,7 @@ tabulated one per row, and a surface is the unit at which ownership and action a
 
 | Surface | Files | Purpose | Audience | Areas covered | Missing | Accuracy | Staleness risk | Action |
 |---|---|---|---|---|---|---|---|---|
-| `standards/` | 19 | The corpus's own rules: evidence, confidence, provenance, atomicity, naming, linking, status, diagrams, normative language | Agent, developer, reviewer | FOUND-003/004/010/011/012, AGENT-014/020/021/024 | — | `PARTIAL` — substantively the strongest material in the subtree; `confidence.md` carries structural merge damage (F-06) and its own rule is 44% unmet (F-04) | Medium | Repair `confidence.md`; add the band-value check |
+| `standards/` | 19 | The corpus's own rules: evidence, confidence, provenance, atomicity, naming, linking, status, diagrams, normative language | Agent, developer, reviewer | FOUND-003/004/010/011/012, AGENT-014/020/021/024 | — | `PARTIAL` — substantively the strongest material in the subtree. `confidence.md` carried structural merge damage (F-06), **repaired in this branch**; its own rule remains 44% unmet (F-04), which is open | Medium | F-06 done (roadmap 0.5). Still open: the band-value check, which is what would have caught F-04 |
 | `templates/` | 26 | Genre contracts per node type | Agent | R02 genre overlays; `API-012` | — | `NOT_ASSESSED` | Low — templates change slowly | Assess against `R02`'s eight families |
 | `architecture/` | 47 | Context, container, deployment, flow, principle views | Developer, operator | ARCH-001…005 | ARCH-006, ARCH-009 | `NOT_ASSESSED` — the research found (2026-09-07) 48 nodes all `draft`, 7 with diagrams, 2 with relationships; relationship coverage has since risen corpus-wide to 69% | Medium | First deep-review tranche |
 | `layers/` | 170 | Cross-cutting system layers — the largest single group | Developer | ARCH-006/007, API-008 | — | `NOT_ASSESSED`; 2 of 4 random-sample claims verified here | Medium | Sample-based review |
@@ -84,7 +84,7 @@ tabulated one per row, and a surface is the unit at which ownership and action a
 
 | Surface | Files | Purpose | Audience | Areas covered | Missing | Accuracy | Staleness risk | Action |
 |---|---|---|---|---|---|---|---|---|
-| `deploy/runbooks/` | live SOPs | Stand up a dev environment end to end | Operator, newcomer | OPS-004, START-003/004/007, HUMAN-006 | — | `PARTIAL` — a destructive step's rationale follows the block (F-10). Otherwise unusually complete: every command written out, nothing hidden in a script | **High** — environment-bound | Move the rationale; assign an owner |
+| `deploy/runbooks/` | live SOPs | Stand up a dev environment end to end | Operator, newcomer | OPS-004, START-003/004/007, HUMAN-006 | — | `PARTIAL` → **`PASS`** on F-10 — the destructive step's rationale followed the block; **moved above it in this branch** (warning at line 3003, command at 3013). Otherwise unusually complete: every command written out, nothing hidden in a script | **High** — environment-bound | F-10 done (roadmap 0.3). Still open: assign an owner and a review trigger (`FOUND-009`) |
 | `deploy/archived/` | archived SOPs | Superseded procedures | — | GOV-007 | — | `INCORRECT` → **`PASS`** — the archived SOP did not say it was archived while containing destructive commands (F-09); **banner added in this branch**, naming the live replacement | **High** | Done (roadmap 0.2). `GOV-007` across all 67 ADRs remains open at Stage 2.5 |
 | `deploy/` (compose, configs) | 41 md + configs | Deployment configuration | Operator | API-008/009 | OPS-001/002 logging and monitoring | `NOT_ASSESSED` | **High** | Assess with operations |
 

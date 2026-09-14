@@ -75,7 +75,23 @@ def main() -> int:
     items = data.get("items") or []
 
     print("Checklist integrity")
-    md_ids = set(re.findall(r"^\*\*([A-Z]+-\d{3}) ", md_text, re.M))
+    # DELIBERATELY LOOSER THAN THE GENERATOR'S PATTERN. The generator requires
+    # `**ID · text**` followed by an em-dash field block; this requires only a
+    # bolded ID at the start of a line. That difference is the whole point.
+    #
+    # Until 2026-09-14 this scan was `r"^\*\*([A-Z]+-\d{3}) "` — the generator's
+    # own shape. A cross-model review then deleted one space (`**READER-002 ·`
+    # became `**READER-002·`) and BOTH parsers skipped the item identically: the
+    # generator wrote 121 items, `item_count` self-reported 121, the two ID sets
+    # matched each other because both were missing the same ID, and the suite
+    # exited 0 — while the README claimed it "fails loudly rather than silently
+    # dropping an item".
+    #
+    # A parity test written in the generator's own vocabulary cannot see what
+    # that vocabulary cannot express. The check only has force if the two
+    # parsers can DISAGREE, so this one is intentionally permissive: anything a
+    # reader would recognise as an item heading must survive into the YAML.
+    md_ids = set(re.findall(r"^\*\*([A-Z]+-\d{3})\b", md_text, re.M))
     yaml_ids = {i["id"] for i in items}
 
     check("YAML parses and has items", bool(items), f"{len(items)} items")
@@ -93,6 +109,31 @@ def main() -> int:
         "Markdown and YAML contain the same IDs",
         md_ids == yaml_ids,
         f"differ by {sorted(md_ids ^ yaml_ids)}" if md_ids != yaml_ids else "",
+    )
+
+    # CONTENT parity, not just ID parity. Matching ID sets says the same items
+    # exist on both sides; it says nothing about whether they still say the same
+    # thing. The same cross-model review replaced a YAML requirement with
+    # contradictory text and the suite passed, because nothing compared the
+    # words. An ID-only check licenses exactly the drift generation was adopted
+    # to make impossible.
+    md_requirements = {
+        pid: req.strip()
+        for pid, req in re.findall(
+            r"^\*\*([A-Z]+-\d{3}) · (.+?)\*\*", md_text, re.M
+        )
+    }
+    mismatched = [
+        i["id"]
+        for i in items
+        if i["id"] in md_requirements
+        and " ".join((i.get("requirement") or "").split())
+        != " ".join(md_requirements[i["id"]].split())
+    ]
+    check(
+        "requirement text is identical in Markdown and YAML",
+        not mismatched,
+        f"{mismatched}" if mismatched else "",
     )
 
     empty = [
