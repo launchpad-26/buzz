@@ -62,7 +62,32 @@ pre-push:
         - "docker-compose*.yml"
         - "docker-compose*.yaml"
         - "deploy/**"
-      run: python3 -m unittest discover -s launchpad/scripts -p 'test_*.py'
+      # `env -u` IS LOAD-BEARING. Do not simplify this to a bare python3 call.
+      #
+      # Git exports GIT_DIR into every hook, and git honours it OVER a
+      # subprocess's `cwd=`. Several suites here build a throwaway repository in
+      # a temp directory and isolate it with `cwd=` alone — correct for a normal
+      # run, catastrophic inside a hook: the fixture's `git add -A && git commit`
+      # lands in THE REPOSITORY BEING PUSHED.
+      #
+      # Not theoretical. The first version of this lane, without `env -u`, put 15
+      # commits authored `test <test@example.com>` titled "test fixture" onto the
+      # branch being pushed, moved HEAD to the fixture's tree, and left most of
+      # the repository showing as untracked. The push aborted, so nothing reached
+      # the remote — but it was silent until someone read `git status`.
+      #
+      # Reproduced minimally: with only GIT_DIR set, a `git commit` run from a
+      # different directory adds a commit to the GIT_DIR repository and none to
+      # the one in `cwd`.
+      #
+      # Scrubbed here rather than in each test: one place that must be right
+      # beats N places that must each stay right, and no test author can be
+      # expected to know their suite will one day run inside a hook.
+      run: >-
+        env -u GIT_DIR -u GIT_WORK_TREE -u GIT_INDEX_FILE -u GIT_PREFIX
+        -u GIT_OBJECT_DIRECTORY -u GIT_ALTERNATE_OBJECT_DIRECTORIES
+        -u GIT_QUARANTINE_PATH
+        python3 -m unittest discover -s launchpad/scripts -p 'test_*.py'
 
     # 59ms for both. Mirrors .github/workflows/launchpad-adr-check.yml.
     launchpad-adr-check:

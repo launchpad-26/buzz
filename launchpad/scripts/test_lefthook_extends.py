@@ -95,6 +95,45 @@ class LefthookExtendsWiring(unittest.TestCase):
             "lane is a decision; losing one is not.",
         )
 
+    # Lanes that shell out to a suite which may itself run git. Named
+    # explicitly: a future lane that runs git should be added here deliberately
+    # rather than swept in by a wildcard.
+    LANES_NEEDING_GIT_ENV_SCRUB = {"launchpad-scripts-tests"}
+
+    # What git exports into a hook and honours over a subprocess's `cwd=`.
+    REQUIRED_UNSETS = ("GIT_DIR", "GIT_WORK_TREE", "GIT_INDEX_FILE")
+
+    def test_git_env_is_scrubbed_where_tests_run_git(self) -> None:
+        """Without this, a fixture's commits land in the repo being pushed.
+
+        Measured, not hypothetical. The first version of this lane put 15
+        commits titled "test fixture", authored `test <test@example.com>`, onto
+        the branch being pushed — because git hooks export GIT_DIR and git
+        honours it over a subprocess's `cwd=`, so suites that isolate their
+        fixture repository with `cwd=` alone write into the real one instead.
+
+        The damage was local and silent: the push aborted, nothing reached the
+        remote, and the only symptom was `git status`. Deleting `env -u` would
+        reintroduce it and nothing else here would notice — hence this test.
+        """
+        path = os.path.join(self.root, "launchpad/lefthook-launchpad.yml")
+        if not os.path.exists(path):
+            self.skipTest("covered by test_the_extended_file_exists")
+        with open(path, encoding="utf-8") as fh:
+            cfg = yaml.safe_load(fh)
+        lanes = (cfg.get("pre-push") or {}).get("commands") or {}
+        for name in self.LANES_NEEDING_GIT_ENV_SCRUB:
+            with self.subTest(lane=name):
+                run = (lanes.get(name) or {}).get("run", "")
+                for var in self.REQUIRED_UNSETS:
+                    self.assertIn(
+                        f"-u {var}", run,
+                        f"{name} does not unset {var}. Git hooks export it, and "
+                        "git honours it over a subprocess's cwd, so a fixture "
+                        "repository built by these tests would commit into the "
+                        "repository being pushed.",
+                    )
+
     def test_each_lane_is_path_scoped(self) -> None:
         """An unscoped lane runs on every push, which is how hooks get bypassed."""
         path = os.path.join(self.root, "launchpad/lefthook-launchpad.yml")
