@@ -42,6 +42,20 @@ SUBTREE = "launchpad"
 CORPUS = "launchpad/docs/corpus"
 CORPUS_EXCLUDE = "/schema/"
 
+# Inputs the census could not read, and binaries it skipped. Reported in the
+# output rather than folded silently into the totals: a denominator that quietly
+# omits what it could not open is the exact failure this file was written to fix.
+FAILED_READS: list[str] = []
+BINARY_SKIPS: list[str] = []
+# Files whose front matter would not parse as YAML, so the line scanner was used
+# instead. Named in the output because their counts are the less reliable ones.
+YAML_FALLBACKS: list[str] = []
+
+try:
+    import yaml
+except ImportError:  # the scanner fallback still works without it
+    yaml = None
+
 # ---------------------------------------------------------------------------
 # Citation forms — IMPORTED, never reimplemented
 # ---------------------------------------------------------------------------
@@ -97,13 +111,26 @@ def blob(rev: str, path: str) -> str:
     fails closed on one binary file is worse than one that skips it, provided
     it says so. Binary files carry no citations or Markdown links by
     definition, so skipping them changes no number here.
+
+    A FAILED READ IS NOT EMPTY CONTENT. This function used to ignore git's exit
+    status, so a read that failed with exit 128 returned '' -- indistinguishable
+    from a file that is genuinely empty, and silently removing that file's
+    citations and links from the denominator. An independent review demonstrated
+    it by fault injection. Failed reads are now recorded and reported in the
+    output, because a census that quietly drops inputs is the precise defect this
+    file exists to correct.
     """
-    out = subprocess.run(
-        ["git", "show", f"{rev}:{path}"], capture_output=True,
-    ).stdout
+    proc = subprocess.run(["git", "show", f"{rev}:{path}"], capture_output=True)
+    if proc.returncode != 0:
+        FAILED_READS.append(
+            f"{path} (git exit {proc.returncode}: "
+            f"{proc.stderr.decode('utf-8', 'replace').strip()[:80]})"
+        )
+        return ""
     try:
-        return out.decode("utf-8")
+        return proc.stdout.decode("utf-8")
     except UnicodeDecodeError:
+        BINARY_SKIPS.append(path)
         return ""
 
 
@@ -143,22 +170,97 @@ def census_citations(rev: str) -> tuple[Counter, int, int]:
     kinds: Counter = Counter()
     for f in files:
         text = blob(rev, f)
-        # Evidence citations are YAML list items nested under `evidence:`.
-        # Matching the bullet directly is deliberate: a full YAML parse would
-        # fail closed on any malformed node and silently shrink the denominator.
-        in_evidence = False
-        for line in text.split("\n"):
-            if re.match(r"^\s*evidence:\s*$", line):
-                in_evidence = True
-                continue
-            if in_evidence:
-                m = re.match(r'^\s+-\s+"?([^"\n]+)"?\s*$', line)
-                if m:
-                    kinds[classify(m.group(1))] += 1
-                    continue
-                if line.strip() and not line.startswith((" ", "\t")):
-                    in_evidence = False
+        # PARSE THE FRONT MATTER AS YAML, because that is what it is.
+        #
+        # This used to scan for `- ` bullets with a regex, justified in a comment
+        # saying a real parse "would fail closed on any malformed node and
+        # silently shrink the denominator". The justification was sound; the
+        # implementation was not. An independent review parsed the same files
+        # properly and got 20,850 strings against this scanner's 20,801, with 36
+        # files differing in BOTH directions -- the regex both missed citations
+        # (block scalars, flow sequences, multi-line quoted strings) and invented
+        # them (list items under other keys that happened to follow `evidence:`).
+        #
+        # So: parse properly, and keep the fail-open property by falling back to
+        # the scanner per-file and REPORTING which files fell back, rather than
+        # by never parsing at all.
+        cites, fell_back = extract_evidence(text)
+        if fell_back:
+            YAML_FALLBACKS.append(f)
+        for c in cites:
+            kinds[classify(c)] += 1
     return kinds, len(files), sum(kinds.values())
+
+
+def extract_evidence(text: str) -> tuple[list[str], bool]:
+    """Return (citation strings, whether the YAML parse failed for this file)."""
+    fm = re.match(r"^---\n(.*?)\n---\n", text, re.S)
+    if fm and yaml is not None:
+        try:
+            data = yaml.safe_load(fm.group(1))
+        except Exception:
+            data = None
+        if isinstance(data, dict):
+            return _walk_evidence(data), False
+    return _scan_evidence(text), True
+
+
+def _walk_evidence(node) -> list[str]:
+    """Every string under any `evidence:` key, at any depth."""
+    out: list[str] = []
+    if isinstance(node, dict):
+        for k, v in node.items():
+            if k == "evidence":
+                out.extend(_strings(v))
+            else:
+                out.extend(_walk_evidence(v))
+    elif isinstance(node, list):
+        for v in node:
+            out.extend(_walk_evidence(v))
+    return out
+
+
+def _strings(node) -> list[str]:
+    """Citation strings only.
+
+    The real shape, confirmed against the schema rather than assumed:
+
+        evidence:                       <- top-level list of ENTRIES
+          - statement: "..."
+            entry_class: FACT
+            evidence: ["path.rs:12"]    <- the citations, nested under the
+                                           SAME key name one level down
+
+    Two wrong guesses preceded this. Taking every value of an entry mapping swept
+    in `statement` prose and inflated the total to 49,881; looking for a
+    `citations:` key found nothing at all and reported 0. Both were confidently
+    wrong in the same way the original regex was, which is the argument for
+    checking the schema instead of inferring it from one sample.
+    """
+    if isinstance(node, str):
+        return [node]
+    if isinstance(node, list):
+        return [s for v in node for s in _strings(v)]
+    if isinstance(node, dict):
+        return _strings(node["evidence"]) if "evidence" in node else []
+    return []
+
+
+def _scan_evidence(text: str) -> list[str]:
+    """The original line scanner, kept only as the per-file fallback."""
+    out, in_evidence = [], False
+    for line in text.split("\n"):
+        if re.match(r"^\s*evidence:\s*$", line):
+            in_evidence = True
+            continue
+        if in_evidence:
+            m = re.match(r'^\s+-\s+"?([^"\n]+)"?\s*$', line)
+            if m:
+                out.append(m.group(1))
+                continue
+            if line.strip() and not line.startswith((" ", "\t")):
+                in_evidence = False
+    return out
 
 
 # ---------------------------------------------------------------------------
@@ -180,6 +282,17 @@ def census_links(rev: str) -> dict:
         link is broken once per place a reader can hit it
     """
     files = [f for f in tracked_files(rev, SUBTREE) if f.endswith(".md")]
+    # RESOLVE AGAINST `rev`'s OWN TREE, not the working directory.
+    #
+    # This used to call os.path.exists(), which answers a question about the
+    # checkout on disk right now -- so an untracked scratch file could make a
+    # historical link "resolve", and a file deleted in the working tree could
+    # make a tracked historical target "break". A census labelled with a
+    # revision has to be answerable from that revision alone, or the label is
+    # decoration. An independent review named this as an evidence-boundary
+    # defect, and it is: the instrument was reading two different worlds and
+    # reporting one number.
+    tree = set(tracked_files(rev, "."))
     total = broken = 0
     broken_list: list[str] = []
     for f in files:
@@ -190,7 +303,11 @@ def census_links(rev: str) -> dict:
             resolved = os.path.normpath(
                 os.path.join(os.path.dirname(f), target.split("#")[0])
             )
-            if not os.path.exists(resolved):
+            # A directory target resolves if the tree holds anything beneath it.
+            hit = resolved in tree or any(
+                p.startswith(resolved + "/") for p in tree
+            )
+            if not hit:
                 broken += 1
                 broken_list.append(f"{f} -> {target}")
     return {
@@ -265,11 +382,37 @@ def census_secrets(rev: str) -> dict[str, tuple[int, int]]:
 RE_STATUS = re.compile(r'^status:\s*"?([a-z]+)"?\s*$', re.M)
 
 
+def generated_output_paths() -> set[str]:
+    """The registry's own list of generated outputs, not a path guess.
+
+    `"/generated/" not in f` excluded 21 files. The registry excludes 29 -- the
+    other eight live outside that directory, so they were being counted as
+    canonical nodes. That is how this script reported a 727-node canonical
+    population at 93.54% draft when the registry-defined population is 719 at
+    93.46%. The exclusion rule has to come from whoever owns it.
+    """
+    try:
+        _validator()  # puts the corpus package dir on sys.path
+        import indexes  # noqa: PLC0415
+
+        return {
+            f"{CORPUS}/{s.output_path}" for s in indexes.discover_builders()
+        }
+    except Exception as exc:
+        print(
+            f"  WARNING: could not load the builder registry ({exc}); "
+            "canonical counts are NOT reported rather than guessed",
+            file=sys.stderr,
+        )
+        return set()
+
+
 def census_status(rev: str) -> dict:
     files = [
         f for f in tracked_files(rev, CORPUS)
         if f.endswith(".md") and CORPUS_EXCLUDE not in f
     ]
+    generated = generated_output_paths()
     all_counts: Counter = Counter()
     canon_counts: Counter = Counter()
     for f in files:
@@ -277,9 +420,14 @@ def census_status(rev: str) -> dict:
         if not m:
             continue
         all_counts[m.group(1)] += 1
-        if "/generated/" not in f:
+        if f not in generated:
             canon_counts[m.group(1)] += 1
-    return {"all": all_counts, "canonical": canon_counts, "files": len(files)}
+    return {
+        "all": all_counts,
+        "canonical": canon_counts if generated else None,
+        "files": len(files),
+        "generated": len(generated),
+    }
 
 
 def pct(n: int, d: int) -> str:
@@ -330,12 +478,33 @@ def main() -> int:
 
     st = census_status(rev)
     a, c = st["all"], st["canonical"]
-    at, ct = sum(a.values()), sum(c.values())
+    at = sum(a.values())
     print("\nNode status")
     print(f"  all corpus files ({at:>3})        draft {a['draft']} ({pct(a['draft'], at)}), active {a['active']}")
-    print(f"  canonical only   ({ct:>3})        draft {c['draft']} ({pct(c['draft'], ct)}), active {c['active']}")
+    if c is None:
+        print("  canonical only               NOT REPORTED — the builder registry")
+        print("                               could not be loaded, and guessing the")
+        print("                               exclusion is what made this wrong before")
+    else:
+        ct = sum(c.values())
+        print(f"  canonical only   ({ct:>3})        draft {c['draft']} ({pct(c['draft'], ct)}), active {c['active']}")
+        print(f"  (canonical = all minus the registry's {st['generated']} generated outputs)")
     print("\n  The two populations give different percentages. Any figure quoted")
     print("  from here must say which one it uses.")
+
+    # Everything the census could not read, stated rather than absorbed.
+    print("\nInstrument integrity")
+    print(f"  failed reads                 {len(FAILED_READS)}")
+    for x in FAILED_READS[:10]:
+        print(f"    FAILED  {x}")
+    print(f"  binaries skipped             {len(BINARY_SKIPS)}")
+    print(f"  YAML fallbacks (line scan)   {len(YAML_FALLBACKS)}")
+    for x in YAML_FALLBACKS[:10]:
+        print(f"    FALLBACK  {x}")
+    if FAILED_READS:
+        print("\n  A failed read is NOT an empty file. The totals above exclude")
+        print("  these inputs; treat every figure as a lower bound until fixed.")
+        return 1
     return 0
 
 

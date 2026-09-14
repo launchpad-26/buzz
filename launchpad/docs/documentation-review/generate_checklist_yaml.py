@@ -62,13 +62,30 @@ AUTOMATION = {
     "Human review": "human",
 }
 
-# The requirement runs to the LAST '**' on the line, not the first. A non-greedy
-# (.+?) here truncated any requirement containing nested emphasis -- START-006,
-# OPS-006 and AGENT-001 each lost the word carrying their meaning, and an
-# ID-only parity check could never see it. Greedy is required. ITEM_COUNT_RE is
-# deliberately independent of this pattern so a future format change shows up as
-# a count mismatch rather than as silently dropped items.
-ITEM_RE = r"^\*\*([A-Z]+-\d{3}) \u00b7 (.+)\*\*(.*)\n((?:\u2014.*\n)+)"
+# Two parser defects have lived on this one line, in opposite directions, and
+# the fix for each created the other. Both were found by cross-model review, not
+# by this suite.
+#
+#   Non-greedy (.+?)  stopped at the FIRST '**', truncating every requirement
+#                     containing nested emphasis. START-006, OPS-006 and
+#                     AGENT-001 silently lost "names", "restore" and "not".
+#   Greedy (.+)       ran to the LAST '**', so a *bolded trailing tag* was
+#                     swallowed INTO the requirement -- and because the tag was
+#                     then inside the requirement rather than in its own group,
+#                     `corpus_gap` silently went false.
+#
+# Neither is fixable by choosing a different quantifier: a line regex cannot tell
+# a delimiter from emphasis. So the TAIL is anchored instead. After the closing
+# '**' only whitespace and one backticked tag may appear before end of line --
+# which is the documented convention anyway. A bolded tag now MATCHES NOTHING,
+# the item falls out of this pattern entirely, and ITEM_COUNT_RE (deliberately
+# independent) turns that into a loud failure. Guessing is what caused both bugs;
+# refusing to guess is the fix.
+# So the heading is no longer matched by a regex at all. This pattern only finds
+# the line and hands the rest of it to split_heading(), which scans for the
+# delimiter that actually closes the opening '**' by tracking nesting depth --
+# the one thing a regex cannot do here.
+ITEM_RE = r"^\*\*([A-Z]+-\d{3}) \u00b7 (.*)\n((?:\u2014.*\n)+)"
 ITEM_COUNT_RE = r"^\*\*[A-Z]+-\d{3} \u00b7 "
 EMPHASIS_RE = r"\*\*|__"
 META_RE = (
@@ -125,12 +142,90 @@ def quote(s: str) -> str:
     return '"' + s.replace("\\", "\\\\").replace('"', '\\"') + '"'
 
 
+def split_heading(pid: str, rest: str) -> tuple:
+    """Split `requirement** optional-tag` at the delimiter that really closes.
+
+    `rest` is everything after "**ID · ". The opening '**' is already open, so
+    depth starts at 1; each subsequent '**' toggles it. The requirement ends at
+    the marker that brings depth back to 0. Everything after that is the tag.
+
+        text with **bold** inside** `tag`   ->  depth 1,2,1,0  -> closes at the
+                                                third marker, tag = `tag`
+        text** **Corpus gap**              ->  depth 1,0       -> closes at the
+                                                FIRST marker, tag = **Corpus gap**
+
+    The second case is the one both previous parsers got wrong in opposite ways:
+    non-greedy truncated the first case, greedy swallowed the tag in the second.
+    Depth tracking gets both right, and a tag that still contains '**' after the
+    split is a format the convention does not allow -- so it is refused here
+    rather than silently absorbed.
+    """
+    depth, i = 1, 0
+    while i < len(rest):
+        if rest.startswith("**", i):
+            before = rest[i - 1] if i else " "
+            after = rest[i + 2] if i + 2 < len(rest) else " "
+            # CommonMark flanking, reduced to what this format needs: a marker
+            # preceded by non-space closes; one followed by non-space opens.
+            if not before.isspace():
+                depth -= 1
+            elif not after.isspace():
+                depth += 1
+            if depth == 0:
+                requirement, tag = rest[:i], rest[i + 2 :].strip()
+                if "**" in tag or "__" in tag:
+                    sys.exit(
+                        f"{pid}: the text after the requirement contains bold "
+                        f"({tag!r}). A trailing tag must be plain or backticked "
+                        "-- bold there is indistinguishable from the "
+                        "requirement's own closing delimiter."
+                    )
+                return requirement, tag
+            i += 2
+            continue
+        i += 1
+    sys.exit(f"{pid}: heading has no closing '**':\n  **{pid} · {rest}")
+
+
+# Values that legitimately mean "no dependencies". Anything else that fails to
+# parse is an error, not an empty list.
+NO_DEPS = {"", "-", "—", "none", "n/a", "na"}
+
+
+def parse_dependencies(pid: str, deps: str) -> list:
+    """Parse the dependency list, refusing anything it cannot read.
+
+    This used to be a comprehension with `if re.match(...)` as its filter, which
+    silently DROPPED any token that did not match -- backtick-formatted, an
+    unexpected separator, a typo'd id. A dropped edge leaves no trace: the YAML
+    is well-formed, the count is right, and the dependency graph is quietly
+    wrong. An independent review demonstrated the loss by backticking one id.
+
+    A filter and a validator look identical and mean opposite things. This is
+    the validator.
+    """
+    out = []
+    for raw in deps.split(","):
+        token = raw.strip().strip("`").strip()
+        if token.lower() in NO_DEPS:
+            continue
+        if not re.fullmatch(r"[A-Z]+-\d{3}", token):
+            sys.exit(
+                f"{pid}: cannot parse dependency {token!r} (from {deps!r}). "
+                "Dependencies must be bare ids like READER-001, comma separated."
+            )
+        out.append(token)
+    return out
+
+
 def parse(text: str) -> list:
     items, seen = [], set()
-    for pid, requirement, tag, body in re.findall(ITEM_RE, text, re.M):
+    for pid, heading_rest, body in re.findall(ITEM_RE, text, re.M):
         if pid in seen:
             sys.exit(f"duplicate id: {pid}")
         seen.add(pid)
+
+        requirement, tag = split_heading(pid, heading_rest)
 
         meta = body.split("\n")[0]
         m = re.match(META_RE, meta)
@@ -162,11 +257,7 @@ def parse(text: str) -> list:
                 "source_references": field(body, "Source"),
                 "audit_method": field(body, "Audit method"),
                 "automation_potential": AUTOMATION[automation],
-                "dependencies": [
-                    d.strip()
-                    for d in deps.split(",")
-                    if re.match(r"^[A-Z]+-\d{3}$", d.strip())
-                ],
+                "dependencies": parse_dependencies(pid, deps),
                 "failure_risk": field(body, "Failure risk"),
                 "corpus_gap": ("Corpus gap" in tag)
                 or ("Corpus gap" in field(body, "Source")),

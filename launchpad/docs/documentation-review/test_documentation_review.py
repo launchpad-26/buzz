@@ -142,6 +142,68 @@ def main() -> int:
         f"{mismatched}" if mismatched else "",
     )
 
+    # EVERY field, not just `requirement`. The check above was the whole of the
+    # content-parity fix for one round, and the second review showed what that
+    # bought: truncating a rationale to the single letter "R" still exited 0,
+    # because nothing compared any other field's words. Presence checks cannot
+    # see corruption -- "R" is present.
+    #
+    # This block re-derives all seven em-dash fields from the Markdown with its
+    # own parser. Sharing the generator's would only prove the generator agrees
+    # with itself, which is how the truncation bug survived a passing suite.
+    FIELD_MAP = {
+        "Applies when": "applies_when",
+        "Rationale": "rationale",
+        "Evidence needed": "evidence_required",
+        "Location": "suggested_locations",
+        "Source": "source_references",
+        "Audit method": "audit_method",
+        "Failure risk": "failure_risk",
+    }
+    blocks = {}
+    for m in re.finditer(
+        r"^\*\*([A-Z]+-\d{3}) · .*?\n(.*?)(?=^\*\*[A-Z]+-\d{3} · |\Z)",
+        md_text,
+        re.M | re.S,
+    ):
+        # Only the leading run of em-dash lines belongs to the item. Without
+        # this the last item in each section absorbed the prose that follows it
+        # and its final field never matched -- a false positive, and exactly the
+        # "extraction boundary" error this framework has already made once.
+        lines, kept = m.group(2).split("\n"), []
+        for line in lines:
+            if line.startswith("—"):
+                kept.append(line)
+            elif kept and line.strip():
+                break
+            elif kept:
+                break
+        blocks[m.group(1)] = "\n".join(kept)
+
+    def norm(s):
+        return " ".join(re.sub(r"\*\*|__", "", s or "").split())
+
+    field_bad = []
+    compared = 0
+    for it in items:
+        block = blocks.get(it["id"], "")
+        for label, key in FIELD_MAP.items():
+            fm = re.search(
+                r"— \*\*" + re.escape(label) + r"\*\*\s+(.*?)(?=\n—|\Z)",
+                block,
+                re.S,
+            )
+            if not fm:
+                continue
+            compared += 1
+            if norm(fm.group(1)) != norm(it.get(key)):
+                field_bad.append(f"{it['id']}.{key}")
+    check(
+        "every field's text matches the Markdown, not just requirement",
+        not field_bad,
+        f"{field_bad[:8]}" if field_bad else f"{compared} fields compared",
+    )
+
     empty = [
         i["id"] for i in items if any(not i.get(f) for f in REQUIRED_FIELDS)
     ]
@@ -202,7 +264,13 @@ def main() -> int:
         # counting it both invents a broken link and inflates the denominator.
         # The independent review made the same point about the audit's own link
         # census: quoted examples are not interchangeable with rendered links.
+        # An ESCAPED backtick (\`) is a literal character, not a code-span
+        # delimiter. Treating it as one let a real broken link hide between two
+        # of them — the second review demonstrated it. Neutralise escaped
+        # backticks before the span strip so they cannot open or close a span.
+        text = text.replace("\\`", "\x00")
         text = re.sub(r"`[^`\n]*`", "", text)
+        text = text.replace("\x00", "`")
         for link in re.findall(r"\]\(([^)\s#]+)", text):
             if link.startswith(("http", "mailto")):
                 continue

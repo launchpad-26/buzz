@@ -324,7 +324,7 @@ strongest, and several represent remediation of defects the research itself foun
 
 | Result | Measurement |
 |---|---|
-| **Citation resolution** | **`validate.py` exits 0 with 0 errors** across all 748 files — every citation it can resolve, resolves. **The same run reports 1,983 items `UNVERIFIED`** (commit references, graph edges and tool results, none of which names an openable file). A green exit is not a claim about those. *The precise counts originally given here (18,715 of 20,680) are withdrawn as unreproducible; see "Census figures corrected". The replacement is **17,844 repository-path citations of 20,801 citation strings** across 748 files, by `census.py`'s stated rule at `6e6186d26` — reproducible by running it, which is the only property that makes it a measurement rather than an assertion.* |
+| **Citation resolution** | **`validate.py` exits 0 with 0 errors** across all 748 files — every citation it can resolve, resolves. **The same run reports 1,983 items `UNVERIFIED`** (commit references, graph edges and tool results, none of which names an openable file). A green exit is not a claim about those. *The precise counts originally given here (18,715 of 20,680) are withdrawn as unreproducible; see "Census figures corrected". The replacement is **17,840 repository-path citations of 20,850 citation strings** across 748 files, by `census.py`'s stated rule — reproducible by running it, which is the only property that makes it a measurement rather than an assertion. A second independent review derived 20,850 by its own method and predicted 17,840 for this classifier; both now agree exactly, which is a stronger warrant than either alone.* |
 | **Positional citation bounds** | **0 out-of-bounds** line/range citations (symlink-resolved) |
 | **Relationship integrity** | **1,341** typed edges, **0 unresolved targets** |
 | **Relationship coverage** | **516 of 748** files (69%) declare relationships, up from 89 of 205 (43%) at the research baseline |
@@ -589,13 +589,22 @@ applies it and prints every figure below. `python3 census.py <rev>` reproduces t
 | This report, as first published | 18,715 | 20,680 |
 | Reviewer A (Codex) | 18,791 | 20,850 |
 | Reviewer B, independently | 18,791 | 20,850 |
-| `census.py`, delegating to `validate.py` | 17,844 | 20,801 |
+| `census.py`, first version — regex scanner | 17,844 | 20,801 |
+| **`census.py` now — YAML parse, `validate.py` classifier** | **17,840** | **20,850** |
 
-**Four methods, four answers, over the same 748 files.** Nobody miscounted; each drew the
-boundary of "repository-path citation" somewhere slightly different — whether a Markdown-link
-citation counts as its target, whether a bare path without a line number counts, how graph
-edges and tool results are bucketed. The two reviewers agreeing tells us their *rules*
-agreed, not that the figure is canonical.
+**Five methods, four answers, over the same 748 files — and the last two agree.** The
+denominator is now settled: **20,850**, reached independently by two reviewers parsing the
+front matter as YAML and now by `census.py` doing the same. The earlier 20,801 was this
+file's own regex scanner, which both missed citations (block scalars, flow sequences) and
+invented them (list items under other keys that happened to follow `evidence:`), differing
+from a real parse in 36 files in *both* directions.
+
+The numerator still differs — 17,840 here against the reviewers' 18,791 — and that
+difference is honest and explained: they classified with their own rule, `census.py`
+delegates to `validate.py`. A reviewer predicted **17,840** for this classifier before it
+was run, and that is what it produced. Agreeing on the denominator while differing on a
+category boundary is what two correct instruments with different definitions look like. The
+first four rows differed because nobody had written the rule down.
 
 So the precise figure is withdrawn rather than restated with better arithmetic. **A count
 whose definition is contested is not evidence, and picking whichever number has the most
@@ -671,7 +680,18 @@ three separate subsystems, and none is allowlisted anywhere."**
 ### The draft percentage mixes two populations
 
 **93.7%** is `701/748` — **all corpus files, including the 29 registered generated outputs**.
-The canonical-node figure is `680/727 = 93.5%`. The difference is small; the undisclosed
+The canonical-node figure is `672/719 = 93.46%`.
+
+*Corrected twice.* This paragraph first gave the canonical figure as `680/727 = 93.5%`,
+because `census.py` excluded generated outputs by testing for `/generated/` in the path —
+which catches 21 of them. The registry excludes **29**; the other eight live outside that
+directory and were being counted as canonical nodes. `census.py` now asks the builder
+registry for its own output list instead of pattern-matching a path, and **refuses to
+report a canonical figure at all if that registry cannot be loaded**, rather than falling
+back to the guess that produced the error. An independent review derived `672/719` before
+this fix; the corrected instrument now agrees exactly.
+
+The difference is small; the undisclosed
 denominator is not, in a report whose `HC-1` says no coverage number here has an agreed
 denominator. Generated projections carry `status: draft` in front matter despite not being
 on a draft→active maturity path at all, so folding them in measures something slightly
