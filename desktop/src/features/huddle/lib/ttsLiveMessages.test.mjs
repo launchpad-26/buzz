@@ -140,6 +140,26 @@ test("strips attachment markup and skips attachment-only events", () => {
   );
 });
 
+test("resists a pathological separator payload (ReDoS regression, #2224)", () => {
+  // event.content is remote-peer-controlled; an imeta tag is required so
+  // textWithoutAttachments doesn't early-return before reaching the
+  // separator-stripping regex under test. The pre-#2227 regex took ~38.9s
+  // on this exact 34-character input (measured independently in review of
+  // #2227) via exponential backtracking on an unclosed "||" pair. A
+  // reintroduced ambiguous quantifier here would go uncaught without this
+  // bound.
+  const url = "https://cdn.example/voice.png";
+  const tags = [...base.tags, ["imeta", `url ${url}`, "m image/png"]];
+  const pathological = "||\n" + "\n".repeat(30) + "X";
+  const start = performance.now();
+  speakableText({ ...base, content: pathological, tags });
+  const elapsed = performance.now() - start;
+  assert.ok(
+    elapsed < 2000,
+    `expected under 2000ms, took ${elapsed}ms (possible ReDoS regression)`,
+  );
+});
+
 test("queues agent messages in live thread arrival order", async () => {
   const spoken = [];
   let releaseFirst;
