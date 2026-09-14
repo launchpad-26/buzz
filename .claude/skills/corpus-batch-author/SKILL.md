@@ -1,3 +1,8 @@
+---
+name: corpus-batch-author
+description: Run a list of pre-scoped, single-document corpus Task issues through plan → build → verify → commit, N at a time, then integrate every issue's commits onto one shared branch and open exactly one draft PR for the whole Feature. Use when a Feature's corpus document tasks are ready to be built as a batch. Not for authoring a single node (corpus-author), turning a manifest into task issues (corpus-plan), reviewing a drafted node (corpus-review), or updating nodes a change invalidated (corpus-maintain).
+---
+
 # Corpus batch author
 
 Take a list of pre-scoped, single-document corpus Task issues belonging to one Feature

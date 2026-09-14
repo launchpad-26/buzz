@@ -35,6 +35,29 @@ started anywhere in this fork can discover and load them. **Discovery does not s
 variable for you:** a skill loaded that way still needs it exported, which is why the check
 fails loud rather than assuming a caller already did it.
 
+## Adapting on install: the pack's only local references
+
+Three skills' `description:` fields name skills that exist **only in `launchpad-26/buzz`**, so
+that a session in this fork routes to the right tool instead of guessing between two that answer
+the same request:
+
+| Skill | Names | Because |
+|---|---|---|
+| `scan-repo` | `corpus-maintain` | staleness across `launchpad/docs/corpus/` is that pipeline's job, not this scan's |
+| `draft-page` | `corpus-author` | authoring a governed corpus node is that skill's job |
+| `update-page` | `corpus-maintain` | a change that invalidated corpus nodes is that skill's job |
+
+Each is phrased principle-first — *"a repository that runs its own governed documentation
+pipeline … in `launchpad-26/buzz` that is …"* — so it reads as an example rather than an
+instruction. **These three lines are the pack's only fork-specific references.** Installing this
+pack elsewhere: either drop the trailing instance clause, or replace it with the equivalent tool
+in the target repo. Nothing else in the pack needs adapting, and nothing breaks if the clauses
+are left as they are — a reader in another repo simply sees an example that does not apply.
+
+The underlying rule is the suite's, not this fork's: Professor follows the target repository's
+own documentation procedure and never imposes a default (redesign document, Open Questions item
+1). These clauses are that rule made concrete for the one repository the pack currently ships in.
+
 ## Redesign proposal (2026-09-03): from one handbook to any repo — Phase 0 and Phase 1 resolved, Phases 1b–7 not yet built
 
 **Phase 1 (the tool layer) is now built** (issue #2100): `tools/professor.py`, a plain
