@@ -26,6 +26,7 @@ sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
 
 import lifecycle_cascade_bench as lifecycle_bench  # noqa: E402
 import test_rqa_remediation_fixtures as fixtures  # noqa: E402
+import rqa.escalation as escalation  # noqa: E402
 
 from rqa.contracts import (  # noqa: E402
     Activity,
@@ -34,6 +35,7 @@ from rqa.contracts import (  # noqa: E402
     RemediationRefusalReason,
     RemediationRefused,
 )
+from rqa.escalation.store import SqliteEscalationStore  # noqa: E402
 from rqa.lifecycle.steps import Cascade, step9  # noqa: E402
 from rqa.remediation import remediate  # noqa: E402
 from rqa.remediation.push import push_head  # noqa: E402
@@ -50,6 +52,26 @@ class _RecordingRunner:
         from rqa.contracts import ProcessResult
 
         return ProcessResult(returncode=0, stdout=b"", stderr=b"")
+
+
+class _RealEscalation:
+    """P-02's E-11 protocol backed by P-11's real SQLite store."""
+
+    def __init__(self, connection) -> None:
+        self.store = SqliteEscalationStore(connection)
+
+    def raise_(self, *, job, cause, question, context, record, store):
+        return escalation.raise_(
+            job=job,
+            cause=cause,
+            question=question,
+            context=context,
+            record=record,
+            store=store,
+        )
+
+    def pending(self, *, store):
+        return escalation.pending(store=store)
 
 
 def test_adr0064_the_push_argv_is_exact_and_carries_no_force() -> None:
@@ -133,7 +155,7 @@ def test_adr0064_a_refused_candidate_reaches_a_named_human() -> None:
         findings=(finding,),
         remediation_candidates=(finding.id,),
     )
-    escalation = lifecycle_bench.FakeEscalation()
+    escalation_client = _RealEscalation(connection)
     deps = lifecycle_bench.make_deps(
         connection,
         record,
@@ -145,7 +167,7 @@ def test_adr0064_a_refused_candidate_reaches_a_named_human() -> None:
                 entry_seq=1,
             )
         ),
-        escalation=escalation,
+        escalation=escalation_client,
     )
     ctx = Cascade(
         deps=deps,
@@ -157,9 +179,8 @@ def test_adr0064_a_refused_candidate_reaches_a_named_human() -> None:
     moved, _ = step9(job, ctx)
 
     assert lifecycle_bench.stored_status(connection, job.id) == "escalated"
-    assert len(escalation.raised) == 1
-    raised = escalation.raised[0]
-    assert raised["cause"] is EscalationCause.EVIDENCE_GAP
+    raised = lifecycle_bench.latest_payload(connection, "escalation")
+    assert raised["cause"] == EscalationCause.EVIDENCE_GAP.value
     assert "behaviour_changed" in raised["question"]
     grant_activities = [activity for activity, _, _ in deps.authority.calls]
     assert grant_activities == [Activity.REMEDIATE], (
