@@ -154,15 +154,31 @@ def test_no_module_here_imports_a_part_section_one_forbids() -> None:
     assert offenders == [], offenders
 
 
-def test_only_rqa_github_writes_imports_intake_identity_directly() -> None:
+def test_only_rqa_github_writes_imports_intake_submodules_directly() -> None:
     """§1's one documented exception, the other direction: nothing outside
-    `rqa/github/writes.py` imports `rqa.intake` directly."""
+    `rqa/github/writes.py` reaches *past* `rqa.intake`'s own `__init__` into
+    one of its submodules directly.
+
+    §1's words are exact: "No other module in RQA imports from `rqa.intake`
+    **except through `__init__`**, with one documented exception ... `rqa.github`
+    imports `rqa.intake.identity` directly". That licenses two shapes for every
+    other module in RQA: `import rqa.intake` / `from rqa.intake import <name>`
+    (through `__init__`, resolving only names `rqa/intake/__init__.py` itself
+    re-exports) is always allowed; `import rqa.intake.<submodule>` / `from
+    rqa.intake.<submodule> import <name>` (past `__init__`, into a submodule)
+    is forbidden everywhere except `rqa/github/writes.py`. A bare
+    `module == "rqa.intake"` match is the first, sanctioned shape, not an
+    offender — E-21 (`rqa/cli/main.py`'s `from rqa.intake import tick`) is
+    exactly that shape's first real, legitimate user outside P-01 itself, and a
+    test that forbade it would be asserting an accident of "no legitimate
+    importer existed yet", not §1's own words.
+    """
     offenders = []
     for name, source in _tree_sources().items():
         if name == "rqa/github/writes.py" or name.startswith("rqa/intake/"):
             continue
         imported = _imported_modules(source)
-        if any(module == "rqa.intake" or module.startswith("rqa.intake.") for module in imported):
+        if any(module.startswith("rqa.intake.") for module in imported):
             offenders.append(name)
     assert offenders == [], offenders
 
