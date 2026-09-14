@@ -49,9 +49,13 @@ def repo_root() -> str:
 # The lanes this fork relies on. Named explicitly rather than counted, so
 # deleting one is a failure rather than a smaller number nobody notices.
 EXPECTED_LANES = {
+    # Tier 1 — cheap, 1.4s together
     "launchpad-scripts-tests",
     "launchpad-adr-check",
     "launchpad-corpus-schema-tests",
+    # Tier 2 — ~32s together, corpus changes only
+    "launchpad-corpus-validate",
+    "launchpad-corpus-package-drift",
 }
 
 
@@ -98,7 +102,14 @@ class LefthookExtendsWiring(unittest.TestCase):
     # Lanes that shell out to a suite which may itself run git. Named
     # explicitly: a future lane that runs git should be added here deliberately
     # rather than swept in by a wildcard.
-    LANES_NEEDING_GIT_ENV_SCRUB = {"launchpad-scripts-tests"}
+    LANES_NEEDING_GIT_ENV_SCRUB = {
+        "launchpad-scripts-tests",
+        # validate.py shells out to git; inside a hook GIT_DIR would point it at
+        # the repository being pushed rather than the tree it thinks it reads.
+        "launchpad-corpus-validate",
+        # the drift script runs package.py, which reads the corpus through git.
+        "launchpad-corpus-package-drift",
+    }
 
     # What git exports into a hook and honours over a subprocess's `cwd=`.
     REQUIRED_UNSETS = ("GIT_DIR", "GIT_WORK_TREE", "GIT_INDEX_FILE")
@@ -132,6 +143,38 @@ class LefthookExtendsWiring(unittest.TestCase):
                         "git honours it over a subprocess's cwd, so a fixture "
                         "repository built by these tests would commit into the "
                         "repository being pushed.",
+                    )
+
+    # Commands that WRITE generated files in place. Safe from a terminal, unsafe
+    # from a pre-push hook: they would modify tracked files while git is already
+    # reading them for the push, so a lane must never invoke one.
+    MUTATING_COMMANDS = ("just knowledge-package", "package.py --out launchpad",
+                         "package.py --out desktop")
+
+    def test_no_lane_writes_to_the_tree_it_checks(self) -> None:
+        """A check that mutates what it is checking is not a check.
+
+        The corpus drift lane is the temptation: the obvious implementation is
+        `just knowledge-package && git diff --quiet`, and it works fine by hand.
+        Inside a hook it rewrites two tracked files mid-push. The lane therefore
+        packages to a temp directory and compares, via
+        launchpad/scripts/check-corpus-package-drift.sh.
+        """
+        path = os.path.join(self.root, "launchpad/lefthook-launchpad.yml")
+        if not os.path.exists(path):
+            self.skipTest("covered by test_the_extended_file_exists")
+        with open(path, encoding="utf-8") as fh:
+            cfg = yaml.safe_load(fh)
+        for name, lane in ((cfg.get("pre-push") or {}).get("commands") or {}).items():
+            run = lane.get("run", "")
+            for bad in self.MUTATING_COMMANDS:
+                with self.subTest(lane=name, command=bad):
+                    self.assertNotIn(
+                        bad, run,
+                        f"{name} runs `{bad}`, which writes generated files in "
+                        "place. In a pre-push hook that mutates tracked files "
+                        "while git is reading them. Package to a temp path and "
+                        "compare instead.",
                     )
 
     def test_each_lane_is_path_scoped(self) -> None:

@@ -104,3 +104,41 @@ pre-push:
       glob:
         - "launchpad/docs/corpus/schema/**"
       run: python3 -m unittest discover -s launchpad/docs/corpus/schema/tests -p 'test_*.py'
+
+    # ---------------------------------------------------------------- Tier 2
+    # Slower, and scoped to corpus changes only. Together ~32s, paid solely by
+    # a push that touches launchpad/docs/corpus/**. Both run under the same
+    # `env -u` scrub as the scripts lane, for the same reason: validate.py
+    # shells out to git, and inside a hook GIT_DIR would point it at the
+    # repository being pushed rather than at what it thinks it is reading.
+
+    # ~18s. Mirrors .github/workflows/launchpad-corpus-validate.yml.
+    # This is the highest-value check in the repository: it validates every
+    # node's front matter, citations and relationships. Read-only.
+    launchpad-corpus-validate:
+      files: git diff --name-only origin/launchpad...HEAD
+      glob:
+        - "launchpad/docs/corpus/**"
+      run: >-
+        env -u GIT_DIR -u GIT_WORK_TREE -u GIT_INDEX_FILE -u GIT_PREFIX
+        -u GIT_OBJECT_DIRECTORY -u GIT_ALTERNATE_OBJECT_DIRECTORIES
+        -u GIT_QUARANTINE_PATH
+        python3 launchpad/project-intelligence/corpus/validate.py
+
+    # ~14s. Mirrors test_package.py::DriftGuardTest.
+    #
+    # NOTE THE SCRIPT, AND DO NOT REPLACE IT WITH `just knowledge-package`.
+    # That recipe writes both generated files IN PLACE, which inside a pre-push
+    # hook means mutating tracked files while git is already reading them for
+    # the push. The script packages to a temp directory and compares instead, so
+    # the check never modifies what it is checking. Verified: the working tree
+    # is byte-for-byte unchanged after a run, pass or fail.
+    launchpad-corpus-package-drift:
+      files: git diff --name-only origin/launchpad...HEAD
+      glob:
+        - "launchpad/docs/corpus/**"
+      run: >-
+        env -u GIT_DIR -u GIT_WORK_TREE -u GIT_INDEX_FILE -u GIT_PREFIX
+        -u GIT_OBJECT_DIRECTORY -u GIT_ALTERNATE_OBJECT_DIRECTORIES
+        -u GIT_QUARANTINE_PATH
+        bash launchpad/scripts/check-corpus-package-drift.sh
