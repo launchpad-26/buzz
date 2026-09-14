@@ -8,9 +8,18 @@ byte-for-byte intact. Separately, `onboard` writes a starter configuration and
 never overwrites an operator's file.
 
 No other module in RQA imports from `rqa.policy` except through this file. The
-public surface is exactly `P-03-policy.md` §1's re-export list and nothing more:
-`SnapshotStore` and `StoredSnapshot` are deliberately **not** re-exported — they
-stay `rqa.policy.store` names even though E-03's signature mentions the Protocol.
+public surface is §1's re-export list plus the snapshot store seam a composition
+root must construct: `SnapshotStore` (the Protocol E-03's signature already
+mentions) and `SqliteSnapshotStore` (the one implementation of it). `StoredSnapshot`
+stays a `rqa.policy.store` name.
+
+**Why the store is surface.** `snapshot_for()` takes its store as a parameter and
+nothing inside `rqa/policy/` ever constructs one, so something outside this package
+always must, and the operator CLI's composition root (#2211) is the first module in
+RQA whose job is exactly that. Withholding the store while forbidding a reach past
+`__init__` left no conforming way to build it: the clause was unfalsifiable only
+until a composition root existed.
+
 The shared snapshot vocabulary — `Snapshot`, `Route`, `External`, `Policy`,
 `Blocking`, `Mechanical`, `Budget`, and the validation outcomes — is imported from
 `rqa.contracts` (`CONTRACTS.md` §3 is its one definition) and re-exported here so a
@@ -40,6 +49,7 @@ from rqa.policy.onboard import (
     onboard,
 )
 from rqa.policy.snapshot import snapshot_for
+from rqa.policy.store import SnapshotStore, SqliteSnapshotStore
 from rqa.policy.types import PolicyError, SnapshotStoreCorrupted
 
 __all__ = [
@@ -61,4 +71,6 @@ __all__ = [
     "Written",
     "OnboardRefusal",
     "OnboardRefusalReason",
+    "SnapshotStore",
+    "SqliteSnapshotStore",
 ]

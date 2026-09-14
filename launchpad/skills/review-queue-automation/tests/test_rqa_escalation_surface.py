@@ -38,7 +38,11 @@ ESCALATION = RQA / "escalation"
 #: §1's module list, in full.
 MODULES = frozenset({"__init__", "escalate", "decide", "store"})
 
-#: §1's re-export list, verbatim order.
+#: §1's re-export list, verbatim order, then the one concrete store this package publishes
+#: so a composition root can construct it through the front door. #2211 (the operator CLI)
+#: is the module that falsified §1's "except through `__init__`" sentence: `raise_()`,
+#: `pending()` and `decide()` all take their store as a parameter and nothing in
+#: `rqa/escalation/` ever builds one, so something outside P-11 always must.
 EXPORTS = [
     "raise_",
     "pending",
@@ -49,7 +53,12 @@ EXPORTS = [
     "EscalationRefused",
     "EscalationRefusalReason",
     "EscalationError",
+    "SqliteEscalationStore",
 ]
+
+#: The names published beyond §1's own list. Asserted positively below, not merely
+#: tolerated by the exact-list check.
+PUBLISHED = {"SqliteEscalationStore"}
 
 #: §6: the only two entry kinds P-11 writes.
 ENTRY_KINDS_WRITTEN = frozenset({"escalation", "decision"})
@@ -114,13 +123,24 @@ def test_every_re_exported_name_resolves_and_nothing_else_is_surface() -> None:
     # from this check: Python's import machinery binds an imported submodule as an
     # attribute of its parent package regardless of `__all__`, so `rqa.escalation.store`
     # is always reachable this way — that is a language mechanic, not this package
-    # choosing to export its store module.
+    # choosing to export its store module. `SqliteEscalationStore` is no longer on this
+    # list: it is published surface, asserted positively in the next test.
     for internal in (
-        "EscalationRow", "SqliteEscalationStore", "ensure_schema",
+        "EscalationRow", "ensure_schema",
         "JobReader", "LifecycleDeps", "LifecycleResume", "utcnow",
     ):
         assert internal not in rqa.escalation.__all__, internal
         assert not hasattr(rqa.escalation, internal), internal
+
+
+def test_the_concrete_store_a_composition_root_needs_is_package_surface() -> None:
+    """§1's "no other module imports from `rqa.escalation` except through `__init__`" and
+    `raise_(store=...)` are only jointly satisfiable if the store is reachable through
+    `__init__`. The package must publish the store module's own class, not a second copy."""
+    from rqa.escalation.store import SqliteEscalationStore
+
+    assert PUBLISHED <= set(rqa.escalation.__all__)
+    assert rqa.escalation.SqliteEscalationStore is SqliteEscalationStore
 
 
 def test_the_package_init_declares_nothing_it_only_re_exports() -> None:

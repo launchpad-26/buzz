@@ -37,7 +37,17 @@ NAMED_EXPORTS = frozenset(
      "MutationKind", "Stale", "LeaseTaken", "GithubUnavailable",
      "CapabilityReading", "AdapterError"}
 )
-ALL_EXPORTS = SHARED_EXPORTS | NAMED_EXPORTS
+#: The concrete collaborators published beyond §1's list so a composition root can build
+#: the adapter through the front door. #2211 (the operator CLI) is the module that
+#: falsified §1's "except through `__init__`" sentence: the adapter takes its three
+#: stores and its transport as parameters and nothing in `rqa/github/` ever builds one.
+#: `ensure_schema` is P-09's own — each part publishes its own through its own package,
+#: so `rqa.github.ensure_schema` and `rqa.intake.ensure_schema` never collide.
+PUBLISHED_EXPORTS = frozenset(
+    {"SqliteEtagStore", "SqliteApiCallStore", "SqliteMutationStore", "ensure_schema",
+     "Transport"}
+)
+ALL_EXPORTS = SHARED_EXPORTS | NAMED_EXPORTS | PUBLISHED_EXPORTS
 
 #: An HTTP client import anywhere outside transport.py breaks §1's boundary.
 HTTP_CLIENT_MODULES = frozenset(
@@ -83,13 +93,38 @@ def test_every_re_exported_name_resolves() -> None:
 
 
 def test_the_shared_seam_types_are_the_contracts_declarations() -> None:
-    for name in sorted(ALL_EXPORTS - {"GithubAdapter", "MutationKind", "AdapterError"}):
+    for name in sorted(SHARED_EXPORTS | (NAMED_EXPORTS - {"GithubAdapter", "MutationKind",
+                                                          "AdapterError"})):
         assert getattr(github, name) is getattr(contracts, name), name
 
 
 def test_the_store_protocols_stay_module_names_not_package_surface() -> None:
+    """The seam Protocols and the row type stay `rqa.github.store` names: a caller that
+    only names the seam has no reason to reach for the package. The concrete stores are
+    the exception, asserted positively in the next test."""
     for name in ("EtagStore", "ApiCallStore", "MutationStore", "MutationRow"):
         assert name not in github.__all__, name
+
+
+def test_the_concrete_collaborators_a_composition_root_needs_are_package_surface() -> None:
+    """§1's "no other module imports from `rqa.github` except through `__init__`" and an
+    adapter whose stores and transport arrive as parameters are only jointly satisfiable
+    if those classes are reachable through `__init__`. The package must publish the
+    submodules' own objects, not second copies."""
+    from rqa.github.store import (
+        SqliteApiCallStore,
+        SqliteEtagStore,
+        SqliteMutationStore,
+        ensure_schema,
+    )
+    from rqa.github.transport import Transport
+
+    assert PUBLISHED_EXPORTS <= frozenset(github.__all__)
+    assert github.SqliteEtagStore is SqliteEtagStore
+    assert github.SqliteApiCallStore is SqliteApiCallStore
+    assert github.SqliteMutationStore is SqliteMutationStore
+    assert github.ensure_schema is ensure_schema
+    assert github.Transport is Transport
 
 
 # -- §2/§7: MutationKind has exactly five members; no estate kinds ---------------

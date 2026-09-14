@@ -35,8 +35,15 @@ AUTHORITY = RQA / "authority"
 #: set, not a stage of it.
 MODULES = frozenset({"__init__", "activities", "gate", "capability", "store"})
 
-#: §1's re-export list, in order.
-EXPORTS = ["grant", "Activity", "Grant", "Deny", "GateError"]
+#: §1's re-export list, in order, then the one concrete store this package publishes so a
+#: composition root can construct it through the front door (#2211 is the module that
+#: falsified §1's "except through `__init__`" sentence: `grant()` takes its store as a
+#: parameter and nothing in `rqa/authority/` ever builds one).
+EXPORTS = ["grant", "Activity", "Grant", "Deny", "GateError", "SqliteCapabilityStore"]
+
+#: The names published beyond §1's own list. Asserted positively below, not merely
+#: tolerated by the exact-set check.
+PUBLISHED = {"SqliteCapabilityStore"}
 
 #: §6: the only two entry kinds P-08 writes.
 ENTRY_KINDS_WRITTEN = frozenset({"grant", "attestation"})
@@ -124,19 +131,30 @@ def test_the_package_declares_nothing_it_only_re_exports() -> None:
     assert declarations == []
 
 
-def test_the_gate_the_proof_and_the_two_collaborators_are_not_package_surface() -> None:
-    """They stay submodule names, the way `rqa.policy` keeps `SnapshotStore` out of its
-    package surface even though E-03's signature mentions the Protocol."""
+def test_the_gate_the_proof_and_the_collaborator_protocols_are_not_package_surface() -> None:
+    """They stay submodule names, the way `rqa.policy` keeps `StoredSnapshot` out of its
+    package surface. The concrete `SqliteCapabilityStore` is the one exception, and it is
+    asserted positively in the next test rather than merely permitted here."""
     for name in (
         "Gate",
         "CapabilityProof",
         "CapabilityStore",
         "GithubProbe",
-        "SqliteCapabilityStore",
         "CredentialGithubUnavailable",
         "REQUIRED_CAPABILITY",
     ):
         assert name not in rqa.authority.__all__, name
+
+
+def test_the_concrete_store_a_composition_root_needs_is_package_surface() -> None:
+    """§1's "no module imports from `rqa.authority` except through `__init__`" and
+    `grant(store=...)` are only jointly satisfiable if the store is reachable through
+    `__init__`. The package must publish it, and publish the store module's own class —
+    not a second copy."""
+    from rqa.authority.store import SqliteCapabilityStore
+
+    assert PUBLISHED <= set(rqa.authority.__all__)
+    assert rqa.authority.SqliteCapabilityStore is SqliteCapabilityStore
 
 
 def test_no_module_here_is_a_stub() -> None:

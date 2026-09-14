@@ -13,7 +13,14 @@ read of a job's current head/snapshot and the call into P-02 are Protocols decla
 `rqa.intake` or P-02's lifecycle implementation, and never reads or writes a job's
 status column; only P-02 changes a job's state.
 
-`__all__` is §1's re-export list exactly.
+`__all__` is §1's re-export list plus `SqliteEscalationStore`, the concrete store a
+composition root must construct. P-11 never builds its own store — `raise_()`,
+`pending()` and `decide()` all take it as a parameter — so something outside this
+package always must, and the operator CLI's composition root (#2211) is the first
+module in RQA whose job is exactly that. Withholding the store while forbidding a
+reach past `__init__` left no conforming way to build it; the clause was unfalsifiable
+only until a composition root existed. `EscalationRow` and `ensure_schema` stay
+`rqa.escalation.store` names.
 """
 
 from __future__ import annotations
@@ -28,6 +35,7 @@ from rqa.contracts import (
 
 from rqa.escalation.decide import decide
 from rqa.escalation.escalate import EscalationError, pending, raise_
+from rqa.escalation.store import SqliteEscalationStore
 
 __all__ = [
     "raise_",
@@ -39,4 +47,5 @@ __all__ = [
     "EscalationRefused",
     "EscalationRefusalReason",
     "EscalationError",
+    "SqliteEscalationStore",
 ]
