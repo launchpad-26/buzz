@@ -152,12 +152,18 @@ test("resists a pathological separator payload (ReDoS regression, #2224)", () =>
   const tags = [...base.tags, ["imeta", `url ${url}`, "m image/png"]];
   const pathological = `||\n${"\n".repeat(30)}X`;
   const start = performance.now();
-  speakableText({ ...base, content: pathological, tags });
+  const result = speakableText({ ...base, content: pathological, tags });
   const elapsed = performance.now() - start;
   assert.ok(
     elapsed < 2000,
     `expected under 2000ms, took ${elapsed}ms (possible ReDoS regression)`,
   );
+  // Timing alone can't tell a fast, correct no-op apart from a fast,
+  // over-eager rewrite that discards content instead of leaving it
+  // untouched. The "||" here is unclosed (no matching pair), so the
+  // separator-stripping regex must not match anything: output equals
+  // input, unchanged.
+  assert.equal(result, pathological);
 });
 
 test("queues agent messages in live thread arrival order", async () => {
