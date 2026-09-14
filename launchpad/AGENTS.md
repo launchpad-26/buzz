@@ -87,6 +87,14 @@ The deliberate exceptions, all accepted knowingly:
   `launchpad/` directory. A standing divergence, not a temporary one — the cohort is
   not currently sending fixes upstream. Reasoning and the rejected alternatives are in
   [`decisions/ADR-0017-lefthook-pin-upstream-boundary-exception.md`](decisions/ADR-0017-lefthook-pin-upstream-boundary-exception.md).
+- **`lefthook.yml`** — two divergences, both small and both deliberate. The `branch-skew`
+  lane runs `launchpad/scripts/check-branch-skew.sh` instead of upstream's script, which
+  assumes `origin/main` is the PR base (launchpad-26/buzz#15). And an `extends:` key pulls
+  in [`lefthook-launchpad.yml`](lefthook-launchpad.yml), so cohort hook lanes live under
+  `launchpad/` rather than in the root file. **The `branch-skew` divergence predates this
+  entry and was not recorded anywhere** — it is written down here now rather than left as
+  an exception nobody agreed to. Adding cohort lanes to the root file directly would widen
+  that; the `extends:` key is what keeps the root divergence to one line.
 - **Deployment image provenance** — five named files (`deploy/compose/compose.yml`,
   `deploy/compose/.env.example`, `deploy/compose/README.md`, `Dockerfile`,
   `.github/workflows/docker.yml`) carry Launchpad values so the fork deploys its own
@@ -403,6 +411,22 @@ gh pr create --base launchpad
   than when it lands here.
 - **Conventional commit titles**: `feat(deploy): ...`, `fix(ci): ...`, `docs(...): ...`.
   Every commit on the branch gets one, because every one of them survives the merge.
+- **Some cohort checks also run on `git push`, as hooks — which is not the same as being
+  enforced.** [`lefthook-launchpad.yml`](lefthook-launchpad.yml) adds three pre-push lanes
+  that mirror GitHub Actions workflows: the `launchpad/scripts/` test suite, the ADR
+  boundary and trailing-newline checks, and the corpus schema tests. Each is scoped to the
+  paths it covers, so a push that touches none of them costs nothing; together they take
+  about **1.4 seconds**.
+
+  **Read "hook" literally.** A lane runs only for someone who has run `just hooks`, only on
+  the machine doing the push, and `--no-verify` skips it silently. It is not a gate, it
+  does not block a merge, and nothing about it should be described as "enforced" or
+  "required" — that phrasing is what audit finding F-01 is about. The same checks run in
+  CI, where they are also not required by branch protection: **this repository requires one
+  approving review and no status check at all.**
+
+  Run `just hooks` after changing hook configuration, and prefer fixing a lane over
+  reaching for `--no-verify`.
 - **A PR lands as a merge commit — never a squash, never a rebase.** ADR-0055 (#1960)
   settles the question ADR-0052 left open, in the direction the platform already enforces:
   `allow_squash_merge` and `allow_rebase_merge` are **off** on this repository, so `merge`
