@@ -89,9 +89,10 @@ The `launchpad/` documentation has the strongest mechanical integrity I can meas
 citation it can resolve, resolves, and no positional citation points past the end of its
 file. **That same run reports 1,983 items `UNVERIFIED`** — commit references and graph/tool
 citations that name no openable file. The pass says nothing about those, and rule 3 of the
-checklist requires saying so. All **1,341 relationship edges** resolve. **1,526 of 1,540** relative links work, and
-**13 of the 14 that do not are quoted link-syntax examples, not links** — 8 in
-`standards/`, 5 in `capabilities/` and `Research/`. The only credential-shaped strings in the subtree are five test fixtures for
+checklist requires saying so. All **1,341 relationship edges** resolve. **1,526 of 1,541** relative links work, and
+**14 of the 15 that do not are quoted link-syntax examples, not links** — 8 in
+`standards/`, 5 in `capabilities/` and `Research/`, and 1 in the audit report itself,
+which quotes one of them while explaining the category. The only credential-shaped strings in the subtree are five test fixtures for
 secret-detection tooling.
 
 **Three of those figures replace numbers I first published and could not reproduce.** The

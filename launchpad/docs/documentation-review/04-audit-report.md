@@ -265,7 +265,7 @@ behaviour, per `F07`) were not assessed at all.
 #### F-12 · One relative link does not resolve — *corrected down from two; now remediated*
 - **Checklist** `START-002` · **Status** `FAIL` at audit → **`PASS` after remediation** · **1**
   genuine broken link, fixed. *(The "745 links checked" denominator originally quoted here is
-  withdrawn as unreproducible — see "Census figures corrected". `census.py` reports 1,540 by a
+  withdrawn as unreproducible — see "Census figures corrected". `census.py` reports 1,541 by a
   stated rule. The finding itself is unaffected: it concerns which links were broken, not how
   many were counted.)*
 - **Genuine, and fixed:** `launchpad/docs/corpus/schema/README.md:11` → `../../plans/2026-08-25-issue-622-corpus-schema.md`
@@ -328,7 +328,7 @@ strongest, and several represent remediation of defects the research itself foun
 | **Positional citation bounds** | **0 out-of-bounds** line/range citations (symlink-resolved) |
 | **Relationship integrity** | **1,341** typed edges, **0 unresolved targets** |
 | **Relationship coverage** | **516 of 748** files (69%) declare relationships, up from 89 of 205 (43%) at the research baseline |
-| **Link health** | **1,526 of 1,540** relative links resolve at HEAD, by `census.py`'s stated rule. **13 of the 14 unresolved are quoted link-syntax examples, not links** — 8 in `standards/`, 5 in `capabilities/` and `Research/`. *The "745" originally given here is withdrawn — no reviewer, including me, could reproduce that denominator.* |
+| **Link health** | **1,526 of 1,541** relative links resolve at HEAD, by `census.py`'s stated rule. **14 of the 15 unresolved are quoted link-syntax examples, not links** — 8 in `standards/`, 5 in `capabilities/` and `Research/`, and 1 in this report itself, which quotes one of them. *The "745" originally given here is withdrawn — no reviewer, including me, could reproduce that denominator.* |
 | **Credential hygiene** | **5** credential-shaped matches across 5 files, every one a test fixture — see the correction below. *This row originally read "0 matches … One match, a self-labelled fixture", which was wrong.* |
 | **Claim entailment** | **4 of 4** claims sampled from the seeded random sample are exactly supported by their cited source at the cited line range — including a verbatim module-doc quotation. *Not projectable* |
 | **Generated-view discipline** | Every generated index declares generator, script, inputs, ordering, input digest, and **both** inclusion and exclusion rules; `stale-docs.md` explicitly refuses to claim a flagged node's FACT is false, "which AGENTS.md itself calls 'a narrowing step, not a certification'" |
@@ -618,9 +618,9 @@ I. The figure is withdrawn.
 
 `census.py` states its rule — every tracked `.md` file under `launchpad/`, every occurrence
 rather than unique pairs, fragments stripped, anchors unverified — and at this branch's HEAD
-reports **1,540 relative links, 1,526 resolving, 14 not**.
+reports **1,541 relative links, 1,526 resolving, 15 not**.
 
-**13 of those 14 are the F-12 false positive again**, at scale — targets like `url`,
+**14 of those 15 are the F-12 false positive again**, at scale — targets like `url`,
 `target`, `...`, `AGENTS.md` and `file.md#some-heading` quoted as examples of link syntax
 rather than used as links. **They are not all in `standards/`**, which this passage claimed
 until a third reviewer checked it against `census.py`: 8 are (`linking.md`, `diagrams.md`,
