@@ -724,8 +724,11 @@ class FakeRemediation:
 
 
 class FakeEscalation:
-    """E-11 — the one genuinely absent collaborator (P-11 is Batch 5), faked through
-    the `EscalationClient` Protocol as the lane contract instructs."""
+    """E-11, faked through the `EscalationClient` Protocol. Not a stand-in for an
+    absent P-11 (`rqa/escalation` is landed): P-02 §1 permanently forbids
+    `rqa.lifecycle` from importing `rqa.escalation`'s implementation, so the injected
+    Protocol is the only legitimate contact between the two packages regardless of
+    what P-11 contains — this fake stays correct whether or not P-11 exists."""
 
     def __init__(self, pending: tuple = ()):
         self.store = object()
