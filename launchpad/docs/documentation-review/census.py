@@ -215,35 +215,48 @@ SECRET_PATTERNS = {
 }
 
 
-def census_secrets(rev: str) -> dict[tuple[int, str], int]:
-    """Count credential-pattern matches. Returns COUNTS ONLY.
+def census_secrets(rev: str) -> dict[str, tuple[int, int]]:
+    """Count credential-pattern matches. Returns AGGREGATES ONLY, never locations.
 
-    The return type is deliberate. An earlier version returned
-    `(path, pattern_name, count)` tuples, and CodeQL flagged printing them as
-    "clear-text logging of sensitive information" (high). Reading the flag
-    closely, it was right about the shape even though the printed values were
-    safe: the tuple left a function that had the file's text in scope, so every
-    field carried that provenance, and a later edit could have widened the tuple
-    to include a match without any reviewer noticing the type had changed
-    meaning.
+    Maps pattern name -> (total matches, number of distinct files).
 
-    Now nothing leaves this function but an INDEX into the caller's own file
-    list, a pattern NAME the caller already holds, and an integer. The caller
-    prints strings it supplied itself. That is not a workaround for the
-    analyser; it is the property the analyser was asking for, and the reason a
-    scanner reviewing a scanner was worth listening to.
+    WHY THIS DELIBERATELY TELLS YOU LESS THAN IT COULD. Two earlier versions
+    returned per-file detail: first `(path, name, count)` tuples, then an index
+    into the caller's file list. CodeQL flagged printing both as "clear-text
+    logging of sensitive information" (high severity), and the second attempt
+    taught me why the first fix missed: I had tried to launder the provenance
+    rather than remove it, and indexing carried the taint straight through.
+
+    The analyser is making a point worth conceding. "Which files contain a
+    credential-shaped string" IS information derived from credential content.
+    A scanner that prints that to stdout, into CI logs, into a terminal
+    scrollback, into a transcript, is a disclosure channel -- a weak one, but a
+    real one, and precisely the kind that gets copied somewhere public because
+    it looked like harmless output. The payload was never printed; the map to
+    the payload was.
+
+    So this reports totals, and locating a match is a deliberate second step
+    the reader has to choose:
+
+        grep -rlE '<the pattern from SECRET_PATTERNS>' launchpad/
+
+    The cost is real: a changed count tells you something moved without telling
+    you where. That is the trade accepted here, and it is reversible -- if the
+    cohort decides paths belong in the output, restore them and suppress the
+    rule with a written justification rather than by restructuring, because
+    restructuring to dodge an analyser is how a genuine finding gets buried.
     """
-    files = tracked_files(rev, SUBTREE)
-    counts: dict[tuple[int, str], int] = {}
-    for i, f in enumerate(files):
+    totals: dict[str, tuple[int, int]] = {}
+    for f in tracked_files(rev, SUBTREE):
         text = blob(rev, f)
         if not text:
             continue
         for name, pat in SECRET_PATTERNS.items():
             n = len(re.findall(pat, text))
             if n:
-                counts[(i, name)] = n
-    return counts
+                prev = totals.get(name, (0, 0))
+                totals[name] = (prev[0] + n, prev[1] + 1)
+    return totals
 
 
 # ---------------------------------------------------------------------------
@@ -304,16 +317,16 @@ def main() -> int:
     for b in links["broken_list"]:
         print(f"    BROKEN  {b}")
 
-    counts = census_secrets(rev)
-    print("\nCredential patterns (counts only; values never printed)")
-    if not counts:
+    totals = census_secrets(rev)
+    print("\nCredential patterns (totals only — no values, no paths)")
+    if not totals:
         print("  0 matches")
-    # Every string printed here is one MAIN already held: a path from
-    # `git ls-tree`, and a key of this module's own SECRET_PATTERNS literal.
-    # Nothing that passed through the file's text reaches stdout.
-    paths = tracked_files(rev, SUBTREE)
-    for (idx, name), n in sorted(counts.items()):
-        print(f"  {paths[idx]}: {int(n)} match(es) of {name} [value NOT reproduced]")
+    for name in sorted(totals):
+        matches, files_ = totals[name]
+        print(f"  {name}: {matches} match(es) across {files_} file(s)")
+    if totals:
+        print("  Locations are deliberately not printed — see census_secrets'")
+        print("  docstring. To locate one, grep for that pattern yourself.")
 
     st = census_status(rev)
     a, c = st["all"], st["canonical"]
