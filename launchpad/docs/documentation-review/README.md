@@ -75,8 +75,11 @@ including 719 canonical corpus nodes and 29 registered generated outputs.
 The `launchpad/` documentation has the strongest mechanical integrity I can measure. Every
 one of **18,715 repository-path citations resolves**, and across the **20,680 citations**
 parsed in total not one positional citation points past the end of its file. All
-**1,341 relationship edges** resolve. **743 of 745** relative links
-work. There are no exposed credentials. The generated indexes declare their generator,
+**1,341 relationship edges** resolve. **744 of 745** relative links
+work — and **745 of 745** after the Stage 0 fixes in this branch. (That figure was
+originally reported as 743; one of the two "broken" links was my own checker's error, not
+the repository's. Audit report, methodological correction 4.) There are no exposed
+credentials. The generated indexes declare their generator,
 inputs, ordering, input digest, and both inclusion *and* exclusion rules — and explicitly
 refuse to overclaim beyond what a `git diff` establishes.
 
@@ -96,6 +99,9 @@ public/private boundary.
 1. **A gate that does not exist is documented as enforced.** `launchpad/AGENTS.md:395` and
    `launchpad/README.md:123` both state the DCO check rejects unsigned commits. Zero of 33
    workflows reference it; zero of 39 check runs on a real merged PR match it.
+   **Fixed in this branch** — both sentences now describe what actually happens: no CI
+   check, a `commit-msg` hook that *adds* the trailer rather than rejecting, and upstream
+   as the place its absence bites.
 2. **The generated coverage report inflates its own numerator.** `37 of 408 GAP` reads as
    91% coverage, but `documented` is earned by a node citing `.env.example` at all — five
    nodes credited with documenting `PGPASSWORD` mention it zero times, including a
@@ -115,10 +121,16 @@ prerequisites, usage constraints, negative behaviour — were **not assessed at 
 **Coverage.** 43 of 122 checklist items assessed. 17 pass, 22 findings, 4 not applicable.
 **79 items were not evaluated — which is not the same as passing them.**
 
-**Recommended first action.** Correct the two DCO sentences (roadmap 0.1). It takes
-minutes, it removes a false statement from the two documents every contributor and agent
-reads first, and it is the cleanest instance of the failure the research corpus argues is
-the most durable: a fabricated gate reads as diligence.
+**Recommended first action — already done.** The two DCO sentences (roadmap 0.1) are
+corrected in this branch, along with the other five Stage 0 fixes. That was the right
+first move because it removes a false statement from the two documents every contributor
+and agent reads first, and it is the cleanest instance of the failure the research corpus
+argues is the most durable: a fabricated gate reads as diligence.
+
+**So your actual first action** is a decision, not an edit: **`HC-4` — which of the eight
+hard gates block a merge?** Everything in Stage 1 depends on it, because a gate you have
+not decided to enforce cannot be built into CI, and documenting it as enforced anyway is
+how F-01 happened in the first place.
 
 ---
 
@@ -235,8 +247,14 @@ The corpus is blunt about this and so is this guide:
 
 ## The five most urgent actions
 
-1. **Correct the DCO enforcement claim** in `launchpad/AGENTS.md:395` and
-   `launchpad/README.md:123` — or install the check. *(F-01, roadmap 0.1, Small)*
+*Action 1 as originally written — correct the DCO enforcement claim — is **done in this
+branch**, together with the rest of Stage 0. It is replaced below by the decision that now
+blocks the most work.*
+
+1. **Decide which of the eight hard gates block a merge (`HC-4`).** Stage 1 cannot start
+   without it: every check it would add needs a decision that the gate is enforced. Deciding
+   nothing and documenting enforcement anyway is exactly how F-01 arose. *(HC-4, roadmap 1,
+   decision only)*
 2. **Fix `coverage.py` so `documented` requires key-level evidence**, and regenerate.
    Expect the GAP count to rise well above 37 — that is the check working. *(F-02,
    roadmap 1.5, Medium)*

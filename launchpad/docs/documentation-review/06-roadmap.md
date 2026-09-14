@@ -47,22 +47,31 @@ more, or a decision that cannot be rushed.
 
 ---
 
-## Stage 0 — Immediate fixes (this week)
+## Stage 0 — Immediate fixes — ✅ **DONE in this branch**
 
 Small, unambiguous, no decision required. Every one is a text or config change with a
-mechanical validation step.
+mechanical validation step. All six were applied here; each row records the validation that
+was actually run, not the one that was planned.
 
-| # | Action | Finding | Owner | Effort | Depends on | Validation |
-|---|---|---|---|---|---|---|
-| 0.1 | Correct the DCO enforcement sentences in `launchpad/AGENTS.md:395` and `launchpad/README.md:123` to describe the `commit-msg` hook rather than a CI check — or install a DCO check and keep them | F-01 | Maintainer | Small | — | Re-run both probes: workflow grep and `gh pr checks` on a live PR. The sentence and the check list must agree |
-| 0.2 | Add a superseded banner above the first heading of `launchpad/deploy/archived/runbooks/dev-deployment-SOP.md` naming the live replacement | F-09 | DevOps | Small | — | The first screen of the file says it is archived |
-| 0.3 | Move the `rm -rf` rationale above the code block in `launchpad/deploy/runbooks/dev-deployment-SOP.md:3004` | F-10 | DevOps | Small | — | The warning precedes the command |
-| 0.4 | Fix the two broken relative links (`schema/README.md`, `standards/linking.md` — both need one more `../`) | F-12 | Developer | Small | — | Link check returns zero |
-| 0.5 | Repair the duplicated front matter and second H1 in `launchpad/docs/corpus/standards/confidence.md` | F-06 | Developer | Small | — | File has one H1 and one front-matter block |
-| 0.6 | Add a governance routing block to `launchpad/README.md`: what governs contributions here, the licence, and where the code of conduct lives | F-11 | Maintainer | Small | — | A newcomer reading only `launchpad/README.md` can find all three |
+| # | Action | Finding | Effort | Status | Validation run |
+|---|---|---|---|---|---|
+| 0.1 | Correct the DCO enforcement sentences in `launchpad/AGENTS.md` and `launchpad/README.md` to describe the `commit-msg` hook rather than a CI check | F-01 | Small | ✅ Done | Workflow grep re-run: still 0 of 33. Both sentences now describe the hook as **adding** the trailer (`lefthook.yml:73-76`, `git interpret-trailers --in-place`), not rejecting — the hook has no failure path |
+| 0.2 | Add a superseded banner above the first heading of `launchpad/deploy/archived/runbooks/dev-deployment-SOP.md` | F-09 | Small | ✅ Done | Banner is the first content after the H1 and names `../../runbooks/dev-deployment-SOP.md` |
+| 0.3 | Move the `rm -rf` rationale above the code block in `launchpad/deploy/runbooks/dev-deployment-SOP.md` | F-10 | Small | ✅ Done | Warning at line 3003, command at line 3013 — verified by line number, not by eye |
+| 0.4 | Fix the broken relative link in `schema/README.md` | F-12 | Small | ✅ Done | `../../plans/` → `../../../plans/`; target resolves. **The second link in this row was withdrawn** — it was my checker's false positive, not a defect (audit report, correction 4) |
+| 0.5 | Repair the duplicated front matter and second H1 in `launchpad/docs/corpus/standards/confidence.md` | F-06 | Small | ✅ Done | 1 H1, 2 delimiters, front matter parses, **14 evidence entries preserved** including the orphaned `TEAM_KNOWLEDGE` entry. `validate.py` exits 0 with 0 errors |
+| 0.6 | Add a governance routing block to `launchpad/README.md` | F-11 | Small | ✅ Done (partial by design) | All four root targets verified present. Routes to them **and states which apply to this fork**; `HC-3` (licence) is named as undecided rather than answered |
 
-**Why these first.** None needs a decision, none can be got wrong, and 0.1 removes a
+**Why these first.** None needed a decision, none could be got wrong, and 0.1 removed a
 false statement from the two documents every contributor and agent reads first.
+
+**What Stage 0 taught, which matters more than the fixes.** Two rows changed shape once
+the work was actually done — 0.4 lost half its scope to a false positive in my own tooling,
+and 0.5 turned out to be a *recovery* rather than a deletion, because the stray lines were
+a provenance entry whose loss the schema validator would not have caught. Both are the same
+lesson: **a fix planned from a finding must be re-derived against the file before it is
+applied.** A roadmap row is a hypothesis about a repository, and Stage 1 exists precisely
+because hypotheses like these should be checked by machines rather than by memory.
 
 ---
 

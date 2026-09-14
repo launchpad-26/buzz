@@ -10,10 +10,20 @@
 week. Everything below P1 can wait.
 
 **The short version.** Nothing dangerous. No leaked credentials, no broken security
-reporting, no destructive command pointed at an unknown target. But two documents say a
+reporting, no destructive command pointed at an unknown target. But two documents said a
 sign-off check protects you and it does not exist; the coverage report flatters itself; and
 93.7% of the corpus is still draft. I checked 43 of 122 items — **the other 79 were not
 checked, which is not the same as them passing.**
+
+**What changed since.** Six of the sixteen findings are **already fixed in this branch** —
+the six that needed no decision from you (F-01, F-06, F-09, F-10, F-11 partly, F-12). The
+findings below are kept as they were written, with the fix recorded against each, because an
+audit that edits itself to match the repository stops being evidence. The ten that remain
+need either a decision only you can make or work larger than a text fix.
+
+**One thing I got wrong.** F-12 originally reported two broken links. One of them was my
+mistake — a correct file I would have sent someone to "fix". It is corrected below and
+explained in full, because how it slipped through matters more than the link did.
 
 ### How the audit was run
 
@@ -94,7 +104,8 @@ behaviour, per `F07`) were not assessed at all.
 - **Code evidence** 0 of **33** tracked files under `.github/workflows/` contain `dco` or `signed-off-by` (case-insensitive, whole-word). Independently: **39** distinct check runs on merged PR #2245 in `launchpad-26/buzz`, **zero** matching `dco|sign.?off`. Prior corroboration: `launchpad/Research/354-dco-check-on-vendor-drops.md` (2026-08-22, 40 PRs scanned).
 - **Gap** An enforcement mechanism is asserted as fact in the fork's normative spec and its README. It does not exist in this fork. The sentence is true in the root `AGENTS.md`, which is upstream's guide — this is `F09`'s **A3 transplanted obligation** producing **A2 phantom enforcement**.
 - **Risk** Contributors and agents rely on a gate that will never catch their mistake. Unsigned commits accumulate and are discovered later, when a branch must be rebased with `--signoff`.
-- **Recommended action** Either install a DCO check and keep the sentence, or rewrite both sentences to state what actually enforces sign-off (the `commit-msg` hook `just hooks` installs, which `--no-verify` bypasses).
+- **Recommended action** Either install a DCO check and keep the sentence, or rewrite both sentences to state what actually happens. **Taken: the sentences were rewritten** — see *Stage 0 remediation*.
+- **Sharpened after remediation.** The original wording above said the `commit-msg` hook "enforces" sign-off. It does not, and the distinction is the whole finding. `lefthook.yml:73-76` runs `git interpret-trailers --if-exists doNothing --trailer "Signed-off-by: …" --in-place {1}`: it **adds** the trailer to the message being written. There is no exit-non-zero path, so it cannot reject a commit — it silently repairs the omission when `just hooks` has been run, and silently does nothing when it has not or when `--no-verify` is passed. Calling that "enforcement" would have replaced one phantom gate with a smaller one, which is why the remediation describes the hook as *adding* rather than *checking*.
 - **Destination** `launchpad/AGENTS.md` §6; `launchpad/README.md` "Opening a PR".
 - **Effort** Small (text) or Medium (install the check). **Owner** Maintainer.
 - **Validation** Re-run both checks; the sentence and the check-run list must agree.
@@ -213,11 +224,18 @@ behaviour, per `F07`) were not assessed at all.
 
 ### P3 — Low priority
 
-#### F-12 · Two relative links do not resolve
-- **Checklist** `START-002` · **Status** `FAIL` · Of **745** relative links checked, **2** are broken (99.7% resolve).
-- `launchpad/docs/corpus/schema/README.md` → `../../plans/2026-08-25-issue-622-corpus-schema.md` (resolves to `launchpad/docs/plans/`; the file is at `launchpad/plans/` — needs `../../../`).
-- `launchpad/docs/corpus/standards/linking.md` → `../../decisions/ADR-0028-corpus-canonical-representation.md` (same off-by-one; file is at `launchpad/decisions/`).
-- **Action** Fix both paths. **Effort** Small. **Owner** Developer. **Validation** Re-run the link check.
+#### F-12 · One relative link does not resolve — *corrected down from two; now remediated*
+- **Checklist** `START-002` · **Status** `FAIL` at audit → **`PASS` after remediation** · Of **745** relative
+  links checked, **1** was broken (99.87% resolve).
+- **Genuine, and fixed:** `launchpad/docs/corpus/schema/README.md:11` → `../../plans/2026-08-25-issue-622-corpus-schema.md`
+  resolved to `launchpad/docs/plans/`; the file is at `launchpad/plans/`. Corrected to `../../../plans/`.
+- **False positive, withdrawn:** `launchpad/docs/corpus/standards/linking.md:41` was **not** a broken link
+  and **no change was made to it**. Line 41 sits *inside* that node's YAML front matter, which closes at
+  line 120. The string is part of a `FACT` statement that **quotes README.md's link as an example** of the
+  style it documents. Relative to `launchpad/docs/corpus/README.md` — the file that actually contains the
+  link — `../../decisions/` resolves to `launchpad/decisions/`, which exists. My checker resolved it against
+  `linking.md`'s own directory (`standards/`) instead of the quoted file's. See methodological correction 4.
+- **Effort** Small. **Owner** Developer. **Validation** Re-run the link check. Done — see *Stage 0 remediation* below.
 
 #### F-13 · A public test fixture contains a high-entropy synthetic token indistinguishable from a real credential
 - **Checklist** `OPS-011` · **Status** `PASS with observation`
@@ -269,7 +287,7 @@ strongest, and several represent remediation of defects the research itself foun
 | **Positional citation bounds** | **0 out-of-bounds** line/range citations (symlink-resolved) |
 | **Relationship integrity** | **1,341** typed edges, **0 unresolved targets** |
 | **Relationship coverage** | **516 of 748** files (69%) declare relationships, up from 89 of 205 (43%) at the research baseline |
-| **Link health** | 743 of 745 relative links resolve (99.7%) |
+| **Link health** | 744 of 745 relative links resolve (99.87%) — corrected from 743; see methodological correction 4. 745 of 745 after Stage 0 |
 | **Credential hygiene** | 0 matches for AWS, GitHub, Slack, Google or PEM private-key patterns. One match, a self-labelled fixture (F-13) |
 | **Claim entailment** | **4 of 4** claims sampled from the seeded random sample are exactly supported by their cited source at the cited line range — including a verbatim module-doc quotation. *Not projectable* |
 | **Generated-view discipline** | Every generated index declares generator, script, inputs, ordering, input digest, and **both** inclusion and exclusion rules; `stale-docs.md` explicitly refuses to claim a flagged node's FACT is false, "which AGENTS.md itself calls 'a narrowing step, not a certification'" |
@@ -282,8 +300,9 @@ strongest, and several represent remediation of defects the research itself foun
 ## Methodological corrections made during this audit
 
 Recorded because `F02` requires that tool-mediated evidence failures be visible rather
-than silently absorbed. Three of my own checks produced false positives and were
-corrected before any finding was drawn from them:
+than silently absorbed. Four of my own checks produced false positives. The first three were
+corrected before any finding was drawn from them; **the fourth was not — it reached F-12 as a
+published finding and is corrected here**:
 
 1. **50 "broken links"** — an artefact of extracting only `launchpad/` from the archive, so
    links to files outside it appeared unresolvable. Re-run against the full tracked file
@@ -294,9 +313,22 @@ corrected before any finding was drawn from them:
 3. **A 29-node "discrepancy"** between my 748-file count and `INDEX.md`'s declared 719 —
    my arithmetic, not the index's. 748 − 29 registered generated outputs = 719. The index
    was correct and had stated its exclusions explicitly.
+4. **One of F-12's two "broken links"** — `launchpad/docs/corpus/standards/linking.md:41`. The
+   string is *inside front matter* (which closes at line 120), within a `FACT` that quotes
+   **README.md's** link as a style example. My checker resolved every relative link against the
+   directory of the file the *text* sits in, which is right for a real link and wrong for a
+   quoted one. Resolved against `launchpad/docs/corpus/README.md`, the target exists.
+   **1** genuine, not 2.
 
-Each is an instance of the failure class the corpus documents: a tool's contract misread
-as a fact about the repository.
+   This one is worth more than the correction. Unlike the first three it was **not** caught
+   before publication: it was written up as a defect, given a status and an action, and would
+   have sent someone to "fix" a correct file — the concrete form of the harm `R05` describes
+   when a checker's contract is reported as a property of the repository. It survived because a
+   link check is easy to trust and its two results looked alike: an identical `../../` prefix
+   and an identical off-by-one story made the false one corroborate the true one. **Two findings
+   sharing a shape is a reason to re-derive the second independently, not a reason to believe
+   it.** Finding 4 is also the only one to touch the `Link health` positive-result figure, so a
+   false positive had propagated into a *favourable* measurement as well as an adverse one.
 
 ---
 
@@ -344,3 +376,54 @@ more.
 They were not re-run because their input trees are byte-identical, which is a stronger
 guarantee than re-running would provide. Had any corpus path differed, the census would
 have been repeated rather than carried forward.
+
+---
+
+## Stage 0 remediation applied in this branch
+
+The roadmap's Stage 0 is the set of fixes that are unambiguous, small, and need no
+maintainer decision. All six were applied **in this branch**, so this report describes a
+state that no longer fully holds — recorded here rather than by silently editing the
+findings, because an audit that quietly rewrites itself to match the repository stops
+being evidence of anything.
+
+| # | Finding | Change | Now |
+|---|---|---|---|
+| 0.1a | F-01 | `launchpad/AGENTS.md` — the DCO-check assertion replaced with what actually happens: no CI check, a `commit-msg` hook that *adds* the trailer, and upstream as where it bites | `INCORRECT` → `PASS` |
+| 0.1b | F-01 | `launchpad/README.md` — same correction in "Opening a PR" | `INCORRECT` → `PASS` |
+| 0.2 | F-09 | `launchpad/deploy/archived/runbooks/dev-deployment-SOP.md` — ARCHIVED banner pointing to the live SOP | `DUPLICATED` → `PASS` |
+| 0.3 | F-10 | `launchpad/deploy/runbooks/dev-deployment-SOP.md` — the `rm -rf` rationale moved **above** the block it warns about | `FAIL` → `PASS` |
+| 0.4 | F-12 | `launchpad/docs/corpus/schema/README.md:11` — `../../plans/` → `../../../plans/` | `FAIL` → `PASS` |
+| 0.5 | F-06 | `launchpad/docs/corpus/standards/confidence.md` — duplicated front matter and second H1 repaired | `FAIL` → `PASS` |
+| 0.6 | F-11 | `launchpad/README.md` — governance/licence/conduct routing table, each target's applicability to *this fork* stated | `FAIL` → `PARTIAL` |
+
+**Two of these deserve more than a table row.**
+
+**0.5 recovered evidence rather than deleting it.** The damage in `confidence.md` was a
+merge that left an orphaned fragment between two `---` delimiters: three YAML lines
+stranded in the body, under a stale code-formatted H1. The obvious repair — delete the
+stray lines, keep the good H1 — would have destroyed a `TEAM_KNOWLEDGE` entry recording
+Serina's decision on `launchpad-26/buzz#1486`. That entry is the *provenance for the very
+H1 style the repair adopts*: it says the H1 must no longer code-format the topic. So the
+fragment was moved **into** the front matter ledger and only the stale duplicate H1
+removed. The node now has 14 evidence entries (10 FACT, 2 INFERENCE, 2 TEAM_KNOWLEDGE),
+one H1, two delimiters. `launchpad/project-intelligence/corpus/validate.py` exits 0 with
+**0 errors** across the corpus. A destructive "tidy" would also have passed that
+validator — schema validity would not have noticed the loss, which is why the check was
+read before the edit rather than after.
+
+**0.6 is a partial fix, deliberately.** The routing table tells a reader which governance
+file applies to this fork and which is upstream's. It does **not** answer `HC-3` — the
+licence covering `launchpad/` documentation — because that is a legal decision no audit
+can make. The table records the gap in place rather than papering over it.
+
+**Not fixed here, and why.** F-02, F-03, F-04, F-05, F-07, F-08, F-13 and F-14 are
+untouched. Each needs either a maintainer decision (`HC-1` through `HC-6`), a change to
+generated tooling, or work larger than Stage 0 admits. They are Stages 1–5 of the roadmap.
+
+**Verification after remediation:** corpus validator exits 0, 0 errors; `confidence.md`
+front matter parses with its ledger intact; all 745 relative links resolve; the framework's
+own 16 self-checks pass. What has *not* been re-run is the full citation, relationship and
+secret census — the Stage 0 edits touched six files, none of which carry positional
+citations, so those censuses are unaffected. That is a reasoned exemption, not an
+assumption: if a later stage edits corpus nodes, the censuses must be re-run.
