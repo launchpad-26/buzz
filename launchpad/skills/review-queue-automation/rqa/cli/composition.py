@@ -49,6 +49,7 @@ from rqa.authority import SqliteCapabilityStore
 from rqa.contracts import (
     Grant,
     Job,
+    KeyStore,
     Plan,
     RecordWriter,
     Reservation,
@@ -284,7 +285,10 @@ class Composition:
 
 
 def build_composition(
-    state_dir: Path, *, clock: Callable[[], datetime] = utcnow
+    state_dir: Path,
+    *,
+    clock: Callable[[], datetime] = utcnow,
+    keystore: KeyStore = OSKeyStore(),
 ) -> Composition:
     """Bootstrap every table this state directory needs and wire every real
     collaborator over it. Idempotent: every store's own constructor runs its
@@ -300,7 +304,24 @@ def build_composition(
     pr_facts = SqlitePrFactsStore(connection)
     leases = SqliteLeaseStore(connection)
 
-    record: RecordWriter = SQLiteRecordWriter(connection, clock=clock, keystore=OSKeyStore())
+    # The `KeyStore` (E-25) arrives the same way every other collaborator in
+    # this function does — constructed or injected right here, like `clock`,
+    # `jobs`, `pr_facts` and `leases` three lines above. `rqa/record/__init__.py`
+    # names this module as the reason `OSKeyStore` is importable at all: its
+    # public surface is the re-export list "plus the two concrete collaborators
+    # a composition root must construct", because "nothing inside `rqa/record/`
+    # constructs one, so something outside this package always must", and
+    # `tests/test_rqa_record_surface.py` pins that publication as a contract
+    # (`PUBLISHED_EXPORTS = frozenset({"SQLiteRecordWriter", "OSKeyStore"})`).
+    # Taking it as a parameter means a caller that cannot reach a platform
+    # keychain (CI on Linux, a test process) supplies its own, rather than this
+    # module deciding what a missing keychain means. That judgement stays in
+    # `rqa/record/keychain.py`, where absent-key and machine-cannot-answer
+    # remain deliberately distinct. The `OSKeyStore()` default is evaluated once
+    # at definition time, matching what `SQLiteRecordWriter.__init__`,
+    # `verify()` and `SQLiteRecordReader.__init__` already do, so no existing
+    # caller's behaviour changes.
+    record: RecordWriter = SQLiteRecordWriter(connection, clock=clock, keystore=keystore)
 
     github_ensure_schema(connection)
     transport = Transport(
