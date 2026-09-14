@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import json
 import pathlib
+import stat
 import sys
 import tempfile
 
@@ -67,6 +68,26 @@ def test_two_attempts_distinct_immutable() -> None:
     for p in jl.attempts_dir.glob("attempt-*.json"):
         data = json.loads(p.read_text(encoding="utf-8"))
         assert "profile" in data and "job.id" in data and "outcome" in data
+
+
+def test_attempt_log_is_not_world_or_group_readable() -> None:
+    """Pins the real invariant, not the transient one.
+
+    `Logger.attempt`'s O_CREAT|O_EXCL reservation sets 0o600 on an empty file
+    that `_atomic_replace` immediately supersedes via `tempfile.mkstemp` (always
+    0600) + `os.replace` (a rename, so the destination takes the *source*
+    inode's mode). The completed attempt-NNN.json has therefore always been
+    0600 regardless of what the reservation's own mode argument was — this test
+    asserts that post-completion state, so a future edit that regresses either
+    the reservation mode or `_atomic_replace` itself would be caught either way.
+    See #2247.
+    """
+    jl, _ = _standard_logger()
+    jl.attempt({"profile": {}, "signals": [], "outcome": "complete"})
+    files = list(jl.attempts_dir.glob("attempt-*.json"))
+    assert len(files) == 1
+    mode = stat.S_IMODE(files[0].stat().st_mode)
+    assert mode == 0o600, f"expected 0o600, got {oct(mode)}"
 
 
 def test_artifacts_contain_no_secrets_or_evidence() -> None:
