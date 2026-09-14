@@ -1,17 +1,53 @@
 {
   "authority": {
-    "review": "disabled",
-    "comment": "disabled",
-    "approve": "disabled",
-    "request_changes": "disabled"
+    "review": false,
+    "comment": false,
+    "approve": false,
+    "request_changes": false,
+    "remediate": false,
+    "merge": false
+  },
+  "routes": [
+    {
+      "harness": "claude",
+      "model": "claude-sonnet-4-5",
+      "provider": "anthropic",
+      "family": "claude",
+      "external": false
+    },
+    {
+      "harness": "custom",
+      "model": "local-review-model",
+      "provider": "local",
+      "family": "local",
+      "external": false,
+      "command": ["local-review-cli", "--model", "local-review-model"]
+    }
+  ],
+  "external": {
+    "allowed": false,
+    "deny_label": ""
+  },
+  "policy": {
+    "version": "v1",
+    "obligations": [],
+    "blocking": {
+      "categories": [],
+      "severities": [],
+      "corroboration": 1
+    },
+    "mechanical": {
+      "categories": [],
+      "tools": []
+    },
+    "assurance": {},
+    "remediation": {
+      "allow_forks": false
+    }
   },
   "budget": {
     "per_pr_tokens": 2000000,
     "per_repo_daily_tokens": 40000000,
     "per_model_daily_tokens": 20000000
-  },
-  "policy": {
-    "version": "v1",
-    "assurance": {}
   }
 }
