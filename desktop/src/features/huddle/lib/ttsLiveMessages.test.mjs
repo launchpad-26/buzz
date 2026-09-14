@@ -150,7 +150,7 @@ test("resists a pathological separator payload (ReDoS regression, #2224)", () =>
   // bound.
   const url = "https://cdn.example/voice.png";
   const tags = [...base.tags, ["imeta", `url ${url}`, "m image/png"]];
-  const pathological = "||\n" + "\n".repeat(30) + "X";
+  const pathological = `||\n${"\n".repeat(30)}X`;
   const start = performance.now();
   speakableText({ ...base, content: pathological, tags });
   const elapsed = performance.now() - start;
