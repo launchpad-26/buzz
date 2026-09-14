@@ -117,10 +117,16 @@ def main() -> int:
     # contradictory text and the suite passed, because nothing compared the
     # words. An ID-only check licenses exactly the drift generation was adopted
     # to make impossible.
+    # GREEDY, and emphasis-stripped, to match what the generator now stores.
+    # This pattern was `(.+?)` — non-greedy — so it stopped at the FIRST `**` and
+    # reproduced the generator's own truncation on BOTH sides of the comparison.
+    # Two parsers sharing a defect agree perfectly and prove nothing: START-006,
+    # OPS-006 and AGENT-001 each silently lost the word carrying their meaning
+    # ("names", "restore", "not") while this check reported parity.
     md_requirements = {
-        pid: req.strip()
+        pid: re.sub(r"\*\*|__", "", req).strip()
         for pid, req in re.findall(
-            r"^\*\*([A-Z]+-\d{3}) · (.+?)\*\*", md_text, re.M
+            r"^\*\*([A-Z]+-\d{3}) · (.+)\*\*", md_text, re.M
         )
     }
     mismatched = [
@@ -191,6 +197,12 @@ def main() -> int:
     total = 0
     for doc in docs:
         text = re.sub(r"```.*?```", "", doc.read_text(encoding="utf-8"), flags=re.S)
+        # Inline code spans too, not just fenced blocks. A document that QUOTES a
+        # link as an example — `![image](url)` — is not carrying that link, and
+        # counting it both invents a broken link and inflates the denominator.
+        # The independent review made the same point about the audit's own link
+        # census: quoted examples are not interchangeable with rendered links.
+        text = re.sub(r"`[^`\n]*`", "", text)
         for link in re.findall(r"\]\(([^)\s#]+)", text):
             if link.startswith(("http", "mailto")):
                 continue

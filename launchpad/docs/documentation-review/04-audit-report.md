@@ -135,7 +135,16 @@ behaviour, per `F07`) were not assessed at all.
 #### F-02 · The generated coverage report's `documented` disposition is earned by file-level citation, not by documenting the item
 - **Checklist** `FOUND-011`, `FOUND-004` · **Status** `INCORRECT`
 - **Existing evidence** `launchpad/docs/corpus/generated/coverage.md` — "**37 of 408 in-scope source items are `GAP` rows at this revision**". Its own contract states `documented` is "earned by a canonical node's file/position citation".
-- **Code evidence** Every `config:` row lists a near-identical set of ~46 crediting nodes. Sampled five nodes credited with documenting `config:PGPASSWORD` — `layers-data-redis-role`, `layers-networking-heartbeat`, `operations-runbooks-redis-unavailable`, `capabilities-git-git-object-storage`, `corpus-template-datastore` — **each mentions `PGPASSWORD` zero times**. Same result for `TYPESENSE_API_KEY`. 74 nodes cite `.env.example` at all.
+- **Code evidence** Every `config:` row lists a near-identical set of ~46 crediting nodes. Sampled five nodes credited with documenting `config:PGPASSWORD` — `layers-data-redis-role`, `layers-networking-heartbeat`, `operations-runbooks-redis-unavailable`, `capabilities-git-git-object-storage`, `corpus-template-datastore` — **each mentions `PGPASSWORD` zero times**. 74 nodes cite `.env.example` at all.
+
+  *Correction, from the independent review.* This row originally added "Same result for
+  `TYPESENSE_API_KEY`." **That was wrong.** `corpus-template-datastore` mentions
+  `TYPESENSE_API_KEY` **twice**, including substantive discussion of the stale Typesense
+  configuration, and the key appears in ten corpus files. The generalisation was asserted
+  from the `PGPASSWORD` sample rather than measured — the same move this report criticises
+  `coverage.md` for. The `PGPASSWORD` result itself is independently **confirmed**: all
+  five named nodes mention it zero times. The finding therefore stands on the sample
+  actually taken, and only on that one.
 - **Gap** Any node citing `.env.example` is credited with documenting *every* key in it — including a **template** being credited with documenting a production database password. The headline reads as 91% coverage; the numerator is not what a reader will take it to be.
 - **Risk** Exactly `16-coverage-inflation.md`'s inventory substitution: the visible numerator grows faster than the definition of what must be covered, and the 37 real GAPs look like the whole gap.
 - **Recommended action** Require key-level evidence (`\.env\.example:LINE` matching the key's line, or the key name appearing in the node) before awarding `documented`; re-run; expect the GAP count to rise substantially. Until then, add a sentence to `coverage.md` stating that `documented` means "some node cites the file this item lives in".
@@ -148,7 +157,15 @@ behaviour, per `F07`) were not assessed at all.
 - **Checklist** `GOV-010`, `FOUND-010` · **Status** `PARTIAL`
 - **Existing evidence** At baseline: **47 `active`, 701 `draft`** (93.7% draft). The research baseline of 2026-09-08 recorded **47 active of 205**.
 - **Code evidence** Front-matter census over all 748 files at the frozen revision.
-- **Gap** 543 nodes were added in roughly eight days and not one was promoted. Either promotion is blocked on a gate nobody has run, or `draft` has become the corpus's resting state and carries no information.
+- **Gap** The corpus grew by roughly **514 canonical nodes** in about eight days (205 → 719 canonical) while `active` stayed at 47. Either promotion is blocked on a gate nobody has run, or `draft` has become the corpus's resting state and carries no information.
+
+  *Two corrections from the independent review.* This line originally said **543**, which
+  subtracted a canonical figure from an all-files one — the same population mixing that
+  produced the 93.7%/93.5% split below. Use one population or name both. Second, it
+  originally said "**not one was promoted**": unchanged endpoint counts do not establish
+  that. 47 active at both ends is equally consistent with promotions offset by
+  demotions. What is measured is that **the net `active` count did not move**, which is
+  what the finding now claims.
 - **Risk** `14-documentation-review-at-corpus-scale.md` warns that `draft` does not mean "ignore" — draft material is still found, cited, copied and used by agents. A 93.7% draft corpus that agents read as authoritative has a lifecycle vocabulary that is not doing any work.
 - **Recommended action** Decide what promotion requires (`SYNTHESIS.md` adoption decision 3) and either promote a first tranche or state explicitly that `draft` is the expected steady state for generated-from-code nodes.
 - **Destination** `launchpad/docs/corpus/standards/status.md`; a governance decision.
@@ -307,11 +324,11 @@ strongest, and several represent remediation of defects the research itself foun
 
 | Result | Measurement |
 |---|---|
-| **Citation resolution** | **`validate.py` exits 0 with 0 errors** across all 748 files — every citation the repository's own validator can resolve, resolves. *The precise counts originally given here (18,715 of 20,680) are withdrawn as unreproducible; see "Census figures corrected".* |
+| **Citation resolution** | **`validate.py` exits 0 with 0 errors** across all 748 files — every citation it can resolve, resolves. **The same run reports 1,983 items `UNVERIFIED`** (commit references, graph edges and tool results, none of which names an openable file). A green exit is not a claim about those. *The precise counts originally given here (18,715 of 20,680) are withdrawn as unreproducible; see "Census figures corrected". The replacement is **17,844 repository-path citations of 20,801 citation strings** across 748 files, by `census.py`'s stated rule at `6e6186d26` — reproducible by running it, which is the only property that makes it a measurement rather than an assertion.* |
 | **Positional citation bounds** | **0 out-of-bounds** line/range citations (symlink-resolved) |
 | **Relationship integrity** | **1,341** typed edges, **0 unresolved targets** |
 | **Relationship coverage** | **516 of 748** files (69%) declare relationships, up from 89 of 205 (43%) at the research baseline |
-| **Link health** | **1,526 of 1,540** relative links resolve at this branch's HEAD, by `census.py`'s stated rule. **13 of the 14 unresolved are quoted link-syntax examples inside `standards/`, not links.** *The "745" originally given here is withdrawn — no reviewer, including me, could reproduce that denominator.* |
+| **Link health** | **1,526 of 1,540** relative links resolve at HEAD, by `census.py`'s stated rule. **13 of the 14 unresolved are quoted link-syntax examples, not links** — 8 in `standards/`, 5 in `capabilities/` and `Research/`. *The "745" originally given here is withdrawn — no reviewer, including me, could reproduce that denominator.* |
 | **Credential hygiene** | **5** credential-shaped matches across 5 files, every one a test fixture — see the correction below. *This row originally read "0 matches … One match, a self-labelled fixture", which was wrong.* |
 | **Claim entailment** | **4 of 4** claims sampled from the seeded random sample are exactly supported by their cited source at the cited line range — including a verbatim module-doc quotation. *Not projectable* |
 | **Generated-view discipline** | Every generated index declares generator, script, inputs, ordering, input digest, and **both** inclusion and exclusion rules; `stale-docs.md` explicitly refuses to claim a flagged node's FACT is false, "which AGENTS.md itself calls 'a narrowing step, not a certification'" |
@@ -449,11 +466,11 @@ being evidence of anything.
 |---|---|---|---|
 | 0.1a | F-01 | `launchpad/AGENTS.md` — the DCO-check assertion replaced with what actually happens: no CI check, a `commit-msg` hook that *adds* the trailer, and upstream as where it bites | `INCORRECT` → `PASS` |
 | 0.1b | F-01 | `launchpad/README.md` — same correction in "Opening a PR" | `INCORRECT` → `PASS` |
-| 0.2 | F-09 | `launchpad/deploy/archived/runbooks/dev-deployment-SOP.md` — ARCHIVED banner pointing to the live SOP | `DUPLICATED` → `PASS` |
-| 0.3 | F-10 | `launchpad/deploy/runbooks/dev-deployment-SOP.md` — the `rm -rf` rationale moved **above** the block it warns about | `FAIL` → `PASS` |
+| 0.2 | F-09 | `launchpad/deploy/archived/runbooks/dev-deployment-SOP.md` — ARCHIVED banner pointing to the live SOP | `INCORRECT` → `PASS` |
+| 0.3 | F-10 | `launchpad/deploy/runbooks/dev-deployment-SOP.md` — the `rm -rf` rationale moved **above** the block it warns about | `PARTIAL` → `PASS` |
 | 0.4 | F-12 | `launchpad/docs/corpus/schema/README.md:11` — `../../plans/` → `../../../plans/` | `FAIL` → `PASS` |
-| 0.5 | F-06 | `launchpad/docs/corpus/standards/confidence.md` — duplicated front matter and second H1 repaired | `FAIL` → `PASS` |
-| 0.6 | F-11 | `launchpad/README.md` — governance/licence/conduct routing table, each target's applicability to *this fork* stated | `FAIL` → `PARTIAL` |
+| 0.5 | F-06 | `launchpad/docs/corpus/standards/confidence.md` — duplicated front matter and second H1 repaired | `INCORRECT` → `PASS` |
+| 0.6 | F-11 | `launchpad/README.md` — governance/licence/conduct routing table, each target's applicability to *this fork* stated | `PARTIAL` → `PARTIAL`, materially improved |
 
 **Two of these deserve more than a table row.**
 
@@ -475,9 +492,19 @@ file applies to this fork and which is upstream's. It does **not** answer `HC-3`
 licence covering `launchpad/` documentation — because that is a legal decision no audit
 can make. The table records the gap in place rather than papering over it.
 
-**Not fixed here, and why.** F-02, F-03, F-04, F-05, F-07, F-08, F-13 and F-14 are
-untouched. Each needs either a maintainer decision (`HC-1` through `HC-6`), a change to
-generated tooling, or work larger than Stage 0 admits. They are Stages 1–5 of the roadmap.
+**Not fixed here, and why.** F-02, F-03, F-04, F-05, F-07, F-08, **F-13, F-14, F-15 and
+F-16** are untouched — **ten**, matching the count stated at the top of this report. Most
+need either a maintainer decision (`HC-1` through `HC-6`), a change to generated tooling, or
+work larger than Stage 0 admits, and those are Stages 1–5 of the roadmap.
+
+**F-15 and F-16 are the exception, and were missing from this list entirely** until a
+whole-branch review counted it. They have no roadmap row either — so the two findings about
+*this framework's own reader-first rules* (`READER-001`, `READER-002`, `ARCH-002`) were the
+only ones with no owner, no effort estimate and no stage. F-16's own recommended action is
+an hour's work. That an audit built around "not evaluated is not a pass" mislaid two of its
+own findings between the finding list and the plan is worth more than the hour: **an
+enumeration and a plan drift apart silently unless something counts them against each
+other**, which is `FOUND-011` pointed inward.
 
 **Verification after remediation:** corpus validator exits 0, 0 errors; `confidence.md`
 front matter parses with its ledger intact; the one genuine broken link is fixed; the framework's
@@ -593,10 +620,20 @@ I. The figure is withdrawn.
 rather than unique pairs, fragments stripped, anchors unverified — and at this branch's HEAD
 reports **1,540 relative links, 1,526 resolving, 14 not**.
 
-**13 of those 14 are the F-12 false positive again**, at scale: targets like `url`, `target`,
-`...`, `AGENTS.md` and `file.md#some-heading` quoted *inside* `standards/linking.md`,
-`standards/diagrams.md` and `standards/code-references.md` as examples of link syntax. A
-document that teaches linking is full of strings shaped like links that are not links. The
+**13 of those 14 are the F-12 false positive again**, at scale — targets like `url`,
+`target`, `...`, `AGENTS.md` and `file.md#some-heading` quoted as examples of link syntax
+rather than used as links. **They are not all in `standards/`**, which this passage claimed
+until a third reviewer checked it against `census.py`: 8 are (`linking.md`, `diagrams.md`,
+`code-references.md`), and the other 5 are in
+`capabilities/media/imeta.md`, `capabilities/messaging/attachments.md` and
+`Research/364-declines-and-upstream-security-fixes.md` — `![image](url)` inside FACT
+statements, and a quoted `SECURITY.md` diff hunk.
+
+The distinction matters to exactly one reader, and it is a reader this report is trying to
+help: whoever implements roadmap 1.3, the CI link check. Scoping an exclusion allowlist to
+`standards/` on the strength of the original sentence buys five unexplained failures on day
+one. **Cite `census.py`'s attribution rather than this prose** — restating a tool's output in
+a sentence is how the two drift, which is the same defect as F-02 one level up. The
 one plausible genuine case is
 `launchpad/plans/2026-08-26-issue-639-corpus-readme.md` → `schema/node.schema.json`, a
 historical plan quoting a path relative to a file it is describing rather than itself.

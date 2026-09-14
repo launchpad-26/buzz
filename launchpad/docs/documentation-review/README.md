@@ -87,9 +87,11 @@ including 719 canonical corpus nodes and 29 registered generated outputs.
 The `launchpad/` documentation has the strongest mechanical integrity I can measure.
 **`validate.py` exits 0 with 0 errors across all 748 corpus files** — every repository-path
 citation it can resolve, resolves, and no positional citation points past the end of its
-file. All **1,341 relationship edges** resolve. **1,526 of 1,540** relative links work, and
-**13 of the 14 that do not are quoted link-syntax examples inside `standards/`, not
-links**. The only credential-shaped strings in the subtree are five test fixtures for
+file. **That same run reports 1,983 items `UNVERIFIED`** — commit references and graph/tool
+citations that name no openable file. The pass says nothing about those, and rule 3 of the
+checklist requires saying so. All **1,341 relationship edges** resolve. **1,526 of 1,540** relative links work, and
+**13 of the 14 that do not are quoted link-syntax examples, not links** — 8 in
+`standards/`, 5 in `capabilities/` and `Research/`. The only credential-shaped strings in the subtree are five test fixtures for
 secret-detection tooling.
 
 **Three of those figures replace numbers I first published and could not reproduce.** The
@@ -102,7 +104,7 @@ inputs, ordering, input digest, and both inclusion *and* exclusion rules — and
 refuse to overclaim beyond what a `git diff` establishes.
 
 That is not the same as being correct, and the corpus's own research is the authority for
-that distinction. **93.7% of nodes are `draft`.** The count of `active` nodes — 47 — has
+that distinction. **93.7% of corpus files are `draft`** (93.5% of canonical nodes — the two populations differ by the 29 generated outputs, and the difference is exactly what `HC-5` has to decide about). The count of `active` nodes — 47 — has
 not moved while the corpus grew from 205 to 719. No reader, operator or contributor has
 ever been tested against any of it.
 
@@ -192,7 +194,10 @@ than one that says "looks good".
 | `FAIL` | It should be here and it is not |
 | `INCORRECT` | It says something the code or configuration contradicts |
 | `STALE` | It was true once |
+| `DUPLICATED` | It is repeated somewhere else, and the copies will drift apart |
 | `NOT_APPLICABLE` | It genuinely does not apply here — **and here is why** |
+| `NOT_EVALUATED` | **I did not check it.** Not a pass, and not the same as one |
+| `UNABLE_TO_ASSESS` | I tried and the tool or the access failed. Never a pass |
 | `UNKNOWN` | I could not tell |
 | `HUMAN_CONFIRMATION_REQUIRED` | Someone with authority has to decide |
 
@@ -271,7 +276,7 @@ blocks the most work.*
 
 1. **Decide which of the eight hard gates block a merge (`HC-4`).** Stage 1 cannot start
    without it: every check it would add needs a decision that the gate is enforced. Deciding
-   nothing and documenting enforcement anyway is exactly how F-01 arose. *(HC-4, roadmap 1,
+   nothing and documenting enforcement anyway is exactly how F-01 arose. *(HC-4, roadmap 3.2,
    decision only)*
 2. **Fix `coverage.py` so `documented` requires key-level evidence**, and regenerate.
    Expect the GAP count to rise well above 37 — that is the check working. *(F-02,

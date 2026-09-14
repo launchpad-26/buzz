@@ -37,7 +37,7 @@ rules:
   - "A deterministic check proves its own predicate and nothing else."
   - "A tool failure becomes unable_to_assess, never a pass."
   - "Report 'no defect detected against inventory X', never 'complete' or 'correct'."
-result_states: [pass, partial, fail, incorrect, stale, duplicated, not_applicable, unknown, human_confirmation_required]
+result_states: [pass, partial, fail, incorrect, stale, duplicated, not_applicable, not_evaluated, unable_to_assess, unknown, human_confirmation_required]
 item_count: 122
 items:
   - id: "READER-001"
@@ -382,7 +382,7 @@ items:
     failure_risk: "Operators configure against a value the system never uses."
   - id: "START-006"
     category: "getting-started"
-    requirement: "Environment variable"
+    requirement: "Environment variable names are documented without any real values."
     audience:
       - human
       - agent
@@ -1171,7 +1171,7 @@ items:
     failure_risk: "Guesswork during incidents."
   - id: "OPS-006"
     category: "operations-security-reliability"
-    requirement: "Backup and restore procedures are documented and the"
+    requirement: "Backup and restore procedures are documented and the restore side has been exercised."
     audience:
       - human
       - agent
@@ -1765,7 +1765,7 @@ items:
     failure_risk: "Tasks left half-done."
   - id: "AGENT-001"
     category: "agent-readable"
-    requirement: "The repository states its purpose and what it is"
+    requirement: "The repository states its purpose and what it is not in a file agents load unconditionally."
     audience:
       - agent
     applicability: "required"

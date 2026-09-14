@@ -85,7 +85,16 @@ Turning one-off fixes into gates. Each of these is a Level-A deterministic predi
 | 1.1 | Add a `confidence` band-value check to `validate.py`, restricting values to the bands `standards/confidence.md` declares | F-04, `FOUND-011` | Developer | Small | 0.5 | Check fails on a seeded `0.83`; the 349 existing violations become visible and convergeable |
 | 1.2 | Add a Markdown structure lint (one H1, no skipped heading levels, no duplicate H2 within a document) | F-06, `HUMAN-004`, `AGENT-023` | Developer | Small | 0.5 | Fails on a seeded second H1; the 33 multi-H1 files are enumerated |
 | 1.3 | Add the relative-link resolution check to CI, scoped to `launchpad/**` | F-12, `START-002` | Developer | Small | 0.4 | Fails on a seeded broken link |
-| 1.4 | Add an enforcement-claim check: grep the documentation for "check fails", "is enforced", "is required by CI", and require each hit to name a mechanism that exists | F-01, `DEV-008`, `AGENT-017` | Developer | Medium | 0.1 | The check reproduces F-01 on the pre-fix revision and passes after |
+| 1.4 | Add an enforcement-claim check: grep the documentation for "check fails", "is enforced", "is required by CI", and require each hit to name a mechanism that exists | F-01, `DEV-008`, `AGENT-017` | Developer | Medium | 0.1, **3.2** | The check reproduces F-01 on the pre-fix revision and passes after |
+
+> **1.4 depends on a decision listed further down this roadmap.** Row **3.2** is `HC-4` —
+> which of the eight hard gates block a merge — and 1.4 cannot be written without it: a
+> check that asserts "this gate is enforced" needs someone to have decided that it is. The
+> dependency runs backwards through the stage numbering, which is deliberate and worth
+> naming rather than renumbering: **the decision is cheap and the implementation is not, so
+> the decision does not need its own stage — it needs an owner and a date.** Shipping 1.4
+> before 3.2 would install a check that documents an enforcement nobody agreed to, which is
+> F-01 rebuilt in CI.
 | 1.5 | Fix `coverage.py` so a config key earns `documented` only from key-level evidence, then regenerate | F-02 | Developer | Medium | — | A node crediting a config key contains that key. Expect the GAP count to rise well above 37 — **that is the check working** |
 
 **Why before Stage 2.** Stage 2 is expensive human review. Running it while these
@@ -122,7 +131,17 @@ leverage unresolved risk in the subtree.
 | 3.3 | **HC-5** — Decide whether `draft` is the intended steady state for generated-from-code nodes, or define what promotion requires | F-03; the meaning of the entire status vocabulary | Human decision | Medium |
 | 3.4 | **HC-2** — Name the official rendered surface and its accessibility target, and who owns renderer-controlled failures | All of `FOUND-008`, `HUMAN-010`, `HUMAN-012` | Human decision | Medium |
 | 3.5 | **HC-3** — Decide the documentation licence for `launchpad/` | `GOV-003` | Human decision | Small |
-| 3.6 | **HC-6** — Confirm the `block-api-key.md` fixture token was synthesised, not copied | F-13 | Developer who owns the fixture | Small |
+| 3.6 | **HC-6** — Confirm the `block-api-key.md` fixture token was synthesised, not copied. **Now covers five fixtures across three subsystems**, not one — see the census correction | F-13 | Developer who owns the fixture | Small |
+| 3.7 | Give each `launchpad/` entry point a diagram of what it describes, with a text equivalent | **F-15**, `ARCH-002`, `READER-002` | Writer | Medium |
+| 3.8 | Verify that each entry point's opening summary is readable in under 30 seconds by someone who has not seen the subtree | **F-16**, `READER-001` | Writer | Small — about an hour |
+
+> **3.7 and 3.8 were added on 2026-09-14.** F-15 and F-16 had no roadmap row at all, and
+> were also missing from the audit report's "not fixed here" list — so two of sixteen
+> findings had no owner, no effort and no stage, and the omission was invisible because
+> nothing counted the finding list against the plan. Both concern the framework's *own*
+> reader-first rules, which makes their disappearance the most on-the-nose defect in this
+> branch: the two items that exist to stop documents being unreadable were the two the
+> planning forgot.
 
 **Recommended order:** 3.6 first (one minute, closes a security question), then 3.2 and
 3.3 (cheap, and they determine how everything else is reported), then 3.4, 3.5, and 3.1

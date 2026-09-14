@@ -188,8 +188,16 @@ Assign exactly one status:
 | `STALE` | Describes an older version |
 | `DUPLICATED` | Repeated in a way likely to drift |
 | `NOT_APPLICABLE` | Not relevant here — **with a reason** |
+| `NOT_EVALUATED` | **You did not check it. This is not a pass** — with why not |
+| `UNABLE_TO_ASSESS` | You tried; the tool or the access failed. **Never a pass** |
 | `UNKNOWN` | Cannot be determined from available evidence — **with what is missing** |
 | `HUMAN_CONFIRMATION_REQUIRED` | Needs a maintainer or specialist |
+
+`03-master-checklist.md` § *Result states* is the canonical list, and `checklist.yaml`'s
+`result_states` is generated from it. **This table omitted `NOT_EVALUATED` and
+`UNABLE_TO_ASSESS` until 2026-09-14** while §12 below made reporting the unevaluated count
+mandatory — so the guide demanded a status it did not define, and the machine contract
+forbade it outright.
 
 `PASS` requires that you inspected the evidence. A heading, a file's existence, or a
 brief mention is not a pass.

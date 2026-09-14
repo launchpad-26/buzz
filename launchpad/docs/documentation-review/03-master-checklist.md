@@ -84,6 +84,33 @@ weaker.
 5. **Insufficiency is detectable; sufficiency is not.** Report "no defect detected against
    inventory X", never "complete" or "correct". (`F01`, `F07`)
 
+### Result states
+
+**This list is the single definition.** `generate_checklist_yaml.py` parses it from this
+section and emits it as `result_states` in `checklist.yaml`. Every other document uses these
+spellings and no others.
+
+It is declared here, and generated rather than restated, because it previously was not. The
+enum was a hardcoded literal inside the generator, and it **omitted `NOT_EVALUATED` and
+`UNABLE_TO_ASSESS` — the two states rules 2 and 4 above make mandatory.** An agent enforcing
+that enum would have been obliged to reject this framework's own audit report, on its single
+most load-bearing sentence: *"79 items were not evaluated — which is not the same as passing
+them."* Four documents had drifted to four different vocabularies and nothing could detect
+it, because the Markdown declared no enum for the generated file to disagree with. Rule 2
+existed; it simply had no machine form.
+
+- `PASS` — the predicate was checked and holds.
+- `PARTIAL` — holds in part; the gap is stated.
+- `FAIL` — the predicate was checked and does not hold.
+- `INCORRECT` — the documentation asserts something the repository contradicts.
+- `STALE` — was true; the thing it describes has since moved.
+- `DUPLICATED` — repeated in a way likely to drift.
+- `NOT_APPLICABLE` — does not apply here; the reason is stated.
+- `NOT_EVALUATED` — **not checked. This is not a pass**, and it needs a reason.
+- `UNABLE_TO_ASSESS` — checking was attempted; the tool or the access failed. Never a pass.
+- `UNKNOWN` — checked, and the evidence does not settle it.
+- `HUMAN_CONFIRMATION_REQUIRED` — inspection cannot settle it; a person must say.
+
 ---
 
 ## 0. Reader-first requirements

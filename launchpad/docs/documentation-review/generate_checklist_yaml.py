@@ -21,9 +21,16 @@ HOW IT WORKS
              v
     checklist.yaml           <-- generated, do not hand-edit
 
-Parity between the two files is by construction: every item in the YAML came
-from a block in the Markdown, and the script fails loudly rather than silently
-skipping a block it cannot parse.
+Every item in the YAML comes from a block in the Markdown, and the script exits
+non-zero rather than silently skipping a block it cannot parse.
+
+That is not the same as parity, and this file used to claim it was. Regenerating
+reproduces whatever the parser does, including its mistakes -- a byte-for-byte
+match after a re-run proves determinism, not correctness. An independent
+cross-model review found the parser truncating three requirements at nested
+emphasis while the ID counts matched perfectly. Parity is therefore asserted by
+test_documentation_review.py, which compares field *content* against the
+Markdown, and not by this script.
 """
 
 import collections
@@ -55,7 +62,15 @@ AUTOMATION = {
     "Human review": "human",
 }
 
-ITEM_RE = r"^\*\*([A-Z]+-\d{3}) \u00b7 (.+?)\*\*(.*)\n((?:\u2014.*\n)+)"
+# The requirement runs to the LAST '**' on the line, not the first. A non-greedy
+# (.+?) here truncated any requirement containing nested emphasis -- START-006,
+# OPS-006 and AGENT-001 each lost the word carrying their meaning, and an
+# ID-only parity check could never see it. Greedy is required. ITEM_COUNT_RE is
+# deliberately independent of this pattern so a future format change shows up as
+# a count mismatch rather than as silently dropped items.
+ITEM_RE = r"^\*\*([A-Z]+-\d{3}) \u00b7 (.+)\*\*(.*)\n((?:\u2014.*\n)+)"
+ITEM_COUNT_RE = r"^\*\*[A-Z]+-\d{3} \u00b7 "
+EMPHASIS_RE = r"\*\*|__"
 META_RE = (
     "\u2014\\s*([^/]+)/\\s*([^/]+)/\\s*([^/]+)/"
     "\\s*\\*\\*(P\\d)\\*\\*\\s*/\\s*([^/]+)/\\s*(.*)"
@@ -133,7 +148,10 @@ def parse(text: str) -> list:
             {
                 "id": pid,
                 "category": CATEGORY[prefix],
-                "requirement": requirement.strip(),
+                # Emphasis markers are presentation, not content. The YAML holds
+                # the plain sentence; test_documentation_review.py compares the
+                # two after the same normalisation.
+                "requirement": re.sub(EMPHASIS_RE, "", requirement).strip(),
                 "audience": AUDIENCE[aud],
                 "applicability": applicability.lower(),
                 "applies_when": field(body, "Applies when"),
@@ -157,7 +175,40 @@ def parse(text: str) -> list:
     return items
 
 
-def render(items: list) -> str:
+def parse_result_states(text: str) -> list[str]:
+    """Read the result-state vocabulary from the Markdown's own declaration.
+
+    NEVER hardcode this list. It WAS hardcoded until 2026-09-14, and the literal
+    omitted `NOT_EVALUATED` and `UNABLE_TO_ASSESS` -- the two states the
+    checklist's own non-negotiable rules 2 and 4 make mandatory. An agent
+    enforcing the emitted enum would have been obliged to reject this framework's
+    own audit report, whose central claim is that 79 items were *not evaluated*
+    and that this is not the same as passing them.
+
+    Nothing could detect the contradiction, because the per-item generation
+    guarantee did not extend to the header: the Markdown declared no enum, so the
+    generated file had nothing to disagree with. A generated artefact is only as
+    trustworthy as the part of it that is actually generated.
+    """
+    block = re.search(r"^### Result states\s*$(.*?)^---\s*$", text, re.M | re.S)
+    if not block:
+        raise SystemExit(
+            f"generate_checklist_yaml: no '### Result states' section in {SRC.name}. "
+            "The vocabulary is declared there and read from there; it is "
+            "deliberately not hardcoded here."
+        )
+    states = re.findall(r"^- `([A-Z_]+)`", block.group(1), re.M)
+    missing = {"NOT_EVALUATED", "UNABLE_TO_ASSESS"} - set(states)
+    if missing:
+        raise SystemExit(
+            f"generate_checklist_yaml: '### Result states' omits {sorted(missing)}, "
+            "which non-negotiable rules 2 and 4 require. Refusing to emit a "
+            "contract that forbids a state the rules mandate."
+        )
+    return states
+
+
+def render(items: list, states: list[str]) -> str:
     out = [HEADER]
     out.append('checklist_version: "1.1"')
     out.append('baseline_revision: "78e789369e3392f187e8c63753262669108fda81"')
@@ -167,10 +218,7 @@ def render(items: list) -> str:
     out.append("    files_unreadable: 0")
     out.append("rules:")
     out.extend("  - " + quote(r) for r in RULES)
-    out.append(
-        "result_states: [pass, partial, fail, incorrect, stale, duplicated, "
-        "not_applicable, unknown, human_confirmation_required]"
-    )
+    out.append("result_states: [" + ", ".join(s.lower() for s in states) + "]")
     out.append(f"item_count: {len(items)}")
     out.append("items:")
     for it in items:
@@ -198,9 +246,22 @@ def render(items: list) -> str:
 def main() -> None:
     if not SRC.exists():
         sys.exit(f"cannot find {SRC}")
-    items = parse(SRC.read_text(encoding="utf-8"))
+    text = SRC.read_text(encoding="utf-8")
+    items = parse(text)
     if not items:
         sys.exit("parsed zero items - the Markdown item format has probably changed")
+
+    # Independent count, not derived from ITEM_RE. A block the item pattern
+    # cannot parse is dropped silently by re.findall; this is what makes that
+    # loud. It has caught a real regression once, when 21 tagged items vanished.
+    declared = len(re.findall(ITEM_COUNT_RE, text, re.M))
+    if declared != len(items):
+        parsed_ids = {i["id"] for i in items}
+        all_ids = set(re.findall(r"^\*\*([A-Z]+-\d{3}) · ", text, re.M))
+        sys.exit(
+            f"{declared} item headings in the Markdown but {len(items)} parsed. "
+            f"Unparsed: {sorted(all_ids - parsed_ids)}"
+        )
 
     missing = [
         i["id"]
@@ -227,7 +288,7 @@ def main() -> None:
     if dangling:
         sys.exit(f"dependencies pointing at unknown ids: {dangling}")
 
-    OUT.write_text(render(items), encoding="utf-8")
+    OUT.write_text(render(items, parse_result_states(text)), encoding="utf-8")
     by_cat = collections.Counter(i["category"] for i in items)
     print(f"wrote {OUT.name}: {len(items)} items")
     print(f"  categories: {dict(by_cat)}")
