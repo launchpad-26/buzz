@@ -1,6 +1,6 @@
 ---
 name: "provenance-log"
-description: "Read or write the per-section provenance ledger for a page — who or what contributed a section, which commit it rests on, and when — so every doc section's origin is checkable, not asserted."
+description: "Read or write the per-section provenance ledger for a page — who or what contributed a section, which commit it rests on, and when — so every doc section's origin is checkable, not asserted. Use when recording what a section rests on after a write, reading that record back, or archiving old entries. Not for writing the section's content (draft-page, update-page) or judging whether its claims are supported (verify-claims)."
 ---
 
 # Recording and answering provenance

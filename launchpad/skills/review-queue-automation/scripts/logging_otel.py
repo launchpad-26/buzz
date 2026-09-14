@@ -311,7 +311,7 @@ class JobLogger:
             number += 1
             path = self.attempts_dir / f"attempt-{number:03d}.json"
             try:
-                fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o644)
+                fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
                 os.close(fd)
             except FileExistsError:
                 continue

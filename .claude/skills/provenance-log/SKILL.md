@@ -1,0 +1,1 @@
+../../../launchpad/agents/the-professor/skills/provenance-log/SKILL.md

@@ -1,6 +1,6 @@
 ---
 name: "verify-claims"
-description: "Adversarially re-check that each behaviour claim in a gated draft has a citation at all, and that the citation actually supports it — the third, mandatory, unskippable gate before any write, run twice per draft."
+description: "Adversarially re-check that each behaviour claim in a gated draft has a citation at all, and that the citation actually supports it — the third, mandatory, unskippable gate before any write, run twice per draft. Use when a draft has passed check-page and screen-sensitive and is about to be written. Not for secrets screening (screen-sensitive) or structural contract compliance (the check-page subcommand of tools/professor.py). Requires $PROFESSOR_VERIFIER_CMD for any draft containing behaviour claims; it fails loud rather than passing a claim it could not check."
 ---
 
 # Verifying claims, not just citations

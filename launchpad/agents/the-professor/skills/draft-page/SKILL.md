@@ -1,6 +1,6 @@
 ---
 name: "draft-page"
-description: "Draft a documentation page for one gap-report entry from a target repo's own source, against whichever contract resolves for that repo, using tools for every fact instead of recalling it."
+description: "Draft a documentation page for one gap-report entry from a target repo's own source, against whichever contract resolves for that repo, using tools for every fact instead of recalling it. Use when scan-repo has reported a new entry for a page that does not exist yet, or a needs_baseline section on an existing page whose prose never had citations — baseline mode establishes them for the first time. Not for rewriting the prose of a section that already has citations (update-page), finding what needs writing (scan-repo), or authoring a node in a repository that runs its own governed documentation pipeline — in launchpad-26/buzz that is corpus-author."
 ---
 
 # Drafting a page from a target repo's own source

@@ -1,6 +1,6 @@
 ---
 name: "update-page"
-description: "Rewrite one stale section of an existing page — only that section — after its cited source has changed, grounded in a real diff rather than a full re-read-and-guess."
+description: "Rewrite one stale section of an existing page — only that section — after its cited source has changed, grounded in a real diff rather than a full re-read-and-guess. Use when scan-repo has reported a stale entry naming one page and one section. Not for creating a page (draft-page), establishing citations on prose that never had them (draft-page baseline mode), rewriting a whole page, or updating a node in a repository that runs its own governed documentation pipeline — in launchpad-26/buzz, a change that invalidated corpus nodes is corpus-maintain's job, not this skill's."
 ---
 
 # Updating one stale section, and only that section
