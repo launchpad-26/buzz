@@ -486,6 +486,55 @@ def make_escalation(
     )
 
 
+def record_escalation(
+    connection: sqlite3.Connection,
+    *,
+    job: Job,
+    cause: EscalationCause = EscalationCause.AUTHORITY_REQUIREMENT,
+    raised_at: datetime = NOW,
+    head_sha: str | None = None,
+    snapshot_hash: str | None = None,
+    unpinned: bool = False,
+) -> None:
+    """The `escalation` record entry P-11's `raise_` appends at its step 4
+    (`code/P-11-escalation.md` §6) — which is where `resume` recovers the escalation a
+    decision answers (`code/P-02-lifecycle.md` §7 permits `record_entries` and forbids
+    reading `human_requests` content).
+
+    Written through a real `SQLiteRecordWriter` pinned to `raised_at`, because the entry
+    stamps its own `at` and that `at` is the escalation moment `resume` compares a
+    submitted review against. Pinning it keeps the 12b bound a fixture-controlled fact
+    rather than a wall-clock race.
+
+    The payload is reproduced from §6 rather than produced by `raise_`: this bench does
+    not import `rqa.escalation`, for the same reason `FakeEscalation` exists. That the
+    two shapes agree is pinned by `tests/test_rqa_lifecycle_resume_from_record.py`,
+    which drives the real `raise_` and the real `decide()` end to end.
+
+    `snapshot_hash=None` means "no override" — mirror the job's own pin — exactly as it
+    always has, for every caller. `unpinned=True` is a separate, additive path for the
+    one shape that meaning cannot express: E-B5-1 made `snapshot_hash` nullable, so a
+    recorded `None` is a real value (the job that never pinned a snapshot), and
+    `_check_freshness`'s `None`-vs-`None` branch is unreachable without it. It is a
+    distinct parameter rather than a repurposed `None` precisely so that no existing
+    caller's meaning moves.
+    """
+    assert not (unpinned and snapshot_hash is not None), (
+        "unpinned records a NULL pin; it cannot also carry an override"
+    )
+    writer = SQLiteRecordWriter(connection, clock=lambda: raised_at, keystore=NoKeyStore())
+    writer.append(job.id, "escalation", {
+        "cause": cause.value,
+        "question": "a specific question",
+        "context": {},
+        "head_sha": head_sha if head_sha is not None else job.head_sha,
+        "snapshot_hash": None if unpinned else (
+            snapshot_hash if snapshot_hash is not None else (job.snapshot_hash or SNAP_HASH)
+        ),
+    })
+    connection.commit()
+
+
 def make_decision(
     *,
     actor: str = "human-reviewer",
@@ -728,7 +777,14 @@ class FakeEscalation:
     absent P-11 (`rqa/escalation` is landed): P-02 §1 permanently forbids
     `rqa.lifecycle` from importing `rqa.escalation`'s implementation, so the injected
     Protocol is the only legitimate contact between the two packages regardless of
-    what P-11 contains — this fake stays correct whether or not P-11 exists."""
+    what P-11 contains — this fake stays correct whether or not P-11 exists.
+
+    `pending` stays on this fake, and in the Protocol, because `rqa/edges.py` declares
+    E-11 as `raise_` *and* `pending`: the Protocol mirrors the edge, not P-02's current
+    call sites. `resume` no longer calls it — it recovers the escalation from the
+    `escalation` record entry `record_escalation` writes — so `pending=` is now only
+    what a caller other than P-02 would read, and no P-02 test steers a branch with it.
+    """
 
     def __init__(self, pending: tuple = ()):
         self.store = object()

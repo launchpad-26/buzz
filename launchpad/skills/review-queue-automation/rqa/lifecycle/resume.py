@@ -16,11 +16,19 @@ escalation's cause:
   then `escalated → approved | changes_requested`, directly, with step 11 performed for
   an approval. Step 10 is never re-entered.
 
+**Where the escalation comes from.** The `escalation` record entry P-11 appends at
+`raise_` step 4 (`code/P-11-escalation.md` §6), read through §5's read protocol — not
+E-11's `pending()`. `decide()`'s own step order closes the `human_requests` row (step
+12) *before* calling this function (step 13), so `pending()` no longer lists it by the
+time we are running; and `code/P-02-lifecycle.md` §7 forbids this part from reading "the
+content of `human_requests` rows" in the first place, while placing `record_entries`
+inside its permitted set. One durable source, permitted and ordering-independent.
+
 **Staleness is fail-closed and value-free.** A moved head or a moved snapshot raises
 `StaleDecisionError`; this function never substitutes a local alternative value for the
-human's decision (§3.3). The comparison is against the pinned job row and the open
-escalation's own recorded head and snapshot — both captured before the human ever saw
-the question.
+human's decision (§3.3). The comparison is against the pinned job row and the recorded
+escalation's own head and snapshot — both captured before the human ever saw the
+question.
 
 **Containment.** The drive after a successful check runs under the same boundary as
 `admit` (§3.1): an `AppendFailed`, `sqlite3.Error` or `OSError` becomes one licensed
@@ -36,12 +44,12 @@ the review rows being matched are data compared field-by-field, never interpolat
 from __future__ import annotations
 
 import sqlite3
+from dataclasses import dataclass
 from datetime import datetime
 
 from rqa.contracts import (
     AppendFailed,
     Decision,
-    Escalation,
     EscalationCause,
     Facts,
     GithubUnavailable,
@@ -75,6 +83,29 @@ _OUTCOME_STATUS = {
 }
 
 
+@dataclass(frozen=True)
+class _RecordedEscalation:
+    """The escalation a decision answers, as recovered from the record.
+
+    Exactly the four fields `resume` uses, and deliberately **not** a
+    `contracts.Escalation`: that value's `id` is the `human_requests` row id, and §7
+    forbids this part from reading that table's content — a synthesised id would be a
+    fabricated field, not a recovered one. Module-private, so nothing at the seam moves:
+    E-11's `resume(*, job_id, decision, deps) -> JobStatus` is unchanged.
+
+    `raised_at` is the record entry's own `at`. `RecordWriter.append` takes no `at`, so
+    the writer stamps it microseconds after P-11 computed its `raised_at = utcnow()`
+    (`code/P-11-escalation.md` §3): `at >= raised_at` by construction. 12b's
+    "submitted at or after we asked" bound can therefore only become marginally
+    stricter, never looser — the fail-closed direction.
+    """
+
+    cause: EscalationCause
+    raised_at: datetime
+    head_sha: str
+    snapshot_hash: str | None
+
+
 def resume(*, job_id: str, decision: Decision, deps: LifecycleDeps) -> JobStatus:
     """E-11 verbatim (`rqa/edges.py`): apply one recorded human decision to one
     escalated job and drive it to its next resting status."""
@@ -84,7 +115,7 @@ def resume(*, job_id: str, decision: Decision, deps: LifecycleDeps) -> JobStatus
             f"job {job_id!r} is {job.status.value}, not escalated; there is no open "
             "question for a decision to answer"
         )
-    escalation = _open_escalation(job=job, deps=deps)
+    escalation = _recorded_escalation(job=job, deps=deps)
 
     current = job
     try:
@@ -165,7 +196,12 @@ def _step12a(*, job: Job, decision: Decision, facts: Facts, deps: LifecycleDeps)
 
 
 def _step12b(
-    *, job: Job, decision: Decision, facts: Facts, escalation: Escalation, deps: LifecycleDeps
+    *,
+    job: Job,
+    decision: Decision,
+    facts: Facts,
+    escalation: _RecordedEscalation,
+    deps: LifecycleDeps,
 ) -> Job:
     """12b: admit the human's own GitHub outcome, verified against E-23, then step 11
     for an approval. No verdict grant is requested (§8 T15)."""
@@ -215,7 +251,7 @@ def _carry_only_panel(job: Job, ctx: Cascade) -> PanelResult:
     )
 
 
-def _check_freshness(*, job: Job, facts: Facts, escalation: Escalation) -> None:
+def _check_freshness(*, job: Job, facts: Facts, escalation: _RecordedEscalation) -> None:
     """§3.3: either mismatch — head or pinned snapshot — raises; no transition follows."""
     if facts.pr.head_sha != job.head_sha:
         raise StaleDecisionError(
@@ -259,13 +295,55 @@ def _load(*, job_id: str, deps: LifecycleDeps) -> Job:
     )
 
 
-def _open_escalation(*, job: Job, deps: LifecycleDeps) -> Escalation:
-    """The one open escalation this decision answers, from E-11 `pending`."""
-    pending = deps.escalation.pending(store=deps.escalation.store)
-    matching = [escalation for escalation in pending if escalation.job_id == job.id]
-    if len(matching) != 1:
+def _recorded_escalation(*, job: Job, deps: LifecycleDeps) -> _RecordedEscalation:
+    """The escalation this decision answers, from the latest `escalation` record entry.
+
+    §5's read protocol, through `steps._latest_payload` — the one record-read idiom this
+    package has — plus the same row's `at`, read in exactly that shape. The two reads
+    observe the same row by construction: identical predicate and ordering, on the same
+    connection, with no append between them.
+
+    Absence is a `LifecycleError`: an `ESCALATED` job with no `escalation` entry is a
+    wiring defect in the caller, not a crash. There is no multiplicity branch to guard
+    any more — this reads the *latest* entry, and `decide()`, the only caller, has
+    already proved at its steps 5-8 that exactly one open escalation exists for this job
+    and has not been answered before (`code/P-11-escalation.md` §3).
+    """
+    ctx = Cascade(deps=deps)
+    payload = _latest_payload(job, ctx, kind="escalation")
+    if payload is None:
         raise LifecycleError(
-            f"{len(matching)} open escalations exist for job {job.id!r}; a resume "
-            "answers exactly one"
+            f"job {job.id!r} is escalated but has no escalation entry; there is nothing "
+            "recorded for a decision to answer"
         )
-    return matching[0]
+    # F-T1: the payload also carries `question` and `context`, both potentially
+    # PR-derived. Take the four fields this part uses and unbind the whole mapping
+    # before any raise below, so neither is reachable from this frame's `f_locals` once
+    # an exception raised here is introspected.
+    cause_value = payload.get("cause")
+    head_sha = payload.get("head_sha")
+    snapshot_hash = payload.get("snapshot_hash")
+    del payload
+
+    if not isinstance(cause_value, str) or not isinstance(head_sha, str):
+        raise LifecycleError(
+            f"the escalation entry for job {job.id!r} records no cause or no head"
+        )
+    try:
+        cause = EscalationCause(cause_value)
+    except ValueError:
+        raise LifecycleError(
+            f"the escalation entry for job {job.id!r} records {cause_value!r}, which is "
+            "not one of the five causes"
+        ) from None
+
+    row = deps.connection.execute(
+        "SELECT at FROM record_entries WHERE job = ? AND kind = ? ORDER BY seq DESC LIMIT 1",
+        (job.id, "escalation"),
+    ).fetchone()
+    return _RecordedEscalation(
+        cause=cause,
+        raised_at=datetime.fromisoformat(row[0]),
+        head_sha=head_sha,
+        snapshot_hash=snapshot_hash if isinstance(snapshot_hash, str) else None,
+    )
