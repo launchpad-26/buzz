@@ -95,7 +95,7 @@ def test_location_is_frozen() -> None:
 
 def test_finding_is_frozen_and_shaped() -> None:
     location = Location(path="a.py", line=None)
-    remedy = Remedy(tool="black", paths=("a.py",), check="lint")
+    remedy = Remedy(tool="ruff-format", paths=("a.py",), check="ruff-format-check")
     finding = Finding(
         id="f1",
         categories=frozenset({Category.MECHANICAL}),
@@ -136,7 +136,11 @@ def test_finding_categories_and_extra_tags_are_never_merged() -> None:
 
 
 def test_remedy_paths_is_a_tuple_of_exact_files() -> None:
-    remedy = Remedy(tool="ruff", paths=("src/a.py", "src/b.py"), check="ruff-check")
+    remedy = Remedy(
+        tool="ruff-format",
+        paths=("src/a.py", "src/b.py"),
+        check="ruff-format-check",
+    )
     assert remedy.paths == ("src/a.py", "src/b.py")
     assert isinstance(remedy.paths, tuple)
 
@@ -199,4 +203,3 @@ def test_obligation_shape() -> None:
     )
     assert obligation.paths == ("src/**/*.py",)
     assert obligation.required_for == {"high"}
-
