@@ -240,6 +240,47 @@ actually happened; the second, independent pass is the real gate of record. Do n
 special-case this pass as "probably fine since it already passed once" — run it exactly
 as thoroughly as the first.
 
+### 4a. Proving the second pass actually re-dispatched
+
+**Decided 2026-09-15, by Serina.** "It ran twice" is unfalsifiable from the outside: a
+pass that re-dispatched every claim and a pass that reused the first pass's verdicts look
+identical unless something observable distinguishes them. Caching those verdicts is the
+obvious optimisation, and it is exactly what this section exists to detect.
+
+**The observable is a per-pass run identifier.** Each pass generates one fresh identifier
+before it dispatches anything, and stamps it on every verdict that pass produces. A
+verdict carrying the *previous* pass's identifier was not re-checked — it was replayed.
+
+**An identifier alone is not enough, so it is bound to evidence:**
+
+- **One recorded invocation of `$PROFESSOR_VERIFIER_CMD` per cited claim, per pass.** Not
+  one per pass. A pass over six cited claims records six invocations; a pass that records
+  one has not re-checked the other five, whatever its verdicts are stamped with.
+- Each invocation record carries the pass identifier, and **identifies its claim by
+  location and citation rather than by reproducing the claim's text** — the same
+  discipline `check-page`'s own findings already follow, so this evidence channel does not
+  become a way for draft content to outlive the draft.
+
+**What an inspector checks, in order:**
+
+1. Count the cited claims in the finished draft. Count the second pass's invocation
+   records. **They must be equal.** Fewer records than cited claims is a replay,
+   regardless of what the verdicts say.
+2. Every second-pass verdict carries the second pass's identifier — not the first's.
+3. Every verdict maps to an invocation record for *that claim* in *that pass*.
+
+**A verdict that fails any of these blocks the write**, with the same disposition as any
+other non-`SUPPORTED` outcome in step 3. A replayed verdict is not a verdict; it is the
+absence of a second check wearing the first check's answer.
+
+**What this does not prove — named, not solved.** A fresh identifier and a matching
+invocation record prove a dispatch *happened*. They do not prove it was *independent*: an
+agent could re-dispatch while carrying the first pass's reasoning in context and still
+produce a perfectly-shaped record. Isolation remains a property of how step 2 is followed,
+not something this observable can enforce. This is the same honest limit as the one
+recorded below for claim identification — worth knowing before treating a clean
+second-pass record as proof the gate is sound.
+
 ## What this gate does not solve
 
 Naming these explicitly so they are never mistaken for silent guarantees:
@@ -283,6 +324,9 @@ draft in isolation.
 - [ ] This whole procedure ran a second time, independently, against the finished
       file, immediately before the write — not treated as already satisfied by the
       first, mid-draft pass
+- [ ] The second pass carries its own fresh run identifier, and one invocation record
+      per cited claim — the record count equals the cited-claim count (§4a), and no
+      verdict carries the first pass's identifier
 - [ ] `$PROFESSOR_VERIFIER_CMD` was confirmed set before any dispatch — an unset
       variable failed loud with §2a's specific message, not a silent fallback or a
       generic crash
