@@ -21,7 +21,7 @@ protocols and shared `CONTRACTS.md` values define every seam.
 rqa/lifecycle/
   __init__.py    re-exports: admit, resume, status, transition, JobStatus, TRANSITIONS,
                  Disposition, DISPOSITION, StatusReport, NotFound, StaleDecisionError,
-                 LifecycleError, IllegalTransitionError, UnknownJobError
+                 LifecycleError, IllegalTransitionError, UnknownJobError, LifecycleDeps
   states.py      imports shared JobStatus and defines TRANSITIONS, Disposition and DISPOSITION
   errors.py      LifecycleError and its subclasses; never a policy or availability outcome
   deps.py        LifecycleDeps and neighbour Protocols; no shared value-type redefinitions

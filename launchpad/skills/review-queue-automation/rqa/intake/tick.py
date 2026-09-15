@@ -18,16 +18,17 @@ from rqa.intake.lease import Lease
 from rqa.intake.lock import acquire
 from rqa.intake.store import DEFAULT_BATCH_SIZE, JobStore, LeaseStore, PrFactsStore
 from rqa.intake.types import IntakeError, JobFailure, RepositoryFailure, TickResult
-from rqa.lifecycle import LifecycleDeps, admit
-from rqa.lifecycle.deps import (
+from rqa.lifecycle import (
     AuthorityClient,
     EscalationClient,
     HarnessClient,
     JudgementClient,
+    LifecycleDeps,
     PolicyClient,
     RemediationClient,
     ReuseClient,
     SupplyClient,
+    admit,
 )
 from rqa.record import AppendFailed, RecordWriter
 
