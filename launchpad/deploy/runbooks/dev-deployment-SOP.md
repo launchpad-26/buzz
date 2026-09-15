@@ -2998,7 +2998,16 @@ pnpm -C admin-web build
 > unset, the bundle works out the relay address from whatever address the browser used, which is what
 > you want. Setting it hard-codes one relay into the files permanently.
 
-Copy the results in:
+Copy the results in.
+
+> **Read this before running the block — the first line deletes.** `sudo rm -rf
+> /opt/buzz/web /opt/buzz/admin-web` removes those two directories on the VM. Both are
+> build output you are about to replace, so on this dev VM there is nothing in them you
+> cannot rebuild — but check you are pointed at `127.0.0.1:2222`, your own machine, and not
+> a host you care about. The deletion is deliberate: copying onto an existing folder nests
+> the files *inside* it as `/opt/buzz/web/dist`, and the relay then cannot find
+> `index.html`. The copy goes via `/tmp` because after Step 13 you log in as `dev`, who
+> cannot write to `/opt` directly.
 
 ```bash
 ssh -p 2222 dev@127.0.0.1 'sudo rm -rf /opt/buzz/web /opt/buzz/admin-web'
@@ -3006,10 +3015,6 @@ scp -P 2222 -r web/dist dev@127.0.0.1:/tmp/web
 scp -P 2222 -r admin-web/dist dev@127.0.0.1:/tmp/admin-web
 ssh -p 2222 dev@127.0.0.1 'sudo mv /tmp/web /opt/buzz/web && sudo mv /tmp/admin-web /opt/buzz/admin-web && sudo chown -R root:root /opt/buzz/web /opt/buzz/admin-web'
 ```
-
-> The copy goes via `/tmp` because after Step 13 you log in as `dev`, who cannot write to `/opt`
-> directly. The `rm -rf` first matters: copying onto an existing folder nests the files *inside* it as
-> `/opt/buzz/web/dist`, and the relay then cannot find `index.html`.
 
 Add the mounts to the `relay` service in `compose.cohort.yml` — alongside the `networks:` block that is
 already there, not as a second `relay:` key:

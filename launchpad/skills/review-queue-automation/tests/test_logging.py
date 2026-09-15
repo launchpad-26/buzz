@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import json
 import pathlib
+import stat
 import sys
 import tempfile
 
@@ -67,6 +68,40 @@ def test_two_attempts_distinct_immutable() -> None:
     for p in jl.attempts_dir.glob("attempt-*.json"):
         data = json.loads(p.read_text(encoding="utf-8"))
         assert "profile" in data and "job.id" in data and "outcome" in data
+
+
+def test_attempt_log_is_not_world_or_group_readable() -> None:
+    """Pins the real invariant, not the transient one.
+
+    `Logger.attempt`'s O_CREAT|O_EXCL reservation sets 0o600 on an empty file
+    that `_atomic_replace` immediately supersedes via `tempfile.mkstemp` (always
+    0600) + `os.replace` (a rename, so the destination takes the *source*
+    inode's mode). The completed attempt-NNN.json has therefore always been
+    0600 regardless of what the reservation's own mode argument was — this
+    test asserts exactly that post-completion state, which is what #2247's
+    Definition of Done asks for.
+
+    This does NOT cover a regression to the reservation's own `os.open` mode
+    argument: that value is unobservable once `_atomic_replace` has run, since
+    the destination inode is replaced outright. Reverting `logging_otel.py`'s
+    0o600 back to 0o644 leaves this test green (verified on Linux during
+    review of #2247, not merely reasoned about — this repo's own CI runs
+    this suite on Linux, but this file's docstring was written from a
+    Windows sandbox where the suite cannot even be imported; see
+    `common.py`'s unconditional `fcntl` import). This test's job is narrower
+    than "catches any mode regression": it pins the real invariant
+    `_atomic_replace` provides, not the reservation step's own mode.
+    (Separately, #2265 tracks that this assertion also inherits the process
+    umask, so a future umask-dependent regression to `_atomic_replace` itself
+    could go uncaught under some umasks — a different gap from the one above.)
+    See #2247.
+    """
+    jl, _ = _standard_logger()
+    jl.attempt({"profile": {}, "signals": [], "outcome": "complete"})
+    files = list(jl.attempts_dir.glob("attempt-*.json"))
+    assert len(files) == 1
+    mode = stat.S_IMODE(files[0].stat().st_mode)
+    assert mode == 0o600, f"expected 0o600, got {oct(mode)}"
 
 
 def test_artifacts_contain_no_secrets_or_evidence() -> None:
