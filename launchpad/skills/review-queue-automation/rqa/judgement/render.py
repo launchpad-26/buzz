@@ -111,7 +111,11 @@ def render(judgement: Judgement) -> str:
     lines.append("")
 
     lines.append("## Reused from")
-    reused_from = "(none)" if judgement.reused_from is None else _code_span(judgement.reused_from)
+    reused_from = (
+        "(none)"
+        if judgement.reused_from is None
+        else _code_span(f"{judgement.reused_from[0]}@{judgement.reused_from[1]}")
+    )
     lines.append(f"- {reused_from}")
 
     return "\n".join(lines)

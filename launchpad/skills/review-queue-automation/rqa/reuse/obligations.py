@@ -100,15 +100,7 @@ def _source_attestations(*, judgement_row: RecordRow, obligation_id: str) -> tup
 def _carried_evidence(
     *, obligation: Obligation, source_job: str, judgement_row: RecordRow
 ) -> CarriedEvidence:
-    """Build authenticated provenance from the latest trusted judgement (§3.6).
-
-    **Interim, pending #2236.** P-13 §3.6 fixes `source_judgement_seq` to the
-    `judgement_row.seq` returned by `VerifiedRecordPrefix.latest("judgement")`, so this
-    mints the predecessor's *latest trusted* judgement sequence. The pinned `(job, seq)`
-    reference #2236 calls for cannot be carried farther today because
-    `Judgement.reused_from` (`CONTRACTS.md` §6) is only a job id. This interim behaviour
-    stays aligned with P-12's documented reuse-chain resolution until #2236 lands.
-    """
+    """Build authenticated provenance pinned to the selected trusted judgement (§3.6)."""
     if type(judgement_row.seq) is not int or judgement_row.seq < 1:
         raise ReuseError("predecessor judgement sequence is malformed")
     attestations = _source_attestations(
@@ -118,8 +110,6 @@ def _carried_evidence(
         obligation_id=obligation.id,
         state=EvidenceState.VERIFIED,
         source_job=source_job,
-        # Interim (see the docstring and #2236): this is the latest trusted judgement,
-        # because no earlier pinned source sequence is readable from the landed seam.
         source_judgement_seq=judgement_row.seq,
         source_attestations=attestations,
     )

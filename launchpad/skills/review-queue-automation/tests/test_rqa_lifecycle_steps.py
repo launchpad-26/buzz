@@ -401,7 +401,7 @@ def test_t9_empty_regenerated_calls_no_harness_and_the_absent_attestation_proves
     # E-09 received the empty complete panel cut off at fact-capture time (T9).
     assert call["panel"].evidence_cutoff == NOW
     judgement_payload = latest_payload(connection, "judgement", job_id="job-2")
-    assert judgement_payload["reused_from"] == "job-1"
+    assert judgement_payload["reused_from"] == ["job-1", 3]
     assert judgement_payload["disposition"] == "approve"
 
 

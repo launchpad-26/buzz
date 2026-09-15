@@ -334,7 +334,8 @@ CLI's `explain.py job <job-id>` precedent), and `explain` is defined in terms of
    corroboration/blocking decorations, and decision basis; a terminal human `decision` overrides the
    reviewer identity/type exactly as before.
 3. A judgement with `reused_from is None` uses only this job's rows. A judgement with
-   `reused_from: str` is a materialised current judgement, not a pointer that may be ignored:
+   `reused_from: tuple[str, int]` pins the predecessor job and exact judgement sequence; it is a
+   materialised current judgement, not a pointer that may be ignored:
    - load and verify the named predecessor's trusted prefix, then obtain the predecessor judgement
      at the carried source sequence and its harness-shaped attestations;
    - merge the current judgement's own obligations/findings/basis with the predecessor attestations
@@ -549,7 +550,7 @@ none touches a real OS keychain or a real network.
 | T16 | `KeyStore.read("rqa-record-hmac")` returns `None` during `append` | append returns `Entry`; its row has `keyed=False, hmac=NULL`; `verify` returns `ok=True` with an `unverifiable` segment whose reason is `no key`, not `HMAC_MISMATCH`; `explain` reports that segment `unverifiable: no key` |
 | T14 | `append(job, "not_a_real_kind", {})` | raises `UnknownEntryKind`; `record_entries` for that job is unchanged (zero new rows) |
 | T15 | `append(job, "spend", {"at": datetime.now()})` (a raw `datetime`, not a string) | raises `PayloadNotSerializable`; zero new rows |
-| T20 | predecessor has a valid plan, harness attestations, and judgement; successor has no `attestation`, a materialised `judgement` with `reused_from=<predecessor job>`, and a transition | `explain_job(successor)` follows `reused_from`, returns all twelve elements, and obtains reviewer identity/harness/model/provider from the predecessor attestations |
+| T20 | predecessor has a valid plan, harness attestations, and judgement; successor has no `attestation`, a materialised `judgement` with `reused_from=(<predecessor job>, <judgement seq>)`, and a transition | `explain_job(successor)` follows the exact referenced judgement, returns all twelve elements, and obtains reviewer identity/harness/model/provider from predecessor attestations through that sequence |
 | T17 | two payload dicts with identical key/value pairs built in different insertion order | `compute_hash` returns byte-identical results for both |
 | T18 | a job with rows `[keyed real seq=1, legacy, unkeyed real seq=2 chained to seq=1]` | `verify` returns `ok=True` with the seq-2 `unverifiable: no key` segment; `explain_job` returns `legacy=True, verified=False` and reports that segment without calling it broken |
 | T19 | a `judgement` row whose `findings` list contains three ids: one in both `blocking` and `corroborated`, one in `corroborated` only, one in neither | `explain_job`'s `findings` tuple marks the first `blocking=True, corroborated=True`, the second `blocking=False, corroborated=True`, the third `blocking=False, corroborated=False` — the three-way split RQA-BR-005/RQA-BR-008 need |

@@ -32,7 +32,7 @@ and provides them in `Facts`.
 `Assurance`, `Judgement`, `CarriedEvidence`, and `CarryOver` are defined only in
 [`CONTRACTS.md`](CONTRACTS.md) §6. In particular, `Judgement.obligations` is exactly
 `set(plan.obligations) | {c.obligation_id for c in carry.reused}`, and `Judgement.reused_from` is the
-predecessor job id when any evidence was carried. P-07 does not redefine them.
+exact predecessor `(job id, judgement seq)` when any evidence was carried. P-07 does not redefine them.
 
 `Job`, `Plan`, `PanelResult`, `Attempt`, `Attestation`, `Verdict`, `Finding`, `InjectionAttempt`,
 `Remedy`, `EvidenceState`, `Category`, both category groups, `Facts`, captured-check constants,
@@ -69,8 +69,9 @@ ties, and reads neither clock, filesystem, configuration, environment, network, 
    `snapshot.policy.obligations`; an obligation omitted by the plan is absent from the judgement.
    Resolve each universe member in plan order, followed by carried-only ids in carry order.
 3. A carried `CarriedEvidence` yields `VERIFIED` directly, with its `source_job`,
-   `source_judgement_seq`, and `source_attestations` retained as provenance. Set `reused_from` to
-   `carry.source_job` when at least one carried item exists, otherwise `None`. A carried obligation is
+   `source_judgement_seq`, and `source_attestations` retained as provenance. All carried items must
+   name one identical `(source_job, source_judgement_seq)` pair; set `reused_from` to that pair when
+   at least one carried item exists, otherwise `None`. A carried obligation is
    not changed by a pending check or re-decided from stale panel material.
 4. For a non-carried obligation, consider only verdicts in `panel.attempts`; the invariant above
    proves all ended by the recorded panel cutoff. A matching non-empty recorded decision overrides

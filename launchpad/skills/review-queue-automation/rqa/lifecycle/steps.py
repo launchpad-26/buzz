@@ -1096,7 +1096,11 @@ def _recorded_judgement(job: Job, ctx: Cascade) -> Judgement:
             for item in payload["escalation_causes"]
         ),
         disposition=payload["disposition"],
-        reused_from=payload["reused_from"],
+        reused_from=(
+            None
+            if payload["reused_from"] is None
+            else (payload["reused_from"][0], payload["reused_from"][1])
+        ),
     )
 
 

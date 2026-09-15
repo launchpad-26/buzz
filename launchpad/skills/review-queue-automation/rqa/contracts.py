@@ -451,7 +451,7 @@ class Judgement:
     remediation_candidates: tuple[str, ...]
     escalation_causes: tuple[tuple[EscalationCause, str], ...]
     disposition: Literal["approve", "request_changes", "remediate", "escalate"]
-    reused_from: str | None
+    reused_from: tuple[str, int] | None
 
 
 @dataclass(frozen=True)
