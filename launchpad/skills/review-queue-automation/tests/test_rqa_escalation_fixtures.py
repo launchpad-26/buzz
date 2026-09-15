@@ -28,6 +28,8 @@ from rqa.contracts import (  # noqa: E402
     AppendFailed,
     Entry,
     EscalationCause,
+    EscalationSubject,
+    EscalationSubjectKind,
     Job,
     JobStatus,
 )
@@ -38,6 +40,7 @@ BASE = "b" * 40
 REPO = "owner/name"
 SNAP_HASH = "sha256:snapshot-1"
 NOW = datetime(2026, 9, 13, 12, 0, 0, tzinfo=timezone.utc)
+SUBJECT = EscalationSubject(EscalationSubjectKind.OBLIGATION, "OBL-1")
 
 
 def make_job(
@@ -89,7 +92,7 @@ class FakeStore:
         self.close_calls: list[int] = []
 
     def insert(
-        self, *, job_id, entry_seq, cause, question, context, head_sha, snapshot_hash, raised_at
+        self, *, job_id, entry_seq, cause, subject, question, context, head_sha, snapshot_hash, raised_at
     ) -> int:
         row_id = self._next_id
         self._next_id += 1
@@ -98,6 +101,7 @@ class FakeStore:
             job_id=job_id,
             entry_seq=entry_seq,
             cause=cause,
+            subject=subject,
             question=question,
             context=dict(context),
             head_sha=head_sha,

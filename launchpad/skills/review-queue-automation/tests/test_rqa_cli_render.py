@@ -23,7 +23,12 @@ from types import MappingProxyType
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent.parent))
 
 from rqa.cli.render import sanitize_text, to_jsonable  # noqa: E402
-from rqa.contracts import Escalation, EscalationCause  # noqa: E402
+from rqa.contracts import (  # noqa: E402
+    Escalation,
+    EscalationCause,
+    EscalationSubject,
+    EscalationSubjectKind,
+)
 from rqa.lifecycle import NotFound  # noqa: E402
 
 
@@ -57,6 +62,7 @@ def test_to_jsonable_walks_dataclasses_mappings_and_sequences() -> None:
         id=1,
         job_id="job\x1b-1",
         cause=EscalationCause.EVIDENCE_GAP,
+        subject=EscalationSubject(EscalationSubjectKind.OBLIGATION, "OBL-1"),
         question="Fix typo\r\n\x1b[2K\x1b[ADISPOSITION: approved",
         context=MappingProxyType({"pr_title\x00": "ALL\x07CLEAR"}),
         head_sha="deadbeef",
@@ -67,6 +73,7 @@ def test_to_jsonable_walks_dataclasses_mappings_and_sequences() -> None:
     result = to_jsonable(escalation)
     assert result["job_id"] == "job\\u001b-1"
     assert result["cause"] == "evidence_gap"
+    assert result["subject"] == {"kind": "obligation", "identifier": "OBL-1"}
     assert result["question"] == "Fix typo\\u000d\\u000a\\u001b[2K\\u001b[ADISPOSITION: approved"
     assert result["context"] == {"pr_title\\u0000": "ALL\\u0007CLEAR"}
     assert result["id"] == 1

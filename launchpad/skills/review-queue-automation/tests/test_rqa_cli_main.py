@@ -25,7 +25,14 @@ sys.path.insert(0, str(_SKILL_ROOT))
 
 from rqa.cli import exitcodes  # noqa: E402
 from rqa.cli.main import main  # noqa: E402
-from rqa.contracts import EscalationCause, GithubUnavailable, Job, JobStatus  # noqa: E402
+from rqa.contracts import (  # noqa: E402
+    EscalationCause,
+    EscalationSubject,
+    EscalationSubjectKind,
+    GithubUnavailable,
+    Job,
+    JobStatus,
+)
 from rqa.escalation.escalate import raise_  # noqa: E402
 from rqa.escalation.store import SqliteEscalationStore  # noqa: E402
 
@@ -201,6 +208,7 @@ def _seed_escalated_job(
     escalation = raise_(
         job=job,
         cause=cause,
+        subject=EscalationSubject(EscalationSubjectKind.OBLIGATION, "prod-signoff"),
         question=question,
         context=context,
         record=record,
@@ -364,6 +372,10 @@ def test_pending_decide_pending_round_trip_and_exit_codes() -> None:
         code, payload = _run(state_dir, "pending")
         assert code == exitcodes.OK
         assert [row["id"] for row in payload["result"]] == [escalation_id]
+        assert payload["result"][0]["subject"] == {
+            "kind": "obligation",
+            "identifier": "prod-signoff",
+        }
 
         with _offline_composition():
             code, payload = _run(

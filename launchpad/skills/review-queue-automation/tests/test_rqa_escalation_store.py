@@ -13,24 +13,26 @@ from datetime import datetime, timezone
 
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent.parent))
 
-from rqa.contracts import EscalationCause  # noqa: E402
+from rqa.contracts import EscalationCause, EscalationSubject, EscalationSubjectKind  # noqa: E402
 from rqa.escalation.store import SqliteEscalationStore, ensure_schema  # noqa: E402
 
 JOB = "job-1"
 RAISED_AT = datetime(2026, 9, 12, 8, 30, 15, tzinfo=timezone.utc)
 CLOSED_AT = datetime(2026, 9, 12, 9, 0, 0, tzinfo=timezone.utc)
+SUBJECT = EscalationSubject(EscalationSubjectKind.OBLIGATION, "OBL-1")
 
 
 def connected() -> sqlite3.Connection:
     return sqlite3.connect(":memory:")
 
 
-def test_the_schema_is_section_fives_twelve_columns_and_nothing_else() -> None:
+def test_the_schema_is_section_fives_fourteen_columns_and_nothing_else() -> None:
     connection = connected()
     ensure_schema(connection=connection)
     columns = [row[1] for row in connection.execute("PRAGMA table_info(human_requests)")]
     assert columns == [
-        "id", "job_id", "entry_seq", "cause", "question", "context", "head_sha",
+        "id", "job_id", "entry_seq", "cause", "subject_kind", "subject_id",
+        "question", "context", "head_sha",
         "snapshot_hash", "raised_at", "status", "closed_at", "decision_entry_seq",
     ]
 
@@ -58,6 +60,7 @@ def test_a_row_round_trips_field_for_field() -> None:
         job_id=JOB,
         entry_seq=3,
         cause=EscalationCause.EVIDENCE_GAP,
+        subject=SUBJECT,
         question="which obligation is unmet?",
         context={"obligation": "OBL-1"},
         head_sha="a" * 40,
@@ -69,6 +72,7 @@ def test_a_row_round_trips_field_for_field() -> None:
     assert row.job_id == JOB
     assert row.entry_seq == 3
     assert row.cause is EscalationCause.EVIDENCE_GAP
+    assert row.subject == SUBJECT
     assert row.question == "which obligation is unmet?"
     assert dict(row.context) == {"obligation": "OBL-1"}
     assert row.head_sha == "a" * 40
@@ -87,7 +91,7 @@ def test_e_b5_1_a_null_snapshot_hash_inserts_and_round_trips_as_none() -> None:
     not this column."""
     store = SqliteEscalationStore(connected())
     row_id = store.insert(
-        job_id=JOB, entry_seq=1, cause=EscalationCause.AUTHORITY_REQUIREMENT,
+        job_id=JOB, entry_seq=1, cause=EscalationCause.AUTHORITY_REQUIREMENT, subject=SUBJECT,
         question="policy failed to validate; may a human proceed?", context={},
         head_sha="a" * 40, snapshot_hash=None, raised_at=RAISED_AT,
     )
@@ -107,15 +111,15 @@ def test_pending_lists_only_open_rows_oldest_first() -> None:
 
     store = SqliteEscalationStore(connected())
     later = store.insert(
-        job_id=JOB, entry_seq=1, cause=EscalationCause.EVIDENCE_GAP, question="second",
+        job_id=JOB, entry_seq=1, cause=EscalationCause.EVIDENCE_GAP, subject=SUBJECT, question="second",
         context={}, head_sha="a" * 40, snapshot_hash="s", raised_at=RAISED_AT + timedelta(hours=1),
     )
     earlier = store.insert(
-        job_id=JOB, entry_seq=2, cause=EscalationCause.EVIDENCE_GAP, question="first",
+        job_id=JOB, entry_seq=2, cause=EscalationCause.EVIDENCE_GAP, subject=SUBJECT, question="first",
         context={}, head_sha="a" * 40, snapshot_hash="s", raised_at=RAISED_AT,
     )
     already_closed = store.insert(
-        job_id=JOB, entry_seq=3, cause=EscalationCause.EVIDENCE_GAP, question="closed one",
+        job_id=JOB, entry_seq=3, cause=EscalationCause.EVIDENCE_GAP, subject=SUBJECT, question="closed one",
         context={}, head_sha="a" * 40, snapshot_hash="s", raised_at=RAISED_AT - timedelta(hours=1),
     )
     store.close(already_closed, decision_entry_seq=9, closed_at=CLOSED_AT)
@@ -127,7 +131,7 @@ def test_pending_lists_only_open_rows_oldest_first() -> None:
 def test_close_sets_status_closed_at_and_decision_entry_seq() -> None:
     store = SqliteEscalationStore(connected())
     row_id = store.insert(
-        job_id=JOB, entry_seq=1, cause=EscalationCause.AUTHORITY_REQUIREMENT, question="q",
+        job_id=JOB, entry_seq=1, cause=EscalationCause.AUTHORITY_REQUIREMENT, subject=SUBJECT, question="q",
         context={}, head_sha="a" * 40, snapshot_hash="s", raised_at=RAISED_AT,
     )
     store.close(row_id, decision_entry_seq=42, closed_at=CLOSED_AT)
@@ -141,12 +145,12 @@ def test_close_sets_status_closed_at_and_decision_entry_seq() -> None:
 def test_the_unique_constraint_is_job_id_and_entry_seq() -> None:
     store = SqliteEscalationStore(connected())
     store.insert(
-        job_id=JOB, entry_seq=1, cause=EscalationCause.EVIDENCE_GAP, question="q",
+        job_id=JOB, entry_seq=1, cause=EscalationCause.EVIDENCE_GAP, subject=SUBJECT, question="q",
         context={}, head_sha="a" * 40, snapshot_hash="s", raised_at=RAISED_AT,
     )
     try:
         store.insert(
-            job_id=JOB, entry_seq=1, cause=EscalationCause.EVIDENCE_GAP, question="q2",
+            job_id=JOB, entry_seq=1, cause=EscalationCause.EVIDENCE_GAP, subject=SUBJECT, question="q2",
             context={}, head_sha="a" * 40, snapshot_hash="s", raised_at=RAISED_AT,
         )
     except sqlite3.IntegrityError:
@@ -159,7 +163,7 @@ def test_a_naive_timestamp_is_read_back_as_utc() -> None:
     store = SqliteEscalationStore(connected())
     naive = datetime(2026, 9, 12, 8, 30, 15)  # no tzinfo
     row_id = store.insert(
-        job_id=JOB, entry_seq=1, cause=EscalationCause.EVIDENCE_GAP, question="q",
+        job_id=JOB, entry_seq=1, cause=EscalationCause.EVIDENCE_GAP, subject=SUBJECT, question="q",
         context={}, head_sha="a" * 40, snapshot_hash="s", raised_at=naive,
     )
     read = store.get(row_id)
@@ -169,7 +173,7 @@ def test_a_naive_timestamp_is_read_back_as_utc() -> None:
 def test_the_context_mapping_round_trips_through_json() -> None:
     store = SqliteEscalationStore(connected())
     row_id = store.insert(
-        job_id=JOB, entry_seq=1, cause=EscalationCause.REQUIRED_INFORMATION, question="q",
+        job_id=JOB, entry_seq=1, cause=EscalationCause.REQUIRED_INFORMATION, subject=SUBJECT, question="q",
         context={"obligation": "OBL-2", "note": "needs a second reviewer"},
         head_sha="a" * 40, snapshot_hash="s", raised_at=RAISED_AT,
     )
@@ -187,7 +191,7 @@ def test_the_store_never_commits_so_the_row_lands_with_its_record_entry() -> Non
         connection = sqlite3.connect(str(path))
         store = SqliteEscalationStore(connection)
         store.insert(
-            job_id=JOB, entry_seq=1, cause=EscalationCause.EVIDENCE_GAP, question="q",
+            job_id=JOB, entry_seq=1, cause=EscalationCause.EVIDENCE_GAP, subject=SUBJECT, question="q",
             context={}, head_sha="a" * 40, snapshot_hash="s", raised_at=RAISED_AT,
         )
         connection.close()

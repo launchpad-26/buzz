@@ -174,6 +174,7 @@ class Explanation:
     findings: tuple[Mapping[str, Any], ...]
     decision_basis: str | None
     disposition: str
+    escalation_subjects: tuple[Mapping[str, str], ...]
     # Supporting trust/rendering fields:
     snapshot_hash: str | None
     verified: bool
@@ -331,8 +332,9 @@ CLI's `explain.py job <job-id>` precedent), and `explain` is defined in terms of
 2. Reduce that prefix: the first/last `transition` supplies identity/disposition; the last `plan`
    supplies pins; harness-shaped `attestation` rows supply the ordered de-duplicated reviewer,
    harness, model, and provider values; the last `judgement` supplies obligations, findings,
-   corroboration/blocking decorations, and decision basis; a terminal human `decision` overrides the
-   reviewer identity/type exactly as before.
+   corroboration/blocking decorations, and decision basis; every readable `escalation` supplies its
+   structured `{kind, identifier}` subject; a terminal human `decision` overrides the reviewer
+   identity/type exactly as before.
 3. A judgement with `reused_from is None` uses only this job's rows. A judgement with
    `reused_from: str` is a materialised current judgement, not a pointer that may be ignored:
    - load and verify the named predecessor's trusted prefix, then obtain the predecessor judgement
@@ -544,6 +546,7 @@ none touches a real OS keychain or a real network.
 | T14 | `append(job, "not_a_real_kind", {})` | raises `UnknownEntryKind`; `record_entries` for that job is unchanged (zero new rows) |
 | T15 | `append(job, "spend", {"at": datetime.now()})` (a raw `datetime`, not a string) | raises `PayloadNotSerializable`; zero new rows |
 | T20 | predecessor has a valid plan, harness attestations, and judgement; successor has no `attestation`, a materialised `judgement` with `reused_from=<predecessor job>`, and a transition | `explain_job(successor)` follows `reused_from`, returns all twelve elements, and obtains reviewer identity/harness/model/provider from the predecessor attestations |
+| T21 | a readable escalation record has a structured subject | `explain_job` returns that `{kind, identifier}` in `escalation_subjects` |
 | T17 | two payload dicts with identical key/value pairs built in different insertion order | `compute_hash` returns byte-identical results for both |
 | T18 | a job with rows `[keyed real seq=1, legacy, unkeyed real seq=2 chained to seq=1]` | `verify` returns `ok=True` with the seq-2 `unverifiable: no key` segment; `explain_job` returns `legacy=True, verified=False` and reports that segment without calling it broken |
 | T19 | a `judgement` row whose `findings` list contains three ids: one in both `blocking` and `corroborated`, one in `corroborated` only, one in neither | `explain_job`'s `findings` tuple marks the first `blocking=True, corroborated=True`, the second `blocking=False, corroborated=True`, the third `blocking=False, corroborated=False` — the three-way split RQA-BR-005/RQA-BR-008 need |
