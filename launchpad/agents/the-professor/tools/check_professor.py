@@ -183,13 +183,17 @@ SCREEN_CONTENT_EXPECTED = {
         "disposition_by_category": {"internal-hostname-private-ip": "redact"}
     },
     "redact-physical-address.md": {"disposition_by_category": {"physical-address": "redact"}},
-    # Interim `redact`, not `not-evaluated` -- issue #2110. See the comment on
-    # the roster-names finding in localcmd.py's screen_content: a disposition
-    # SKILL.md §2 defines no consumer action for is a fail-open, so an
-    # undecided candidate takes the ruleset's own Redact disposition until
-    # Phase 1b (#2131) can tell attribution from access-control data.
+    # `redact` remains the floor for every roster-names candidate even now that
+    # Phase 1b's dispatch exists -- see the comment on the roster-names finding
+    # in localcmd.py's screen_content. A consumer reading this JSON directly
+    # never dispatches, and a disposition SKILL.md §2 defines no consumer action
+    # for is the fail-open issue #2110 closed. Only a clean ATTRIBUTION verdict,
+    # at the skill layer, removes the redaction.
     "dispatch-roster-names.md": {"disposition_by_category": {"roster-names": "redact"}},
     "dispatch-roster-names-two-pairs.md": {
+        "disposition_by_category": {"roster-names": "redact"}
+    },
+    "dispatch-roster-names-same-line.md": {
         "disposition_by_category": {"roster-names": "redact"}
     },
     "clean-unrelated-roster-and-names.md": {"disposition_by_category": {}},
@@ -1226,6 +1230,109 @@ def check_roster_names_multiple_candidates() -> str | None:
     return None
 
 
+def check_roster_names_same_line_candidates_distinguishable() -> str | None:
+    """Two roster-names candidates on ONE line must be told apart by their
+    column offsets, and every candidate must carry the `requires_dispatch`
+    flag `skills/screen-sensitive/SKILL.md` dispatches on (Phase 1b, #2140).
+
+    `dispatch-roster-names-two-pairs.md` cannot prove this and is deliberately
+    left alone: its two candidates are on lines 11 and 16, and
+    `check_roster_names_multiple_candidates` pins exactly those two line
+    numbers. A finding carrying only a line number is indistinguishable from
+    its neighbour when both sit on one line, which is the whole failure mode
+    here -- an ATTRIBUTION verdict earned by a contributor's name gets applied
+    to the access-control entry beside it, and the roster is silently
+    unprotected. So this needs its own same-line fixture.
+
+    Asserted here and nowhere else, because
+    `check_screen_content_fixtures`'s category-set sweep sees neither the flag
+    nor the offsets: reverting either one leaves that sweep green. The
+    retained-`redact` floor is NOT re-asserted here -- lines 186-194's
+    expectation table already covers it for all three roster fixtures.
+    """
+    fixture_path = FIXTURES_DIR / "dispatch-roster-names-same-line.md"
+    result = _run_professor(["screen-content", str(fixture_path)], pack_root=str(PACK_ROOT))
+    if result.returncode != 0:
+        return f"screen-content(dispatch-roster-names-same-line.md) failed: {result.stderr}"
+    try:
+        report = json.loads(result.stdout)
+    except json.JSONDecodeError:
+        return (
+            "screen-content(dispatch-roster-names-same-line.md) did not print "
+            f"valid JSON: {result.stdout!r}"
+        )
+    findings = report.get("findings", [])
+    if len(findings) != 2:
+        return (
+            "screen-content(dispatch-roster-names-same-line.md): expected exactly "
+            f"2 roster-names findings, got {len(findings)}: {findings!r}"
+        )
+
+    for finding in findings:
+        if finding.get("requires_dispatch") is not True:
+            return (
+                "screen-content(dispatch-roster-names-same-line.md): a roster-names "
+                "finding is missing the requires_dispatch flag (got "
+                f"{finding.get('requires_dispatch')!r}). screen-sensitive/SKILL.md "
+                "dispatches on that flag, not on the category name -- without it "
+                "the candidate is never role-checked and the skill cannot resolve it."
+            )
+
+    # Both candidates are on the same line on purpose. Equal lines plus
+    # differing offsets is the assertion: equal lines alone would also hold if
+    # the offsets were dropped, and differing offsets alone would also hold if
+    # the fixture drifted onto two lines.
+    lines = [f["location"]["line"] for f in findings]
+    if lines != [11, 11]:
+        return (
+            "screen-content(dispatch-roster-names-same-line.md): expected both "
+            "findings on line 11 (verified against the fixture file with grep -n), "
+            f"got {lines!r} -- the fixture must keep both candidates on ONE line "
+            "or it no longer tests what it exists to test."
+        )
+
+    # Line-relative, Unicode characters, zero-based, end-exclusive -- the units
+    # pinned by screen-sensitive/SKILL.md. Pinned as exact values, not merely
+    # "present and different": an offset pair in the wrong units still differs
+    # between the two candidates, so a looser check would pass a finding whose
+    # coordinates point at the wrong span.
+    spans = [(f["location"].get("col_start"), f["location"].get("col_end")) for f in findings]
+    if spans != [(14, 26), (66, 79)]:
+        return (
+            "screen-content(dispatch-roster-names-same-line.md): expected "
+            "line-relative, zero-based, end-exclusive offsets [(14, 26), (66, 79)] "
+            "for the two candidates on line 11, got "
+            f"{spans!r}. Line 11 is 'Documented by Alex Example, and release "
+            "approval is restricted to Taylor Sample.' -- the first name starts at "
+            "character 14 and the second at 66."
+        )
+
+    # `match` stays null even though the offsets are now emitted. The offsets
+    # are coordinates; the matched name is content, and reproducing it would
+    # reopen the leak Phase 1 closed.
+    for finding in findings:
+        if finding["match"] is not None:
+            return (
+                "screen-content(dispatch-roster-names-same-line.md): a finding's "
+                f"match was {finding['match']!r}, expected null -- offsets are "
+                "coordinates and are safe to emit; the matched name is not."
+            )
+        if "not yet built" in finding["message"]:
+            return (
+                "screen-content(dispatch-roster-names-same-line.md): the roster-names "
+                "message still says the dispatch is 'not yet built'. Phase 1b built "
+                "it; the message must name the dispatch a consumer has to run."
+            )
+        if "$PROFESSOR_VERIFIER_CMD" not in finding["message"]:
+            return (
+                "screen-content(dispatch-roster-names-same-line.md): the roster-names "
+                "message does not name the $PROFESSOR_VERIFIER_CMD dispatch a consumer "
+                f"must run to resolve the candidate: {finding['message']!r}"
+            )
+
+    return None
+
+
 def check_roster_names_three_names_one_context() -> str | None:
     """`dispatch-roster-names.md` (the pre-existing fixture, three names --
     Alex Example, Jamie Example, Morgan Example -- in a single roster
@@ -1485,6 +1592,11 @@ def _run_network_free_checks(offline: bool) -> int:
             "roster-names enumerates every candidate, not just the first "
             "(2 distinct findings)",
             check_roster_names_multiple_candidates,
+        ),
+        (
+            "two roster-names candidates on ONE line carry the requires_dispatch "
+            "flag and distinct column offsets",
+            check_roster_names_same_line_candidates_distinguishable,
         ),
         (
             "dispatch-roster-names.md's three names each produce their own finding "
