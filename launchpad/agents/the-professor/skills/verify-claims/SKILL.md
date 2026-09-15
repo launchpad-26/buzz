@@ -189,8 +189,28 @@ where:
   no commentary after it.
 
 Whitespace: leading and trailing whitespace around the whole response, and around each
-of the two lines, is stripped before matching. **No other flexibility exists.** A
-response of one line, or of three or more, does not match.
+line, is stripped before matching, and **entirely blank lines are discarded before the
+two-line count is taken** — so a verifier that separates its reason from its verdict with
+a blank line still matches. **No other flexibility exists.** After blank lines are
+discarded, a response of one non-empty line, or of three or more, does not match.
+
+**The blank-line tolerance is not politeness, it is a measured necessity.** The first run
+of this grammar against a real draft returned exactly this:
+
+```
+The span shows `_line_number` unconditionally returning `content.count("\n", 0, offset)
++ 1` with no bounds check, no validation, and no raise of any kind.
+
+NOT_SUPPORTED
+```
+
+Four earlier dispatches under the same instructions emitted no blank line, so the
+behaviour is intermittent rather than consistent — which is worse, because it would make
+roughly one run in five fail to parse for a reason that has nothing to do with the claim.
+A gate that blocks a correct verdict at random is not stricter, it is noisier, and the
+noise would land on exactly the dispatches that did their job. Discarding blank lines
+costs none of this grammar's protections: narration lines are not blank, so rejection
+example 3 below still fails, and the verdict line must still *equal* a literal.
 
 Because the verdict must *equal* line two in its entirety, `SUPPORTED` being a substring
 of `NOT_SUPPORTED` and `PARTIALLY_SUPPORTED` cannot cause a misread. A rule that searched
