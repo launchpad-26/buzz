@@ -132,7 +132,7 @@ def merge(*, job: Job, grant: Grant, record: RecordWriter) -> Mutation | Stale |
 ```
 
 `submit_review` requires `Activity.APPROVE` for `"APPROVE"` and `Activity.REQUEST_CHANGES` for
-`"REQUEST_CHANGES"`. It uses two fixed GraphQL literals (`APPROVE` and `CHANGES_REQUESTED`), never an
+`"REQUEST_CHANGES"`. It uses two fixed GraphQL literals (`APPROVE` and `REQUEST_CHANGES`), never an
 interpolated event. For APPROVE it freshly reads the PR: a changed head or closed PR returns `Stale`;
 otherwise it sends the mutation and performs the mandatory review visibility post-check. A failed
 send or unreadable post-check returns `GithubUnavailable`; a visible matching APPROVED review returns the

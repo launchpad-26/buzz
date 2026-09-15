@@ -503,7 +503,10 @@ def test_the_review_events_are_fixed_literals_never_interpolated() -> None:
     GraphQL text itself, so a caller cannot select a more-authoritative
     review event (RQA-NFR-032)."""
     assert "event:APPROVE" in writes._APPROVE_MUTATION
-    assert "event:CHANGES_REQUESTED" in writes._REQUEST_CHANGES_MUTATION
+    # PullRequestReviewEvent uses REQUEST_CHANGES. CHANGES_REQUESTED is the
+    # resulting PullRequestReviewState and GitHub rejects it as mutation input.
+    assert "event:REQUEST_CHANGES" in writes._REQUEST_CHANGES_MUTATION
+    assert "event:CHANGES_REQUESTED" not in writes._REQUEST_CHANGES_MUTATION
     assert "event:COMMENT" in writes._COMMENT_MUTATION
     for document in (
         writes._APPROVE_MUTATION,
