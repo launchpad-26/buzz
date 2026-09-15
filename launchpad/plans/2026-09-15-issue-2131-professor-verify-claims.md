@@ -27,6 +27,24 @@ DECIDED 2026-09-15, by Serina — the re-dispatch observable (was OPEN item 1)
   Lands in verify-claims/SKILL.md at step 2 of this plan, and in the design doc at
   step 11.
 
+DECIDED 2026-09-15, by Serina — the roster-names finding shape (was OPEN item 2)
+
+  screen-content keeps emitting disposition `redact` for every roster-names candidate,
+  and gains an explicit flag on the finding marking it as one a dispatch must resolve.
+  The skill dispatches on that flag and drops ATTRIBUTION candidates from its outcome.
+
+  This is the only option that serves both consumers. A session following
+  screen-sensitive/SKILL.md sees the flag, dispatches, and un-flags attribution names, so
+  #2140's "not flagged at all" holds. Anything reading screen-content's JSON directly —
+  CI, a script, the scheduled workflow — never dispatches and still sees `redact`, so
+  #2110's fail-closed floor holds too. Replacing `redact` with a neutral needs-dispatch
+  disposition was rejected: it reintroduces the exact fail-open shape #2110 closed five
+  days earlier, where a consumer has no defined action and can drop the finding silently.
+
+  Accepted cost, stated rather than discovered later: the finding shape is a contract, and
+  this adds a field to it. check_professor.py must assert the new field, and every
+  consumer of that JSON has to tolerate it.
+
 ALREADY TRUE  (verified against the worktree, not against notes)
 
   This section most changes the shape of this Feature. Three of the six child issues are
@@ -125,21 +143,28 @@ STEP 6  screen-sensitive/SKILL.md — retire the interim rule                   
         Delete the interim paragraph at lines 82–100 and bind the already-documented
         dispatch protocol to the now-concrete contract, so the same recognition rule
         covers ATTRIBUTION/ROSTER_DATA/AMBIGUOUS stdout.
+        State that the skill dispatches on the finding's requires-dispatch flag, and that
+        an ATTRIBUTION verdict removes the candidate from this skill's outcome even
+        though screen-content reported it as redact — per the DECIDED note above.
         done when: no paragraph in the file claims the dispatch "does not exist yet";
-        #2110 no longer appears as a live interim rule; and the file states what happens
-        when a roster-names dispatch returns unrecognised stdout. Closes #2140's
-        criterion 4.
+        #2110 no longer appears as a live interim rule; the file names the
+        requires-dispatch flag as what it dispatches on and states that ATTRIBUTION
+        overrides the script's redact; and the file states what happens when a
+        roster-names dispatch returns unrecognised stdout. Closes #2140's criterion 4.
 
 STEP 7  localcmd.py roster-names finding, and its regression coverage         [needs 6]
-        Update the roster-names finding at lines 1316–1348 so its message no longer
-        claims Phase 1b is unbuilt, and so it names the dispatch the consumer must now
-        run. See OPEN — whether the redact disposition itself changes is undecided; this
-        plan assumes it stays redact and the skill downgrades ATTRIBUTION after dispatch.
-        Add a check_professor.py assertion over the new shape.
+        Per the DECIDED note above: keep disposition `redact`, add the explicit
+        requires-dispatch flag to the roster-names finding at lines 1316–1348, and
+        rewrite its message so it no longer claims Phase 1b is unbuilt but names the
+        dispatch the consumer must now run. Add check_professor.py assertions over both
+        the retained disposition and the new field.
         done when: `./tools/professor.py screen-content` on a roster-shaped fixture emits
-        a finding whose message names the dispatch rather than "not yet built";
+        a finding that still carries disposition `redact`, carries the requires-dispatch
+        flag, and whose message names the dispatch rather than "not yet built";
         `./tools/check_professor.py --offline` reports ALL CHECKS PASSED; and reverting
-        the message change alone makes that harness fail.
+        either the flag or the retained `redact` alone makes that harness fail — the
+        second is the fail-closed floor #2110 established, so it needs its own test, not
+        shared coverage with the flag.
 
 STEP 8  Demonstrate all four verdicts                                      [needs 3, 4]
         Construct four genuinely distinct claims against real source — one truly
@@ -211,13 +236,8 @@ BUDGET
 OPEN
   1. RESOLVED 2026-09-15 by Serina — see the DECIDED note above the steps. Kept numbered
      here so a reader of this section alone does not think it was never asked.
-  2. Whether localcmd.py's roster-names disposition changes (step 7). #2110 made it
-     redact specifically because not-evaluated was fail-open for any consumer not
-     following the skill. #2140 requires ATTRIBUTION candidates to be "not flagged at
-     all". Those pull opposite ways for a consumer that reads screen-content output
-     directly without dispatching. This plan assumes redact stays as the fail-closed
-     floor and the skill downgrades ATTRIBUTION after dispatch — that assumption needs
-     confirming before step 7 is built.
+  2. RESOLVED 2026-09-15 by Serina — see the second DECIDED note above the steps. Kept
+     numbered here so a reader of this section alone does not think it was never asked.
   3. What #2142's fourth criterion actually demonstrates. "A harness with no headless
      single-turn CLI available is confirmed to fail loudly" — setting the variable to a
      non-existent command is a different failure from a harness that has no such CLI. The
