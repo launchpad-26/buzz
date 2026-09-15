@@ -2,8 +2,7 @@
 
 from __future__ import annotations
 
-from rqa.policy import ValidationFailure, snapshot_for
-from rqa.policy.store import SnapshotStore
+from rqa.policy import SnapshotStore, ValidationFailure, snapshot_for
 from rqa.record import RecordWriter
 from rqa.intake.types import AdmissionRefusal
 

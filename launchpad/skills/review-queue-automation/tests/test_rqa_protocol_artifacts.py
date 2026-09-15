@@ -344,7 +344,7 @@ def test_protocol_md_cites_interaction_contract() -> None:
 
 
 # -- rqa.protocol.__init__: exact re-export surface, §§1-2 slice --------------
-# This lane's own 18 re-exports (§§1-2's slice). `validate` and `ProtocolError` are
+# This lane's own 19 re-exports (§§1-2's slice). `validate` and `ProtocolError` are
 # task #2204's (P-04 §3) and are deliberately absent until that lane appends them
 # after this branch merges (orchestrator decision D-B1-1) — see __init__.py's module
 # docstring for why, not a test: a test must assert what the contract requires
@@ -364,13 +364,14 @@ EXPECTED_EXPORTS = {
     "HarnessIdentity",
     "Verdict",
     "PROTOCOL_VERSION",
+    "schema_path",
     "protocol_hash",
     "PROBE_MARKER",
     "envelope",
     "extract",
 }
 
-# P-04-protocol.md §1's complete `__init__.py` re-export list — this lane's 18 plus
+# P-04-protocol.md §1's complete `__init__.py` re-export list — this lane's 19 plus
 # #2204's `validate`/`ProtocolError`. The two are the ONLY states that ever exist:
 # there is no valid partial state with only one of the two sibling names appended.
 FULL_SPECIFIED_EXPORTS = EXPECTED_EXPORTS | {"validate", "ProtocolError"}
@@ -396,8 +397,8 @@ FULL_SPECIFIED_MODULES = THIS_LANES_MODULES | {"schema", "contradictions", "vali
 def test_init_all_is_exactly_this_lane_or_the_full_post_sibling_set() -> None:
     exported = set(protocol.__all__)
     assert exported in (EXPECTED_EXPORTS, FULL_SPECIFIED_EXPORTS), (
-        "rqa.protocol.__all__ must be exactly this lane's 18 names (before task #2204 "
-        "lands validate.py/schema.py/contradictions.py) or exactly all 20 names "
+        "rqa.protocol.__all__ must be exactly this lane's 19 names (before task #2204 "
+        "lands validate.py/schema.py/contradictions.py) or exactly all 21 names "
         "P-04-protocol.md §1 lists (after #2204 appends validate and ProtocolError); "
         f"found {sorted(exported)}"
     )

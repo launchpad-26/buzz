@@ -20,7 +20,8 @@ otherwise independent of ADR-D/F/G.
 rqa/github/
   __init__.py        re-exports the §4 shared imports plus GithubAdapter, CheckConclusion, FAILING,
                       UNSETTLED, PASSING, MutationKind, Stale, LeaseTaken, GithubUnavailable,
-                      CapabilityReading, and AdapterError
+                      CapabilityReading, AdapterError, SqliteEtagStore, SqliteApiCallStore,
+                      SqliteMutationStore, ensure_schema, and Transport
   types.py           P-09-private result/implementation types; imports §4 shared types unchanged
   conclusions.py      the canonical CheckConclusion vocabulary and total normalisation functions
                       (U-VERDICT-06)

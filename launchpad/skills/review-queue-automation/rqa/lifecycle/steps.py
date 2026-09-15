@@ -80,7 +80,7 @@ from rqa.lifecycle.errors import LifecycleError
 from rqa.lifecycle.rest import enter_rest
 from rqa.lifecycle.states import as_status
 from rqa.lifecycle.transition import transition
-from rqa.record.reader import SQLiteRecordReader
+from rqa.record import SQLiteRecordReader
 
 __all__ = ["drive", "Cascade", "read_prior_record", "DISPATCH"]
 

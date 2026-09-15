@@ -18,7 +18,8 @@ resume through E-11; shared escalation/decision values remain canonical.
 
 rqa/escalation/
   __init__.py     re-exports: raise_, pending, decide, EscalationCause, Escalation,
-                  Decision, EscalationRefused, EscalationRefusalReason, EscalationError
+                  Decision, EscalationRefused, EscalationRefusalReason, EscalationError,
+                  SqliteEscalationStore
   escalate.py     Escalation; raise_() and pending(): the E-11 entry points
   decide.py       EscalationRefused, EscalationRefusalReason; decide(): the E-17 `decide` CLI entry point;
                   the JobReader and P-02 resume Protocols this part depends on
