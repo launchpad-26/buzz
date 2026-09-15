@@ -26,7 +26,10 @@ import rqa.record.trace as trace_module  # noqa: E402
 from rqa.record import PayloadNotSerializable  # noqa: E402
 from rqa.record.trace import (  # noqa: E402
     ATTEMPT_ALLOCATED,
+    JOB_EVENTS,
     LOCK_FILENAME,
+    REQUIRED_JOB_EVENTS,
+    UnknownTraceEvent,
     allocate_attempt_number,
     append_trace,
     trace_lines,
@@ -34,11 +37,70 @@ from rqa.record.trace import (  # noqa: E402
 )
 
 
+def test_u_dispatch_19_publishes_the_exact_milestone_registry_and_required_subset() -> None:
+    assert JOB_EVENTS == (
+        "queueing",
+        "preflight",
+        "lease_acquired",
+        "lease_released",
+        "evidence",
+        "budget",
+        "planner",
+        "strategy",
+        "route_selection",
+        "rereview",
+        "decision",
+        "human_queue",
+        "mutation",
+        "verify",
+        "safe_stop",
+    )
+    assert REQUIRED_JOB_EVENTS == {
+        "queueing",
+        "preflight",
+        "evidence",
+        "budget",
+        "planner",
+        "strategy",
+        "route_selection",
+        "decision",
+        "verify",
+    }
+    assert REQUIRED_JOB_EVENTS < frozenset(JOB_EVENTS)
+
+
+def test_u_dispatch_19_rejects_an_unregistered_event_before_creating_a_trace() -> None:
+    with tempfile.TemporaryDirectory() as state_dir:
+        try:
+            append_trace(state_dir=state_dir, job_id="job-1", event="free_form")
+        except UnknownTraceEvent:
+            pass
+        else:
+            raise AssertionError("an unregistered orchestration milestone was accepted")
+        assert not trace_path(state_dir=state_dir, job_id="job-1").exists()
+
+
+def test_caller_fields_cannot_replace_canonical_trace_identity() -> None:
+    with tempfile.TemporaryDirectory() as state_dir:
+        try:
+            append_trace(
+                state_dir=state_dir,
+                job_id="job-1",
+                event="queueing",
+                fields={"event": "free_form"},
+            )
+        except ValueError:
+            pass
+        else:
+            raise AssertionError("caller data replaced the validated milestone name")
+        assert not trace_path(state_dir=state_dir, job_id="job-1").exists()
+
+
 def test_a_milestone_is_appended_as_one_json_object_per_line() -> None:
     with tempfile.TemporaryDirectory() as state_dir:
-        append_trace(state_dir=state_dir, job_id="job-1", event="claimed")
+        append_trace(state_dir=state_dir, job_id="job-1", event="lease_acquired")
         append_trace(
-            state_dir=state_dir, job_id="job-1", event="planned", fields={"obligations": 3}
+            state_dir=state_dir, job_id="job-1", event="planner", fields={"obligations": 3}
         )
         path = trace_path(state_dir=state_dir, job_id="job-1")
         assert path == pathlib.Path(state_dir) / "jobs" / "job-1" / "trace.jsonl"
@@ -46,7 +108,7 @@ def test_a_milestone_is_appended_as_one_json_object_per_line() -> None:
         body = path.read_text(encoding="utf-8")
         assert body.endswith("\n")
         objects = [json.loads(line) for line in body.splitlines()]
-        assert [entry["event"] for entry in objects] == ["claimed", "planned"]
+        assert [entry["event"] for entry in objects] == ["lease_acquired", "planner"]
         assert objects[1]["obligations"] == 3
         assert all(entry["job"] == "job-1" for entry in objects)
         assert trace_lines(state_dir=state_dir, job_id="job-1") == tuple(objects)
@@ -56,15 +118,15 @@ def test_the_timestamp_is_utc_with_microseconds() -> None:
     with tempfile.TemporaryDirectory() as state_dir:
         moment = datetime(2026, 9, 12, 8, 30, 15, 123456, tzinfo=timezone.utc)
         written = append_trace(
-            state_dir=state_dir, job_id="job-1", event="claimed", at=moment
+            state_dir=state_dir, job_id="job-1", event="queueing", at=moment
         )
         assert written["at"] == "2026-09-12T08:30:15.123456+00:00"
 
 
 def test_each_job_gets_its_own_trace_and_its_own_lock() -> None:
     with tempfile.TemporaryDirectory() as state_dir:
-        append_trace(state_dir=state_dir, job_id="job-1", event="claimed")
-        append_trace(state_dir=state_dir, job_id="job-2", event="claimed")
+        append_trace(state_dir=state_dir, job_id="job-1", event="queueing")
+        append_trace(state_dir=state_dir, job_id="job-2", event="queueing")
         assert len(trace_lines(state_dir=state_dir, job_id="job-1")) == 1
         assert (
             trace_path(state_dir=state_dir, job_id="job-1").with_name(LOCK_FILENAME).exists()
@@ -80,7 +142,7 @@ def test_a_trace_field_that_is_not_json_safe_is_refused_by_the_same_check() -> N
             append_trace(
                 state_dir=state_dir,
                 job_id="job-1",
-                event="claimed",
+                event="evidence",
                 fields={"when": datetime.now(timezone.utc)},
             )
         except PayloadNotSerializable:
@@ -96,7 +158,7 @@ def test_attempt_numbers_are_allocated_in_order_and_recorded_in_the_trace() -> N
     with tempfile.TemporaryDirectory() as state_dir:
         assert allocate_attempt_number(state_dir=state_dir, job_id="job-1") == 1
         assert allocate_attempt_number(state_dir=state_dir, job_id="job-1") == 2
-        append_trace(state_dir=state_dir, job_id="job-1", event="planned")
+        append_trace(state_dir=state_dir, job_id="job-1", event="planner")
         assert allocate_attempt_number(state_dir=state_dir, job_id="job-1") == 3
 
         objects = trace_lines(state_dir=state_dir, job_id="job-1")
@@ -156,7 +218,7 @@ def test_a_write_that_fails_at_the_rename_leaves_the_previous_complete_file() ->
     interrupted write leaves the previous, complete file — never a torn final line —
     and leaves no temp file behind."""
     with tempfile.TemporaryDirectory() as state_dir:
-        append_trace(state_dir=state_dir, job_id="job-1", event="claimed")
+        append_trace(state_dir=state_dir, job_id="job-1", event="queueing")
         path = trace_path(state_dir=state_dir, job_id="job-1")
         before = path.read_text(encoding="utf-8")
 
@@ -169,7 +231,7 @@ def test_a_write_that_fails_at_the_rename_leaves_the_previous_complete_file() ->
         try:
             raised = False
             try:
-                append_trace(state_dir=state_dir, job_id="job-1", event="planned")
+                append_trace(state_dir=state_dir, job_id="job-1", event="planner")
             except OSError:
                 raised = True
             assert raised
@@ -193,8 +255,8 @@ def test_the_whole_file_is_rewritten_through_one_rename_per_append() -> None:
 
         trace_module.os.replace = watched_replace
         try:
-            append_trace(state_dir=state_dir, job_id="job-1", event="claimed")
-            append_trace(state_dir=state_dir, job_id="job-1", event="planned")
+            append_trace(state_dir=state_dir, job_id="job-1", event="queueing")
+            append_trace(state_dir=state_dir, job_id="job-1", event="planner")
         finally:
             trace_module.os.replace = original
 

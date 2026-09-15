@@ -73,11 +73,11 @@ EXPLAIN_EXPORTS = frozenset(
         "LegacySource",
     }
 )
-#: The two concrete collaborators published beyond §1's list so a composition root can
-#: construct them through the front door. #2211 (the operator CLI) is the module that
+#: The two concrete collaborators and the trace writer published beyond the original
+#: §1 list so callers can reach them through the front door. #2211 (the operator CLI) is the module that
 #: falsified §1's "except through `__init__`" sentence: every part that appends takes its
 #: `RecordWriter` as a parameter and nothing in `rqa/record/` ever builds one.
-PUBLISHED_EXPORTS = frozenset({"SQLiteRecordWriter", "OSKeyStore"})
+PUBLISHED_EXPORTS = frozenset({"SQLiteRecordWriter", "OSKeyStore", "append_trace"})
 ALL_EXPORTS = APPEND_EXPORTS | EXPLAIN_EXPORTS | PUBLISHED_EXPORTS
 
 
@@ -184,7 +184,7 @@ def test_the_reader_and_the_segment_type_are_not_public_package_surface() -> Non
         assert isinstance(implementation, type), implementation
 
 
-def test_the_concrete_collaborators_a_composition_root_needs_are_package_surface() -> None:
+def test_the_concrete_collaborators_and_trace_writer_are_package_surface() -> None:
     """§1's "no other module imports from `rqa.record` except through `__init__`" and a
     `RecordWriter`/`KeyStore` that every caller receives as a parameter are only jointly
     satisfiable if the implementations are reachable through `__init__`. The package must
@@ -192,13 +192,17 @@ def test_the_concrete_collaborators_a_composition_root_needs_are_package_surface
 
     Publishing `OSKeyStore` re-exports the same class under a second name: it widens no
     capability. The keychain read itself is unchanged and still bounded by
-    `tests/test_rqa_record_keychain.py`."""
+    `tests/test_rqa_record_keychain.py`. U-DISPATCH-19 likewise requires lifecycle to
+    reach `append_trace` without importing through the package boundary."""
     from rqa.record.keychain import OSKeyStore
     from rqa.record.writer import SQLiteRecordWriter
 
     assert PUBLISHED_EXPORTS <= frozenset(rqa.record.__all__)
     assert rqa.record.SQLiteRecordWriter is SQLiteRecordWriter
     assert rqa.record.OSKeyStore is OSKeyStore
+    from rqa.record.trace import append_trace
+
+    assert rqa.record.append_trace is append_trace
 
 
 def test_the_package_declares_nothing_it_only_re_exports() -> None:
@@ -389,7 +393,7 @@ def test_no_authoritative_module_here_reads_the_trace() -> None:
     """§7: "Does not read `jobs/<job>/trace.jsonl` for any purpose, including `explain`;
     the trace is written-only from this part and never authoritative"."""
     for name, source in _sources().items():
-        if name.endswith("trace.py"):
+        if name.endswith(("trace.py", "__init__.py")):
             continue
         assert "rqa.record.trace" not in _imported(source), name
         assert "trace_lines" not in _identifiers(source), name

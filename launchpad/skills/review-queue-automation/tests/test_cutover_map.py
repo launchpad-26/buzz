@@ -15,8 +15,8 @@ Three independent failure conditions, matching #2212's issue text exactly:
 2. a row's ``replacement`` cell names something that does not resolve — a
    dotted ``rqa.*`` path with no matching file under ``rqa/``, or a
    ``tests/test_rqa_*.py`` path that is absent;
-3. a row's ``status`` disagrees with the filesystem in either direction, or two
-   rows for the same file disagree with each other on ``status``.
+3. a row's ``status`` is not ``present`` or ``deleted``, disagrees with the
+   filesystem, or differs across rows for the same file.
 
 Condition 1's file-present set is read from the filesystem with ``os.listdir``
 at run time on every invocation — never a hard-coded enumeration of the 118
@@ -167,9 +167,8 @@ def check_every_legacy_file_has_a_row() -> list[str]:
 def check_every_replacement_resolves() -> list[str]:
     """Parses ``replacement`` as ``;``-separated clauses (a mixed row — part of
     the file's responsibility migrated, part did not — states each half as its
-    own clause, e.g. ``scripts/logging_otel.py``'s: ``rqa.record.trace (...);
-    none (binned: U-DISPATCH-19 ...)``); a single-clause cell with no ``;`` is
-    the common case and behaves exactly as before. Within a clause that is not
+    own clause); a single-clause cell with no ``;`` is the common case and
+    behaves exactly as before. Within a clause that is not
     a ``none (binned: ...)`` declaration, a further ``,``-separated list of
     real paths is still supported (unchanged from round 1)."""
     rows = parse_map_rows(_read_cutover_text())
@@ -207,10 +206,8 @@ def check_every_replacement_resolves() -> list[str]:
 
 
 def check_status_matches_filesystem_and_is_self_consistent() -> list[str]:
-    """``status`` is one of ``present`` | ``deleted`` | ``retained``. A
-    ``deleted`` row's file must genuinely be absent; a ``present`` or
-    ``retained`` row's file must genuinely exist (the two differ in what wave 2
-    may do with it, not in whether it is on disk today — see CUTOVER.md §0)."""
+    """``status`` is one of ``present`` | ``deleted``. A ``deleted`` row's
+    file must genuinely be absent and a ``present`` row's file must exist."""
     rows = parse_map_rows(_read_cutover_text())
     problems: list[str] = []
     by_file: dict[str, list[str]] = {}
@@ -218,8 +215,10 @@ def check_status_matches_filesystem_and_is_self_consistent() -> list[str]:
         by_file.setdefault(r["file"], []).append(r["status"])
 
     for file_, statuses in by_file.items():
-        if any(s not in ("present", "deleted", "retained") for s in statuses):
-            problems.append(f"{file_}: status must be 'present', 'deleted' or 'retained', got {sorted(set(statuses))}")
+        if any(s not in ("present", "deleted") for s in statuses):
+            problems.append(
+                f"{file_}: status must be 'present' or 'deleted', got {sorted(set(statuses))}"
+            )
             continue
         if len(set(statuses)) != 1:
             problems.append(f"{file_}: rows disagree on status: {statuses}")
@@ -229,7 +228,7 @@ def check_status_matches_filesystem_and_is_self_consistent() -> list[str]:
         if claimed == "deleted":
             if on_disk:
                 problems.append(f"{file_}: row says status='deleted' but the file is actually present")
-        else:  # 'present' or 'retained' both assert the file exists
+        else:
             if not on_disk:
                 problems.append(f"{file_}: row says status={claimed!r} but the file is actually deleted")
     return problems

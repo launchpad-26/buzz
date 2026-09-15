@@ -235,18 +235,27 @@ invalidates unscoped capability-cache evidence and probes again.
 
 ---
 
-## 9. What logging and tracing currently do
+## 9. Job milestone traces
 
-`rqa/record/trace.py` defines `append_trace`, which can append one row to
-`jobs/<job>/trace.jsonl`. **Nothing in `rqa/` calls it** — it has zero callers
-outside its own module and is absent from `rqa/record/__init__.py`'s
-`__all__`. There is no otel-jsonl milestone trace, no event vocabulary, and no
-per-job trace file an operator can currently rely on; that gap is tracked as
-**#2273**. `scripts/logging_otel.py`, the single file remaining under
-`scripts/`, is kept **only as a reference implementation for #2273** — it is
-not live code, it is not importable (it imports a `common` module #2213
-deleted), and it is not on any path `rqa` runs. Do not point an operator at
-it.
+Each lifecycle admission appends validated orchestration milestones to
+`<state-dir>/jobs/<job-id>/trace.jsonl`. Every line is one JSON object. The
+closed fifteen-name vocabulary and its nine required events live in
+`rqa.record.trace`; an unknown event is refused before a trace file is created.
+The completed-review lifecycle test proves that all required milestones are
+emitted.
+
+The trace is diagnostic and non-authoritative. `rqa explain` reconstructs from
+the hash-chained SQLite record and never reads this file. Concurrent writers use
+an exclusive per-job lock; each update is flushed, synced, and atomically
+renamed. Inspect a trace with standard JSON Lines tools, for example:
+
+```bash
+jq . <state-dir>/jobs/<job-id>/trace.jsonl
+```
+
+Route metadata is bounded to four executed routes per event. Emitted fields are
+counts, identifiers, fixed outcomes, and route metadata; PR bodies, file
+contents, credentials, environment values, and model output are absent.
 
 ---
 

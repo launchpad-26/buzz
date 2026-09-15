@@ -226,7 +226,7 @@ def lifecycle_deps(connection, record, **overrides) -> LifecycleDeps:
         "reuse": None,
         "record": record,
         "connection": connection,
-        "state_dir": pathlib.Path("/nonexistent"),
+        "state_dir": pathlib.Path(tempfile.gettempdir()),
         "runner": None,
         "claim_lease": None,
         "release_lease": None,

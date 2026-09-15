@@ -1,11 +1,12 @@
 """`jobs/<job>/trace.jsonl` — the non-authoritative milestone trace,
-`code/P-12-record.md` §6's trace paragraph (U-RESILIENCE-08, U-RESILIENCE-14).
+`code/P-12-record.md` §6's trace paragraph (U-RESILIENCE-08, U-RESILIENCE-14,
+U-DISPATCH-19).
 
 One JSON object per orchestration milestone, for an operator or a future tool to
 read. **Nothing in RQA reads it back for a trust decision** — §7: "Does not read
-`jobs/<job>/trace.jsonl` for any purpose, including `explain`". It contributes no
-name to §1's re-export list precisely because it is invisible to the authoritative
-side of this package.
+`jobs/<job>/trace.jsonl` for any purpose, including `explain`". `append_trace` is
+published only so lifecycle can write milestones through the package front door;
+that write-only surface gives no authoritative reader access.
 
 Two mechanisms, both carried from the estate because they are what make a
 concurrently-written file usable at all:
@@ -39,9 +40,12 @@ from rqa.record.hashing import canonical_json
 
 __all__ = [
     "ATTEMPT_ALLOCATED",
+    "JOB_EVENTS",
     "JOBS_DIR_NAME",
     "LOCK_FILENAME",
+    "REQUIRED_JOB_EVENTS",
     "TRACE_FILENAME",
+    "UnknownTraceEvent",
     "allocate_attempt_number",
     "append_trace",
     "trace_lines",
@@ -54,9 +58,53 @@ TRACE_FILENAME = "trace.jsonl"
 LOCK_FILENAME = "trace.lock"
 
 #: The milestone `allocate_attempt_number` records. A trace consumer keys off a fixed
-#: vocabulary rather than free-form strings (U-DISPATCH-19's retained decision); the
-#: caller names its own milestones, and this is the one this module names itself.
+#: vocabulary rather than free-form strings (U-DISPATCH-19's retained decision).
+#: This durability event is internal and separate from the orchestration registry.
 ATTEMPT_ALLOCATED = "attempt_allocated"
+
+#: The complete orchestration vocabulary retained from U-DISPATCH-19. Keep this a
+#: tuple so documentation and tests can preserve its declared order as well as its
+#: membership. `ATTEMPT_ALLOCATED` is a trace-internal durability event, not an
+#: orchestration milestone, and therefore is deliberately outside this registry.
+JOB_EVENTS: tuple[str, ...] = (
+    "queueing",
+    "preflight",
+    "lease_acquired",
+    "lease_released",
+    "evidence",
+    "budget",
+    "planner",
+    "strategy",
+    "route_selection",
+    "rereview",
+    "decision",
+    "human_queue",
+    "mutation",
+    "verify",
+    "safe_stop",
+)
+
+#: Every milestone a job reaching a disposition must emit. Branch-specific events
+#: such as `mutation`, `human_queue`, `safe_stop`, and `rereview` remain optional.
+REQUIRED_JOB_EVENTS: frozenset[str] = frozenset(
+    {
+        "queueing",
+        "preflight",
+        "evidence",
+        "budget",
+        "planner",
+        "strategy",
+        "route_selection",
+        "decision",
+        "verify",
+    }
+)
+
+_RESERVED_FIELDS = frozenset({"job", "event", "at"})
+
+
+class UnknownTraceEvent(ValueError):
+    """An orchestration caller attempted to emit outside `JOB_EVENTS`."""
 
 
 def trace_path(*, state_dir: str | os.PathLike[str], job_id: str) -> Path:
@@ -126,7 +174,14 @@ def append_trace(
 
     `fields` is plain JSON-safe data, checked by the same `canonical_json` the record
     itself uses, so a trace line cannot carry a value the record would have refused.
+    Canonical identity fields cannot be replaced by caller data.
     """
+    if event not in JOB_EVENTS:
+        raise UnknownTraceEvent(f"unregistered trace event: {event!r}")
+    supplied = dict(fields) if fields else {}
+    reserved = _RESERVED_FIELDS.intersection(supplied)
+    if reserved:
+        raise ValueError(f"trace fields cannot replace reserved names: {sorted(reserved)!r}")
     moment = (at or datetime.now(timezone.utc)).astimezone(timezone.utc)
 
     def build(_existing: list[str]) -> Mapping[str, Any]:
@@ -134,7 +189,7 @@ def append_trace(
             "job": job_id,
             "event": event,
             "at": moment.isoformat(timespec="microseconds"),
-            **(dict(fields) if fields else {}),
+            **supplied,
         }
 
     return _write_under_lock(state_dir=state_dir, job_id=job_id, build=build)
