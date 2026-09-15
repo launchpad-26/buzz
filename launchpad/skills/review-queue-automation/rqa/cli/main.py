@@ -37,7 +37,7 @@ from rqa.escalation import EscalationError, decide as escalation_decide, pending
 from rqa.intake import tick as intake_tick
 from rqa.lifecycle import LifecycleError, NotFound, status as lifecycle_status
 from rqa.policy import OnboardRefusal, onboard as policy_onboard
-from rqa.record import AppendFailed, ReuseResolutionError, explain as record_explain, explain_job
+from rqa.record import OSKeyStore, AppendFailed, ReuseResolutionError, explain as record_explain, explain_job
 
 __all__ = ["main"]
 
@@ -207,6 +207,7 @@ def _cmd_tick(args: argparse.Namespace, state_dir: Path) -> tuple[int, dict[str,
 def _cmd_onboard(args: argparse.Namespace) -> tuple[int, dict[str, Any]]:
     if not args.repo.strip() or not Path(args.repo).is_dir():
         raise _UsageError("onboard requires an existing local repository directory")
+    OSKeyStore().read("rqa-record-hmac")
     result = policy_onboard(repo=args.repo, migrate=args.migrate)
     if isinstance(result, OnboardRefusal):
         return exitcodes.INPUT_ERROR, {"outcome": "refused", "result": result}

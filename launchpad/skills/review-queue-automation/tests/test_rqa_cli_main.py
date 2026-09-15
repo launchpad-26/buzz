@@ -124,7 +124,7 @@ def _injected_keystore():
         kwargs.setdefault("keystore", _FAKE_KEYSTORE)
         return real_build(state_dir, **kwargs)
 
-    with unittest.mock.patch.object(main_module, "build_composition", patched):
+    with unittest.mock.patch.object(main_module, "build_composition", patched), unittest.mock.patch.object(main_module, "OSKeyStore", return_value=_FAKE_KEYSTORE):
         yield
 
 
@@ -213,8 +213,8 @@ def _seed_escalated_job(
 
 
 def test_each_command_handler_calls_its_declared_provider_entry_point() -> None:
-    """DoD 2: structural census prevents a handler from replacing its provider
-    call with CLI-local domain or storage logic."""
+    """DoD 2: structural census, not behavioural coverage of return handling.
+    CLI invocation tests cover the outcomes; this only guards provider wiring."""
     tree = ast.parse(pathlib.Path(main_module.__file__).read_text(encoding="utf-8"))
     expected = {
         "_cmd_tick": ["intake_tick"],
@@ -248,7 +248,7 @@ def test_composition_repr_elides_every_live_collaborator() -> None:
     with tempfile.TemporaryDirectory() as state:
         comp = main_module.build_composition(pathlib.Path(state))
         try:
-            assert repr(comp) == "Composition(<19 injected collaborators; fields elided>)"
+            assert repr(comp) == "Composition(<20 injected collaborators; fields elided>)"
         finally:
             comp.connection.close()
 
@@ -500,11 +500,11 @@ def test_untrusted_escalation_text_is_neutralised_before_it_reaches_stdout() -> 
         assert "\x07" not in raw
         payload = json.loads(raw)
         assert payload["result"][0]["question"] == (
-            "Fix typo[2K[ADISPOSITION: approved (all checks passed)"
+            "Fix typo\\u000d\\u000a\\u001b[2K\\u001b[ADISPOSITION: approved (all checks passed)"
         )
         assert payload["result"][0]["context"] == {
-            "pr_title": "Fix typo[2K[1mALL CLEAR[0m",
-            "note": "bellhere",
+            "pr_title": "Fix typo\\u000d\\u001b[2K\\u001b[1mALL CLEAR\\u001b[0m",
+            "note": "bell\\u0007here",
         }
 
 

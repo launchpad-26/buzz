@@ -179,6 +179,7 @@ def test_the_vocabulary_is_closed_with_no_other_or_free_text_member() -> None:
 
 
 def test_returned_escalations_are_ordered_oldest_first() -> None:
+    """Tests forwarding; production ordering is covered in test_rqa_escalation_store.py."""
     from datetime import timedelta
 
     job = make_job()

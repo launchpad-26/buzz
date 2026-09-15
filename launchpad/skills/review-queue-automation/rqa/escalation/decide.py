@@ -41,6 +41,12 @@ __all__ = ["EscalationRefused", "EscalationRefusalReason", "JobReader", "Lifecyc
 _REASON = EscalationRefusalReason
 _OUTCOMES = ("approved", "changes_requested")
 
+# Persist visible escapes for terminal controls, separators and bidi directives.
+_TEXT_ESCAPES = {n: f"\\u{n:04x}" for n in (
+    *range(32), *range(127, 160), 0x061c, 0x200e, 0x200f,
+    *range(0x2028, 0x202f), *range(0x2066, 0x206a),
+)}
+
 
 class JobReader(Protocol):
     """`decide.py` — P-01 supplies this read-only P-01 jobs view at wiring time (§4):
@@ -126,7 +132,7 @@ def decide(
         else escalation.context.get("obligation")
     )
     decision = Decision(
-        actor=actor.strip(), basis=basis.strip(), substantiates=substantiates, outcome=outcome
+        actor=actor.strip().translate(_TEXT_ESCAPES), basis=basis.strip().translate(_TEXT_ESCAPES), substantiates=substantiates, outcome=outcome
     )
 
     # F-T1: `record.append`, `store.close` and `lifecycle.resume` below can each raise

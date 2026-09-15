@@ -18,7 +18,6 @@ from rqa.cli.composition import build_composition
 from rqa.contracts import Activity, Deny, DenyReason, GithubUnavailable, Grant
 from rqa.github import GithubAdapter
 from rqa.github.transport import Response, Transport
-from rqa.record import KeyStoreExplanationUnavailable, OSKeyStore
 
 main_module = importlib.import_module("rqa.cli.main")
 
@@ -70,10 +69,10 @@ def test_real_composition_grants_only_configured_repository_with_scoped_attestat
         comp = build_composition(pathlib.Path(directory), repos=(authority_fx.REPO,), keystore=_FAKE_KEYSTORE)
         calls = []
 
-        def exchange(self, method, path, **kwargs):
-            calls.append((method, path))
-            assert method == "GET"
-            value = ({"login": "fixture-operator"} if path == "/user" else
+        def exchange(self, request, **kwargs):
+            calls.append((request.method, request.url))
+            assert request.method == "GET"
+            value = ({"login": "fixture-operator"} if request.url.endswith("/user") else
                      {"private": True, "permissions": {"pull": True, "push": True}})
             return Response(200, {"X-OAuth-Scopes": "repo"}, json.dumps(value))
 
@@ -106,3 +105,29 @@ def test_explain_unknown_job_echoes_requested_subject():
         build_composition(state, keystore=_FAKE_KEYSTORE).connection.close()
         code, payload = _run(state, "explain", "job", "requested-job")
         assert code == 1 and payload["subject"] == {"job_id": "requested-job"}
+
+
+def test_decision_controls_are_escaped_in_the_record_and_explanation():
+    from test_rqa_cli_main import _seed_escalated_job, _offline_composition
+    from rqa.contracts import EscalationCause
+    from rqa.cli.render import sanitize_text
+    import sqlite3
+    with tempfile.TemporaryDirectory() as directory:
+        state = pathlib.Path(directory)
+        eid = _seed_escalated_job(state, job_id="text-job", repo="o/r", number=1,
+            cause=EscalationCause.EVIDENCE_GAP, question="first\nsecond\u202e",
+            context={"obligation": "ob-1"})
+        code, pending = _run(state, "pending")
+        assert code == 0 and pending["result"][0]["question"] == sanitize_text("first\nsecond\u202e")
+        actor, basis = "human\x1b[31m", "observed\nsecond line\u2028"
+        with _offline_composition():
+            code, payload = _run(state, "decide", str(eid), "--actor", actor, "--basis", basis)
+        assert code == 0, payload
+        with sqlite3.connect(state / "state.db") as connection:
+            saved = json.loads(connection.execute("SELECT payload FROM record_entries WHERE kind='decision'").fetchone()[0])
+        assert saved["actor"] == sanitize_text(actor)
+        assert saved["basis"] == sanitize_text(basis.strip())
+        code, explained = _run(state, "explain", "job", "text-job")
+        assert code == 0, explained
+        assert explained["result"]["reviewer_identity"] == [saved["actor"]]
+        assert explained["result"]["decision_basis"] == saved["basis"]

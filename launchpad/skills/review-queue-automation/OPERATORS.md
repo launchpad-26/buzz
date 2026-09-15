@@ -31,6 +31,20 @@ reviewed — the same path you pass to `--repo-root`.
 
 ---
 
+## New `rqa` command: supported keychains
+
+The replacement `rqa` command supports macOS Keychain (`security`) and Linux
+Secret Service (`secret-tool`, with a running, unlocked user Secret Service
+session). Its record key is the operator-managed item with service
+`rqa-record-hmac`. It never creates or rotates a key. On Linux, an empty lookup
+is confirmed by a metadata search; a locked item, missing tool, unavailable
+session or timeout is an error. An absent item permits an explicitly unkeyed,
+unverifiable record; an unavailable backend never silently takes that path.
+
+`onboard` reports backend failures before writing config. `tick` and `decide`
+check the backend before beginning work. `status` and `pending` remain readable
+without a key; `explain` reports whether integrity could be verified.
+
 ## 1. Onboarding
 
 The authoritative config is **repo-local**, git-ignored, and never committed:
