@@ -202,9 +202,15 @@ STEP 1  verify-claims/SKILL.md — the dispatch response contract             [i
         states that a response not wholly matching is a parse failure — wording a builder
         cannot satisfy with a containment or line-scanning check; pins case sensitivity
         and how leading/trailing whitespace is treated, so two builders cannot read it
-        differently; carries at least three explicit REJECTION examples, including
-        `NOT_SUPPORTED: ...`, a verdict token inside negating prose, and a valid verdict
-        line surrounded by other output; states that a parse failure blocks, naming the
+        differently; carries at least three explicit REJECTION examples — text before the
+        verdict literal, a verdict token inside negating prose, and a valid verdict line
+        surrounded by other output — plus ACCEPTANCE examples for all three verdicts
+        (corrected while building, 2026-09-15: this line previously named
+        `NOT_SUPPORTED: ...` as a REJECTION example, which is wrong. A bare
+        `NOT_SUPPORTED: <reason>` is well-formed and must be ACCEPTED as NOT_SUPPORTED.
+        The intent was to prove the SUPPORTED-substring collision cannot happen — an
+        acceptance example demonstrates that; a rejection example would have required the
+        opposite behaviour); states that a parse failure blocks, naming the
         disposition, and that its text is not SUPPORTED; names a concrete default timeout
         value and the agent as its enforcer; and states that a non-zero exit, that
         timeout, and a response that ends without completing the grammar each block on
