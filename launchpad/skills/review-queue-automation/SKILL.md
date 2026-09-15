@@ -21,6 +21,13 @@ Read in this order before acting:
 3. `references/model-fallbacks.md` — default reviewer lanes and the current
    cost-to-quality rationale for their OpenRouter fallbacks.
 
+## Platform support for the replacement `rqa` CLI
+
+The `rqa` CLI supports macOS Keychain and Linux Secret Service (`secret-tool`).
+A running user keychain session is required; an unavailable backend is an error,
+never silently an absent key. `onboard`, `tick` and `decide` check availability
+before work. See `OPERATORS.md` for keyed and explicitly unkeyed records.
+
 ## Authorization and refusal
 
 - You post advisory PR comments and file `by:agent` finding issues. Auto-approval

@@ -45,10 +45,20 @@ MODULES_FULL = frozenset({"__init__", "aliases", "ladder", "breakers", "budget",
 MODULES_ROUTING = MODULES_FULL - {"budget", "spend"}
 
 #: §1's re-export list, in full.
-EXPORTS_FULL = frozenset(
+EXPORTS_SECTION_ONE = frozenset(
     {"route", "reserve", "consumed", "Route", "RouteCursor", "Reservation", "Refusal",
      "RouteUnavailable", "Spend"}
 )
+#: The concrete collaborators published beyond §1's list so a composition root can build
+#: them through the front door. #2211 (the operator CLI) is the module that falsified §1's
+#: "except through `__init__`" sentence: `route()`, `reserve()` and `consumed()` take
+#: their breaker store, spend store and prober as parameters and nothing in `rqa/supply/`
+#: ever builds one.
+PUBLISHED_EXPORTS = frozenset(
+    {"BreakerStore", "SqliteBreakerStore", "SpendStore", "SqliteSpendStore",
+     "SubprocessHarnessProber", "SubprocessProcessRunner"}
+)
+EXPORTS_FULL = EXPORTS_SECTION_ONE | PUBLISHED_EXPORTS
 #: The routing half's share of it.
 EXPORTS_ROUTING = frozenset({"route", "Route", "RouteCursor", "RouteUnavailable"})
 
@@ -118,8 +128,8 @@ def test_all_is_exactly_one_of_the_two_legitimate_re_export_sets() -> None:
 def test_the_two_halves_of_the_re_export_list_partition_it() -> None:
     """The split is a partition, not an overlap: neither lane may claim the other's names,
     and together they are exactly §1's list."""
-    assert EXPORTS_ROUTING < EXPORTS_FULL
-    assert EXPORTS_FULL - EXPORTS_ROUTING == frozenset(
+    assert EXPORTS_ROUTING < EXPORTS_SECTION_ONE
+    assert EXPORTS_SECTION_ONE - EXPORTS_ROUTING == frozenset(
         {"reserve", "consumed", "Reservation", "Refusal", "Spend"}
     )
 
@@ -138,7 +148,7 @@ def test_every_re_exported_name_actually_resolves() -> None:
 
 
 def test_the_seam_types_are_the_ones_contracts_declares() -> None:
-    for name in rqa.supply.__all__:
+    for name in EXPORTS_SECTION_ONE:
         if name[0].isupper():
             assert getattr(rqa.supply, name) is getattr(contracts, name), name
 
@@ -148,13 +158,32 @@ def test_the_package_declares_nothing_it_only_re_exports() -> None:
     assert _declared((SUPPLY / "__init__.py").read_text(encoding="utf-8")) == set()
 
 
-def test_the_stores_the_registry_and_the_probe_are_not_package_surface() -> None:
-    """They stay submodule names, the way `rqa.policy` keeps `SnapshotStore` out of its
-    package surface even though E-03's signature mentions the Protocol. `SupplyError` is
-    §2's, and §1's re-export list does not carry it either."""
-    for name in ("BreakerStore", "BreakerState", "SupplyError", "ALIASES", "HarnessProber",
-                 "SubprocessHarnessProber", "route_key", "eligible", "subscription_first"):
+def test_the_registry_the_seams_and_the_error_are_not_package_surface() -> None:
+    """They stay submodule names, the way `rqa.policy` keeps `StoredSnapshot` out of its
+    package surface. `SupplyError` is §2's, and §1's re-export list does not carry it
+    either. The concrete stores and the subprocess prober are the exception, asserted
+    positively in the next test."""
+    for name in ("BreakerState", "SupplyError", "ALIASES", "HarnessProber",
+                 "route_key", "eligible", "subscription_first"):
         assert name not in rqa.supply.__all__, name
+
+
+def test_the_concrete_collaborators_a_composition_root_needs_are_package_surface() -> None:
+    """§1's "no other module imports from `rqa.supply` except through `__init__`" and
+    `route()`/`reserve()`/`consumed()` taking their stores and prober as parameters are
+    only jointly satisfiable if those classes are reachable through `__init__`. The
+    package must publish the submodules' own objects, not second copies."""
+    from rqa.supply.breakers import BreakerStore, SqliteBreakerStore
+    from rqa.supply.probe import SubprocessHarnessProber, SubprocessProcessRunner
+    from rqa.supply.spend import SpendStore, SqliteSpendStore
+
+    assert PUBLISHED_EXPORTS <= frozenset(rqa.supply.__all__)
+    assert rqa.supply.BreakerStore is BreakerStore
+    assert rqa.supply.SqliteBreakerStore is SqliteBreakerStore
+    assert rqa.supply.SpendStore is SpendStore
+    assert rqa.supply.SqliteSpendStore is SqliteSpendStore
+    assert rqa.supply.SubprocessHarnessProber is SubprocessHarnessProber
+    assert rqa.supply.SubprocessProcessRunner is SubprocessProcessRunner
 
 
 def test_no_module_here_is_a_stub() -> None:

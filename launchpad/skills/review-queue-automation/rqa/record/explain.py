@@ -190,6 +190,7 @@ class _Hop:
     attestations: list[tuple[str, str, str]]
     verify_result: VerifyResult
     legacy_present: bool
+    has_current_rows: bool
 
 
 def _walk_reuse_chain(
@@ -241,6 +242,7 @@ def _walk_reuse_chain(
                 attestations=_harness_attestations(readable),
                 verify_result=vr,
                 legacy_present=any(is_legacy(entry=row) for row in readable),
+                has_current_rows=any(not is_legacy(entry=row) for row in readable),
             ),
         )
 
@@ -250,9 +252,10 @@ def _walk_reuse_chain(
         current = next_link
 
 
-def explain_job(connection: sqlite3.Connection, job_id: str) -> Explanation | ExplanationUnavailable:
+def explain_job(connection: sqlite3.Connection, job_id: str, *, keystore: KeyStore | None = None) -> Explanation | ExplanationUnavailable:
     """§3.3's reconstruction, named job first. Every branch returns or raises."""
-    keystore: KeyStore = OSKeyStore()
+    if keystore is None:
+        keystore = OSKeyStore()
 
     rows = entries_for_job(connection=connection, job=job_id)
     if not rows:
@@ -275,6 +278,11 @@ def explain_job(connection: sqlite3.Connection, job_id: str) -> Explanation | Ex
     protocol_hash = plan.get("protocol_hash") if plan else None
     policy_version = plan.get("policy_version") if plan else None
     snapshot_hash = plan.get("snapshot_hash") if plan else None
+    if plan is None:
+        snapshot = _last_payload_of_kind(readable, "snapshot") or {}
+        protocol_hash = snapshot.get("protocol_hash")
+        policy_version = snapshot.get("policy_version")
+        snapshot_hash = snapshot.get("hash")
 
     judgement = _last_payload_of_kind(readable, "judgement")
     evidence: Mapping[str, str] = dict(judgement.get("obligations", {})) if judgement else {}
@@ -308,6 +316,7 @@ def explain_job(connection: sqlite3.Connection, job_id: str) -> Explanation | Ex
 
     decision = _last_payload_of_kind(readable, "decision")
     if decision is not None:
+        decision_basis = decision.get("basis")
         reviewer_type: Literal["ai", "human", "none"] = "human"
         actor = decision.get("actor")
         reviewer_identity: tuple[str, ...] = (str(actor),) if actor else ()
@@ -318,9 +327,9 @@ def explain_job(connection: sqlite3.Connection, job_id: str) -> Explanation | Ex
         reviewer_type = "none"
         reviewer_identity = ()
 
-    local_hmac_checked = vr.ok and vr.unverifiable == ()
+    local_hmac_checked = vr.ok and vr.unverifiable == () and not all(is_legacy(entry=row) for row in readable)
     local_verified = local_hmac_checked and not local_legacy_present
-    hop_hmac_checked = [hop.verify_result.ok and hop.verify_result.unverifiable == () for hop in hops]
+    hop_hmac_checked = [hop.verify_result.ok and hop.verify_result.unverifiable == () and hop.has_current_rows for hop in hops]
     hop_verified = [
         checked and not hop.legacy_present for checked, hop in zip(hop_hmac_checked, hops, strict=True)
     ]
@@ -357,7 +366,7 @@ def explain_job(connection: sqlite3.Connection, job_id: str) -> Explanation | Ex
     )
 
 
-def explain(connection: sqlite3.Connection, repo: str, number: int) -> Explanation | ExplanationUnavailable:
+def explain(connection: sqlite3.Connection, repo: str, number: int, *, keystore: KeyStore | None = None) -> Explanation | ExplanationUnavailable:
     """§3.3: resolve the current head job for `(repo, number)`, then reconstruct it.
 
     Every ordinary absence/ambiguity case is a returned `ExplanationUnavailable`,
@@ -371,7 +380,7 @@ def explain(connection: sqlite3.Connection, repo: str, number: int) -> Explanati
         return ExplanationUnavailable(repo=repo, number=number, reason="ambiguous_head")
     assert isinstance(resolved, ResolvedJob)
 
-    result = explain_job(connection, resolved.job_id)
+    result = explain_job(connection, resolved.job_id, keystore=keystore)
     if isinstance(result, ExplanationUnavailable):
         # `explain_job` cannot itself know `repo`/`number` when it has nothing to
         # read; `explain` does, and fills them in (§3.3).

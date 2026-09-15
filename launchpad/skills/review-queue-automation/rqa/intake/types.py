@@ -38,6 +38,15 @@ class JobFailure:
 
 
 @dataclass(frozen=True)
+class RepositoryFailure:
+    """A repository whose inventory could not be read during a sweep."""
+
+    repo: str
+    reason: str
+    retriable: bool
+
+
+@dataclass(frozen=True)
 class TickResult:
     outcome: Literal["swept", "sweep_already_running"]
     repos_admitted: tuple[str, ...]
@@ -47,6 +56,7 @@ class TickResult:
     jobs_failed: tuple[JobFailure, ...]  # admit() raised; U-DISPATCH-22
     revisited_resting_jobs: tuple[str, ...]  # job ids added to the batch only so
     # Lifecycle can revisit a resting job (§3 step 4)
+    repos_failed: tuple[RepositoryFailure, ...] = ()
 
 
 class IntakeError(Exception):

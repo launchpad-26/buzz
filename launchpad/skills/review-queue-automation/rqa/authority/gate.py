@@ -216,7 +216,7 @@ class Gate:
 
         # Step 6. Disabled is the default: `.get` rather than `[...]` so a snapshot
         # missing a key denies instead of raising (RQA-NFR-017, RQA-NFR-026).
-        if not snapshot.authority.get(activity, False):
+        if snapshot.authority.get(activity, False) is not True:
             return self._deny(
                 repo=repo,
                 activity=activity,
@@ -233,7 +233,11 @@ class Gate:
         # Step 7. The per-job capability proof: read it if this job already has one,
         # probe once and record the attestation if it does not.
         proof = self._proof(repo=repo, job_id=job_id, record=record, github=github, store=store)
-        missing = REQUIRED_CAPABILITY[activity] - proof.capabilities
+        # Write permissions are authenticated GitHub attestations checked against
+        # both repository permissions and OAuth scopes by P-09. Preserve their
+        # provenance instead of pretending that the read-only probe exercised them.
+        writes = proof.attested_not_proven & {"issues:write", "pulls:write", "contents:write"}
+        missing = REQUIRED_CAPABILITY[activity] - (proof.capabilities | writes)
         if missing:
             return self._deny(
                 repo=repo,
