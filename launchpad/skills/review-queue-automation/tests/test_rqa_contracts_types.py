@@ -266,7 +266,7 @@ DOCUMENTED_DATACLASSES: dict[str, tuple[tuple[str, str], ...]] = {
             "disposition",
             'Literal["approve", "request_changes", "remediate", "escalate"]',
         ),
-        ("reused_from", "str | None"),
+        ("reused_from", "tuple[str, int] | None"),
     ),
     "CarriedEvidence": (
         ("obligation_id", "str"),
