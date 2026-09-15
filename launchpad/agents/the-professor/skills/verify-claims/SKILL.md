@@ -82,13 +82,45 @@ that exists but doesn't hold up).
 ## 2. Dispatch one independent check per claim that has a citation
 
 For each behaviour claim that has a citation, run `$PROFESSOR_VERIFIER_CMD` as a
-subprocess — a genuinely separate check in **fresh context** — give it only the cited
-source's exact span and the claim's exact sentence, nothing else. Deliberately
-withhold:
+subprocess — a genuinely separate check in **fresh context**.
+
+**Send exactly these four things, and nothing about the draft:**
+
+1. The task: decide whether the cited span supports the claim.
+2. **The instruction to decide *only* from the span, inferring nothing from anything
+   outside it.**
+3. The response format §2b requires — the three verdict literals and the
+   `<VERDICT>: <reason>` shape, stated explicitly.
+4. The cited source's exact span, and the claim's exact sentence.
+
+Items 1–3 are not context about the draft; they are the question being asked. **Omitting
+them does not make the check purer, it makes it not a check** — proven by a real dispatch
+on 2026-09-15 (STEP 3), where a verifier sent only a claim and a span invented its own
+task, answered `REFUTED` (a verdict this gate does not define), and produced eleven lines
+of prose. §2b correctly blocked it — but a gate that blocks every claim is not a gate.
+
+Deliberately withhold:
 
 - the rest of the draft
 - the drafting agent's own reasoning or notes
 - any other claim's verdict from this same run
+
+**Withholding the draft is not the same as achieving isolation — named 2026-09-15, after
+the same dispatch demonstrated it.** A verifier command with access to the repository can
+go and read whatever it likes: that run, given no instruction to stay inside the span,
+opened four other files, cited line numbers from three of them, and ran `git` against the
+working tree. It reached a defensible conclusion by reasoning about code the gate never
+showed it.
+
+Two things follow, and both are requirements, not advice:
+
+- **Item 2 above is mandatory in every dispatch.** It is the only part of isolation this
+  skill can enforce through the prompt.
+- **Prefer a `$PROFESSOR_VERIFIER_CMD` without repository access** where the harness can
+  provide one. A verifier that cannot read the target repo cannot silently substitute its
+  own evidence for the cited span, whatever the prompt says. Where that is not available,
+  isolation rests on item 2 alone — which is an instruction, not a boundary, and should
+  be understood as such.
 
 **This isolation is the entire point of the gate.** A verifier that shares context
 with the drafter inherits the drafter's own blind spots instead of catching them —
@@ -316,6 +348,9 @@ draft in isolation.
 - [ ] Each cited claim was checked in a genuinely fresh, isolated context — not the
       drafting agent's own context, and not batched together with other claims'
       verdicts visible
+- [ ] Every dispatch carried the task, the decide-only-from-the-span instruction, and
+      §2b's response format — a dispatch sent without them is not a stricter check, it
+      is an unanswerable one
 - [ ] No `PARTIALLY_SUPPORTED` verdict was rounded up to `SUPPORTED`
 - [ ] Any verdict other than `SUPPORTED`, on any single claim, actually blocked the
       entire write — not logged as a warning and allowed through
