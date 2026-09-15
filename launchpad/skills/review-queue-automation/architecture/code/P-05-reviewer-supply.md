@@ -19,7 +19,8 @@ breaker behaviour. No other part's internals.
 ```
 rqa/supply/
   __init__.py     re-exports: route, reserve, consumed, Route, RouteCursor, Reservation, Refusal,
-                  RouteUnavailable, Spend
+                  RouteUnavailable, Spend, BreakerStore, SqliteBreakerStore, SpendStore,
+                  SqliteSpendStore, SubprocessHarnessProber, SubprocessProcessRunner
   aliases.py      the closed alias registry: every recognised (harness, model) pair and its
                   subscription tier (U-POLICY-11)
   ladder.py       candidate filtering and the subscription-first sort shared by route() and

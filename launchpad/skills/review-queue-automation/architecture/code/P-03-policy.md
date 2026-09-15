@@ -24,7 +24,8 @@ rqa/policy/
   __init__.py     re-exports CONTRACTS.md §3's Snapshot, Route, External, Policy, Blocking,
                   Mechanical and Budget, plus snapshot_for, onboard, ValidationError,
                   ValidationErrorCode, ValidationFailure, OnboardResult, Written, OnboardRefusal,
-                  OnboardRefusalReason, PolicyError, SnapshotStoreCorrupted
+                  OnboardRefusalReason, PolicyError, SnapshotStoreCorrupted, SnapshotStore,
+                  SqliteSnapshotStore
   schema.py       the config JSON schema sketch as data: the allowed/required key sets at every
                   level (§2's normative shape)
   validate.py     validate(): the fail-closed schema+semantic checker (E-03's dependency, not an

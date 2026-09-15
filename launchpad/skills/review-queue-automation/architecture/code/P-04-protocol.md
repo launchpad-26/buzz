@@ -23,7 +23,7 @@ rqa/protocol/
   __init__.py         re-exports: validate, Valid, Invalid, ProtocolError,
                        Location, Category, MECHANICAL_GROUP, SUBSTANTIVE_GROUP, EvidenceState,
                        Obligation, Remedy, Finding, InjectionAttempt, HarnessIdentity, Verdict,
-                       PROTOCOL_VERSION, protocol_hash, PROBE_MARKER, envelope, extract
+                       PROTOCOL_VERSION, schema_path, protocol_hash, PROBE_MARKER, envelope, extract
   types.py            implements the P-04-owned shared types exactly as CONTRACTS.md §2 defines them
   paths.py            matches(): the sole PathGlob matcher in RQA
   fence.py            strip_fence(): markdown-fence normalisation (U-VERDICT-01, kept)

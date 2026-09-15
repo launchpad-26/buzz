@@ -6,19 +6,19 @@ and reconstructs any authoritative outcome from that record alone, contacting ne
 GitHub nor a model.
 
 No other module in RQA imports from `rqa.record` except through this file (§1). The
-public surface is §1's twenty-eight-name re-export list plus the two concrete
-collaborators a composition root must construct: `SQLiteRecordWriter` (the one
-implementation of the `RecordWriter` seam every other part is handed) and `OSKeyStore`
-(the one implementation of `KeyStore`), plus `append_trace`, which lifecycle uses to
-emit P-12's non-authoritative orchestration milestones. `SQLiteRecordReader` and `UnverifiableSegment`
-stay module names (`rqa.record.reader`, `.verify`).
+public surface is §1's twenty-eight-name re-export list plus the three concrete
+collaborators callers must construct: `SQLiteRecordWriter`, `SQLiteRecordReader`, and
+`OSKeyStore`, plus `append_trace`, which lifecycle uses to emit P-12's
+non-authoritative orchestration milestones. Only `UnverifiableSegment` stays a
+`rqa.record.verify` module name.
 
-**Why those two are surface.** Every part that appends takes its `RecordWriter` as a
+**Why those three are surface.** Every part that appends takes its `RecordWriter` as a
 parameter and nothing inside `rqa/record/` constructs one, so something outside this
 package always must, and the operator CLI's composition root (#2211) is the first
 module in RQA whose job is exactly that. Withholding them while forbidding a reach past
 `__init__` left no conforming way to build the writer: the clause was unfalsifiable only
-until a composition root existed. Publishing `OSKeyStore` re-exports the same class
+until a composition root existed. P-02 likewise constructs `SQLiteRecordReader` over
+its injected connection when it reads a predecessor. Publishing `OSKeyStore` re-exports the same class
 under a second name; it widens no capability — the keychain read, its `KEY_NAME` and its
 refusal to carry a credential into an explanation are unchanged and still tested in
 `tests/test_rqa_record_keychain.py`.
@@ -48,7 +48,7 @@ from rqa.record.hashing import PayloadNotSerializable
 from rqa.record.keychain import KeyStoreExplanationUnavailable, OSKeyStore
 from rqa.record.kinds import RecordProgrammingError, UnknownEntryKind
 from rqa.record.migrate import LegacySource, MigrationSummary, MigrationTableResult, migrate_legacy
-from rqa.record.reader import AmbiguousHead, NoRecord, ResolvedJob, resolve_job
+from rqa.record.reader import AmbiguousHead, NoRecord, ResolvedJob, SQLiteRecordReader, resolve_job
 from rqa.record.trace import append_trace
 from rqa.record.verify import BreakKind, VerifyResult, verify
 from rqa.record.writer import SQLiteRecordWriter
@@ -83,6 +83,7 @@ __all__ = [
     "MigrationTableResult",
     "LegacySource",
     "SQLiteRecordWriter",
+    "SQLiteRecordReader",
     "OSKeyStore",
     "append_trace",
 ]

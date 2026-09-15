@@ -92,7 +92,7 @@ from rqa.remediation import MECHANICAL_TOOL_SET  # noqa: E402
 # -- the finished package (wave rule: the post-sibling set, exactly) -------------
 
 
-def test_the_finished_package_exports_exactly_the_fourteen_names() -> None:
+def test_the_finished_package_exports_exactly_the_fifteen_names() -> None:
     """§1's re-export list. This lane completes the package, so the set is asserted
     exactly — never a subset or superset."""
     import rqa.lifecycle
@@ -100,9 +100,9 @@ def test_the_finished_package_exports_exactly_the_fourteen_names() -> None:
     assert set(rqa.lifecycle.__all__) == {
         "admit", "resume", "status", "transition", "JobStatus", "TRANSITIONS",
         "Disposition", "DISPOSITION", "StatusReport", "NotFound", "StaleDecisionError",
-        "LifecycleError", "IllegalTransitionError", "UnknownJobError",
+        "LifecycleError", "IllegalTransitionError", "UnknownJobError", "LifecycleDeps",
     }
-    assert len(rqa.lifecycle.__all__) == 14
+    assert len(rqa.lifecycle.__all__) == 15
 
 
 def test_the_finished_package_has_exactly_the_nine_modules() -> None:

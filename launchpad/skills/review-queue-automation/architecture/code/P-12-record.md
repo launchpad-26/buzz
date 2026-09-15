@@ -23,7 +23,8 @@ rqa/record/
                  KeyStore, KeyStoreExplanationUnavailable, verify, VerifyResult, BreakKind, explain,
                  explain_job, resolve_job, ResolvedJob, NoRecord, AmbiguousHead, Explanation,
                  ExplanationUnavailable, ReuseResolutionError, migrate_legacy, MigrationSummary,
-                 MigrationTableResult, LegacySource, append_trace
+                 MigrationTableResult, LegacySource, SQLiteRecordWriter, SQLiteRecordReader,
+                 OSKeyStore, append_trace
   kinds.py       ENTRY_KINDS: the closed fourteen-kind set (§6)
   hashing.py     canonical_json(); compute_hash(); genesis and "legacy" prev_hash sentinels
   keychain.py    E-25 KeyStore implementation backed by the platform keychain command
