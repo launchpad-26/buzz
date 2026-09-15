@@ -10,6 +10,24 @@ supersedes: none
 
 ## Decision
 
+**Platform amendment, 2026-09-15 (#2272).** Supported keychains are macOS
+Keychain (`security`) and Linux Secret Service (`secret-tool`). RQA reads the
+operator-held `rqa-record-hmac` item, never creates or rotates it, and never
+silently treats an unavailable keychain as an absent key. An empty Linux lookup
+must also have an empty metadata search before it counts as absence; a locked
+matching item is unavailable. Unsupported platforms and broken keychain
+sessions fail with an actionable message. State-changing CLI operations check
+keychain availability before beginning work; read-only status does not require
+a key, and explanation discloses unverifiable records.
+
+**Agent-exercised decision:** @tucktuck101 instructed this choice verbatim:
+
+> Support macOS Keychain and Linux Secret Service
+
+This accepts the proposed platform support and its fail-closed handling of
+unavailable keychains. It does not delegate PR approval or merge.
+
+
 Review-queue-automation (RQA) makes its review record tamper-evident with a **hash chain over every
 entry, plus an HMAC keyed by a secret the operator holds outside the state directory (the OS
 keychain), verified by `explain`**. This is option **(b)** of

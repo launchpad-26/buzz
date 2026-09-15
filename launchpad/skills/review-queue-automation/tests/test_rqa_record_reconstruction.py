@@ -1,0 +1,38 @@
+"""Offline reconstruction must use the recorded pins and the supplied keychain."""
+
+import pathlib
+import sqlite3
+import sys
+
+sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent.parent))
+
+from rqa.record.explain import explain_job
+from rqa.record.writer import SQLiteRecordWriter
+
+
+class Key:
+    def read(self, name):
+        return b"reconstruction-fixture-key"
+
+
+def test_snapshot_pins_are_reconstructed_before_a_plan_exists():
+    connection = sqlite3.connect(":memory:")
+    writer = SQLiteRecordWriter(connection, keystore=Key())
+    writer.append("job", "snapshot", {"hash": "snapshot-pin", "protocol_hash": "protocol-pin", "policy_version": "v1"})
+    result = explain_job(connection, "job", keystore=Key())
+    assert (result.snapshot_hash, result.protocol_hash, result.policy_version) == ("snapshot-pin", "protocol-pin", "v1")
+    assert result.hmac_checked and result.verified
+    connection.close()
+
+
+def test_injected_keychain_distinguishes_tampering_from_intact_records():
+    connection = sqlite3.connect(":memory:")
+    writer = SQLiteRecordWriter(connection, keystore=Key())
+    writer.append("job", "snapshot", {"hash": "snapshot-pin", "protocol_hash": "protocol-pin", "policy_version": "v1"})
+    assert explain_job(connection, "job", keystore=Key()).verified
+    connection.execute("UPDATE record_entries SET payload = '{}' WHERE job = 'job'")
+    result = explain_job(connection, "job", keystore=Key())
+    assert not result.verified
+    assert result.truncated_at is not None
+    assert result.snapshot_hash is None
+    connection.close()

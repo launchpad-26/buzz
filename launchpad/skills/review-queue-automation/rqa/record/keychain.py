@@ -8,9 +8,8 @@ the implementation, and it is the whole of this part's cross-boundary surface.
 `rqa-record-hmac`, through the local keychain command. It never writes, rotates,
 generates or logs a key — ADR-F: "the key is the operator's and never RQA's to write
 into the record" — and no key byte is ever put into a return value other than the
-key itself, an exception message, a docstring or the record. The one subprocess is
-`security`, macOS's local keychain CLI; it opens no socket, and §8's T7 proves that
-behaviourally rather than by this sentence.
+key itself, an exception message, a docstring or the record. The backends invoke `security` on macOS or `secret-tool` on Linux.
+They query the local keychain service and perform no remote network operation.
 
 **Absent is not broken.** An absent item returns `None`, and the callers treat that
 as a specified outcome: `append` proceeds unkeyed and says so (`keyed=0`,
@@ -66,14 +65,25 @@ def _run_security(argv: Sequence[str]) -> tuple[int, bytes]:
     return completed.returncode, completed.stdout
 
 
+def _run_secret_tool(argv: Sequence[str]) -> tuple[int, bytes, bool]:
+    """Read Secret Service; preserve only whether diagnostics were emitted."""
+    completed = subprocess.run(
+        list(argv), stdin=subprocess.DEVNULL, capture_output=True,
+        timeout=_TIMEOUT, check=False,
+    )
+    return completed.returncode, completed.stdout, bool(completed.stderr)
+
+
 class OSKeyStore:
     """Reads only `rqa-record-hmac` through the platform keychain command. It returns None only for
     that absent item and never writes, rotates, generates, or logs a key."""
 
-    def __init__(self, *, runner: Callable[[Sequence[str]], tuple[int, bytes]] = _run_security):
+    def __init__(self, *, runner: Callable[[Sequence[str]], tuple[int, bytes]] = _run_security,
+                 linux_runner: Callable[[Sequence[str]], tuple[int, bytes, bool]] = _run_secret_tool):
         # Injectable so §8's tests can exercise every branch without a real keychain
         # and without a key ever existing on the machine running them.
         self._runner = runner
+        self._linux_runner = linux_runner
 
     def read(self, name: str) -> bytes | None:
         """The operator's key bytes, `None` when the item is absent.
@@ -86,10 +96,12 @@ class OSKeyStore:
             raise KeyStoreExplanationUnavailable(
                 f"this key store serves only {KEY_NAME!r}, not {name!r}"
             )
+        if sys.platform == "linux":
+            return self._read_linux(name)
         if sys.platform != "darwin":
             raise KeyStoreExplanationUnavailable(
-                f"no platform keychain command on {sys.platform!r}; "
-                "the record can still be appended unkeyed"
+                f"unsupported keychain platform {sys.platform!r}; use macOS Keychain "
+                "or Linux Secret Service; no record was appended"
             )
         argv = ("security", "find-generic-password", "-w", "-s", name)
         try:
@@ -112,3 +124,32 @@ class OSKeyStore:
                 f"the keychain returned an empty value for {name!r}"
             )
         return secret
+
+    def _read_linux(self, name: str) -> bytes | None:
+        """Distinguish an absent item from a failed query or a locked match.
+
+        secret-tool lookup uses status 1 for both absence and errors. Errors
+        emit diagnostics. A matching locked item may also have no readable
+        secret, so an empty lookup requires an empty metadata search too.
+        """
+        try:
+            code, value, diagnostics = self._linux_runner(
+                ("secret-tool", "lookup", "service", name)
+            )
+            if code == 0 and value and not diagnostics:
+                return value
+            if code == 1 and not value and not diagnostics:
+                code, matches, diagnostics = self._linux_runner(
+                    ("secret-tool", "search", "--all", "service", name)
+                )
+                if code in (0, 1) and not matches and not diagnostics:
+                    return None
+        except (OSError, subprocess.SubprocessError):
+            raise KeyStoreExplanationUnavailable(
+                "Linux keychain unavailable: install secret-tool and start an unlocked "
+                "Secret Service session; no record was appended"
+            ) from None
+        raise KeyStoreExplanationUnavailable(
+            "Linux keychain did not return a readable key or confirm its absence; "
+            "check the Secret Service session and unlock the keyring; no record was appended"
+        )
