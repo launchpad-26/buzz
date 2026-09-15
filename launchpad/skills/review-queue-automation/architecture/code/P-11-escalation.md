@@ -54,7 +54,7 @@ class EscalationError(Exception):
 ```python
 job.id: str
 job.head_sha: str
-job.snapshot_hash: str      # already pinned by the time raise_() is ever called (flow step 3/3a)
+job.snapshot_hash: str | None  # pinned on flow step 3a; absent on step 3 validation failure
 ```
 
 ## 3. Entry points
@@ -205,7 +205,8 @@ CREATE TABLE human_requests (
   question            TEXT NOT NULL,
   context             TEXT NOT NULL,         -- JSON object
   head_sha            TEXT NOT NULL,         -- job.head_sha at raise_() time
-  snapshot_hash       TEXT NOT NULL,         -- job.snapshot_hash at raise_() time
+  snapshot_hash       TEXT,                  -- job.snapshot_hash at raise_() time; NULL when
+                                             -- validation failed before a snapshot could be pinned
   raised_at           TEXT NOT NULL,         -- ISO-8601 UTC
   status              TEXT NOT NULL DEFAULT 'open',   -- 'open' | 'closed'
   closed_at           TEXT,                  -- ISO-8601 UTC; set by close()
@@ -231,7 +232,7 @@ class EscalationRow:
     question: str
     context: Mapping[str, str]
     head_sha: str
-    snapshot_hash: str
+    snapshot_hash: str | None
     raised_at: datetime
     status: Literal["open", "closed"]
     closed_at: datetime | None
@@ -240,7 +241,7 @@ class EscalationRow:
 class EscalationStore(Protocol):
     def insert(
         self, *, job_id: str, entry_seq: int, cause: EscalationCause, question: str,
-        context: Mapping[str, str], head_sha: str, snapshot_hash: str, raised_at: datetime,
+        context: Mapping[str, str], head_sha: str, snapshot_hash: str | None, raised_at: datetime,
     ) -> int: ...                                              # returns the new row's id
     def get(self, escalation_id: int) -> EscalationRow | None: ...
     def pending(self) -> tuple[EscalationRow, ...]: ...         # status = 'open', raised_at ascending

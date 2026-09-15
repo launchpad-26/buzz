@@ -309,7 +309,7 @@ class Decision:
 @dataclass(frozen=True)
 class Escalation:
     id: int; job_id: str; cause: EscalationCause; question: str; context: Mapping[str, str]
-    head_sha: str; snapshot_hash: str; entry_seq: int; raised_at: datetime
+    head_sha: str; snapshot_hash: str | None; entry_seq: int; raised_at: datetime
 
 @dataclass(frozen=True)
 class Judgement:
