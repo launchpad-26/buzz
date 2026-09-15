@@ -27,7 +27,7 @@ from datetime import datetime, timezone
 from types import MappingProxyType
 from typing import Literal, Protocol
 
-from rqa.contracts import EscalationCause
+from rqa.contracts import EscalationCause, EscalationSubject, EscalationSubjectKind
 
 __all__ = ["EscalationRow", "EscalationStore", "SqliteEscalationStore", "ensure_schema"]
 
@@ -39,6 +39,8 @@ CREATE TABLE IF NOT EXISTS human_requests (
   job_id              TEXT NOT NULL,
   entry_seq           INTEGER NOT NULL,
   cause               TEXT NOT NULL,
+  subject_kind        TEXT NOT NULL,
+  subject_id          TEXT NOT NULL,
   question            TEXT NOT NULL,
   context             TEXT NOT NULL,
   head_sha            TEXT NOT NULL,
@@ -55,7 +57,7 @@ CREATE INDEX IF NOT EXISTS human_requests_status ON human_requests (status);
 """
 
 _COLUMNS = (
-    "id, job_id, entry_seq, cause, question, context, head_sha, snapshot_hash, "
+    "id, job_id, entry_seq, cause, subject_kind, subject_id, question, context, head_sha, snapshot_hash, "
     "raised_at, status, closed_at, decision_entry_seq"
 )
 
@@ -66,6 +68,7 @@ class EscalationRow:
     job_id: str
     entry_seq: int
     cause: EscalationCause
+    subject: EscalationSubject
     question: str
     context: Mapping[str, str]
     head_sha: str
@@ -83,6 +86,7 @@ class EscalationStore(Protocol):
         job_id: str,
         entry_seq: int,
         cause: EscalationCause,
+        subject: EscalationSubject,
         question: str,
         context: Mapping[str, str],
         head_sha: str,
@@ -114,7 +118,7 @@ def _stamp(moment: datetime) -> str:
 
 def _row(record: tuple) -> EscalationRow:
     (
-        identifier, job_id, entry_seq, cause, question, context, head_sha, snapshot_hash,
+        identifier, job_id, entry_seq, cause, subject_kind, subject_id, question, context, head_sha, snapshot_hash,
         raised_at, status, closed_at, decision_entry_seq,
     ) = record
     return EscalationRow(
@@ -122,6 +126,7 @@ def _row(record: tuple) -> EscalationRow:
         job_id=job_id,
         entry_seq=int(entry_seq),
         cause=EscalationCause(cause),
+        subject=EscalationSubject(EscalationSubjectKind(subject_kind), subject_id),
         question=question,
         context=MappingProxyType(json.loads(context)),
         head_sha=head_sha,
@@ -151,6 +156,7 @@ class SqliteEscalationStore:
         job_id: str,
         entry_seq: int,
         cause: EscalationCause,
+        subject: EscalationSubject,
         question: str,
         context: Mapping[str, str],
         head_sha: str,
@@ -159,12 +165,14 @@ class SqliteEscalationStore:
     ) -> int:
         cursor = self.connection.execute(
             "INSERT INTO human_requests "
-            "(job_id, entry_seq, cause, question, context, head_sha, snapshot_hash, raised_at) "
-            "VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+            "(job_id, entry_seq, cause, subject_kind, subject_id, question, context, head_sha, snapshot_hash, raised_at) "
+            "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
             (
                 job_id,
                 entry_seq,
                 cause.value,
+                subject.kind.value,
+                subject.identifier,
                 question,
                 json.dumps(dict(context), sort_keys=True),
                 head_sha,

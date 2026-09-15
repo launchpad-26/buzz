@@ -270,7 +270,10 @@ def test_t7c_bound_reached_escalates_an_otherwise_approvable_judgement() -> None
     assert result.disposition == "escalate"
     from rqa.contracts import EscalationCause
 
-    assert any(cause is EscalationCause.EVIDENCE_GAP for cause, _ in result.escalation_causes)
+    assert any(
+        cause is EscalationCause.EVIDENCE_GAP
+        for cause, _subject, _detail in result.escalation_causes
+    )
 
 
 def test_approve_is_unreachable_when_bound_reached_is_true() -> None:

@@ -17,8 +17,9 @@ resume through E-11; shared escalation/decision values remain canonical.
 ## 1. Modules
 
 rqa/escalation/
-  __init__.py     re-exports: raise_, pending, decide, EscalationCause, Escalation,
-                  Decision, EscalationRefused, EscalationRefusalReason, EscalationError
+  __init__.py     re-exports: raise_, pending, decide, EscalationCause, EscalationSubjectKind,
+                  EscalationSubject, Escalation, Decision, EscalationRefused,
+                  EscalationRefusalReason, EscalationError
   escalate.py     Escalation; raise_() and pending(): the E-11 entry points
   decide.py       EscalationRefused, EscalationRefusalReason; decide(): the E-17 `decide` CLI entry point;
                   the JobReader and P-02 resume Protocols this part depends on
@@ -34,20 +35,22 @@ writes it — only P-02 changes a job's state.
 
 ## 2. Types
 
-`EscalationCause`, `Decision`, `Escalation`, `EscalationRefusalReason`, and
+`EscalationCause`, `EscalationSubjectKind`, `EscalationSubject`, `Decision`, `Escalation`, `EscalationRefusalReason`, and
 `EscalationRefused` are boundary values defined only in [`CONTRACTS.md`](CONTRACTS.md) §6. P-11
 imports and uses them unchanged:
 
 ```python
 from rqa.contracts import (
-    EscalationCause, Decision, Escalation, EscalationRefusalReason, EscalationRefused,
+    EscalationCause, EscalationSubjectKind, EscalationSubject, Decision, Escalation,
+    EscalationRefusalReason, EscalationRefused,
 )
 
 class EscalationError(Exception):
     """Programming error: raise_() or decide() received a value outside the shared contract."""
 ```
 
-`EscalationCause` is the whole RQA-FR-026 vocabulary. There is no `other` or free-text cause.
+`EscalationCause` is the whole RQA-FR-026 cause vocabulary. `EscalationSubject` adds the
+closed subject kind and non-empty identifier that name what within that cause is unresolved.
 
 `Job` is P-01's type, consumed here read-only. `raise_()` reads exactly three fields:
 
@@ -62,7 +65,8 @@ job.snapshot_hash: str      # already pinned by the time raise_() is ever called
 ### E-11 `raise_`
 
 ```python
-def raise_(*, job: Job, cause: EscalationCause, question: str, context: Mapping, record: RecordWriter,
+def raise_(*, job: Job, cause: EscalationCause, subject: EscalationSubject, question: str,
+           context: Mapping, record: RecordWriter,
            store: EscalationStore) -> Escalation: ...
 ```
 
@@ -71,17 +75,19 @@ def raise_(*, job: Job, cause: EscalationCause, question: str, context: Mapping,
 1. `cause not in EscalationCause` → raise `EscalationError`. Routine conditions never reach this
    module; this is the precondition P-02 enforces by construction (it only ever calls `raise_` from
    step 3a or step 9b/10a with one of the five) and the assertion P-11 makes anyway.
-2. `question.strip() == ""` → raise `EscalationError`. RQA-FR-026 requires a *specific* question, not a
-   generic "needs attention"; an empty string can never be specific.
-3. `raised_at = utcnow()` captures the time this escalation is raised.
-4. `record.append(job.id, kind="escalation", payload={"cause": cause.value, "question": question,
+2. `subject` is not an `EscalationSubject`, its kind is outside the closed set, or its identifier is
+   blank → raise `EscalationError`. The free-text question cannot be the whole request.
+3. `question.strip() == ""` → raise `EscalationError`.
+4. `raised_at = utcnow()` captures the time this escalation is raised.
+5. `record.append(job.id, kind="escalation", payload={"cause": cause.value, "subject":
+   {"kind": subject.kind.value, "identifier": subject.identifier}, "question": question,
    "context": dict(context), "head_sha": job.head_sha, "snapshot_hash": job.snapshot_hash})`. If this
    raises `AppendFailed`, it propagates: the caller's transition fails with it (E-13), and no pending
    index row is written — there is never an index row without a record entry behind it.
-5. `store.insert(job_id=job.id, entry_seq=entry.seq, cause=cause, question=question, context=context,
+6. `store.insert(job_id=job.id, entry_seq=entry.seq, cause=cause, subject=subject, question=question, context=context,
    head_sha=job.head_sha, snapshot_hash=job.snapshot_hash, raised_at=raised_at)` writes the open pending
    row and returns its id.
-6. Return `Escalation(id, job.id, cause, question, context, job.head_sha, job.snapshot_hash,
+7. Return `Escalation(id, job.id, cause, subject, question, context, job.head_sha, job.snapshot_hash,
    entry.seq, raised_at)`.
 
 **No transport.** Nothing above sends mail, writes a file outside the store, executes a command, or
@@ -202,6 +208,8 @@ CREATE TABLE human_requests (
   job_id              TEXT NOT NULL,
   entry_seq           INTEGER NOT NULL,      -- seq of the `escalation` record entry that raised this
   cause               TEXT NOT NULL,         -- one of the five EscalationCause values
+  subject_kind        TEXT NOT NULL,         -- one of the closed EscalationSubjectKind values
+  subject_id          TEXT NOT NULL,         -- non-empty subject identifier
   question            TEXT NOT NULL,
   context             TEXT NOT NULL,         -- JSON object
   head_sha            TEXT NOT NULL,         -- job.head_sha at raise_() time
@@ -228,6 +236,7 @@ class EscalationRow:
     job_id: str
     entry_seq: int
     cause: EscalationCause
+    subject: EscalationSubject
     question: str
     context: Mapping[str, str]
     head_sha: str
@@ -239,7 +248,8 @@ class EscalationRow:
 
 class EscalationStore(Protocol):
     def insert(
-        self, *, job_id: str, entry_seq: int, cause: EscalationCause, question: str,
+        self, *, job_id: str, entry_seq: int, cause: EscalationCause,
+        subject: EscalationSubject, question: str,
         context: Mapping[str, str], head_sha: str, snapshot_hash: str, raised_at: datetime,
     ) -> int: ...                                              # returns the new row's id
     def get(self, escalation_id: int) -> EscalationRow | None: ...
@@ -287,10 +297,11 @@ and P-02's `LifecycleDeps`.
 
 | # | Given | Then |
 |---|---|---|
-| T1 | `raise_` is called once per `EscalationCause` with its complete E-11 keyword-only shape: `job`, `cause`, `question`, `context`, `record`, `store` | five `escalation` entries, each naming its own cause; `pending(store=store)` lists five complete open `Escalation` values |
+| T1 | `raise_` is called once per `EscalationCause` with its complete E-11 keyword-only shape: `job`, `cause`, `subject`, `question`, `context`, `record`, `store` | five `escalation` entries, each naming its own cause and structured subject; `pending(store=store)` lists five complete open `Escalation` values |
 | T2 | `raise_` called with a cause outside the five (a raw string coerced past the enum) | `EscalationError`; no `escalation` entry, no index row |
 | T3 | `raise_` called with `question=""` (or all-whitespace) | `EscalationError`; no entry, no row |
-| T4 | `raise_(job=..., cause=..., question=..., context=..., record=..., store=...)`; `record.append` raises `AppendFailed` | exception propagates; no index row written |
+| T3a | `raise_` called without a valid structured subject, or with a blank subject identifier | `EscalationError`; no entry, no row |
+| T4 | `raise_(job=..., cause=..., subject=..., question=..., context=..., record=..., store=...)`; `record.append` raises `AppendFailed` | exception propagates; no index row written |
 | T5 | `decide(actor="")` | `EscalationError`; no `decision` entry, `store.close` and `lifecycle.resume` never called |
 | T6 | `decide(basis="  ")` | `EscalationError`; same as T5 |
 | T7 | `decide(escalation_id, actor, basis, outcome="approved")` on an `evidence_gap` escalation | `EscalationError` [ADR-D assumed]; no entry |
@@ -312,8 +323,8 @@ and P-02's `LifecycleDeps`.
 Accountable: RQA-BR-011, RQA-BR-013, RQA-FR-013, RQA-FR-025, RQA-FR-026, RQA-NFR-033.
 
 - **RQA-FR-026** — *"Every escalation record names one of the five listed causes concretely, not as a
-  generic 'needs attention' notice."* Met by `raise_` step 1 (closed `EscalationCause`, no sixth value)
-  and step 2 (a blank question can never stand in for a specific one). T1, T2, T3.
+  generic 'needs attention' notice."* Met by the closed `EscalationCause` and required structured
+  `EscalationSubject`; free prose is supplemental. T1, T2, T3, T3a.
 - **RQA-FR-025** and **RQA-BR-013** — *"No condition genuinely requiring no human judgement ever raises
   a notification demanding a human's immediate attention"* / *"...no notification...for a condition
   that did not need one."* Met structurally: §1 and §7 — there is no notification code path in this

@@ -18,6 +18,8 @@ from rqa.contracts import (
     CarryOver,
     Decision,
     EscalationCause,
+    EscalationSubject,
+    EscalationSubjectKind,
     EvidenceState,
     Facts,
     Finding,
@@ -332,34 +334,40 @@ def judge(
     required = snapshot.policy.assurance[plan.risk_class]
     assurance = evidence_mod.compute_assurance(states=obligations, required=required)
 
-    causes: list[tuple[EscalationCause, str]] = []
+    causes: list[tuple[EscalationCause, EscalationSubject, str]] = []
     seen_causes: set[EscalationCause] = set()
 
-    def add_cause(cause: EscalationCause, detail: str) -> None:
+    def add_cause(
+        cause: EscalationCause, subject: EscalationSubject, detail: str
+    ) -> None:
         if cause not in seen_causes:
             seen_causes.add(cause)
-            causes.append((cause, detail))
+            causes.append((cause, subject, detail))
 
     for obligation_id in universe_order:
         state = obligations[obligation_id]
         if state is EvidenceState.CONTRADICTORY:
             add_cause(
                 EscalationCause.CONFLICTING_JUDGEMENT,
+                EscalationSubject(EscalationSubjectKind.OBLIGATION, obligation_id),
                 f"obligation {obligation_id} reported contradictory evidence",
             )
         elif state in (EvidenceState.UNAVAILABLE, EvidenceState.INCOMPLETE):
             add_cause(
                 EscalationCause.REQUIRED_INFORMATION,
+                EscalationSubject(EscalationSubjectKind.OBLIGATION, obligation_id),
                 f"obligation {obligation_id} evidence is {state.value}",
             )
         elif state is EvidenceState.FAILED:
             add_cause(
                 EscalationCause.UNRESOLVED_DECISION,
+                EscalationSubject(EscalationSubjectKind.OBLIGATION, obligation_id),
                 f"obligation {obligation_id} evidence failed",
             )
         elif state in (EvidenceState.UNKNOWN, EvidenceState.NOT_VERIFIED):
             add_cause(
                 EscalationCause.EVIDENCE_GAP,
+                EscalationSubject(EscalationSubjectKind.OBLIGATION, obligation_id),
                 f"obligation {obligation_id} evidence is {state.value}",
             )
 
@@ -367,17 +375,23 @@ def judge(
         if finding.behaviour_changing is not False:
             add_cause(
                 EscalationCause.UNRESOLVED_DECISION,
+                EscalationSubject(EscalationSubjectKind.FINDING, finding.id),
                 f"finding {finding.id} is behaviour-changing",
             )
 
     if assurance.achieved < assurance.required:
         add_cause(
             EscalationCause.EVIDENCE_GAP,
+            EscalationSubject(EscalationSubjectKind.ASSURANCE, plan.risk_class),
             f"assurance {assurance.achieved}/{assurance.required} below required",
         )
 
     if panel.bound_reached:
-        add_cause(EscalationCause.EVIDENCE_GAP, "panel reservation bound was reached")
+        add_cause(
+            EscalationCause.EVIDENCE_GAP,
+            EscalationSubject(EscalationSubjectKind.ASSURANCE, "panel-budget"),
+            "panel reservation bound was reached",
+        )
 
     # ---- step 10: disposition ----------------------------------------------
     disposition: Literal["approve", "request_changes", "remediate", "escalate"]
@@ -433,7 +447,12 @@ def judge(
         "assurance": {"required": assurance.required, "achieved": assurance.achieved},
         "remediation_candidates": list(judgement.remediation_candidates),
         "escalation_causes": [
-            {"cause": cause.value, "detail": detail} for cause, detail in judgement.escalation_causes
+            {
+                "cause": cause.value,
+                "subject": {"kind": subject.kind.value, "identifier": subject.identifier},
+                "detail": detail,
+            }
+            for cause, subject, detail in judgement.escalation_causes
         ],
         "disposition": judgement.disposition,
         "rendered_body": rendered_body,

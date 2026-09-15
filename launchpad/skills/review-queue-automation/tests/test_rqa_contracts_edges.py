@@ -178,6 +178,7 @@ EDGE_FUNCTIONS: dict[str, tuple[tuple[tuple[str, str], ...], str]] = {
         (
             ("job", "Job"),
             ("cause", "EscalationCause"),
+            ("subject", "EscalationSubject"),
             ("question", "str"),
             ("context", "Mapping"),
             ("record", "RecordWriter"),

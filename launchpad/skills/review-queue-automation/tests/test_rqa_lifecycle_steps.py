@@ -72,6 +72,8 @@ from rqa.contracts import (  # noqa: E402
     Category,
     DenyReason,
     EscalationCause,
+    EscalationSubject,
+    EscalationSubjectKind,
     EvidenceState,
     GithubUnavailable,
     JobStatus,
@@ -495,8 +497,16 @@ def test_an_escalate_judgement_raises_every_named_cause() -> None:
     judgement = make_judgement(
         disposition="escalate",
         escalation_causes=(
-            (EscalationCause.EVIDENCE_GAP, "obligation ob-1 evidence is unknown"),
-            (EscalationCause.CONFLICTING_JUDGEMENT, "reviewers disagree on ob-1"),
+            (
+                EscalationCause.EVIDENCE_GAP,
+                EscalationSubject(EscalationSubjectKind.OBLIGATION, "ob-1"),
+                "obligation ob-1 evidence is unknown",
+            ),
+            (
+                EscalationCause.CONFLICTING_JUDGEMENT,
+                EscalationSubject(EscalationSubjectKind.OBLIGATION, "ob-1"),
+                "reviewers disagree on ob-1",
+            ),
         ),
         obligations={"ob-1": EvidenceState.UNKNOWN},
     )

@@ -50,6 +50,8 @@ from rqa.contracts import (  # noqa: E402
     CarryOver,
     Category,
     EscalationCause,
+    EscalationSubject,
+    EscalationSubjectKind,
     EvidenceState,
     GithubUnavailable,
     Grant,
@@ -120,7 +122,11 @@ def _judgements():
         )),
         ("judge_escalate", lambda: make_judgement(
             disposition="escalate",
-            escalation_causes=((EscalationCause.EVIDENCE_GAP, "ob-1 evidence is unknown"),),
+            escalation_causes=((
+                EscalationCause.EVIDENCE_GAP,
+                EscalationSubject(EscalationSubjectKind.OBLIGATION, "ob-1"),
+                "ob-1 evidence is unknown",
+            ),),
             obligations={"ob-1": EvidenceState.UNKNOWN},
         )),
     )

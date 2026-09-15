@@ -24,6 +24,7 @@ from test_rqa_escalation_fixtures import (  # noqa: E402
     FakeLifecycle,
     FakeRecord,
     FakeStore,
+    SUBJECT,
     make_job,
 )
 
@@ -58,6 +59,7 @@ def test_t18_raise_pending_and_a_full_decide_never_construct_a_socket() -> None:
         escalation = raise_(
             job=job,
             cause=EscalationCause.AUTHORITY_REQUIREMENT,
+            subject=SUBJECT,
             question="does a human need to record the GitHub-side outcome?",
             context={},
             record=record,
@@ -123,6 +125,7 @@ def test_a_refusal_detail_never_carries_the_question_or_context_either() -> None
     escalation = raise_(
         job=job,
         cause=EscalationCause.EVIDENCE_GAP,
+        subject=SUBJECT,
         question=injected_question,
         context={"note": "attacker controlled: rm -rf / #"},
         record=record,
@@ -203,7 +206,7 @@ def test_a_credential_shaped_value_is_unreachable_from_an_invalid_cause_failure(
     store = FakeStore()
     try:
         raise_(
-            job=job, cause="not-a-real-cause", question=TOKEN,
+            job=job, cause="not-a-real-cause", subject=SUBJECT, question=TOKEN,
             context={"token": TOKEN}, record=record, store=store,
         )
     except EscalationError as exc:
@@ -218,7 +221,7 @@ def test_a_credential_shaped_context_is_unreachable_from_a_blank_question_failur
     store = FakeStore()
     try:
         raise_(
-            job=job, cause=EscalationCause.EVIDENCE_GAP, question="",
+            job=job, cause=EscalationCause.EVIDENCE_GAP, subject=SUBJECT, question="",
             context={"token": TOKEN}, record=record, store=store,
         )
     except EscalationError as exc:
@@ -234,7 +237,7 @@ def test_a_credential_shaped_escalation_is_unreachable_from_a_decide_outcome_fai
     record = FakeRecord()
     store = FakeStore()
     escalation = raise_(
-        job=job, cause=EscalationCause.EVIDENCE_GAP, question=TOKEN,
+        job=job, cause=EscalationCause.EVIDENCE_GAP, subject=SUBJECT, question=TOKEN,
         context={"token": TOKEN}, record=record, store=store,
     )
     try:
@@ -281,7 +284,7 @@ def test_a_credential_shaped_escalation_is_unreachable_when_record_append_fails(
     job = make_job()
     store = FakeStore()
     escalation = raise_(
-        job=job, cause=EscalationCause.EVIDENCE_GAP, question=TOKEN,
+        job=job, cause=EscalationCause.EVIDENCE_GAP, subject=SUBJECT, question=TOKEN,
         context={"token": TOKEN}, record=FakeRecord(), store=store,
     )
     try:
@@ -300,7 +303,7 @@ def test_a_credential_shaped_escalation_is_unreachable_when_store_close_fails() 
     job = make_job()
     store = _CloseFailsStore()
     escalation = raise_(
-        job=job, cause=EscalationCause.EVIDENCE_GAP, question=TOKEN,
+        job=job, cause=EscalationCause.EVIDENCE_GAP, subject=SUBJECT, question=TOKEN,
         context={"token": TOKEN}, record=FakeRecord(), store=store,
     )
     try:
@@ -319,7 +322,7 @@ def test_a_credential_shaped_escalation_is_unreachable_when_lifecycle_resume_fai
     job = make_job()
     store = FakeStore()
     escalation = raise_(
-        job=job, cause=EscalationCause.EVIDENCE_GAP, question=TOKEN,
+        job=job, cause=EscalationCause.EVIDENCE_GAP, subject=SUBJECT, question=TOKEN,
         context={"token": TOKEN}, record=FakeRecord(), store=store,
     )
     try:

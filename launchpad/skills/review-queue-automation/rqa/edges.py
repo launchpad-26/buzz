@@ -41,6 +41,7 @@ if TYPE_CHECKING:  # annotation-only; resolved by type checkers, never at import
         Deny,
         Escalation,
         EscalationCause,
+        EscalationSubject,
         ExplanationUnavailable,
         Facts,
         GithubUnavailable,
@@ -200,7 +201,7 @@ def remediate(*, job: Job, finding: Finding, grant: Grant, facts: Facts, snapsho
 
 
 # E-11  P-11 provides, P-02 consumes (reverse edge: P-11 calls P-02.resume)
-def raise_(*, job: Job, cause: EscalationCause, question: str, context: Mapping, record: RecordWriter,
+def raise_(*, job: Job, cause: EscalationCause, subject: EscalationSubject, question: str, context: Mapping, record: RecordWriter,
            store: EscalationStore) -> Escalation: ...
 def pending(*, store: EscalationStore) -> tuple[Escalation, ...]: ...
 def resume(*, job_id: str, decision: Decision, deps: LifecycleDeps) -> JobStatus: ...     # P-02 provides

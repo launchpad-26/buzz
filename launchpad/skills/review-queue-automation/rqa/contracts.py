@@ -419,6 +419,22 @@ class EscalationCause(str, Enum):
     AUTHORITY_REQUIREMENT = "authority_requirement"
 
 
+class EscalationSubjectKind(str, Enum):
+    OBLIGATION = "obligation"
+    FINDING = "finding"
+    AUTHORITY = "authority"
+    POLICY = "policy"
+    ASSURANCE = "assurance"
+    REMEDIATION = "remediation"
+    REVISION = "revision"
+
+
+@dataclass(frozen=True)
+class EscalationSubject:
+    kind: EscalationSubjectKind
+    identifier: str
+
+
 @dataclass(frozen=True)
 class Decision:
     actor: str
@@ -432,6 +448,7 @@ class Escalation:
     id: int
     job_id: str
     cause: EscalationCause
+    subject: EscalationSubject
     question: str
     context: Mapping[str, str]
     head_sha: str
@@ -449,7 +466,7 @@ class Judgement:
     attribution: Mapping[str, Literal["pr", "inherited"]]
     assurance: Assurance
     remediation_candidates: tuple[str, ...]
-    escalation_causes: tuple[tuple[EscalationCause, str], ...]
+    escalation_causes: tuple[tuple[EscalationCause, EscalationSubject, str], ...]
     disposition: Literal["approve", "request_changes", "remediate", "escalate"]
     reused_from: str | None
 
@@ -798,6 +815,8 @@ __all__ = [
     # §6. Judgement, escalation, reuse and remediation types
     "Assurance",
     "EscalationCause",
+    "EscalationSubjectKind",
+    "EscalationSubject",
     "Decision",
     "Escalation",
     "Judgement",

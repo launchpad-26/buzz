@@ -22,6 +22,7 @@ from test_rqa_escalation_fixtures import (  # noqa: E402
     FakeLifecycle,
     FakeRecord,
     FakeStore,
+    SUBJECT,
     make_job,
 )
 
@@ -52,6 +53,7 @@ def _raised(*, cause=EscalationCause.EVIDENCE_GAP, context=None, job=None):
     escalation = raise_(
         job=job,
         cause=cause,
+        subject=SUBJECT,
         question="a specific question",
         context=context if context is not None else {},
         record=record,

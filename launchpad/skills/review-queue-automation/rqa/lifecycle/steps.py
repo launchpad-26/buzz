@@ -53,6 +53,8 @@ from rqa.contracts import (
     Deny,
     Decision,
     EscalationCause,
+    EscalationSubject,
+    EscalationSubjectKind,
     EvidenceState,
     Facts,
     Finding,
@@ -177,6 +179,7 @@ def step3(job: Job, ctx: Cascade) -> tuple[Job, bool]:
         _escalate_authority_requirement(
             job,
             ctx,
+            subject=EscalationSubject(EscalationSubjectKind.POLICY, job.repo),
             detail="policy validation failed",
         )
         return (
@@ -209,6 +212,7 @@ def step3(job: Job, ctx: Cascade) -> tuple[Job, bool]:
         _escalate_authority_requirement(
             job if job.snapshot_hash is not None else replace(job, snapshot_hash=snapshot.hash),
             ctx,
+            subject=EscalationSubject(EscalationSubjectKind.AUTHORITY, Activity.REVIEW.value),
             detail=f"review denied ({answer.reason.value})",
         )
         return (
@@ -270,7 +274,12 @@ def step5(job: Job, ctx: Cascade) -> tuple[Job, bool]:
 
     snapshot = _ensure_snapshot(job, ctx)
     if isinstance(snapshot, ValidationFailure):
-        _escalate_authority_requirement(job, ctx, detail="policy validation failed")
+        _escalate_authority_requirement(
+            job,
+            ctx,
+            subject=EscalationSubject(EscalationSubjectKind.POLICY, job.repo),
+            detail="policy validation failed",
+        )
         return (
             transition(
                 job,
@@ -474,9 +483,14 @@ def step9(job: Job, ctx: Cascade) -> tuple[Job, bool]:
 
     if judgement.disposition == "escalate":
         # "escalate raises every named cause then ESCALATED" (§3.2).
-        for cause, detail in judgement.escalation_causes:
-            _raise_escalation(job, ctx, cause=cause, question=detail, context={"cause": cause.value})
-        causes = ", ".join(cause.value for cause, _ in judgement.escalation_causes) or "unnamed"
+        for cause, subject, detail in judgement.escalation_causes:
+            _raise_escalation(
+                job, ctx, cause=cause, subject=subject, question=detail,
+                context={"cause": cause.value},
+            )
+        causes = ", ".join(
+            cause.value for cause, _, _ in judgement.escalation_causes
+        ) or "unnamed"
         return (
             transition(
                 job,
@@ -566,6 +580,7 @@ def submit(job: Job, ctx: Cascade) -> tuple[Job, bool]:
             job,
             ctx,
             cause=EscalationCause.EVIDENCE_GAP,
+            subject=EscalationSubject(EscalationSubjectKind.REVISION, job.head_sha),
             question="review submission found the head stale; the evidence no longer matches",
             context={"reason": result.reason},
         )
@@ -676,7 +691,10 @@ def _remediate(job: Job, ctx: Cascade, judgement: Judgement) -> tuple[Job, bool]
     if isinstance(answer, Deny):
         # §3.2: "A remediation Deny similarly escalates with AUTHORITY_REQUIREMENT."
         _escalate_authority_requirement(
-            job, ctx, detail=f"remediation denied ({answer.reason.value})"
+            job,
+            ctx,
+            subject=EscalationSubject(EscalationSubjectKind.AUTHORITY, Activity.REMEDIATE.value),
+            detail=f"remediation denied ({answer.reason.value})",
         )
         return (
             transition(
@@ -711,6 +729,7 @@ def _remediate(job: Job, ctx: Cascade, judgement: Judgement) -> tuple[Job, bool]
             job,
             ctx,
             cause=EscalationCause.EVIDENCE_GAP,
+            subject=EscalationSubject(EscalationSubjectKind.REMEDIATION, finding.id),
             question=f"remediation was refused ({push.reason.value}); a human must judge",
             context={"reason": push.reason.value},
         )
@@ -747,7 +766,10 @@ def _authority_requirement_escalation(job: Job, ctx: Cascade, *, denied: Activit
                 raise LifecycleError(f"E-12 comment returned {type(posted).__name__}")
             # A GithubUnavailable comment is a lost courtesy, never a lost escalation.
     _escalate_authority_requirement(
-        job, ctx, detail=f"verdict activity {denied.value} denied"
+        job,
+        ctx,
+        subject=EscalationSubject(EscalationSubjectKind.AUTHORITY, denied.value),
+        detail=f"verdict activity {denied.value} denied",
     )
     return transition(
         job,
@@ -791,13 +813,20 @@ def _grant(job: Job, ctx: Cascade, *, activity: Activity) -> Grant | Deny:
 
 
 def _raise_escalation(
-    job: Job, ctx: Cascade, *, cause: EscalationCause, question: str, context: Mapping
+    job: Job,
+    ctx: Cascade,
+    *,
+    cause: EscalationCause,
+    subject: EscalationSubject,
+    question: str,
+    context: Mapping,
 ) -> None:
     """One E-11 raise. The store rides the injected client the way `deps.supply`
     carries its prober, breakers and spend (§3.2's closures)."""
     ctx.deps.escalation.raise_(
         job=job,
         cause=cause,
+        subject=subject,
         question=question,
         context=context,
         record=ctx.deps.record,
@@ -805,11 +834,14 @@ def _raise_escalation(
     )
 
 
-def _escalate_authority_requirement(job: Job, ctx: Cascade, *, detail: str) -> None:
+def _escalate_authority_requirement(
+    job: Job, ctx: Cascade, *, subject: EscalationSubject, detail: str
+) -> None:
     _raise_escalation(
         job,
         ctx,
         cause=EscalationCause.AUTHORITY_REQUIREMENT,
+        subject=subject,
         question=f"RQA lacks authority on {job.repo}: {detail}",
         context={"repo": job.repo, "detail": detail},
     )
@@ -869,7 +901,12 @@ def _require_context(job: Job, ctx: Cascade) -> tuple[Job, bool] | None:
             return _stop(job, ctx, reason=FACTS_UNAVAILABLE), False
     snapshot = _ensure_snapshot(job, ctx)
     if isinstance(snapshot, ValidationFailure):
-        _escalate_authority_requirement(job, ctx, detail="policy validation failed")
+        _escalate_authority_requirement(
+            job,
+            ctx,
+            subject=EscalationSubject(EscalationSubjectKind.POLICY, job.repo),
+            detail="policy validation failed",
+        )
         return (
             transition(
                 job,
@@ -992,7 +1029,14 @@ def _recorded_judgement(job: Job, ctx: Cascade) -> Judgement:
         ),
         remediation_candidates=tuple(payload["remediation_candidates"]),
         escalation_causes=tuple(
-            (EscalationCause(item["cause"]), item["detail"])
+            (
+                EscalationCause(item["cause"]),
+                EscalationSubject(
+                    EscalationSubjectKind(item["subject"]["kind"]),
+                    item["subject"]["identifier"],
+                ),
+                item["detail"],
+            )
             for item in payload["escalation_causes"]
         ),
         disposition=payload["disposition"],
