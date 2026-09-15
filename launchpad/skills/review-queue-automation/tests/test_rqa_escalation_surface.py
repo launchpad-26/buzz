@@ -10,7 +10,7 @@ reviewer would otherwise have to re-derive by reading the whole package:
 * the package exports exactly §1's list, so a later change cannot widen the surface;
 * `human_requests` is written by this package alone, so §5's "written only by P-11"
   claim is tree-wide, not package-local;
-* the boundary types (`EscalationCause`, `Decision`, `Escalation`,
+* the boundary types (`EscalationCause`, `EscalationSubjectKind`, `EscalationSubject`, `Decision`, `Escalation`,
   `EscalationRefusalReason`, `EscalationRefused`) are imported, never redeclared —
   `test_rqa_contracts_guard.py` checks the CONTRACTS.md-owned half of this tree-wide;
   this file checks the identity match from this package's own side;
@@ -48,6 +48,8 @@ EXPORTS = [
     "pending",
     "decide",
     "EscalationCause",
+    "EscalationSubjectKind",
+    "EscalationSubject",
     "Escalation",
     "Decision",
     "EscalationRefused",
@@ -66,6 +68,8 @@ ENTRY_KINDS_WRITTEN = frozenset({"escalation", "decision"})
 #: The boundary types §2 says P-11 "imports and uses unchanged".
 BOUNDARY_TYPES = (
     "EscalationCause",
+    "EscalationSubjectKind",
+    "EscalationSubject",
     "Decision",
     "Escalation",
     "EscalationRefusalReason",

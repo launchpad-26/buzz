@@ -242,10 +242,15 @@ DOCUMENTED_DATACLASSES: dict[str, tuple[tuple[str, str], ...]] = {
         ("substantiates", "str | None"),
         ("outcome", 'Literal["approved", "changes_requested"] | None'),
     ),
+    "EscalationSubject": (
+        ("kind", "EscalationSubjectKind"),
+        ("identifier", "str"),
+    ),
     "Escalation": (
         ("id", "int"),
         ("job_id", "str"),
         ("cause", "EscalationCause"),
+        ("subject", "EscalationSubject"),
         ("question", "str"),
         ("context", "Mapping[str, str]"),
         ("head_sha", "str"),
@@ -261,7 +266,7 @@ DOCUMENTED_DATACLASSES: dict[str, tuple[tuple[str, str], ...]] = {
         ("attribution", 'Mapping[str, Literal["pr", "inherited"]]'),
         ("assurance", "Assurance"),
         ("remediation_candidates", "tuple[str, ...]"),
-        ("escalation_causes", "tuple[tuple[EscalationCause, str], ...]"),
+        ("escalation_causes", "tuple[tuple[EscalationCause, EscalationSubject, str], ...]"),
         (
             "disposition",
             'Literal["approve", "request_changes", "remediate", "escalate"]',
@@ -397,6 +402,15 @@ DOCUMENTED_ENUMS: dict[str, tuple[tuple[str, str], ...]] = {
         ("EVIDENCE_GAP", "evidence_gap"),
         ("REQUIRED_INFORMATION", "required_information"),
         ("AUTHORITY_REQUIREMENT", "authority_requirement"),
+    ),
+    "EscalationSubjectKind": (
+        ("OBLIGATION", "obligation"),
+        ("FINDING", "finding"),
+        ("AUTHORITY", "authority"),
+        ("POLICY", "policy"),
+        ("ASSURANCE", "assurance"),
+        ("REMEDIATION", "remediation"),
+        ("REVISION", "revision"),
     ),
     "RemediationRefusalReason": (
         ("REMEDY_MISSING", "remedy_missing"),

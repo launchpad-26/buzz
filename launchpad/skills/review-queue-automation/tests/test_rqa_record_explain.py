@@ -232,6 +232,26 @@ def test_t6_explain_by_repo_and_number_resolves_the_same_job() -> None:
     assert result.disposition == "review-complete"
 
 
+def test_explain_includes_each_readable_structured_escalation_subject() -> None:
+    connection, writer = unkeyed_writer()
+    full_job(connection, writer)
+    writer.append(
+        "job-1",
+        "escalation",
+        {
+            "cause": "evidence_gap",
+            "subject": {"kind": "obligation", "identifier": "ob1"},
+            "question": "needs attention",
+            "context": {},
+            "head_sha": "sha-abc",
+            "snapshot_hash": "snap-1",
+        },
+    )
+    result = explain_job(connection, "job-1")
+    assert isinstance(result, Explanation)
+    assert result.escalation_subjects == ({"kind": "obligation", "identifier": "ob1"},)
+
+
 def test_t7_a_socket_that_raises_does_not_affect_explain() -> None:
     """T7: socket calls patched to raise during T6's `explain` are unaffected — no
     network is ever reached (§1, §3.3's guarantees)."""

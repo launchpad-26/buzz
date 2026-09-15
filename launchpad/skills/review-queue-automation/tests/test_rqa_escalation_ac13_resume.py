@@ -59,7 +59,13 @@ from lifecycle_cascade_bench import (  # noqa: E402
 )
 
 import rqa.escalation as escalation  # noqa: E402
-from rqa.contracts import Decision, EscalationCause, JobStatus  # noqa: E402
+from rqa.contracts import (  # noqa: E402
+    Decision,
+    EscalationCause,
+    EscalationSubject,
+    EscalationSubjectKind,
+    JobStatus,
+)
 from rqa.escalation.store import SqliteEscalationStore  # noqa: E402
 from rqa.lifecycle import resume  # noqa: E402
 
@@ -75,9 +81,10 @@ class RealEscalationClient:
     def __init__(self, store: SqliteEscalationStore) -> None:
         self.store = store
 
-    def raise_(self, *, job, cause, question, context, record, store):
+    def raise_(self, *, job, cause, subject, question, context, record, store):
         return escalation.raise_(
-            job=job, cause=cause, question=question, context=context, record=record, store=store
+            job=job, cause=cause, subject=subject, question=question, context=context,
+            record=record, store=store
         )
 
     def pending(self, *, store):
@@ -121,6 +128,7 @@ def _escalated_job_with_a_real_open_row():
     raised = escalation.raise_(
         job=job,
         cause=EscalationCause.AUTHORITY_REQUIREMENT,
+        subject=EscalationSubject(EscalationSubjectKind.AUTHORITY, "merge"),
         question="RQA has no MERGE authority for this repository; may a human record the "
         "GitHub-side outcome directly?",
         context={},

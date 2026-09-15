@@ -302,6 +302,15 @@ class EscalationCause(str, Enum):
     EVIDENCE_GAP = "evidence_gap"; REQUIRED_INFORMATION = "required_information"
     AUTHORITY_REQUIREMENT = "authority_requirement"
 
+class EscalationSubjectKind(str, Enum):
+    OBLIGATION = "obligation"; FINDING = "finding"; AUTHORITY = "authority"
+    POLICY = "policy"; ASSURANCE = "assurance"; REMEDIATION = "remediation"
+    REVISION = "revision"
+
+@dataclass(frozen=True)
+class EscalationSubject:
+    kind: EscalationSubjectKind; identifier: str
+
 @dataclass(frozen=True)
 class Decision:
     actor: str; basis: str
@@ -310,7 +319,8 @@ class Decision:
 
 @dataclass(frozen=True)
 class Escalation:
-    id: int; job_id: str; cause: EscalationCause; question: str; context: Mapping[str, str]
+    id: int; job_id: str; cause: EscalationCause; subject: EscalationSubject
+    question: str; context: Mapping[str, str]
     head_sha: str; snapshot_hash: str | None; entry_seq: int; raised_at: datetime
 
 @dataclass(frozen=True)
@@ -322,7 +332,7 @@ class Judgement:
     attribution: Mapping[str, Literal["pr", "inherited"]]
     assurance: Assurance
     remediation_candidates: tuple[str, ...]
-    escalation_causes: tuple[tuple[EscalationCause, str], ...]
+    escalation_causes: tuple[tuple[EscalationCause, EscalationSubject, str], ...]
     disposition: Literal["approve", "request_changes", "remediate", "escalate"]
     reused_from: tuple[str, int] | None  # exact predecessor (job id, judgement seq)
 
@@ -484,7 +494,8 @@ def remediate(*, job: Job, finding: Finding, grant: Grant, facts: Facts, snapsho
               state_dir: Path, runner: ProcessRunner, record: RecordWriter) -> RemediationPushed | RemediationRefused: ...
 
 # E-11  P-11 provides, P-02 consumes (reverse edge: P-11 calls P-02.resume)
-def raise_(*, job: Job, cause: EscalationCause, question: str, context: Mapping, record: RecordWriter,
+def raise_(*, job: Job, cause: EscalationCause, subject: EscalationSubject, question: str,
+           context: Mapping, record: RecordWriter,
            store: EscalationStore) -> Escalation: ...
 def pending(*, store: EscalationStore) -> tuple[Escalation, ...]: ...
 def resume(*, job_id: str, decision: Decision, deps: LifecycleDeps) -> JobStatus: ...     # P-02 provides

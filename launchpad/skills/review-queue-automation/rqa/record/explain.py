@@ -114,6 +114,7 @@ class Explanation:
     findings: tuple[Mapping[str, Any], ...]
     decision_basis: str | None
     disposition: str
+    escalation_subjects: tuple[Mapping[str, str], ...]
     # Supporting trust/rendering fields:
     snapshot_hash: str | None
     verified: bool
@@ -179,6 +180,22 @@ def _reuse_reference(value: object) -> tuple[str, int]:
     if type(job_id) is not str or not job_id or type(seq) is not int or seq < 1:
         raise ReuseResolutionError(f"malformed reused_from: {value!r}")
     return job_id, seq
+
+
+def _escalation_subjects(rows: list[StoredEntry]) -> tuple[Mapping[str, str], ...]:
+    """Structured subjects from every readable escalation row, in record order."""
+    subjects: list[Mapping[str, str]] = []
+    for row in rows:
+        if row.kind != "escalation":
+            continue
+        payload = json.loads(row.payload)
+        if not isinstance(payload, dict) or not isinstance(payload.get("subject"), dict):
+            continue
+        subject = payload["subject"]
+        subjects.append(
+            {"kind": str(subject.get("kind", "")), "identifier": str(subject.get("identifier", ""))}
+        )
+    return tuple(subjects)
 
 
 def _harness_attestations(rows: list[StoredEntry]) -> list[tuple[str, str, str]]:
@@ -306,6 +323,7 @@ def explain_job(connection: sqlite3.Connection, job_id: str, *, keystore: KeySto
         }
         for finding in (judgement.get("findings", []) if judgement else [])
     )
+    escalation_subjects = _escalation_subjects(readable)
 
     local_attestations = _harness_attestations(readable)
     local_legacy_present = any(is_legacy(entry=row) for row in readable)
@@ -365,6 +383,7 @@ def explain_job(connection: sqlite3.Connection, job_id: str, *, keystore: KeySto
         findings=findings,
         decision_basis=decision_basis,
         disposition=disposition,
+        escalation_subjects=escalation_subjects,
         snapshot_hash=snapshot_hash,
         verified=verified,
         hmac_checked=hmac_checked,

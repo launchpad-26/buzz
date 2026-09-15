@@ -61,6 +61,8 @@ from rqa.contracts import (  # noqa: E402
     Activity,
     Decision,
     EscalationCause,
+    EscalationSubject,
+    EscalationSubjectKind,
     JobStatus,
 )
 from rqa.escalation.store import SqliteEscalationStore  # noqa: E402
@@ -86,9 +88,10 @@ class RealEscalationClient:
         self.store = store
         self.pending_calls = 0
 
-    def raise_(self, *, job, cause, question, context, record, store):
+    def raise_(self, *, job, cause, subject, question, context, record, store):
         return escalation.raise_(
-            job=job, cause=cause, question=question, context=context, record=record, store=store
+            job=job, cause=cause, subject=subject, question=question, context=context,
+            record=record, store=store
         )
 
     def pending(self, *, store):
@@ -140,6 +143,12 @@ def _escalated(cause: EscalationCause):
     raised = escalation.raise_(
         job=job,
         cause=cause,
+        subject=EscalationSubject(
+            EscalationSubjectKind.AUTHORITY
+            if cause is EscalationCause.AUTHORITY_REQUIREMENT
+            else EscalationSubjectKind.OBLIGATION,
+            "merge" if cause is EscalationCause.AUTHORITY_REQUIREMENT else "ob-1",
+        ),
         question="a specific question only a human can answer",
         # 12a: `decide()` reads `context['obligation']` into `Decision.substantiates`,
         # which is what lets the real judge settle the gap this escalation names.

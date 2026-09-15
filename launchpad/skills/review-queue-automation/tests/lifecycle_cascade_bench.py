@@ -42,6 +42,8 @@ from rqa.contracts import (  # noqa: E402
     DenyReason,
     Escalation,
     EscalationCause,
+    EscalationSubject,
+    EscalationSubjectKind,
     EvidenceState,
     External,
     Facts,
@@ -80,6 +82,7 @@ BASE = "b" * 40
 REPO = "owner/name"
 SNAP_HASH = "sha256:snapshot-1"
 NOW = datetime(2026, 9, 13, 12, 0, 0, tzinfo=timezone.utc)
+SUBJECT = EscalationSubject(EscalationSubjectKind.OBLIGATION, "ob-1")
 
 #: `code/P-01-intake.md` §5's tables, reproduced because P-02 owns no DDL. `leases`
 #: uses the landed `job_id` column (`rqa/intake/store.py`; P-02 §5's `job` snippet is a
@@ -472,11 +475,13 @@ def make_escalation(
     head_sha: str | None = None,
     snapshot_hash: str | None = None,
     escalation_id: int = 1,
+    subject: EscalationSubject = SUBJECT,
 ) -> Escalation:
     return Escalation(
         id=escalation_id,
         job_id=job.id,
         cause=cause,
+        subject=subject,
         question="a specific question",
         context={},
         head_sha=head_sha if head_sha is not None else job.head_sha,
@@ -525,6 +530,7 @@ def record_escalation(
     writer = SQLiteRecordWriter(connection, clock=lambda: raised_at, keystore=NoKeyStore())
     writer.append(job.id, "escalation", {
         "cause": cause.value,
+        "subject": {"kind": SUBJECT.kind.value, "identifier": SUBJECT.identifier},
         "question": "a specific question",
         "context": {},
         "head_sha": head_sha if head_sha is not None else job.head_sha,
@@ -791,10 +797,14 @@ class FakeEscalation:
         self.raised = []
         self._pending = pending
 
-    def raise_(self, *, job, cause, question, context, record, store):
+    def raise_(self, *, job, cause, subject, question, context, record, store):
         assert store is self.store, "E-11 must receive the client's own store"
-        self.raised.append({"job": job, "cause": cause, "question": question, "context": context})
-        return make_escalation(job=job, cause=cause, escalation_id=len(self.raised))
+        self.raised.append(
+            {"job": job, "cause": cause, "subject": subject, "question": question, "context": context}
+        )
+        return make_escalation(
+            job=job, cause=cause, subject=subject, escalation_id=len(self.raised)
+        )
 
     def pending(self, *, store):
         assert store is self.store

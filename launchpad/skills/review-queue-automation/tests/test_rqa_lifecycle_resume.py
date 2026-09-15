@@ -330,7 +330,11 @@ def test_t14_a_carry_only_resume_uses_the_judgement_cutoff() -> None:
         "contributing_attempts": [], "decision": None, "findings": [], "corroborated": [],
         "blocking": [], "attribution": {}, "assurance": {"required": 2, "achieved": 0},
         "remediation_candidates": [], "escalation_causes": [
-            {"cause": "evidence_gap", "detail": "obligation ob-1 evidence is unknown"},
+            {
+                "cause": "evidence_gap",
+                "subject": {"kind": "obligation", "identifier": "ob-1"},
+                "detail": "obligation ob-1 evidence is unknown",
+            },
         ], "disposition": "escalate", "rendered_body": "recorded rendering",
     })
     connection.commit()
