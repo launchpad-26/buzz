@@ -19,6 +19,7 @@ from __future__ import annotations
 import pathlib
 import sqlite3
 import sys
+import tempfile
 import traceback
 
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent.parent))
@@ -84,6 +85,7 @@ from rqa.lifecycle.admit import _durable  # noqa: E402
 from rqa.lifecycle.errors import LifecycleError, UnknownJobError  # noqa: E402
 from rqa.lifecycle.status import _reason  # noqa: E402
 from rqa.lifecycle.steps import NO_CONFORMING_TRANSITION  # noqa: E402
+from rqa.record.trace import JOB_EVENTS, REQUIRED_JOB_EVENTS, trace_lines  # noqa: E402
 from rqa.remediation import MECHANICAL_TOOL_SET  # noqa: E402
 
 
@@ -213,6 +215,29 @@ def test_t7_one_admission_drives_queued_to_approved_with_exactly_one_run() -> No
     state, body, grant = deps.github.submit_calls[0]
     assert state == "APPROVE" and grant.activity is Activity.APPROVE
     assert body == latest_payload(connection, "judgement")["rendered_body"]
+
+
+def test_u_dispatch_19_a_completed_review_emits_every_required_milestone() -> None:
+    """The registry is exercised by the real lifecycle, not only by trace unit tests."""
+    with tempfile.TemporaryDirectory() as state_dir:
+        connection, record, job = bench()
+        deps, _ = happy_deps(
+            connection,
+            record,
+            job,
+            state_dir=pathlib.Path(state_dir),
+        )
+        assert admit(job=job, deps=deps) is JobStatus.APPROVED
+
+        events = [
+            str(entry["event"])
+            for entry in trace_lines(state_dir=state_dir, job_id=job.id)
+        ]
+        assert REQUIRED_JOB_EVENTS <= set(events), sorted(REQUIRED_JOB_EVENTS - set(events))
+        assert set(events) <= set(JOB_EVENTS)
+        assert events[0] == "queueing"
+        assert "lease_acquired" in events
+        assert "mutation" in events
 
 
 def test_every_transition_payload_carries_exactly_the_eight_section_six_fields() -> None:

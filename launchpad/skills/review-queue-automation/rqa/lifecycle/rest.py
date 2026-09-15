@@ -42,6 +42,7 @@ from rqa.lifecycle.deps import LifecycleDeps
 from rqa.lifecycle.errors import LifecycleError
 from rqa.lifecycle.states import TRANSITIONS, as_status
 from rqa.lifecycle.transition import transition
+from rqa.record import append_trace
 
 __all__ = ["enter_rest"]
 
@@ -112,10 +113,23 @@ def enter_rest(job: Job, *, snapshot: Snapshot | None, deps: LifecycleDeps) -> J
         raise LifecycleError(
             f"authority answered a review grant request with {type(answer).__name__}"
         )
+    append_trace(
+        state_dir=deps.state_dir,
+        job_id=job.id,
+        event="mutation",
+        fields={"kind": "release_lease"},
+    )
     released = deps.release_lease(job=job, grant=answer, record=deps.record)
     if not isinstance(released, (Mutation, GithubUnavailable)):
         raise LifecycleError(
             f"release_lease returned {type(released).__name__}, which is not an E-01 result"
+        )
+    if isinstance(released, Mutation) and released.accepted:
+        append_trace(
+            state_dir=deps.state_dir,
+            job_id=job.id,
+            event="lease_released",
+            fields={"mutation_id": released.id},
         )
     # A Mutation released it; a GithubUnavailable leaves it for a later rest entry.
     # Either way the resting status is unchanged.

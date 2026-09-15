@@ -9,7 +9,8 @@ No other module in RQA imports from `rqa.record` except through this file (§1).
 public surface is §1's twenty-eight-name re-export list plus the two concrete
 collaborators a composition root must construct: `SQLiteRecordWriter` (the one
 implementation of the `RecordWriter` seam every other part is handed) and `OSKeyStore`
-(the one implementation of `KeyStore`). `SQLiteRecordReader` and `UnverifiableSegment`
+(the one implementation of `KeyStore`), plus `append_trace`, which lifecycle uses to
+emit P-12's non-authoritative orchestration milestones. `SQLiteRecordReader` and `UnverifiableSegment`
 stay module names (`rqa.record.reader`, `.verify`).
 
 **Why those two are surface.** Every part that appends takes its `RecordWriter` as a
@@ -48,6 +49,7 @@ from rqa.record.keychain import KeyStoreExplanationUnavailable, OSKeyStore
 from rqa.record.kinds import RecordProgrammingError, UnknownEntryKind
 from rqa.record.migrate import LegacySource, MigrationSummary, MigrationTableResult, migrate_legacy
 from rqa.record.reader import AmbiguousHead, NoRecord, ResolvedJob, resolve_job
+from rqa.record.trace import append_trace
 from rqa.record.verify import BreakKind, VerifyResult, verify
 from rqa.record.writer import SQLiteRecordWriter
 
@@ -82,4 +84,5 @@ __all__ = [
     "LegacySource",
     "SQLiteRecordWriter",
     "OSKeyStore",
+    "append_trace",
 ]
