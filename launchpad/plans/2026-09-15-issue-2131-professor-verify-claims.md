@@ -10,6 +10,23 @@ plan in launchpad/plans/.
 Planned on branch `feature/2131-professor-verify-claims`, worktree
 `__worktrees/feature-2131-verify-claims`, off `origin/launchpad` at `5089c83fb6`.
 
+DECIDED 2026-09-15, by Serina — the re-dispatch observable (was OPEN item 1)
+
+  Each pass stamps a fresh per-pass run identifier alongside its verdicts. A verdict
+  carrying a prior pass's identifier is a replay, not a re-run. Chosen over comparing the
+  two passes' raw stdout, which fails against the exact thing #2139 asks it to detect: a
+  deterministic verifier returning byte-identical output twice is the healthy case, so
+  matching bytes cannot tell a real re-run from a cache hit.
+
+  Named limitation, to be written into the skill rather than left to read as solved: a
+  fresh identifier proves a dispatch happened, not that it was independent of the first
+  pass's reasoning. An agent could re-dispatch carrying the first pass's context and still
+  stamp a new identifier. This is the same shape of honest limit the skill already records
+  for claim identification.
+
+  Lands in verify-claims/SKILL.md at step 2 of this plan, and in the design doc at
+  step 11.
+
 ALREADY TRUE  (verified against the worktree, not against notes)
 
   This section most changes the shape of this Feature. Three of the six child issues are
@@ -67,11 +84,15 @@ STEP 1  verify-claims/SKILL.md — the three missing contract pieces          [i
         non-matching outcome whose text is not SUPPORTED. Closes #2137 criteria 1, 3, 4.
 
 STEP 2  verify-claims/SKILL.md — the re-dispatch observable                   [needs 1]
-        State, in step 4, one specific checkable signal that the second pass genuinely
-        re-dispatched rather than replaying the first pass's verdicts. See OPEN — the
-        issue does not decide what this signal is.
-        done when: step 4 names a single observable, and states what an inspector would
-        look at to confirm it. Closes #2139's criterion 3.
+        State, in step 4, that each pass stamps a fresh per-pass run identifier alongside
+        its verdicts, and that a verdict carrying a prior pass's identifier is a replay
+        rather than a re-run. Name the limitation in the same breath: a fresh identifier
+        proves a dispatch happened, not that it was independent of the first pass's
+        reasoning. Per the DECIDED note above.
+        done when: step 4 names the per-pass run identifier as the observable, states
+        what an inspector looks at to tell a re-run from a replay, and names the
+        independence limitation rather than implying it is solved. Closes #2139's
+        criterion 3.
 
 STEP 3  First real dispatch, end to end                        [needs 1]  ← RUNS HERE
         Configure $PROFESSOR_VERIFIER_CMD to a real headless CLI. Take one real behaviour
@@ -188,13 +209,8 @@ BUDGET
   claim also costs a real model call, twice, under the run-twice rule.
 
 OPEN
-  1. What the re-dispatch observable actually is (step 2). #2139 requires a checkable
-     signal that the second pass re-dispatched, and notes that a cache is the obvious
-     optimisation this criterion exists to detect. Nothing decides what the signal is.
-     Two readings: a per-pass run identifier recorded alongside the verdict, or both
-     passes' raw stdout captured and compared. These are not equivalent — the first is
-     falsifiable by inspection, the second only detects a cache returning byte-identical
-     output. Not resolving this silently.
+  1. RESOLVED 2026-09-15 by Serina — see the DECIDED note above the steps. Kept numbered
+     here so a reader of this section alone does not think it was never asked.
   2. Whether localcmd.py's roster-names disposition changes (step 7). #2110 made it
      redact specifically because not-evaluated was fail-open for any consumer not
      following the skill. #2140 requires ATTRIBUTION candidates to be "not flagged at
