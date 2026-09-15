@@ -139,13 +139,18 @@ no path matcher. `FileNotFoundError` maps to `TOOL_UNAVAILABLE`; E-13 appends th
 
 **Closed formatter registry.**
 
-| id | canonical `check_id` | extensions | fix/check | equivalence oracle |
-|---|---|---|---|---|
-| `ruff-format` | `ruff-format-check` | `.py`, `.pyi` | `ruff format` / `ruff format --check` | `python_ast_v1` |
-| `prettier` | `prettier-check` | `.js`, `.jsx`, `.ts`, `.tsx` | `prettier --write` / `prettier --check` | `typescript_estree_v1` |
-| `gofmt` | `gofmt-check` | `.go` | `gofmt -w` / empty `gofmt -d` | `go_ast_v1` |
-| `rustfmt` | `rustfmt-check` | `.rs` | `rustfmt` / `rustfmt --check` | `rust_syn_v1` |
-| `dart-format` | `dart-format-check` | `.dart` | `dart format` / `dart format --output=none --set-exit-if-changed` | `dart_analyzer_v1` |
+| id | canonical `check_id` | extensions | fix/check | equivalence oracle | availability |
+|---|---|---|---|---|---|
+| `ruff-format` | `ruff-format-check` | `.py`, `.pyi` | `ruff format` / `ruff format --check` | `python_ast_v1` | available |
+| `prettier` | `prettier-check` | `.js`, `.jsx`, `.ts`, `.tsx` | `prettier --write` / `prettier --check` | `typescript_estree_v1` | registered, unavailable |
+| `gofmt` | `gofmt-check` | `.go` | `gofmt -w` / empty `gofmt -d` | `go_ast_v1` | registered, unavailable |
+| `rustfmt` | `rustfmt-check` | `.rs` | `rustfmt` / `rustfmt --check` | `rust_syn_v1` | registered, unavailable |
+| `dart-format` | `dart-format-check` | `.dart` | `dart format` / `dart format --output=none --set-exit-if-changed` | `dart_analyzer_v1` | registered, unavailable |
+
+Registration and runtime availability are separate. Policy validation and the authority gate may
+accept all five ids. For `prettier`, `gofmt`, `rustfmt`, and `dart-format`, the current in-process
+oracle is unavailable, so every `remediate()` call refuses at step 6 before the formatter, commit,
+or push. This fail-closed behavior is intentional until each parser-backed oracle is implemented.
 
 Each oracle rejects parse errors and hashes a normalized compiler/parser AST with source positions
 removed while retaining literal values, directives, ordered comments/doc attributes and macro token
@@ -196,7 +201,7 @@ Each is a unit test with fakes for `RecordWriter` and `ProcessRunner`; the runne
 | T12 | fork allowed | remote is exact `job.head_repo`; sole refspec is PR `head_ref` |
 | T13 | invalid or `rqa/` head ref | `PUSH_REJECTED` before push |
 | T14 | success | pushed result; one action; worktree absent; argv contains exact files and no `.`/force |
-| T15 | every registered tool over paired behavior-preserving formatting and adversarial semantic-change fixtures | oracle accepts only the former; registry contains no tool without a passing oracle |
+| T15 | every registered tool over paired behavior-preserving formatting and adversarial semantic-change fixtures | the available oracle accepts only the former; each registered-unavailable oracle returns no fingerprint and refuses before formatter, commit, or push |
 | T16 | terminal append fails | exception propagates after cleanup |
 
 ## 9. Requirements this part answers for
