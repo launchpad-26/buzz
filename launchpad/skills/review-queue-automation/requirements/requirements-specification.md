@@ -1241,8 +1241,6 @@ A malformed or unreadable policy shall never widen authority beyond what was alr
 
 ### RQA-NFR-024
 
-**Implementation interpretation (ADR-0062 amendment, 2026-09-15; #2250):** A GitHub-attested write capability may satisfy this requirement only when authenticated repository permissions and the same OAuth credential's scopes both support the operation. Exercised capabilities and write attestations remain separately recorded; policy and protection checks still apply. Missing or ambiguous evidence denies the activity.
-
 The credential the system holds shall carry pull-request write and repository-content read on each managed repository, and, where a repository's configured operations include remediation push or merge-after-review, additionally exactly the write scope those operations require.
 
 *In plain terms: The system's token needs at least write-to-PRs and read-the-code on every managed repo; a repo configured to push fixes or auto-merge additionally carries exactly the write scope those need.*
@@ -1255,6 +1253,7 @@ The credential the system holds shall carry pull-request write and repository-co
 
 **Fit criterion:** Inspecting the credential's granted scopes shows, on an authoritative-review-only repository, pull-request write and repository-content read present; on a repository configured for remediation push or merge-after-review, those same two plus exactly the additional write scope those configured operations require; and on an advisory-only repository, pull-requests write present as the base scope. A credential missing any required scope on a repository configured to exercise it fails this check.
 
+**See also:** ADR-0062 amendment, 2026-09-15 (#2250). A GitHub-attested write capability may satisfy this requirement only when authenticated repository permissions and the same OAuth credential's scopes both support the operation. Exercised capabilities and write attestations remain separately recorded; policy and protection checks still apply. Missing or ambiguous evidence denies the activity.
 
 ### RQA-NFR-025
 
@@ -1284,8 +1283,6 @@ Each of review, comment, approve, request-changes, remediate and merge shall def
 
 ### RQA-NFR-030
 
-**Implementation interpretation (ADR-0062 amendment, 2026-09-15; #2250):** A GitHub-attested write capability may satisfy this requirement only when authenticated repository permissions and the same OAuth credential's scopes both support the operation. Exercised capabilities and write attestations remain separately recorded; policy and protection checks still apply. Missing or ambiguous evidence denies the activity.
-
 The credential the system holds shall carry no permission on a managed repository beyond what that repository's configured activities require, and no permission at all on any repository the system does not manage.
 
 *In plain terms: No repository's token holds more than its configured activities need — advisory-only repos keep base pull-request write and nothing more, and repos the system doesn't manage get nothing.*
@@ -1304,6 +1301,8 @@ The credential the system holds shall carry no permission on a managed repositor
 ## Scope and design baseline
 
 What repository host this covers, and the baseline every kept piece of the design has to justify itself against.
+
+**See also:** ADR-0062 amendment, 2026-09-15 (#2250). A GitHub-attested write capability may satisfy this requirement only when authenticated repository permissions and the same OAuth credential's scopes both support the operation. Exercised capabilities and write attestations remain separately recorded; policy and protection checks still apply. Missing or ambiguous evidence denies the activity.
 
 ### RQA-FR-034
 
