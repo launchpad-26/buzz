@@ -62,8 +62,9 @@ CREATE TABLE IF NOT EXISTS snapshots (
 
 @dataclass(frozen=True)
 class StoredSnapshot:
-    snapshot: Snapshot  # repo is a placeholder ("") here; snapshot_for() rebuilds it with
-    #                     the caller's own repo before returning
+    snapshot: Snapshot  # repo is the intentional empty sentinel ("") here;
+    #                     snapshot_for() rebuilds it with the caller's own repo
+    #                     before returning
     activated_at: datetime
 
 
