@@ -1,13 +1,13 @@
 #!/usr/bin/env python3
-"""Task #2216 — ADR-0062's executable half: a grant rests on a probe-proven
-capability and never on an attested one, and a missing scope is denied rather
-than attempted (RQA-NFR-024).
+"""Task #2216 — ADR-0062's executable half: a grant rests on authenticated
+repository permission plus an applicable OAuth scope, and a missing scope is denied
+rather than attempted (RQA-NFR-024).
 
-ADR-0062 §1, verbatim: "P-08 grants an activity only when both hold: the pinned
-policy snapshot grants it, *and* a per-job capability probe (E-16) proves the
-credential can actually perform it on that repository. A failed probe yields no
-grant ... rather than an attempt." §3: "What the token could do elsewhere is
-recorded, not hidden."
+ADR-0062's 2026-09-15 amendment permits a GitHub-attested write only when an
+authenticated response proves both repository permission and the OAuth token's
+applicable scope. Missing scope metadata, malformed permissions, failed probes and
+disabled policy deny. Proven reads and scope-checked write attestations remain
+separate in provenance.
 
 These tests drive the REAL `Gate` and the REAL E-16 `probe` with injected probes
 and transports (the same seams E-04/E-16 declare) and assert the decision
@@ -111,17 +111,16 @@ def _grant(*, activity: Activity, reading, repos: frozenset[str] | None = None):
     return answer, github, connection
 
 
-def test_adr0062_an_attested_but_unproven_write_grants_nothing() -> None:
-    """The credential floor is a proof, not a hope: GitHub *attesting* `pulls:write`
-    (push permission reported, never exercised) yields a denial, not a grant and not
-    an attempted write."""
+def test_adr0062_a_scope_checked_write_attestation_can_grant() -> None:
+    """P-09 emits write attestations only after checking repository permission and
+    OAuth scope. P-08 may consume that authenticated result without performing a
+    probe write."""
     reading = CapabilityReading(
         capabilities=_READS, attested_not_proven=_WRITES, login="operator"
     )
     answer, github, connection = _grant(activity=Activity.COMMENT, reading=reading)
-    assert isinstance(answer, Deny), answer
-    assert answer.reason is DenyReason.CAPABILITY_MISSING
-    assert "pulls:write" in answer.detail
+    assert not isinstance(answer, Deny), answer
+    assert answer.capability_proof_id is not None
     assert github.calls == [REPO], "exactly one probe, and only for the asked repository"
 
 
@@ -200,16 +199,19 @@ class _FakeTransport:
             )
         return {"permissions": self.permissions}
 
+    def oauth_scopes(self, *, credential: str):
+        return frozenset({"repo"})
+
 
 class _FakeAdapter:
     def __init__(self, transport) -> None:
         self.transport = transport
 
 
-def test_adr0062_the_probe_proves_reads_and_only_attests_writes() -> None:
-    """E-16's split, from GitHub's own permissions block: `pull` proves the three
-    reads (the probe exercised authenticated reads); push-or-higher is only ever
-    attested, because proving a write would mean performing one."""
+def test_adr0062_the_probe_proves_reads_and_scope_checks_write_attestations() -> None:
+    """E-16 keeps provenance distinct: authenticated reads are exercised; writes
+    remain attestations backed by both the repository permission block and OAuth
+    scope, because proving them with a write would mutate GitHub."""
     adapter = _FakeAdapter(_FakeTransport(
         permissions={"pull": True, "triage": True, "push": True, "admin": True}
     ))

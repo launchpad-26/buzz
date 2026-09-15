@@ -42,7 +42,12 @@ from lifecycle_cascade_bench import (  # noqa: E402
 )
 
 import rqa.escalation as escalation  # noqa: E402
-from rqa.contracts import EscalationCause, JobStatus  # noqa: E402
+from rqa.contracts import (  # noqa: E402
+    EscalationCause,
+    EscalationSubject,
+    EscalationSubjectKind,
+    JobStatus,
+)
 from rqa.escalation.store import SqliteEscalationStore  # noqa: E402
 from rqa.lifecycle import resume  # noqa: E402
 from rqa.lifecycle.errors import LifecycleError, StaleDecisionError  # noqa: E402
@@ -69,6 +74,7 @@ def _escalated_job(reviews: tuple) -> tuple:
     raised = escalation.raise_(
         job=job,
         cause=EscalationCause.AUTHORITY_REQUIREMENT,
+        subject=EscalationSubject(EscalationSubjectKind.AUTHORITY, "merge"),
         question="RQA holds no verdict authority here; a human must record the outcome",
         context={},
         record=record,

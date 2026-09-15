@@ -38,7 +38,15 @@ from lifecycle_cascade_bench import (  # noqa: E402
     stored_status,
 )
 
-from rqa.contracts import Budget, EscalationCause, JobStatus, Refusal, Reservation  # noqa: E402
+from rqa.contracts import (  # noqa: E402
+    Budget,
+    EscalationCause,
+    EscalationSubject,
+    EscalationSubjectKind,
+    JobStatus,
+    Refusal,
+    Reservation,
+)
 from rqa.judgement import judge  # noqa: E402
 from rqa.lifecycle.states import DISPOSITION, Disposition, as_status  # noqa: E402
 from rqa.lifecycle.steps import Cascade, step7  # noqa: E402
@@ -140,6 +148,7 @@ def test_ac11_a_reached_bound_is_never_a_successful_disposition() -> None:
     assert judgement.disposition == "escalate"
     assert (
         EscalationCause.EVIDENCE_GAP,
+        EscalationSubject(EscalationSubjectKind.ASSURANCE, "panel-budget"),
         "panel reservation bound was reached",
     ) in judgement.escalation_causes
 

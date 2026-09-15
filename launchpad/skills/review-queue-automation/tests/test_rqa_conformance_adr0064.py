@@ -60,10 +60,11 @@ class _RealEscalation:
     def __init__(self, connection) -> None:
         self.store = SqliteEscalationStore(connection)
 
-    def raise_(self, *, job, cause, question, context, record, store):
+    def raise_(self, *, job, cause, subject, question, context, record, store):
         return escalation.raise_(
             job=job,
             cause=cause,
+            subject=subject,
             question=question,
             context=context,
             record=record,
