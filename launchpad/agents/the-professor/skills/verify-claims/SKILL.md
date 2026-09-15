@@ -33,9 +33,14 @@ recommended value to configure it to, not a fallback the suite applies for you),
 feeding it only the cited source span and the claim's exact sentence, and capture its
 stdout as the verdict. Confirm `$PROFESSOR_VERIFIER_CMD` resolves before dispatching
 anything — same fail-loud requirement as `$PROFESSOR_PACK_ROOT` elsewhere in this
-pack, not a silent fallback to a guessed command. A harness with no headless
-single-turn CLI available at all cannot run this gate — that limitation is real and
-named, not solved by this decision.
+pack, not a silent fallback to a guessed command; **§2a gives the exact message.** A
+harness with no headless single-turn CLI available at all cannot run this gate — that
+limitation is real and named, not solved by this decision.
+
+**What counts as a verdict, and what a non-answer does, are specified in §2b and §2c.**
+Capturing stdout is not the same as having an answer: a response is a verdict only if
+the whole of it matches §2b's grammar, and a command that exits non-zero, times out or
+stops mid-response has not answered at all, however well-formed the text it printed.
 
 **Decided 2026-09-04, by Serina: this skill runs twice per draft, not once** — once
 during drafting (so `draft-page`/`update-page` can fix what it flags), and once more,
@@ -102,6 +107,110 @@ Each dispatched check returns one of three verdicts, plus a one-sentence reason:
 
 A claim already marked `UNSOURCED` in step 1 is never dispatched here — it already has
 its verdict.
+
+### 2a. Before dispatching anything: `$PROFESSOR_VERIFIER_CMD` must resolve
+
+If `$PROFESSOR_VERIFIER_CMD` is unset or empty, stop and emit exactly this, then fail —
+matching the shape `professor.py` already uses for `$PROFESSOR_PACK_ROOT`:
+
+```
+verify-claims: $PROFESSOR_VERIFIER_CMD is not set. This gate dispatches one
+independent check per claim and cannot run without it -- set
+$PROFESSOR_VERIFIER_CMD to a headless, single-turn CLI command (the suite applies
+no default; `claude --print` is the recommended value) before drafting.
+```
+
+**Never fall back to a guessed command, and never skip the gate because the variable is
+missing.** A harness with no headless single-turn CLI at all cannot run this gate; that
+limitation is named in the redesign doc (§3, §6.7) and is not solved here.
+
+### 2b. What counts as a verdict — the response grammar
+
+**A verdict is recognised by matching the WHOLE response against the grammar below. It
+is never found by searching inside a response.** This distinction is the gate, not a
+detail of it: every weaker rule that has been tried lets a wrong answer through.
+
+The complete response, after stripping leading and trailing whitespace, must be exactly:
+
+```
+<VERDICT><separator><reason>
+```
+
+where:
+
+- **`<VERDICT>`** is one of the three literals `SUPPORTED`, `NOT_SUPPORTED`,
+  `PARTIALLY_SUPPORTED`, **matched case-sensitively, in upper case, as the entire text
+  before the separator.** Not contained in it — equal to it.
+- **`<separator>`** is a single colon, optionally followed by spaces.
+- **`<reason>`** is one non-empty line: the one-sentence reason this step already
+  requires. It may contain any text, including the word `SUPPORTED`; the reason is never
+  scanned for a verdict.
+
+Whitespace: leading and trailing whitespace around the whole response is stripped before
+matching, and spaces after the separator are allowed. **No other flexibility exists.** A
+response spanning more than one line after the reason, or carrying any text before the
+verdict literal, does not match.
+
+Because the verdict must *equal* the text before the separator, `SUPPORTED` being a
+substring of `NOT_SUPPORTED` and `PARTIALLY_SUPPORTED` cannot cause a misread. A rule
+that searched for `SUPPORTED` anywhere would report a `NOT_SUPPORTED` response as
+supported — the gate's own silent-wrongness failure, reproduced inside the mechanism
+built to catch it.
+
+**Responses that MUST be accepted, and as what** — these matter as much as the
+rejections, because the whole point of the equality rule is that the two longer verdicts
+survive it intact:
+
+1. `SUPPORTED: the span states the retry count as three.` → **`SUPPORTED`**.
+2. `NOT_SUPPORTED: the citation contradicts the claim.` → **`NOT_SUPPORTED`**, never
+   `SUPPORTED`. The text before the separator is `NOT_SUPPORTED`, which is not equal to
+   `SUPPORTED`, so the collision cannot occur.
+3. `PARTIALLY_SUPPORTED: the span supports two of the three conditions.` →
+   **`PARTIALLY_SUPPORTED`**, and step 3 blocks on it. Never rounded up.
+
+**Responses that MUST be rejected, not interpreted:**
+
+1. `The verdict is NOT_SUPPORTED: the citation contradicts the claim.`
+   Rejected: text precedes the verdict literal, so the whole response does not match.
+   A scanning rule would read this as `NOT_SUPPORTED` — correct by luck — and the same
+   rule reads example 2 catastrophically wrong.
+2. `This claim cannot be classified as SUPPORTED because the citation contradicts it.`
+   Rejected: no verdict literal at the start, no separator. **A containment check marks
+   this `SUPPORTED`.** It is the exact opposite of what the verifier said.
+3. ```
+   Checking the cited span now...
+   SUPPORTED: the span states the retry count as three.
+   Done.
+   ```
+   Rejected: a valid verdict line surrounded by other output. The response as a whole
+   does not match, and a line-scanning rule would accept it — which means any verifier
+   that narrates its work silently becomes trusted.
+
+### 2c. When there is no verdict — parse failure and non-completion
+
+**Disposition for everything in this section: `block`.** Same disposition as any
+non-`SUPPORTED` verdict in step 3, reported the same way, and **never `SUPPORTED`**. A
+check that did not produce an answer is not an answer.
+
+**Parse failure** — the response did not match §2b's grammar, including an empty
+response, a response with no reason, or any of the three rejected shapes above.
+
+**Non-completion — judged independently of anything stdout contained.** A response can
+be perfectly well-formed and still not count, because how the command ended is part of
+whether it answered at all:
+
+- **Non-zero exit status.** A command can print a flawless `SUPPORTED: ...` and then
+  exit non-zero. Block. Do not read the stdout.
+- **Timeout. The default is 120 seconds per dispatch.** Nothing else enforces this:
+  dispatch deliberately is not a `tools/professor.py` subcommand (§4), so it does not go
+  through `professor_lib/proc.py`, and **the dispatching agent is the only thing that can
+  bound the call.** Apply the timeout, kill the command, and block. A hang without an
+  enforced bound is an indefinite wait, not a verdict.
+- **A response that ends without completing the grammar** — output that stops mid-line,
+  or after the verdict and separator with no reason. Block.
+
+None of these are recoverable by retrying silently. Report them like any other blocking
+finding, naming which claim and which failure.
 
 ## 3. Act on the result
 
@@ -175,5 +284,11 @@ draft in isolation.
       file, immediately before the write — not treated as already satisfied by the
       first, mid-draft pass
 - [ ] `$PROFESSOR_VERIFIER_CMD` was confirmed set before any dispatch — an unset
-      variable failed loud with a specific message, not a silent fallback or a
+      variable failed loud with §2a's specific message, not a silent fallback or a
       generic crash
+- [ ] Every verdict came from matching a response **whole** against §2b's grammar —
+      never from finding a verdict word inside a longer response, and never from a
+      case-insensitive or partial match
+- [ ] Every dispatch was bounded by the §2c timeout, and a non-zero exit, a timeout,
+      a parse failure or a truncated response each blocked — none of them was read as
+      a verdict, and none was silently retried
