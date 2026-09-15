@@ -1,10 +1,10 @@
 #!/usr/bin/env python3
 """Suite-wide isolation: no real credential, no network.
 
-WHY THIS FILE EXISTS. Nine tests in this suite passed only because the machine
-running them had a working `gh auth token`. They inject a fake `http_post` and
-never use a token, but `github_mutate.post` resolves one anyway via
-`common.github_token()`, which falls back to shelling out to `gh auth token`.
+WHY THIS FILE EXISTS. Nine tests in the legacy suite passed only because the
+machine running them had a working `gh auth token`. They injected a fake sender
+and never used a token, but the legacy transport resolved one anyway and fell
+back to shelling out to `gh auth token`.
 On a developer machine that returns a real credential and the tests go green; in
 CI it fails and they do not. A suite whose result depends on ambient credentials
 is not testing the code, it is testing the machine.
@@ -28,8 +28,10 @@ from __future__ import annotations
 import os
 import socket
 
-# Must be set before any test calls a transport. `github_token()` reads the
-# environment first and never reaches `gh auth token` when this is present.
+# Must be set before any test invokes a subprocess. `rqa.harness.invoke` and
+# `rqa.supply.probe` both build the child environment from an allow-list, so a
+# test that these two names never reach a child is only meaningful when this
+# process actually has them.
 os.environ["GITHUB_TOKEN"] = "not-a-real-token-suite-sentinel"
 os.environ["GH_TOKEN"] = "not-a-real-token-suite-sentinel"
 
