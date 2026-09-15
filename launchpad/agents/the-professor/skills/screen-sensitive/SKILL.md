@@ -55,15 +55,44 @@ access-control data, as opposed to attribution) needs recognizing what a name is
 *being used for* in its sentence — not a shape `screen-content`'s pattern matching
 can test.
 
-**The protocol, run once per name `screen-content` flags as a candidate** (a plain
-name-shaped token — the pattern side still does that detection; dispatch only
-decides *role*, it doesn't hunt for names itself): run `$PROFESSOR_VERIFIER_CMD` as a
-subprocess (same mechanism `verify-claims` uses, §6.7 — a fresh, isolated call),
-fed only the name and its containing sentence, nothing else. It returns one of:
+**Which findings get dispatched.** `screen-content` marks every roster-names candidate
+with an explicit requires-dispatch flag, and that flag — not the category name, not a
+guess — is what this step acts on. Each such finding carries its `location` as a line
+number **plus column offsets**: line-relative, measured in Unicode characters,
+zero-based, end-exclusive. `match` stays `null`, as it does for every finding in this
+gate; the offsets are coordinates, not content, which is exactly why they are safe to
+carry when the matched text is not.
+
+**Those offsets are the candidate's identity, and they travel with it.** Two names on
+one line, or the same name twice in one sentence in different roles, produce findings
+that are otherwise identical — so the offsets go into the dispatch input and the verdict
+comes back against them. Without that, a verdict earned by a contributor's name can be
+applied to an access-control entry sitting beside it, and the roster is silently
+unprotected. That is the failure this whole mechanism exists to prevent, so it is not
+optional bookkeeping.
+
+**The protocol, run once per flagged candidate** (a plain name-shaped token — the pattern
+side still does that detection; dispatch only decides *role*, it doesn't hunt for names
+itself): run `$PROFESSOR_VERIFIER_CMD` as a subprocess, the same mechanism `verify-claims`
+uses.
+
+**Send the same four things `verify-claims` §2 requires**, for the same reason a real
+dispatch proved on 2026-09-15: the task, the instruction to decide only from what it is
+given, the response format and its three verdict literals, and the content itself — here,
+the candidate's offsets, the name, and its containing sentence. A verifier sent only a
+name and a sentence invents its own task and answers in a shape nothing can parse. As
+there, prefer a verifier command without repository access; a verifier that can read the
+target repo can substitute its own evidence for what it was shown.
+
+**The response is matched whole, by `verify-claims` §2b's grammar**, with the verdict
+literal below in place of that gate's three. Nothing is searched for inside a response.
+It returns one of:
 
 - **`ATTRIBUTION`** — the name is a citation's author or a provenance record's
   contributor. Not flagged at all; this is exactly the case
-  `sensitive-patterns.md`'s own "why redact" column names as never sensitive.
+  `sensitive-patterns.md`'s own "why redact" column names as never sensitive. **This is
+  the only verdict that removes protection, and only when the dispatch both completed
+  and parsed cleanly for that exact candidate** — see the retention rule below.
 - **`ROSTER_DATA`** — the name is being used as configuration/access-control data
   (an allowlist, a hardcoded reviewer list). **Disposition: `redact`** — matching
   `sensitive-patterns.md`'s own table (this category lives under "Redact," not
@@ -79,25 +108,45 @@ skill's own `pass`/`redact`/`block` outcome in step 2 below exactly like
 `screen-content`'s findings — the dispatch mechanism, not the disposition or the
 reporting shape, is what differs from the rest of this gate.
 
-**Interim behaviour until Phase 1b ships the dispatch — added 2026-09-09, issue
-#2110.** The dispatch above does not exist yet. Until it does, `screen-content`
-returns every roster-names candidate with disposition **`redact`** directly, and no
-dispatch happens: treat those findings exactly like any other `redact` in step 2,
-with no extra step and nothing to interpret.
+### The retention rule — stated as a default, not a list
 
-This is deliberately the same fail-closed correction §1a below records for
-`target-ruleset-override`. An earlier version returned `not-evaluated` here — an
+**`screen-content` reports every roster-names candidate as `redact`, and that
+disposition stands unless a dispatch takes it away.** Exactly one thing takes it away:
+a dispatch that **completed and parsed cleanly** and returned `ATTRIBUTION` **for that
+exact candidate**, identified by its offsets. Every other outcome — without exception,
+including outcomes not imagined here — keeps the underlying `redact`, and keeps it
+*inside* this skill's single outcome in step 2. Never reported separately, never set
+aside as a special case, never dropped.
+
+These are **instances** of that default, not its full extent:
+
+- stdout that does not match the response grammar whole
+- a parse failure of any kind, including an empty or truncated response
+- a non-zero exit, whatever the stdout said
+- a timeout, per `verify-claims` §2c's bound
+- `ROSTER_DATA` or `AMBIGUOUS`, which are verdicts rather than failures but are not
+  `ATTRIBUTION`
+- a candidate that was never dispatched at all, for any reason
+
+Writing this as a default rather than an enumeration is deliberate. **An enumeration is
+a list of the failures someone thought of**, and the one nobody listed becomes the one
+with no defined handling — which is how a finding ends up dropped. Stated this way, a new
+failure mode is already covered the moment it exists.
+
+**Why `redact` and not something weaker.** This is the same fail-closed correction §1a
+below records for `target-ruleset-override`, and it is the resolution of issue #2110. An
+earlier version of this skill returned `not-evaluated` for an undecided candidate — an
 outcome step 2 defines no consumer action for, so a caller following this procedure
 literally had nothing to do with it and could drop it silently, which is
 indistinguishable from `pass` in effect. An undecided candidate therefore takes the
-disposition the ruleset itself assigns an undecided one: `sensitive-patterns.md`
-lists this category under Redact, and the `AMBIGUOUS` verdict above already resolves
-to `redact` for exactly this reason. Over-redacting an attribution name is
-recoverable by a human reading the draft; publishing an access-control roster is not.
+disposition the ruleset itself assigns an undecided one: `sensitive-patterns.md` lists
+this category under Redact, and `AMBIGUOUS` above resolves to `redact` for exactly this
+reason. **Over-redacting an attribution name is recoverable by a human reading the draft;
+publishing an access-control roster is not.**
 
-Once Phase 1b lands, `ATTRIBUTION` candidates stop being flagged at all and this
-paragraph goes away — the interim rule is strictly more conservative than the
-dispatch that replaces it, never less.
+That floor also protects a consumer that never dispatches at all. Anything reading
+`screen-content`'s JSON directly — CI, a script, the scheduled workflow — sees `redact`
+and is safe without knowing this protocol exists.
 
 **`screen-content` now exists** — Phase 1 shipped it (`tools/professor.py`, issue #2100,
 PR #2106). There is therefore no manual-pass branch in this skill any more, and this
@@ -134,9 +183,12 @@ in a later phase — not by proceeding with the write anyway.
 ## 2. Act on the result
 
 **One combined outcome, from both checks** — `screen-content`'s pattern findings and
-step 1's dispatch verdicts (`ROSTER_DATA`/`AMBIGUOUS`, both `redact`) are merged into
-a single `pass`/`redact`/`block` result for this skill, never reported or acted on
-separately; whichever category applies, apply the discipline below. (A
+step 1's roster-names candidates are merged into a single `pass`/`redact`/`block` result
+for this skill, never reported or acted on separately; whichever category applies, apply
+the discipline below. A candidate leaves step 1 in exactly one of two states: dropped,
+because a clean dispatch returned `ATTRIBUTION` for it, or carrying `redact` — whether
+that came from a `ROSTER_DATA`/`AMBIGUOUS` verdict or from the retention rule's default
+after a failure. **Both states merge here; neither is reported on the side.** (A
 target-ruleset-override result, step 1a above, is its own fourth outcome and is
 always `block` — it does not merge with the pattern/dispatch findings the way
 `redact` and `block` findings from those two checks do with each other.)
@@ -146,8 +198,10 @@ always `block` — it does not merge with the pattern/dispatch findings the way
   redact-not-block (e.g. an internal hostname that's useful context but shouldn't be
   published verbatim, or a name dispatch classified `ROSTER_DATA`/`AMBIGUOUS`).
   `screen-content` never hands back the flagged text itself — its `match` field is
-  always `null`, for every disposition. Use each finding's `location` (which line)
-  and `category` (which kind) to find the span in the draft file you already hold
+  always `null`, for every disposition. Use each finding's `location` (which line, and
+  for roster-names candidates the column offsets too — the only way to tell two
+  candidates on one line apart) and `category` (which kind) to find the span in the
+  draft file you already hold
   in your own context, and replace it there with `[REDACTED: <category>]`. Log the
   redaction — which category, which section, never the redacted value itself — so a
   reviewer can see what was removed without the removed content ever having been
@@ -180,6 +234,12 @@ entry, not left behind after a `block`, not quoted back in an error message.
       never `pass` — an unrun gate and a passed gate are different outcomes
 - [ ] Every category in the resolved ruleset was actually checked against the draft —
       not a subset "close enough" pass
+- [ ] Every finding carrying the requires-dispatch flag was actually dispatched, one
+      call per candidate, with its offsets in the input and the verdict returned
+      against them — no candidate reached the outcome unresolved
+- [ ] Protection was removed from a candidate **only** by a dispatch that completed and
+      parsed cleanly and returned `ATTRIBUTION` for that exact candidate; every other
+      outcome kept `redact` and stayed inside the combined result
 - [ ] `redact` results replaced the exact flagged span, logged by category only, never
       by value
 - [ ] `block` results stopped the write entirely and reported category + location only
