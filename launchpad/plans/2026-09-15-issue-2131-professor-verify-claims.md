@@ -45,6 +45,26 @@ DECIDED 2026-09-15, by Serina — the roster-names finding shape (was OPEN item 
   this adds a field to it. check_professor.py must assert the new field, and every
   consumer of that JSON has to tolerate it.
 
+DECIDED 2026-09-15, by Serina — candidate identity in a roster-names finding
+
+  Raised by the Codex review of this plan, not by the issues. A roster-names finding
+  carries a line number and `match: null`, so two candidates on the same line are
+  indistinguishable — a contributor and an allowlisted person, one line apart in column
+  only, produce two identical-looking findings. Applying the contributor's ATTRIBUTION
+  verdict to the wrong finding silently removes protection from the roster name, on the
+  one category that exists to stop an access-control list being published.
+
+  Decision: the finding's location gains column offsets alongside its line number.
+  `match` stays null. Offsets are coordinates, not content, so they do not reopen the
+  content leak that made `match` null in Phase 1; echoing the matched name back would.
+  localcmd.py already computes the span and throws it away at line 1336, so detection
+  does not change at all.
+
+  An opaque per-finding id was considered and not taken: it identifies the finding rather
+  than the position, so a human reading the JSON still could not tell which name it meant.
+  Leaving the shape alone and having the skill track document order was rejected outright
+  — correctness would depend on an agent maintaining ordering across a loop.
+
 DECIDED 2026-09-15, by Serina — what #2142's fourth criterion proves (was OPEN item 3)
 
   Two scenarios, both demonstrated. First, $PROFESSOR_VERIFIER_CMD set to a command that
@@ -99,9 +119,19 @@ ALREADY TRUE  (verified against the worktree, not against notes)
   a hardcoded "disposition": "redact" and a message reading "Phase 1b, #2131, not yet
   built". That message becomes false the moment this Feature lands.
 
-  skills/draft-page/SKILL.md does not wire the gate. Its only mention of verify-claims is
-  line 227, inside a history note — not its procedure. skills/update-page/SKILL.md
-  contains zero occurrences of verify-claims.
+  skills/draft-page/SKILL.md wires the gate in ONE mode only — corrected 2026-09-15 after
+  the Codex review caught this plan mischaracterising it. Its single mention of
+  verify-claims, at line 227, is not a history note: it is inside BASELINE MODE's numbered
+  step 5 (lines 225–229), which already names verify-claims and the mandatory final
+  independent pass for that mode. The ordinary drafting path is still unwired, so no work
+  disappears — but any test phrased as "the gate appears in a numbered procedure rather
+  than only in the history note" is false as written, because it already appears in one.
+  skills/update-page/SKILL.md contains zero occurrences of verify-claims.
+
+  tools/check_professor.py ALREADY asserts the roster-names redact floor — lines 186–194
+  expect `roster-names: redact` for both roster fixtures, and the disposition check covers
+  every matching finding. Reverting `redact` already fails the harness today. Do not plan
+  that assertion as new work.
 
   The fail-loud shape #2137 must match is real and already asserted verbatim.
   tools/professor.py:63 emits the $PROFESSOR_PACK_ROOT unset message;
@@ -114,16 +144,39 @@ ALREADY TRUE  (verified against the worktree, not against notes)
   Dispatch is deliberately not a professor.py subcommand (§4's diagram note), so most of
   this Feature is procedure text plus one Python change — not a code build.
 
-STEP 1  verify-claims/SKILL.md — the three missing contract pieces          [independent]
+STEP 1  verify-claims/SKILL.md — the dispatch response contract             [independent]
         Add, to the existing step 2: the verbatim message emitted when
         $PROFESSOR_VERIFIER_CMD is unset, modelled on professor.py:63's
-        $PROFESSOR_PACK_ROOT wording; the exact stdout form that counts as each of
-        SUPPORTED, NOT_SUPPORTED, PARTIALLY_SUPPORTED; and the outcome when stdout
-        matches none of them.
+        $PROFESSOR_PACK_ROOT wording; a positive acceptance form for each of SUPPORTED,
+        NOT_SUPPORTED and PARTIALLY_SUPPORTED; and the outcome for every response that
+        does not match one.
+
+        Both reviews made this the plan's most serious finding, independently, so the
+        acceptance bar below is deliberately strict.
+
+        SUBSTRING CONTAINMENT IS THE TRAP. `SUPPORTED` is a substring of both
+        `NOT_SUPPORTED` and `PARTIALLY_SUPPORTED`. A rule that scans for `SUPPORTED`
+        first marks a correctly-formed `NOT_SUPPORTED: the citation contradicts the
+        claim` as supported — the gate's own silent-wrongness failure, reproduced inside
+        the mechanism built to catch it. Longest-token-first fixes that collision and
+        still accepts negated prose such as "this claim cannot be classified as SUPPORTED
+        because the citation contradicts it".
+
+        NON-COMPLETION IS NOT A VERDICT. A stdout-only rule never governs how the command
+        exited. A verifier can print a perfectly-formed SUPPORTED and then exit non-zero,
+        or print it and hang. proc.py's handling does not cover dispatch (§4 keeps it out
+        of the four subcommands), so the contract itself has to say what these mean.
+
         done when: verify-claims/SKILL.md contains a quoted unset message naming
-        $PROFESSOR_VERIFIER_CMD; a stated recognition rule a reader could apply to a raw
-        stdout string to pick exactly one of the three verdicts; and an explicit
-        non-matching outcome whose text is not SUPPORTED. Closes #2137 criteria 1, 3, 4.
+        $PROFESSOR_VERIFIER_CMD; states a positive acceptance form matched as an exact
+        delimited token, explicitly NOT by substring containment, and says so in terms a
+        builder cannot satisfy with a containment check; states that a response carrying
+        more than one verdict token, or a verdict token inside surrounding prose that
+        negates it, is a parse failure rather than a verdict; states that a parse failure
+        blocks, naming the disposition, and that its text is not SUPPORTED; and states
+        that a non-zero exit, a timeout, and output truncated mid-response each block on
+        their own, independently of anything stdout contained. Closes #2137 criteria 1,
+        3, 4.
 
 STEP 2  verify-claims/SKILL.md — the re-dispatch observable                   [needs 1]
         State, in step 4, that each pass stamps a fresh per-pass run identifier alongside
@@ -131,10 +184,16 @@ STEP 2  verify-claims/SKILL.md — the re-dispatch observable                   
         rather than a re-run. Name the limitation in the same breath: a fresh identifier
         proves a dispatch happened, not that it was independent of the first pass's
         reasoning. Per the DECIDED note above.
-        done when: step 4 names the per-pass run identifier as the observable, states
-        what an inspector looks at to tell a re-run from a replay, and names the
-        independence limitation rather than implying it is solved. Closes #2139's
-        criterion 3.
+        The identifier must be bound to a recorded invocation, not merely stamped on a
+        verdict — otherwise an agent can attach a fresh identifier to cached output and
+        satisfy the observable without re-dispatching, which is the exact evasion #2139
+        exists to detect.
+        done when: step 4 names the per-pass run identifier as the observable; requires
+        each identifier to sit alongside a recorded invocation of $PROFESSOR_VERIFIER_CMD
+        for that pass, so a verdict with an identifier but no matching invocation record
+        is detectable; states what an inspector looks at to tell a re-run from a replay;
+        and names the independence limitation rather than implying it is solved. Closes
+        #2139's criterion 3.
 
 STEP 3  First real dispatch, end to end                        [needs 1]  ← RUNS HERE
         Configure $PROFESSOR_VERIFIER_CMD to a real headless CLI. Take one real behaviour
@@ -152,10 +211,14 @@ STEP 4  draft-page/SKILL.md — third gate and final pass                       
         screen-sensitive's; state the zero-behaviour-claims case explicitly; and add the
         final independent pass as its own last step before the write, with the
         first-is-advisory / second-is-the-gate-of-record reasoning.
-        done when: `grep -c verify-claims draft-page/SKILL.md` exceeds its current 1, the
-        gate appears in the numbered procedure rather than only in the history note at
-        line 227, and all four of #2138's criteria plus #2139's criteria 1–2 are each
-        traceable to a line in this file.
+        Baseline mode's numbered step 5 already names the gate and the final pass. Wire
+        the ORDINARY drafting path, and leave baseline mode consistent with it rather
+        than describing the gate two different ways in one file.
+        done when: the gate appears in the ordinary drafting path's own numbered
+        procedure, cited by line and distinct from baseline mode's step 5 at lines
+        225–229; baseline mode's existing wording is confirmed to still agree with the
+        ordinary path's, or is updated so it does; and all four of #2138's criteria plus
+        #2139's criteria 1–2 are each traceable to a line in this file.
 
 STEP 5  update-page/SKILL.md — third gate and final pass                      [needs 2]
         The same as the previous step, against a file that currently has zero mentions.
@@ -170,25 +233,42 @@ STEP 6  screen-sensitive/SKILL.md — retire the interim rule                   
         State that the skill dispatches on the finding's requires-dispatch flag, and that
         an ATTRIBUTION verdict removes the candidate from this skill's outcome even
         though screen-content reported it as redact — per the DECIDED note above.
+        ONLY a successfully parsed ATTRIBUTION verdict, resolving that exact candidate,
+        may remove protection. Every other outcome keeps the underlying redact. Both
+        reviews flagged that "state what happens" alone permits a skill to report an
+        unresolved candidate separately and drop it from the combined outcome — which is
+        #2110's undefined-consumer-action fail-open, reappearing at the skill layer where
+        the script's retained redact cannot reach it.
         done when: no paragraph in the file claims the dispatch "does not exist yet";
         #2110 no longer appears as a live interim rule; the file names the
-        requires-dispatch flag as what it dispatches on and states that ATTRIBUTION
-        overrides the script's redact; and the file states what happens when a
-        roster-names dispatch returns unrecognised stdout. Closes #2140's criterion 4.
+        requires-dispatch flag as what it dispatches on, and identifies the candidate by
+        the finding's line and column offsets; the file states that ATTRIBUTION overrides
+        the script's redact ONLY when parsed successfully for that exact candidate; and
+        it states that unrecognised stdout, a parse failure, a non-zero exit, a timeout
+        and a candidate never dispatched at all each retain the underlying redact and
+        appear in the combined outcome, never reported separately and never dropped.
+        Closes #2140's criterion 4.
 
 STEP 7  localcmd.py roster-names finding, and its regression coverage         [needs 6]
-        Per the DECIDED note above: keep disposition `redact`, add the explicit
-        requires-dispatch flag to the roster-names finding at lines 1316–1348, and
-        rewrite its message so it no longer claims Phase 1b is unbuilt but names the
-        dispatch the consumer must now run. Add check_professor.py assertions over both
-        the retained disposition and the new field.
+        Per the DECIDED notes above: keep disposition `redact`, add the explicit
+        requires-dispatch flag, add column offsets to the finding's location, and rewrite
+        its message so it no longer claims Phase 1b is unbuilt but names the dispatch the
+        consumer must now run. The finding block is at lines 1316–1348; it already
+        computes `name_span` and discards everything but the line number at line 1336, so
+        the offsets are available without changing detection at all.
+        `match` stays null. The offsets are coordinates, not content — that is precisely
+        why they are safe, and why echoing the matched name instead would reopen the
+        content-leak Phase 1 closed.
+        Do NOT add a retained-redact assertion: check_professor.py lines 186–194 already
+        cover it (see ALREADY TRUE). Add coverage for the flag and the offsets only.
         done when: `./tools/professor.py screen-content` on a roster-shaped fixture emits
         a finding that still carries disposition `redact`, carries the requires-dispatch
-        flag, and whose message names the dispatch rather than "not yet built";
-        `./tools/check_professor.py --offline` reports ALL CHECKS PASSED; and reverting
-        either the flag or the retained `redact` alone makes that harness fail — the
-        second is the fail-closed floor #2110 established, so it needs its own test, not
-        shared coverage with the flag.
+        flag, carries column offsets locating that specific candidate, and whose message
+        names the dispatch rather than "not yet built"; the two-pair fixture
+        (`dispatch-roster-names-two-pairs.md`) yields two findings whose offsets differ,
+        proving two candidates on one line are distinguishable; `./tools/check_professor.py
+        --offline` reports ALL CHECKS PASSED; and reverting the flag alone, and the
+        offsets alone, each make that harness fail.
 
 STEP 8  Demonstrate all four verdicts                                      [needs 3, 4]
         Construct four genuinely distinct claims against real source — one truly
@@ -196,40 +276,66 @@ STEP 8  Demonstrate all four verdicts                                      [need
         supported in part only, one with no citation at all — and record each verdict.
         Then run a draft containing one non-SUPPORTED claim through draft-page's
         procedure and show the write does not happen.
+        "No file at the target path" proves nothing on its own — it is equally true if an
+        earlier gate blocked, or if the run never attempted a write. The evidence has to
+        rule those out.
         done when: four distinct claim sentences are recorded with four distinct verdicts
-        and their raw stdout; UNSOURCED is reached without a dispatch;
-        PARTIALLY_SUPPORTED is not rounded up; and the blocked run shows no file written
-        at the target path plus a reported finding. Closes #2141.
+        and their raw stdout; UNSOURCED is reached without a dispatch and its transcript
+        shows no invocation for that claim; PARTIALLY_SUPPORTED is not rounded up; and
+        for the blocked run — check-page and screen-sensitive are recorded as having
+        passed first, so verify-claims is demonstrably what blocked; the target path is
+        observed before and after, absent both times; and the reported finding names the
+        specific claim and verdict. Closes #2141.
 
 STEP 9  Prove $PROFESSOR_VERIFIER_CMD resolution and its unset failure        [needs 4]
         With the variable unset, run a draft down the real draft-page path — not the
         dispatch alone — and capture the failure. Then run the same draft with a
         configured command that is not `claude --print` and show it works. Then the two
         degrade scenarios from the DECIDED note: a command not on PATH, and a command
-        that runs but returns prose carrying no recognisable verdict.
+        that runs but returns prose carrying no recognisable verdict. Then the two
+        non-completion cases step 1's contract now governs: a command that prints a
+        well-formed SUPPORTED and exits non-zero, and one that prints it and then hangs
+        past the timeout.
         done when: the unset run fails with a message naming the variable, is not a
         generic empty-command crash, and does not skip the gate; the non-default run
         returns a real verdict; the not-on-PATH run fails at launch; the unparseable-
         output run is caught by step 1's recognition rule and blocks rather than passing;
-        all four transcripts show the draft path, not a direct dispatch call; and the
-        write-up says it demonstrated the consequences of a harness without a headless
-        CLI, not the absence of one. Closes #2142.
+        the non-zero-exit and hanging runs each block despite their stdout reading
+        SUPPORTED; all six transcripts show the draft path, not a direct dispatch call;
+        and the write-up says it demonstrated the consequences of a harness without a
+        headless CLI, not the absence of one. Closes #2142.
 
 STEP 10 Demonstrate the roster-names dispatch resolving every candidate    [needs 6, 7]
         Run screen-sensitive's full procedure over a page carrying both an attribution
         name and an access-control roster, and show each candidate reaching a resolved
         verdict.
-        done when: the attribution name is not flagged in the final outcome, the roster
-        name resolves to redact, and no candidate reaches the outcome unresolved. Closes
-        #2140's criteria 1–3 and 5 in fact, not only in text.
+        Put both names on ONE line, so the demonstration actually exercises the mapping
+        the offsets exist for. "The attribution name is not flagged" is vacuous unless it
+        was flagged as a candidate in the first place — start from the raw candidate list
+        and reconcile counts.
+        done when: screen-content's raw output is recorded first, showing both names as
+        separate candidates on the same line with different column offsets; each
+        candidate has its own recorded invocation, input and verdict; the count of
+        candidates in equals the count resolved out; the attribution name is absent from
+        the final outcome and the roster name resolves to redact; and a deliberately
+        unresolvable candidate is shown retaining redact rather than being dropped.
+        Closes #2140's criteria 1–3 and 5 in fact, not only in text.
 
-STEP 11 Reconcile the design doc with what is now true                  [needs 4, 5, 6]
+STEP 11 Reconcile the design doc with what is now true       [needs 4, 5, 6, 7, 8, 9, 10]
         launchpad/Research/the-professor-skill-suite-redesign.md's phase table still reads
         "| 1 | ... | 0 | Not started |" — Phase 1 shipped on 2026-09-08. Correct Phase 1's
         status, set Phase 1b's, and re-check §6.7 against what the editing steps wrote.
-        done when: no phase row in the table contradicts a merged PR; every §N
-        cross-reference in the file still resolves to a real heading; and the three
-        mermaid diagrams are still present.
+        Also record the three 2026-09-15 decisions where the doc's other eleven live, so
+        they survive this plan.
+        Dependency corrected 2026-09-15: this was tagged [needs 4, 5, 6], which permitted
+        it to set Phase 1b's status before step 7 changed the code and before steps 8–10
+        produced any evidence. §9's Phase 1b review gate makes those demonstrations part
+        of the gate, so the status row cannot honestly be set until they exist.
+        done when: no phase row in the table contradicts a merged PR or an undemonstrated
+        criterion; the run-identifier decision and its independence limitation, the
+        roster-names flag-plus-offsets shape, and #2142's two-scenario reading are each
+        recorded in the doc; every §N cross-reference still resolves to a real heading;
+        and the three mermaid diagrams are still present.
 
 PARALLEL
   Steps 4, 5 and 6 may run as parallel subagents — three different SKILL.md files, no
@@ -237,7 +343,11 @@ PARALLEL
   wording depends on step 1's contract. Step 7 cannot run beside step 6 — its message
   text must match what step 6 leaves in the skill. Steps 8, 9 and 10 are demonstration
   runs that each consume a wired procedure and must follow it. Step 11 must come last of
-  the editing steps; it reports what the others actually wrote.
+  ALL steps, not just the editing ones — corrected 2026-09-15, because its old [needs 4,
+  5, 6] tag let it set Phase 1b's status in the design doc before step 7 changed any code
+  and before steps 8–10 produced a single piece of evidence, which §9's own Phase 1b
+  review gate requires. It reports what the others actually did, so it cannot precede
+  them.
 
 GATES
   review-skill after steps 4, 5 and 6 (four SKILL.md diffs — the bulk of the Feature).
@@ -270,9 +380,21 @@ OPEN
   3. RESOLVED 2026-09-15 by Serina — see the third DECIDED note above the steps. Kept
      numbered here so a reader of this section alone does not think it was never asked.
 
-  No live open items remain. All three were put to Serina one at a time on 2026-09-15 and
-  answered; each answer is recorded above the steps and carried into the step it changes.
-  A builder finding a genuinely new gap reports it back rather than deciding it here.
+  No live open items remain. The three above were put to Serina one at a time on
+  2026-09-15 and answered. A FOURTH decision — candidate identity in a roster-names
+  finding — was raised by the Codex review of this plan rather than by the issues, put to
+  her the same day, and answered; it has its own DECIDED note above the steps and was
+  never an OPEN item here. Each answer is carried into the step it changes. A builder
+  finding a genuinely new gap reports it back rather than deciding it here.
+
+  This plan has been reviewed once, on 2026-09-15, by review-plan (Sonnet) and by Codex
+  independently. Eight findings between them, all applied. The two reviews converged on
+  step 1's parsing rule as the plan's most serious defect — Blocker from one, High from
+  the other — and its done-condition was rewritten to forbid substring matching outright
+  rather than merely ask for a rule. Codex alone found the candidate-identity hole that
+  became the fourth decision. One disagreement was adjudicated against the files: the
+  draft-page line-227 claim, which Sonnet passed and Codex correctly failed. ALREADY TRUE
+  now records what that file actually says.
 
 LEFT OUT
   Cost work — batching, caching, a cheaper model tier — named by the design doc as a
