@@ -115,12 +115,14 @@ class AuthorityClient:
     """`LifecycleDeps.authority` — carries `.github`/`.store` the way
     `rqa/lifecycle/rest.py`/`steps.py` read them off `deps.authority`."""
 
-    def __init__(self, *, github: GithubAdapter, store: SqliteCapabilityStore) -> None:
+    def __init__(self, *, github: GithubAdapter, store: SqliteCapabilityStore,
+                 repos: tuple[str, ...] = ()) -> None:
         self.github = github
         self.store = store
+        self.gate = authority_mod.Gate(repos=frozenset(repos))
 
     def grant(self, **kwargs: Any) -> Grant | Any:
-        return authority_mod.grant(**kwargs)
+        return self.gate.grant(**kwargs)
 
 
 class SupplyClient:
@@ -236,6 +238,7 @@ class Composition:
     pr_facts: SqlitePrFactsStore
     leases: SqliteLeaseStore
     record: RecordWriter
+    keystore: KeyStore
     github: GithubAdapter
     runner: SubprocessProcessRunner
     policy: PolicyClient
@@ -289,6 +292,8 @@ def build_composition(
     *,
     clock: Callable[[], datetime] = utcnow,
     keystore: KeyStore = OSKeyStore(),
+    repos: tuple[str, ...] = (),
+    require_record: bool = False,
 ) -> Composition:
     """Bootstrap every table this state directory needs and wire every real
     collaborator over it. Idempotent: every store's own constructor runs its
@@ -296,6 +301,8 @@ def build_composition(
     directory (the normal case — one process per `rqa` invocation) never
     loses or duplicates schema.
     """
+    if require_record:
+        keystore.read("rqa-record-hmac")
     state_dir.mkdir(parents=True, exist_ok=True)
     connection = sqlite3.connect(str(state_dir / "state.db"))
 
@@ -338,7 +345,7 @@ def build_composition(
     policy = PolicyClient(snapshot_store)
 
     capability_store = SqliteCapabilityStore(connection)
-    authority = AuthorityClient(github=github, store=capability_store)
+    authority = AuthorityClient(github=github, store=capability_store, repos=repos)
 
     prober = SubprocessHarnessProber()
     breakers = SqliteBreakerStore(connection=connection)
@@ -363,6 +370,7 @@ def build_composition(
         pr_facts=pr_facts,
         leases=leases,
         record=record,
+        keystore=keystore,
         github=github,
         runner=runner,
         policy=policy,
@@ -376,5 +384,3 @@ def build_composition(
         escalation_store=escalation_store,
         snapshot_store=snapshot_store,
     )
-
-

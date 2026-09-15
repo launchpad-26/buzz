@@ -354,6 +354,7 @@ def test_t4_unavailable_first_inventory_does_not_block_the_second() -> None:
         )
 
     assert result.repos_admitted == (first, second)
+    assert [(f.repo, f.reason, f.retriable) for f in result.repos_failed] == [(first, "unreachable", True)]
     assert github.inventory_calls == [first, second]
     assert len(jobs.created) == 1
     assert result.jobs_created == (jobs.created[0].id,)

@@ -258,6 +258,7 @@ def test_onboard_writes_then_refuses_the_second_call() -> None:
     with tempfile.TemporaryDirectory() as state, tempfile.TemporaryDirectory() as repos:
         state_dir = pathlib.Path(state)
         repo = str(pathlib.Path(repos) / "acme" / "widget")
+        pathlib.Path(repo).mkdir(parents=True)
 
         code, payload = _run(state_dir, "onboard", repo)
         assert code == exitcodes.OK
@@ -273,6 +274,7 @@ def test_onboard_writes_then_refuses_the_second_call() -> None:
 def test_status_reports_not_found_for_an_unknown_pr() -> None:
     with tempfile.TemporaryDirectory() as state:
         state_dir = pathlib.Path(state)
+        main_module.build_composition(state_dir, keystore=_FAKE_KEYSTORE).connection.close()
         code, payload = _run(state_dir, "status", "some/repo", "7")
         assert code == exitcodes.INPUT_ERROR
         assert payload["outcome"] == "not_found"
@@ -398,6 +400,7 @@ def test_pending_decide_pending_round_trip_and_exit_codes() -> None:
 def test_decide_refuses_an_unknown_escalation_id() -> None:
     with tempfile.TemporaryDirectory() as state:
         state_dir = pathlib.Path(state)
+        main_module.build_composition(state_dir, keystore=_FAKE_KEYSTORE).connection.close()
         code, payload = _run(
             state_dir, "decide", "999", "--actor", "jeff", "--basis", "no such row",
         )

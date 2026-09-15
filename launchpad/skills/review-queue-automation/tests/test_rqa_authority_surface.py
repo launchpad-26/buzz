@@ -39,11 +39,11 @@ MODULES = frozenset({"__init__", "activities", "gate", "capability", "store"})
 #: composition root can construct it through the front door (#2211 is the module that
 #: falsified §1's "except through `__init__`" sentence: `grant()` takes its store as a
 #: parameter and nothing in `rqa/authority/` ever builds one).
-EXPORTS = ["grant", "Activity", "Grant", "Deny", "GateError", "SqliteCapabilityStore"]
+EXPORTS = ["grant", "Activity", "Grant", "Deny", "GateError", "SqliteCapabilityStore", "Gate"]
 
 #: The names published beyond §1's own list. Asserted positively below, not merely
 #: tolerated by the exact-set check.
-PUBLISHED = {"SqliteCapabilityStore"}
+PUBLISHED = {"SqliteCapabilityStore", "Gate"}
 
 #: §6: the only two entry kinds P-08 writes.
 ENTRY_KINDS_WRITTEN = frozenset({"grant", "attestation"})
@@ -136,7 +136,6 @@ def test_the_gate_the_proof_and_the_collaborator_protocols_are_not_package_surfa
     package surface. The concrete `SqliteCapabilityStore` is the one exception, and it is
     asserted positively in the next test rather than merely permitted here."""
     for name in (
-        "Gate",
         "CapabilityProof",
         "CapabilityStore",
         "GithubProbe",

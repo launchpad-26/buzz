@@ -93,6 +93,9 @@ def decide(
         return EscalationRefused(
             _REASON.ALREADY_CLOSED, detail=f"escalation {escalation_id} is already closed"
         )
+    if outcome is None and escalation.cause is EscalationCause.AUTHORITY_REQUIREMENT:
+        del escalation
+        raise EscalationError("an authority-requirement decision must include --outcome")
     if outcome is not None and escalation.cause is not EscalationCause.AUTHORITY_REQUIREMENT:
         # F-T1: `escalation` carries `.context`/`.question`, both potentially
         # PR-derived; extract only the safe value this message needs, then unbind the

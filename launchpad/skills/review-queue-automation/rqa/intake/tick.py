@@ -17,7 +17,7 @@ from rqa.intake.inventory import _ingest_inventory
 from rqa.intake.lease import Lease
 from rqa.intake.lock import acquire
 from rqa.intake.store import DEFAULT_BATCH_SIZE, JobStore, LeaseStore, PrFactsStore
-from rqa.intake.types import IntakeError, JobFailure, TickResult
+from rqa.intake.types import IntakeError, JobFailure, RepositoryFailure, TickResult
 from rqa.lifecycle import LifecycleDeps, admit
 from rqa.lifecycle.deps import (
     AuthorityClient,
@@ -88,6 +88,7 @@ def tick(
     jobs_created: list[str] = []
     jobs_dispatched: list[str] = []
     jobs_failed: list[JobFailure] = []
+    repos_failed: list[RepositoryFailure] = []
 
     try:
         for repo in repos:
@@ -101,6 +102,7 @@ def tick(
                 repos_admitted.append(repo)
                 result = github.inventory(repo=repo)
                 if isinstance(result, GithubUnavailable):
+                    repos_failed.append(RepositoryFailure(repo, result.reason, result.retriable))
                     log(f"repo inventory unavailable: {repo}: {result!r}")
                     continue
 
@@ -118,6 +120,7 @@ def tick(
                 raise
             except Exception as exc:
                 connection.rollback()
+                repos_failed.append(RepositoryFailure(repo, "internal_error", False))
                 log(f"repo sweep failed: {repo}: {exc!r}")
 
         batch, revisited_resting_jobs = _select_batch(jobs=jobs, limit=batch_size)
@@ -160,6 +163,7 @@ def tick(
             jobs_dispatched=tuple(jobs_dispatched),
             jobs_failed=tuple(jobs_failed),
             revisited_resting_jobs=revisited_resting_jobs,
+            repos_failed=tuple(repos_failed),
         )
     finally:
         lock_handle.close()
