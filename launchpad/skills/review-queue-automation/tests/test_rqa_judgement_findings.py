@@ -68,7 +68,7 @@ def test_t8_a_two_family_corroborated_multi_category_finding_with_a_blocking_cat
 def test_t9_a_mixed_mechanical_and_substantive_finding_is_never_a_remediation_candidate() -> None:
     location = Location(path="src/widget.py", line=1)
     categories = frozenset({Category.MECHANICAL, Category.SECURITY})
-    remedy = Remedy(tool="fmt", paths=("src/widget.py",), check="ci/fmt")
+    remedy = Remedy(tool="ruff-format", paths=("src/widget.py",), check="ruff-format-check")
     finding_a = fx.make_finding(
         finding_id="FA", categories=categories, location=location, remedy=remedy,
         behaviour_changing=False, source_attempt="att-1",
@@ -95,7 +95,7 @@ def test_t9_a_mixed_mechanical_and_substantive_finding_is_never_a_remediation_ca
 
 
 def test_t10_an_otherwise_mechanical_finding_with_behaviour_changing_none_or_true_is_not_a_candidate() -> None:
-    remedy = Remedy(tool="fmt", paths=("src/widget.py",), check="ci/fmt")
+    remedy = Remedy(tool="ruff-format", paths=("src/widget.py",), check="ruff-format-check")
     for label, behaviour_changing in (("none", None), ("true", True)):
         location = Location(path=f"src/{label}.py", line=1)
         categories = frozenset({Category.MECHANICAL})
@@ -124,7 +124,7 @@ def test_t10_an_otherwise_mechanical_finding_with_behaviour_changing_none_or_tru
 def test_a_qualifying_mechanical_finding_with_behaviour_changing_false_is_a_candidate() -> None:
     """The positive counterpart to T9/T10: proves the gate discriminates rather
     than always returning False."""
-    remedy = Remedy(tool="fmt", paths=("src/widget.py",), check="ci/fmt")
+    remedy = Remedy(tool="ruff-format", paths=("src/widget.py",), check="ruff-format-check")
     location = Location(path="src/widget.py", line=1)
     categories = frozenset({Category.MECHANICAL})
     finding_a = fx.make_finding(
@@ -153,7 +153,7 @@ def test_e_b3b_3_a_remedy_path_absent_from_the_captured_files_is_not_a_candidate
     requires a remedy's exact paths to be present in the captured files;
     `code/P-07-judgement.md` §3 step 7 omits this condition, and §11 governs
     under the seam rule (see the handoff's Disclosures)."""
-    remedy = Remedy(tool="fmt", paths=("missing.py",), check="ci/fmt")
+    remedy = Remedy(tool="ruff-format", paths=("missing.py",), check="ruff-format-check")
     location = Location(path="src/widget.py", line=1)
     categories = frozenset({Category.MECHANICAL})
     finding_a = fx.make_finding(
@@ -446,8 +446,8 @@ def test_p07_005_remediation_candidates_survive_interleaved_fingerprints_in_orde
     `.append()`-during-group-iteration construction produces when two
     fingerprints interleave across attempts.
     """
-    remedy_a = Remedy(tool="fmt", paths=("src/a.py",), check="ci/fmt")
-    remedy_b = Remedy(tool="fmt", paths=("src/b.py",), check="ci/fmt")
+    remedy_a = Remedy(tool="ruff-format", paths=("src/a.py",), check="ruff-format-check")
+    remedy_b = Remedy(tool="ruff-format", paths=("src/b.py",), check="ruff-format-check")
     location_a = Location(path="src/a.py", line=1)
     location_b = Location(path="src/b.py", line=1)
     categories = frozenset({Category.MECHANICAL})
