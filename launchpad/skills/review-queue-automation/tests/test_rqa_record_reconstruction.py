@@ -36,3 +36,13 @@ def test_injected_keychain_distinguishes_tampering_from_intact_records():
     assert result.truncated_at is not None
     assert result.snapshot_hash is None
     connection.close()
+
+
+def test_human_decision_basis_is_reconstructed_from_the_decision_entry():
+    connection = sqlite3.connect(":memory:")
+    writer = SQLiteRecordWriter(connection, keystore=Key())
+    writer.append("job", "decision", {"actor": "fixture-human", "basis": "checked the cited evidence"})
+    result = explain_job(connection, "job", keystore=Key())
+    assert result.reviewer_identity == ("fixture-human",)
+    assert result.decision_basis == "checked the cited evidence"
+    connection.close()
