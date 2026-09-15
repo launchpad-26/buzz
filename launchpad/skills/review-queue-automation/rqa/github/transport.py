@@ -272,6 +272,25 @@ class Transport:
 
     # -- REST ------------------------------------------------------------------
 
+    def oauth_scopes(self, *, credential: str) -> frozenset[str] | None:
+        """Read this credential's OAuth scopes from a fresh authenticated response.
+
+        Scope headers are never inferred from cached bodies or another credential.
+        An absent header is unknown authority, not unrestricted authority.
+        """
+        response = self._exchange(
+            Request(method="GET", url=f"{API_ROOT}/user",
+                    headers=self._headers(accept=ACCEPT_JSON, credential=credential, etag=None),
+                    body=None),
+            kind="rest", operation="probe",
+        )
+        if response.status != 200:
+            raise _status_unavailable(response, operation="probe")
+        scopes = _header_value(response.headers, "X-OAuth-Scopes")
+        if scopes is None:
+            return None
+        return frozenset(scope.strip() for scope in scopes.split(",") if scope.strip())
+
     def rest_json(self, path: str, *, operation: str, credential: str | None = None) -> object:
         """One REST GET, parsed. `path` is `/`-rooted or a full pagination URL."""
         url = path if path.startswith("https://") else f"{API_ROOT}{path}"
@@ -394,4 +413,3 @@ class Transport:
         if not document.lstrip().startswith("mutation"):
             raise ValueError("mutate() sends mutations only")
         return self._post_graphql(document, variables, operation=operation, credential=credential)
-
