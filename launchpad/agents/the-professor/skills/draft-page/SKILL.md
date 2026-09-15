@@ -121,20 +121,21 @@ above its heading, built from step 4's `sources` (§8 has the exact format). Thi
 content, not a separate ledger write: it's why `check-page` (step 7) can legitimately
 require every section to carry one (page-contract.md's own "Provenance" section
 explains the distinction) — the marker exists in the draft itself from this point on,
-whereas the `.jsonl` ledger append only happens later, in step 8, once the page is
+whereas the `.jsonl` ledger append only happens later, in step 11, once the page is
 actually published. Getting this ordering right matters: a version of this skill that
-deferred the inline marker to step 8 (alongside the ledger append) would hand
-`check-page` a scratch file with no markers to check, making its own provenance
-requirement impossible to satisfy — don't reintroduce that by moving this step later.
+deferred the inline marker to the ledger-append step would hand `check-page` a scratch
+file with no markers to check, making its own provenance requirement impossible to
+satisfy — don't reintroduce that by moving this step later.
 
-Both gates below (`check-page`, then `screen-sensitive`) need the complete draft —
-markers included — as a file argument, so write it to a fresh temp path first
+All three gates below (`check-page`, then `screen-sensitive`, then `verify-claims`) need
+the complete draft — markers included — as a file argument, so write it to a fresh temp
+path first
 (mirroring the original `check_page()`'s own pattern: an isolated scratch location
 holding nothing else, never the real target library). **This is not the write §7
 forbids** — the section of `screen-sensitive`'s own text that says "never write
 flagged content anywhere" is about the *real* target location and any logs, not about
 this scratch file, which is the thing being screened in the first place and gets
-deleted once both gates have run, pass or fail.
+deleted once all three gates have run, pass or fail.
 
 ## 7. Run the contract gate
 
@@ -157,10 +158,69 @@ the contract gate doesn't become safe by also passing the sensitivity gate.
 
 The scratch file goes to `screen-sensitive`, only after step 7 is clean. This is not
 optional and not something judgement decides case by case — see that skill's own
-text for why. Only after it returns `pass` or `redact` does the page get written to
-its real path in the target's library; a `block` result means the draft doesn't ship
-in its current form, full stop, and the scratch file is discarded without its content
-appearing anywhere else — no log, no retry-with-the-same-content, nothing.
+text for why. A `block` result means the draft doesn't ship in its current form, full
+stop, and the scratch file is discarded without its content appearing anywhere else —
+no log, no retry-with-the-same-content, nothing.
+
+**`pass` or `redact` does not authorize the write.** It authorizes step 9. Two gates are
+not the gate stack; the third is below.
+
+## 9. Run the claim gate — `verify-claims`, the third and last
+
+Only after step 8 returns `pass` or `redact`, hand the same scratch file to
+`verify-claims`. It is the third gate, always after `check-page` and `screen-sensitive`
+and never in parallel with either: cheapest and most deterministic first, this one last,
+because it is the only gate that costs a model call per claim.
+
+**Any verdict other than `SUPPORTED`, on any single claim, stops the write entirely.**
+`UNSOURCED`, `NOT_SUPPORTED` and `PARTIALLY_SUPPORTED` all block, and so does a dispatch
+that produced no verdict at all. There is no partial-write path and no
+write-the-supported-sections-only path — the same disposition `screen-sensitive`'s
+`block` already has, for the same reason: a page is not "mostly verified."
+
+Report a blocked result in the same finding shape `screen-sensitive` uses — which claim,
+which verdict, the one-sentence reason, and the citation it was checked against (or that
+none existed, for `UNSOURCED`) — so review has one place to look regardless of which gate
+produced the finding.
+
+**A draft with zero behaviour claims still runs this gate.** The gate records explicitly
+that it found none and passes through. It does not skip, and it never invents a claim in
+order to have something to verify — a structural or opinion-only page is a legitimate
+outcome, an unrecorded one is indistinguishable from the gate not having run.
+
+This pass is **advisory**: it exists so findings can be fixed before step 10, not to
+authorize the write by itself.
+
+## 10. The final independent pass — all three gates, in order, against the finished content
+
+**Decided 2026-09-04, by Serina: every gate runs twice.** Immediately before the write is
+finalized, re-run `check-page`, then `screen-sensitive`, then `verify-claims` — the whole
+sequence, in that order, against the finished content, from scratch.
+
+The first pass through steps 7–9 is advisory. **This one is the gate of record.**
+"Unskippable" in steps 7–9 is a prompt instruction to the drafting agent, not proof the
+agent complied, and not proof the content those gates saw is the content about to be
+written.
+
+**All three, not just `verify-claims`.** A fix made in response to step 9's findings is an
+edit to the draft *after* `check-page` and `screen-sensitive` already ran. Re-running only
+the claim gate would leave those two holding verdicts about a version of the page that no
+longer exists — so a repair could introduce a secret, or break a citation, after screening
+and still reach the target path. That is the precise failure this ordering exists to stop.
+
+**Any edit after this sequence invalidates it.** There is no "just one more small fix"
+after the final pass — that fix requires the whole sequence again, from `check-page`. A
+sequence run against content that then changed is not evidence about the content that
+shipped.
+
+`verify-claims`' own §4a governs how its second pass is told from a replay of the first:
+a fresh per-pass run identifier and one recorded invocation per cited claim. A second pass
+that reuses the first pass's verdicts has not run.
+
+Only when all three gates come back clean on the finished content does the page get
+written to its real path in the target's library.
+
+## 11. After the write: the ledger and the index
 
 Once written to its real path (inline provenance markers already in it, from step 6),
 two more things need to happen — not guaranteed atomic with each other or with the
@@ -222,11 +282,14 @@ other draft would, using this skill's own steps 1, 4, and 5 exactly as written:
 4. Embed the inline provenance markers (step 6) directly above the section's existing
    heading — this is the first time this section gets one, not a rewrite of an
    existing marker.
-5. Run the contract gate (step 7) and the sensitivity gate (step 8) exactly as any
-   other draft would, against the now-annotated section — **and, corrected
-   2026-09-05, `verify-claims` (§6.7) and the mandatory final independent pass, same
-   as any other draft gets (§6's flow-diagram note)**; an earlier version of this
-   text stopped at two gates, silently exempting baseline mode from the third.
+5. Run the contract gate (step 7), the sensitivity gate (step 8) and the claim gate
+   (step 9) exactly as any other draft would, against the now-annotated section, and
+   then **step 10's final independent pass — all three again, in order, against the
+   finished content**, same as any other draft gets. An earlier version of this text
+   stopped at two gates, silently exempting baseline mode from the third; a later one
+   named the third gate and the final pass but before either had a step of its own to
+   point at. Baseline mode gets no carve-out from any of it, including step 10's rule
+   that an edit after the final sequence invalidates it.
 6. On a clean pass, `provenance-log` writes an `"updated"` line — **corrected
    2026-09-05: not `"added"`**, because the section's `unknown-pre-existing` line
    already exists and is itself the section's first-ever ledger line; §8's own rule
@@ -255,13 +318,22 @@ the library) — it only ever touches the one section `needs_baseline` named.
       its path was confirmed with `tools/professor.py path-exists-at`
 - [ ] Every section's inline provenance marker was embedded in the draft **before**
       the scratch write — not deferred to the ledger-append step
-- [ ] Draft was written to an isolated scratch file before either gate ran, never
+- [ ] Draft was written to an isolated scratch file before any gate ran, never
       straight to the target library
 - [ ] The contract gate resolved a target override (`.professor/check-page`) before
       falling back to the bundled `tools/professor.py check-page`, and reported no
       findings against the scratch file before `screen-sensitive` ever saw it
 - [ ] `screen-sensitive` ran against the scratch file and returned `pass` or `redact`
-      before the page was written to its real path — never `block`
+      — never `block` — and that result authorized step 9, not the write
+- [ ] `verify-claims` ran as the third gate, after both others and never beside them;
+      every claim came back `SUPPORTED`, or the write stopped entirely — no
+      partial-write path, and a draft with zero behaviour claims recorded that
+      explicitly rather than skipping the gate
+- [ ] Step 10 ran all three gates again, in order, against the finished content
+      immediately before the write — not `verify-claims` alone, because a fix made
+      after steps 7–8 leaves those two holding verdicts about a page that changed
+- [ ] Nothing was edited after step 10's sequence; if anything was, the whole sequence
+      ran again from `check-page` rather than being patched up
 - [ ] `provenance-log` ran in `write` mode for every section once the page existed at
       its real path
 - [ ] `library.json`'s entry for this topic was updated from `page: null` to the real
