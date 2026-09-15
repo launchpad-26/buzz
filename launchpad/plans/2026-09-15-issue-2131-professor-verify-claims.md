@@ -45,6 +45,30 @@ DECIDED 2026-09-15, by Serina — the roster-names finding shape (was OPEN item 
   this adds a field to it. check_professor.py must assert the new field, and every
   consumer of that JSON has to tolerate it.
 
+DECIDED 2026-09-15, by Serina — what #2142's fourth criterion proves (was OPEN item 3)
+
+  Two scenarios, both demonstrated. First, $PROFESSOR_VERIFIER_CMD set to a command that
+  is not on PATH: fails at launch. Second, and the one that matters, a command that runs
+  to completion but is not a headless single-turn verifier — it hangs on input, or returns
+  prose containing no recognisable verdict. That second case is the degrade the criterion
+  names: nothing crashes, and a careless reading could treat the output as a pass.
+
+  Reading the criterion as the unset case was rejected: that is criterion 1 of the same
+  issue, and it would make criterion 4 a duplicate rather than a distinct proof.
+
+  This matters more than it looks, because dispatch deliberately does not go through
+  professor_lib/proc.py — §4 keeps it out of the toolkit's four subcommands, so the agent
+  runs $PROFESSOR_VERIFIER_CMD by following the skill's prose. proc.py's structured
+  handling of a missing binary, a timeout and an OS refusal therefore does not cover
+  dispatch at all. Step 1's unrecognised-stdout rule is the only thing standing between
+  "the verifier returned something unparseable" and "the claim passed", which is exactly
+  what the second scenario tests.
+
+  Honesty requirement on the evidence, so it is not overclaimed: what gets demonstrated is
+  the two observable consequences of a harness with no headless single-turn CLI, not the
+  absence of one. The design doc names that limitation as real and unsolved; this shows it
+  fails safely, not that it has been fixed.
+
 ALREADY TRUE  (verified against the worktree, not against notes)
 
   This section most changes the shape of this Feature. Three of the six child issues are
@@ -180,11 +204,16 @@ STEP 8  Demonstrate all four verdicts                                      [need
 STEP 9  Prove $PROFESSOR_VERIFIER_CMD resolution and its unset failure        [needs 4]
         With the variable unset, run a draft down the real draft-page path — not the
         dispatch alone — and capture the failure. Then run the same draft with a
-        configured command that is not `claude --print` and show it works.
+        configured command that is not `claude --print` and show it works. Then the two
+        degrade scenarios from the DECIDED note: a command not on PATH, and a command
+        that runs but returns prose carrying no recognisable verdict.
         done when: the unset run fails with a message naming the variable, is not a
         generic empty-command crash, and does not skip the gate; the non-default run
-        returns a real verdict; and both transcripts show the draft path, not a direct
-        dispatch call. Closes #2142.
+        returns a real verdict; the not-on-PATH run fails at launch; the unparseable-
+        output run is caught by step 1's recognition rule and blocks rather than passing;
+        all four transcripts show the draft path, not a direct dispatch call; and the
+        write-up says it demonstrated the consequences of a harness without a headless
+        CLI, not the absence of one. Closes #2142.
 
 STEP 10 Demonstrate the roster-names dispatch resolving every candidate    [needs 6, 7]
         Run screen-sensitive's full procedure over a page carrying both an attribution
@@ -238,10 +267,12 @@ OPEN
      here so a reader of this section alone does not think it was never asked.
   2. RESOLVED 2026-09-15 by Serina — see the second DECIDED note above the steps. Kept
      numbered here so a reader of this section alone does not think it was never asked.
-  3. What #2142's fourth criterion actually demonstrates. "A harness with no headless
-     single-turn CLI available is confirmed to fail loudly" — setting the variable to a
-     non-existent command is a different failure from a harness that has no such CLI. The
-     issue does not say which is being asked for.
+  3. RESOLVED 2026-09-15 by Serina — see the third DECIDED note above the steps. Kept
+     numbered here so a reader of this section alone does not think it was never asked.
+
+  No live open items remain. All three were put to Serina one at a time on 2026-09-15 and
+  answered; each answer is recorded above the steps and carried into the step it changes.
+  A builder finding a genuinely new gap reports it back rather than deciding it here.
 
 LEFT OUT
   Cost work — batching, caching, a cheaper model tier — named by the design doc as a
