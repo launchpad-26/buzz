@@ -120,7 +120,10 @@ couldn't verify**. Reviewing a human PR doesn't need any of that.
 Both paths are checked in CI, so structure holds whether the PR came from the browser
 or the CLI.
 
-Branch from `launchpad`, commit with `-s` (the DCO check is not optional), and expect to
+Branch from `launchpad`, commit with `-s` — the sign-off is expected on every commit,
+though nothing in this fork's CI rejects a commit without it; the `commit-msg` hook adds
+the trailer for you if you have run `just hooks`, and upstream is where its absence
+actually bites ([AGENTS.md §6](AGENTS.md#6-branch-commit-pr)). Expect to
 need **one** approving review from a reviewer with write access — the branch is protected
 and GitHub does not let you approve your own. `dismiss_stale_reviews` is on, so pushing new
 commits dismisses an existing approval and a change made in response to review needs
@@ -157,6 +160,19 @@ the clone too.
 | `upstream-intel/` | Upstream tracking tooling (prd-01) |
 
 The last four arrive with the PRDs that create them.
+
+### Governance, licence and conduct
+
+These are **not** under `launchpad/` — they sit at the repository root, and the ones
+inherited from upstream do not all describe how this fork works.
+
+| Where to look | For what | Caveat |
+|---|---|---|
+| [`AGENTS.md`](AGENTS.md) | **How to contribute here** — types, rules, git workflow, review | This is the fork's contribution guide. Use it, not the root one |
+| [`../CONTRIBUTING.md`](../CONTRIBUTING.md) | Upstream `block/buzz`'s contribution process | Describes upstream's process. §1 of [`AGENTS.md`](AGENTS.md) records that root guidance is *wrong, not merely irrelevant* for cohort work |
+| [`../CODE_OF_CONDUCT.md`](../CODE_OF_CONDUCT.md) | Expected conduct and how to report a breach | Applies to this fork |
+| [`../LICENSE`](../LICENSE) | The licence the code is published under | Whether it also governs `launchpad/` documentation is **not yet decided** — raise an ADR issue if you need the answer |
+| [`../SECURITY.md`](../SECURITY.md) | Reporting a vulnerability in **Buzz the product** — goes privately to Block | For a vulnerability in *this fork's* operational work, use the private advisory in the issue chooser instead |
 
 ---
 

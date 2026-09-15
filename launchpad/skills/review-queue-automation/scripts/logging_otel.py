@@ -305,6 +305,17 @@ class JobLogger:
         Allocation reserves the next free number with O_CREAT|O_EXCL; two
         concurrent callers cannot choose the same number. Content is then written
         atomically via rename (no lock needed for the immutable file itself).
+
+        This 0o600 governs only the empty reservation file created below. The
+        real content lands via `_atomic_replace`, which writes through
+        `tempfile.mkstemp` (always 0600, independent of umask) and `os.replace`
+        — a rename, so the destination inode takes on the *source's* mode, not
+        its own prior one. `attempt-NNN.json` has therefore always ended up
+        0600 with content in it, before and after this argument was 0o644: this
+        line closes a CodeQL lint pattern (#2225/#2226), not a disclosure gap
+        that ever existed. Kept as 0o600 anyway, since a correct mode on the
+        reservation file is still the right thing even though it's superseded
+        moments later. See #2247.
         """
         number = 0
         while True:

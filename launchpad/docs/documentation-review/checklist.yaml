@@ -1,0 +1,2193 @@
+# Output 10 - Machine-readable master documentation checklist
+#
+# ---------------------------------------------------------------------------
+# IN PLAIN TERMS
+#
+#   What this is   The same documentation rules as 03-master-checklist.md, in a
+#                  form a program can read. The Markdown file is the one humans
+#                  should read; this one is for tooling.
+#   Who it is for  Scripts, linters, CI jobs and agents.
+#   What to do     Load it, filter by `applicability` and `priority_default`,
+#                  and run the `audit_method` for each item you select.
+#   Know this      `corpus_gap: true` means the rule is NOT backed by the
+#                  research - it is supplementary best practice. Weaker.
+#
+# HOW IT IS PRODUCED
+#
+#     03-master-checklist.md        (humans write and edit HERE)
+#              |
+#              v
+#     generate_checklist_yaml.py    (run it from this directory)
+#              |
+#              v
+#     checklist.yaml                (this file - generated, do not hand-edit)
+#
+#   Editing this file directly will be overwritten. Change the Markdown.
+# ---------------------------------------------------------------------------
+
+checklist_version: "1.1"
+baseline_revision: "78e789369e3392f187e8c63753262669108fda81"
+generated_from:
+  - path: "launchpad/Research/documentation-corpus-review/"
+    files_reviewed: 41
+    files_unreadable: 0
+rules:
+  - "No aggregate score; an average may not offset a failed gate."
+  - "not_applicable and not_evaluated are different results and both need a reason."
+  - "A deterministic check proves its own predicate and nothing else."
+  - "A tool failure becomes unable_to_assess, never a pass."
+  - "Report 'no defect detected against inventory X', never 'complete' or 'correct'."
+result_states: [pass, partial, fail, incorrect, stale, duplicated, not_applicable, not_evaluated, unable_to_assess, unknown, human_confirmation_required]
+item_count: 122
+items:
+  - id: "READER-001"
+    category: "reader-first"
+    requirement: "The document opens with a plain-language summary a non-specialist can read and understand in under 30 seconds."
+    audience:
+      - human
+    applicability: "required"
+    applies_when: "Always. Every document, every genre, no exceptions."
+    priority_default: "P1"
+    rationale: "Readers decide in seconds whether a document is for them, and a reader who cannot tell will either leave or — worse — act on a document meant for someone else. `R06` makes recognition a separate stage of the findability chain from retrieval: a document can be found and still be unusable because the reader cannot confirm it is the right one. `R13` makes it an accessibility requirement rather than a courtesy — readers working under interruption, time pressure, or with cognitive, language or reading differences need the point before the detail, not after it."
+    evidence_required: "A summary at the very top, before any technical content, stating what the document is, who it is for, and what the reader should do with it — in plain words, using no jargon the summary does not itself define."
+    suggested_locations: "The first block after the title, above everything else including tables of contents, status badges and metadata commentary."
+    source_references: "`R06`, `R13`, `R01`; and the cohort's existing convention that a PR body opens with an \"In plain terms\" section above the machine-checked schema."
+    corpus_gap: false
+    audit_method: "Read only the summary, with a timer. Then state without scrolling: what is this, who is it for, what do I do next. If you cannot answer all three inside 30 seconds, the item fails. Do not grade your own document — an author always passes their own summary."
+    automation_potential: "human"
+    dependencies: []
+    failure_risk: "The document serves only readers who already know what it contains, which is precisely the population that least needs it. Every other quality in this checklist becomes unreachable."
+  - id: "READER-002"
+    category: "reader-first"
+    requirement: "The document contains a diagram of the thing it describes — the system, the flow, or the process — with an equivalent description in words."
+    audience:
+      - human
+      - agent
+    applicability: "required"
+    applies_when: "The document describes something with parts, steps, states or relationships. A single-fact reference entry is exempt; almost nothing else is."
+    priority_default: "P1"
+    rationale: "`R10` is explicit that topology, sequence, containment and relationships are the information shapes prose carries worst, and that a reader who cannot see the shape reconstructs it wrongly. `R13` imposes the reverse obligation in the same breath: a diagram with no equivalent text route moves the information out of reach of some readers entirely. The diagram and its description are one requirement, not two."
+    evidence_required: "A diagram — Mermaid preferred, because it is text, it diffs, and it renders on GitHub — showing the elements and their relationships, **plus** prose or a list conveying the same elements, relationships, order and conclusion."
+    suggested_locations: "Immediately after the plain-language summary, before the detailed content."
+    source_references: "`R10`, `R13`, `R02` G03."
+    corpus_gap: false
+    audit_method: "Two passes. Hide the prose: are the diagram's purpose, elements, relationship labels and direction clear, with a legend where the notation is not obvious (`ARCH-002`, `ARCH-003`)? Then hide the diagram: does the remaining text support the same conclusion (`HUMAN-010`)? Both must pass."
+    automation_potential: "human"
+    dependencies: ["READER-001"]
+    failure_risk: "Structure and sequence exist only in the author's head. Readers rebuild them by guessing, and differently from one another — `F14`'s divergent mental models, arriving through the front door."
+  - id: "FOUND-001"
+    category: "foundations"
+    requirement: "Each document identifies its intended reader and the reader's goal specifically enough to judge fitness — a bare role label is not sufficient."
+    audience:
+      - human
+      - agent
+    applicability: "required"
+    applies_when: "Always."
+    priority_default: "P1"
+    rationale: "Relevance, completeness and usability cannot be judged without a named audience and task; ISO 9241-11 binds usability to specified users, goals and context."
+    evidence_required: "A statement of audience and reader goal, or metadata plus opening prose that jointly make both recoverable."
+    suggested_locations: "Front matter plus the document's opening."
+    source_references: "`R01`, `R06`, `F11`."
+    corpus_gap: false
+    audit_method: "Read the opening cold. State the reader and the decision they are trying to make. If you cannot, the item fails."
+    automation_potential: "human"
+    dependencies: []
+    failure_risk: "The document addresses everyone and serves no one — the measured default output of an agent that cannot observe the reader (`F11`)."
+  - id: "FOUND-002"
+    category: "foundations"
+    requirement: "No document declares more audiences than it actually addresses."
+    audience:
+      - human
+      - agent
+    applicability: "required"
+    applies_when: "The project has an audience field or equivalent."
+    priority_default: "P2"
+    rationale: "An audience field that is cheap to satisfy will be satisfied syntactically; declaring an extra audience costs nothing while excluding one requires an argument (`F11`)."
+    evidence_required: "For each declared audience, a passage addressed to it."
+    suggested_locations: "Front matter."
+    source_references: "`F11`."
+    corpus_gap: false
+    audit_method: "Count declared audiences mechanically; for any document declaring ≥3, sample and check that each is genuinely addressed."
+    automation_potential: "partial"
+    dependencies: ["FOUND-001"]
+    failure_risk: "Mode conflation and task disconnection hidden behind valid metadata."
+  - id: "FOUND-003"
+    category: "foundations"
+    requirement: "Every document names the authority that governs its claims, and says when it is not itself authoritative."
+    audience:
+      - human
+      - agent
+    applicability: "required"
+    applies_when: "The document states requirements, defaults, or current system behaviour."
+    priority_default: "P1"
+    rationale: "Authority is not conferred by file location, confident tone, or capitalisation (`R09`)."
+    evidence_required: "A named governing instrument, or an explicit statement that the document is explanatory and a link to what governs."
+    suggested_locations: "Document header or a precedence section."
+    source_references: "`R09`, `F09`."
+    corpus_gap: false
+    audit_method: "For each requirement-shaped sentence, ask which instrument imposed it. Unanswerable ⇒ fail."
+    automation_potential: "human"
+    dependencies: []
+    failure_risk: "Invented obligations that read as policy."
+  - id: "FOUND-004"
+    category: "foundations"
+    requirement: "Documents declare their source of truth for volatile facts, and link rather than restate bounded rule sets."
+    audience:
+      - human
+      - agent
+    applicability: "required"
+    applies_when: "The document repeats a fact owned elsewhere."
+    priority_default: "P1"
+    rationale: "Restatement creates an independent maintenance site; the corpus demonstrates a case where a consistency guard propagated a wrong value into the document that was right (`F10`)."
+    evidence_required: "A link to the owner, or a generation path."
+    suggested_locations: "At the point of restatement."
+    source_references: "`R05`, `F10`, `F14`."
+    corpus_gap: false
+    audit_method: "Grep for duplicated values (counts, versions, defaults) across documents; verify each duplicate against the owner, not against its sibling."
+    automation_potential: "partial"
+    dependencies: ["FOUND-003"]
+    failure_risk: "Correction of the root does not propagate; the derived claim is where the harm lives."
+  - id: "FOUND-005"
+    category: "foundations"
+    requirement: "Information architecture separates canonical nodes, classification, semantic relationships and reader journeys, and does not use one for another."
+    audience:
+      - human
+      - agent
+    applicability: "conditional"
+    applies_when: "The corpus exceeds what one document can hold."
+    priority_default: "P2"
+    rationale: "Relationship vocabularies express semantic structure, not reader sequence; a generator cannot invent a curriculum from a `references` graph (`R05`)."
+    evidence_required: "A stated model of the four layers, or an explicit decision that maps are not maintained."
+    suggested_locations: "Corpus README or an architecture-of-documentation node."
+    source_references: "`R05`."
+    corpus_gap: false
+    audit_method: "Ask which artefact tells an operator what to read, in what order, for one real task. If the answer is \"the relationship graph\", the item fails."
+    automation_potential: "human"
+    dependencies: []
+    failure_risk: "Individually valid nodes with no usable journey between them."
+  - id: "FOUND-006"
+    category: "foundations"
+    requirement: "Important concepts have a stable identity separate from their display label, with a preferred label declared per scope."
+    audience:
+      - human
+      - agent
+    applicability: "conditional"
+    applies_when: "A concept appears across ≥2 surfaces (docs, code, UI, protocol) or has been renamed."
+    priority_default: "P2"
+    rationale: "Renaming a term need not change the concept, and reusing a word does not prove two documents mean the same thing (`R11`)."
+    evidence_required: "A concept record or glossary entry with definition, boundary, and admitted/deprecated labels."
+    suggested_locations: "Glossary or concept node."
+    source_references: "`R11`."
+    corpus_gap: false
+    audit_method: "Pick 5 high-risk terms (security, identity, tenancy, role, liveness). For each, check one preferred label per scope and an explicit mapping where scopes differ."
+    automation_potential: "partial"
+    dependencies: []
+    failure_risk: "Silent concept collision at a trust boundary."
+  - id: "FOUND-007"
+    category: "foundations"
+    requirement: "Unfamiliar terms and abbreviations are defined or linked at the point of need; exact code, UI and protocol identifiers are reproduced verbatim."
+    audience:
+      - human
+      - agent
+    applicability: "required"
+    applies_when: "Always."
+    priority_default: "P2"
+    rationale: "Plain language is audience-appropriate precision; a shorter inaccurate word is not plainer (`R13`)."
+    evidence_required: "First-use definition or link; identifiers in code formatting."
+    suggested_locations: "Inline."
+    source_references: "`R11`, `R13`."
+    corpus_gap: false
+    audit_method: "Extract acronyms; check each has a reachable expansion."
+    automation_potential: "partial"
+    dependencies: ["FOUND-006"]
+    failure_risk: "Readers cannot map prose to the system they can see."
+  - id: "FOUND-008"
+    category: "foundations"
+    requirement: "Accessibility is assessed on the delivered surface, not on the Markdown source alone, and the surface assessed is named."
+    audience:
+      - human
+    applicability: "required"
+    applies_when: "The documentation is published or read through any renderer, including a pull-request diff."
+    priority_default: "P1"
+    rationale: "A renderer can discard semantics the source carries and add controls the source does not; \"the Markdown passes WCAG\" is not a well-formed conclusion (`R13`)."
+    evidence_required: "A named surface, and results from keyboard, zoom/reflow, contrast and at least one assistive-technology exercise for high-risk documents."
+    suggested_locations: "Review record."
+    source_references: "`R13`."
+    corpus_gap: false
+    audit_method: "Render, then exercise. Record the browser, AT stack and tasks."
+    automation_potential: "human"
+    dependencies: []
+    failure_risk: "An accessible-looking source that is unusable as delivered."
+  - id: "FOUND-009"
+    category: "foundations"
+    requirement: "Every volatile or consequential document has a viable route to a person able and authorised to correct it."
+    audience:
+      - human
+      - agent
+    applicability: "required"
+    applies_when: "Always for `active`/published content."
+    priority_default: "P1"
+    rationale: "Ownership routes review; assignment is not verification, but its absence guarantees non-correction (`R07`, `F20`)."
+    evidence_required: "An owner, team, CODEOWNERS entry, or a named escalation path."
+    suggested_locations: "Front matter or a governance register."
+    source_references: "`R07`, `F20`."
+    corpus_gap: false
+    audit_method: "For a risk-weighted sample, name the person who would fix a P0 defect today."
+    automation_potential: "partial"
+    dependencies: []
+    failure_risk: "Findings accumulate with no one able to close them."
+  - id: "FOUND-010"
+    category: "foundations"
+    requirement: "Currency is judged as semantic applicability to a declared baseline, not by age, edit recency, or lifecycle status."
+    audience:
+      - human
+      - agent
+    applicability: "required"
+    applies_when: "The document makes current-state claims."
+    priority_default: "P1"
+    rationale: "An old statement about a stable invariant can be current; a statement edited today can already be stale (`R07`)."
+    evidence_required: "A recorded baseline revision and a recorded verification act."
+    suggested_locations: "Provenance ledger or equivalent."
+    source_references: "`R07`, `F03`."
+    corpus_gap: false
+    audit_method: "Compare a sampled claim against the authority for its claim type at the current revision."
+    automation_potential: "partial"
+    dependencies: ["FOUND-009"]
+    failure_risk: "\"Reviewed recently\" mistaken for \"still true\"."
+  - id: "FOUND-011"
+    category: "foundations"
+    requirement: "Every automated check states what a pass establishes and enumerates what it did not examine."
+    audience:
+      - human
+      - agent
+    applicability: "required"
+    applies_when: "Any validator, linter or scanner result is reported."
+    priority_default: "P0"
+    rationale: "A green run is a fact about form that gets read as a fact about content; reporting it unqualified manufactures false assurance (`F13`, `F19`)."
+    evidence_required: "A result envelope: tool, version, revision, inputs discovered / excluded / skipped / timed out, and the pass proposition."
+    suggested_locations: "CI output and any report quoting it."
+    source_references: "`F19`, `F02`, `SYN` A09."
+    corpus_gap: false
+    audit_method: "Read the check's own output. If it says \"passed\" without a scope, the item fails."
+    automation_potential: "automated"
+    dependencies: []
+    failure_risk: "Validation halo — the single most common way a documentation gate misleads."
+  - id: "FOUND-012"
+    category: "foundations"
+    requirement: "Review results distinguish `pass`, `finding`, `not applicable`, `unable to assess` and `accepted risk`, and never collapse them into a number."
+    audience:
+      - human
+      - agent
+    applicability: "required"
+    applies_when: "Any review is recorded."
+    priority_default: "P0"
+    rationale: "Non-compensatory quality requires that a gate failure survive aggregation (`R01`, `SYN`)."
+    evidence_required: "A review record using the five states with reasons for the last three."
+    suggested_locations: "Review register."
+    source_references: "`R01`, `R14`, `SYN`."
+    corpus_gap: false
+    audit_method: "Inspect the register schema."
+    automation_potential: "human"
+    dependencies: ["FOUND-011"]
+    failure_risk: "One severe operational defect averaged away by many low-risk passes."
+  - id: "START-001"
+    category: "getting-started"
+    requirement: "A single entry point exists that states what the project is, who it is for, and what it is not."
+    audience:
+      - human
+      - agent
+    applicability: "required"
+    applies_when: "Always."
+    priority_default: "P1"
+    rationale: "First contact for every human and every agent; `F01` measures that agent context files systematically under-cover security (14.8%) and performance (14.5%), so an entry point's silence is inherited."
+    evidence_required: "A README or index with purpose, audience and non-goals."
+    suggested_locations: "`README.md` at the tree root."
+    source_references: "Corpus gap — supplementary best practice (Diátaxis; Good Docs; `F01` for the coverage measurement only)."
+    corpus_gap: true
+    audit_method: "Hand it to someone unfamiliar; ask them to state the purpose in one sentence."
+    automation_potential: "partial"
+    dependencies: []
+    failure_risk: "Every downstream reader reconstructs scope from fragments."
+  - id: "START-002"
+    category: "getting-started"
+    requirement: "The entry point routes to installation, architecture, contribution and support without the reader knowing filenames."
+    audience:
+      - human
+      - agent
+    applicability: "required"
+    applies_when: "The project has more than one document."
+    priority_default: "P2"
+    rationale: "Findability begins from the reader's starting state, not the repository's structure (`R06`)."
+    evidence_required: "Resolvable links with descriptive text."
+    suggested_locations: "`README.md`."
+    source_references: "Corpus gap; routing quality basis `R06`."
+    corpus_gap: true
+    audit_method: "Link-resolution check plus a first-choice test on 3 realistic questions."
+    automation_potential: "automated"
+    dependencies: ["START-001"]
+    failure_risk: "Content exists and is unreachable."
+  - id: "START-003"
+    category: "getting-started"
+    requirement: "Prerequisites are stated as observable preconditions, including tool versions, OS, permissions and required accounts."
+    audience:
+      - human
+      - agent
+    applicability: "required"
+    applies_when: "The project must be installed, built or run."
+    priority_default: "P0"
+    rationale: "`F07` class O1: prerequisites are ambient in the evidence and therefore systematically elided; they have **no mechanical enumerator**, and the only reliable test is executing from a clean environment."
+    evidence_required: "A checkable precondition list plus a clean-environment run."
+    suggested_locations: "Installation / getting-started document."
+    source_references: "`F07`, `R08`."
+    corpus_gap: false
+    audit_method: "Run the documented process in a disposable clean environment. Record every step you had to supply yourself."
+    automation_potential: "human"
+    dependencies: []
+    failure_risk: "A newcomer or agent cannot start, and the failure is attributed to the software."
+  - id: "START-004"
+    category: "getting-started"
+    requirement: "The supported installation process is documented with literal commands and an explicit target environment."
+    audience:
+      - human
+      - agent
+    applicability: "required"
+    applies_when: "The project must be installed before use."
+    priority_default: "P1"
+    rationale: "A command is an intervention in a system; correctness is relational to shell, directory, versions and privileges (`R12`)."
+    evidence_required: "Commands, declared environment, and a recorded execution."
+    suggested_locations: "Installation document."
+    source_references: "`R12`, `F08`."
+    corpus_gap: false
+    audit_method: "Execute in a pinned disposable environment; record exit status and postcondition, not just exit status."
+    automation_potential: "partial"
+    dependencies: ["START-003"]
+    failure_risk: "Plausible commands that have never worked from the stated starting state."
+  - id: "START-005"
+    category: "getting-started"
+    requirement: "Configuration required before first run is documented with actual defaults distinguished from example values."
+    audience:
+      - human
+      - agent
+    applicability: "required"
+    applies_when: "The project reads configuration."
+    priority_default: "P1"
+    rationale: "`R12` names `example/default collapse` explicitly: documenting the `.env.example` value as the loader default is a distinct, common defect."
+    evidence_required: "For each setting, the loader-established default and, separately, the example value."
+    suggested_locations: "Configuration reference."
+    source_references: "`R12`."
+    corpus_gap: false
+    audit_method: "Compare a sample of documented defaults against the loader source, not against the example file."
+    automation_potential: "partial"
+    dependencies: ["START-004"]
+    failure_risk: "Operators configure against a value the system never uses."
+  - id: "START-006"
+    category: "getting-started"
+    requirement: "Environment variable names are documented without any real values."
+    audience:
+      - human
+      - agent
+    applicability: "required"
+    applies_when: "The project uses environment variables."
+    priority_default: "P0"
+    rationale: "Read authority becomes publication authority silently (`F12`); deletion is not remediation (`R15`)."
+    evidence_required: "A names-and-semantics table; secret scan over source, rendered output and history."
+    suggested_locations: "Configuration reference."
+    source_references: "`R15`, `F12`."
+    corpus_gap: false
+    audit_method: "Deterministic secret scan across the whole publication path, reporting scope and exclusions."
+    automation_potential: "automated"
+    dependencies: ["START-005"]
+    failure_risk: "Credential exposure — unrecoverable by editing."
+  - id: "START-007"
+    category: "getting-started"
+    requirement: "A first successful workflow is documented end to end, with an explicit positive verification step."
+    audience:
+      - human
+      - agent
+    applicability: "required"
+    applies_when: "Always."
+    priority_default: "P1"
+    rationale: "\"The command exited zero\" proves that command's exit status; final success needs positive evidence (`R08`)."
+    evidence_required: "A stated expected observable outcome and how to check it."
+    suggested_locations: "Getting-started document."
+    source_references: "`R08`."
+    corpus_gap: false
+    audit_method: "Execute; confirm the verification step distinguishes success from silent failure."
+    automation_potential: "human"
+    dependencies: ["START-004"]
+    failure_risk: "Readers believe they succeeded when they did not — `false success`, which `R06` requires be measured separately."
+  - id: "START-008"
+    category: "getting-started"
+    requirement: "Common setup failures and their recovery are documented next to the step that causes them."
+    audience:
+      - human
+    applicability: "conditional"
+    applies_when: "Setup has known failure modes."
+    priority_default: "P2"
+    rationale: "Troubleshooting placed far from the instruction is not found under pressure (`R08`, `R13`)."
+    evidence_required: "Symptom → discriminating observation → remedy."
+    suggested_locations: "Inline with the step."
+    source_references: "`R08`."
+    corpus_gap: false
+    audit_method: "Check that each listed cause has an observation that discriminates it from the others."
+    automation_potential: "human"
+    dependencies: ["START-007"]
+    failure_risk: "Cause lists with no way to choose among them."
+  - id: "START-009"
+    category: "getting-started"
+    requirement: "Platform-specific differences are stated where behaviour differs."
+    audience:
+      - human
+      - agent
+    applicability: "conditional"
+    applies_when: "More than one OS, architecture or runtime is supported."
+    priority_default: "P2"
+    rationale: "`F16` variant collapse: one platform described repeatedly reads as representative of all."
+    evidence_required: "Per-variant instructions or an explicit statement of which variants are unsupported."
+    suggested_locations: "Installation document."
+    source_references: "Corpus gap; variant-collapse basis `F16`."
+    corpus_gap: true
+    audit_method: "Check each supported variant has been exercised or is explicitly marked untested."
+    automation_potential: "human"
+    dependencies: ["START-004"]
+    failure_risk: "Silent unsupported-platform failures."
+  - id: "ARCH-001"
+    category: "architecture"
+    requirement: "The system of interest, its environment and its external actors are unambiguous."
+    audience:
+      - human
+      - agent
+    applicability: "required"
+    applies_when: "The system has any external interface."
+    priority_default: "P1"
+    rationale: "Architecture description quality is fitness for identified stakeholder use, and that starts with the boundary (`R10`)."
+    evidence_required: "A context view or equivalent prose naming what is inside and outside."
+    suggested_locations: "`ARCHITECTURE.md` or a context node."
+    source_references: "`R10`."
+    corpus_gap: false
+    audit_method: "Name a stakeholder and a consequential task; check the boundary answers it."
+    automation_potential: "human"
+    dependencies: []
+    failure_risk: "Changes cross boundaries nobody knew existed."
+  - id: "ARCH-002"
+    category: "architecture"
+    requirement: "Every architecture view declares its type, purpose, scope and abstraction level."
+    audience:
+      - human
+      - agent
+    applicability: "required"
+    applies_when: "Any view or diagram is published."
+    priority_default: "P2"
+    rationale: "A diagram without a stated question is decoration (`R10`, C4 checklist)."
+    evidence_required: "Declared viewpoint and scope beside the view."
+    suggested_locations: "With the view."
+    source_references: "`R10`."
+    corpus_gap: false
+    audit_method: "For each diagram, state the question it answers. Unanswerable ⇒ fail."
+    automation_potential: "human"
+    dependencies: ["ARCH-001"]
+    failure_risk: "View gallery — attractive diagrams that do not compose."
+  - id: "ARCH-003"
+    category: "architecture"
+    requirement: "Elements and relationships in views are named, labelled and given responsibilities; notation is defined where not self-evident."
+    audience:
+      - human
+      - agent
+    applicability: "required"
+    applies_when: "Any diagram is published."
+    priority_default: "P2"
+    rationale: "Unlabelled boxes and arrows carry claims prose must supply (`R10`)."
+    evidence_required: "Element names, responsibilities, relationship labels with direction, legend where needed."
+    suggested_locations: "With the view."
+    source_references: "`R10`."
+    corpus_gap: false
+    audit_method: "C4 review checklist applied to a sample."
+    automation_potential: "partial"
+    dependencies: ["ARCH-002"]
+    failure_risk: "The picture asserts what nothing supports."
+  - id: "ARCH-004"
+    category: "architecture"
+    requirement: "Elements map consistently across context, structural, runtime and deployment views; intentional differences are explained."
+    audience:
+      - human
+      - agent
+    applicability: "conditional"
+    applies_when: "More than one view exists."
+    priority_default: "P2"
+    rationale: "Correspondence is architecture content, not navigation polish (`R10`)."
+    evidence_required: "Traceable names and boundaries across views."
+    suggested_locations: "A roadmap or mapping section."
+    source_references: "`R10`, `F14`."
+    corpus_gap: false
+    audit_method: "Trace one element end to end across every view it appears in."
+    automation_potential: "human"
+    dependencies: ["ARCH-003"]
+    failure_risk: "Readers build divergent mental models from individually valid views."
+  - id: "ARCH-005"
+    category: "architecture"
+    requirement: "Architecturally significant decisions are linked to context, alternatives, rationale, status and consequences."
+    audience:
+      - human
+      - agent
+    applicability: "required"
+    applies_when: "Consequential design choices exist."
+    priority_default: "P1"
+    rationale: "Structure without drivers says what exists and not why, or which change would violate a trade-off (`R10`)."
+    evidence_required: "ADR links from the views the decision shapes."
+    suggested_locations: "Decision records, linked from views."
+    source_references: "`R10`, `R02` G07."
+    corpus_gap: false
+    audit_method: "Pick 3 consequential structures; find the decision that explains each."
+    automation_potential: "partial"
+    dependencies: ["ARCH-001"]
+    failure_risk: "A future change silently violates an unstated trade-off."
+  - id: "ARCH-006"
+    category: "architecture"
+    requirement: "Data flow, storage, retention and protection are described for important data."
+    audience:
+      - human
+      - agent
+    applicability: "conditional"
+    applies_when: "The system stores or transmits user or sensitive data."
+    priority_default: "P1"
+    rationale: "`F06` measures information-flow enumeration at **15.61%** for a leading model — this is the dimension agents reconstruct worst; and privacy reasoning depends on it."
+    evidence_required: "A data-flow description naming stores, transformations, retention and protection."
+    suggested_locations: "Architecture or a data node."
+    source_references: "Corpus gap; reconstruction-difficulty basis `F06`, classification basis `F12`."
+    corpus_gap: true
+    audit_method: "Trace one data item from ingress to storage to deletion."
+    automation_potential: "human"
+    dependencies: ["ARCH-001"]
+    failure_risk: "Unassessable privacy and security posture."
+  - id: "ARCH-007"
+    category: "architecture"
+    requirement: "Failure, degradation, recovery and backpressure behaviour accompany happy-path runtime views where consequential."
+    audience:
+      - human
+      - agent
+    applicability: "conditional"
+    applies_when: "The system has operational consequences."
+    priority_default: "P1"
+    rationale: "`R10` names \"happy-path architecture\" as a failure mode; `R08` requires adverse paths."
+    evidence_required: "Named failure modes with expected behaviour."
+    suggested_locations: "Runtime/flow views."
+    source_references: "`R10`, `R08`."
+    corpus_gap: false
+    audit_method: "For one flow, ask what happens when each dependency is unavailable."
+    automation_potential: "human"
+    dependencies: ["ARCH-003"]
+    failure_risk: "Operators meet undocumented degradation during an incident."
+  - id: "ARCH-008"
+    category: "architecture"
+    requirement: "External services and dependencies are identified with the responsibility boundary stated."
+    audience:
+      - human
+      - agent
+    applicability: "required"
+    applies_when: "The system depends on anything it does not own."
+    priority_default: "P2"
+    rationale: "Delegated responsibilities must be stated as obligations with verification guidance, not implied protections (`R15`)."
+    evidence_required: "Dependency list with what each is trusted for."
+    suggested_locations: "Context view / dependency section."
+    source_references: "`R10`, `R15`."
+    corpus_gap: false
+    audit_method: "Compare documented dependencies against manifests and lockfiles."
+    automation_potential: "partial"
+    dependencies: ["ARCH-001"]
+    failure_risk: "Assumed protections nobody provides."
+  - id: "ARCH-009"
+    category: "architecture"
+    requirement: "Background jobs, scheduled tasks and asynchronous work are documented with trigger, frequency, failure behaviour and observability."
+    audience:
+      - human
+      - agent
+    applicability: "conditional"
+    applies_when: "The system runs work not triggered by a request."
+    priority_default: "P1"
+    rationale: "Async work is not reachable from a route or symbol inventory, so a code-derived denominator omits it entirely — the `code-shaped blind spot` of `F16`."
+    evidence_required: "An enumeration with per-job behaviour."
+    suggested_locations: "Architecture or operations."
+    source_references: "Corpus gap — supplementary best practice; blind-spot basis `F16`, `F06`."
+    corpus_gap: true
+    audit_method: "Enumerate schedulers/queues from source; check each appears."
+    automation_potential: "human"
+    dependencies: ["ARCH-001"]
+    failure_risk: "Silent data corruption or unnoticed job failure."
+  - id: "ARCH-010"
+    category: "architecture"
+    requirement: "Current, intended, transitional and superseded states are visibly distinct at claim granularity."
+    audience:
+      - human
+      - agent
+    applicability: "required"
+    applies_when: "The documentation describes anything not yet built, or describes intent."
+    priority_default: "P0"
+    rationale: "Describing a future state is legitimate; making the reader infer which state is shown is the defect. A section-level marker does not inherit to a row added later (`R10`, `F09`)."
+    evidence_required: "Per-claim lifecycle markers with defined evidence expectations."
+    suggested_locations: "Inline with each claim."
+    source_references: "`R10`, `R09`, `F09`."
+    corpus_gap: false
+    audit_method: "Sample claims; for each, determine the state. Ambiguity ⇒ fail."
+    automation_potential: "human"
+    dependencies: ["ARCH-001"]
+    failure_risk: "A proposal presented as a decision — which `launchpad/VISION.md` itself calls \"worse than no document at all\"."
+  - id: "DEV-001"
+    category: "developer-workflows"
+    requirement: "Development commands are documented with their expected working directory and toolchain."
+    audience:
+      - human
+      - agent
+    applicability: "required"
+    applies_when: "The project is built or run locally."
+    priority_default: "P1"
+    rationale: "Working directory and toolchain are the context most often omitted and most often decisive (`R12`, `F02`)."
+    evidence_required: "Commands with declared cwd and versions."
+    suggested_locations: "Development guide; `AGENTS.md` for agents."
+    source_references: "`R12`, `F02`."
+    corpus_gap: false
+    audit_method: "Execute each from a fresh shell at the declared directory."
+    automation_potential: "partial"
+    dependencies: []
+    failure_risk: "Commands that work only from the author's shell state."
+  - id: "DEV-002"
+    category: "developer-workflows"
+    requirement: "Lint, format and type-check commands are documented separately from tests, with their distinct pass meanings."
+    audience:
+      - human
+      - agent
+    applicability: "required"
+    applies_when: "The project has these gates."
+    priority_default: "P2"
+    rationale: "Each check proves a different predicate; collapsing them into \"validated\" is `F19`'s core failure."
+    evidence_required: "One command per gate with its proposition."
+    suggested_locations: "Development guide; `AGENTS.md`."
+    source_references: "`F19`."
+    corpus_gap: false
+    audit_method: "Run each; confirm it fails on a seeded violation."
+    automation_potential: "automated"
+    dependencies: ["DEV-001"]
+    failure_risk: "Contributors and agents believe one gate covers another."
+  - id: "DEV-003"
+    category: "developer-workflows"
+    requirement: "Debugging entry points are documented, including how to raise log verbosity safely."
+    audience:
+      - human
+      - agent
+    applicability: "conditional"
+    applies_when: "The system can be run locally."
+    priority_default: "P2"
+    rationale: "`R08`'s local analysis of the Buzz debugging guide is the worked example: risk disclosure present, live execution evidence absent."
+    evidence_required: "Documented flags with a statement of what was and was not exercised."
+    suggested_locations: "Debugging guide."
+    source_references: "`R08`."
+    corpus_gap: false
+    audit_method: "Execute against a live instance; record what could not be run."
+    automation_potential: "human"
+    dependencies: ["DEV-001"]
+    failure_risk: "Inferred-from-source flags that do not work."
+  - id: "DEV-004"
+    category: "developer-workflows"
+    requirement: "The test strategy states levels, what each level establishes, and deliberate exclusions."
+    audience:
+      - human
+      - agent
+    applicability: "required"
+    applies_when: "The project has tests."
+    priority_default: "P1"
+    rationale: "A passing test's strength comes from its setup, execution and assertions, not from the word \"pass\" (`R03`, `R02` G06)."
+    evidence_required: "Levels, coverage logic, environments, exclusions."
+    suggested_locations: "`TESTING.md` or a test-strategy node."
+    source_references: "`R02`, `R03`."
+    corpus_gap: false
+    audit_method: "Check that \"all tests pass\" claims name the suite and its scope."
+    automation_potential: "human"
+    dependencies: ["DEV-002"]
+    failure_risk: "A green suite generalised beyond what it exercised."
+  - id: "DEV-005"
+    category: "developer-workflows"
+    requirement: "The documented procedure for adding a feature names every artefact that must change together."
+    audience:
+      - human
+      - agent
+    applicability: "conditional"
+    applies_when: "Features span several artefacts (schema + handler + docs + tests)."
+    priority_default: "P2"
+    rationale: "`F14`: a local edit does not carry a corpus transaction boundary."
+    evidence_required: "A change-set checklist."
+    suggested_locations: "Contribution or development guide."
+    source_references: "`F14`."
+    corpus_gap: false
+    audit_method: "Trace a recent feature; compare what changed against what the guide lists."
+    automation_potential: "human"
+    dependencies: ["DEV-001"]
+    failure_risk: "Repeated partial implementations."
+  - id: "DEV-006"
+    category: "developer-workflows"
+    requirement: "The procedure for modifying existing behaviour states what must be re-verified."
+    audience:
+      - human
+      - agent
+    applicability: "conditional"
+    applies_when: "Behaviour changes have downstream documentation."
+    priority_default: "P2"
+    rationale: "Change-impact routing by claim type and relationship semantics (`R07`)."
+    evidence_required: "A named impact-discovery step."
+    suggested_locations: "Contribution guide."
+    source_references: "`R07`, `F14`."
+    corpus_gap: false
+    audit_method: "Check whether a recent behaviour change triggered documentation review."
+    automation_potential: "human"
+    dependencies: ["DEV-005"]
+    failure_risk: "Documentation silently describes the previous behaviour."
+  - id: "DEV-007"
+    category: "developer-workflows"
+    requirement: "Database changes document the migration path, its reversibility and its recovery position."
+    audience:
+      - human
+      - agent
+    applicability: "conditional"
+    applies_when: "The project has a schema and migrations."
+    priority_default: "P0"
+    rationale: "Migrations are frequently irreversible and often auto-applied; the corpus supplies the procedural-safety criteria (`R08`) but never requires the area be documented."
+    evidence_required: "Forward and backward procedure, or an explicit statement that rollback is impossible and what to do instead."
+    suggested_locations: "Database / operations documentation."
+    source_references: "Corpus gap — supplementary best practice; procedural-safety basis `R08`, `F08`."
+    corpus_gap: true
+    audit_method: "Exercise on a disposable copy; verify the stated recovery path."
+    automation_potential: "human"
+    dependencies: ["DEV-005"]
+    failure_risk: "Irrecoverable data loss."
+  - id: "DEV-008"
+    category: "developer-workflows"
+    requirement: "Branching, commit and pull-request conventions are stated, and every stated enforcement mechanism is verified to exist."
+    audience:
+      - human
+      - agent
+    applicability: "required"
+    applies_when: "The project accepts contributions."
+    priority_default: "P0"
+    rationale: "`F09` A2 **phantom enforcement** — the obligation is real, the gate is imagined — is the failure that survives review, because a fabricated gate reads as diligence."
+    evidence_required: "For each claimed gate: the workflow, app, ruleset or branch-protection setting that implements it, verified by running or querying it."
+    suggested_locations: "Contribution guide; `AGENTS.md`."
+    source_references: "`F09`."
+    corpus_gap: false
+    audit_method: "Grep workflows **and** list actual check runs on a recent PR **and** query branch protection and rulesets. All three; any one alone is inconclusive."
+    automation_potential: "automated"
+    dependencies: []
+    failure_risk: "Contributors rely on a check that will never catch their mistake."
+  - id: "DEV-009"
+    category: "developer-workflows"
+    requirement: "The release workflow is documented with its trigger, artefacts and verification."
+    audience:
+      - human
+      - agent
+    applicability: "conditional"
+    applies_when: "The project produces releases."
+    priority_default: "P1"
+    rationale: "Release is a high-consequence procedure requiring `R08`'s full model."
+    evidence_required: "Ordered steps, expected observations, and a success criterion."
+    suggested_locations: "`RELEASING.md`."
+    source_references: "`R08`."
+    corpus_gap: false
+    audit_method: "Walkthrough with a qualified peer; execute where safe."
+    automation_potential: "human"
+    dependencies: ["DEV-004"]
+    failure_risk: "Release performed from tribal knowledge."
+  - id: "DEV-010"
+    category: "developer-workflows"
+    requirement: "Deployment documentation names the target environment, the authorisation required, and how to confirm the deployed state."
+    audience:
+      - human
+      - agent
+    applicability: "conditional"
+    applies_when: "The project is deployed."
+    priority_default: "P0"
+    rationale: "`F08`'s third boundary: before any material external mutation, re-resolve target identity and scope, inspect the exact diff, confirm recovery, obtain authority."
+    evidence_required: "Target resolution step, approval requirement, post-deploy verification."
+    suggested_locations: "Deployment runbook."
+    source_references: "`F08`, `R08`."
+    corpus_gap: false
+    audit_method: "Confirm the procedure resolves and displays the target before the mutating step."
+    automation_potential: "human"
+    dependencies: ["DEV-009"]
+    failure_risk: "A correct operation applied to the wrong environment."
+  - id: "DEV-011"
+    category: "developer-workflows"
+    requirement: "Rollback is documented, and its preconditions are themselves verified."
+    audience:
+      - human
+      - agent
+    applicability: "conditional"
+    applies_when: "Deployment can fail."
+    priority_default: "P0"
+    rationale: "`R08` names **rollback theatre**: a rollback command that depends on an unverified backup, an expired artefact, a removed schema or a lost permission."
+    evidence_required: "Rollback steps, their preconditions, and evidence those preconditions hold."
+    suggested_locations: "Deployment runbook."
+    source_references: "`R08`."
+    corpus_gap: false
+    audit_method: "Exercise rollback in a representative environment; if that is unsafe, record it as untested rather than assumed."
+    automation_potential: "human"
+    dependencies: ["DEV-010"]
+    failure_risk: "Discovering during an incident that rollback was never possible."
+  - id: "DEV-012"
+    category: "developer-workflows"
+    requirement: "Code review expectations state what a reviewer must independently verify, not only what to look at."
+    audience:
+      - human
+    applicability: "required"
+    applies_when: "The project has review."
+    priority_default: "P1"
+    rationale: "\"Human reviewed\" without a specified act does not perform verification; explanations raise acceptance regardless of correctness (`F18`)."
+    evidence_required: "A review contract naming the acts (open the source, run the command, check the authority)."
+    suggested_locations: "Contribution guide / review standard."
+    source_references: "`F18`, `R03`."
+    corpus_gap: false
+    audit_method: "Read the review contract; check it requires an act, not an opinion."
+    automation_potential: "human"
+    dependencies: []
+    failure_risk: "Review theatre — the control that everything else assumes is working."
+  - id: "API-001"
+    category: "interfaces-and-contracts"
+    requirement: "Every public interface is enumerated against an authoritative machine-readable inventory."
+    audience:
+      - human
+      - agent
+    applicability: "conditional"
+    applies_when: "The project exposes an API, CLI, event kind or library surface."
+    priority_default: "P1"
+    rationale: "Generated-reference comparison is a Level-A deterministic check (`F19`), but only if the authoritative universe is enumerable."
+    evidence_required: "Inventory-to-documentation comparison with explicit handling of intentionally undocumented surfaces."
+    suggested_locations: "API reference."
+    source_references: "Corpus gap — supplementary best practice; method basis `F19`, `R04`."
+    corpus_gap: true
+    audit_method: "Diff the documented set against compiler/schema/CLI-help output."
+    automation_potential: "automated"
+    dependencies: []
+    failure_risk: "Undocumented surface that consumers depend on anyway."
+  - id: "API-002"
+    category: "interfaces-and-contracts"
+    requirement: "Each operation documents inputs, outputs, types and required/optional status."
+    audience:
+      - human
+      - agent
+    applicability: "conditional"
+    applies_when: "As API-001."
+    priority_default: "P1"
+    rationale: "Reference completeness for the fields it promises (`R02` G02)."
+    evidence_required: "Per-operation signature facts traceable to source or schema."
+    suggested_locations: "API reference."
+    source_references: "Corpus gap; genre basis `R02`."
+    corpus_gap: true
+    audit_method: "Sample against the schema; check the sampled facts, not their presence."
+    automation_potential: "partial"
+    dependencies: ["API-001"]
+    failure_risk: "Integrations fail at the boundary."
+  - id: "API-003"
+    category: "interfaces-and-contracts"
+    requirement: "Error responses are documented with their conditions and the correct client action."
+    audience:
+      - human
+      - agent
+    applicability: "conditional"
+    applies_when: "As API-001."
+    priority_default: "P1"
+    rationale: "`F06` error-contract distortion: sentinel vs throw, transformed and rethrown errors, logging mistaken for recovery."
+    evidence_required: "Error conditions traced to the code paths that raise them."
+    suggested_locations: "API reference."
+    source_references: "Corpus gap; distortion basis `F06`."
+    corpus_gap: true
+    audit_method: "Enumerate declared errors from source; check coverage and correctness of a sample."
+    automation_potential: "human"
+    dependencies: ["API-002"]
+    failure_risk: "Clients handle errors that do not occur and miss those that do."
+  - id: "API-004"
+    category: "interfaces-and-contracts"
+    requirement: "Rate limits, quotas and pagination are documented where they exist."
+    audience:
+      - human
+      - agent
+    applicability: "conditional"
+    applies_when: "The interface imposes them."
+    priority_default: "P2"
+    rationale: "Undocumented limits surface as intermittent production failures."
+    evidence_required: "Limits traced to enforcement code or configuration."
+    suggested_locations: "API reference."
+    source_references: "Corpus gap — supplementary best practice."
+    corpus_gap: true
+    audit_method: "Compare against limiter configuration."
+    automation_potential: "human"
+    dependencies: ["API-001"]
+    failure_risk: "Consumers build against limits they cannot see."
+  - id: "API-005"
+    category: "interfaces-and-contracts"
+    requirement: "Compatibility and versioning policy states what may change without notice."
+    audience:
+      - human
+      - agent
+    applicability: "conditional"
+    applies_when: "The interface has external consumers."
+    priority_default: "P1"
+    rationale: "A specification must expose compatibility and supersession rules (`R02` G04)."
+    evidence_required: "A stated policy with the stability of each surface."
+    suggested_locations: "API reference / specification."
+    source_references: "Corpus gap; normative basis `R02`, `R09`."
+    corpus_gap: true
+    audit_method: "Check the policy exists and that a recent change honoured it."
+    automation_potential: "human"
+    dependencies: ["API-001"]
+    failure_risk: "Silent breaking changes."
+  - id: "API-006"
+    category: "interfaces-and-contracts"
+    requirement: "The authentication model is documented with its threat boundary, not only its mechanism."
+    audience:
+      - human
+      - agent
+    applicability: "conditional"
+    applies_when: "The system authenticates anyone."
+    priority_default: "P0"
+    rationale: "`R15` requires every security claim to name object, property, threat, boundary, layer, conditions, evidence and freshness."
+    evidence_required: "The eight-part claim schema for each material auth claim."
+    suggested_locations: "Security documentation."
+    source_references: "`R15`."
+    corpus_gap: false
+    audit_method: "Specialist review; verify each absolute (\"only\", \"never\") across every applicable interface, not one."
+    automation_potential: "human"
+    dependencies: ["ARCH-001"]
+    failure_risk: "A false security claim is itself a security control failure."
+  - id: "API-007"
+    category: "interfaces-and-contracts"
+    requirement: "Authorisation and permission models state who may do what, and how that is enforced."
+    audience:
+      - human
+      - agent
+    applicability: "conditional"
+    applies_when: "The system has differentiated permissions."
+    priority_default: "P0"
+    rationale: "As API-006; `F06` warns trust boundaries may be organisational and absent from source entirely."
+    evidence_required: "Role/permission matrix with enforcement points."
+    suggested_locations: "Security documentation."
+    source_references: "`R15`, `F06`."
+    corpus_gap: false
+    audit_method: "Trace one permission from documentation to the enforcing code and to a test."
+    automation_potential: "human"
+    dependencies: ["API-006"]
+    failure_risk: "Privilege escalation via a documented-but-unenforced boundary."
+  - id: "API-008"
+    category: "interfaces-and-contracts"
+    requirement: "Each configuration setting documents type, constraints, required and secret status, effect, precedence and validation behaviour."
+    audience:
+      - human
+      - agent
+    applicability: "conditional"
+    applies_when: "The project reads configuration."
+    priority_default: "P1"
+    rationale: "`R12`'s per-setting fact list; recognisable syntax does not expose effective semantics."
+    evidence_required: "Facts traced to the loader."
+    suggested_locations: "Configuration reference."
+    source_references: "`R12`."
+    corpus_gap: false
+    audit_method: "Compare a sample against loader code; check precedence explicitly."
+    automation_potential: "partial"
+    dependencies: ["START-005"]
+    failure_risk: "A recognised key that is ignored, overridden or inert."
+  - id: "API-009"
+    category: "interfaces-and-contracts"
+    requirement: "Sample configuration is validated as a coherent whole, not value by value."
+    audience:
+      - human
+      - agent
+    applicability: "conditional"
+    applies_when: "Sample configuration is published."
+    priority_default: "P2"
+    rationale: "`R12`: a syntactically valid configuration can be internally contradictory, insecure, or attached to the wrong component."
+    evidence_required: "Parse plus loader acceptance plus a scenario check."
+    suggested_locations: "Configuration reference."
+    source_references: "`R12`."
+    corpus_gap: false
+    audit_method: "Load the sample with the real parser; assert the intended outcome."
+    automation_potential: "automated"
+    dependencies: ["API-008"]
+    failure_risk: "A sample that parses and cannot work."
+  - id: "API-010"
+    category: "interfaces-and-contracts"
+    requirement: "Data schemas and their constraints are documented and traced to the migration that created them."
+    audience:
+      - human
+      - agent
+    applicability: "conditional"
+    applies_when: "The project has a persistent schema."
+    priority_default: "P1"
+    rationale: "Schema is an interface contract for anything reading the store."
+    evidence_required: "Entity/field documentation traceable to migrations."
+    suggested_locations: "Data reference."
+    source_references: "Corpus gap; reference-genre basis `R02` G02."
+    corpus_gap: true
+    audit_method: "Diff documented entities against the schema."
+    automation_potential: "partial"
+    dependencies: ["DEV-007"]
+    failure_risk: "Consumers rely on constraints that do not exist."
+  - id: "API-011"
+    category: "interfaces-and-contracts"
+    requirement: "Events and messages document producers, consumers, payload contract and lifecycle."
+    audience:
+      - human
+      - agent
+    applicability: "conditional"
+    applies_when: "The system is event-driven."
+    priority_default: "P1"
+    rationale: "`R02`'s `event-kind` overlay names exactly these obligations."
+    evidence_required: "Kind identity, tags/content contract, producers, consumers, validation."
+    suggested_locations: "Event reference."
+    source_references: "`R02`."
+    corpus_gap: false
+    audit_method: "Compare documented kinds against the kind registry in source."
+    automation_potential: "partial"
+    dependencies: ["API-001"]
+    failure_risk: "Event consumers break on an unannounced contract change."
+  - id: "API-012"
+    category: "interfaces-and-contracts"
+    requirement: "Every executable example declares its class, environment, expected result and the highest validation level actually reached."
+    audience:
+      - human
+      - agent
+    applicability: "required"
+    applies_when: "The documentation contains commands, code or configuration."
+    priority_default: "P1"
+    rationale: "`R12`'s assurance ladder: rendered / parsed / built / executed / behaviour-asserted / integration-exercised / reader-tested are different observations, and \"tested\" alone is not a review verdict."
+    evidence_required: "Per-artefact class and the recorded level with its environment."
+    suggested_locations: "Beside the example, or in a document-level contract."
+    source_references: "`R12`, `F08`."
+    corpus_gap: false
+    audit_method: "Extract examples; execute safe ones in a pinned sandbox with an outcome oracle; record skips separately."
+    automation_potential: "partial"
+    dependencies: []
+    failure_risk: "Non-runnable examples presented as runnable; syntax-as-correctness."
+  - id: "API-013"
+    category: "interfaces-and-contracts"
+    requirement: "Deprecations state the replacement, the migration path and the removal condition."
+    audience:
+      - human
+      - agent
+    applicability: "conditional"
+    applies_when: "Anything is deprecated."
+    priority_default: "P1"
+    rationale: "`R07`: deprecated content remains the answer for now and must explain why and whether claims still hold; silent deprecation breaks search, code compatibility and migration (`R11`)."
+    evidence_required: "Replacement target, migration steps, removal timing."
+    suggested_locations: "With the deprecated item and in the changelog."
+    source_references: "`R07`, `R11`."
+    corpus_gap: false
+    audit_method: "For each deprecation, follow the migration path."
+    automation_potential: "human"
+    dependencies: ["API-005"]
+    failure_risk: "Consumers discover removal at breakage."
+  - id: "OPS-001"
+    category: "operations-security-reliability"
+    requirement: "Logging behaviour is documented: what is emitted, at what level, and what must never be logged."
+    audience:
+      - human
+      - agent
+    applicability: "conditional"
+    applies_when: "The system runs as a service."
+    priority_default: "P1"
+    rationale: "The corpus covers logs only as a leakage risk (`F12`, OWASP logging guidance); operators still need to know what exists."
+    evidence_required: "Log surface description plus an explicit exclusion list."
+    suggested_locations: "Observability documentation."
+    source_references: "Corpus gap — supplementary best practice; exclusion basis `F12`."
+    corpus_gap: true
+    audit_method: "Compare documented levels against logging configuration; scan sample log excerpts for sensitive fields."
+    automation_potential: "human"
+    dependencies: ["ARCH-007"]
+    failure_risk: "Operators cannot diagnose; or logs leak secrets."
+  - id: "OPS-002"
+    category: "operations-security-reliability"
+    requirement: "Monitoring signals and their meaning are documented."
+    audience:
+      - human
+      - agent
+    applicability: "conditional"
+    applies_when: "The system is monitored."
+    priority_default: "P2"
+    rationale: "A signal without a documented meaning generates alerts nobody can action."
+    evidence_required: "Signal list with interpretation."
+    suggested_locations: "Observability documentation."
+    source_references: "Corpus gap — supplementary best practice."
+    corpus_gap: true
+    audit_method: "For each dashboard signal, find its documented meaning."
+    automation_potential: "human"
+    dependencies: ["OPS-001"]
+    failure_risk: "Alert fatigue; unactionable telemetry."
+  - id: "OPS-003"
+    category: "operations-security-reliability"
+    requirement: "Alerts link to the operational response they expect."
+    audience:
+      - human
+      - agent
+    applicability: "conditional"
+    applies_when: "Alerts exist."
+    priority_default: "P1"
+    rationale: "`R08`: alerts must link to the appropriate operational response; wrong-procedure selection is itself a failure mode."
+    evidence_required: "Alert → runbook mapping."
+    suggested_locations: "Alert definitions and runbooks."
+    source_references: "`R08`."
+    corpus_gap: false
+    audit_method: "Sample alerts; follow each to a runbook that matches its trigger."
+    automation_potential: "human"
+    dependencies: ["OPS-002"]
+    failure_risk: "Responders improvise under pressure."
+  - id: "OPS-004"
+    category: "operations-security-reliability"
+    requirement: "Runbooks state trigger, severity, prerequisites, ordered actions with expected observations, decision points, verification, recovery and escalation."
+    audience:
+      - human
+      - agent
+    applicability: "conditional"
+    applies_when: "The system is operated."
+    priority_default: "P0"
+    rationale: "`R08`'s full model. A procedure that succeeds only when nothing goes wrong is incomplete for operational use."
+    evidence_required: "All nine elements present and exercised at a level proportionate to risk."
+    suggested_locations: "Runbooks."
+    source_references: "`R08`."
+    corpus_gap: false
+    audit_method: "Walkthrough plus execution in a representative environment, including one adverse path."
+    automation_potential: "human"
+    dependencies: ["OPS-003"]
+    failure_risk: "Failed recovery during a real incident."
+  - id: "OPS-005"
+    category: "operations-security-reliability"
+    requirement: "Troubleshooting content gives discriminating observations, not just candidate causes."
+    audience:
+      - human
+    applicability: "conditional"
+    applies_when: "Troubleshooting content exists."
+    priority_default: "P2"
+    rationale: "`R08` names **cause-free troubleshooting** as a distinct failure."
+    evidence_required: "For each cause, the observation that selects it."
+    suggested_locations: "Troubleshooting guide."
+    source_references: "`R08`."
+    corpus_gap: false
+    audit_method: "Check each branch names its selecting observation."
+    automation_potential: "human"
+    dependencies: ["OPS-004"]
+    failure_risk: "Guesswork during incidents."
+  - id: "OPS-006"
+    category: "operations-security-reliability"
+    requirement: "Backup and restore procedures are documented and the restore side has been exercised."
+    audience:
+      - human
+      - agent
+    applicability: "conditional"
+    applies_when: "The system holds state that matters."
+    priority_default: "P0"
+    rationale: "`R08` and NIST SP 800-184: verify that restored assets are functional and secure before returning them to service. A backup procedure is not evidence that restore works."
+    evidence_required: "A recorded restore exercise with date, environment and outcome."
+    suggested_locations: "Operations runbook."
+    source_references: "`R08`."
+    corpus_gap: false
+    audit_method: "Check for a restore exercise record; if none, the item fails regardless of backup documentation quality."
+    automation_potential: "human"
+    dependencies: ["OPS-004"]
+    failure_risk: "Unrecoverable data loss discovered at the worst moment."
+  - id: "OPS-007"
+    category: "operations-security-reliability"
+    requirement: "Disaster-recovery documentation is reachable when the primary system is unavailable."
+    audience:
+      - human
+      - agent
+    applicability: "conditional"
+    applies_when: "The system has a recovery plan."
+    priority_default: "P0"
+    rationale: "`R08` names **normal-channel dependency**: the recovery guide, credentials or contacts become unavailable in the same outage."
+    evidence_required: "An out-of-band access path, tested."
+    suggested_locations: "DR plan plus an out-of-band copy."
+    source_references: "`R08`."
+    corpus_gap: false
+    audit_method: "Ask how you would read it with the primary system down. Answer must be concrete."
+    automation_potential: "human"
+    dependencies: ["OPS-006"]
+    failure_risk: "The plan exists and cannot be reached."
+  - id: "OPS-008"
+    category: "operations-security-reliability"
+    requirement: "Security-relevant content is classified before publication against a declared routing model."
+    audience:
+      - human
+      - agent
+    applicability: "required"
+    applies_when: "Any security-relevant content is published."
+    priority_default: "P0"
+    rationale: "`R15`'s seven classes: public knowledge / context-sensitive / restricted operational / secret / personal data / embargoed vulnerability / coordinated advisory. The same fact changes class with time, combination and precision."
+    evidence_required: "A classification decision per item, with authority."
+    suggested_locations: "Security governance."
+    source_references: "`R15`, `F12`."
+    corpus_gap: false
+    audit_method: "For a sample, ask what operational capability an uninformed public reader gains from the combined facts."
+    automation_potential: "human"
+    dependencies: []
+    failure_risk: "Aggregation risk — individually harmless facts forming a gap map."
+  - id: "OPS-009"
+    category: "operations-security-reliability"
+    requirement: "The public security model, assumptions, limitations and safe actions are published without a live control-state map."
+    audience:
+      - human
+      - agent
+    applicability: "required"
+    applies_when: "The repository is public."
+    priority_default: "P1"
+    rationale: "`R15`: security by obscurity does not excuse missing design documentation, and transparency absolutism does not excuse publishing current gaps. `launchpad/SECURITY-POSTURE.md` is the corpus's own worked example of getting this right."
+    evidence_required: "Stable model published; live state restricted."
+    suggested_locations: "`SECURITY-POSTURE.md` or equivalent."
+    source_references: "`R15`."
+    corpus_gap: false
+    audit_method: "Check that limitations are sufficient to operate safely without identifying a current target."
+    automation_potential: "human"
+    dependencies: ["OPS-008"]
+    failure_risk: "Either unusable guidance or an attacker's map."
+  - id: "OPS-010"
+    category: "operations-security-reliability"
+    requirement: "The vulnerability reporting route is obvious, private, monitored, scoped, and verified to work."
+    audience:
+      - human
+    applicability: "required"
+    applies_when: "The project is publicly reachable."
+    priority_default: "P0"
+    rationale: "`R15`: a promise is a control claim and must be monitored; a stale contact routes sensitive reports to the wrong recipient."
+    evidence_required: "A tested route, scope statement, and an owner."
+    suggested_locations: "`SECURITY.md` and the issue chooser."
+    source_references: "`R15`."
+    corpus_gap: false
+    audit_method: "Exercise the route. Check that fork and upstream routing agree on what is reported where."
+    automation_potential: "human"
+    dependencies: ["OPS-008"]
+    failure_risk: "Reports lost, or disclosed publicly because the private route was unclear."
+  - id: "OPS-011"
+    category: "operations-security-reliability"
+    requirement: "Examples contain no live or plausible credentials, hosts or identifiers; placeholders are unmistakable and reserved ranges are used."
+    audience:
+      - human
+      - agent
+    applicability: "required"
+    applies_when: "Examples exist."
+    priority_default: "P0"
+    rationale: "`R12`/`R15`: RFC 2606 and RFC 5737 exist partly because example values escape into real use; a plausible placeholder may be run unchanged."
+    evidence_required: "Secret scan plus a check that example hosts/addresses are reserved."
+    suggested_locations: "All examples."
+    source_references: "`R12`, `R15`, `F12`."
+    corpus_gap: false
+    audit_method: "Deterministic scan across source, rendered output, attachments and history, reporting scope. Then human review for semantic credentials the scanner cannot see."
+    automation_potential: "automated"
+    dependencies: ["API-012"]
+    failure_risk: "Credential exposure; accidental contact with a real system."
+  - id: "OPS-012"
+    category: "operations-security-reliability"
+    requirement: "Personal and sensitive data in documentation is minimised, and re-identification through combination is checked."
+    audience:
+      - human
+    applicability: "conditional"
+    applies_when: "Documentation contains anything about people."
+    priority_default: "P0"
+    rationale: "`F12`: PII is contextual and may emerge only through linkage; automated detection explicitly cannot guarantee completeness."
+    evidence_required: "A privacy-aware review testing combinations of role, date, location, quote and metadata."
+    suggested_locations: "Review record."
+    source_references: "`F12`."
+    corpus_gap: false
+    audit_method: "Motivated-intruder test against the destination audience's available knowledge."
+    automation_potential: "human"
+    dependencies: ["OPS-008"]
+    failure_risk: "Re-identification of a real person."
+  - id: "OPS-013"
+    category: "operations-security-reliability"
+    requirement: "On discovering a possible secret, private coordinate or undisclosed vulnerability, review stops and routes privately — the value is never reproduced."
+    audience:
+      - human
+      - agent
+    applicability: "required"
+    applies_when: "Always, as a standing procedure."
+    priority_default: "P0"
+    rationale: "`R15`'s stop-and-route sequence; removal from the latest file is not remediation — revoke or rotate first."
+    evidence_required: "A documented stop-and-route procedure with an owner."
+    suggested_locations: "Security governance; review instructions."
+    source_references: "`R15`, `F12`."
+    corpus_gap: false
+    audit_method: "Confirm the procedure exists and that a public work record would carry only a non-sensitive marker."
+    automation_potential: "human"
+    dependencies: ["OPS-011"]
+    failure_risk: "A reviewer widening the exposure while reporting it."
+  - id: "OPS-014"
+    category: "operations-security-reliability"
+    requirement: "Performance characteristics, capacity limits and scaling behaviour are documented where operational safety depends on them."
+    audience:
+      - human
+      - agent
+    applicability: "conditional"
+    applies_when: "The system has meaningful load limits."
+    priority_default: "P2"
+    rationale: "`F01` measures agent context files covering performance at **14.5%** — the gap is documented, not filled, anywhere in the corpus."
+    evidence_required: "Stated limits with the measurement that established them."
+    suggested_locations: "Operations or architecture documentation."
+    source_references: "Corpus gap — supplementary best practice; coverage measurement `F01`."
+    corpus_gap: true
+    audit_method: "Check each stated limit names how it was measured."
+    automation_potential: "human"
+    dependencies: ["ARCH-007"]
+    failure_risk: "Capacity surprises in production."
+  - id: "OPS-015"
+    category: "operations-security-reliability"
+    requirement: "Known limitations and accepted risks are stated explicitly rather than left to silence."
+    audience:
+      - human
+      - agent
+    applicability: "required"
+    applies_when: "Always."
+    priority_default: "P1"
+    rationale: "A reader cannot distinguish \"not applicable\" from \"not investigated\"; silence is not a marked state (`F07`)."
+    evidence_required: "A limitations section with owner and review trigger."
+    suggested_locations: "Each consequential document."
+    source_references: "`F07`, `R15`."
+    corpus_gap: false
+    audit_method: "Check the section exists and that its entries correspond to real artefacts."
+    automation_potential: "human"
+    dependencies: []
+    failure_risk: "False completeness."
+  - id: "GOV-001"
+    category: "governance"
+    requirement: "Contribution guidelines exist and state how to propose, review and land a change."
+    audience:
+      - human
+    applicability: "conditional"
+    applies_when: "The project accepts external or cross-team contributions."
+    priority_default: "P1"
+    rationale: "Not addressed by the corpus; near-universal convention."
+    evidence_required: "`CONTRIBUTING.md` or an equivalent reachable from the entry point."
+    suggested_locations: "Repository root or the subtree root."
+    source_references: "Corpus gap — supplementary best practice."
+    corpus_gap: true
+    audit_method: "Check presence and that it matches actual enforced practice (see DEV-008)."
+    automation_potential: "partial"
+    dependencies: ["DEV-008"]
+    failure_risk: "Inconsistent contributions; wasted reviewer time."
+  - id: "GOV-002"
+    category: "governance"
+    requirement: "A code of conduct is published with a reporting route."
+    audience:
+      - human
+    applicability: "conditional"
+    applies_when: "The project is public or multi-person."
+    priority_default: "P2"
+    rationale: "Not addressed by the corpus; community-safety convention."
+    evidence_required: "`CODE_OF_CONDUCT.md` with a contact."
+    suggested_locations: "Repository root."
+    source_references: "Corpus gap — supplementary best practice."
+    corpus_gap: true
+    audit_method: "File presence plus a working contact."
+    automation_potential: "automated"
+    dependencies: []
+    failure_risk: "No route for harm."
+  - id: "GOV-003"
+    category: "governance"
+    requirement: "Licensing is stated unambiguously for the published material."
+    audience:
+      - human
+      - agent
+    applicability: "required"
+    applies_when: "Anything is published."
+    priority_default: "P1"
+    rationale: "Not addressed by the corpus. Legal reuse depends on it."
+    evidence_required: "A `LICENSE` file, and a statement where documentation is licensed differently from code."
+    suggested_locations: "Repository root."
+    source_references: "Corpus gap — supplementary best practice."
+    corpus_gap: true
+    audit_method: "File presence; confirm scope covers documentation."
+    automation_potential: "automated"
+    dependencies: []
+    failure_risk: "Reuse is legally unclear. **Requires a human decision.**"
+  - id: "GOV-004"
+    category: "governance"
+    requirement: "Ownership is recorded for each documentation area."
+    audience:
+      - human
+      - agent
+    applicability: "required"
+    applies_when: "Always."
+    priority_default: "P1"
+    rationale: "Ownership routes change-triggered review; `R07` separates change author, content maintainer, subject authority and approver."
+    evidence_required: "CODEOWNERS or an ownership register covering documentation paths."
+    suggested_locations: "`CODEOWNERS` / governance register."
+    source_references: "`R07`, `F20`."
+    corpus_gap: false
+    audit_method: "Check documentation paths are covered by a non-wildcard owner."
+    automation_potential: "partial"
+    dependencies: ["FOUND-009"]
+    failure_risk: "Everything is owned by everyone, i.e. no one."
+  - id: "GOV-005"
+    category: "governance"
+    requirement: "Support expectations state where to ask and what response is realistic."
+    audience:
+      - human
+    applicability: "conditional"
+    applies_when: "The project has users beyond its authors."
+    priority_default: "P2"
+    rationale: "`R15` treats response promises as control claims that must be owned and measured; the general support case is a corpus gap."
+    evidence_required: "Channels and an honest expectation."
+    suggested_locations: "README / SUPPORT."
+    source_references: "Corpus gap; promise-as-claim basis `R15`."
+    corpus_gap: true
+    audit_method: "Check the stated expectation against observed reality."
+    automation_potential: "human"
+    dependencies: ["GOV-004"]
+    failure_risk: "Unmet promises."
+  - id: "GOV-006"
+    category: "governance"
+    requirement: "Consequential decisions are recorded with status, context, alternatives, outcome, rationale and consequences."
+    audience:
+      - human
+      - agent
+    applicability: "required"
+    applies_when: "The project makes architecturally or procedurally significant decisions."
+    priority_default: "P1"
+    rationale: "`R02` G07 and `R10` (Nygard/MADR)."
+    evidence_required: "ADRs with those fields."
+    suggested_locations: "`decisions/`."
+    source_references: "`R02`, `R10`."
+    corpus_gap: false
+    audit_method: "Sample ADRs against the field list."
+    automation_potential: "partial"
+    dependencies: ["ARCH-005"]
+    failure_risk: "Decisions relitigated; rationale lost."
+  - id: "GOV-007"
+    category: "governance"
+    requirement: "Superseded decisions are marked as superseded and cannot be read as current."
+    audience:
+      - human
+      - agent
+    applicability: "required"
+    applies_when: "Any decision has been superseded."
+    priority_default: "P1"
+    rationale: "`F09` D3: superseding does not edit the old record, so a superseded ADR keeps its withdrawn prose and reads as though it still binds."
+    evidence_required: "Status field plus a forward link, visible at the top of the record."
+    suggested_locations: "Decision records."
+    source_references: "`F09`, `R07`."
+    corpus_gap: false
+    audit_method: "Check every superseded record carries the marker before its body."
+    automation_potential: "partial"
+    dependencies: ["GOV-006"]
+    failure_risk: "Retired policy enforced as current."
+  - id: "GOV-008"
+    category: "governance"
+    requirement: "A changelog records user-visible changes with versions."
+    audience:
+      - human
+      - agent
+    applicability: "conditional"
+    applies_when: "The project is released or consumed externally."
+    priority_default: "P2"
+    rationale: "Not addressed by the corpus. Note `R07`/`F03`: Google's timeless-documentation guidance deliberately exempts release notes, so a changelog is the correct home for time-anchored prose."
+    evidence_required: "`CHANGELOG.md` maintained with releases."
+    suggested_locations: "Repository root."
+    source_references: "Corpus gap — supplementary best practice."
+    corpus_gap: true
+    audit_method: "Compare recent releases against entries."
+    automation_potential: "partial"
+    dependencies: ["API-005"]
+    failure_risk: "Consumers cannot tell what changed."
+  - id: "GOV-009"
+    category: "governance"
+    requirement: "Issue and security reporting routes are distinct, and the distinction is visible from one place."
+    audience:
+      - human
+    applicability: "required"
+    applies_when: "The project accepts reports."
+    priority_default: "P1"
+    rationale: "`R15` found the fork/upstream split documented but distributed across three files, so a reader must infer it."
+    evidence_required: "A single routing statement or table."
+    suggested_locations: "Issue chooser / README."
+    source_references: "`R15`."
+    corpus_gap: false
+    audit_method: "Ask a newcomer where a vulnerability goes. Wrong answer ⇒ fail."
+    automation_potential: "human"
+    dependencies: ["OPS-010"]
+    failure_risk: "A vulnerability filed publicly."
+  - id: "GOV-010"
+    category: "governance"
+    requirement: "Documentation status vocabulary is defined, and status is never presented as evidence of correctness."
+    audience:
+      - human
+      - agent
+    applicability: "required"
+    applies_when: "The project uses lifecycle states."
+    priority_default: "P1"
+    rationale: "`R07`: active content can be wrong, deprecated content can be current for a transition, retired content can be accurate history."
+    evidence_required: "A status standard plus a statement that status is not a verification result."
+    suggested_locations: "Documentation standards."
+    source_references: "`R07`, `R14`."
+    corpus_gap: false
+    audit_method: "Check whether any report treats `active` as assurance."
+    automation_potential: "human"
+    dependencies: ["FOUND-010"]
+    failure_risk: "Lifecycle state read as a quality claim."
+  - id: "HUMAN-001"
+    category: "human-readable"
+    requirement: "A plain-language summary states what the document is for before any detail."
+    audience:
+      - human
+    applicability: "required"
+    applies_when: "Always."
+    priority_default: "P2"
+    rationale: "Direct-arrival readers must orient without the surrounding structure (`R05`, `R06`)."
+    evidence_required: "An opening that differentiates this document from near-matches."
+    suggested_locations: "Document opening."
+    source_references: "`R05`, `R06`, `R13`."
+    corpus_gap: false
+    audit_method: "Show only the title and opening; ask whether the reader would open it for their question."
+    automation_potential: "human"
+    dependencies: ["FOUND-001"]
+    failure_risk: "Correct content, never selected."
+  - id: "HUMAN-002"
+    category: "human-readable"
+    requirement: "The document explains why the thing exists, not only what it does."
+    audience:
+      - human
+    applicability: "required"
+    applies_when: "The subject embodies a non-obvious choice."
+    priority_default: "P2"
+    rationale: "`R10`: structure without drivers cannot tell a reader which change would violate a trade-off."
+    evidence_required: "Rationale, or a link to the decision holding it."
+    suggested_locations: "Explanatory section."
+    source_references: "`R10`, `R02` G01."
+    corpus_gap: false
+    audit_method: "Ask \"why this and not the obvious alternative?\""
+    automation_potential: "human"
+    dependencies: ["ARCH-005"]
+    failure_risk: "Changes that undo deliberate design."
+  - id: "HUMAN-003"
+    category: "human-readable"
+    requirement: "Information is progressively disclosed: the common case first, depth reachable but not mandatory."
+    audience:
+      - human
+    applicability: "required"
+    applies_when: "The subject has beginner and advanced readers."
+    priority_default: "P2"
+    rationale: "Genre conflation — tutorial with how-to — is the most common documentation conflation (`R02`, Diátaxis)."
+    evidence_required: "A structure where the first path is the common one."
+    suggested_locations: "Document structure."
+    source_references: "`R02`, `R06`."
+    corpus_gap: false
+    audit_method: "Time how long a newcomer takes to reach the first useful action."
+    automation_potential: "human"
+    dependencies: ["HUMAN-001"]
+    failure_risk: "Readers abandon before the content that would have helped."
+  - id: "HUMAN-004"
+    category: "human-readable"
+    requirement: "Headings describe their sections and form a coherent hierarchy with no skipped levels and exactly one H1."
+    audience:
+      - human
+      - agent
+    applicability: "required"
+    applies_when: "Always."
+    priority_default: "P2"
+    rationale: "WCAG 1.3.1 and 2.4.6 are separate requirements: semantic structure *and* descriptive wording (`R13`)."
+    evidence_required: "Lint result plus human judgement on descriptiveness."
+    suggested_locations: "Document structure."
+    source_references: "`R13`, `R06`."
+    corpus_gap: false
+    audit_method: "Heading-structure lint; then read the heading list alone and predict the contents."
+    automation_potential: "automated"
+    dependencies: []
+    failure_risk: "Unnavigable by screen reader or by scanning."
+  - id: "HUMAN-005"
+    category: "human-readable"
+    requirement: "Examples are complete enough to copy and run, with omissions marked in the target language's comment syntax."
+    audience:
+      - human
+    applicability: "required"
+    applies_when: "Examples exist."
+    priority_default: "P1"
+    rationale: "`R12`: ellipsis damage and the synopsis copy trap are distinct, named failures."
+    evidence_required: "Copy the rendered example and run it."
+    suggested_locations: "With the example."
+    source_references: "`R12`."
+    corpus_gap: false
+    audit_method: "Copy from the rendered surface, not the source, and execute."
+    automation_potential: "partial"
+    dependencies: ["API-012"]
+    failure_risk: "Pasted placeholders and broken commands."
+  - id: "HUMAN-006"
+    category: "human-readable"
+    requirement: "Each procedure states the expected result after consequential steps."
+    audience:
+      - human
+    applicability: "required"
+    applies_when: "The document instructs action."
+    priority_default: "P1"
+    rationale: "`R08`: a software response must be distinguishable from a user action, and divergence must be detectable before continuing."
+    evidence_required: "Expected observation per consequential step."
+    suggested_locations: "Inline with steps."
+    source_references: "`R08`."
+    corpus_gap: false
+    audit_method: "Check each consequential step has an observable expectation."
+    automation_potential: "human"
+    dependencies: ["OPS-004"]
+    failure_risk: "Partial completion invisible until much later."
+  - id: "HUMAN-007"
+    category: "human-readable"
+    requirement: "Troubleshooting sits next to the instruction that can fail, not in a distant appendix."
+    audience:
+      - human
+    applicability: "required"
+    applies_when: "Steps can fail."
+    priority_default: "P2"
+    rationale: "`R13`: readers under interruption need condition, action, expected result and exception kept together."
+    evidence_required: "Proximity, or a same-page link."
+    suggested_locations: "Inline."
+    source_references: "`R13`, `R08`."
+    corpus_gap: false
+    audit_method: "Check the reader does not have to leave the procedure to recover."
+    automation_potential: "human"
+    dependencies: ["OPS-005"]
+    failure_risk: "Abandonment mid-procedure."
+  - id: "HUMAN-008"
+    category: "human-readable"
+    requirement: "Warnings precede risky or destructive commands, while avoidance is still possible."
+    audience:
+      - human
+      - agent
+    applicability: "required"
+    applies_when: "Any documented action is destructive, irreversible or privileged."
+    priority_default: "P0"
+    rationale: "`R08` names **warnings after commitment** as a distinct failure: the reader learns about data loss after running the command."
+    evidence_required: "A warning above the command, naming blast radius and recovery."
+    suggested_locations: "Immediately before the step."
+    source_references: "`R08`, `R12`."
+    corpus_gap: false
+    audit_method: "Grep for destructive command patterns; check each has a preceding warning."
+    automation_potential: "partial"
+    dependencies: ["OPS-004"]
+    failure_risk: "Irreversible damage the reader could have avoided."
+  - id: "HUMAN-009"
+    category: "human-readable"
+    requirement: "Language is direct and unambiguous without erasing necessary technical distinctions."
+    audience:
+      - human
+    applicability: "required"
+    applies_when: "Always."
+    priority_default: "P2"
+    rationale: "`R13`: plain-language dilution — replacing exact distinctions with familiar but false approximations — is a named failure. Readability formulas are diagnostic signals, never verdicts."
+    evidence_required: "Editorial review; comprehension check for high-risk content."
+    suggested_locations: "Throughout."
+    source_references: "`R13`, `R01`."
+    corpus_gap: false
+    audit_method: "Ask a reader to explain a boundary condition in their own words."
+    automation_potential: "human"
+    dependencies: ["FOUND-007"]
+    failure_risk: "Fluent prose that transfers the wrong meaning."
+  - id: "HUMAN-010"
+    category: "human-readable"
+    requirement: "Diagrams have an equivalent text route conveying purpose and material relationships, not a label."
+    audience:
+      - human
+    applicability: "required"
+    applies_when: "Diagrams exist."
+    priority_default: "P1"
+    rationale: "WCAG 1.1.1 requires an equivalent purpose; \"architecture diagram\" is a label, not an account (`R13`)."
+    evidence_required: "Prose or list conveying nodes, relationships, order and conclusion; `accTitle`/`accDescr` where the renderer supports them."
+    suggested_locations: "Beside the diagram."
+    source_references: "`R13`."
+    corpus_gap: false
+    audit_method: "Hide the diagram; check the remaining text supports the same conclusion."
+    automation_potential: "partial"
+    dependencies: ["ARCH-003"]
+    failure_risk: "Information available only visually."
+  - id: "HUMAN-011"
+    category: "human-readable"
+    requirement: "No distinction is carried only by colour, position, shape or typography."
+    audience:
+      - human
+    applicability: "required"
+    applies_when: "Any visual encoding is used."
+    priority_default: "P1"
+    rationale: "WCAG 1.4.1; and \"as shown above\" fails under reflow and linearisation (`R13`)."
+    evidence_required: "A textual label accompanying every sensory cue."
+    suggested_locations: "Throughout."
+    source_references: "`R13`."
+    corpus_gap: false
+    audit_method: "Grep directional and colour references; check each has a stable named referent."
+    automation_potential: "partial"
+    dependencies: ["HUMAN-010"]
+    failure_risk: "Meaning lost for a subset of readers."
+  - id: "HUMAN-012"
+    category: "human-readable"
+    requirement: "Tables are used for genuine two-dimensional comparison, are introduced, and remain intelligible when linearised."
+    audience:
+      - human
+    applicability: "required"
+    applies_when: "Tables exist."
+    priority_default: "P2"
+    rationale: "`R13` found tables the corpus's largest structural hotspot and records that basic GFM has no caption, row-header or complex-header syntax."
+    evidence_required: "A preceding introduction; a linearisation check; width check under reflow."
+    suggested_locations: "With the table."
+    source_references: "`R13`."
+    corpus_gap: false
+    audit_method: "Read the table one cell at a time in reading order; check context survives."
+    automation_potential: "partial"
+    dependencies: ["HUMAN-004"]
+    failure_risk: "Compressed prose that is unusable by assistive technology."
+  - id: "HUMAN-013"
+    category: "human-readable"
+    requirement: "Separate guidance exists for the distinct roles the project actually has."
+    audience:
+      - human
+    applicability: "conditional"
+    applies_when: "Users, contributors, maintainers and operators have materially different needs."
+    priority_default: "P2"
+    rationale: "`R02`: one document cannot carry incompatible authority and lifecycle."
+    evidence_required: "Role-scoped entry points."
+    suggested_locations: "Entry point routing."
+    source_references: "`R02`, `R06`."
+    corpus_gap: false
+    audit_method: "For each role, follow their path from the entry point."
+    automation_potential: "human"
+    dependencies: ["FOUND-001"]
+    failure_risk: "Every reader wades through content for other roles."
+  - id: "HUMAN-014"
+    category: "human-readable"
+    requirement: "Each document ends with a concrete next step or an explicit statement that the task is complete."
+    audience:
+      - human
+    applicability: "required"
+    applies_when: "The document supports a task."
+    priority_default: "P3"
+    rationale: "`R08` requires an explicit completion or termination declaration."
+    evidence_required: "A stated next action or completion criterion."
+    suggested_locations: "Document end."
+    source_references: "`R08`, `R06`."
+    corpus_gap: false
+    audit_method: "Check the reader knows whether they are finished."
+    automation_potential: "human"
+    dependencies: ["START-007"]
+    failure_risk: "Tasks left half-done."
+  - id: "AGENT-001"
+    category: "agent-readable"
+    requirement: "The repository states its purpose and what it is not in a file agents load unconditionally."
+    audience:
+      - agent
+    applicability: "required"
+    applies_when: "Agents operate in the repository."
+    priority_default: "P1"
+    rationale: "`F01` C1: unconditionally preloaded instruction files are the highest-salience, least task-selected evidence an agent holds."
+    evidence_required: "A purpose statement plus explicit non-goals."
+    suggested_locations: "`AGENTS.md` / `CLAUDE.md`."
+    source_references: "`F01`."
+    corpus_gap: false
+    audit_method: "Read the preloaded file cold; state the repository's purpose and boundary."
+    automation_potential: "partial"
+    dependencies: ["START-001"]
+    failure_risk: "Agents work on the wrong thing confidently."
+  - id: "AGENT-002"
+    category: "agent-readable"
+    requirement: "Instruction precedence is stated explicitly, including which file wins and what the subordinate file governs."
+    audience:
+      - agent
+    applicability: "required"
+    applies_when: "More than one instruction file is in scope."
+    priority_default: "P0"
+    rationale: "`F01` C10 and `F09` D6: harness conflict resolution is documented as arbitrary, and precedence is typically asserted *inside the subordinate file* — so an agent must already have read it to learn it is subordinate."
+    evidence_required: "A precedence statement in the file that loads first."
+    suggested_locations: "The unconditionally loaded file."
+    source_references: "`F01`, `F09`, `F17`."
+    corpus_gap: false
+    audit_method: "Check the top-loaded file names the precedence, not only the subordinate one."
+    automation_potential: "human"
+    dependencies: ["AGENT-001"]
+    failure_risk: "Agents follow the more prominent rather than the more specific instruction."
+  - id: "AGENT-003"
+    category: "agent-readable"
+    requirement: "Authoritative file locations are named for each claim type: behaviour, intent, configuration, policy, tests."
+    audience:
+      - agent
+    applicability: "required"
+    applies_when: "Always."
+    priority_default: "P1"
+    rationale: "Evidence authority depends on claim type; a single hierarchy is wrong (`R03`, ADR-0029)."
+    evidence_required: "A claim-type → source map."
+    suggested_locations: "`AGENTS.md`."
+    source_references: "`R03`, `F06`."
+    corpus_gap: false
+    audit_method: "For 3 claim types, check the map names a source that can actually establish them."
+    automation_potential: "human"
+    dependencies: ["AGENT-002"]
+    failure_risk: "Code cited for intent; decisions cited for runtime behaviour."
+  - id: "AGENT-004"
+    category: "agent-readable"
+    requirement: "A repository map names the major trees and what each contains."
+    audience:
+      - agent
+    applicability: "required"
+    applies_when: "The repository has more than a handful of directories."
+    priority_default: "P1"
+    rationale: "Corpus gap on content, but `F01` C2 supplies the hazard: an agent whose working copy is sparse sees a different repository and reports absence confidently."
+    evidence_required: "A tree map matching the actual tree."
+    suggested_locations: "`AGENTS.md`."
+    source_references: "`F01`; content requirement is a corpus gap."
+    corpus_gap: false
+    audit_method: "Diff the documented tree against `git ls-tree`."
+    automation_potential: "partial"
+    dependencies: ["AGENT-001"]
+    failure_risk: "False absence claims."
+  - id: "AGENT-005"
+    category: "agent-readable"
+    requirement: "Agents must state the evidence boundary they worked within: repository, revision, and whether the working copy was complete."
+    audience:
+      - agent
+    applicability: "required"
+    applies_when: "An agent authors or edits documentation."
+    priority_default: "P0"
+    rationale: "`F01`'s central local demonstration: a 9.7%-materialised working copy announces nothing, and a filesystem search reports a documentation-only repository."
+    evidence_required: "A declared view: revision, sparse/shallow state, submodule state."
+    suggested_locations: "Provenance record or the artefact itself."
+    source_references: "`F01`, `F03`."
+    corpus_gap: false
+    audit_method: "Run a view-completeness probe (`git ls-tree -r HEAD | wc -l` vs files on disk) before authoring; treat a large divergence as blocking."
+    automation_potential: "automated"
+    dependencies: ["AGENT-004"]
+    failure_risk: "Confident claims about a repository the agent never saw."
+  - id: "AGENT-006"
+    category: "agent-readable"
+    requirement: "Build, test, lint, type-check and format commands are listed with their exact working directory."
+    audience:
+      - agent
+    applicability: "required"
+    applies_when: "Always."
+    priority_default: "P1"
+    rationale: "Shell CWD does not persist between tool calls; `F02` documents the resulting state loss."
+    evidence_required: "Commands with `cd` inline or absolute paths."
+    suggested_locations: "`AGENTS.md`."
+    source_references: "`F02`, `R12`."
+    corpus_gap: false
+    audit_method: "Execute each as a single command from a fresh shell."
+    automation_potential: "automated"
+    dependencies: ["DEV-001"]
+    failure_risk: "Commands that fail for reasons the agent misattributes to the code."
+  - id: "AGENT-007"
+    category: "agent-readable"
+    requirement: "Toolchain and version requirements are stated, including how to activate a pinned environment."
+    audience:
+      - agent
+    applicability: "required"
+    applies_when: "The project pins a toolchain."
+    priority_default: "P1"
+    rationale: "`R12`: environment incompatibility is a distinct failure class, and each assumption is conventional somewhere."
+    evidence_required: "Versions plus the activation command."
+    suggested_locations: "`AGENTS.md`."
+    source_references: "`R12`, `F08`."
+    corpus_gap: false
+    audit_method: "Activate and verify the pinned tool wins over any system version."
+    automation_potential: "partial"
+    dependencies: ["AGENT-006"]
+    failure_risk: "Silent version drift producing unreproducible results."
+  - id: "AGENT-008"
+    category: "agent-readable"
+    requirement: "Environment variable names are listed without values, and the retrieval interface is documented instead."
+    audience:
+      - agent
+    applicability: "required"
+    applies_when: "Agents need configuration."
+    priority_default: "P0"
+    rationale: "`F12`: agents read broadly and publish narrowly; the document is a new information object with a different audience."
+    evidence_required: "Names and semantics only."
+    suggested_locations: "`AGENTS.md` / configuration reference."
+    source_references: "`F12`, `R15`."
+    corpus_gap: false
+    audit_method: "Secret scan; check no example carries a usable value."
+    automation_potential: "automated"
+    dependencies: ["START-006"]
+    failure_risk: "Credential exposure."
+  - id: "AGENT-009"
+    category: "agent-readable"
+    requirement: "Dependency-management rules state how dependencies are added, pinned and updated."
+    audience:
+      - agent
+    applicability: "conditional"
+    applies_when: "The project has managed dependencies."
+    priority_default: "P2"
+    rationale: "`F04`/`F08`: package hallucination is measured across every model family studied, and package existence is not a trust signal."
+    evidence_required: "A stated rule plus a verification step against the registry."
+    suggested_locations: "`AGENTS.md`."
+    source_references: "Corpus gap; hallucination basis `F04`, `F08`."
+    corpus_gap: true
+    audit_method: "Check the rule requires registry and provenance verification, not just a name."
+    automation_potential: "human"
+    dependencies: ["AGENT-007"]
+    failure_risk: "Package-confusion supply-chain compromise."
+  - id: "AGENT-010"
+    category: "agent-readable"
+    requirement: "Generated files are marked as generated and name their generator and inputs."
+    audience:
+      - human
+      - agent
+    applicability: "required"
+    applies_when: "Any file is generated."
+    priority_default: "P1"
+    rationale: "`R02` G08: a generated view must disclose generator, inputs, selection rules and reproduce deterministically, and must not carry hand-authored claims."
+    evidence_required: "A do-not-edit banner, named generator, declared inputs and an input digest."
+    suggested_locations: "Top of each generated file."
+    source_references: "`R02`, `R05`."
+    corpus_gap: false
+    audit_method: "Regenerate and diff; confirm byte-identical output from the named inputs."
+    automation_potential: "automated"
+    dependencies: []
+    failure_risk: "Hand edits silently lost; generated claims attributed to an author."
+  - id: "AGENT-011"
+    category: "agent-readable"
+    requirement: "Files and directories agents must not modify are listed explicitly."
+    audience:
+      - agent
+    applicability: "required"
+    applies_when: "Any path is off-limits (vendored, upstream, generated, security-sensitive)."
+    priority_default: "P0"
+    rationale: "`F17`: read authority must not imply write authority; restricting the write scope is a deterministic control, not a prompt."
+    evidence_required: "An explicit path list, ideally enforced by a hook."
+    suggested_locations: "`AGENTS.md` plus a pre-commit check."
+    source_references: "`F17`, `F08`."
+    corpus_gap: false
+    audit_method: "Attempt a write to a listed path; confirm it is refused."
+    automation_potential: "automated"
+    dependencies: ["AGENT-010"]
+    failure_risk: "Agents overwrite upstream or generated content."
+  - id: "AGENT-012"
+    category: "agent-readable"
+    requirement: "Destructive operations are named, and the boundary at which an agent must stop is explicit."
+    audience:
+      - agent
+    applicability: "required"
+    applies_when: "The repository contains destructive tooling."
+    priority_default: "P0"
+    rationale: "`F08`'s three boundaries: content validation / isolated execution / target authorisation. An agent should stop at the first boundary it cannot verify, and must never convert uncertainty into an invented transcript."
+    evidence_required: "A named list plus the stop rule."
+    suggested_locations: "`AGENTS.md`."
+    source_references: "`F08`."
+    corpus_gap: false
+    audit_method: "Check the stop rule is stated as a prohibition, not a preference."
+    automation_potential: "human"
+    dependencies: ["AGENT-011"]
+    failure_risk: "Irreversible action on an unverified target."
+  - id: "AGENT-013"
+    category: "agent-readable"
+    requirement: "Human-approval checkpoints are explicit and name what the human must see."
+    audience:
+      - agent
+    applicability: "required"
+    applies_when: "Agents can take consequential action."
+    priority_default: "P0"
+    rationale: "`F18`: approval is meaningful only if the reviewer sees the exact resolved target and action, not an abstract description."
+    evidence_required: "Checkpoint list with the required evidence at each."
+    suggested_locations: "`AGENTS.md`."
+    source_references: "`F18`, `F08`, `F17`."
+    corpus_gap: false
+    audit_method: "Check each checkpoint names its evidence."
+    automation_potential: "human"
+    dependencies: ["AGENT-012"]
+    failure_risk: "Rubber-stamp approval of an action the approver could not assess."
+  - id: "AGENT-014"
+    category: "agent-readable"
+    requirement: "Repository content, tool output and external sources are treated as evidence, never as instructions."
+    audience:
+      - agent
+    applicability: "required"
+    applies_when: "Always."
+    priority_default: "P0"
+    rationale: "`F17`: content authority must not imply instruction authority. Existing models do not reliably represent instruction privilege."
+    evidence_required: "An explicit rule in the governing instruction file."
+    suggested_locations: "`AGENTS.md`; research/authoring contracts."
+    source_references: "`F17`, `RESEARCH-CONTRACT` §6."
+    corpus_gap: false
+    audit_method: "Check the rule exists and covers issues, comments, logs and retrieved pages."
+    automation_potential: "human"
+    dependencies: ["AGENT-002"]
+    failure_risk: "Indirect prompt injection redirecting the task or expanding scope."
+  - id: "AGENT-015"
+    category: "agent-readable"
+    requirement: "Architecture constraints an agent must not violate are stated as constraints, with their authority."
+    audience:
+      - agent
+    applicability: "required"
+    applies_when: "The architecture has invariants."
+    priority_default: "P1"
+    rationale: "`F09`: an invented constraint and an unstated real one fail in opposite directions; both need the authority chain."
+    evidence_required: "Constraint plus governing instrument."
+    suggested_locations: "`AGENTS.md` / invariant nodes."
+    source_references: "`F09`, `R09`."
+    corpus_gap: false
+    audit_method: "For each constraint, name the instrument that imposed it."
+    automation_potential: "human"
+    dependencies: ["ARCH-005"]
+    failure_risk: "Agents either violate real invariants or invent false ones."
+  - id: "AGENT-016"
+    category: "agent-readable"
+    requirement: "Data-handling restrictions state what may not be read, logged, published or sent to an external service."
+    audience:
+      - agent
+    applicability: "required"
+    applies_when: "The repository contains restricted material."
+    priority_default: "P0"
+    rationale: "`F12`: the boundary change is from narrow-audience read to wide-audience publish, and ordinary controls miss it because each control recognises only part of the problem."
+    evidence_required: "A classification and routing rule."
+    suggested_locations: "`AGENTS.md`."
+    source_references: "`F12`, `R15`."
+    corpus_gap: false
+    audit_method: "Check the rule names the destination, not only the source."
+    automation_potential: "human"
+    dependencies: ["OPS-008"]
+    failure_risk: "Restricted content published or sent to a third-party service."
+  - id: "AGENT-017"
+    category: "agent-readable"
+    requirement: "Coding and documentation conventions are stated with their enforcement status — including \"enforced by nothing\"."
+    audience:
+      - agent
+    applicability: "required"
+    applies_when: "Conventions exist."
+    priority_default: "P1"
+    rationale: "`F09`: where the honest answer cannot be written down, the dishonest one gets written by default. \"Enforced mechanically: nothing\" must be a legal, writable value."
+    evidence_required: "Convention plus its actual enforcement mechanism or an explicit none."
+    suggested_locations: "`AGENTS.md` / standards."
+    source_references: "`F09`."
+    corpus_gap: false
+    audit_method: "For each convention, verify the named mechanism runs."
+    automation_potential: "partial"
+    dependencies: ["DEV-008"]
+    failure_risk: "Phantom enforcement."
+  - id: "AGENT-018"
+    category: "agent-readable"
+    requirement: "Validation required after a change is stated as an ordered, runnable sequence."
+    audience:
+      - agent
+    applicability: "required"
+    applies_when: "Always."
+    priority_default: "P1"
+    rationale: "`F19`: each check proves a different predicate; the agent must know which to run and what each establishes."
+    evidence_required: "A named sequence with each command's proposition."
+    suggested_locations: "`AGENTS.md`."
+    source_references: "`F19`."
+    corpus_gap: false
+    audit_method: "Run the sequence on a trivial change."
+    automation_potential: "automated"
+    dependencies: ["AGENT-006"]
+    failure_risk: "Changes land unvalidated, or validation is claimed without being run."
+  - id: "AGENT-019"
+    category: "agent-readable"
+    requirement: "A definition of done states what must be true before an agent reports completion."
+    audience:
+      - agent
+    applicability: "required"
+    applies_when: "Agents complete tasks autonomously."
+    priority_default: "P1"
+    rationale: "`F13`/`F19`: a confidently wrong completion scores the same as a correct one at authoring time, and abstention scores worse than both."
+    evidence_required: "An explicit checklist including evidence requirements."
+    suggested_locations: "`AGENTS.md`."
+    source_references: "`F13`, `F19`, `F20`."
+    corpus_gap: false
+    audit_method: "Check the definition requires evidence, not assertion."
+    automation_potential: "human"
+    dependencies: ["AGENT-018"]
+    failure_risk: "\"Done\" that means \"stopped\"."
+  - id: "AGENT-020"
+    category: "agent-readable"
+    requirement: "Conflicting documentation must be reported, not silently reconciled."
+    audience:
+      - agent
+    applicability: "required"
+    applies_when: "Two sources disagree."
+    priority_default: "P0"
+    rationale: "`F10`: models override their own correct prior with incorrect retrieved content over 60% of the time; and the corpus's own worked example shows a consistency fix propagating an error into the document that was right."
+    evidence_required: "An escalation rule: record both, flag, do not choose."
+    suggested_locations: "`AGENTS.md` / evidence standard."
+    source_references: "`F10`, `F14`, `R03`, ADR-0029."
+    corpus_gap: false
+    audit_method: "Check the rule forbids the agent from resolving a same-claim-type conflict."
+    automation_potential: "human"
+    dependencies: ["AGENT-003"]
+    failure_risk: "The most valuable signal in the corpus — a disagreement — destroyed."
+  - id: "AGENT-021"
+    category: "agent-readable"
+    requirement: "Uncertainty must be reported as a first-class state, and abstention is a permitted outcome."
+    audience:
+      - agent
+    applicability: "required"
+    applies_when: "Always."
+    priority_default: "P0"
+    rationale: "`F13`: only 5% of unprompted generations carry any epistemic marker, and preference training prices a hedge *below saying nothing*. The route must be explicit or it will not be taken."
+    evidence_required: "A documented route for \"not established\", with an example."
+    suggested_locations: "`AGENTS.md` / evidence standard."
+    source_references: "`F13`, `F07`, `F04`."
+    corpus_gap: false
+    audit_method: "Check a named gap is a valid deliverable, not a failure to deliver."
+    automation_potential: "human"
+    dependencies: ["AGENT-019"]
+    failure_risk: "Plausible fill in place of a gap — the corpus's most consistently evidenced failure."
+  - id: "AGENT-022"
+    category: "agent-readable"
+    requirement: "Every claim links to authoritative detail; summaries never stand alone as evidence."
+    audience:
+      - agent
+    applicability: "required"
+    applies_when: "Documentation summarises anything."
+    priority_default: "P1"
+    rationale: "`F15`: derivatives must not be counted as corroboration; `n` documents may be one source copied `n` times."
+    evidence_required: "Claim-to-root traceability."
+    suggested_locations: "Evidence ledger."
+    source_references: "`F15`, `F05`."
+    corpus_gap: false
+    audit_method: "For a sampled claim, follow every citation to a root; reject roots that are themselves derivatives."
+    automation_potential: "partial"
+    dependencies: ["AGENT-003"]
+    failure_risk: "False consensus manufacturing unfounded authority."
+  - id: "AGENT-023"
+    category: "agent-readable"
+    requirement: "Headings and Markdown structure are stable and predictable across documents of the same kind."
+    audience:
+      - agent
+    applicability: "required"
+    applies_when: "Agents parse the documentation."
+    priority_default: "P2"
+    rationale: "Predictable structure is what makes deterministic extraction possible (`R05`, `F19`)."
+    evidence_required: "Template conformance check."
+    suggested_locations: "Templates and a lint rule."
+    source_references: "`R05`, `F19`."
+    corpus_gap: false
+    audit_method: "Structural lint across the population."
+    automation_potential: "automated"
+    dependencies: ["HUMAN-004"]
+    failure_risk: "Extraction silently misses sections."
+  - id: "AGENT-024"
+    category: "agent-readable"
+    requirement: "Claims that may become stale carry a date, version or commit reference at the claim, not the document."
+    audience:
+      - human
+      - agent
+    applicability: "required"
+    applies_when: "Any current-state claim is made."
+    priority_default: "P0"
+    rationale: "`F03`: a whole-document freshness marker cannot say \"current for these claims, stale for those\"; and `R07` forbids advancing a whole-ledger revision when only one claim was checked."
+    evidence_required: "Per-claim revision pinning."
+    suggested_locations: "Evidence ledger."
+    source_references: "`F03`, `R07`."
+    corpus_gap: false
+    audit_method: "Check the recorded revision resolves and is an **ancestor** of the documented revision — a date comparison is not an ancestry test."
+    automation_potential: "partial"
+    dependencies: ["FOUND-010"]
+    failure_risk: "Untouched claims silently granted unearned currency."
+  - id: "AGENT-025"
+    category: "agent-readable"
+    requirement: "Examples state inputs, outputs, assumptions and at least one failure case."
+    audience:
+      - human
+      - agent
+    applicability: "required"
+    applies_when: "Examples exist."
+    priority_default: "P1"
+    rationale: "`R12`: an example with an input and an expected output is a test-like partial specification; without an oracle it establishes nothing."
+    evidence_required: "Declared input, expected observable outcome, assumptions, one negative case."
+    suggested_locations: "With the example."
+    source_references: "`R12`, `F08`."
+    corpus_gap: false
+    audit_method: "Check the example has an oracle, not merely a zero exit status."
+    automation_potential: "human"
+    dependencies: ["API-012"]
+    failure_risk: "No-oracle execution reported as validation."
