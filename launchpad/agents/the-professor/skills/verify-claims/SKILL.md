@@ -89,11 +89,13 @@ subprocess — a genuinely separate check in **fresh context**.
 1. The task: decide whether the cited span supports the claim.
 2. **The instruction to decide *only* from the span, inferring nothing from anything
    outside it.**
-3. The response format §2b requires — the three verdict literals and the
-   `<VERDICT>: <reason>` shape, stated explicitly — **and the instruction that the
-   reason must not name any verdict literal other than the one it follows**, which is
-   what §2d blocks on. Asking for it costs a sentence; not asking for it turns §2d into
-   blocks the verifier was never given a chance to avoid.
+3. The response format §2b requires — the three verdict literals and the two-line
+   **reason-first, verdict-on-its-own-last-line** shape, stated explicitly — **and the
+   instruction that the reason must not name any verdict literal other than the one on
+   line two**, which is what §2d blocks on. Asking for it costs a sentence; not asking
+   for it turns §2d into blocks the verifier was never given a chance to avoid.
+   **Do not ask for the verdict first.** The ordering is not cosmetic: §2b records why
+   it is the difference between a reachable fourth verdict and an unreachable one.
 4. The cited source's exact span, and the claim's exact sentence.
 
 Items 1–3 are not context about the draft; they are the question being asked. **Omitting
@@ -165,64 +167,106 @@ limitation is named in the redesign doc (§3, §6.7) and is not solved here.
 is never found by searching inside a response.** This distinction is the gate, not a
 detail of it: every weaker rule that has been tried lets a wrong answer through.
 
-The complete response, after stripping leading and trailing whitespace, must be exactly:
+The complete response, after stripping leading and trailing whitespace, must be exactly
+two lines:
 
 ```
-<VERDICT><separator><reason>
+<reason>
+<VERDICT>
 ```
 
 where:
 
-- **`<VERDICT>`** is one of the three literals `SUPPORTED`, `NOT_SUPPORTED`,
-  `PARTIALLY_SUPPORTED`, **matched case-sensitively, in upper case, as the entire text
-  before the separator.** Not contained in it — equal to it.
-- **`<separator>`** is a single colon, optionally followed by spaces.
-- **`<reason>`** is one non-empty line: the one-sentence reason this step already
-  requires. It may contain any text **except a verdict literal other than the one it
-  follows** — see §2d, which explains why that single exception exists and what to do
+- **`<reason>`** is line one: the single-sentence reason this step already requires,
+  non-empty. It may contain any text **except a verdict literal other than the one on
+  line two** — see §2d, which explains why that single exception exists and what to do
   when it is hit. The reason is still never *scanned for* the verdict: the verdict is
-  always the text before the separator, and §2d is a contradiction check applied after
-  that, never a second way to find a verdict.
+  always the whole of line two, and §2d is a contradiction check applied after that,
+  never a second way to find a verdict.
+- **`<VERDICT>`** is line two, and is one of the three literals `SUPPORTED`,
+  `NOT_SUPPORTED`, `PARTIALLY_SUPPORTED`, **matched case-sensitively, in upper case, as
+  the entire line.** Not contained in it — equal to it. No colon, no trailing full stop,
+  no commentary after it.
 
-Whitespace: leading and trailing whitespace around the whole response is stripped before
-matching, and spaces after the separator are allowed. **No other flexibility exists.** A
-response spanning more than one line after the reason, or carrying any text before the
-verdict literal, does not match.
+Whitespace: leading and trailing whitespace around the whole response, and around each
+of the two lines, is stripped before matching. **No other flexibility exists.** A
+response of one line, or of three or more, does not match.
 
-Because the verdict must *equal* the text before the separator, `SUPPORTED` being a
-substring of `NOT_SUPPORTED` and `PARTIALLY_SUPPORTED` cannot cause a misread. A rule
-that searched for `SUPPORTED` anywhere would report a `NOT_SUPPORTED` response as
-supported — the gate's own silent-wrongness failure, reproduced inside the mechanism
-built to catch it.
+Because the verdict must *equal* line two in its entirety, `SUPPORTED` being a substring
+of `NOT_SUPPORTED` and `PARTIALLY_SUPPORTED` cannot cause a misread. A rule that searched
+for `SUPPORTED` anywhere would report a `NOT_SUPPORTED` response as supported — the
+gate's own silent-wrongness failure, reproduced inside the mechanism built to catch it.
+
+**Why the verdict comes LAST, and it is the whole point of this ordering — decided
+2026-09-16, by Serina, from measurement.** This grammar originally put the verdict first,
+`<VERDICT>: <reason>`. That shape requires the answer to be emitted *before* the
+reasoning that decides it, and a verifier generating left to right therefore commits to a
+literal before it has worked anything out. Nine real dispatches on 2026-09-16 showed it
+then correcting itself inside the reason, where the equality rule gives the correction no
+effect:
+
+```
+NOT_SUPPORTED: ... — wait, the first two assertions are established, so the correct
+verdict is PARTIALLY_SUPPORTED.
+```
+
+`PARTIALLY_SUPPORTED` was unreachable under that ordering on every honestly-partial claim
+tried. Supplying the three verdicts' definitions did not fix it; supplying an explicit
+ordered procedure for composing them did not fix it either, and the `SUPPORTED` /
+`NOT_SUPPORTED` controls held throughout, so the cause was positional rather than
+wording. **Reason first means the composition happens before the token that reports it.**
+Everything the original grammar earned is kept — whole-response matching, equality not
+containment, one-line reason, no narration — only the position moved.
 
 **Responses that MUST be accepted, and as what** — these matter as much as the
 rejections, because the whole point of the equality rule is that the two longer verdicts
 survive it intact:
 
-1. `SUPPORTED: the span states the retry count as three.` → **`SUPPORTED`**.
-2. `NOT_SUPPORTED: the citation contradicts the claim.` → **`NOT_SUPPORTED`**, never
-   `SUPPORTED`. The text before the separator is `NOT_SUPPORTED`, which is not equal to
-   `SUPPORTED`, so the collision cannot occur.
-3. `PARTIALLY_SUPPORTED: the span supports two of the three conditions.` →
-   **`PARTIALLY_SUPPORTED`**, and step 3 blocks on it. Never rounded up.
+1. ```
+   The span states the retry count as three.
+   SUPPORTED
+   ```
+   → **`SUPPORTED`**.
+2. ```
+   The citation contradicts the claim.
+   NOT_SUPPORTED
+   ```
+   → **`NOT_SUPPORTED`**, never `SUPPORTED`. Line two is `NOT_SUPPORTED`, which is not
+   equal to `SUPPORTED`, so the collision cannot occur.
+3. ```
+   The span supports two of the three conditions.
+   PARTIALLY_SUPPORTED
+   ```
+   → **`PARTIALLY_SUPPORTED`**, and step 3 blocks on it. Never rounded up.
 
 **Responses that MUST be rejected, not interpreted:**
 
-1. `The verdict is NOT_SUPPORTED: the citation contradicts the claim.`
-   Rejected: text precedes the verdict literal, so the whole response does not match.
-   A scanning rule would read this as `NOT_SUPPORTED` — correct by luck — and the same
-   rule reads example 2 catastrophically wrong.
+1. ```
+   SUPPORTED: the span states the retry count as three.
+   ```
+   Rejected: this is the OLD verdict-first shape, and it is one line rather than two.
+   Accepting it would reintroduce the exact ordering defect this grammar was changed to
+   remove, so it has to fail rather than be tolerated for compatibility.
 2. `This claim cannot be classified as SUPPORTED because the citation contradicts it.`
-   Rejected: no verdict literal at the start, no separator. **A containment check marks
-   this `SUPPORTED`.** It is the exact opposite of what the verifier said.
+   Rejected: one line, and line two is absent, so there is no verdict at all. **A
+   containment check marks this `SUPPORTED`.** It is the exact opposite of what the
+   verifier said.
 3. ```
    Checking the cited span now...
-   SUPPORTED: the span states the retry count as three.
+   The span states the retry count as three.
+   SUPPORTED
    Done.
    ```
-   Rejected: a valid verdict line surrounded by other output. The response as a whole
-   does not match, and a line-scanning rule would accept it — which means any verifier
-   that narrates its work silently becomes trusted.
+   Rejected: four lines. A valid verdict line surrounded by other output — the response as
+   a whole does not match, and a line-scanning rule would accept it, which means any
+   verifier that narrates its work silently becomes trusted.
+4. ```
+   The span supports two of the three conditions.
+   PARTIALLY_SUPPORTED.
+   ```
+   Rejected: line two is `PARTIALLY_SUPPORTED.` with a trailing full stop, which is not
+   *equal* to any literal. Equality is what makes the substring collision impossible, so
+   it cannot be relaxed to "starts with" or "contains" for punctuation either.
 
 ### 2c. When there is no verdict — parse failure and non-completion
 
@@ -245,7 +289,12 @@ whether it answered at all:
   bound the call.** Apply the timeout, kill the command, and block. A hang without an
   enforced bound is an indefinite wait, not a verdict.
 - **A response that ends without completing the grammar** — output that stops mid-line,
-  or after the verdict and separator with no reason. Block.
+  or that gives the reason line and then ends with no verdict line. Block.
+  **Verdict-last makes truncation safer, not riskier, and this is a real gain from the
+  2026-09-16 reordering.** Under the old verdict-first shape a truncated response still
+  carried a complete-looking verdict, and only the justification was lost; now a
+  truncated response loses the verdict itself and is unambiguously incomplete. A
+  half-finished check can no longer look like a decided one.
 
 None of these are recoverable by retrying silently. Report them like any other blocking
 finding, naming which claim and which failure.
@@ -253,13 +302,14 @@ finding, naming which claim and which failure.
 ### 2d. When the reason contradicts its own verdict
 
 **Decided 2026-09-16, by Serina, after five real dispatches demonstrated it.** If the
-reason names any verdict literal **other than** the one before the separator, the
+reason line names any verdict literal **other than** the one on line two, the
 response is contradictory: **parse failure, disposition `block`, and never the emitted
 verdict.** Match the literals as whole tokens and longest-first, so the `SUPPORTED`
 inside `NOT_SUPPORTED` is not mistaken for a competing verdict.
 
-**This is not hypothetical.** Three of five dispatches against real claims produced
-exactly this shape, and the emitted literal was wrong in all three:
+**This is not hypothetical.** It was observed under the grammar's previous
+verdict-first ordering, where the verifier committed to a literal before reasoning and
+could only correct itself afterwards, too late to change the parse:
 
 ```
 NOT_SUPPORTED: The span establishes the 120-character window value and its
@@ -268,19 +318,22 @@ sentence-spanning rationale but says nothing about per-repository override via a
 so the correct verdict is PARTIALLY_SUPPORTED.
 ```
 
-**Why this happens, and why no prompt wording fixes it.** §2b requires the verdict
-*before* the reason. A verifier generating left to right therefore commits to a literal
-before it has done the reasoning that decides which literal is right, and can only
-correct itself inside the reason — where, by §2b's equality rule, the correction has no
-effect. Supplying the three verdicts' definitions did not help; supplying an explicit
-ordered procedure for composing them did not help either. Both were tried on
-2026-09-16 and both produced the response above. **The ordering is the cause, so the
-fix for the underlying defect is a grammar change — putting the verdict last — which is
-a separate decision and is NOT what this section does.**
+**§2b's reordering removed that cause, and this section is deliberately kept anyway.**
+Reason-first means the composition now happens before the verdict token, so a verifier
+has no structural reason to contradict itself. But "has no reason to" is not "cannot":
+the ordering fixed the mechanism that *forced* the contradiction, not every route to
+one. A verifier may still reason its way to one conclusion and then emit a different
+literal, and if it does, this section is what stops the gate trusting it.
 
-What this section does is narrower and strictly safe: it refuses to trust a verdict
-whose own reason disputes it. The gate cannot tell which of the two the verifier meant,
-and a check that did not produce one unambiguous answer has not produced an answer.
+Keeping a guard after removing its cause is intentional here, not belt-and-braces
+clutter. The cause was identified by measurement on one verifier command; the contract
+is meant to hold for **any** configured `$PROFESSOR_VERIFIER_CMD`, including ones that
+behave differently. Deleting the check would make the gate's safety depend on a
+behaviour we only ever confirmed for one model.
+
+What this section does is narrow and strictly safe: it refuses to trust a verdict whose
+own reason disputes it. The gate cannot tell which of the two the verifier meant, and a
+check that did not produce one unambiguous answer has not produced an answer.
 
 **The dispatch prompt must also ask for this**, per §2's item 3: tell the verifier to
 emit no verdict literal other than its own in the reason. A rule the verifier is never
@@ -289,21 +342,20 @@ told about only produces blocks it could have avoided.
 **Accepted cost, stated rather than discovered later.** A verifier that self-corrects
 inside its reason is *more* honest than one that does not, and this rule blocks it
 anyway. That is deliberate — blocking is recoverable and cheap, and the mirror image is
-not: `SUPPORTED: ... though strictly this is only partially supported` parses as
-`SUPPORTED` under §2b alone and would otherwise **pass the gate**. This rule is the only
-thing in the contract that catches that.
+not: a reason ending "though strictly this is only partially supported" above a line-two
+`SUPPORTED` parses as `SUPPORTED` under §2b alone and would otherwise **pass the gate**.
+This rule is the only thing in the contract that catches that.
 
 **What it does NOT catch — named, not solved.** This is a check on *naming*, not on
 meaning: it fires only when the reason spells out a competing verdict literal. A reason
-that describes a contradiction without naming one —
-`SUPPORTED: the span supports two of the three conditions` — is semantically the same
-failure and passes this rule untouched. Measured on the 2026-09-16 dispatches: of four
-responses whose reasoning disagreed with their own emitted verdict, this rule caught the
-two that named a literal and missed the two that only described the disagreement. Those
-two collapsed toward `NOT_SUPPORTED`, which blocks anyway, so the misses were harmless
-*there* — but nothing in this contract guarantees the miss always falls that way.
-Closing it properly means removing the cause rather than detecting the symptom: see the
-ordering problem above.
+that describes a contradiction without naming one — "the span supports two of the three
+conditions", above a line-two `SUPPORTED` — is semantically the same failure and passes
+this rule untouched. Measured on the 2026-09-16 dispatches: of four responses whose
+reasoning disagreed with their own emitted verdict, this rule caught the two that named a
+literal and missed the two that only described the disagreement. Detecting the second
+kind would mean judging the reason's meaning, which is a second model call per verdict —
+the cost the suite already refused for cheaper gains. §2b's reordering is what addresses
+the cause; this section is the residue guard, and it is not complete on its own.
 
 ## 3. Act on the result
 
