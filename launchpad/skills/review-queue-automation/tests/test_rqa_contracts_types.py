@@ -249,7 +249,7 @@ DOCUMENTED_DATACLASSES: dict[str, tuple[tuple[str, str], ...]] = {
         ("question", "str"),
         ("context", "Mapping[str, str]"),
         ("head_sha", "str"),
-        ("snapshot_hash", "str"),
+        ("snapshot_hash", "str | None"),
         ("entry_seq", "int"),
         ("raised_at", "datetime"),
     ),
