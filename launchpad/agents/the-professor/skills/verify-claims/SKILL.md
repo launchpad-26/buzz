@@ -90,7 +90,10 @@ subprocess — a genuinely separate check in **fresh context**.
 2. **The instruction to decide *only* from the span, inferring nothing from anything
    outside it.**
 3. The response format §2b requires — the three verdict literals and the
-   `<VERDICT>: <reason>` shape, stated explicitly.
+   `<VERDICT>: <reason>` shape, stated explicitly — **and the instruction that the
+   reason must not name any verdict literal other than the one it follows**, which is
+   what §2d blocks on. Asking for it costs a sentence; not asking for it turns §2d into
+   blocks the verifier was never given a chance to avoid.
 4. The cited source's exact span, and the claim's exact sentence.
 
 Items 1–3 are not context about the draft; they are the question being asked. **Omitting
@@ -175,8 +178,11 @@ where:
   before the separator.** Not contained in it — equal to it.
 - **`<separator>`** is a single colon, optionally followed by spaces.
 - **`<reason>`** is one non-empty line: the one-sentence reason this step already
-  requires. It may contain any text, including the word `SUPPORTED`; the reason is never
-  scanned for a verdict.
+  requires. It may contain any text **except a verdict literal other than the one it
+  follows** — see §2d, which explains why that single exception exists and what to do
+  when it is hit. The reason is still never *scanned for* the verdict: the verdict is
+  always the text before the separator, and §2d is a contradiction check applied after
+  that, never a second way to find a verdict.
 
 Whitespace: leading and trailing whitespace around the whole response is stripped before
 matching, and spaces after the separator are allowed. **No other flexibility exists.** A
@@ -243,6 +249,61 @@ whether it answered at all:
 
 None of these are recoverable by retrying silently. Report them like any other blocking
 finding, naming which claim and which failure.
+
+### 2d. When the reason contradicts its own verdict
+
+**Decided 2026-09-16, by Serina, after five real dispatches demonstrated it.** If the
+reason names any verdict literal **other than** the one before the separator, the
+response is contradictory: **parse failure, disposition `block`, and never the emitted
+verdict.** Match the literals as whole tokens and longest-first, so the `SUPPORTED`
+inside `NOT_SUPPORTED` is not mistaken for a competing verdict.
+
+**This is not hypothetical.** Three of five dispatches against real claims produced
+exactly this shape, and the emitted literal was wrong in all three:
+
+```
+NOT_SUPPORTED: The span establishes the 120-character window value and its
+sentence-spanning rationale but says nothing about per-repository override via a
+`.professor/` configuration file — wait, the first two assertions are established,
+so the correct verdict is PARTIALLY_SUPPORTED.
+```
+
+**Why this happens, and why no prompt wording fixes it.** §2b requires the verdict
+*before* the reason. A verifier generating left to right therefore commits to a literal
+before it has done the reasoning that decides which literal is right, and can only
+correct itself inside the reason — where, by §2b's equality rule, the correction has no
+effect. Supplying the three verdicts' definitions did not help; supplying an explicit
+ordered procedure for composing them did not help either. Both were tried on
+2026-09-16 and both produced the response above. **The ordering is the cause, so the
+fix for the underlying defect is a grammar change — putting the verdict last — which is
+a separate decision and is NOT what this section does.**
+
+What this section does is narrower and strictly safe: it refuses to trust a verdict
+whose own reason disputes it. The gate cannot tell which of the two the verifier meant,
+and a check that did not produce one unambiguous answer has not produced an answer.
+
+**The dispatch prompt must also ask for this**, per §2's item 3: tell the verifier to
+emit no verdict literal other than its own in the reason. A rule the verifier is never
+told about only produces blocks it could have avoided.
+
+**Accepted cost, stated rather than discovered later.** A verifier that self-corrects
+inside its reason is *more* honest than one that does not, and this rule blocks it
+anyway. That is deliberate — blocking is recoverable and cheap, and the mirror image is
+not: `SUPPORTED: ... though strictly this is only partially supported` parses as
+`SUPPORTED` under §2b alone and would otherwise **pass the gate**. This rule is the only
+thing in the contract that catches that.
+
+**What it does NOT catch — named, not solved.** This is a check on *naming*, not on
+meaning: it fires only when the reason spells out a competing verdict literal. A reason
+that describes a contradiction without naming one —
+`SUPPORTED: the span supports two of the three conditions` — is semantically the same
+failure and passes this rule untouched. Measured on the 2026-09-16 dispatches: of four
+responses whose reasoning disagreed with their own emitted verdict, this rule caught the
+two that named a literal and missed the two that only described the disagreement. Those
+two collapsed toward `NOT_SUPPORTED`, which blocks anyway, so the misses were harmless
+*there* — but nothing in this contract guarantees the miss always falls that way.
+Closing it properly means removing the cause rather than detecting the symptom: see the
+ordering problem above.
 
 ## 3. Act on the result
 
@@ -368,6 +429,9 @@ draft in isolation.
 - [ ] Every verdict came from matching a response **whole** against §2b's grammar —
       never from finding a verdict word inside a longer response, and never from a
       case-insensitive or partial match
+- [ ] Every dispatch told the verifier not to name a competing verdict literal in its
+      reason (§2 item 3), and every response whose reason named one anyway was blocked
+      as contradictory under §2d rather than trusted for its emitted literal
 - [ ] Every dispatch was bounded by the §2c timeout, and a non-zero exit, a timeout,
       a parse failure or a truncated response each blocked — none of them was read as
       a verdict, and none was silently retried
