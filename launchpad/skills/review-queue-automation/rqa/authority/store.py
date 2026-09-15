@@ -18,7 +18,7 @@ the same discipline `rqa/record/writer.py` keeps for E-13. A re-probe of the sam
 than accumulating a second answer for one job: the per-job proof is one fact, and two
 rows would leave a reader to guess which one the grant used.
 
-**No credential column, and no credential anywhere.** §5's seven columns are the whole
+**No credential column, and no credential anywhere.** The capability columns and an evidence-version marker are the whole
 table; the token that produced the reading is not one of them and is never written here
 (RQA-NFR-025).
 """
@@ -57,6 +57,9 @@ def ensure_schema(*, connection: sqlite3.Connection) -> None:
     """§5's DDL, idempotent. Run from the constructor so no DDL runs inside the
     transaction a `put` joins."""
     connection.execute(_SCHEMA)
+    columns = {row[1] for row in connection.execute("PRAGMA table_info(capabilities)")}
+    if "evidence_version" not in columns:
+        connection.execute("ALTER TABLE capabilities ADD COLUMN evidence_version INTEGER NOT NULL DEFAULT 0")
 
 
 def _stamp(moment: datetime) -> str:
@@ -81,7 +84,7 @@ class SqliteCapabilityStore:
     def current(self, repo: str, job_id: str) -> CapabilityProof | None:
         row = self.connection.execute(
             "SELECT id, capabilities, attested, login, probed_at FROM capabilities "
-            "WHERE repo = ? AND job_id = ?",
+            "WHERE repo = ? AND job_id = ? AND evidence_version = 1",
             (repo, job_id),
         ).fetchone()
         if row is None:
@@ -104,11 +107,11 @@ class SqliteCapabilityStore:
         a row a reader can compare, and a `json.loads` a reader can round-trip.
         """
         self.connection.execute(
-            "INSERT INTO capabilities (repo, job_id, capabilities, attested, login, probed_at) "
-            "VALUES (?, ?, ?, ?, ?, ?) "
+            "INSERT INTO capabilities (repo, job_id, capabilities, attested, login, probed_at, evidence_version) "
+            "VALUES (?, ?, ?, ?, ?, ?, 1) "
             "ON CONFLICT (repo, job_id) DO UPDATE SET "
             "capabilities = excluded.capabilities, attested = excluded.attested, "
-            "login = excluded.login, probed_at = excluded.probed_at",
+            "login = excluded.login, probed_at = excluded.probed_at, evidence_version = 1",
             (
                 proof.repo,
                 proof.job_id,
