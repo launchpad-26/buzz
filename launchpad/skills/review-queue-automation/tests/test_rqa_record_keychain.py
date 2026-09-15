@@ -153,7 +153,7 @@ def test_it_reads_only_its_own_item_and_never_another_name() -> None:
 
 def test_a_platform_without_the_command_is_unavailable_not_a_guess() -> None:
     runner = RecordingRunner()
-    original = darwin("linux")
+    original = darwin("unsupported-test-platform")
     try:
         raised = False
         try:
