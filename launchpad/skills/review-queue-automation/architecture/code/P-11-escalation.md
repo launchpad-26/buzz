@@ -333,3 +333,19 @@ Accountable: RQA-BR-011, RQA-BR-013, RQA-FR-013, RQA-FR-025, RQA-FR-026, RQA-NFR
   part of the guarantee is that whichever cause is named is recorded and closed only by a named,
   substantiated decision, never silently. T1 (every cause, including whichever the finding maps to,
   is recorded) and T9 (the decision names the specific obligation).
+
+
+### Operator surface amendments (#2274, #2278, #2279, #2280)
+
+The CLI constructs the published `authority.Gate` with its configured repository
+set. A missing state database on a read or decision command is an input error;
+only a tick bootstraps state. Inventory outages are reported as incomplete with
+exit 2 (network) or 3 (authentication); they cannot report a successful sweep.
+`onboard` requires an existing local directory and checks the platform keychain;
+`tick` and `decide` check it before building stateful collaborators.
+
+Decision actor and basis text is persisted with visible Unicode escapes for
+C0/C1 controls, line separators and bidi directives. CLI rendering uses the same
+escaping convention instead of deleting boundaries. `explain` uses the
+composition's injected keychain, reports the recorded human basis and echoes an
+unknown job id. Raw control text from older records is escaped when rendered.

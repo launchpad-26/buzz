@@ -11,18 +11,12 @@ terminal is not a safe sink: a raw ANSI escape, a carriage return or a
 backspace embedded in that text can repaint what the operator believes they
 are reading.
 
-**The neutralisation.** `sanitize_text` strips every C0/C1 control character
-(`\\x00`-`\\x1f`, `\\x7f`-`\\x9f`) from a string before it is ever considered
-"safe to print" — the class that carries every ANSI/CSI escape sequence,
-every carriage return and every backspace this issue names. `to_jsonable`
-walks a result value (dataclass, mapping, sequence, enum, primitive)
-recursively and applies `sanitize_text` to *every* string leaf it finds, not
-only the leaves this module happens to know are PR-derived: a value that
-originated inside RQA (a disposition name, a boolean, a job id) is left
-byte-for-byte identical by a control-character strip, so blanket coverage
-costs nothing and misses nothing a future field addition could otherwise
-reintroduce. `tests/test_rqa_cli_render.py::test_sanitize_strips_every_control_
-character_and_common_escape_families` is the proof.
+**The neutralisation.** `sanitize_text` replaces C0/C1 controls, Unicode line
+separators and bidi directives with visible Unicode escapes. Text remains legible
+and distinct instead of losing line boundaries. It runs recursively on every
+string leaf; it is not a general defence against visual impersonation or Unicode
+confusables. JSON encoding adds the transport escaping around those visible
+sequences, so decoding JSON never activates a terminal control.
 
 Output is one JSON object per invocation, `sort_keys=True` for a stable diff,
 written to stdout. Nothing here decides an exit code; that mapping is
@@ -47,13 +41,13 @@ __all__ = ["sanitize_text", "to_jsonable", "emit"]
 #: an ANSI/CSI escape sequence (`\x1b[...`), a carriage return, a line feed
 #: mid-field, a backspace or a bell. Printable text keeps every other
 #: codepoint untouched, including non-ASCII letters.
-_CONTROL_CHARACTERS = re.compile(r"[\x00-\x1f\x7f-\x9f]")
+_CONTROL_CHARACTERS = re.compile(r"[\x00-\x1f\x7f-\x9f\u061c\u200e\u200f\u2028-\u202e\u2066-\u2069]")
 
 
 def sanitize_text(value: str) -> str:
-    """`value` with every control character removed. Idempotent, and a no-op
+    """`value` with controls rendered as visible Unicode escapes. Idempotent, and a no-op
     on text that never carried one."""
-    return _CONTROL_CHARACTERS.sub("", value)
+    return _CONTROL_CHARACTERS.sub(lambda match: f"\\u{ord(match.group()):04x}", value)
 
 
 def to_jsonable(value: Any) -> Any:

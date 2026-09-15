@@ -50,13 +50,13 @@ def proof(
     )
 
 
-def test_the_schema_is_section_fives_seven_columns_and_nothing_else() -> None:
+def test_the_schema_contains_capabilities_and_the_evidence_version() -> None:
     connection = connected()
     ensure_schema(connection=connection)
     columns = [
         row[1] for row in connection.execute("PRAGMA table_info(capabilities)").fetchall()
     ]
-    assert columns == ["id", "repo", "job_id", "capabilities", "attested", "login", "probed_at"]
+    assert columns == ["id", "repo", "job_id", "capabilities", "attested", "login", "probed_at", "evidence_version"]
 
 
 def test_no_column_holds_a_credential() -> None:

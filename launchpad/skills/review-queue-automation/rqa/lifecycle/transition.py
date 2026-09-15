@@ -35,6 +35,7 @@ or a payload: states, ids, kinds and exception type names only (`errors.py`).
 from __future__ import annotations
 
 import sqlite3
+from contextlib import contextmanager
 from dataclasses import replace
 
 from rqa.contracts import Job, JobStatus, RecordWriter
@@ -42,6 +43,29 @@ from rqa.lifecycle.errors import IllegalTransitionError, UnknownJobError
 from rqa.lifecycle.states import TRANSITIONS, as_status
 
 __all__ = ["transition", "safe_stop"]
+
+
+@contextmanager
+def _transaction(connection: sqlite3.Connection):
+    """Join a caller's transaction without committing or rolling it back.
+
+    A decision and its resumed transition share a transaction owned by the CLI.
+    A nested sqlite connection context would commit or erase that decision.
+    Standalone transitions retain their own commit boundary.
+    """
+    if not connection.in_transaction:
+        with connection:
+            yield
+        return
+    connection.execute("SAVEPOINT rqa_transition")
+    completed = False
+    try:
+        yield
+        completed = True
+    finally:
+        if not completed:
+            connection.execute("ROLLBACK TO rqa_transition")
+        connection.execute("RELEASE rqa_transition")
 
 
 def transition(
@@ -132,18 +156,18 @@ def _commit(
     record: RecordWriter,
     snapshot_hash: str | None = None,
 ) -> None:
-    """§5's transaction boundary, verbatim, plus §5's write-once `snapshot_hash` pin.
+    """§5's transaction boundary and write-once `snapshot_hash` pin.
 
-    `with connection:` BEGINs on the first statement, COMMITs on a clean exit and ROLLBACKs
-    and re-raises on any exception — stdlib `sqlite3`'s own transaction semantics, nothing
-    this part adds. `record.append` never commits or rolls back itself (`P-12-record.md`
-    §3.1); this is the only place in this part that does.
+    Standalone transitions commit on success and roll back on failure. Inside a
+    caller transaction, a savepoint confines rollback to this transition and leaves
+    commit to the caller. This preserves the atomic human-decision/resume boundary.
+    `record.append` never commits or rolls back itself (`P-12-record.md` §3.1).
 
     `snapshot_hash` is `None` on every transition but the first pin, and the statement is
     then not issued at all: §5's "writes `jobs.status` … and `jobs.snapshot_hash` exactly
     once" is two statements on exactly one transition per job and one on every other.
     """
-    with connection:
+    with _transaction(connection):
         # The one write: jobs.status = the new state; on the first pin only,
         # jobs.snapshot_hash = that pin, in this same transaction (§5).
         cursor = connection.execute(
@@ -176,4 +200,3 @@ def _commit(
                 "predecessor_job": job.predecessor_job,
             },
         )
-

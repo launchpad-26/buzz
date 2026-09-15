@@ -609,3 +609,20 @@ recordable and resumable like any other, §6), RQA-NFR-006 (nothing here require
 local SQLite file and one local keychain call), RQA-NFR-010 (`append`'s all-or-nothing transaction
 contract and `AppendFailed`'s uncaught propagation, §3.1, are exactly the "no partially authoritative
 outcome" mechanism U-DISPATCH-20/21 name).
+
+## Implementation amendments — #2272, #2280 and conformance F-1
+
+ADR-0063's 2026-09-15 platform amendment adds Linux Secret Service via
+`secret-tool`, alongside macOS Keychain. Both backends preserve the distinction
+between an absent item and a query that cannot establish absence. Linux needs
+`secret-tool` and an unlocked Secret Service session. The item is selected by
+`service rqa-record-hmac`; RQA never stores or generates it. Lookup failure
+with diagnostics and a locked matching item both refuse appends. The Linux
+lookup/search behavior follows the
+[libsecret implementation](https://github.com/GNOME/libsecret/blob/main/tool/secret-tool.c).
+
+`explain` and `explain_job` accept an optional keyword-only `keystore`, allowing
+the composition root to provide the same keychain used for appends. When no
+plan exists, reconstruction reads policy/protocol pins from the last trusted
+snapshot entry. A tampered entry is excluded rather than used as a fallback.
+Legacy-only records do not claim that an HMAC was checked.

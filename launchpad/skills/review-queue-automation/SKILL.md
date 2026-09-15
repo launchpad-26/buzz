@@ -116,18 +116,22 @@ target returns `outcome: "unavailable"` (exit 1).
 
 ## Exit codes
 
-`rqa/cli/exitcodes.py` declares five: `0` OK, `1` INPUT_ERROR, `2` NETWORK,
-`3` AUTH, `4` OTHER — the module's own docstring says "and nothing else". In
-the current `rqa/cli/main.py`, only three of those five are ever actually
-returned: `0` on success, `1` for a bad invocation or a command's own refusal
-value (`not_found`, `refused`, `rejected`, `usage_error`), and `4` for every
-other exception a provider raises (`LifecycleError`, `AppendFailed`,
-`ReuseResolutionError`, and anything unanticipated). No code path in
-`rqa/cli/main.py` returns `2` or `3` today, and no test exercises either —
-`GithubUnavailable` is a returned value inspected by callers, not an
-exception the CLI's dispatch loop maps to a network-specific code. Do not
-expect a network or auth failure to produce a distinct exit code until that
-changes.
+`0` means success; `1` means input error or policy refusal; `2` means a GitHub
+network or availability failure; `3` means authentication failed; `4` means an
+internal, persistence or job failure. A partial or wholly unavailable inventory
+reports `outcome: "incomplete"` and names failed repositories. A failed job cannot
+produce a successful tick exit code.
+
+## Platform and state
+
+macOS Keychain and Linux Secret Service (`secret-tool`) are supported.
+`onboard`, `tick` and `decide` check keychain availability before work; an absent
+key is explicitly unkeyed, while an unavailable backend is an error.
+`onboard` requires an existing local directory. Read and decision commands require
+an existing state database so a mistyped state directory creates nothing.
+`explain` uses the writer's keychain and reports the stored human decision basis.
+Control characters in operator text render as visible escapes, preserving line
+boundaries without activating terminal controls.
 
 ## Configuration and policy
 
@@ -141,17 +145,13 @@ optional per-route `command`; see [OPERATORS.md](OPERATORS.md) §2 for the
 full field-by-field reference and the frozen requirement text driving the
 six dispositions and five escalation causes.
 
-## Authority is not yet wired to a grant
+## Authority and credential evidence
 
-Configuring `authority.*` `true` for an activity does not currently cause
-`rqa` to act on a pull request. `rqa/authority/gate.py`'s
-`_configured_repositories()` is a hardcoded empty set and
-`rqa/cli/composition.py`'s `AuthorityClient` has no way to supply a managed
-repository list, so in production every activity on every repository is
-denied (`REPO_NOT_MANAGED`) regardless of configuration. This is filed as
-#2274, a `deferred-blocker` against this Feature. Do not configure
-`authority.*` expecting an activity to run; treat every deployment today as
-advisory-only until #2274 lands.
+The CLI passes the configured repository set to the gate. An activity needs
+its explicit policy flag and credential evidence: GitHub write attestations
+qualify only when repository permissions and OAuth scopes both support the
+operation. Unknown evidence denies, exercised and attested provenance remain
+separate, and grants never bypass GitHub protection. See [OPERATORS.md](OPERATORS.md) §8.
 
 ## Tests
 

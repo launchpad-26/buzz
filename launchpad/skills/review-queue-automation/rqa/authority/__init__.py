@@ -28,8 +28,8 @@ declaration: this file defines nothing.
 
 from __future__ import annotations
 
-from rqa.authority.gate import GateError, grant
+from rqa.authority.gate import Gate, GateError, grant
 from rqa.authority.store import SqliteCapabilityStore
 from rqa.contracts import Activity, Deny, Grant
 
-__all__ = ["grant", "Activity", "Grant", "Deny", "GateError", "SqliteCapabilityStore"]
+__all__ = ["grant", "Activity", "Grant", "Deny", "GateError", "SqliteCapabilityStore", "Gate"]

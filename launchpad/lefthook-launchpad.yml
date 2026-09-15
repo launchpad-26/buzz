@@ -1,0 +1,106 @@
+# Cohort git hooks, merged into the root lefthook.yml by its `extends:` key.
+#
+# WHY THIS FILE EXISTS RATHER THAN MORE LANES IN lefthook.yml.
+# `AGENTS.md` §3 puts cohort-specific content under `launchpad/`, and lists the
+# deliberate exceptions where a root file may diverge from upstream. The root
+# `lefthook.yml` is NOT on that list — though it already diverges by six lines
+# for the branch-skew lane (launchpad-26/buzz#15), which appears to be an
+# undocumented exception rather than a sanctioned one.
+#
+# Adding three more cohort lanes there would have widened a divergence nobody
+# recorded, and §3 says adding to that list "is a change to that record, not a
+# call to make in a pull request." So the root file gains ONE line — an
+# `extends:` pointing here — and every cohort lane lives on our side of the
+# boundary, where a future upstream merge will not conflict with it.
+#
+# WHY THESE LANES EXIST AT ALL. Every check below currently runs only as a
+# GitHub Action. If Actions is disabled, they stop running entirely. These are
+# the ones cheap enough to run on every push: 1.4 seconds for all three,
+# measured, and each is path-scoped so a push that touches nothing relevant
+# pays nothing.
+#
+# THE INCLUDE FAILS OPEN, AND YOU SHOULD KNOW THAT. If this file is deleted or
+# renamed while `lefthook.yml` still extends it, lefthook does NOT error:
+# `lefthook dump` exits 0 and silently omits every lane below. Measured, not
+# assumed. `git push` then stays green while three checks no longer exist.
+# `launchpad/scripts/test_lefthook_extends.py` is the backstop — with the
+# circularity it documents, since the lane that runs it is defined here.
+#
+# WHAT THESE LANES ARE NOT. A hook is not a gate. It runs only for someone who
+# has run `just hooks`, only on the machine pushing, and `--no-verify` skips it
+# without a word. Nothing here is enforced against an author who does not
+# cooperate, and no wording anywhere should say "enforced", "required" or
+# "blocked" about it. That distinction is the subject of audit finding F-01,
+# where two documents claimed a sign-off gate this fork does not have.
+#
+# NOT MOVED HERE, and why, so the absences are deliberate rather than forgotten:
+#   * corpus/validate.py (17.8s) and the knowledge-package drift guard (16.5s)
+#     — worth moving, but only scoped to corpus changes. Tier 2, not yet done.
+#   * the corpus validator's own unit tests — 560 tests, ~145s. Too slow to put
+#     in front of every push.
+#   * gitleaks and semgrep — both download a toolchain; they need Hermit pins
+#     first.
+#   * CodeQL — cannot move. It needs GitHub's infrastructure.
+#   * the PR-body and issue-body checks — they validate a GitHub body, which
+#     does not exist at push time. `pr_body_check.py` belongs at PR-create time.
+
+pre-push:
+  parallel: true
+  commands:
+    # Covers the rqa tests, the ADR frontmatter suites, the security-audit unit
+    # tests and the container image-pin check in one lane, because they all
+    # already live under launchpad/scripts/. Measured 1,038ms for the lot.
+    #
+    # The glob includes the compose and chart files because
+    # test_container_image_pins.py asserts against them rather than against
+    # anything in launchpad/scripts/ — a change there must re-run this lane even
+    # though no test file was touched.
+    launchpad-scripts-tests:
+      files: git diff --name-only origin/launchpad...HEAD
+      glob:
+        - "launchpad/scripts/**"
+        - "docker-compose*.yml"
+        - "docker-compose*.yaml"
+        - "deploy/**"
+      # `env -u` IS LOAD-BEARING. Do not simplify this to a bare python3 call.
+      #
+      # Git exports GIT_DIR into every hook, and git honours it OVER a
+      # subprocess's `cwd=`. Several suites here build a throwaway repository in
+      # a temp directory and isolate it with `cwd=` alone — correct for a normal
+      # run, catastrophic inside a hook: the fixture's `git add -A && git commit`
+      # lands in THE REPOSITORY BEING PUSHED.
+      #
+      # Not theoretical. The first version of this lane, without `env -u`, put 15
+      # commits authored `test <test@example.com>` titled "test fixture" onto the
+      # branch being pushed, moved HEAD to the fixture's tree, and left most of
+      # the repository showing as untracked. The push aborted, so nothing reached
+      # the remote — but it was silent until someone read `git status`.
+      #
+      # Reproduced minimally: with only GIT_DIR set, a `git commit` run from a
+      # different directory adds a commit to the GIT_DIR repository and none to
+      # the one in `cwd`.
+      #
+      # Scrubbed here rather than in each test: one place that must be right
+      # beats N places that must each stay right, and no test author can be
+      # expected to know their suite will one day run inside a hook.
+      run: >-
+        env -u GIT_DIR -u GIT_WORK_TREE -u GIT_INDEX_FILE -u GIT_PREFIX
+        -u GIT_OBJECT_DIRECTORY -u GIT_ALTERNATE_OBJECT_DIRECTORIES
+        -u GIT_QUARANTINE_PATH
+        python3 -m unittest discover -s launchpad/scripts -p 'test_*.py'
+
+    # 59ms for both. Mirrors .github/workflows/launchpad-adr-check.yml.
+    launchpad-adr-check:
+      files: git diff --name-only origin/launchpad...HEAD
+      glob:
+        - "launchpad/decisions/**"
+      run: |
+        python3 launchpad/scripts/adr_boundary_check.py &&
+        python3 launchpad/scripts/adr_trailing_newline_check.py
+
+    # 149ms. Mirrors .github/workflows/launchpad-corpus-schema-tests.yml.
+    launchpad-corpus-schema-tests:
+      files: git diff --name-only origin/launchpad...HEAD
+      glob:
+        - "launchpad/docs/corpus/schema/**"
+      run: python3 -m unittest discover -s launchpad/docs/corpus/schema/tests -p 'test_*.py'

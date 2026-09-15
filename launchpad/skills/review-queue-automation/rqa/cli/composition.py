@@ -49,6 +49,7 @@ from rqa.authority import SqliteCapabilityStore
 from rqa.contracts import (
     Grant,
     Job,
+    KeyStore,
     Plan,
     RecordWriter,
     Reservation,
@@ -114,12 +115,14 @@ class AuthorityClient:
     """`LifecycleDeps.authority` — carries `.github`/`.store` the way
     `rqa/lifecycle/rest.py`/`steps.py` read them off `deps.authority`."""
 
-    def __init__(self, *, github: GithubAdapter, store: SqliteCapabilityStore) -> None:
+    def __init__(self, *, github: GithubAdapter, store: SqliteCapabilityStore,
+                 repos: tuple[str, ...] = ()) -> None:
         self.github = github
         self.store = store
+        self.gate = authority_mod.Gate(repos=frozenset(repos))
 
     def grant(self, **kwargs: Any) -> Grant | Any:
-        return authority_mod.grant(**kwargs)
+        return self.gate.grant(**kwargs)
 
 
 class SupplyClient:
@@ -235,6 +238,7 @@ class Composition:
     pr_facts: SqlitePrFactsStore
     leases: SqliteLeaseStore
     record: RecordWriter
+    keystore: KeyStore
     github: GithubAdapter
     runner: SubprocessProcessRunner
     policy: PolicyClient
@@ -284,7 +288,12 @@ class Composition:
 
 
 def build_composition(
-    state_dir: Path, *, clock: Callable[[], datetime] = utcnow
+    state_dir: Path,
+    *,
+    clock: Callable[[], datetime] = utcnow,
+    keystore: KeyStore = OSKeyStore(),
+    repos: tuple[str, ...] = (),
+    require_record: bool = False,
 ) -> Composition:
     """Bootstrap every table this state directory needs and wire every real
     collaborator over it. Idempotent: every store's own constructor runs its
@@ -292,6 +301,8 @@ def build_composition(
     directory (the normal case — one process per `rqa` invocation) never
     loses or duplicates schema.
     """
+    if require_record:
+        keystore.read("rqa-record-hmac")
     state_dir.mkdir(parents=True, exist_ok=True)
     connection = sqlite3.connect(str(state_dir / "state.db"))
 
@@ -300,7 +311,24 @@ def build_composition(
     pr_facts = SqlitePrFactsStore(connection)
     leases = SqliteLeaseStore(connection)
 
-    record: RecordWriter = SQLiteRecordWriter(connection, clock=clock, keystore=OSKeyStore())
+    # The `KeyStore` (E-25) arrives the same way every other collaborator in
+    # this function does — constructed or injected right here, like `clock`,
+    # `jobs`, `pr_facts` and `leases` three lines above. `rqa/record/__init__.py`
+    # names this module as the reason `OSKeyStore` is importable at all: its
+    # public surface is the re-export list "plus the two concrete collaborators
+    # a composition root must construct", because "nothing inside `rqa/record/`
+    # constructs one, so something outside this package always must", and
+    # `tests/test_rqa_record_surface.py` pins that publication as a contract
+    # (`PUBLISHED_EXPORTS = frozenset({"SQLiteRecordWriter", "OSKeyStore"})`).
+    # Taking it as a parameter means a caller that cannot reach a platform
+    # keychain (CI on Linux, a test process) supplies its own, rather than this
+    # module deciding what a missing keychain means. That judgement stays in
+    # `rqa/record/keychain.py`, where absent-key and machine-cannot-answer
+    # remain deliberately distinct. The `OSKeyStore()` default is evaluated once
+    # at definition time, matching what `SQLiteRecordWriter.__init__`,
+    # `verify()` and `SQLiteRecordReader.__init__` already do, so no existing
+    # caller's behaviour changes.
+    record: RecordWriter = SQLiteRecordWriter(connection, clock=clock, keystore=keystore)
 
     github_ensure_schema(connection)
     transport = Transport(
@@ -317,7 +345,7 @@ def build_composition(
     policy = PolicyClient(snapshot_store)
 
     capability_store = SqliteCapabilityStore(connection)
-    authority = AuthorityClient(github=github, store=capability_store)
+    authority = AuthorityClient(github=github, store=capability_store, repos=repos)
 
     prober = SubprocessHarnessProber()
     breakers = SqliteBreakerStore(connection=connection)
@@ -342,6 +370,7 @@ def build_composition(
         pr_facts=pr_facts,
         leases=leases,
         record=record,
+        keystore=keystore,
         github=github,
         runner=runner,
         policy=policy,
@@ -355,5 +384,3 @@ def build_composition(
         escalation_store=escalation_store,
         snapshot_store=snapshot_store,
     )
-
-

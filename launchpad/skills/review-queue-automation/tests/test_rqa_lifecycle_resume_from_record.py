@@ -273,3 +273,42 @@ def test_resume_never_consults_pending() -> None:
         assert isinstance(result, Decision)
         status, _ = _expected(cause)
         assert stored_status(connection, job.id) == status, cause.value
+
+
+def test_second_real_decision_resumes_the_latest_escalation():
+    """A resolved evidence question leads to an authority question, then an outcome.
+
+    Only the judgement/remote facts are controlled. Both escalation entries,
+    decisions, resume calls and transitions use production code and real SQLite.
+    Selecting the oldest escalation takes 12a again and fails the final state check.
+    """
+    from lifecycle_cascade_bench import FakeJudgement, make_judgement
+    connection, record, job, store, first = _escalated(EscalationCause.EVIDENCE_GAP)
+    client = RealEscalationClient(store)
+    deps = _deps(connection, record, job, client, reviews=(
+        make_review(outcome="changes_requested", submitted_at=_FAR_FUTURE),
+    ))
+    deps = dataclasses.replace(deps,
+        judgement=FakeJudgement(make_judgement()),
+        authority=FakeAuthority({
+            Activity.APPROVE: [make_deny(Activity.APPROVE)],
+            Activity.COMMENT: [make_deny(Activity.COMMENT)],
+        }),
+    )
+    try:
+        escalation.decide(first.id, "human-reviewer", "supplied the missing evidence",
+            store=store, record=record, jobs=FakeJobs(job), lifecycle=RealLifecycle(), deps=deps)
+        connection.commit()
+        second, = escalation.pending(store=store)
+        assert second.id != first.id and second.cause is EscalationCause.AUTHORITY_REQUIREMENT
+        assert store.get(first.id).status == "closed"
+        escalation.decide(second.id, "human-reviewer", "reviewed on GitHub", "changes_requested",
+            store=store, record=record, jobs=FakeJobs(job), lifecycle=RealLifecycle(), deps=deps)
+        connection.commit()
+        assert store.get(second.id).status == "closed"
+        assert escalation.pending(store=store) == ()
+        assert stored_status(connection, job.id) == "changes_requested"
+        assert connection.execute("SELECT count(*) FROM record_entries WHERE kind='escalation'").fetchone()[0] == 2
+        assert connection.execute("SELECT count(*) FROM record_entries WHERE kind='decision'").fetchone()[0] == 2
+    finally:
+        connection.close()

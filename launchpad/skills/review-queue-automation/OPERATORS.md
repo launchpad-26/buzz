@@ -20,7 +20,7 @@ Contents:
 5. [Deciding an escalation](#5-deciding-an-escalation)
 6. [The four ratified architecture decisions](#6-the-four-ratified-architecture-decisions)
 7. [Two requirements this delivery does not implement as code](#7-two-requirements-this-delivery-does-not-implement-as-code)
-8. [Authority is not wired to a grant](#8-authority-is-not-wired-to-a-grant)
+8. [Authority and credential evidence](#8-authority-and-credential-evidence)
 9. [What logging and tracing currently do](#9-what-logging-and-tracing-currently-do)
 10. [Platform](#10-platform)
 11. [Tests](#11-tests)
@@ -54,7 +54,8 @@ named at all (`comment`/`approve`/`request_changes`/`merge`), and refuses
 (`no_config_to_migrate` / `unreadable_existing` / `migrated_config_invalid`, exit 1) if there is
 nothing to migrate or the result itself fails validation.
 
-Onboarding makes no GitHub call and mutates nothing outside the one file it
+The path must already be an existing local directory. Onboarding checks the
+keychain before writing and makes no GitHub call and mutates nothing outside the one file it
 writes.
 
 ---
@@ -74,7 +75,7 @@ together, never one per run.
 
 | Group | Keys | Notes |
 |---|---|---|
-| `authority` | `review`, `comment`, `approve`, `request_changes`, `remediate`, `merge` (each `true`/`false`) | Derived from the closed `Activity` enum, so this key set cannot drift from what the authority gate names. Every omitted key defaults `false` — nothing is granted by omission. **Configuring `true` here does not currently cause an activity to run — see §8.** |
+| `authority` | `review`, `comment`, `approve`, `request_changes`, `remediate`, `merge` (each `true`/`false`) | Derived from the closed `Activity` enum, so this key set cannot drift from what the authority gate names. Every omitted key defaults `false` — nothing is granted by omission. Every grant also requires credential evidence and membership in the configured repository set — see §8. |
 | `routes` | array of `{harness, model, provider, family, external, command?}` | `harness`, `model`, `provider`, `family` are required non-empty strings; `external` is required Boolean. `command` is **optional** — the operator-declared argv for a harness `rqa` ships no built-in alias for; its absence means a built-in alias is used. |
 | `external` | `allowed` (bool), `deny_label` (string) | Whether an external (non-subscription) route may be used, and the label recorded when one is denied. |
 | `policy` | `version?` (default `"unversioned"`), `obligations` (array), `blocking` (`{categories, severities, corroboration}`), `mechanical` (`{categories, tools}`), `assurance` (object), `remediation?` (`{allow_forks}`, default `allow_forks: false`) | `obligations`, `blocking`, `mechanical` and `assurance` are required — an absent one would *widen* what a review has to satisfy, not narrow it. `categories` values are drawn from the closed `Category` enum: `mechanical`, `procedural`, `creation_time`. |
@@ -173,7 +174,7 @@ authoritative verdict exists — never a plausible-looking stand-in.
 **ADR-0062 — the credential's floor is proven, its ceiling is an accepted
 residual.** `rqa` uses the operator's own `gh auth token`. An activity is
 granted only when the pinned policy snapshot allows it **and** a per-job
-capability probe proves the credential can perform it on that exact
+capability probe supplies exercised or scope-qualified attested evidence for it on that exact
 repository; a failed probe yields no grant and an `authority_requirement`
 escalation rather than an attempted mutation. `rqa` never addresses a
 repository outside its configured set and never persists the credential.
@@ -217,18 +218,20 @@ happens as part of this document or this Task.
 
 ---
 
-## 8. Authority is not wired to a grant
+## 8. Authority and credential evidence
 
-**Configuring `authority.*` does not currently cause `rqa` to act.**
-`rqa/authority/gate.py`'s `_configured_repositories()` is a hardcoded empty
-`frozenset()`, and `rqa/cli/composition.py`'s `AuthorityClient` has no
-parameter to supply a managed-repository set. The result: in production,
-every activity on every repository is denied (`REPO_NOT_MANAGED`), regardless
-of what `authority.*` says. This is tracked as **#2274**, a
-`deferred-blocker` against this Feature (#2188 cannot close until it lands).
-Do not configure `authority.*` expecting an activity to run, and do not treat
-its presence in `config.example.json` as evidence that granting works — it
-is one of the five groups `rqa.policy.validate` accepts, nothing more.
+The CLI supplies the repository set from `tick --repo` or
+`<state-dir>/repos.json` to the authority gate. Decisions use `repos.json`;
+keep that durable set current when a scheduled sweep or resumed job needs it.
+An unconfigured repository is denied before credential probing. Each activity
+also requires its own Boolean policy flag and the required capabilities.
+
+GitHub-attested writes satisfy the gate only when both repository permissions
+and authenticated OAuth scopes support them (`repo`, or `public_repo` for an
+explicitly public repository). Missing scope headers and ambiguous permissions
+deny. The record keeps exercised and attested capabilities separate. The probe
+performs no test writes and grants never bypass branch protection. Upgrading
+invalidates unscoped capability-cache evidence and probes again.
 
 ---
 
@@ -249,14 +252,18 @@ it.
 
 ## 10. Platform
 
-`rqa/record/keychain.py`'s `OSKeyStore.read()` raises
-`KeyStoreExplanationUnavailable` on any platform where `sys.platform !=
-"darwin"`, which `record.append` converts into `AppendFailed`. On a
-non-macOS host, every record append currently fails, which stops a job from
-making any transition. This is tracked as **#2272**; whether `rqa` is
-macOS-only, gets a portable key store, or degrades some other way is that
-issue's decision, not this document's — this section states the measured
-behaviour only.
+Supported backends are macOS Keychain (`security`) and Linux Secret Service
+(`secret-tool`, with a running user Secret Service session). The operator-held
+item is identified by service `rqa-record-hmac`; RQA reads it and never creates
+or rotates it. Linux lookup failure is checked with a metadata search so a
+locked matching item cannot be mistaken for an absent item.
+
+A missing tool, unavailable session, locked matching item or timeout stops
+`onboard`, `tick` and `decide` before work. An absent key permits explicitly
+unkeyed records; `explain` marks them unverifiable. `status` and `pending` need
+no key, and `explain` reports integrity using the same backend as the writer.
+A typo in `--state-dir` on a read or decision command is an input error and
+creates no database.
 
 ---
 

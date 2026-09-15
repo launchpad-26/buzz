@@ -41,6 +41,12 @@ __all__ = ["EscalationRefused", "EscalationRefusalReason", "JobReader", "Lifecyc
 _REASON = EscalationRefusalReason
 _OUTCOMES = ("approved", "changes_requested")
 
+# Persist visible escapes for terminal controls, separators and bidi directives.
+_TEXT_ESCAPES = {n: f"\\u{n:04x}" for n in (
+    *range(32), *range(127, 160), 0x061c, 0x200e, 0x200f,
+    *range(0x2028, 0x202f), *range(0x2066, 0x206a),
+)}
+
 
 class JobReader(Protocol):
     """`decide.py` — P-01 supplies this read-only P-01 jobs view at wiring time (§4):
@@ -93,6 +99,9 @@ def decide(
         return EscalationRefused(
             _REASON.ALREADY_CLOSED, detail=f"escalation {escalation_id} is already closed"
         )
+    if outcome is None and escalation.cause is EscalationCause.AUTHORITY_REQUIREMENT:
+        del escalation
+        raise EscalationError("an authority-requirement decision must include --outcome")
     if outcome is not None and escalation.cause is not EscalationCause.AUTHORITY_REQUIREMENT:
         # F-T1: `escalation` carries `.context`/`.question`, both potentially
         # PR-derived; extract only the safe value this message needs, then unbind the
@@ -123,7 +132,7 @@ def decide(
         else escalation.context.get("obligation")
     )
     decision = Decision(
-        actor=actor.strip(), basis=basis.strip(), substantiates=substantiates, outcome=outcome
+        actor=actor.strip().translate(_TEXT_ESCAPES), basis=basis.strip().translate(_TEXT_ESCAPES), substantiates=substantiates, outcome=outcome
     )
 
     # F-T1: `record.append`, `store.close` and `lifecycle.resume` below can each raise

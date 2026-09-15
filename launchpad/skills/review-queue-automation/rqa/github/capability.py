@@ -69,12 +69,23 @@ def probe(*, adapter, repo: str, credential: str) -> CapabilityReading | GithubU
 
     proven: set[str] = set()
     attested: set[str] = set()
-    if permissions.get("pull"):
+    if permissions.get("pull") is True:
         proven |= _READ_CAPABILITIES
-    if permissions.get("triage"):
+    if permissions.get("triage") is True:
         attested |= _TRIAGE_CAPABILITIES
-    if permissions.get("push") or permissions.get("maintain") or permissions.get("admin"):
+    if any(permissions.get(name) is True for name in ("push", "maintain", "admin")):
         attested |= _PUSH_CAPABILITIES
+    if attested:
+        scopes_reader = getattr(adapter.transport, "oauth_scopes", None)
+        try:
+            scopes = scopes_reader(credential=credential) if scopes_reader else None
+        except transport_module.Unavailable as failure:
+            return GithubUnavailable(op="probe", reason=failure.reason, retriable=failure.retriable)
+        public = isinstance(meta, Mapping) and meta.get("private") is False
+        if not isinstance(scopes, frozenset) or not (
+            "repo" in scopes or (public and "public_repo" in scopes)
+        ):
+            attested.clear()
     return CapabilityReading(
         capabilities=frozenset(proven),
         attested_not_proven=frozenset(attested),
