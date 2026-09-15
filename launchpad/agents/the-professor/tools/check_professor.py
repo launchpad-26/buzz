@@ -1296,15 +1296,24 @@ def check_roster_names_same_line_candidates_distinguishable() -> str | None:
     # "present and different": an offset pair in the wrong units still differs
     # between the two candidates, so a looser check would pass a finding whose
     # coordinates point at the wrong span.
+    #
+    # The CHARACTERS-not-bytes half of that unit is why the fixture's line 11
+    # carries an em dash between its two names. One character, three UTF-8
+    # bytes, so a byte-offset implementation reports (69, 82) for the second
+    # candidate where a character-offset one reports (67, 80). An all-ASCII
+    # line makes those two implementations indistinguishable -- raised by the
+    # independent Codex review of this step, 2026-09-16, which correctly
+    # pointed out the first version of this fixture could not falsify the unit
+    # it exists to pin.
     spans = [(f["location"].get("col_start"), f["location"].get("col_end")) for f in findings]
-    if spans != [(14, 26), (66, 79)]:
+    if spans != [(14, 26), (67, 80)]:
         return (
             "screen-content(dispatch-roster-names-same-line.md): expected "
-            "line-relative, zero-based, end-exclusive offsets [(14, 26), (66, 79)] "
-            "for the two candidates on line 11, got "
-            f"{spans!r}. Line 11 is 'Documented by Alex Example, and release "
-            "approval is restricted to Taylor Sample.' -- the first name starts at "
-            "character 14 and the second at 66."
+            "line-relative, zero-based, end-exclusive offsets in UNICODE CHARACTERS "
+            f"[(14, 26), (67, 80)] for the two candidates on line 11, got {spans!r}. "
+            "[(14, 26), (69, 82)] specifically means the implementation counted "
+            "UTF-8 BYTES: the em dash before the second name is one character and "
+            "three bytes."
         )
 
     # `match` stays null even though the offsets are now emitted. The offsets
@@ -1312,10 +1321,19 @@ def check_roster_names_same_line_candidates_distinguishable() -> str | None:
     # reopen the leak Phase 1 closed.
     for finding in findings:
         if finding["match"] is not None:
+            # Deliberately reports the TYPE and LENGTH, never the value. This
+            # branch fires exactly when `match` carries the matched name, so
+            # echoing it into a harness diagnostic would leak the content the
+            # assertion exists to keep out -- the same rule
+            # screen-sensitive/SKILL.md applies to logs and tool arguments.
+            # Flagged by the independent Codex review of this step, 2026-09-16.
+            leaked = finding["match"]
             return (
                 "screen-content(dispatch-roster-names-same-line.md): a finding's "
-                f"match was {finding['match']!r}, expected null -- offsets are "
-                "coordinates and are safe to emit; the matched name is not."
+                f"match was non-null ({type(leaked).__name__}, length "
+                f"{len(leaked) if hasattr(leaked, '__len__') else 'n/a'}), expected "
+                "null -- offsets are coordinates and are safe to emit; the matched "
+                "name is not. Its value is withheld here on purpose."
             )
         if "not yet built" in finding["message"]:
             return (
