@@ -8,7 +8,7 @@ that prove it.
 This directory is the reference point [#636](https://github.com/launchpad-26/buzz/issues/636)
 and [#639](https://github.com/launchpad-26/buzz/issues/639) (the corpus documentation
 standard / `AGENTS.md` / `README.md`) will link to. It does not itself author that
-standard — see [`OPEN`](../../plans/2026-08-25-issue-622-corpus-schema.md) in this
+standard — see [`OPEN`](../../../plans/2026-08-25-issue-622-corpus-schema.md) in this
 issue's plan for why.
 
 ## Files
