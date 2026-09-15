@@ -109,6 +109,7 @@ class _RecordedEscalation:
 def resume(*, job_id: str, decision: Decision, deps: LifecycleDeps) -> JobStatus:
     """E-11 verbatim (`rqa/edges.py`): apply one recorded human decision to one
     escalated job and drive it to its next resting status."""
+    caller_transaction = deps.connection.in_transaction
     job = _load(job_id=job_id, deps=deps)
     if as_status(job.status, what="jobs.status") is not JobStatus.ESCALATED:
         raise LifecycleError(
@@ -147,6 +148,11 @@ def resume(*, job_id: str, decision: Decision, deps: LifecycleDeps) -> JobStatus
             current = _step12a(job=job, decision=decision, facts=facts, deps=deps)
         return as_status(current.status, what="jobs.status")
     except (AppendFailed, sqlite3.Error, OSError) as exc:
+        if caller_transaction:
+            # decide() has written a decision and closed its escalation in the
+            # caller's transaction. Let that owner roll back the entire attempt;
+            # reporting a safe stop here would falsely report a successful decision.
+            raise
         # §3.1's containment, unchanged in meaning: re-read the durable row, stop
         # where the table licenses a stop, propagate where it does not.
         durable = _durable(job=current, connection=deps.connection, cause=exc)
