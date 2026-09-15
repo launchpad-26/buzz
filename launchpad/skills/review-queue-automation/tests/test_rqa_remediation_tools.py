@@ -155,6 +155,27 @@ ORACLE_AVAILABLE = {
     "dart-format": False,
 }
 
+CANONICAL_CHECK_IDS = {
+    "ruff-format": "ruff-format-check",
+    "prettier": "prettier-check",
+    "gofmt": "gofmt-check",
+    "rustfmt": "rustfmt-check",
+    "dart-format": "dart-format-check",
+}
+
+
+def test_published_check_ids_match_every_registry_row() -> None:
+    """A Remedy producer can use the literal ids published by the seam."""
+    assert {
+        tool_id: spec.check_id for tool_id, spec in MECHANICAL_TOOL_SET.items()
+    } == CANONICAL_CHECK_IDS
+    contracts = (
+        pathlib.Path(__file__).resolve().parent.parent
+        / "architecture" / "code" / "CONTRACTS.md"
+    ).read_text(encoding="utf-8")
+    for check_id in CANONICAL_CHECK_IDS.values():
+        assert f"`{check_id}`" in contracts or check_id in contracts
+
 
 def test_t15_the_availability_expectation_covers_every_registered_row() -> None:
     """The table and the registry cannot drift apart silently."""

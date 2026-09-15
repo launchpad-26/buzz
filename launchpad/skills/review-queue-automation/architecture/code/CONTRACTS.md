@@ -68,7 +68,9 @@ class Remedy:
     tool: str                    # a MECHANICAL_TOOL_SET id
     paths: tuple[str, ...]       # exact normalized repository-relative files; non-empty, unique,
                                  # no glob metacharacters, absolute path, "." or ".." segment
-    check: str                   # the check name that must pass after the fix
+    check: str                   # one canonical check id: ruff-format-check,
+                                 # prettier-check, gofmt-check, rustfmt-check,
+                                 # or dart-format-check
 
 @dataclass(frozen=True)
 class Finding:

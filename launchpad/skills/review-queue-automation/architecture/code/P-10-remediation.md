@@ -139,13 +139,13 @@ no path matcher. `FileNotFoundError` maps to `TOOL_UNAVAILABLE`; E-13 appends th
 
 **Closed formatter registry.**
 
-| id | extensions | fix/check | equivalence oracle |
-|---|---|---|---|
-| `ruff-format` | `.py`, `.pyi` | `ruff format` / `ruff format --check` | `python_ast_v1` |
-| `prettier` | `.js`, `.jsx`, `.ts`, `.tsx` | `prettier --write` / `prettier --check` | `typescript_estree_v1` |
-| `gofmt` | `.go` | `gofmt -w` / empty `gofmt -d` | `go_ast_v1` |
-| `rustfmt` | `.rs` | `rustfmt` / `rustfmt --check` | `rust_syn_v1` |
-| `dart-format` | `.dart` | `dart format` / `dart format --output=none --set-exit-if-changed` | `dart_analyzer_v1` |
+| id | canonical `check_id` | extensions | fix/check | equivalence oracle |
+|---|---|---|---|---|
+| `ruff-format` | `ruff-format-check` | `.py`, `.pyi` | `ruff format` / `ruff format --check` | `python_ast_v1` |
+| `prettier` | `prettier-check` | `.js`, `.jsx`, `.ts`, `.tsx` | `prettier --write` / `prettier --check` | `typescript_estree_v1` |
+| `gofmt` | `gofmt-check` | `.go` | `gofmt -w` / empty `gofmt -d` | `go_ast_v1` |
+| `rustfmt` | `rustfmt-check` | `.rs` | `rustfmt` / `rustfmt --check` | `rust_syn_v1` |
+| `dart-format` | `dart-format-check` | `.dart` | `dart format` / `dart format --output=none --set-exit-if-changed` | `dart_analyzer_v1` |
 
 Each oracle rejects parse errors and hashes a normalized compiler/parser AST with source positions
 removed while retaining literal values, directives, ordered comments/doc attributes and macro token

@@ -132,7 +132,7 @@ def make_policy(
     assurance: dict[str, int] | None = None,
     blocking_categories: frozenset[Category] = frozenset({Category.SECURITY, Category.EVIDENCE}),
     mechanical_categories: frozenset[Category] = frozenset({Category.MECHANICAL}),
-    mechanical_tools: frozenset[str] = frozenset({"fmt"}),
+    mechanical_tools: frozenset[str] = frozenset({"ruff-format"}),
 ) -> Policy:
     return Policy(
         version="policy-1",
