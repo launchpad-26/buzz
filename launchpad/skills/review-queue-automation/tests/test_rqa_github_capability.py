@@ -37,6 +37,10 @@ class ProbeTransport:
             raise value
         return value
 
+    def oauth_scopes(self, *, credential):
+        self.credentials_seen.append(credential)
+        return frozenset({"repo"})
+
     def mutate(self, *args, **kwargs):
         raise AssertionError("probe attempted a mutation")
 
@@ -84,7 +88,7 @@ def test_t9_probe_returns_a_reading_with_zero_write_calls() -> None:
         {"pulls:write", "contents:write", "issues:write"}
     )
     # The caller-supplied credential was used on every read (§4's exception).
-    assert transport.credentials_seen == [NON_TOKEN_CREDENTIAL, NON_TOKEN_CREDENTIAL]
+    assert transport.credentials_seen == [NON_TOKEN_CREDENTIAL] * 3
 
 
 def test_probe_read_only_permission_attests_no_write() -> None:
