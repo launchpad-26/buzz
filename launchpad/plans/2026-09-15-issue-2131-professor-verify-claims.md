@@ -65,6 +65,20 @@ DECIDED 2026-09-15, by Serina — candidate identity in a roster-names finding
   Leaving the shape alone and having the skill track document order was rejected outright
   — correctness would depend on an agent maintaining ordering across a loop.
 
+  Semantics pinned 2026-09-15 after Codex round 2 found "column offsets" underspecified.
+  The offsets are LINE-RELATIVE, measured in Unicode characters (not bytes), ZERO-BASED,
+  with the end offset EXCLUSIVE — matching the shape approved with this decision
+  (`{"line": 42, "col_start": 17, "col_end": 29}`) and the half-open spans
+  `_roster_names_matches` already yields. They address the scratch file screening ran
+  against, so any edit to that file invalidates them.
+
+  The offsets must also reach the dispatch, not only the finding. Codex round 2: the
+  dispatch input is currently "the name and its containing sentence", so the SAME name
+  appearing twice in ONE sentence in different roles produces two identical verifier
+  inputs even though the two findings now differ. Carrying the offset into the input, and
+  requiring the verdict to come back against it, is what closes that; offsets on the
+  finding alone do not.
+
 DECIDED 2026-09-15, by Serina — what #2142's fourth criterion proves (was OPEN item 3)
 
   Two scenarios, both demonstrated. First, $PROFESSOR_VERIFIER_CMD set to a command that
@@ -167,14 +181,33 @@ STEP 1  verify-claims/SKILL.md — the dispatch response contract             [i
         or print it and hang. proc.py's handling does not cover dispatch (§4 keeps it out
         of the four subcommands), so the contract itself has to say what these mean.
 
+        MATCH THE WHOLE RESPONSE, DO NOT SEARCH INSIDE IT. Round 2 of the Codex review
+        found the first fix still permitted a parser that finds a standalone SUPPORTED
+        line somewhere inside unrelated multi-line output. Forbidding substring
+        containment is not enough; the contract needs a grammar the ENTIRE response is
+        matched against, so anything outside that grammar is a parse failure by
+        construction rather than something to be scanned past. §6.7 and the skill's own
+        step 2 already require a verdict plus a one-sentence reason, so the grammar has
+        both to describe.
+
+        COMPLETION MUST BE BOUNDED BY SOMETHING. Dispatch does not go through proc.py, so
+        no timeout exists unless this contract creates one. "Hangs past the timeout" is
+        meaningless until the skill names a concrete default, says who applies it (the
+        dispatching agent, since there is no wrapper), and says it is what turns a hang
+        into a blocking failure rather than an indefinite wait.
+
         done when: verify-claims/SKILL.md contains a quoted unset message naming
-        $PROFESSOR_VERIFIER_CMD; states a positive acceptance form matched as an exact
-        delimited token, explicitly NOT by substring containment, and says so in terms a
-        builder cannot satisfy with a containment check; states that a response carrying
-        more than one verdict token, or a verdict token inside surrounding prose that
-        negates it, is a parse failure rather than a verdict; states that a parse failure
-        blocks, naming the disposition, and that its text is not SUPPORTED; and states
-        that a non-zero exit, a timeout, and output truncated mid-response each block on
+        $PROFESSOR_VERIFIER_CMD; specifies a complete-response grammar covering the
+        verdict and its reason, states that the whole response is matched against it, and
+        states that a response not wholly matching is a parse failure — wording a builder
+        cannot satisfy with a containment or line-scanning check; pins case sensitivity
+        and how leading/trailing whitespace is treated, so two builders cannot read it
+        differently; carries at least three explicit REJECTION examples, including
+        `NOT_SUPPORTED: ...`, a verdict token inside negating prose, and a valid verdict
+        line surrounded by other output; states that a parse failure blocks, naming the
+        disposition, and that its text is not SUPPORTED; names a concrete default timeout
+        value and the agent as its enforcer; and states that a non-zero exit, that
+        timeout, and a response that ends without completing the grammar each block on
         their own, independently of anything stdout contained. Closes #2137 criteria 1,
         3, 4.
 
@@ -188,12 +221,16 @@ STEP 2  verify-claims/SKILL.md — the re-dispatch observable                   
         verdict — otherwise an agent can attach a fresh identifier to cached output and
         satisfy the observable without re-dispatching, which is the exact evasion #2139
         exists to detect.
+        A pass is one invocation PER CITED CLAIM, not one invocation. Codex round 2: the
+        earlier wording let a pass with several claims and a single fresh dispatch satisfy
+        the observable. The reconciliation has to be per claim, in both passes.
         done when: step 4 names the per-pass run identifier as the observable; requires
-        each identifier to sit alongside a recorded invocation of $PROFESSOR_VERIFIER_CMD
-        for that pass, so a verdict with an identifier but no matching invocation record
-        is detectable; states what an inspector looks at to tell a re-run from a replay;
-        and names the independence limitation rather than implying it is solved. Closes
-        #2139's criterion 3.
+        one recorded invocation of $PROFESSOR_VERIFIER_CMD per cited claim per pass, so a
+        pass whose invocation count does not equal its cited-claim count is detectable;
+        states that a verdict bearing an identifier with no matching invocation record for
+        that claim in that pass is a replay and blocks; states what an inspector looks at
+        to tell a re-run from a replay; and names the independence limitation rather than
+        implying it is solved. Closes #2139's criterion 3.
 
 STEP 3  First real dispatch, end to end                        [needs 1]  ← RUNS HERE
         Configure $PROFESSOR_VERIFIER_CMD to a real headless CLI. Take one real behaviour
@@ -214,17 +251,31 @@ STEP 4  draft-page/SKILL.md — third gate and final pass                       
         Baseline mode's numbered step 5 already names the gate and the final pass. Wire
         the ORDINARY drafting path, and leave baseline mode consistent with it rather
         than describing the gate two different ways in one file.
+        THE FINAL PASS RE-RUNS ALL THREE GATES, NOT JUST THIS ONE. Codex round 2 found
+        both skills would otherwise re-run only verify-claims, leaving check-page and
+        screen-sensitive holding verdicts about a draft that changed after they ran — so
+        a repair made in response to the advisory pass could introduce sensitive content
+        after screening and still reach the write. The design doc's §6 flow note (line
+        571) already says every gate runs twice; this is fidelity to Serina's 2026-09-04
+        decision 9, not a new requirement. It stays inside #2138's "the gate step and its
+        sequencing" scope because it IS the sequencing.
         done when: the gate appears in the ordinary drafting path's own numbered
         procedure, cited by line and distinct from baseline mode's step 5 at lines
-        225–229; baseline mode's existing wording is confirmed to still agree with the
-        ordinary path's, or is updated so it does; and all four of #2138's criteria plus
-        #2139's criteria 1–2 are each traceable to a line in this file.
+        225–229; the final pass re-runs check-page, screen-sensitive and verify-claims in
+        that order against the finished content; the text states that any edit after that
+        sequence invalidates its results and requires the whole sequence again; baseline
+        mode's existing wording is confirmed to still agree with the ordinary path's, or
+        is updated so it does; and all four of #2138's criteria plus #2139's criteria 1–2
+        are each traceable to a line in this file.
 
 STEP 5  update-page/SKILL.md — third gate and final pass                      [needs 2]
-        The same as the previous step, against a file that currently has zero mentions.
+        The same as the previous step, against a file that currently has zero mentions —
+        including the all-three-gates final pass and the edit-invalidates-the-sequence
+        rule, which this file needs just as much and has no baseline-mode head start on.
         done when: the same four #2138 criteria and #2139 criteria 1–2 are traceable to
-        lines in update-page/SKILL.md, and the gate's position is stated as after
-        check-page and screen-sensitive, never parallel.
+        lines in update-page/SKILL.md; the gate's position is stated as after check-page
+        and screen-sensitive, never parallel; and the final pass re-runs all three gates
+        in order against the finished content, with any later edit invalidating it.
 
 STEP 6  screen-sensitive/SKILL.md — retire the interim rule                   [needs 1]
         Delete the interim paragraph at lines 82–100 and bind the already-documented
@@ -241,13 +292,18 @@ STEP 6  screen-sensitive/SKILL.md — retire the interim rule                   
         the script's retained redact cannot reach it.
         done when: no paragraph in the file claims the dispatch "does not exist yet";
         #2110 no longer appears as a live interim rule; the file names the
-        requires-dispatch flag as what it dispatches on, and identifies the candidate by
-        the finding's line and column offsets; the file states that ATTRIBUTION overrides
-        the script's redact ONLY when parsed successfully for that exact candidate; and
-        it states that unrecognised stdout, a parse failure, a non-zero exit, a timeout
-        and a candidate never dispatched at all each retain the underlying redact and
-        appear in the combined outcome, never reported separately and never dropped.
-        Closes #2140's criterion 4.
+        requires-dispatch flag as what it dispatches on, identifies the candidate by the
+        finding's line and column offsets, and carries those offsets into the dispatch
+        input so two occurrences of one name in one sentence are distinguishable to the
+        verifier; the file states that ATTRIBUTION overrides the script's redact ONLY on
+        a dispatch that both COMPLETED and PARSED successfully for that exact candidate;
+        and it states the retention rule as a default rather than a list — every outcome
+        that is not such an ATTRIBUTION retains the underlying redact and appears in the
+        combined outcome, never reported separately and never dropped — with
+        unrecognised stdout, a parse failure, a non-zero exit, a timeout, a response that
+        ended without completing the grammar, and a candidate never dispatched at all
+        each named as instances of that default rather than as its full extent. Closes
+        #2140's criterion 4.
 
 STEP 7  localcmd.py roster-names finding, and its regression coverage         [needs 6]
         Per the DECIDED notes above: keep disposition `redact`, add the explicit
@@ -255,18 +311,26 @@ STEP 7  localcmd.py roster-names finding, and its regression coverage         [n
         its message so it no longer claims Phase 1b is unbuilt but names the dispatch the
         consumer must now run. The finding block is at lines 1316–1348; it already
         computes `name_span` and discards everything but the line number at line 1336, so
-        the offsets are available without changing detection at all.
+        the offsets are available without changing detection at all. `_roster_names_matches`
+        yields document-wide Python string spans, so converting to the line-relative form
+        the DECIDED note fixes is a computation, not a detection change.
         `match` stays null. The offsets are coordinates, not content — that is precisely
         why they are safe, and why echoing the matched name instead would reopen the
         content-leak Phase 1 closed.
         Do NOT add a retained-redact assertion: check_professor.py lines 186–194 already
         cover it (see ALREADY TRUE). Add coverage for the flag and the offsets only.
+        A NEW same-line fixture is required. Corrected 2026-09-15 after Codex round 2 ran
+        the matcher: `dispatch-roster-names-two-pairs.md` puts its two candidates on lines
+        11 and 16, NOT one line, and check_professor.py:1189 pins those two line numbers.
+        It therefore cannot prove same-line candidates are distinguishable, and
+        repurposing it would delete existing coverage.
         done when: `./tools/professor.py screen-content` on a roster-shaped fixture emits
         a finding that still carries disposition `redact`, carries the requires-dispatch
-        flag, carries column offsets locating that specific candidate, and whose message
-        names the dispatch rather than "not yet built"; the two-pair fixture
-        (`dispatch-roster-names-two-pairs.md`) yields two findings whose offsets differ,
-        proving two candidates on one line are distinguishable; `./tools/check_professor.py
+        flag, carries offsets in the units the DECIDED note fixes, and whose message names
+        the dispatch rather than "not yet built"; a NEW fixture carrying two roster-names
+        candidates on a SINGLE line yields two findings that share a line number and
+        differ only in their offsets; `dispatch-roster-names-two-pairs.md` and its
+        existing line-[11,16] expectations are left untouched; `./tools/check_professor.py
         --offline` reports ALL CHECKS PASSED; and reverting the flag alone, and the
         offsets alone, each make that harness fail.
 
@@ -313,19 +377,29 @@ STEP 10 Demonstrate the roster-names dispatch resolving every candidate    [need
         the offsets exist for. "The attribution name is not flagged" is vacuous unless it
         was flagged as a candidate in the first place — start from the raw candidate list
         and reconcile counts.
-        done when: screen-content's raw output is recorded first, showing both names as
-        separate candidates on the same line with different column offsets; each
-        candidate has its own recorded invocation, input and verdict; the count of
-        candidates in equals the count resolved out; the attribution name is absent from
-        the final outcome and the roster name resolves to redact; and a deliberately
-        unresolvable candidate is shown retaining redact rather than being dropped.
-        Closes #2140's criteria 1–3 and 5 in fact, not only in text.
+        THE DEMONSTRATION PAGE MUST USE SYNTHETIC PLACEHOLDER NAMES, and the recorded
+        evidence must be content-free. Codex round 2 caught the previous wording requiring
+        each candidate's "recorded input" — which is the name and its sentence — in direct
+        violation of screen-sensitive/SKILL.md:164–172, which forbids a flagged span
+        surviving into a log or a tool call's arguments. Recording it would breach the
+        rule this very step exists to demonstrate. Existing fixtures already model the
+        way out: `dispatch-roster-names-two-pairs.md` uses "Alex Example" and "Taylor
+        Sample" and says in the page itself that they are placeholders.
+        done when: the page uses synthetic placeholder names, stated as such in the page;
+        screen-content's raw output is recorded first, showing both names as separate
+        candidates on the same line with different column offsets; each candidate has its
+        own invocation record identified by line and offsets and by the returned verdict,
+        with no flagged span reproduced in that record; the count of candidates in equals
+        the count resolved out; the attribution name is absent from the final outcome and
+        the roster name resolves to redact; and a deliberately unresolvable candidate is
+        shown retaining redact rather than being dropped. Closes #2140's criteria 1–3 and
+        5 in fact, not only in text.
 
 STEP 11 Reconcile the design doc with what is now true       [needs 4, 5, 6, 7, 8, 9, 10]
         launchpad/Research/the-professor-skill-suite-redesign.md's phase table still reads
         "| 1 | ... | 0 | Not started |" — Phase 1 shipped on 2026-09-08. Correct Phase 1's
         status, set Phase 1b's, and re-check §6.7 against what the editing steps wrote.
-        Also record the three 2026-09-15 decisions where the doc's other eleven live, so
+        Also record all FOUR 2026-09-15 decisions where the doc's other eleven live, so
         they survive this plan.
         Dependency corrected 2026-09-15: this was tagged [needs 4, 5, 6], which permitted
         it to set Phase 1b's status before step 7 changed the code and before steps 8–10
@@ -387,14 +461,26 @@ OPEN
   never an OPEN item here. Each answer is carried into the step it changes. A builder
   finding a genuinely new gap reports it back rather than deciding it here.
 
-  This plan has been reviewed once, on 2026-09-15, by review-plan (Sonnet) and by Codex
-  independently. Eight findings between them, all applied. The two reviews converged on
-  step 1's parsing rule as the plan's most serious defect — Blocker from one, High from
-  the other — and its done-condition was rewritten to forbid substring matching outright
-  rather than merely ask for a rule. Codex alone found the candidate-identity hole that
-  became the fourth decision. One disagreement was adjudicated against the files: the
-  draft-page line-227 claim, which Sonnet passed and Codex correctly failed. ALREADY TRUE
-  now records what that file actually says.
+  REVIEW HISTORY — two rounds, 2026-09-15, sixteen findings, all applied.
+
+  Round 1: review-plan (Sonnet) and Codex, independently. Eight findings. Both converged
+  on step 1's parsing rule as the worst defect — Blocker from one, High from the other.
+  Codex alone found the candidate-identity hole that became the fourth decision. One
+  disagreement was adjudicated against the files: the draft-page line-227 claim, which
+  Sonnet passed and Codex correctly failed.
+
+  Round 2: Codex again, over the revised plan. It rated five of its own eight round-1
+  findings only PARTLY fixed, and added three more. The pattern worth carrying forward:
+  every round-1 fix that named a failure without making it executable came back. Round 2
+  required a whole-response grammar rather than "not by substring"; a concrete timeout
+  value and a named enforcer rather than "a timeout blocks"; offset units, indexing and
+  end-inclusivity rather than "column offsets"; and per-claim rather than per-pass
+  invocation reconciliation. It also caught two errors this plan introduced in round 1 —
+  a regression test pointed at a fixture whose candidates are on different lines, and an
+  evidence requirement that would have breached screen-sensitive's own no-content-logging
+  rule.
+
+  Nothing in either round re-argued a DECIDED note, and none needed to be reopened.
 
 LEFT OUT
   Cost work — batching, caching, a cheaper model tier — named by the design doc as a
