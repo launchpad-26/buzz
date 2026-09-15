@@ -120,8 +120,9 @@ def legacy_files_on_disk() -> set[str]:
     files: set[str] = set()
     scripts_dir = SKILL / "scripts"
     tests_dir = SKILL / "tests"
-    for name in sorted(entry.name for entry in scripts_dir.iterdir() if entry.is_file()):
-        files.add(f"scripts/{name}")
+    if scripts_dir.is_dir():
+        for name in sorted(entry.name for entry in scripts_dir.iterdir() if entry.is_file()):
+            files.add(f"scripts/{name}")
     for name in sorted(entry.name for entry in tests_dir.iterdir() if entry.is_file()):
         if _is_new_estate_test(name):
             continue

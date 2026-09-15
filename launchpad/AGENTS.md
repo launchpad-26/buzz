@@ -395,13 +395,20 @@ paste.
 ```bash
 git checkout -b <short-slug> launchpad/launchpad
 # work
-git commit -s                          # -s is required: DCO check
+git commit -s                          # -s every time: see the sign-off note below
 git push -u launchpad <short-slug>
 gh pr create --base launchpad
 ```
 
-- **`git commit -s` every time.** The DCO check fails any commit without a
-  `Signed-off-by` trailer.
+- **`git commit -s` every time — and nothing in this fork will tell you if you forget.**
+  No CI check here rejects an unsigned commit: no workflow under `.github/workflows/`
+  references DCO or `Signed-off-by`, and no such check appears in a merged PR's checks.
+  What you get instead is `lefthook.yml`'s `commit-msg` hook, which *adds* the trailer
+  via `git interpret-trailers` rather than rejecting the commit — so it silently fixes
+  the omission if you have run `just hooks`, and silently does nothing if you have not,
+  or if you pass `--no-verify`. Upstream `block/buzz` does gate on DCO, per the root
+  contributor guide, so unsigned commits become a problem when work goes upstream rather
+  than when it lands here.
 - **Conventional commit titles**: `feat(deploy): ...`, `fix(ci): ...`, `docs(...): ...`.
   Every commit on the branch gets one, because every one of them survives the merge.
 - **Some cohort checks also run on `git push`, as hooks — which is not the same as being
