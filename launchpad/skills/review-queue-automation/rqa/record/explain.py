@@ -316,6 +316,7 @@ def explain_job(connection: sqlite3.Connection, job_id: str, *, keystore: KeySto
 
     decision = _last_payload_of_kind(readable, "decision")
     if decision is not None:
+        decision_basis = decision.get("basis")
         reviewer_type: Literal["ai", "human", "none"] = "human"
         actor = decision.get("actor")
         reviewer_identity: tuple[str, ...] = (str(actor),) if actor else ()
