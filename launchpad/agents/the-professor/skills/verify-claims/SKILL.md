@@ -177,31 +177,38 @@ two lines:
 
 where:
 
-- **`<reason>`** is line one: the single-sentence reason this step already requires. To
-  count as a reason at all it must satisfy **both** of these, and a response failing
-  either is a parse failure under §2c, not a verdict:
-  1. it contains at least one letter; and
-  2. it is not, ignoring case and surrounding whitespace, equal to any of the three
-     verdict literals.
-
-  It may otherwise contain any text **except a verdict literal other than the one on
+- **`<reason>`** is line one: the single-sentence reason this step already requires,
+  non-empty. It may contain any text **except a verdict literal other than the one on
   line two** — see §2d, which explains why that single exception exists and what to do
   when it is hit. The reason is still never *scanned for* the verdict: the verdict is
   always the whole of line two, and §2d is a contradiction check applied after that,
   never a second way to find a verdict.
 
-  **Why these two tests exist, and what they deliberately do not reach.** §2c lists "a
-  response with no reason" as a parse failure, and until 2026-09-17 nothing here made
-  that clause implementable: the only test on line one was non-emptiness, so `.` and
-  `-` passed as reasons, and so did a response whose line one was the verdict literal
-  repeated — `SUPPORTED` above `SUPPORTED` parsed as a clean `SUPPORTED` from a verifier
-  that had reasoned about nothing. Test 1 removes the punctuation-only case and test 2
-  removes the repeated-literal case, which are the shapes a verifier produces when it
-  has no reasoning to report. **Neither test establishes that the text is a sentence, or
-  that it is about the claim.** `x` above `SUPPORTED` still parses. Sentence-hood is not
-  mechanically checkable, so this is a floor against degenerate responses, not a
-  guarantee that a reason was given — stated here rather than left for a reader to
-  discover by finding `x` accepted.
+  **What this grammar does NOT establish about line one — decided 2026-09-17, by
+  Serina, after two attempts to test it failed.** Non-emptiness is the only test, and it
+  is deliberately the only one. The grammar does not establish that line one is a reason
+  at all, that it relates to the claim, or that the verifier reasoned before answering.
+  `x`, `.`, and the verdict literal repeated all satisfy it.
+
+  That was twice treated as a defect to fix, and both fixes were wrong. Requiring "at
+  least one letter" turns on a definition of *letter* that ASCII and Unicode disagree
+  about on twelve of twenty-one sampled reasons — under the ASCII reading, which is what
+  `grep '[a-zA-Z]'` and C-locale `[[:alpha:]]` give you, a verifier reasoning in CJK,
+  Cyrillic, Arabic or Devanagari has every correct verdict blocked as "no reason."
+  Requiring line one not to *equal* a verdict literal bans exactly one spelling:
+  `SUPPORTED.` defeats it, and so do `**SUPPORTED**` and `"SUPPORTED"` — twenty-one of
+  twenty-two measured mutations walked straight through. Worse, that same
+  equality-is-brittle property is **load-bearing in the opposite direction** fourteen
+  lines below, where rejection example 4 relies on a trailing full stop defeating
+  equality on line two.
+
+  **Reason quality is a semantic question, and the only robust test for it is another
+  model call** — the cost this suite has already refused for cheaper gains. So it is
+  stated as a limit, exactly as §2's isolation requirement is stated as "an instruction,
+  not a boundary": reason-first ordering makes reasoning the path of least resistance,
+  and it is not a guarantee that reasoning happened. §3 acts on the verdict. A verifier
+  that answers without thinking produces a verdict this gate cannot distinguish from a
+  considered one, and that limitation belongs to the gate, not to this grammar.
 - **`<VERDICT>`** is line two, and is one of the three literals `SUPPORTED`,
   `NOT_SUPPORTED`, `PARTIALLY_SUPPORTED`, **matched case-sensitively, in upper case, as
   the entire line.** Not contained in it — equal to it. No colon, no trailing full stop,
@@ -313,8 +320,17 @@ survive it intact:
 non-`SUPPORTED` verdict in step 3, reported the same way, and **never `SUPPORTED`**. A
 check that did not produce an answer is not an answer.
 
-**Parse failure** — the response did not match §2b's grammar, including an empty
-response, a response with no reason, or any of the three rejected shapes above.
+**Parse failure** — the response did not match §2b's grammar: an empty response, a
+response whose line one is empty, a response that is not exactly two non-empty lines,
+a line two that is not *equal* to a verdict literal, or any of the rejected shapes §2b
+lists.
+
+This enumeration deliberately no longer says "a response with no reason." It did until
+2026-09-17, and nothing in §2b could detect one — §2b's only test on line one is
+non-emptiness, and that is now a stated limit rather than a gap (see §2b). An
+enumeration that lists a failure the grammar cannot recognise is not a stricter
+contract, it is an unimplementable one: the first person to build a parser from this
+list had no rule to write for that clause.
 
 **Non-completion — judged independently of anything stdout contained.** A response can
 be perfectly well-formed and still not count, because how the command ended is part of
