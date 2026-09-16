@@ -74,7 +74,7 @@ from rqa.intake import (
 from rqa.intake import ensure_schema as intake_ensure_schema
 from rqa.lifecycle import LifecycleDeps
 from rqa.policy import SnapshotStore, SqliteSnapshotStore
-from rqa.record import SQLiteRecordWriter
+from rqa.record import SQLiteRecordWriter, anchor_job
 from rqa.supply import (
     BreakerStore,
     SpendStore,
@@ -214,6 +214,19 @@ class LifecycleResumeAdapter:
         from rqa.lifecycle import resume as lifecycle_resume
 
         return lifecycle_resume(**kwargs)
+
+
+@dataclass(frozen=True)
+class AnchorOutcome:
+    """What one `rqa anchor` run did. Every field is an observed outcome, never a
+    claim: `pending` above zero means the anchor exists locally but never left the
+    machine, which still detects a removed tail offline."""
+
+    job_id: str
+    anchored_seq: int | None
+    published: int
+    pending: int
+    detail: str | None
 
 
 @dataclass
@@ -359,4 +372,53 @@ def build_composition(
         reuse=reuse,
         escalation_store=escalation_store,
         snapshot_store=snapshot_store,
+    )
+def anchor_job_for(comp: "Composition", job_id: str) -> "AnchorOutcome":
+    """Publish this job's chain head where the reviewed agent cannot rewrite it.
+
+    **Order matters, and it is the whole reason this lives here rather than
+    inside `rqa/record/`.** `authority.grant` records a `grant` entry (E-04), so
+    minting the grant *moves the head*. The grant is therefore minted **first**
+    and the head read **after**, so the anchor covers its own grant entry and
+    nothing is appended behind it. Mint it the other way round and every anchor
+    run leaves the head one entry ahead of the anchor, for ever.
+
+    Returns an outcome rather than raising: an unanchorable job — unknown, not yet
+    on GitHub, or a repository with no comment authority — is a reportable state,
+    never a reason to fail a review. ADR-0066: anchoring cannot break anything.
+    """
+    from rqa.contracts import Activity, Deny, Grant
+    from rqa.github.anchor_publisher import GithubAnchorPublisher
+
+    job = comp.jobs.get(job_id)
+    if job is None:
+        return AnchorOutcome(job_id=job_id, anchored_seq=None, published=0, pending=0,
+                             detail="no such job")
+
+    answer = comp.authority.grant(
+        repo=job.repo,
+        activity=Activity.COMMENT,
+        snapshot=None,
+        job_id=job.id,
+        categories=None,
+        record=comp.record,
+        github=comp.authority.github,
+        store=comp.authority.store,
+    )
+    grant = answer if isinstance(answer, Grant) else None
+    detail = None
+    if isinstance(answer, Deny):
+        # Fail-closed, and say so. The anchor is still recorded locally, which is
+        # what detects a crash-truncated log offline; it simply never leaves the
+        # machine. An advisory-only repository lands here by design.
+        detail = f"not published: {answer.reason.value if hasattr(answer.reason, 'value') else answer.reason}"
+
+    publisher = GithubAnchorPublisher(adapter=comp.github, job=job, grant=grant)
+    result = anchor_job(comp.connection, job.id, publisher=publisher, clock=comp.clock)
+    return AnchorOutcome(
+        job_id=job.id,
+        anchored_seq=result.anchored_seq,
+        published=result.published,
+        pending=result.pending,
+        detail=detail or (result.failures[0] if result.failures else None),
     )

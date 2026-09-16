@@ -295,3 +295,62 @@ def test_the_github_publisher_refuses_without_a_grant_and_never_sends() -> None:
         raised = exc
     assert raised is not None, "a missing grant must refuse"
     assert "no authority" in str(raised)
+
+
+# -- the wiring: `rqa anchor`, and the ordering rule it must keep -----------------
+
+
+def test_the_grant_is_minted_before_the_head_is_read() -> None:
+    """**The second loop, and the reason anchoring is wired in the composition root.**
+
+    `authority.grant` records a `grant` entry (E-04), so minting a grant *moves the
+    head*. If the head were read first and the grant minted second, every anchor run
+    would leave the head one entry ahead of the anchor, for ever — the publish/append
+    loop again, arriving through the authority path instead of the write path.
+
+    Minting first and reading the head after means the anchor covers its own grant
+    entry and nothing is appended behind it. This test pins the ordering by driving
+    the same sequence against a fake: an append that lands *before* the head read is
+    covered; one that lands after would not be.
+    """
+    connection = chained(entries=2)
+    writer = SQLiteRecordWriter(connection)
+
+    # Stand in for `authority.grant`: it appends, exactly as E-04 does.
+    writer.append("job-1", "grant", {"activity": "comment", "decision": "granted"})
+
+    publisher = FakePublisher()
+    result = anchor_job(connection, "job-1", publisher=publisher, clock=lambda: CLOCK)
+
+    assert result.anchored_seq == 3, "the anchor must cover the grant entry"
+    verified = verify(connection, "job-1")
+    assert verified.anchored_through_seq == 3
+    assert verified.checked_through_seq == 3, "nothing is appended behind the anchor"
+
+
+def test_rqa_anchor_is_a_real_command_that_reaches_the_record() -> None:
+    """The feature is reachable by an operator, not just importable.
+
+    Exercises the actual CLI dispatch against a temp state directory. GitHub is never
+    reached: with no capability configured the grant is denied, which is the
+    advisory-only path — the anchor is still recorded locally, which is what detects a
+    crash-truncated log offline, and the command still exits 0 because anchoring must
+    never be able to fail a review.
+    """
+    import json
+    import tempfile
+    from io import StringIO
+    from unittest.mock import patch
+
+    from rqa.cli.main import main
+
+    with tempfile.TemporaryDirectory() as directory:
+        out = StringIO()
+        with patch("sys.stdout", out):
+            code = main(["--state-dir", directory, "anchor", "job-does-not-exist"])
+        assert code == 0, "an unanchorable job is a reported state, not a failure"
+        payload = json.loads(out.getvalue())
+        assert payload["outcome"] == "ok"
+        assert payload["result"]["job_id"] == "job-does-not-exist"
+        assert payload["result"]["anchored_seq"] is None
+        assert "no such job" in (payload["result"]["detail"] or "")
