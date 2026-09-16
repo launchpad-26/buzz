@@ -219,3 +219,12 @@ Accountable: RQA-NFR-017, RQA-NFR-018, RQA-NFR-019, RQA-NFR-024, RQA-NFR-025, RQ
 RQA-NFR-030. Each maps to a behaviour above: 017/026 → steps 6 and T3; 018 → step 2 and T1;
 019 → step 4 and T5–T7; 024 → step 7 and T4; 025 → §4 `credential()` and T16; 030 → step 1, T10,
 and the `attested_not_proven` field (accepted residual, ADR-E).
+
+## Implementation amendment — #2250 and #2252
+
+ADR-0062's 2026-09-15 amendment permits P-09's scope-checked write attestations
+for write requirements. The gate preserves the exercised/attested distinction
+in the record, accepts only literal `True` policy flags, and refuses cached
+capability rows that predate OAuth-scope validation. The capabilities table
+adds `evidence_version`; legacy rows default to 0 and are retained but ignored,
+while newly probed rows use 1. No credential or token scope is persisted.

@@ -5,8 +5,8 @@ T16 (its append and verify halves), T21.
 No pytest: every `test_*` function here takes no arguments, per `tests/run_all.py`.
 
 Every test drives a real SQLite connection — in memory, or a temp file where a second
-connection has to read what the first one did — and a fake `KeyStore` whose bytes are
-chosen here and never leave this process. None touches a real OS keychain (§8).
+connection has to read what the first one did. ADR-0066 removed the credential-store
+dependency, so none of these paths reads an OS keychain (§8).
 """
 
 from __future__ import annotations

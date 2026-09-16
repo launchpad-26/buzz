@@ -54,9 +54,9 @@ provided the stated shape, behaviour and tests hold")**:
   as stored (obligation id → `EvidenceState` string).
 * `findings` — the last `judgement` row's `findings`, each decorated with
   `blocking`/`corroborated` booleans from that same judgement's own id sets (T19).
-* `decision_basis` — the last `judgement` row's `rendered_body`: the one
-  judgement-owned prose field §6 adds to the payload, and the natural analogue of
-  "why", since `Judgement` itself carries no separate `basis` field to re-export.
+* `decision_basis` — a terminal human `decision` row's `basis`, when present;
+  otherwise the last `judgement` row's `rendered_body`: the one judgement-owned
+  prose field §6 adds to the payload.
 * `disposition` — `DISPOSITION_TABLE[last transition.to_state]`, not
   `judgement.disposition` — see above.
 
@@ -268,6 +268,11 @@ def explain_job(connection: sqlite3.Connection, job_id: str) -> Explanation | Ex
     protocol_hash = plan.get("protocol_hash") if plan else None
     policy_version = plan.get("policy_version") if plan else None
     snapshot_hash = plan.get("snapshot_hash") if plan else None
+    if plan is None:
+        snapshot = _last_payload_of_kind(readable, "snapshot") or {}
+        protocol_hash = snapshot.get("protocol_hash")
+        policy_version = snapshot.get("policy_version")
+        snapshot_hash = snapshot.get("hash")
 
     judgement = _last_payload_of_kind(readable, "judgement")
     evidence: Mapping[str, str] = dict(judgement.get("obligations", {})) if judgement else {}
@@ -301,6 +306,7 @@ def explain_job(connection: sqlite3.Connection, job_id: str) -> Explanation | Ex
 
     decision = _last_payload_of_kind(readable, "decision")
     if decision is not None:
+        decision_basis = decision.get("basis")
         reviewer_type: Literal["ai", "human", "none"] = "human"
         actor = decision.get("actor")
         reviewer_identity: tuple[str, ...] = (str(actor),) if actor else ()

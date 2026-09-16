@@ -6,11 +6,11 @@ No pytest: every `test_*` function here takes no arguments, per `tests/run_all.p
 
 Each test writes a real chain through `append`, then edits the stored rows with direct
 SQL the way an actor with database access would, and asks `verify` what it makes of the
-result. The key is a fake `KeyStore`'s bytes, chosen here; no real OS keychain is
+result. ADR-0066 removed the credential-store dependency, so no real OS keychain is
 touched (§8).
 
-**What `verify` claims.** It detects an altered row, a re-parented row, and a keyed row
-that no longer authenticates. It does **not** detect a removed tail — the walk starts at
+**What `verify` claims.** It detects an altered row and a re-parented row. It does
+**not** detect a removed tail — the walk starts at
 the first row and stops at the first row it stops trusting, so a shortened but
 internally consistent chain verifies. `test_a_removed_tail_is_not_detected_and_the_claim_is_not_made`
 pins that limit deliberately (issue #2220): `bad_seq` is the first seq verification
