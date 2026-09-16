@@ -177,12 +177,31 @@ two lines:
 
 where:
 
-- **`<reason>`** is line one: the single-sentence reason this step already requires,
-  non-empty. It may contain any text **except a verdict literal other than the one on
+- **`<reason>`** is line one: the single-sentence reason this step already requires. To
+  count as a reason at all it must satisfy **both** of these, and a response failing
+  either is a parse failure under §2c, not a verdict:
+  1. it contains at least one letter; and
+  2. it is not, ignoring case and surrounding whitespace, equal to any of the three
+     verdict literals.
+
+  It may otherwise contain any text **except a verdict literal other than the one on
   line two** — see §2d, which explains why that single exception exists and what to do
   when it is hit. The reason is still never *scanned for* the verdict: the verdict is
   always the whole of line two, and §2d is a contradiction check applied after that,
   never a second way to find a verdict.
+
+  **Why these two tests exist, and what they deliberately do not reach.** §2c lists "a
+  response with no reason" as a parse failure, and until 2026-09-17 nothing here made
+  that clause implementable: the only test on line one was non-emptiness, so `.` and
+  `-` passed as reasons, and so did a response whose line one was the verdict literal
+  repeated — `SUPPORTED` above `SUPPORTED` parsed as a clean `SUPPORTED` from a verifier
+  that had reasoned about nothing. Test 1 removes the punctuation-only case and test 2
+  removes the repeated-literal case, which are the shapes a verifier produces when it
+  has no reasoning to report. **Neither test establishes that the text is a sentence, or
+  that it is about the claim.** `x` above `SUPPORTED` still parses. Sentence-hood is not
+  mechanically checkable, so this is a floor against degenerate responses, not a
+  guarantee that a reason was given — stated here rather than left for a reader to
+  discover by finding `x` accepted.
 - **`<VERDICT>`** is line two, and is one of the three literals `SUPPORTED`,
   `NOT_SUPPORTED`, `PARTIALLY_SUPPORTED`, **matched case-sensitively, in upper case, as
   the entire line.** Not contained in it — equal to it. No colon, no trailing full stop,
@@ -327,6 +346,16 @@ response is contradictory: **parse failure, disposition `block`, and never the e
 verdict.** Match the literals as whole tokens and longest-first, so the `SUPPORTED`
 inside `NOT_SUPPORTED` is not mistaken for a competing verdict.
 
+**Matching here is case-sensitive and upper-case, exactly as §2b's verdict line is.**
+Only the three literals as spelled count; `not_supported`, `Partially_Supported` and
+`partially supported` are not matches and do not trigger this rule. That is deliberate
+and it is the boundary of what this check is: it detects a reason that **names** a
+competing verdict, never one that merely describes a different conclusion in prose.
+Widening it to case-insensitive or to phrases would make it a containment search over
+the reason — the precise discipline §2b abandons containment to protect — so the
+narrowness is the design, not an omission. §2b's line-two equality test is unaffected
+either way.
+
 **This is not hypothetical.** It was observed under the grammar's previous
 verdict-first ordering, where the verifier committed to a literal before reasoning and
 could only correct itself afterwards, too late to change the parse:
@@ -362,20 +391,31 @@ told about only produces blocks it could have avoided.
 **Accepted cost, stated rather than discovered later.** A verifier that self-corrects
 inside its reason is *more* honest than one that does not, and this rule blocks it
 anyway. That is deliberate — blocking is recoverable and cheap, and the mirror image is
-not: a reason ending "though strictly this is only partially supported" above a line-two
+not: a reason ending "though strictly this is `PARTIALLY_SUPPORTED`" above a line-two
 `SUPPORTED` parses as `SUPPORTED` under §2b alone and would otherwise **pass the gate**.
-This rule is the only thing in the contract that catches that.
+This rule is what catches that shape — a reason that concedes a different verdict **and
+names it**.
 
 **What it does NOT catch — named, not solved.** This is a check on *naming*, not on
-meaning: it fires only when the reason spells out a competing verdict literal. A reason
-that describes a contradiction without naming one — "the span supports two of the three
-conditions", above a line-two `SUPPORTED` — is semantically the same failure and passes
-this rule untouched. Measured on the 2026-09-16 dispatches: of four responses whose
-reasoning disagreed with their own emitted verdict, this rule caught the two that named a
-literal and missed the two that only described the disagreement. Detecting the second
-kind would mean judging the reason's meaning, which is a second model call per verdict —
-the cost the suite already refused for cheaper gains. §2b's reordering is what addresses
-the cause; this section is the residue guard, and it is not complete on its own.
+meaning: it fires only when the reason spells out a competing verdict literal, in upper
+case, as a whole token. Two shapes therefore pass it untouched, and both are the same
+failure semantically:
+
+- a reason that describes a contradiction **without naming a literal** — "the span
+  supports two of the three conditions", above a line-two `SUPPORTED`;
+- a reason that names one **in lower case or as prose** — "though strictly this is only
+  partially supported", above a line-two `SUPPORTED`. Per the case-sensitivity rule
+  above, `partially supported` is not the literal `PARTIALLY_SUPPORTED` and does not
+  trigger this check. **This example was wrongly given as a catch in an earlier draft of
+  this section; it is not one**, and the correction is recorded rather than quietly
+  swapped because the claim was the stated justification for keeping the rule.
+
+Measured on the 2026-09-16 dispatches: of four responses whose reasoning disagreed with
+their own emitted verdict, this rule caught the two that named a literal in upper case
+and missed the two that only described the disagreement. Detecting either uncaught shape
+would mean judging the reason's meaning, which is a second model call per verdict — the
+cost the suite already refused for cheaper gains. §2b's reordering is what addresses the
+cause; this section is the residue guard, and it is not complete on its own.
 
 ## 3. Act on the result
 
