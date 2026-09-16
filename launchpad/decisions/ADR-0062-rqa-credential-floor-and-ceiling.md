@@ -10,6 +10,35 @@ supersedes: none
 
 ## Decision
 
+**Amended 2026-09-15 for #2250.** GitHub-attested write permissions may satisfy
+P-08's write requirements only when an authenticated response proves both the
+repository permission and the OAuth token's applicable scope (`repo`, or
+`public_repo` for an explicitly public repository). Missing scope metadata,
+malformed permissions, failed probes and disabled repository policy deny the
+activity. Read capabilities and scope-checked write attestations remain separate
+in provenance; no write is performed just to probe permission. GitHub still
+applies protection and permission checks to the actual operation. Cached proofs
+from before this rule must be probed again.
+
+This amendment replaces the execution-only reading of item 1 below for write
+capabilities. The read-only probe cannot exercise a write without violating the
+adapter's no-probe-writes contract; authenticated scope and repository evidence
+is the approved substitute, not a claim that a write was exercised.
+
+**Agent-exercised decision:** @tucktuck101 approved the concrete proposal in this
+session with the exact instruction:
+
+> Approve the proposed permission rule
+
+The proposal accepted GitHub-attested writes only when both repository
+permissions and the authenticated OAuth token's scopes support the operation,
+with fail-closed policy checks and separate provenance. No approval or merge of
+a pull request is delegated by this instruction.
+
+GitHub documents the token-scope response header and repository scopes in
+[Scopes for OAuth apps](https://docs.github.com/en/apps/oauth-apps/building-oauth-apps/scopes-for-oauth-apps).
+
+
 The GitHub credential for review-queue-automation (RQA) is the operator's `gh auth token`. Personal
 access tokens and GitHub Apps are out of scope for this version. Under that constraint RQA meets
 RQA-NFR-024's floor and RQA-NFR-030's ceiling as follows — option **(a)** of
