@@ -412,11 +412,13 @@ gh pr create --base launchpad
 - **Conventional commit titles**: `feat(deploy): ...`, `fix(ci): ...`, `docs(...): ...`.
   Every commit on the branch gets one, because every one of them survives the merge.
 - **Some cohort checks also run on `git push`, as hooks — which is not the same as being
-  enforced.** [`lefthook-launchpad.yml`](lefthook-launchpad.yml) adds three pre-push lanes
+  enforced.** [`lefthook-launchpad.yml`](lefthook-launchpad.yml) adds five pre-push lanes
   that mirror GitHub Actions workflows: the `launchpad/scripts/` test suite, the ADR
   boundary and trailing-newline checks, and the corpus schema tests. Each is scoped to the
   paths it covers, so a push that touches none of them costs nothing; together they take
-  about **1.4 seconds**.
+  about **1.4 seconds**. Two more — the corpus validator and the packaged-corpus drift
+  guard — run only when `launchpad/docs/corpus/**` changes, and cost about **32 seconds**
+  on those pushes alone.
 
   **Read "hook" literally.** A lane runs only for someone who has run `just hooks`, only on
   the machine doing the push, and `--no-verify` skips it silently. It is not a gate, it

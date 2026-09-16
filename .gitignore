@@ -85,3 +85,4 @@ deploy/charts/*/charts/*.tgz
 # review-queue-automation (local, optional)
 pr review logs
 .claude/.test-change
+.claude/.test-change
