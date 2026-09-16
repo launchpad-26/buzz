@@ -300,7 +300,8 @@ correctly.
 ```sql
 CREATE TABLE snapshots (
   hash            TEXT PRIMARY KEY,     -- sha256 hex digest over the entire canonical config
-  repo            TEXT NOT NULL,        -- the repo of first activation; informational, not a key
+  repo            TEXT NOT NULL,        -- reserved compatibility field; activate() has no repo
+                                        -- argument and writes the intentional empty sentinel ""
   policy_version  TEXT NOT NULL,
   protocol_hash   TEXT NOT NULL,
   activated_at    TEXT NOT NULL,        -- ISO-8601 UTC, first time this hash was ever seen
@@ -312,8 +313,9 @@ CREATE TABLE snapshots (
 # store.py
 @dataclass(frozen=True)
 class StoredSnapshot:
-    snapshot: Snapshot           # repo is a placeholder ("") here; snapshot_for() rebuilds it with
-                                 # the caller's own repo before returning
+    snapshot: Snapshot           # repo is the intentional empty sentinel ("") here;
+                                 # snapshot_for() rebuilds it with the caller's own repo
+                                 # before returning
     activated_at: datetime
 
 class SnapshotStore(Protocol):
