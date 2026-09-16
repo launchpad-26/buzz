@@ -167,6 +167,14 @@ paths = [
     '''^launchpad/skills/review-queue-automation/tests/test_rqa_authority_secrecy\.py$''',
     '''^launchpad/skills/review-queue-automation/tests/test_rqa_remediation_push\.py$''',
     '''^launchpad/skills/review-queue-automation/tests/test_rqa_remediation_remediate\.py$''',
+    # A fourth of the same kind, added by #2186: test_rqa_escalation_security.py
+    # asserts that rqa/escalation never lets a credential escape through an
+    # escalation's question, record entry or exception — including one that
+    # survives across record.append, store.close and lifecycle.resume, which a
+    # first fix missed. Its canary is a `ghp_` prefix on a literal
+    # `T1CanaryTokenValue` followed by zeroes. Synthetic; nothing to rotate.
+    # Named individually for the reason above rather than widened to a glob.
+    '''^launchpad/skills/review-queue-automation/tests/test_rqa_escalation_security\.py$''',
 ]
 regexes = [
     # nip-oa.md's worked example tags a synthetic event with a public key

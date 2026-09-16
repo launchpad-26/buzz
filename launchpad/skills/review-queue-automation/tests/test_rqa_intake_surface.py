@@ -40,7 +40,15 @@ EXPORTS_THIS_LANE = frozenset(
         "JobStore", "PrFactsStore", "LeaseStore", "PrFactsRow", "LeaseRow", "IntakeError",
     }
 )
-EXPORTS_FULL = EXPORTS_THIS_LANE | frozenset({"tick", "Lease", "GithubAdapter"})
+#: The concrete stores published beyond §1's list so a composition root can construct
+#: them through the front door. #2211 (the operator CLI) is the module that falsified
+#: §1's "except through `__init__`" sentence: `tick()` takes `jobs=`/`pr_facts=`/
+#: `leases=` as parameters, nothing in `rqa/intake/` ever builds one, and duplicating
+#: the schema in the caller is independently forbidden by §5's sole-writer rule.
+PUBLISHED = frozenset(
+    {"SqliteJobStore", "SqlitePrFactsStore", "SqliteLeaseStore", "ensure_schema"}
+)
+EXPORTS_FULL = EXPORTS_THIS_LANE | frozenset({"tick", "Lease", "GithubAdapter"}) | PUBLISHED
 
 #: §1: the only parts this package may import at all, at any point in the wave.
 #: `rqa.lifecycle` is deliberately included: P-01 §1's closing "never imports ...
@@ -112,6 +120,25 @@ def test_store_protocols_are_the_shape_this_lane_declares_not_a_second_copy() ->
     assert intake.LeaseStore is LeaseStore
 
 
+def test_the_concrete_stores_a_composition_root_needs_are_package_surface() -> None:
+    """§1's "no other module imports from `rqa.intake` except through `__init__`" and
+    `tick(jobs=..., pr_facts=..., leases=...)` are only jointly satisfiable if the
+    concrete stores are reachable through `__init__`. The package must publish the store
+    module's own objects, not second copies."""
+    from rqa.intake.store import (
+        SqliteJobStore,
+        SqliteLeaseStore,
+        SqlitePrFactsStore,
+        ensure_schema,
+    )
+
+    assert PUBLISHED <= frozenset(intake.__all__)
+    assert intake.SqliteJobStore is SqliteJobStore
+    assert intake.SqlitePrFactsStore is SqlitePrFactsStore
+    assert intake.SqliteLeaseStore is SqliteLeaseStore
+    assert intake.ensure_schema is ensure_schema
+
+
 # -- §1: forbidden/allowed imports, a forever property ------------------------------
 
 
@@ -127,15 +154,31 @@ def test_no_module_here_imports_a_part_section_one_forbids() -> None:
     assert offenders == [], offenders
 
 
-def test_only_rqa_github_writes_imports_intake_identity_directly() -> None:
+def test_only_rqa_github_writes_imports_intake_submodules_directly() -> None:
     """§1's one documented exception, the other direction: nothing outside
-    `rqa/github/writes.py` imports `rqa.intake` directly."""
+    `rqa/github/writes.py` reaches *past* `rqa.intake`'s own `__init__` into
+    one of its submodules directly.
+
+    §1's words are exact: "No other module in RQA imports from `rqa.intake`
+    **except through `__init__`**, with one documented exception ... `rqa.github`
+    imports `rqa.intake.identity` directly". That licenses two shapes for every
+    other module in RQA: `import rqa.intake` / `from rqa.intake import <name>`
+    (through `__init__`, resolving only names `rqa/intake/__init__.py` itself
+    re-exports) is always allowed; `import rqa.intake.<submodule>` / `from
+    rqa.intake.<submodule> import <name>` (past `__init__`, into a submodule)
+    is forbidden everywhere except `rqa/github/writes.py`. A bare
+    `module == "rqa.intake"` match is the first, sanctioned shape, not an
+    offender — E-21 (`rqa/cli/main.py`'s `from rqa.intake import tick`) is
+    exactly that shape's first real, legitimate user outside P-01 itself, and a
+    test that forbade it would be asserting an accident of "no legitimate
+    importer existed yet", not §1's own words.
+    """
     offenders = []
     for name, source in _tree_sources().items():
         if name == "rqa/github/writes.py" or name.startswith("rqa/intake/"):
             continue
         imported = _imported_modules(source)
-        if any(module == "rqa.intake" or module.startswith("rqa.intake.") for module in imported):
+        if any(module.startswith("rqa.intake.") for module in imported):
             offenders.append(name)
     assert offenders == [], offenders
 

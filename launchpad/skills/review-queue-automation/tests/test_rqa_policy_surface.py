@@ -54,7 +54,12 @@ VALIDATION_EXPORTS = frozenset(
 ONBOARD_EXPORTS = frozenset(
     {"onboard", "OnboardResult", "Written", "OnboardRefusal", "OnboardRefusalReason"}
 )
-ALL_EXPORTS = VALIDATION_EXPORTS | ONBOARD_EXPORTS
+#: The snapshot-store seam published beyond §1's list so a composition root can construct
+#: it through the front door. #2211 (the operator CLI) is the module that falsified §1's
+#: "except through `__init__`" sentence: `snapshot_for()` takes its store as a parameter
+#: and nothing in `rqa/policy/` ever builds one.
+PUBLISHED_EXPORTS = frozenset({"SnapshotStore", "SqliteSnapshotStore"})
+ALL_EXPORTS = VALIDATION_EXPORTS | ONBOARD_EXPORTS | PUBLISHED_EXPORTS
 
 
 def _sources() -> dict[str, str]:
@@ -118,11 +123,23 @@ def test_every_re_exported_name_actually_resolves() -> None:
     assert missing == [], f"__all__ names that do not resolve: {missing}"
 
 
-def test_the_store_protocol_and_its_row_type_are_not_public_package_surface() -> None:
-    """`SnapshotStore` and `StoredSnapshot` stay `rqa.policy.store` names even though
-    E-03's signature mentions the Protocol: they are not in §1's re-export list."""
-    assert "SnapshotStore" not in rqa.policy.__all__
+def test_the_stored_snapshot_row_type_is_not_public_package_surface() -> None:
+    """`StoredSnapshot` stays a `rqa.policy.store` name: it is a row shape, not a seam a
+    caller wires. The store Protocol and its one implementation are published instead —
+    asserted positively in the next test."""
     assert "StoredSnapshot" not in rqa.policy.__all__
+
+
+def test_the_snapshot_store_seam_a_composition_root_needs_is_package_surface() -> None:
+    """§1's "no other module imports from `rqa.policy` except through `__init__`" and
+    `snapshot_for(store=...)` are only jointly satisfiable if the store is reachable
+    through `__init__`. The package must publish the store module's own objects, not
+    second copies."""
+    from rqa.policy.store import SnapshotStore, SqliteSnapshotStore
+
+    assert PUBLISHED_EXPORTS <= frozenset(rqa.policy.__all__)
+    assert rqa.policy.SnapshotStore is SnapshotStore
+    assert rqa.policy.SqliteSnapshotStore is SqliteSnapshotStore
 
 
 def test_the_package_declares_nothing_it_only_re_exports() -> None:

@@ -211,7 +211,11 @@ def call_tick(
     )
 
 
-def test_completed_package_exports_exact_fourteen_name_surface() -> None:
+def test_completed_package_exports_exact_eighteen_name_surface() -> None:
+    """§1's fourteen names in order, then the four concrete stores P-01 publishes so a
+    composition root can construct them through the front door — `tick()` takes
+    `jobs=`/`pr_facts=`/`leases=` as parameters, nothing in `rqa/intake/` ever builds
+    one, and §5's sole-writer rule forbids the caller duplicating the schema."""
     assert intake.__all__ == [
         "tick",
         "TickResult",
@@ -227,6 +231,10 @@ def test_completed_package_exports_exact_fourteen_name_surface() -> None:
         "PrFactsRow",
         "LeaseRow",
         "IntakeError",
+        "SqliteJobStore",
+        "SqlitePrFactsStore",
+        "SqliteLeaseStore",
+        "ensure_schema",
     ]
 
 
@@ -346,6 +354,7 @@ def test_t4_unavailable_first_inventory_does_not_block_the_second() -> None:
         )
 
     assert result.repos_admitted == (first, second)
+    assert [(f.repo, f.reason, f.retriable) for f in result.repos_failed] == [(first, "unreachable", True)]
     assert github.inventory_calls == [first, second]
     assert len(jobs.created) == 1
     assert result.jobs_created == (jobs.created[0].id,)

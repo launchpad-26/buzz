@@ -21,7 +21,7 @@ protocols and shared `CONTRACTS.md` values define every seam.
 rqa/lifecycle/
   __init__.py    re-exports: admit, resume, status, transition, JobStatus, TRANSITIONS,
                  Disposition, DISPOSITION, StatusReport, NotFound, StaleDecisionError,
-                 LifecycleError, IllegalTransitionError, UnknownJobError
+                 LifecycleError, IllegalTransitionError, UnknownJobError, LifecycleDeps
   states.py      imports shared JobStatus and defines TRANSITIONS, Disposition and DISPOSITION
   errors.py      LifecycleError and its subclasses; never a policy or availability outcome
   deps.py        LifecycleDeps and neighbour Protocols; no shared value-type redefinitions
@@ -588,3 +588,13 @@ disposition requires every obligation checked — enforced by acting only on `Ju
 re-deriving it), RQA-FR-022/RQA-FR-039 (resource bound reached never produces success — §3.2's
 6c/T9), RQA-FR-029/RQA-NFR-008 (merge configurable per repository — step 11, gated the same way as
 every other activity).
+
+
+### Human-decision transaction amendment (PR #2269)
+
+A transition inside an existing caller transaction uses a SQLite savepoint and
+leaves commit to that caller. A failed resume propagates to the decision caller,
+which rolls back the decision, escalation closure and transition together.
+Standalone transitions retain their own commit and safe-stop behaviour. The
+regression tests cover rollback and a second real escalation/decision cycle;
+selecting the oldest recorded escalation fails that second-cycle test.

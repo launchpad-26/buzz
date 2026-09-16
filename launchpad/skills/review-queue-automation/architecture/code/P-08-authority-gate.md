@@ -17,7 +17,8 @@ anything else — and record the answer.
 
 ```
 rqa/authority/
-  __init__.py        re-exports: grant, Activity, Grant, Deny, GateError
+  __init__.py        re-exports: grant, Activity, Grant, Deny, GateError, Gate,
+                     SqliteCapabilityStore
   activities.py      the closed Activity enum and its capability requirements
   gate.py            grant(): the one entry point
   capability.py      credential resolution (gh auth token) and per-repository probing

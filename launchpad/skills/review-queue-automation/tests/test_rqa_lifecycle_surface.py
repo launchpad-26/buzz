@@ -5,7 +5,7 @@
 No pytest: every `test_*` function here takes no arguments, per `tests/run_all.py`.
 
 **Why the module and export assertions name two states.** §1 specifies nine modules and
-fourteen re-exports for the finished package. The cascade half — `steps.py`, `rest.py`,
+fifteen re-exports for the finished package. The cascade half — `steps.py`, `rest.py`,
 `resume.py` and the `resume` re-export — is a sibling lane's, landing separately. A test
 frozen to the seven-module / thirteen-name state this lane produces would have to be
 edited when that lane merges, and a test frozen to the finished state would fail until it
@@ -72,7 +72,7 @@ KERNEL_EXPORTS = frozenset(
     }
 )
 CASCADE_EXPORTS = frozenset({"resume"})
-ALL_EXPORTS = KERNEL_EXPORTS | CASCADE_EXPORTS
+ALL_EXPORTS = KERNEL_EXPORTS | CASCADE_EXPORTS | {"LifecycleDeps"}
 
 #: §2's fifteen `LifecycleDeps` fields, in §2's order. P-01 constructs this bundle with
 #: fifteen keyword arguments (`code/P-01-intake.md` §3 step 5); a renamed or reordered
@@ -175,12 +175,10 @@ def test_every_re_exported_name_actually_resolves() -> None:
     assert missing == [], f"__all__ names that do not resolve: {missing}"
 
 
-def test_lifecycle_deps_is_importable_from_the_package_without_being_exported() -> None:
-    """§1's re-export list does not name `LifecycleDeps`, and `code/P-01-intake.md` §3
-    step 5 constructs it as `from rqa.lifecycle import LifecycleDeps, admit`. Binding the
-    name without listing it in `__all__` is what satisfies both."""
+def test_lifecycle_deps_is_exported_from_the_package_front_door() -> None:
+    """P-01 constructs this P-02 value through the package front door."""
     assert rqa.lifecycle.LifecycleDeps is deps_module.LifecycleDeps
-    assert "LifecycleDeps" not in rqa.lifecycle.__all__
+    assert "LifecycleDeps" in rqa.lifecycle.__all__
 
 
 def test_the_shared_status_type_is_the_one_contracts_declares() -> None:

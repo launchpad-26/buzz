@@ -21,6 +21,27 @@ Read in this order before acting:
 3. `references/model-fallbacks.md` — default reviewer lanes and the current
    cost-to-quality rationale for their OpenRouter fallbacks.
 
+## The replacement `rqa` CLI — pre-cutover, not yours to run
+
+`rqa` is the eventual replacement operator surface and is **not live**. The
+`scripts/*` workflow named throughout this file is the one in force; it imports
+nothing from `rqa`. The cutover is tracked in `CUTOVER.md` (#2212).
+
+The two decision surfaces are **disjoint and must not be mixed**: a decision
+recorded through `scripts/human_cli.py` is invisible to `rqa decide`, and the
+reverse. When a human decision is called for, use `scripts/human_cli.py` as
+documented below — never `rqa decide` — until the cutover lands.
+
+Its invocation (`python3 -m rqa.cli <command>`, and the `<cwd>/<owner>/<repo>`
+checkout layout every subcommand's `owner/repo` slug resolves against) is
+documented in `OPERATORS.md` under "New `rqa` command: how to run it".
+
+Platform support: `rqa` supports macOS Keychain and Linux Secret Service
+(`secret-tool`). A running user keychain session is required; an unavailable
+backend is an error, never silently an absent key. `onboard`, `tick` and
+`decide` check availability before work. See `OPERATORS.md` for keyed and
+explicitly unkeyed records.
+
 ## Authorization and refusal
 
 - You post advisory PR comments and file `by:agent` finding issues. Auto-approval

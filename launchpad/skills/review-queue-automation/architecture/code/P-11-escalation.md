@@ -18,7 +18,8 @@ resume through E-11; shared escalation/decision values remain canonical.
 
 rqa/escalation/
   __init__.py     re-exports: raise_, pending, decide, EscalationCause, Escalation,
-                  Decision, EscalationRefused, EscalationRefusalReason, EscalationError
+                  Decision, EscalationRefused, EscalationRefusalReason, EscalationError,
+                  SqliteEscalationStore
   escalate.py     Escalation; raise_() and pending(): the E-11 entry points
   decide.py       EscalationRefused, EscalationRefusalReason; decide(): the E-17 `decide` CLI entry point;
                   the JobReader and P-02 resume Protocols this part depends on
@@ -54,7 +55,7 @@ class EscalationError(Exception):
 ```python
 job.id: str
 job.head_sha: str
-job.snapshot_hash: str      # already pinned by the time raise_() is ever called (flow step 3/3a)
+job.snapshot_hash: str | None  # pinned on flow step 3a; absent on step 3 validation failure
 ```
 
 ## 3. Entry points
@@ -205,7 +206,8 @@ CREATE TABLE human_requests (
   question            TEXT NOT NULL,
   context             TEXT NOT NULL,         -- JSON object
   head_sha            TEXT NOT NULL,         -- job.head_sha at raise_() time
-  snapshot_hash       TEXT NOT NULL,         -- job.snapshot_hash at raise_() time
+  snapshot_hash       TEXT,                  -- job.snapshot_hash at raise_() time; NULL when
+                                             -- validation failed before a snapshot could be pinned
   raised_at           TEXT NOT NULL,         -- ISO-8601 UTC
   status              TEXT NOT NULL DEFAULT 'open',   -- 'open' | 'closed'
   closed_at           TEXT,                  -- ISO-8601 UTC; set by close()
@@ -231,7 +233,7 @@ class EscalationRow:
     question: str
     context: Mapping[str, str]
     head_sha: str
-    snapshot_hash: str
+    snapshot_hash: str | None
     raised_at: datetime
     status: Literal["open", "closed"]
     closed_at: datetime | None
@@ -240,7 +242,7 @@ class EscalationRow:
 class EscalationStore(Protocol):
     def insert(
         self, *, job_id: str, entry_seq: int, cause: EscalationCause, question: str,
-        context: Mapping[str, str], head_sha: str, snapshot_hash: str, raised_at: datetime,
+        context: Mapping[str, str], head_sha: str, snapshot_hash: str | None, raised_at: datetime,
     ) -> int: ...                                              # returns the new row's id
     def get(self, escalation_id: int) -> EscalationRow | None: ...
     def pending(self) -> tuple[EscalationRow, ...]: ...         # status = 'open', raised_at ascending
@@ -333,3 +335,19 @@ Accountable: RQA-BR-011, RQA-BR-013, RQA-FR-013, RQA-FR-025, RQA-FR-026, RQA-NFR
   part of the guarantee is that whichever cause is named is recorded and closed only by a named,
   substantiated decision, never silently. T1 (every cause, including whichever the finding maps to,
   is recorded) and T9 (the decision names the specific obligation).
+
+
+### Operator surface amendments (#2274, #2278, #2279, #2280)
+
+The CLI constructs the published `authority.Gate` with its configured repository
+set. A missing state database on a read or decision command is an input error;
+only a tick bootstraps state. Inventory outages are reported as incomplete with
+exit 2 (network) or 3 (authentication); they cannot report a successful sweep.
+`onboard` requires an existing local directory and checks the platform keychain;
+`tick` and `decide` check it before building stateful collaborators.
+
+Decision actor and basis text is persisted with visible Unicode escapes for
+C0/C1 controls, line separators and bidi directives. CLI rendering uses the same
+escaping convention instead of deleting boundaries. `explain` uses the
+composition's injected keychain, reports the recorded human basis and echoes an
+unknown job id. Raw control text from older records is escaped when rendered.
