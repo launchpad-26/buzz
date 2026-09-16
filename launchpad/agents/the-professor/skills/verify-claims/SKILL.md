@@ -94,8 +94,9 @@ subprocess — a genuinely separate check in **fresh context**.
    instruction that the reason must not name any verdict literal other than the one on
    line two**, which is what §2d blocks on. Asking for it costs a sentence; not asking
    for it turns §2d into blocks the verifier was never given a chance to avoid.
-   **Do not ask for the verdict first.** The ordering is not cosmetic: §2b records why
-   it is the difference between a reachable fourth verdict and an unreachable one.
+   **Do not ask for the verdict first.** The ordering is not cosmetic: §2b records
+   why it is the difference between `PARTIALLY_SUPPORTED` being reachable and being
+   unreachable.
 4. The cited source's exact span, and the claim's exact sentence.
 
 Items 1–3 are not context about the draft; they are the question being asked. **Omitting
@@ -177,20 +178,21 @@ two lines:
 
 where:
 
-- **`<reason>`** is line one: the single-sentence reason this step already requires,
-  non-empty. It may contain any text **except a verdict literal other than the one on
-  line two** — see §2d, which explains why that single exception exists and what to do
-  when it is hit. The reason is still never *scanned for* the verdict: the verdict is
+- **`<reason>`** is line one: the reason §2 asks the verifier for, non-empty. Its length
+  is not matched against — §2 requests one sentence, nothing here tests for one, and a
+  multi-sentence reason is not a parse failure. It may contain any text **except a
+  verdict literal other than the one on line two** — see §2d, which explains why that
+  single exception exists and what to do when it is hit. The reason is still never *scanned for* the verdict: the verdict is
   always the whole of line two, and §2d is a contradiction check applied after that,
   never a second way to find a verdict.
 
   **What this grammar does NOT establish about line one — decided 2026-09-17, by
-  Serina, after two attempts to test it failed.** Line one carries exactly two
-  constraints — it is non-empty, and per the bullet above it must not name a verdict
-  literal other than line two's. There is deliberately no third. **Neither constraint is
-  a test of reason quality**, and the grammar does not establish that line one is a
-  reason at all, that it relates to the claim, or that the verifier reasoned before
-  answering. `x`, `.`, and the verdict literal repeated all satisfy both.
+  Serina, after two attempts to test it failed.** **Matching tests line one against the
+  requirements stated above in this bullet, and against nothing else.**
+
+  Neither test judges reason quality, so the grammar does not establish that line one is
+  a reason at all, that it relates to the claim, or that the verifier reasoned before
+  answering. `x`, `.`, and the verdict literal repeated all match.
 
   That was twice treated as a defect to fix, and both fixes were wrong. Requiring "at
   least one letter" turns on a definition of *letter* that ASCII and Unicode disagree
@@ -220,7 +222,8 @@ Whitespace: leading and trailing whitespace around the whole response, and aroun
 line, is stripped before matching, and **entirely blank lines are discarded before the
 two-line count is taken** — so a verifier that separates its reason from its verdict with
 a blank line still matches. **No other flexibility exists.** After blank lines are
-discarded, a response of one non-empty line, or of three or more, does not match.
+discarded, a response of none, of one non-empty line, or of three or more, does not
+match — an empty or whitespace-only response has no lines left and is a parse failure.
 
 **The blank-line tolerance is not politeness, it is a measured necessity.** The first run
 of this grammar against a real draft returned exactly this:
@@ -249,7 +252,7 @@ gate's own silent-wrongness failure, reproduced inside the mechanism built to ca
 2026-09-16, by Serina, from measurement.** This grammar originally put the verdict first,
 `<VERDICT>: <reason>`. That shape requires the answer to be emitted *before* the
 reasoning that decides it, and a verifier generating left to right therefore commits to a
-literal before it has worked anything out. Nine real dispatches on 2026-09-16 showed it
+literal before it has worked anything out. Real dispatches on 2026-09-16 showed it
 then correcting itself inside the reason, where the equality rule gives the correction no
 effect:
 
@@ -514,8 +517,8 @@ Naming these explicitly so they are never mistaken for silent guarantees:
 - **Opinion claims are never checked** (step 1) — this is a deliberate scope limit,
   not a gap to close later.
 - **An unreasoned verdict is indistinguishable from a considered one — named
-  2026-09-17.** §2b constrains line one to being non-empty and not naming a competing
-  verdict literal; neither is a test of whether the verifier reasoned, and reason
+  2026-09-17.** Nothing §2b tests on line one judges whether the verifier reasoned, and
+  reason
   quality is a semantic question whose only robust test is a second model call, which
   this suite has refused for cheaper gains. Reason-first ordering (§2b) makes reasoning
   the path of least resistance and is not a guarantee it happened. A verifier that
@@ -554,12 +557,12 @@ draft in isolation.
 - [ ] Any verdict other than `SUPPORTED`, on any single claim, actually blocked the
       entire write — not logged as a warning and allowed through
 - [ ] The reported finding names the specific claim, verdict, reason, and citation (or
-      that none existed, for `UNSOURCED`) — never a generic "verification failed".
-      **The reason is passed through as the verifier gave it, and §2b does not require
-      it to be informative** — a verdict whose reason is `.` satisfies this item and is
-      as useless to the drafting agent as the generic string this forbids. Report it
-      as-is rather than substituting a better one; the drafting agent is owed the
-      verifier's actual output, and a thin reason is itself a signal about the verifier.
+      that none existed, for `UNSOURCED`). **The reporting agent never substitutes a
+      summary of its own** — not a generic "verification failed", and not a tidied-up
+      paraphrase. The reason is passed through as the verifier gave it, whatever that
+      was: §2b does not require it to be informative, so a reason of `.` satisfies this
+      item, and a thin reason is itself a signal about the verifier that a substitution
+      would hide.
 - [ ] This whole procedure ran a second time, independently, against the finished
       file, immediately before the write — not treated as already satisfied by the
       first, mid-draft pass
