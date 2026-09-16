@@ -185,10 +185,12 @@ where:
   never a second way to find a verdict.
 
   **What this grammar does NOT establish about line one — decided 2026-09-17, by
-  Serina, after two attempts to test it failed.** Non-emptiness is the only test, and it
-  is deliberately the only one. The grammar does not establish that line one is a reason
-  at all, that it relates to the claim, or that the verifier reasoned before answering.
-  `x`, `.`, and the verdict literal repeated all satisfy it.
+  Serina, after two attempts to test it failed.** Line one carries exactly two
+  constraints — it is non-empty, and per the bullet above it must not name a verdict
+  literal other than line two's. There is deliberately no third. **Neither constraint is
+  a test of reason quality**, and the grammar does not establish that line one is a
+  reason at all, that it relates to the claim, or that the verifier reasoned before
+  answering. `x`, `.`, and the verdict literal repeated all satisfy both.
 
   That was twice treated as a defect to fix, and both fixes were wrong. Requiring "at
   least one letter" turns on a definition of *letter* that ASCII and Unicode disagree
@@ -198,9 +200,9 @@ where:
   Requiring line one not to *equal* a verdict literal bans exactly one spelling:
   `SUPPORTED.` defeats it, and so do `**SUPPORTED**` and `"SUPPORTED"` — twenty-one of
   twenty-two measured mutations walked straight through. Worse, that same
-  equality-is-brittle property is **load-bearing in the opposite direction** fourteen
-  lines below, where rejection example 4 relies on a trailing full stop defeating
-  equality on line two.
+  equality-is-brittle property is **load-bearing in the opposite direction** in §2b's
+  rejection example 4 below, which relies on a trailing full stop defeating equality on
+  line two.
 
   **Reason quality is a semantic question, and the only robust test for it is another
   model call** — the cost this suite has already refused for cheaper gains. So it is
@@ -320,17 +322,15 @@ survive it intact:
 non-`SUPPORTED` verdict in step 3, reported the same way, and **never `SUPPORTED`**. A
 check that did not produce an answer is not an answer.
 
-**Parse failure** — the response did not match §2b's grammar: an empty response, a
-response whose line one is empty, a response that is not exactly two non-empty lines,
-a line two that is not *equal* to a verdict literal, or any of the rejected shapes §2b
-lists.
+**Parse failure** — **the response did not match §2b's grammar.** §2b is the whole
+definition; apply it, and anything it does not match is a parse failure.
 
-This enumeration deliberately no longer says "a response with no reason." It did until
-2026-09-17, and nothing in §2b could detect one — §2b's only test on line one is
-non-emptiness, and that is now a stated limit rather than a gap (see §2b). An
-enumeration that lists a failure the grammar cannot recognise is not a stricter
-contract, it is an unimplementable one: the first person to build a parser from this
-list had no rule to write for that clause.
+**This clause deliberately does not enumerate the ways a response can fail to match, and
+the omission is the point.** It carried such a list until 2026-09-17. Both versions of
+that list were measurably wrong — one naming a failure §2b cannot detect, the next naming
+a state §2b's normalisation makes unreachable while dropping a constraint §2b does
+enforce. A restatement of a grammar is a second copy of that grammar, and two copies
+drift. Pointing at §2b cannot drift from §2b. The full history is in the redesign doc.
 
 **Non-completion — judged independently of anything stdout contained.** A response can
 be perfectly well-formed and still not count, because how the command ended is part of
@@ -511,6 +511,14 @@ Naming these explicitly so they are never mistaken for silent guarantees:
   as evidence, not certainty.
 - **Opinion claims are never checked** (step 1) — this is a deliberate scope limit,
   not a gap to close later.
+- **An unreasoned verdict is indistinguishable from a considered one — named
+  2026-09-17.** §2b constrains line one to being non-empty and not naming a competing
+  verdict literal; neither is a test of whether the verifier reasoned, and reason
+  quality is a semantic question whose only robust test is a second model call, which
+  this suite has refused for cheaper gains. Reason-first ordering (§2b) makes reasoning
+  the path of least resistance and is not a guarantee it happened. A verifier that
+  answers `Looks fine.` above `SUPPORTED` passes this gate exactly as one that read the
+  span carefully does. §2b hands this limit here rather than claiming to solve it.
 - **Claim identification itself is not independently verified — named 2026-09-05,
   after a review pointed out this wasn't stated anywhere.** Step 1's extraction (which
   sentences count as behaviour claims at all) is done by the same drafting agent whose
@@ -544,7 +552,12 @@ draft in isolation.
 - [ ] Any verdict other than `SUPPORTED`, on any single claim, actually blocked the
       entire write — not logged as a warning and allowed through
 - [ ] The reported finding names the specific claim, verdict, reason, and citation (or
-      that none existed, for `UNSOURCED`) — never a generic "verification failed"
+      that none existed, for `UNSOURCED`) — never a generic "verification failed".
+      **The reason is passed through as the verifier gave it, and §2b does not require
+      it to be informative** — a verdict whose reason is `.` satisfies this item and is
+      as useless to the drafting agent as the generic string this forbids. Report it
+      as-is rather than substituting a better one; the drafting agent is owed the
+      verifier's actual output, and a thin reason is itself a signal about the verifier.
 - [ ] This whole procedure ran a second time, independently, against the finished
       file, immediately before the write — not treated as already satisfied by the
       first, mid-draft pass
