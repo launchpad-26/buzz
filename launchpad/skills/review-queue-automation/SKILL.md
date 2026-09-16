@@ -120,7 +120,9 @@ target returns `outcome: "unavailable"` (exit 1).
 network or availability failure; `3` means authentication failed; `4` means an
 internal, persistence or job failure. A partial or wholly unavailable inventory
 reports `outcome: "incomplete"` and names failed repositories. A failed job cannot
-produce a successful tick exit code.
+produce a successful tick exit code. All five are emitted: `tick` maps an
+`unauthenticated` inventory outage to `3` and any other unreachable one to `2`
+(`rqa/cli/main.py`), which `tests/test_rqa_cli_regressions.py` pins.
 
 ## Platform and state
 

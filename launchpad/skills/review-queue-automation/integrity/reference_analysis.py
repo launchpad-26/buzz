@@ -505,33 +505,24 @@ class ReferenceAnalysis:
             ]
             if not test_refs:
                 continue
-            part = module.name
-            runtime_refs = [
+            production_refs = [
                 reference
                 for identity in identities
                 for reference in references[identity]
                 if not reference.source_module.startswith("tests.")
-                and reference.evidence.startswith(("runtime", "dynamic"))
-                and reference.source_module != part
-                and not reference.source_module.startswith(f"{part}.")
+                and reference.evidence.startswith(("runtime", "dynamic", "annotation"))
+                and reference.source_module != module.name
+                and not reference.source_module.startswith(f"{module.name}.")
             ]
-            if runtime_refs:
+            if production_refs:
                 continue
-            annotation_refs = [
-                reference
-                for identity in identities
-                for reference in references[identity]
-                if not reference.source_module.startswith("tests.")
-                and reference.evidence == "annotation"
-                and reference.source_module != part
-                and not reference.source_module.startswith(f"{part}.")
-            ]
             definition = self.definitions.get(target)
             source = definition.path if definition else module.path
             line = definition.line if definition else 1
-            detail = f"tested by {len(set(test_refs))} reference(s); no runtime use outside {part}"
-            if annotation_refs:
-                detail += f"; {len(set(annotation_refs))} annotation-only production reference(s)"
+            detail = (
+                f"tested by {len(set(test_refs))} reference(s); "
+                f"no recognised production use outside {module.name}"
+            )
             findings.append(Finding("T1", surface, source, line, detail))
         return tuple(sorted(findings))
 
