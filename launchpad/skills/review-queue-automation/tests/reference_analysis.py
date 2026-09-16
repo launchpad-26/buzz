@@ -535,6 +535,21 @@ class ReferenceAnalysis:
             findings.append(Finding("T1", surface, source, line, detail))
         return tuple(sorted(findings))
 
+    def t2_findings(self) -> tuple[Finding, ...]:
+        """Return every non-private top-level definition with no recognised use.
+
+        Annotation references count here because T2 asks whether *anything* refers to a
+        definition.  T1 deliberately applies the stricter runtime-only rule.  Binding an
+        import, re-export, or alias does not count until code actually uses the binding.
+        """
+        referenced = {reference.symbol for reference in self.references}
+        findings = [
+            Finding("T2", symbol, definition.path, definition.line, "zero recognised references")
+            for symbol, definition in self.definitions.items()
+            if symbol not in referenced
+        ]
+        return tuple(sorted(findings))
+
 def format_findings(findings: Iterable[Finding], root: pathlib.Path) -> str:
     rows = []
     for finding in findings:

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""T1 reference-integrity guard for #2311.
+"""T1/T2 reference-integrity guards for #2311 and #2312.
 
 No pytest fixtures: every test remains runnable by ``tests/run_all.py``.  The fixture
 package is generated in a temporary directory so each supported static-reference shape
@@ -52,7 +52,8 @@ def _fixture_analysis(*, remove_direct_wiring: bool = False) -> ReferenceAnalysi
         "class RegistryTarget: pass\n"
         "class AliasTarget: pass\n"
         "class ImportedOnly: pass\n"
-        "class UnusedImport: pass\n",
+        "class UnusedImport: pass\n"
+        "class Orphan: pass\n",
     )
     direct_use = "" if remove_direct_wiring else "Direct()"
     _write(
@@ -87,6 +88,13 @@ def test_reference_analysis_distinguishes_wiring_from_imports_and_annotations() 
     t1 = {finding.symbol for finding in analysis.t1_findings()}
     assert t1 == {"sample.part.AnnotatedOnly", "sample.part.ImportedOnly"}, sorted(t1)
 
+    # An annotation is a recognised T2 reference but not T1 runtime wiring. A test
+    # reference also clears T2, while a production import that is never used does not.
+    t2 = {finding.symbol for finding in analysis.t2_findings()}
+    assert "sample.part.api.AnnotatedOnly" not in t2
+    assert "sample.part.api.ImportedOnly" not in t2
+    assert t2 == {"sample.part.api.Orphan", "sample.part.api.UnusedImport"}, sorted(t2)
+
 def test_removing_production_wiring_creates_a_t1_finding() -> None:
     analysis = _fixture_analysis(remove_direct_wiring=True)
     t1 = {finding.symbol for finding in analysis.t1_findings()}
@@ -105,5 +113,13 @@ def test_t1_tested_exports_have_meaningful_production_use() -> None:
     analysis = ReferenceAnalysis(RQA, _TEST_ROOT)
     findings = analysis.t1_findings()
     assert findings == (), "T1 tested exports lacking production wiring:\n" + format_findings(
+        findings, _SKILL_ROOT
+    )
+
+
+def test_t2_public_definitions_have_a_recognised_reference() -> None:
+    analysis = ReferenceAnalysis(RQA, _TEST_ROOT)
+    findings = analysis.t2_findings()
+    assert findings == (), "T2 public definitions with zero recognised references:\n" + format_findings(
         findings, _SKILL_ROOT
     )
