@@ -103,11 +103,21 @@ def _publish(
             anchor=Anchor(job=row.job, seq=row.seq, hash=row.hash, at=row.at)
         )
     except PublishFailed as exc:
+        # `AnchorPublisher`'s contract is that a failed publish raises `PublishFailed`,
+        # and this catches exactly that and nothing wider.
+        #
+        # Nothing broader is caught **here** on purpose. §8's guard forbids
+        # `except Exception` anywhere in `rqa/record/`, because that is how
+        # U-DISPATCH-20's defect was written — a swallowed failure around a ledger
+        # write, letting a review complete authoritatively with a knowingly incomplete
+        # record. The guard is right, and this module is not the place to make an
+        # exception to it.
+        #
+        # A publisher that violates its contract by raising something else is
+        # contained at the boundary instead, where publishers are built: see
+        # `rqa/github/anchor_publisher.py`, which converts anything its transport
+        # throws into `PublishFailed` before it can reach this package.
         return f"seq {row.seq}: {exc}"
-    except (OSError, ValueError) as exc:
-        # A publisher that raises something else is still a failed publish, not a
-        # reason to lose the anchor. It stays pending and is retried.
-        return f"seq {row.seq}: {type(exc).__name__}: {exc}"
     if not destination:
         return f"seq {row.seq}: publisher returned no destination"
     mark_anchor_published(

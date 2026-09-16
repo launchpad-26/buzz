@@ -220,15 +220,65 @@ def test_a_pending_anchor_still_detects_a_removed_tail_offline() -> None:
     assert result.anchor_published is False, "reported honestly as never published"
 
 
-def test_a_publisher_raising_an_unexpected_error_still_leaves_the_anchor_pending() -> None:
-    """A publisher is third-party-ish code. Whatever it raises, the anchor must not be
-    lost and the append path must not be affected."""
-    connection = chained(entries=1)
-    result = anchor_job(
-        connection, "job-1", publisher=FakePublisher(error=OSError("socket gone")), clock=lambda: CLOCK
+def test_an_adapter_blow_up_is_contained_at_the_boundary_not_inside_the_record() -> None:
+    """Where a misbehaving publisher is contained, and why it is there.
+
+    `anchor_job` catches only `PublishFailed`, its declared contract, because §8's
+    guard forbids `except Exception` anywhere in `rqa/record/` — that is how
+    U-DISPATCH-20's defect was written, a swallowed failure around a ledger write.
+
+    So honouring the contract is the publisher's job. `GithubAnchorPublisher` converts
+    whatever its adapter throws into `PublishFailed`, which is what keeps the promise
+    that anchoring can never fail a review — without putting a blanket catch inside
+    the package that must never have one.
+    """
+    from rqa.contracts import Activity, Grant, Job, JobStatus
+    from rqa.github.anchor_publisher import GithubAnchorPublisher
+
+    job = Job(
+        id="job-1",
+        repo="o/r",
+        number=7,
+        head_sha="H1",
+        base_sha="B1",
+        head_repo="o/r",
+        head_ref="feature",
+        predecessor_job=None,
+        predecessor_head_sha=None,
+        snapshot_hash="snap-1",
+        status=JobStatus.QUEUED,
     )
+    grant = Grant(
+        activity=Activity.COMMENT,
+        repo="o/r",
+        job_id="job-1",
+        snapshot_hash="snap-1",
+        capability_proof_id=1,
+        categories=None,
+        entry_seq=1,
+    )
+
+    class BrokenAdapter:
+        @property
+        def transport(self):
+            raise AttributeError("adapter is not wired")
+
+    publisher = GithubAnchorPublisher(adapter=BrokenAdapter(), job=job, grant=grant)
+
+    raised = None
+    try:
+        publisher.publish(anchor=Anchor(job="job-1", seq=1, hash="a" * 64, at="2026-09-16T12:00:00Z"))
+    except PublishFailed as exc:
+        raised = exc
+    assert raised is not None, "an adapter blow-up must surface as PublishFailed"
+    assert "AttributeError" in str(raised)
+
+    # ... and through `anchor_job`, that leaves the anchor pending and raises nothing.
+    connection = chained(entries=1)
+    result = anchor_job(connection, "job-1", publisher=publisher, clock=lambda: CLOCK)
     assert result.pending == 1
-    assert result.failures and "OSError" in result.failures[0]
+    assert result.published == 0
+    assert result.failures
 
 
 def test_anchoring_a_job_with_no_rows_does_nothing_and_does_not_raise() -> None:
@@ -354,3 +404,82 @@ def test_rqa_anchor_is_a_real_command_that_reaches_the_record() -> None:
         assert payload["result"]["job_id"] == "job-does-not-exist"
         assert payload["result"]["anchored_seq"] is None
         assert "no such job" in (payload["result"]["detail"] or "")
+
+
+def test_anchor_job_for_leaves_nothing_appended_behind_the_anchor() -> None:
+    """Pins the ORDERING inside `anchor_job_for`, not just the property.
+
+    The sibling test above proves that an anchor covers a grant entry appended before
+    it. It does not prove the production function mints the grant first — swap the two
+    statements and that test still passes. This one drives `anchor_job_for` itself with
+    an authority stand-in that appends a `grant` entry exactly as E-04 does, and
+    asserts the head is not ahead of the anchor afterwards.
+
+    If anyone reorders it so the head is read before the grant is minted, the anchor
+    lands one entry short and this fails.
+    """
+    from rqa.cli.composition import anchor_job_for
+    from rqa.contracts import Grant, Job, JobStatus
+    from rqa.record.store import head_entry, latest_anchor
+
+    connection = chained(entries=2)
+    writer = SQLiteRecordWriter(connection)
+    job = Job(
+        id="job-1",
+        repo="o/r",
+        number=7,
+        head_sha="H1",
+        base_sha="B1",
+        head_repo="o/r",
+        head_ref="feature",
+        predecessor_job=None,
+        predecessor_head_sha=None,
+        snapshot_hash="snap-1",
+        status=JobStatus.QUEUED,
+    )
+
+    class Authority:
+        github = object()
+        store = object()
+
+        def grant(self, **kwargs):
+            # E-04 records its decision. That is the whole hazard: this append moves
+            # the head, so it must happen before the head is read.
+            entry = writer.append(
+                "job-1", "grant", {"activity": "comment", "decision": "granted"}
+            )
+            return Grant(
+                activity=kwargs["activity"],
+                repo="o/r",
+                job_id="job-1",
+                snapshot_hash="snap-1",
+                capability_proof_id=1,
+                categories=None,
+                entry_seq=entry.seq,
+            )
+
+    class Jobs:
+        def get(self, job_id):
+            return job
+
+    class Comp:
+        connection = None
+        clock = lambda self: CLOCK  # noqa: E731
+        jobs = Jobs()
+        authority = Authority()
+        record = writer
+        github = object()
+
+    comp = Comp()
+    comp.connection = connection
+
+    outcome = anchor_job_for(comp, "job-1")
+
+    head = head_entry(connection=connection, job="job-1")
+    anchor = latest_anchor(connection=connection, job="job-1")
+    assert head is not None and anchor is not None
+    assert anchor.seq == head.seq, (
+        f"anchor at seq {anchor.seq} but head is at {head.seq} — the grant entry landed "
+        "after the head was read, which is the loop this ordering exists to prevent"
+    )
+    assert outcome.anchored_seq == head.seq
