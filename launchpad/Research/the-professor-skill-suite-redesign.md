@@ -1614,3 +1614,35 @@ the last came out of measurement during the build on 2026-09-16.
     and a rule blocking a verdict whose own reason names a different literal is retained even
     though the reordering removed its cause, because the contract must hold for any configured
     `$PROFESSOR_VERIFIER_CMD`, not only the one this was measured on.
+
+15. **`verify-claims` §2c points at §2b rather than enumerating it — decided 2026-09-17, by
+    Serina, after two enumerations failed measurement.** §2c defines what a parse failure is.
+    It carried a list of the ways a response can fail to match §2b's grammar, and both
+    versions of that list were wrong in opposite directions.
+
+    The first listed "a response with no reason", which §2b has no test that can detect — its
+    line-one constraints are non-emptiness and the competing-literal rule, neither of which
+    judges reason quality. A parser built from the list had no rule to write for that clause.
+
+    The replacement was worse. It listed "a response whose line one is empty", a state §2b's
+    own normalisation makes unreachable because blank lines are discarded before the two-line
+    count is taken — and a parser applying the list in its written order **rejected three of
+    four leading-blank responses §2b accepts**, reintroducing the intermittent false-rejection
+    §2b calls a measured necessity. The same list silently omitted §2b's competing-literal
+    constraint, so it **accepted two shapes §2b and §2d block**. One list failed toward
+    over-rejection, the other toward acceptance.
+
+    **Decision: a section that defines a rule is the only place that states it.** §2c now says
+    the response did not match §2b's grammar and stops. A restatement of a grammar is a second
+    copy, two copies drift, and both drifts above were introduced by commits whose purpose was
+    to fix the previous drift. A pointer cannot drift from its target.
+
+    **This generalises beyond §2c, and that is why it is recorded as a decision rather than a
+    fix.** The same review sequence found five High defects in this pack, none of them a wrong
+    rule — every one was prose describing a rule correctly stated elsewhere. The root cause was
+    named in a problem record at
+    `launchpad/docs/audits/2026/09/17/prose-describing-correct-rules-shipped-unverified.md`:
+    no build step enumerated a document's own claims and tested them, so rules were
+    mutation-tested while the prose around them shipped unchecked. Prefer a pointer to a
+    restatement anywhere in this pack, and keep history in this document rather than in the
+    normative sections of a skill.

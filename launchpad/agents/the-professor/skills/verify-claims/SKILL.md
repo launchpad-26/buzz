@@ -330,7 +330,9 @@ the omission is the point.** It carried such a list until 2026-09-17. Both versi
 that list were measurably wrong — one naming a failure §2b cannot detect, the next naming
 a state §2b's normalisation makes unreachable while dropping a constraint §2b does
 enforce. A restatement of a grammar is a second copy of that grammar, and two copies
-drift. Pointing at §2b cannot drift from §2b. The full history is in the redesign doc.
+drift. Pointing at §2b cannot drift from §2b. Both failed lists, and the decision to stop
+enumerating, are recorded as decision 15 in
+`launchpad/Research/the-professor-skill-suite-redesign.md`.
 
 **Non-completion — judged independently of anything stdout contained.** A response can
 be perfectly well-formed and still not count, because how the command ended is part of
