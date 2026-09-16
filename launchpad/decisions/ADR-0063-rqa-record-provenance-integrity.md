@@ -1,5 +1,5 @@
 ---
-status: Accepted
+status: Superseded by ADR-0066
 date: 2026-09-11
 issue: launchpad-26/buzz#2159
 decided_in: agent session — no addressable comment exists; see Provenance
