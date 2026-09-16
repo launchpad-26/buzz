@@ -11,7 +11,7 @@ connection's implicit transaction, so a failure in either leaves neither durable
 writer cannot demonstrate that — it would prove only that this file's own fake behaves as
 this file's own fake was written to. The two places a fake *is* used are the two failures
 a real writer cannot be asked to produce on demand: an append that fails, and a read that
-fails. Nothing here touches a network, a keychain or a credential: the injected key store
+fails. Nothing here touches a network, a keychain or a credential: the record writer
 returns `None`, which is `P-12-record.md` §3.1's explicitly unkeyed append.
 """
 

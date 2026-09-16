@@ -13,7 +13,7 @@ grant discipline on every call**: being handed anything but a `Grant` for their 
 activity is an immediate test failure, which makes §5 guard 2 checked at every callsite
 of every test that uses this bench, not only in the tests written for it.
 
-No key material, no keychain, no network: the key store returns `None` (ADR-0063's
+No key material, no keychain, no network: the record is a keyless hash chain (ADR-0066's
 explicitly unkeyed append) and `tests/conftest.py` blocks sockets suite-wide.
 """
 

@@ -359,14 +359,9 @@ def test_no_module_here_reaches_the_network_a_model_or_a_vcs() -> None:
             assert f'"{tool}"' not in source, f"{name} names {tool}"
 
 
-def test_the_only_subprocess_in_this_package_is_the_local_keychain_command() -> None:
-    """§1: "`keychain.py`'s one subprocess (`security`, macOS's local keychain CLI) is
-    local-only"."""
+def test_no_module_in_this_package_spawns_a_subprocess() -> None:
+    """§1 and ADR-0066: the record package has no external process dependency."""
     for name, source in _sources().items():
-        if name.endswith("keychain.py"):
-            assert "subprocess" in _imported(source)
-            assert '"security"' in source
-            continue
         assert "subprocess" not in _imported(source), name
 
 
