@@ -110,7 +110,7 @@ def test_a_tampered_row_is_an_integrity_break_naming_where_it_stopped() -> None:
     assert "3" in untrusted.detail
 
 
-def test_a_chain_valid_history_is_trusted_without_any_key(monkeypatch) -> None:
+def test_a_chain_valid_history_is_trusted_without_any_key() -> None:
     """ADR-0066 replaces ADR-0063's middle ground.
 
     Under ADR-0063 a history nobody could authenticate came back `UNVERIFIABLE` —

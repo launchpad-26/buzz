@@ -49,7 +49,7 @@ NAMED_EXPORTS = frozenset(
 #: so `rqa.github.ensure_schema` and `rqa.intake.ensure_schema` never collide.
 PUBLISHED_EXPORTS = frozenset(
     {"SqliteEtagStore", "SqliteApiCallStore", "SqliteMutationStore", "ensure_schema",
-     "Transport"}
+     "Transport", "GithubAnchorPublisher"}
 )
 ALL_EXPORTS = SHARED_EXPORTS | NAMED_EXPORTS | PUBLISHED_EXPORTS
 
@@ -121,6 +121,7 @@ def test_the_concrete_collaborators_a_composition_root_needs_are_package_surface
         SqliteMutationStore,
         ensure_schema,
     )
+    from rqa.github.anchor_publisher import GithubAnchorPublisher
     from rqa.github.transport import Transport
 
     assert PUBLISHED_EXPORTS <= frozenset(github.__all__)
@@ -129,6 +130,7 @@ def test_the_concrete_collaborators_a_composition_root_needs_are_package_surface
     assert github.SqliteMutationStore is SqliteMutationStore
     assert github.ensure_schema is ensure_schema
     assert github.Transport is Transport
+    assert github.GithubAnchorPublisher is GithubAnchorPublisher
 
 
 # -- §2/§7: MutationKind has exactly five members; no estate kinds ---------------

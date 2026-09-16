@@ -58,6 +58,7 @@ from rqa.contracts import (
 )
 from rqa.escalation import SqliteEscalationStore
 from rqa.github import (
+    GithubAnchorPublisher,
     GithubAdapter,
     SqliteApiCallStore,
     SqliteEtagStore,
@@ -388,8 +389,6 @@ def anchor_job_for(comp: "Composition", job_id: str) -> "AnchorOutcome":
     never a reason to fail a review. ADR-0066: anchoring cannot break anything.
     """
     from rqa.contracts import Activity, Deny, Grant
-    from rqa.github.anchor_publisher import GithubAnchorPublisher
-
     job = comp.jobs.get(job_id)
     if job is None:
         return AnchorOutcome(job_id=job_id, anchored_seq=None, published=0, pending=0,
