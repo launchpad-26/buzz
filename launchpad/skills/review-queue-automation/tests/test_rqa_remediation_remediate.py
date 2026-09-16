@@ -15,6 +15,7 @@ import pathlib
 import subprocess
 import sys
 import types
+from dataclasses import replace
 
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent.parent))
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
@@ -101,10 +102,18 @@ def with_remedy(**remedy_overrides):
 
 
 def test_t1_a_grant_for_another_activity_raises_and_touches_nothing() -> None:
+    class HeadProtectionTrap:
+        @property
+        def head_protected(self):
+            raise AssertionError("head protection was read before the grant gate")
+
+    trapped_facts = replace(fx.make_facts(), pr=HeadProtectionTrap())
     for activity in Activity:
         if activity is Activity.REMEDIATE:
             continue
-        error, runner, record, worktrees = raised(grant=fx.make_grant(activity=activity))
+        error, runner, record, worktrees = raised(
+            grant=fx.make_grant(activity=activity), facts=trapped_facts
+        )
         assert "authorises" in str(error), activity
         assert runner.calls == [], activity
         assert record.appended == [], activity

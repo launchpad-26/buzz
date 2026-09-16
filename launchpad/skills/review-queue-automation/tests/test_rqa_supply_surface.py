@@ -294,8 +294,6 @@ def test_the_only_entry_kind_this_package_writes_is_spend() -> None:
     assert ENTRY_KINDS_WRITTEN <= contracts.ENTRY_KINDS
 
 
-_SPEND_KIND = re.compile(r'kind="spend"')
-
 #: `rqa/record/migrate.py` is the one ruled exception to §8's closing property, and it was
 #: already landed when this package was written. P-12's one-time legacy migration replays
 #: the incumbent `cost_ledger` into the record as `spend` entries whose `source` is
@@ -306,17 +304,31 @@ MIGRATION_WRITER = "rqa/record/migrate.py"
 RUNTIME_WRITER = "rqa/supply/spend.py"
 
 
+def _appends_spend(source: str) -> bool:
+    """Recognise both supported RecordWriter.append call shapes using syntax, not text."""
+    for node in ast.walk(ast.parse(source)):
+        if not isinstance(node, ast.Call):
+            continue
+        keyword = next((item.value for item in node.keywords if item.arg == "kind"), None)
+        positional = None
+        if isinstance(node.func, ast.Attribute) and node.func.attr == "append":
+            positional = node.args[1] if len(node.args) >= 2 else None
+        value = positional if positional is not None else keyword
+        if isinstance(value, ast.Constant) and value.value == "spend":
+            return True
+    return False
+
+
 def test_only_the_supply_spend_module_writes_a_spend_entry_for_a_review() -> None:
     """§8's closing property: `grep -rn 'kind="spend"' rqa/ --include=*.py` returns hits
-    only inside `rqa/supply/spend.py`, plus P-12's landed legacy migration. The state
-    before the budget half lands (migration alone) and the state after it (both) are each
-    legal; a hit in any other file is not."""
+    only inside `rqa/supply/spend.py`, plus P-12's landed legacy migration. This final
+    assembled tree requires both writers; a hit in any other file is not legal."""
     writers = sorted(
         str(path.relative_to(RQA.parent))
         for path in RQA.rglob("*.py")
-        if _SPEND_KIND.search(path.read_text(encoding="utf-8"))
+        if _appends_spend(path.read_text(encoding="utf-8"))
     )
-    assert writers in ([MIGRATION_WRITER], [MIGRATION_WRITER, RUNTIME_WRITER]), (
+    assert writers == [MIGRATION_WRITER, RUNTIME_WRITER], (
         f"a `spend` entry is written outside `{RUNTIME_WRITER}`: {writers}"
     )
 

@@ -38,6 +38,7 @@ on:
     branches: [launchpad]
     paths:
       - "launchpad/skills/review-queue-automation/**"
+      - ".github/workflows/launchpad-rqa-tests.yml"
 
 # Read-only. The suite reaches no network, no relay and no GitHub API, so it needs
 # no token scope. That is enforced in the repository, not here: tests/conftest.py
@@ -124,3 +125,7 @@ jobs:
       - name: Run review-queue-automation unit tests
         run: python3 -m pytest tests -q
 
+      # This script starts pytest itself against isolated source mutations.
+      # Keeping it outside pytest prevents recursive mutation-suite collection.
+      - name: Prove RQA invariant guards detect their source mutations
+        run: python3 integrity/run_mutations.py

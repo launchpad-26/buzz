@@ -1,5 +1,9 @@
 # RQA conformance proof — recorded runbook
 
+For the current implementation-integrity checks and mutation runner, see
+[`integrity/README.md`](integrity/README.md). The live runs below retain their
+original commits and historical conclusions.
+
 This document records what Review Queue Automation **did**, on a named machine, at a
 named commit, against real GitHub pull requests. It is not a description of what RQA
 is designed to do; the architecture under `architecture/` and the requirements under
