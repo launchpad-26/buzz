@@ -58,11 +58,22 @@ def test_job_id_is_sensitive_to_every_argument() -> None:
     assert job_id("alice/repo", 1, "sha-b") != base
 
 
-def test_github_writes_fallback_is_now_byte_identical_with_this_module() -> None:
-    """`rqa.github.writes._stable_hash` resolves `rqa.intake.identity` at call
-    time (never at import) and falls back only while this package is
-    unlanded. Now that it exists, every call must take this path and produce
-    the identical digest its dead fallback would also have produced."""
-    from rqa.github.writes import _stable_hash
+def test_github_writes_uses_this_modules_canonical_stable_hash() -> None:
+    """The assembled tree has one stable-hash owner and no compatibility fallback.
 
-    assert _stable_hash("job-1", "approve", "{}") == stable_hash("job-1", "approve", "{}")
+    `rqa.github.writes` resolves the owner at call time because `rqa.intake`
+    imports `rqa.github`, so a module-level import there would close a cycle.
+    Redirecting this module's `stable_hash` must therefore change what
+    `writes._stable_hash` returns: a private copy of the formula would not
+    follow, and that is the defect this asserts against.
+    """
+    import unittest.mock
+
+    from rqa.github import writes
+
+    assert writes._stable_hash("a", "b") == stable_hash("a", "b")
+    assert not hasattr(writes, "hashlib"), "writes must hold no hashing implementation"
+    with unittest.mock.patch(
+        "rqa.intake.identity.stable_hash", return_value="redirected"
+    ):
+        assert writes._stable_hash("a", "b") == "redirected"

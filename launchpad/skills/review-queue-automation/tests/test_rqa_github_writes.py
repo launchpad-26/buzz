@@ -274,8 +274,7 @@ def test_t3_second_identical_submit_review_returns_terminal_without_calls() -> N
 def test_client_mutation_id_is_the_fixed_stable_hash_formula() -> None:
     """§3 preamble / §1: `stable_hash(job.id, kind.value, canonical_json(payload))`,
     with P-01's fixed definition `sha256("\\x1f".join(parts)).hexdigest()`. The
-    formula and its determinism are asserted — both resolution paths are
-    byte-identical, so this holds before and after `rqa.intake` lands."""
+    formula and its determinism are asserted against P-01's canonical owner."""
     job = make_job()
     grant = make_grant(Activity.COMMENT)
     record = FakeRecord()
@@ -284,7 +283,10 @@ def test_client_mutation_id_is_the_fixed_stable_hash_formula() -> None:
     assert isinstance(result, Mutation)
     payload = {"repo": job.repo, "number": job.number, "body": "hello"}
     assert result.id == expected_cmid(job, MutationKind.COMMENT, payload)
-    assert writes._stable_hash("a", "b") == hashlib.sha256(b"a\x1fb").hexdigest()
+    from rqa.intake.identity import stable_hash
+
+    assert writes._stable_hash("a", "b") == stable_hash("a", "b")
+    assert stable_hash("a", "b") == hashlib.sha256(b"a\x1fb").hexdigest()
 
 
 # -- T7: APPROVE's fresh read sees a different head ------------------------------

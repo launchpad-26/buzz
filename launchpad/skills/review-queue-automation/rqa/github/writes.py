@@ -23,20 +23,18 @@ that skips required checks: `merge` sends `mergePullRequest` with
 `expectedHeadOid=job.head_sha` and reports GitHub's refusal as a value. A call
 that would need elevated permission fails and reports; it does not escalate.
 
-**`stable_hash` is P-01's (U-RESILIENCE-13).** `rqa.intake.identity` owns
-job/mutation identity and is not yet landed; `_stable_hash` resolves it at
-call time, never at import, exactly the way `rqa.policy.validate` resolves
-P-10's `MECHANICAL_TOOL_SET`. The fallback is the definition §1 records P-01
-as having already fixed — `sha256("\\x1f".join(parts).encode()).hexdigest()` —
-so both paths produce byte-identical digests and no `client_mutation_id`
-changes when P-01 lands. `canonical_json` here is this package's private
+**`stable_hash` is P-01's (U-RESILIENCE-13).** `rqa.intake.identity` is the
+single owner of job/mutation identity, resolved at call time because
+`rqa.intake` imports this package's `GithubAdapter` protocol and a
+module-level import here would close that cycle. The lookup is a cycle break
+and nothing more: a failed import is a broken assembled tree, not a licence to
+hash locally. `canonical_json` here is this package's private
 rendering by the formula P-12 §5 fixes; `rqa.record`'s public surface is
 closed and is imported only to append (§1).
 """
 
 from __future__ import annotations
 
-import hashlib
 import json
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass
@@ -132,13 +130,15 @@ def _canonical_json(payload: Mapping) -> str:
 
 
 def _stable_hash(*parts: str) -> str:
-    """P-01's deterministic hash (U-RESILIENCE-13), resolved at call time —
-    never at import — with §1's fixed definition as the fallback while
-    `rqa.intake` has not landed. Both paths are byte-identical."""
-    try:
-        from rqa.intake.identity import stable_hash
-    except ImportError:
-        return hashlib.sha256("\x1f".join(parts).encode()).hexdigest()
+    """P-01's deterministic hash (U-RESILIENCE-13), resolved at call time.
+
+    `rqa.intake` imports `rqa.github` for its `GithubAdapter` protocol, so a
+    module-level import of `rqa.intake.identity` would close an import cycle.
+    This deferred lookup is that cycle break and nothing else — there is no
+    second definition of the formula to fall back to.
+    """
+    from rqa.intake.identity import stable_hash
+
     return stable_hash(*parts)
 
 
