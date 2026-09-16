@@ -3,15 +3,8 @@
 
 No pytest: every `test_*` function here takes no arguments, per `tests/run_all.py`.
 
-**Why the module and export assertions name two states.** §1 specifies seven modules
-and eighteen re-exports for the finished package. The `onboard` half (`onboard.py`
-and its five names) is a sibling lane's, landing separately. A test frozen to the
-six-module / thirteen-name state this lane produces would have to be edited when that
-lane merges, and a test frozen to the finished state would fail until it does.
-Asserting membership of exactly those two real states catches both a lane adding
-surface §1 does not specify and a botched merge that lands half a package — while
-never asserting that a sibling's contract-required work is absent
-(`plan-rqa.md` §7, D-B1-3).
+The package is fully assembled. Its module set and `__all__` must equal the final §1
+surface; historical partial-wave states are no longer accepted.
 """
 
 from __future__ import annotations
@@ -28,10 +21,8 @@ import rqa.policy  # noqa: E402
 RQA = pathlib.Path(__file__).resolve().parent.parent / "rqa"
 POLICY = RQA / "policy"
 
-#: §1's module list, split by the lane that builds each module.
-VALIDATION_MODULES = frozenset({"__init__", "schema", "validate", "types", "snapshot", "store"})
-ONBOARD_MODULES = frozenset({"onboard"})
-ALL_MODULES = VALIDATION_MODULES | ONBOARD_MODULES
+#: §1's final module list.
+ALL_MODULES = frozenset({"__init__", "schema", "validate", "types", "snapshot", "store", "onboard"})
 
 #: §1's re-export list, split the same way.
 VALIDATION_EXPORTS = frozenset(
@@ -102,18 +93,17 @@ def _identifiers(source: str) -> set[str]:
     return names
 
 
-def test_the_module_set_is_one_of_the_two_states_section_one_specifies() -> None:
+def test_the_module_set_is_exactly_the_final_state_section_one_specifies() -> None:
     found = frozenset(path.stem for path in POLICY.glob("*.py"))
-    assert found in (VALIDATION_MODULES, ALL_MODULES), (
-        f"rqa/policy holds {sorted(found)}; §1 specifies {sorted(ALL_MODULES)}, of which "
-        f"{sorted(VALIDATION_MODULES)} is the pre-onboard state"
+    assert found == ALL_MODULES, (
+        f"rqa/policy holds {sorted(found)}; §1 specifies {sorted(ALL_MODULES)}"
     )
 
 
-def test_all_is_one_of_the_two_states_section_one_specifies() -> None:
+def test_all_is_exactly_the_final_state_section_one_specifies() -> None:
     exported = list(rqa.policy.__all__)
     assert len(exported) == len(set(exported)), f"duplicate re-export: {exported}"
-    assert frozenset(exported) in (VALIDATION_EXPORTS, ALL_EXPORTS), (
+    assert frozenset(exported) == ALL_EXPORTS, (
         f"__all__ is {sorted(exported)}; §1 specifies {sorted(ALL_EXPORTS)}"
     )
 

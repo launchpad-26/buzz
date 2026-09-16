@@ -169,9 +169,20 @@ def _load_inventory(path: Path) -> list[dict]:
         if not isinstance(mutation, dict):
             raise RunnerError(f"{case_id}.mutation must be an object")
         _relative_path(mutation.get("path"), field=f"{case_id}.mutation.path")
-        for field in ("before", "after"):
-            if not isinstance(mutation.get(field), str) or not mutation[field]:
-                raise RunnerError(f"{case_id}.mutation.{field} must be a non-empty string")
+        delete = mutation.get("delete", False)
+        if not isinstance(delete, bool):
+            raise RunnerError(f"{case_id}.mutation.delete must be a boolean")
+        if delete:
+            if "before" in mutation or "after" in mutation:
+                raise RunnerError(
+                    f"{case_id}.mutation must choose either delete or before/after"
+                )
+        else:
+            for field in ("before", "after"):
+                if not isinstance(mutation.get(field), str) or not mutation[field]:
+                    raise RunnerError(
+                        f"{case_id}.mutation.{field} must be a non-empty string"
+                    )
     return cases
 
 
@@ -182,6 +193,11 @@ def _apply_mutation(skill: Path, case: Mapping[str, object]) -> None:
         raise RunnerError(f"{case_id}.mutation is invalid")
     relative = _relative_path(mutation["path"], field=f"{case_id}.mutation.path")
     target = skill / relative
+    if mutation.get("delete") is True:
+        if not target.is_file():
+            raise RunnerError(f"{case_id}: deletion target is not a file: {relative}")
+        target.unlink()
+        return
     try:
         original = target.read_text(encoding="utf-8")
     except OSError as exc:

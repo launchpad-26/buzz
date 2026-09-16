@@ -230,5 +230,40 @@
         "after": "    publisher = GithubAnchorPublisher(adapter=comp.github, job=job, grant=None)\n    result = anchor_job(comp.connection, job.id, publisher=publisher, clock=comp.clock)\n\n    answer = comp.authority.grant(\n        repo=job.repo,\n        activity=Activity.COMMENT,\n        snapshot=None,\n        job_id=job.id,\n        categories=None,\n        record=comp.record,\n        github=comp.authority.github,\n        store=comp.authority.store,\n    )\n    grant = answer if isinstance(answer, Grant) else None\n    detail = None\n    if isinstance(answer, Deny):\n        # Fail-closed, and say so. The anchor is still recorded locally, which is\n        # what detects a crash-truncated log offline; it simply never leaves the\n        # machine. An advisory-only repository lands here by design.\n        detail = f\"not published: {answer.reason.value if hasattr(answer.reason, 'value') else answer.reason}\""
       }
     }
+,
+    {
+      "id": "B-INV-020",
+      "invariant": "rqa/lifecycle holds exactly P-02 \u00a71's final ten modules; a lost module is a broken package, never an accepted earlier assembly wave.",
+      "source": {"path": "rqa/lifecycle/__init__.py", "line": 5},
+      "test": "tests/test_rqa_assembled_surface.py::test_lifecycle_has_exact_final_module_set",
+      "expected_assertion": "rqa/lifecycle module set is not final",
+      "mutation": {
+        "path": "rqa/lifecycle/steps.py",
+        "delete": true
+      }
+    },
+    {
+      "id": "B-INV-021",
+      "invariant": "rqa/policy holds exactly P-03 \u00a71's final seven modules; the onboard half belongs to the finished package, not to a pending sibling lane.",
+      "source": {"path": "rqa/policy/__init__.py", "line": 5},
+      "test": "tests/test_rqa_assembled_surface.py::test_policy_has_exact_final_module_set",
+      "expected_assertion": "rqa/policy module set is not final",
+      "mutation": {
+        "path": "rqa/policy/onboard.py",
+        "delete": true
+      }
+    },
+    {
+      "id": "B-INV-022",
+      "invariant": "rqa/intake's __all__ is exactly P-01 \u00a71's final re-export list; dropping a published name is a surface break, never an accepted earlier assembly wave.",
+      "source": {"path": "rqa/intake/__init__.py", "line": 60},
+      "test": "tests/test_rqa_intake_surface.py::test_all_is_exactly_the_final_export_state",
+      "expected_assertion": "rqa/intake __all__ is not final",
+      "mutation": {
+        "path": "rqa/intake/__init__.py",
+        "before": "__all__ = [\n    \"tick\",\n",
+        "after": "__all__ = [\n"
+      }
+    }
   ]
 }

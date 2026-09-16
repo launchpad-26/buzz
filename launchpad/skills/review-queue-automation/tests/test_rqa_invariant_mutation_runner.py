@@ -76,6 +76,38 @@ def test_a_mutation_that_breaks_python_syntax_is_an_error() -> None:
         assert target.read_text(encoding="utf-8") == "answer = False\n"
 
 
+def test_a_file_deletion_mutation_is_bounded_to_its_named_target() -> None:
+    with tempfile.TemporaryDirectory() as directory:
+        root = pathlib.Path(directory)
+        target = root / "rqa/example.py"
+        neighbour = root / "rqa/neighbour.py"
+        target.parent.mkdir()
+        target.write_text("answer = False\n", encoding="utf-8")
+        neighbour.write_text("untouched = True\n", encoding="utf-8")
+        deletion = case()
+        deletion["mutation"] = {"path": "rqa/example.py", "delete": True}
+
+        runner._apply_mutation(root, deletion)
+
+        assert not target.exists()
+        assert neighbour.read_text(encoding="utf-8") == "untouched = True\n"
+
+
+def test_inventory_rejects_a_deletion_combined_with_text_replacement() -> None:
+    with tempfile.TemporaryDirectory() as directory:
+        deletion = case()
+        deletion["mutation"]["delete"] = True
+        inventory = {"version": 1, "cases": [deletion]}
+        path = pathlib.Path(directory) / "invariants.json"
+        path.write_text(__import__("json").dumps(inventory), encoding="utf-8")
+        try:
+            runner._load_inventory(path)
+        except runner.RunnerError as error:
+            assert "either delete or before/after" in str(error)
+        else:
+            raise AssertionError("a deletion with replacement anchors was accepted")
+
+
 def test_only_the_expected_invariant_assertion_counts_as_a_kill() -> None:
     examples = [
         (runner.TestResult(0, "1 passed"), "guard caught mutation", "SURVIVED"),

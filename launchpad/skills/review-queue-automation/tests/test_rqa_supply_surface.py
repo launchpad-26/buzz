@@ -4,21 +4,8 @@
 
 No pytest: every `test_*` function here takes no arguments, per `tests/run_all.py`.
 
-**This package lands in two waves and this file is the record of the split.** The routing
-and liveness-probing half (§3.1 `route()`, §4's probe, §5's breaker store) lands first; the
-budget and spend half (§3.2 `reserve()`, §3.3 `consumed()`, `budget.py`, `spend.py`) lands
-next. Every assertion below therefore pins a state the *contract* fixes forever, never the
-state of the tree on the afternoon the first half landed:
-
-* the module set is **exactly one of** the pre-sibling five or §1's full seven — not a
-  subset test, not a superset test, and never "the five I wrote";
-* `__all__` is **exactly one of** the pre-sibling four or §1's full nine re-exports;
-* nothing here asserts that `rqa.supply.budget`/`rqa.supply.spend` cannot be imported or
-  that `reserve`/`consumed`/`Spend` are absent — a sibling's contract-required work is not
-  an invariant to pin as missing;
-* §8's closing `kind="spend"` property is written so that zero hits (this wave) and hits
-  confined to `rqa/supply/spend.py` (after the sibling lands) both pass, while a hit in any
-  other file fails.
+The package is fully assembled. Its module set and `__all__` must equal the final §1
+surface; historical partial-wave states are no longer accepted.
 """
 
 from __future__ import annotations
@@ -38,11 +25,8 @@ from rqa import edges  # noqa: E402
 RQA = pathlib.Path(__file__).resolve().parent.parent / "rqa"
 SUPPLY = RQA / "supply"
 
-#: §1's module list, in full. This package is two lanes' work, so both states are legal —
-#: and nothing in between is.
+#: §1's final module list.
 MODULES_FULL = frozenset({"__init__", "aliases", "ladder", "breakers", "budget", "spend", "probe"})
-#: The routing/probing half alone: §1's list minus the budget half's two modules.
-MODULES_ROUTING = MODULES_FULL - {"budget", "spend"}
 
 #: §1's re-export list, in full.
 EXPORTS_SECTION_ONE = frozenset(
@@ -59,8 +43,6 @@ PUBLISHED_EXPORTS = frozenset(
      "SubprocessHarnessProber", "SubprocessProcessRunner"}
 )
 EXPORTS_FULL = EXPORTS_SECTION_ONE | PUBLISHED_EXPORTS
-#: The routing half's share of it.
-EXPORTS_ROUTING = frozenset({"route", "Route", "RouteCursor", "RouteUnavailable"})
 
 #: §6: the only entry kind P-05 writes, from `consumed()` alone.
 ENTRY_KINDS_WRITTEN = frozenset({"spend"})
@@ -108,38 +90,18 @@ def _declared(source: str) -> set[str]:
 # -- §1: modules and re-exports -------------------------------------------------
 
 
-def test_the_module_set_is_exactly_one_of_the_two_legitimate_states() -> None:
+def test_the_module_set_is_exactly_the_final_state() -> None:
     found = frozenset(path.stem for path in SUPPLY.glob("*.py"))
-    assert found in (MODULES_ROUTING, MODULES_FULL), (
-        "§1 lists "
-        f"{sorted(MODULES_FULL)}; the routing half alone is {sorted(MODULES_ROUTING)}; "
-        f"the package has {sorted(found)}"
+    assert found == MODULES_FULL, (
+        f"§1 lists {sorted(MODULES_FULL)}; the package has {sorted(found)}"
     )
 
 
-def test_all_is_exactly_one_of_the_two_legitimate_re_export_sets() -> None:
+def test_all_is_exactly_the_final_re_export_set() -> None:
     found = frozenset(rqa.supply.__all__)
-    assert found in (EXPORTS_ROUTING, EXPORTS_FULL), (
-        f"§1 re-exports {sorted(EXPORTS_FULL)}; the routing half re-exports "
-        f"{sorted(EXPORTS_ROUTING)}; the package re-exports {sorted(found)}"
+    assert found == EXPORTS_FULL, (
+        f"§1 re-exports {sorted(EXPORTS_FULL)}; the package re-exports {sorted(found)}"
     )
-
-
-def test_the_two_halves_of_the_re_export_list_partition_it() -> None:
-    """The split is a partition, not an overlap: neither lane may claim the other's names,
-    and together they are exactly §1's list."""
-    assert EXPORTS_ROUTING < EXPORTS_SECTION_ONE
-    assert EXPORTS_SECTION_ONE - EXPORTS_ROUTING == frozenset(
-        {"reserve", "consumed", "Reservation", "Refusal", "Spend"}
-    )
-
-
-def test_the_module_set_and_the_re_export_set_describe_the_same_wave() -> None:
-    """A package with the sibling's modules but not its exports — or the reverse — is a
-    partial state, which is exactly what this file exists to fail."""
-    modules = frozenset(path.stem for path in SUPPLY.glob("*.py"))
-    exports = frozenset(rqa.supply.__all__)
-    assert (modules == MODULES_FULL) == (exports == EXPORTS_FULL)
 
 
 def test_every_re_exported_name_actually_resolves() -> None:
