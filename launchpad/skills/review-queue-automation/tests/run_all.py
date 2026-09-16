@@ -15,9 +15,6 @@ Discovery rules:
 * every zero-argument ``test_*`` function *defined in that module* is run;
 * a test function that requires an argument (a pytest fixture) is a hard error —
   this suite is deliberately fixture-free so it can run anywhere Python 3 does.
-
-``scripts/`` is placed on ``sys.path`` before importing so tests can
-``import shadow`` and friends directly.
 """
 
 from __future__ import annotations
@@ -37,11 +34,9 @@ def main(argv: list[str] | None = None) -> int:
         root = pathlib.Path(__file__).resolve().parent.parent
 
     tests = root / "tests"
-    scripts = root / "scripts"
     if not tests.is_dir():
         print(f"no tests directory under {root}")
         return 1
-    sys.path.insert(0, str(scripts))
 
     passed = 0
     failed: list[str] = []
