@@ -12,6 +12,7 @@ import contextlib
 import importlib
 import io
 import json
+import os
 import pathlib
 import sqlite3
 import subprocess
@@ -255,20 +256,97 @@ def test_composition_repr_elides_every_live_collaborator() -> None:
 
 
 def test_onboard_writes_then_refuses_the_second_call() -> None:
+    """`onboard` names a repository the way `tick --repo` does: an `owner/repo`
+    slug resolved against the working directory. The slug must already be a
+    checkout; `onboard` never creates one."""
     with tempfile.TemporaryDirectory() as state, tempfile.TemporaryDirectory() as repos:
         state_dir = pathlib.Path(state)
-        repo = str(pathlib.Path(repos) / "acme" / "widget")
-        pathlib.Path(repo).mkdir(parents=True)
+        pathlib.Path(repos, "acme", "widget").mkdir(parents=True)
+        previous = os.getcwd()
+        os.chdir(repos)
+        try:
+            code, payload = _run(state_dir, "onboard", "acme/widget")
+            assert code == exitcodes.OK
+            assert payload["outcome"] == "written"
+            assert payload["result"]["path"] == "acme/widget/.rqa/config.json"
+            assert pathlib.Path(payload["result"]["path"]).is_file()
 
-        code, payload = _run(state_dir, "onboard", repo)
-        assert code == exitcodes.OK
-        assert payload["outcome"] == "written"
-        assert pathlib.Path(payload["result"]["path"]).is_file()
+            code, payload = _run(state_dir, "onboard", "acme/widget")
+            assert code == exitcodes.INPUT_ERROR
+            assert payload["outcome"] == "refused"
+            assert payload["result"]["reason"] == "already_exists"
+        finally:
+            os.chdir(previous)
 
-        code, payload = _run(state_dir, "onboard", repo)
-        assert code == exitcodes.INPUT_ERROR
-        assert payload["outcome"] == "refused"
-        assert payload["result"]["reason"] == "already_exists"
+
+def test_onboard_and_tick_agree_on_what_a_repository_is() -> None:
+    """The cycle this feature exists to ship: a repository onboarded through
+    `rqa onboard` is admitted by `rqa tick`, because both resolve the identical
+    slug through `policy.snapshot.config_path`.
+
+    Before this was fixed, `onboard` took a checkout path and `tick --repo` took
+    an `owner/repo` slug, so a repository onboarded as `checkouts/widget` was
+    refused at admission as unreadable `acme/widget/.rqa/config.json` — and the
+    refusal's own `onboarding_command` named a form `onboard` then rejected.
+
+    Honest about its own strength: this test passes against the pre-fix code too,
+    because a slug that *is* also a real checkout path always agreed. It is a
+    forward guard on the cycle, not the regression pin. The pin is
+    `test_onboard_refuses_anything_that_is_not_an_existing_slug_checkout`, whose
+    non-slug case fails against the pre-fix contract.
+    """
+    from rqa.intake.admission import _check_admission
+    from rqa.policy import SqliteSnapshotStore
+
+    class _NullRecord:
+        def append(self, *args, **kwargs):
+            del args, kwargs
+
+    with tempfile.TemporaryDirectory() as state, tempfile.TemporaryDirectory() as repos:
+        state_dir = pathlib.Path(state)
+        pathlib.Path(repos, "acme", "widget").mkdir(parents=True)
+        previous = os.getcwd()
+        os.chdir(repos)
+        try:
+            code, _ = _run(state_dir, "onboard", "acme/widget")
+            assert code == exitcodes.OK
+            refusal = _check_admission(
+                "acme/widget",
+                store=SqliteSnapshotStore(state_dir),
+                record=_NullRecord(),
+            )
+            assert refusal is None, f"tick refused a repo rqa onboard just wrote: {refusal}"
+        finally:
+            os.chdir(previous)
+
+
+def test_onboard_refuses_anything_that_is_not_an_existing_slug_checkout() -> None:
+    """Empty, traversal, shell-shaped and non-existent arguments are all usage
+    errors, and none of them creates a directory."""
+    with tempfile.TemporaryDirectory() as state, tempfile.TemporaryDirectory() as repos:
+        state_dir = pathlib.Path(state)
+        previous = os.getcwd()
+        os.chdir(repos)
+        try:
+            for argument in ("", "../../../../tmp/x", "a; rm -rf /tmp/nope", "acme/absent"):
+                code, payload = _run(state_dir, "onboard", argument)
+                assert code == exitcodes.INPUT_ERROR, (argument, code)
+                assert payload["outcome"] == "usage_error", (argument, payload)
+            assert sorted(pathlib.Path(repos).iterdir()) == []
+
+            # The discriminating case: a directory that really exists but is not
+            # an `owner/repo` slug. `tick --repo` cannot name it, so a config
+            # written under it could never be read back — which is precisely the
+            # cycle that used to be impossible to complete.
+            pathlib.Path(repos, "widget").mkdir()
+            code, payload = _run(state_dir, "onboard", "widget")
+            assert code == exitcodes.INPUT_ERROR, (code, payload)
+            assert payload["outcome"] == "usage_error", payload
+            assert not pathlib.Path(repos, "widget", ".rqa").exists(), (
+                "onboard wrote a config under a path `tick --repo` can never name"
+            )
+        finally:
+            os.chdir(previous)
 
 
 def test_status_reports_not_found_for_an_unknown_pr() -> None:

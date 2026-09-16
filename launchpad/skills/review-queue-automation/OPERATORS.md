@@ -31,6 +31,61 @@ reviewed — the same path you pass to `--repo-root`.
 
 ---
 
+## New `rqa` command: how to run it
+
+`rqa` is the replacement operator surface and is **pre-cutover**: the
+`scripts/*` workflow documented in §1-§14 below is still the live one, imports
+nothing from `rqa`, and remains what an operator runs today. The cutover step
+is tracked in `CUTOVER.md` (#2212). The two surfaces are disjoint — a decision
+recorded through `scripts/human_cli.py` is not visible to `rqa decide`, and the
+reverse. Do not mix them for one repository.
+
+Invocation is `python3 -m rqa.cli` from the skill directory, or `rqa` once
+installed:
+
+```bash
+python3 -m rqa.cli [--state-dir DIR] <command>
+```
+
+`--state-dir` defaults to `$RQA_STATE_DIR`, else `~/.local/state/rqa`. It must
+already exist; `rqa` never creates it, so a typo is refused rather than
+answered from a fresh, empty store.
+
+**How `rqa` names a repository.** `onboard`, `tick`, `status` and `explain` all
+take the repository as an `owner/repo` slug, and all of them resolve its config
+to `<owner>/<repo>/.rqa/config.json` **relative to the working directory**. So
+`rqa` is run from the parent of `<owner>`, with checkouts arranged as
+`<cwd>/<owner>/<repo>`:
+
+```
+~/work/                 <- run rqa from here
+  block/
+    buzz/               <- the checkout
+      .rqa/config.json  <- written by `rqa onboard block/buzz`
+```
+
+`onboard` requires that checkout to already exist; it never creates one.
+
+```bash
+cd ~/work
+python3 -m rqa.cli onboard block/buzz          # write a starter .rqa/config.json
+python3 -m rqa.cli tick --repo block/buzz      # one sweep; bare `tick` uses repos.json
+python3 -m rqa.cli pending                     # open escalations awaiting a human
+python3 -m rqa.cli decide 7 --actor <github-login> \
+    --basis "reviewed on GitHub" --outcome changes_requested
+python3 -m rqa.cli status block/buzz 1234      # current disposition and its reason
+python3 -m rqa.cli explain block/buzz 1234     # reconstruct from the record, offline
+python3 -m rqa.cli explain job <job-id>
+```
+
+`decide --actor` is a lookup key against a real GitHub review, not an
+assertion: the decision is admitted only when exactly one submitted review
+matches that actor, outcome and head SHA, and was submitted at or after the
+escalation was raised.
+
+Every command prints one JSON object on stdout. Exit codes are `0` ok,
+`1` input error, `2` network, `3` auth, `4` other.
+
 ## New `rqa` command: supported keychains
 
 The replacement `rqa` command supports macOS Keychain (`security`) and Linux
@@ -570,6 +625,10 @@ Operator commands, documented above:
 | `scripts/history.py` | §8.1 |
 | `scripts/shadow.py` | §8.2 |
 | `scripts/explain.py` | §9 |
+
+The replacement `rqa` command is documented above under "New `rqa` command:
+how to run it". It is pre-cutover and is not part of the `scripts/*` workflow
+this index covers.
 
 **Internal modules that are also executable.** Each of these has a `__main__`
 block used for debugging and by the harness's own tests. They are **not**

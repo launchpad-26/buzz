@@ -131,7 +131,11 @@ def _build_parser() -> _ArgumentParser:
     tick_parser.add_argument("--batch-size", type=_positive_int, default=None)
 
     onboard_parser = sub.add_parser("onboard", help="write a starter .rqa/config.json")
-    onboard_parser.add_argument("repo", help="existing local repository directory; never created by this command")
+    onboard_parser.add_argument(
+        "repo",
+        help="owner/repo slug, which must also be an existing checkout directory at "
+        "that same relative path; never created by this command",
+    )
     onboard_parser.add_argument("--migrate", action="store_true")
 
     status_parser = sub.add_parser("status", help="the current disposition and its reason")
@@ -205,10 +209,28 @@ def _cmd_tick(args: argparse.Namespace, state_dir: Path) -> tuple[int, dict[str,
 
 
 def _cmd_onboard(args: argparse.Namespace) -> tuple[int, dict[str, Any]]:
-    if not args.repo.strip() or not Path(args.repo).is_dir():
-        raise _UsageError("onboard requires an existing local repository directory")
+    # `onboard` and `tick` must name a repository the same way or they cannot
+    # complete one cycle together. Both reach `policy.snapshot.config_path(repo)`,
+    # which is `Path(repo)/.rqa/config.json` — so the config `onboard` writes is
+    # only the config `tick` reads when both are handed the identical string.
+    # `tick --repo` is typed through `_repo_slug`, so `onboard` requires the same
+    # `owner/repo` shape, resolved against the working directory. That pins the
+    # one layout under which the two agree: checkouts arranged as
+    # `<cwd>/<owner>/<repo>`, with `rqa` run from the parent of `<owner>`. It also
+    # makes `AdmissionRefusal.onboarding_command` (`rqa onboard <slug>`, built at
+    # `rqa/intake/admission.py:32`) a command that actually runs.
+    #
+    # The `is_dir()` guard stays: the slug must name a checkout that already
+    # exists, so a typo or a slug for an unfetched repository is refused rather
+    # than fabricating a phantom `.rqa/` tree.
+    repo = _repo_slug(args.repo)
+    if not Path(repo).is_dir():
+        raise _UsageError(
+            f"onboard requires an existing checkout at {repo!r}, relative to the "
+            "directory rqa is run from; it never creates one"
+        )
     OSKeyStore().read("rqa-record-hmac")
-    result = policy_onboard(repo=args.repo, migrate=args.migrate)
+    result = policy_onboard(repo=repo, migrate=args.migrate)
     if isinstance(result, OnboardRefusal):
         return exitcodes.INPUT_ERROR, {"outcome": "refused", "result": result}
     return exitcodes.OK, {"outcome": "written", "result": result}
