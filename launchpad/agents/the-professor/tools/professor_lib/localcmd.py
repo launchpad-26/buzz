@@ -1145,6 +1145,29 @@ def _line_number(content: str, offset: int) -> int:
     return content.count("\n", 0, offset) + 1
 
 
+def _line_relative_span(content: str, span: tuple[int, int]) -> tuple[int, int]:
+    """Converts a document-wide `(start, end)` span into offsets relative to
+    the start of the line `start` falls on.
+
+    The units are pinned by `skills/screen-sensitive/SKILL.md`: line-relative,
+    measured in Unicode characters, zero-based, end-exclusive. `content` is a
+    `str`, so Python's own indices are already Unicode characters rather than
+    bytes, and `_roster_names_matches` already yields half-open spans -- the
+    conversion is arithmetic on what exists, not a change to detection.
+
+    Both offsets are measured from the line containing `start`, so a span that
+    crosses a newline still resolves to one unambiguous coordinate pair rather
+    than silently re-basing halfway through.
+
+    These are coordinates, not content. That is precisely why they are safe to
+    emit on a finding whose `match` must stay `null`: they say *where* a
+    candidate is so two candidates on one line can be told apart, without
+    reproducing *what* it says.
+    """
+    line_start = content.rfind("\n", 0, span[0]) + 1
+    return span[0] - line_start, span[1] - line_start
+
+
 def _screen_finding(content: str, category: str, disposition: str, match) -> dict:
     """Builds one screen-content finding dict. `match` is the re.Match whose
     span the finding is about.
@@ -1314,35 +1337,55 @@ def screen_content(file_path: str, pack_root: str, target: str | None = None) ->
         findings.append(_screen_finding(content, "physical-address", "redact", match))
 
     for _, name_span in _roster_names_matches(content):
+        col_start, col_end = _line_relative_span(content, name_span)
         findings.append(
             {
                 "category": "roster-names",
-                # INTERIM disposition, issue #2110: `redact`, not
-                # `not-evaluated`. `screen-sensitive/SKILL.md` §2 defines
-                # consumer actions for pass/redact/block only, so a caller
-                # following that procedure literally has nothing to do with a
-                # `not-evaluated` finding and can drop it on the floor -- the
-                # same fail-open shape already closed for
-                # target-ruleset-override. Until Phase 1b
-                # (#2131) adds the $PROFESSOR_VERIFIER_CMD dispatch that can
-                # tell ATTRIBUTION from ROSTER_DATA, every candidate takes the
-                # disposition the ruleset itself assigns an undecided one:
-                # sensitive-patterns.md lists this category under Redact, and
-                # SKILL.md's own AMBIGUOUS verdict resolves to `redact` for
-                # exactly this "when in doubt, the safer disposition" reason.
-                # Over-redacting an attribution name is recoverable; silently
-                # publishing an access-control roster is not.
+                # `redact` is the floor, and it is deliberately NOT replaced by
+                # a neutral "needs dispatch" disposition (decided 2026-09-15).
+                # This finding has two kinds of consumer and they need
+                # different things. A session following
+                # `screen-sensitive/SKILL.md` reads `requires_dispatch`, runs
+                # the $PROFESSOR_VERIFIER_CMD role dispatch, and drops the
+                # candidate only on a clean ATTRIBUTION verdict for that exact
+                # offset pair. Anything reading this JSON directly -- CI, a
+                # script, the scheduled workflow -- never dispatches at all,
+                # and for it the disposition must still be an action
+                # `screen-sensitive/SKILL.md` §2 actually defines. A
+                # disposition with no defined consumer action is the fail-open
+                # shape issue #2110 closed; keeping `redact` here is what stops
+                # it reopening one layer up.
                 "disposition": "redact",
-                "location": {"line": _line_number(content, name_span[0])},
+                # Line plus line-relative column offsets. The line number alone
+                # cannot tell two candidates on one line apart, so an
+                # ATTRIBUTION verdict earned by a contributor's name could be
+                # applied to the access-control entry beside it -- silently
+                # unprotecting the roster, on the one category that exists to
+                # prevent exactly that. `match` stays `null`: the offsets are
+                # coordinates, echoing the matched name back would not be.
+                "location": {
+                    "line": _line_number(content, name_span[0]),
+                    "col_start": col_start,
+                    "col_end": col_end,
+                },
                 "match": None,
                 "replacement": "[REDACTED: roster-names]",
+                # The flag, not the category name, is what
+                # `screen-sensitive/SKILL.md` dispatches on -- so a consumer
+                # matching on category strings cannot drift away from what the
+                # script actually marks.
+                "requires_dispatch": True,
                 "message": (
                     "structurally matches the roster/access-control-names "
-                    "category. Distinguishing attribution from access-control "
-                    "data needs $PROFESSOR_VERIFIER_CMD model dispatch "
-                    "(Phase 1b, #2131, not yet built); until it exists every "
-                    "candidate is redacted rather than left for the caller to "
-                    "interpret."
+                    "category. Whether this name is attribution or "
+                    "access-control data is a question about its role in the "
+                    "sentence, which pattern matching cannot answer: resolve "
+                    "it by running the $PROFESSOR_VERIFIER_CMD role dispatch "
+                    "in skills/screen-sensitive/SKILL.md against this "
+                    "finding's line and column offsets. Only a dispatch that "
+                    "completed and parsed cleanly and returned ATTRIBUTION "
+                    "for this exact candidate removes the redaction; every "
+                    "other outcome, including no dispatch at all, keeps it."
                 ),
             }
         )

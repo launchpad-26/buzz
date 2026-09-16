@@ -136,9 +136,9 @@ update to after publication would hand the gate a page whose marker still descri
 stale sources, which `check-page` should treat as a defect and couldn't, since
 nothing would have flagged it yet.
 
-Both gates below need the complete page (with the section rewritten, marker
+All three gates below need the complete page (with the section rewritten, marker
 included) as a file argument, so write the whole page to a scratch path first, never
-straight over the real file. The scratch copy is discarded once both gates have run;
+straight over the real file. The scratch copy is discarded once all three have run;
 only a clean pass writes back to the real path.
 
 ## 5. Run the contract gate
@@ -150,19 +150,88 @@ whole page**, not just the rewritten section — a section-scoped edit can still
 a page-level contract rule (e.g. a citation the edit removed was the only one backing
 a claim elsewhere). Fix every finding (in the scratch copy) before moving on.
 
-## 6. Hand off
+## 6. Hand off to the sensitivity gate
 
 Same as `draft-page` §8: the scratch copy goes to `screen-sensitive`, only after step
 5 is clean (a stale section being refreshed can just as easily pick up something
 sensitive from the new source as a freshly drafted one can — this gate is not only
-for first drafts). Only a `pass`/`redact` result overwrites the real file; a `block`
-leaves the real file untouched and discards the scratch copy. Once the real file is
+for first drafts). A `block` leaves the real file untouched and discards the scratch
+copy.
+
+**A `pass` or `redact` does not overwrite the real file.** It authorizes step 7.
+
+## 7. Run the claim gate — `verify-claims`, the third and last
+
+Only after step 6 returns `pass` or `redact`, hand the scratch copy to `verify-claims`.
+Third gate, always after `check-page` and `screen-sensitive`, never in parallel with
+either — cheapest and most deterministic first, the per-claim model call last.
+
+**Scope, and it is deliberately not `check-page`'s scope — decided while building, see
+the note below.** Two different passes over the same scratch copy:
+
+- **The `UNSOURCED` check runs over the WHOLE page.** It needs no dispatch and therefore
+  costs nothing per claim, and a section-scoped edit can genuinely strip the only citation
+  backing a claim somewhere else — the same cross-section failure step 5 already scopes
+  page-wide for. Running it page-wide closes that at no cost.
+- **The per-claim dispatch covers only the claims in the rewritten section.** A claim in
+  an untouched section is checked against an untouched citation; rewriting a different
+  section cannot change whether that citation supports it. Its verdict was earned when the
+  section was written or last updated, and a citation that has since gone stale is
+  `scan-repo`'s job to detect, not this gate's to re-litigate on every unrelated edit.
+
+**Any verdict other than `SUPPORTED`, from either pass, stops the write entirely** — and
+so does a dispatch that produced no verdict at all. No partial-write path, no
+write-the-clean-sections-only path; the same disposition `screen-sensitive`'s `block`
+has. Report a blocked result in `screen-sensitive`'s finding shape — which claim, which
+verdict, the reason, the citation checked (or that none existed).
+
+**A rewritten section containing zero behaviour claims still runs this gate**, records
+that it found none, and passes through. It never skips, and never invents a claim to have
+something to verify.
+
+This pass is **advisory** — it exists so findings can be fixed before step 8.
+
+> **Decided while building STEP 5, 2026-09-15 — needs confirming.** Neither #2138 nor the
+> plan says whether this gate inherits step 5's whole-page scope. Dispatching every claim
+> on the page for a one-section edit would multiply the cost of every update by the page's
+> total claim count, doubled again by the run-twice rule, for claims nothing in the edit
+> could have invalidated. The split above was chosen because it is not a weakening: the
+> free half runs page-wide, and the paid half runs exactly where the content changed. The
+> alternative — dispatch page-wide — is strictly more expensive with no failure mode
+> identified that it catches and this does not.
+
+## 8. The final independent pass — all three gates, in order, against the finished page
+
+**Decided 2026-09-04, by Serina: every gate runs twice.** Immediately before the real file
+is overwritten, re-run `check-page`, then `screen-sensitive`, then `verify-claims` — the
+whole sequence, in that order, against the finished scratch copy, from scratch. Step 7's
+scope split applies to this pass too.
+
+The first pass through steps 5–7 is advisory; **this one is the gate of record.**
+"Unskippable" above is a prompt instruction, not proof it happened, and not proof the
+content those gates saw is the content about to overwrite the real file.
+
+**All three, not just `verify-claims`.** A fix made in response to step 7's findings edits
+the scratch copy *after* `check-page` and `screen-sensitive` ran, leaving both holding
+verdicts about a page that no longer exists — so a repair could break a citation or pick
+up something sensitive after screening and still overwrite the real file.
+
+**Any edit after this sequence invalidates it** and requires the whole sequence again from
+`check-page`. There is no "one more small fix" after the final pass.
+
+`verify-claims` §4a governs how its second pass is told from a replay of the first.
+
+Only when all three come back clean does the scratch copy overwrite the real file.
+
+## 9. After the write: the ledger
+
+Once the real file is
 updated (marker already correct, from step 4), `provenance-log` in `write` mode
 **appends** one new line for *only* this section — passing step 3's full `sources`
 (`commit_author`/`commit_at`/`pr` included, not just the new commit) — every other
 section's provenance on the page stays exactly as it was; an update to one section is
 not licence to append a line for every other section too, as if everything on the
-page just changed. Same retry-safety note as `draft-page` §8: the file write and this
+page just changed. Same retry-safety note as `draft-page` §11: the file write and this
 append are not one atomic operation, but appending is safe to retry (a duplicate line
 is cheap to detect and ignore; a lost one is not), so an interruption between the two
 is a recoverable state, not a corrupted one.
@@ -180,10 +249,19 @@ is a recoverable state, not a corrupted one.
       combined `git log -1` call (target-repo case) or `resolve-pin` +
       `path-exists-at` (external-citation case — both, not just the pin), never
       memory, and never just the bare commit with the other three left out
-- [ ] The whole page was written to a scratch copy before either gate ran
+- [ ] The whole page was written to a scratch copy before any gate ran
 - [ ] The contract gate resolved a target override before falling back to the bundled
       subcommand, and reported no findings against the scratch copy of the whole page
       before `screen-sensitive` ever saw it
-- [ ] `screen-sensitive` ran against the scratch copy before the real file was
-      overwritten
+- [ ] `screen-sensitive` ran against the scratch copy and returned `pass` or `redact`
+      — and that result authorized step 7, not the overwrite
+- [ ] `verify-claims` ran as the third gate, after both others and never beside them,
+      with its `UNSOURCED` check over the whole page and its per-claim dispatch over
+      the rewritten section; every verdict came back `SUPPORTED` or the write stopped
+      entirely — no partial-write path
+- [ ] Step 8 ran all three gates again, in order, against the finished scratch copy
+      immediately before the overwrite — not `verify-claims` alone, because a fix made
+      after steps 5–6 leaves those two holding verdicts about a page that changed
+- [ ] Nothing was edited after step 8's sequence; if anything was, the whole sequence
+      ran again from `check-page`
 - [ ] `provenance-log` updated only this section's entry, not the whole page's
