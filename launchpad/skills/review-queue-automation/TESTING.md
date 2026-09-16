@@ -24,9 +24,10 @@ it is labelled a counterfactual everywhere it appears and contributes to no verd
 |---|---|---|
 | **Part 1 — lifecycle** (this part, §1–§9) | The end-to-end lifecycle proof: two independently configured repositories, one public and one private, one local operator process; disposition, reconstruction, policy differentiation, provider identification, component inventory. Task #2215. | Task #2215 |
 | **Part 2 — decided ADR paths and the credential floor** | Appended below Part 1, unchanged above this line. Task #2216. | Task #2216 |
+| **Part 3 — completion run** | Appended live proof after the blockers found in Part 1 were corrected: authoritative reviews, policy differentiation, two local routes, public/private organisations, and merge/no-merge behavior. Task #2215. | Task #2215 |
 
-Part 2 conforms to the re-run contract defined in [§3](#3-the-re-run-contract). It does
-not edit Part 1.
+Parts 2 and 3 conform to the re-run contract defined in [§3](#3-the-re-run-contract).
+They do not rewrite Part 1; later evidence annotates or supersedes its conclusions.
 
 ---
 
@@ -60,6 +61,11 @@ sqlite3 (stdlib) library version 3.53.4
 | State directory | `/tmp/rqa-2215/proof/state` — a scratch directory, not `~/.local/state/rqa` |
 | Host clock during the run | `2026-09-14` UTC. Every `raised_at` / `activated_at` below is host-clock. |
 | **Was the record keyed?** | **No.** All 55 record rows have `keyed=0` and `hmac=NULL`. See [§7.2](#72-2272-the-record-was-appended-but-not-keyed). |
+
+> **Superseded by ADR-0066 / #2299 for any run after 2026-09-16.** The macOS dependency
+> described below no longer exists: the key, `keychain.py` and the `sys.platform` branch
+> are all removed, and a reader reproducing Part 1 on Linux or Windows now gets exactly
+> as far as one on macOS. The paragraph is kept as the record of what the #2189 run saw.
 
 **On macOS specifically.** This run could happen at all *because* it ran on macOS.
 `rqa/record/keychain.py:89-92` branches on `sys.platform`; on any other platform the
@@ -1262,6 +1268,12 @@ validated only against `REVIEW` leaves five ungrantable.
 
 ### F-3 — `keychain.py` promises an unkeyed append that `writer.py` refuses to make
 
+> **RESOLVED by ADR-0066 / #2299.** The contradiction below is gone because both sides
+> of it are gone: `rqa/record/keychain.py` is deleted and `append` no longer has a
+> credential-store branch at all. Every append is unkeyed on every platform, so there is
+> no message promising a recovery and no caller refusing it. The observation is kept
+> verbatim as the record of what the #2189 conformance run actually saw.
+
 **Owning behaviour:** the record part (P-12), `rqa/record/keychain.py` and
 `rqa/record/writer.py`. **Carry onto #2272** if not already there, rather than filing
 separately: it is the same defect seen from inside.
@@ -1334,3 +1346,364 @@ the two (or both) AC17 demands is the owning Feature's reading to make.
 ---
 
 <!-- Part 2 (Task #2216) appends below this line. Do not edit above it. -->
+
+---
+
+# Part 3 — completion run after the Part 1 blockers were corrected
+
+Part 1 is preserved as the record of the system before its findings were corrected.
+This addendum records the first composed run that crossed the authority gate, invoked
+reviewers, submitted authoritative GitHub reviews, and exercised both merge settings.
+
+## 11. Run identity and prerequisites
+
+Every command in this part ran from `/private/tmp/rqa-2215-final/repos` on one local
+operator machine. RQA itself ran in process; there was no hosted RQA service.
+
+```text
+$ git -C /private/tmp/rqa-conformance-final rev-parse 879696b58
+879696b583268e6a0c47d8e3655b4f50c913290c
+$ uname -a
+Darwin Jeffs-MacBook-Pro.local 24.6.0 Darwin Kernel Version 24.6.0: Tue Apr 21 20:17:54 PDT 2026; root:xnu-11417.140.69.710.16~1/RELEASE_X86_64 x86_64
+$ sw_vers
+ProductName:		macOS
+ProductVersion:		15.7.7
+BuildVersion:		24G720
+$ python3 -V
+Python 3.14.6
+$ gh --version | head -1
+gh version 2.100.0 (2026-09-03)
+$ git --version
+git version 2.52.0
+```
+
+The run needs Python 3.11+, an authenticated `gh`, controlled test pull requests,
+the checked-out RQA source, and the repository-local configs shown below. The two
+review routes are external-command adapters that run
+`tests/test_rqa_conformance_harness_command.py`; they use only Python's standard
+library. RQA and the harness are Apache-2.0 under the repository `LICENSE`. GitHub
+remains the reviewed host; it is not an RQA hosting service.
+
+The exact environment was:
+
+```bash
+export PYTHONPATH=/private/tmp/rqa-conformance-final/launchpad/skills/review-queue-automation
+export RQA_STATE_DIR=<the state directory named with each capture>
+cd /private/tmp/rqa-2215-final/repos
+python3 -m rqa.cli tick --repo <owner/repository> --batch-size 1
+```
+
+| Repository | Owner boundary | Visibility | Head | Role |
+|---|---|---|---|---|
+| `launchpad-26/solo-repo-template#3` | `launchpad-26` organisation | PRIVATE | `49698900d8d24cba6e5eb6ca25b7a292307e45bb` | same-diff policy differentiation; merge disabled |
+| `tucktuck101/collaboration-repo-template#3` | `tucktuck101` user | PUBLIC | `50ea9c46dcf4c52fab742821b4fa4d931c8e5260` | two free/local reviewer routes; merge disabled |
+| `tucktuck101/agent-trust-platform#107` | `tucktuck101` user | PRIVATE | `efa61025874f1ce4bb0a693bef3108eaa5de3565` | two free/local reviewer routes; merge enabled |
+
+This supplies two genuinely different owners, both visibilities, and one operator
+process. Temporary assignment was the lease; every final GitHub observation below
+shows an empty assignee list.
+
+## 12. AC02 — the same diff under two blocking policies
+
+The two configs have identical policy versions, routes, obligations, authority, and
+budgets. This is their complete diff:
+
+```diff
+--- private-block.json
++++ private-allow-blocking-only.json
+@@ -24,9 +24,7 @@
+       "standard": 2
+     },
+     "blocking": {
+-      "categories": [
+-        "procedural"
+-      ],
++      "categories": [],
+       "corroboration": 2,
+       "severities": []
+     },
+```
+
+The blocking run used
+`RQA_STATE_DIR=/private/tmp/rqa-2215-final/state-private-block-fixed`:
+
+```text
+$ python3 -m rqa.cli tick --repo launchpad-26/solo-repo-template --batch-size 1
+{
+  "command": "tick",
+  "outcome": "swept",
+  "result": {
+    "jobs_created": [
+      "c01a2585ab9608d55b4ac628c6d1d39ed8e12cececb469b422579526810bab78",
+      "0ec215708b9857f24739fbd39473b702b24ad445ce6f7773e658cbe4616330dd",
+      "0838ca605abcb95355aeb9eb7f4c93f4e9e6c9cb844e891a8fcba296973ee1b4"
+    ],
+    "jobs_dispatched": [
+      "c01a2585ab9608d55b4ac628c6d1d39ed8e12cececb469b422579526810bab78"
+    ],
+    "jobs_failed": [],
+    "outcome": "swept",
+    "repos_admitted": ["launchpad-26/solo-repo-template"],
+    "repos_failed": [],
+    "repos_refused": [],
+    "revisited_resting_jobs": []
+  }
+}
+$ python3 -m rqa.cli status launchpad-26/solo-repo-template 3
+{
+  "command": "status",
+  "outcome": "ok",
+  "result": {
+    "disposition": "blocked",
+    "internal_state": "changes_requested",
+    "job_id": "c01a2585ab9608d55b4ac628c6d1d39ed8e12cececb469b422579526810bab78",
+    "reason": "review submitted: request_changes"
+  }
+}
+```
+
+The next review used the edited config directly, with no build, install, restart, or
+deployment, and a fresh
+`RQA_STATE_DIR=/private/tmp/rqa-2215-final/state-private-allow-blocking-only`:
+
+```text
+$ python3 -m rqa.cli tick --repo launchpad-26/solo-repo-template --batch-size 1
+{
+  "command": "tick",
+  "outcome": "swept",
+  "result": {
+    "jobs_created": [
+      "c01a2585ab9608d55b4ac628c6d1d39ed8e12cececb469b422579526810bab78",
+      "0ec215708b9857f24739fbd39473b702b24ad445ce6f7773e658cbe4616330dd",
+      "0838ca605abcb95355aeb9eb7f4c93f4e9e6c9cb844e891a8fcba296973ee1b4"
+    ],
+    "jobs_dispatched": [
+      "c01a2585ab9608d55b4ac628c6d1d39ed8e12cececb469b422579526810bab78"
+    ],
+    "jobs_failed": [],
+    "outcome": "swept",
+    "repos_admitted": ["launchpad-26/solo-repo-template"],
+    "repos_failed": [],
+    "repos_refused": [],
+    "revisited_resting_jobs": []
+  }
+}
+$ python3 -m rqa.cli status launchpad-26/solo-repo-template 3
+{
+  "command": "status",
+  "outcome": "ok",
+  "result": {
+    "disposition": "review-complete",
+    "internal_state": "approved",
+    "job_id": "c01a2585ab9608d55b4ac628c6d1d39ed8e12cececb469b422579526810bab78",
+    "reason": "review submitted: approve"
+  }
+}
+```
+
+The same job id and revision produced different authoritative outcomes because only
+the blocking category changed. Both routes reported the same procedural finding; it
+was blocking in the first judgement and non-blocking in the second.
+
+## 13. AC01, AC06, AC08 and AC14 — two routes and offline reconstruction
+
+The public run used
+`RQA_STATE_DIR=/private/tmp/rqa-2215-final/state-public-local` and required two
+participants:
+
+```text
+$ python3 -m rqa.cli tick --repo tucktuck101/collaboration-repo-template --batch-size 1
+{
+  "command": "tick",
+  "outcome": "swept",
+  "result": {
+    "jobs_created": [
+      "64f94555cc454b4119d45fa0a49448e8a6f376fa24b018a44fd3d0413fbd3e50",
+      "d07db1826c96af66b78bc21f16b5e7accb70db91267d0ae00cc86a8ba3388ea9",
+      "986375f452efe9a804a4928b28ebfc7c858128d9cd3050b0b60560db6a4f79b0"
+    ],
+    "jobs_dispatched": [
+      "64f94555cc454b4119d45fa0a49448e8a6f376fa24b018a44fd3d0413fbd3e50"
+    ],
+    "jobs_failed": [],
+    "outcome": "swept",
+    "repos_admitted": ["tucktuck101/collaboration-repo-template"],
+    "repos_failed": [],
+    "repos_refused": [],
+    "revisited_resting_jobs": []
+  }
+}
+$ python3 -m rqa.cli status tucktuck101/collaboration-repo-template 3
+{
+  "command": "status",
+  "outcome": "ok",
+  "result": {
+    "disposition": "review-complete",
+    "internal_state": "approved",
+    "job_id": "64f94555cc454b4119d45fa0a49448e8a6f376fa24b018a44fd3d0413fbd3e50",
+    "reason": "review submitted: approve"
+  }
+}
+$ python3 -m rqa.cli explain job 64f94555cc454b4119d45fa0a49448e8a6f376fa24b018a44fd3d0413fbd3e50
+{
+  "command": "explain",
+  "outcome": "ok",
+  "result": {
+    "decision_basis": "# Judgement\\u000a\\u000a## Obligations\\u000a- `O1`: verified\\u000a\\u000a## Findings\\u000a- `RQA-CONFORMANCE-MARKER` [non-blocking] categories=procedural provenance=`attempt=64f94555cc454b4119d45fa0a49448e8a6f376fa24b018a44fd3d0413fbd3e50:03` evidence=`The diff updates a GitHub workflow action or carries the explicit conformance marker.`\\u000a- `RQA-CONFORMANCE-MARKER` [non-blocking] categories=procedural provenance=`attempt=64f94555cc454b4119d45fa0a49448e8a6f376fa24b018a44fd3d0413fbd3e50:06` evidence=`The diff updates a GitHub workflow action or carries the explicit conformance marker.`\\u000a\\u000a## Inherited check attribution\\u000a- `Repository check`\\u000a\\u000a## Assurance\\u000a- required=2 achieved=2\\u000a\\u000a## Reused from\\u000a- (none)",
+    "disposition": "review-complete",
+    "escalation_subjects": [],
+    "evidence": {"O1": "verified"},
+    "findings": [
+      {"behaviour_changing": false, "blocking": false, "categories": ["procedural"], "corroborated": true, "evidence": "The diff updates a GitHub workflow action or carries the explicit conformance marker.", "extra_tags": ["conformance"], "id": "RQA-CONFORMANCE-MARKER", "location": {"line": 1, "path": "RQA-CONFORMANCE.md"}, "remedy": null, "severity": "low", "source_attempt": "64f94555cc454b4119d45fa0a49448e8a6f376fa24b018a44fd3d0413fbd3e50:03"},
+      {"behaviour_changing": false, "blocking": false, "categories": ["procedural"], "corroborated": true, "evidence": "The diff updates a GitHub workflow action or carries the explicit conformance marker.", "extra_tags": ["conformance"], "id": "RQA-CONFORMANCE-MARKER", "location": {"line": 1, "path": "RQA-CONFORMANCE.md"}, "remedy": null, "severity": "low", "source_attempt": "64f94555cc454b4119d45fa0a49448e8a6f376fa24b018a44fd3d0413fbd3e50:06"}
+    ],
+    "harness": ["rqa-foss-a", "rqa-foss-b"],
+    "hmac_checked": false,
+    "job_id": "64f94555cc454b4119d45fa0a49448e8a6f376fa24b018a44fd3d0413fbd3e50",
+    "legacy": false,
+    "model": ["deterministic-1", "deterministic-2"],
+    "number": 3,
+    "policy_version": "conformance-public-local",
+    "pr_revision": "50ea9c46dcf4c52fab742821b4fa4d931c8e5260",
+    "protocol_hash": "82cce34d9446fc7d766f040e597492df5fc4fa89e257eb11d234460a35008598",
+    "provider": ["local-python-a", "local-python-b"],
+    "repo": "tucktuck101/collaboration-repo-template",
+    "reviewer_identity": ["rqa-foss-a", "rqa-foss-b"],
+    "reviewer_type": "ai",
+    "snapshot_hash": "8f9e0c03dc36e1000548532b77c5910e3f7095b1db2785d7ede87cf58915400a",
+    "truncated_at": null,
+    "unverifiable": [{"first_seq": 1, "job_id": "64f94555cc454b4119d45fa0a49448e8a6f376fa24b018a44fd3d0413fbd3e50", "last_seq": 26, "reason": "no key"}],
+    "verified": false
+  }
+}
+```
+
+The two attested attempts carry the same obligation and finding concepts while naming
+different harnesses, models, providers, families, and attempt ids. The `hmac_checked`
+and `unverifiable` fields record the implementation at commit `879696b58`; ADR-0066
+and #2299 remove those obsolete fields for later runs rather than changing this output.
+
+## 14. Merge disabled and merge enabled
+
+The successful public and private-policy runs above had `authority.merge=false` and
+remained open. The otherwise successful merge case used
+`RQA_STATE_DIR=/private/tmp/rqa-2215-final/state-merge` with
+`authority.merge=true`:
+
+```text
+$ python3 -m rqa.cli tick --repo tucktuck101/agent-trust-platform --batch-size 1
+{
+  "command": "tick",
+  "outcome": "swept",
+  "result": {
+    "jobs_created": [
+      "6b4f93aeb1ca1b5ba919236e2e21fe821f295bdbf5348c72889284c3938b8ff8",
+      "61e931c37f810d4d8b1c05ca48eefe5127e42733170645cc76b8d9087d53d271"
+    ],
+    "jobs_dispatched": [
+      "6b4f93aeb1ca1b5ba919236e2e21fe821f295bdbf5348c72889284c3938b8ff8"
+    ],
+    "jobs_failed": [],
+    "outcome": "swept",
+    "repos_admitted": ["tucktuck101/agent-trust-platform"],
+    "repos_failed": [],
+    "repos_refused": [],
+    "revisited_resting_jobs": []
+  }
+}
+$ python3 -m rqa.cli status tucktuck101/agent-trust-platform 107
+{
+  "command": "status",
+  "outcome": "ok",
+  "result": {
+    "disposition": "review-complete",
+    "internal_state": "merged",
+    "job_id": "6b4f93aeb1ca1b5ba919236e2e21fe821f295bdbf5348c72889284c3938b8ff8",
+    "reason": "merged under merge grant"
+  }
+}
+```
+
+The trace captures the two routes followed by the separately gated review and merge
+mutations, then lease release:
+
+```json
+{"at":"2026-09-16T03:05:01.918144+00:00","event":"route_selection","job":"6b4f93aeb1ca1b5ba919236e2e21fe821f295bdbf5348c72889284c3938b8ff8","routes":[{"family":"local-a","harness":"rqa-foss-a","model":"deterministic-1","provider":"local-python-a"},{"family":"local-b","harness":"rqa-foss-b","model":"deterministic-2","provider":"local-python-b"}],"truncated":false,"unrouted":false}
+{"at":"2026-09-16T03:05:02.115191+00:00","event":"mutation","job":"6b4f93aeb1ca1b5ba919236e2e21fe821f295bdbf5348c72889284c3938b8ff8","kind":"submit_review","state":"APPROVE"}
+{"at":"2026-09-16T03:05:05.178779+00:00","event":"mutation","job":"6b4f93aeb1ca1b5ba919236e2e21fe821f295bdbf5348c72889284c3938b8ff8","kind":"merge"}
+{"at":"2026-09-16T03:05:11.727013+00:00","event":"lease_released","job":"6b4f93aeb1ca1b5ba919236e2e21fe821f295bdbf5348c72889284c3938b8ff8","mutation_id":"c07031d5f2b735b0ee06b9a26f88a25192f0e7a6d939eac6dd0e568dd2ea4c3c"}
+```
+
+Final GitHub observations, captured after all runs:
+
+```text
+{"assignees":[],"headRefOid":"49698900d8d24cba6e5eb6ca25b7a292307e45bb","mergedAt":null,"repo":"launchpad-26/solo-repo-template","review_states":["CHANGES_REQUESTED","APPROVED","APPROVED"],"state":"OPEN","visibility":"PRIVATE"}
+{"assignees":[],"headRefOid":"50ea9c46dcf4c52fab742821b4fa4d931c8e5260","mergedAt":null,"repo":"tucktuck101/collaboration-repo-template","review_states":["APPROVED","APPROVED"],"state":"OPEN","visibility":"PUBLIC"}
+{"assignees":[],"headRefOid":"efa61025874f1ce4bb0a693bef3108eaa5de3565","mergeCommit":"94fbc14b69e71edb1c3e75211f0456093f34587a","mergedAt":"2026-09-16T03:05:07Z","repo":"tucktuck101/agent-trust-platform","review_states":["APPROVED"],"state":"MERGED","visibility":"PRIVATE"}
+```
+
+## 15. Optional external provider enable/remove boundary
+
+The configured-provider and removed-provider snapshots validate against the same
+protocol. This command constructs snapshots only; it does not build a review bundle,
+invoke a harness, or send repository content:
+
+```text
+$ PYTHONPATH=/private/tmp/rqa-conformance-final/launchpad/skills/review-queue-automation python3 -c 'import json,pathlib; from rqa.policy.snapshot import digest_of,snapshot_from_unverified_config; from rqa.protocol import protocol_hash; p=protocol_hash();
+for label,path in (("provider-enabled","/private/tmp/rqa-2215-final/configs/public-external-configured.json"),("provider-removed","/private/tmp/rqa-2215-final/configs/public-external-removed.json")):
+ raw=json.loads(pathlib.Path(path).read_text()); snap=snapshot_from_unverified_config(raw=raw,digest=digest_of(raw),repo="tucktuck101/collaboration-repo-template",protocol=p); print(label,"snapshot="+snap.hash,"protocol="+snap.protocol_hash,"external_allowed="+str(snap.external.allowed),"routes="+repr([(r.provider,r.external) for r in snap.routes]))'
+provider-enabled snapshot=aa867bcc77d11e8ea8e668d610f902dcde340d04661f620eec26a2e68e575c59 protocol=82cce34d9446fc7d766f040e597492df5fc4fa89e257eb11d234460a35008598 external_allowed=True routes=[('local-python-a', False), ('openai', True)]
+provider-removed snapshot=dcd7a495e7ac45394399ecf80353e8fa97d3e1f8612b853dd6d1e829e316760b protocol=82cce34d9446fc7d766f040e597492df5fc4fa89e257eb11d234460a35008598 external_allowed=False routes=[('local-python-a', False)]
+```
+
+After removal, the `state-public-external-removed` run completed and posted approval
+with `O1=verified`, policy `conformance-public-external-removed`, provider
+`local-python-a`, and protocol
+`82cce34d9446fc7d766f040e597492df5fc4fa89e257eb11d234460a35008598`.
+The full two-route free/open-source run in §13 then produced the same obligation and
+finding semantics under that protocol.
+
+No OpenAI tick was required or executed. AC17 makes an external provider optional: the
+configured snapshot identifies the provider path before any possible send, while the
+removed snapshot proves that the same protocol remains active without it. The
+removed-provider run and the two-route free/open-source run then complete reviews with
+the same `O1=verified` concept semantics. This demonstrates provider removal without
+sending repository content to the optional provider.
+
+## 16. Completion matrix for Task #2215
+
+| Criterion | Result | Direct evidence |
+|---|---|---|
+| Public repository in one owner and private repository in another; one local operator; no hosted RQA | Demonstrated | §11, §12, §13 |
+| End-to-end authoritative outcome plus `status` and offline `explain` | Demonstrated | §12, §13 |
+| Same diff, blocking-only policy edit, different blocking outcome, no redeploy | Demonstrated | §12 |
+| Same PR through two harness/model/provider routes with the same concepts | Demonstrated | §13 |
+| Complete review using only free/open-source components and standard library | Demonstrated | §11, §13 |
+| Merge-enabled repository merges; merge-disabled repositories stay open | Demonstrated | §14 |
+| External provider identified in config before any possible send; removal leaves protocol and local path runnable | Demonstrated | §15 |
+| Every claim backed by command output and repeatable identifiers | Demonstrated for every completed row | §11–§15 |
+
+The live run also found and fixed a GraphQL boundary defect before these results were
+recorded: `addPullRequestReview` accepts `event:REQUEST_CHANGES`; the implementation
+had used the returned review-state spelling `CHANGES_REQUESTED`. The invalid mutation
+failed closed and posted no review. Commit `879696b58` corrects the fixed literal and
+adds a regression assertion for both the accepted and rejected spellings.
+
+## 17. Validation of the recorded implementation
+
+```text
+$ python3 launchpad/skills/review-queue-automation/tests/run_all.py launchpad/skills/review-queue-automation
+repo inventory unavailable: o/r: GithubUnavailable(op='inventory', reason='unreachable', retriable=True)
+repo inventory unavailable: o/r: GithubUnavailable(op='inventory', reason='unauthenticated', retriable=False)
+PASSED: 1498 test(s)
+$ python3 launchpad/skills/review-queue-automation/architecture/validate.py
+parts 13 · requirements 86 · units 162 · records 20 · edges 26 · ADRs 5 · constraints 22 · states 13 · code contracts 13
+PASS
+$ python3 launchpad/skills/review-queue-automation/requirements/validate.py
+PASS
+- 86 requirements: 14 business, 39 functional, 33 non-functional
+- 65 clauses, 95 requirement→clause edges, 26 split clauses
+- 774 QA judgements (9 per requirement), all verdicts match the frozen baseline
+- every candidate field byte-matches commit 9267b6308's statement/fit/EARS/priority/status/ADR/source-clause/quote
+- both traceability directions hold; note-cell equality holds; every relative link resolves
+```
