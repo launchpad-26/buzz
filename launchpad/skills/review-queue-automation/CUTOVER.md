@@ -36,10 +36,14 @@ Every row below carries two columns that must never be collapsed into one:
     `scripts/config.py`'s, correctly cite `replacement: rqa.intake.admission` under
     `disposition: retired`; only round 1's prose describing the mapping was wrong, not those rows).
     `retired` with `replacement: none (binned: U-XXX-NN)` is reserved for the narrower case where
-    *no* part covers the concern at all — the twelve rows so marked in §2, each a genuine absence,
-    never a part's own behaviour making it moot.
-  - `kept` is reserved for the ten root/doc/schema files of §6, where a handoff found nothing to
-    rewrite.
+    *no* part covers the concern at all — **22 rows in §2, spanning 19 files and 14 disposition
+    units** — each a genuine absence, never a part's own behaviour making it moot. The predicate
+    is stated because four counts have now been offered for this one sentence and no two agreed:
+    a §2 row whose `replacement` cell carries a `none (binned: …)` clause. It said "twelve rows"
+    until #2212's round 3; `tests/test_cutover_map.py` now asserts all three numbers against the
+    table, so the next disagreement fails the suite instead of reaching a reviewer.
+  - `kept` is reserved for the eleven root/doc/schema files of §6, where a handoff found nothing
+    to rewrite.
   - **A row can also state, in its own words, that a `keep`-recommended unit's mechanism has no
     landed successor at all** — a defect, not a disposition choice; §2's row for
     `scripts/logging_otel.py` and its `U-DISPATCH-19` share is the one instance (§7.3, #2273). That
@@ -113,9 +117,11 @@ files with no row, which is exactly the defect this document exists to prevent.
 **"71 `tests/*` files."** 70 were present at the run's actual base (`3fdafab0c`); the 71st present
 in this worktree today, `tests/lifecycle_cascade_bench.py`, was added *by this run*: its first
 commit is `028ef9211` ("feat(rqa): implement P-02 — lifecycle drive and resume", 2026-09-13),
-part of the same P-02 batch as `#2199`/`#2200`, well after `3fdafab0c`. It is recorded in §7 as
-**new estate, not legacy, not retired**, so its absence from the 70-row legacy table below is
-never mistaken for an omission. This document maps the 70.
+part of the same P-02 batch as `#2199`/`#2200`, well after `3fdafab0c`. It is recorded **here**
+as new estate, not legacy, not retired, so its absence from the 70-row legacy table below is
+never mistaken for an omission. This document maps the 70. (Until #2212 round 3 this sentence
+said "recorded in §7", which it never was — §7 is for files no lane claimed, and new estate is
+not unclaimed.)
 
 ## 2. The map
 
@@ -137,6 +143,7 @@ successor. `unknown` appears nowhere in this table.
 | `SKILL.md` | — | #2214 | U-DOCS-01,02,04,05,06,07,08,10,11,12,13,16 | rewritten | (#2214 rewrite; NOT deletion-authorized by this map) | present |
 | `config.example.json` | P-03 | #2214 | U-POLICY-03 | rewritten | (#2214 rewrite; NOT deletion-authorized by this map) | present |
 | `onboarding/SKILL.md` | — | #2214 | U-DOCS-02,04,05,06,07,08,09,11,12,13; U-POLICY-06,07 (cross-cutting; cited by 11+ parts) | rewritten | (#2214 rewrite; NOT deletion-authorized by this map) | present |
+| `references/architecture.md` | — | #2214 | §7.4 (no handoff cited it) | kept | (descriptive, superseded by the part contracts; NOT deletion-authorized by this map) | present |
 | `references/classification.md` | — | #2214 | U-DOCS-01,13,25 | rewritten | (#2214 rewrite; NOT deletion-authorized by this map) | present |
 | `references/contracts.md` | — | #2214 | U-DOCS-01,04,06,08,09,13 | rewritten | (#2214 rewrite; NOT deletion-authorized by this map) | present |
 | `references/model-fallbacks.md` | P-05 | #2214 | U-DOCS-07 | kept | (nothing rewrites it beyond #2205's aliases.py; NOT deletion-authorized by this map) | present |
@@ -588,6 +595,28 @@ merely present as reference text) would require keeping all three, and `scripts/
 make `logging_otel.py` importable again would keep the legacy `State` layer alive against this
 Feature's own objective, to supply one timestamp helper. Refused by the orchestrator's own
 measurement; not attempted here.
+
+### 7.4 `references/architecture.md` — a documentation file no handoff cited
+
+Nine lane handoffs hand documents to this map. None of them names
+`references/architecture.md`, so it had no row: it is the one `references/*.md` file §6's
+"every `references/*.md` file a handoff handed to this document" does not reach.
+
+That is the same class of defect as §7.1 — a documentation gap, not a code gap — but it had a
+second consequence §7.1 did not. `tests/test_cutover_map.py`'s own docstring claimed the exempt
+set included "every `references/*.md` file" while its literal listed four of the five, so a
+maintainer reading the guard believed this file was protected while nothing protected it. Deleting
+it left every condition green. Found in #2212 round 3, by asking which files the guard's prose
+claimed to cover and its literal did not.
+
+Recorded in §2 with lane **#2214** — §6's rule already makes every `references/*.md` file wave 3's
+to rewrite, so the lane is not in doubt, only the handoff that should have said so — and
+disposition **`kept`**: the file is a descriptive deep-research pass over the *pre-rewrite* skill,
+its own header says it is "DESCRIPTIVE, not normative" and yields to `contracts.md` and
+`classification.md` where they disagree, and the part contracts under `architecture/code/` are the
+normative account of the assembled system. Nothing rewrites it, and this map does not authorise
+deleting it. **Whether a descriptive document of the superseded design should survive the cutover
+at all is a #2214 question, not this map's** — recording it is what makes that question askable.
 
 ## 8. Coverage debt
 
