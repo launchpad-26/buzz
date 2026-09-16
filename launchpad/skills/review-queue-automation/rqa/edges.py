@@ -235,7 +235,8 @@ def consumed(*, job: Job, attempt: Attempt, reading: int | None, reservation: Re
 def probe(*, repo: str, credential: str) -> CapabilityReading | GithubUnavailable: ...
 
 
-# E-17  CLI: P-02 status; P-12 explain → Explanation | ExplanationUnavailable; P-11 decide/pending; P-03 onboard; P-01 tick
+# E-17  CLI: P-02 status; P-12 explain → Explanation | ExplanationUnavailable and anchor;
+#       P-11 decide/pending; P-03 onboard; P-01 tick
 #
 # E-17 is a command surface, not one signature. §9 states it as the prose line
 # above — the concrete provider callables and, for `explain`, its return union;
@@ -243,12 +244,13 @@ def probe(*, repo: str, credential: str) -> CapabilityReading | GithubUnavailabl
 # keyword-only (**kwargs) surface — the CONTRACTS.md preamble's "every function
 # keyword-only" rule binds free functions, with `rqa.protocol.paths.matches` its
 # single named exception. The full parameter list is its provider part's
-# contract to state (P-02 §3.4 `status`, P-12 §3.3 `explain`, P-11 `decide`,
-# P-03 `onboard`, P-01 §3 `tick`) and that part's lane to implement; nothing
+# contract to state (P-02 §3.4 `status`, P-12 §3.3/§3.4 `explain`/`anchor`,
+# P-11 `decide`, P-03 `onboard`, P-01 §3 `tick`) and that part's lane to implement; nothing
 # here narrows it. E-17's `pending` IS P-11's E-11 `pending()` (components.md
 # §6 row E-17) — declared above, never a second declaration.
 def status(**kwargs): ...
 def explain(**kwargs) -> Explanation | ExplanationUnavailable: ...
+def anchor(**kwargs): ...
 def decide(**kwargs): ...
 def onboard(**kwargs): ...
 def tick(**kwargs): ...
