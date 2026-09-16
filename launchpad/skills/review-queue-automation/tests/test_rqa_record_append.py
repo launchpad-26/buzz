@@ -22,39 +22,18 @@ sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent.parent))
 import rqa.record.writer as writer_module  # noqa: E402
 from rqa.contracts import ENTRY_KINDS, AppendFailed, Entry  # noqa: E402
 from rqa.record import PayloadNotSerializable, UnknownEntryKind, verify  # noqa: E402
-from rqa.record.keychain import KEY_NAME, KeyStoreExplanationUnavailable  # noqa: E402
 from rqa.record.writer import SQLiteRecordWriter  # noqa: E402
-
-KEY = b"a-test-key-that-never-leaves-this-process"
-
-
-class FakeKeyStore:
-    """§8's fake `KeyStore`: the bytes are the test's own and there is no keychain.
-
-    `absent=True` is the ADR-0063 path — the operator has no key, `read` returns
-    `None`, and an append must still succeed and say it is unkeyed.
-    """
-
-    def __init__(self, *, key: bytes | None = KEY, error: BaseException | None = None):
-        self.key = key
-        self.error = error
-        self.names: list[str] = []
-
-    def read(self, name: str) -> bytes | None:
-        self.names.append(name)
-        if self.error is not None:
-            raise self.error
-        return self.key
-
 
 def fixed_clock(moment: datetime = datetime(2026, 9, 12, 8, 30, 15, 123456, tzinfo=timezone.utc)):
     return lambda: moment
 
 
-def memory_writer(**kwargs) -> tuple[sqlite3.Connection, SQLiteRecordWriter, FakeKeyStore]:
+def memory_writer(**kwargs) -> tuple[sqlite3.Connection, SQLiteRecordWriter, None]:
+    """ADR-0066: there is no key store, so the third element is always `None`. It is
+    kept so the many `connection, writer, _ = memory_writer()` call sites read the
+    same as before."""
     connection = sqlite3.connect(":memory:")
-    keystore = kwargs.pop("keystore", None) or FakeKeyStore()
-    return connection, SQLiteRecordWriter(connection, keystore=keystore, **kwargs), keystore
+    return connection, SQLiteRecordWriter(connection, **kwargs), None
 
 
 def rows(connection: sqlite3.Connection, job: str) -> list[tuple]:
@@ -88,14 +67,13 @@ def test_append_is_the_positional_signature_contracts_declares() -> None:
 
 
 def test_the_writers_dependencies_are_constructor_only() -> None:
-    """§3.1: `connection`, `clock` and `keystore` are constructor-only; they are not
+    """§3.1: `connection` and `clock` are constructor-only; they are not
     E-13 parameters, so no caller can vary them per call."""
     import inspect
 
     parameters = inspect.signature(SQLiteRecordWriter.__init__).parameters
-    assert list(parameters) == ["self", "connection", "clock", "keystore"]
+    assert list(parameters) == ["self", "connection", "clock"]
     assert parameters["clock"].kind is inspect.Parameter.KEYWORD_ONLY
-    assert parameters["keystore"].kind is inspect.Parameter.KEYWORD_ONLY
     assert set(inspect.signature(SQLiteRecordWriter.append).parameters) == {
         "self",
         "job_id",
@@ -110,7 +88,7 @@ def test_the_writers_dependencies_are_constructor_only() -> None:
 def test_t14_an_unknown_kind_raises_and_writes_nothing() -> None:
     """T14: `append(job, "not_a_real_kind", {})` raises `UnknownEntryKind`;
     `record_entries` for that job is unchanged (zero new rows)."""
-    connection, writer, keystore = memory_writer()
+    connection, writer, _keystore = memory_writer()
     writer.append("job-1", "transition", {"to_state": "queued"})
     before = rows(connection, "job-1")
 
@@ -122,7 +100,6 @@ def test_t14_an_unknown_kind_raises_and_writes_nothing() -> None:
     assert raised, "an unknown kind must raise UnknownEntryKind"
     assert rows(connection, "job-1") == before
     # Step 1 runs before anything is read or written: the key store is untouched too.
-    assert keystore.names == [KEY_NAME]
 
 
 def test_a_string_subclass_carrying_a_members_text_is_not_a_kind() -> None:
@@ -242,106 +219,53 @@ def test_append_is_deterministic_for_identical_hashed_inputs() -> None:
     )
 
 
-# -- §3.1 step 5: the operator key, in all three outcomes ----------------------
+# -- §3.1 step 5: ADR-0066 retired the operator key ---------------------------
 
 
-def test_a_keyed_append_stores_a_keyed_bit_and_an_hmac() -> None:
-    connection, writer, keystore = memory_writer()
-    writer.append("job-1", "transition", {"to_state": "queued"})
-    seq, _kind, _at, _payload, _prev, entry_hash, entry_hmac, keyed = rows(connection, "job-1")[0]
-    assert keyed == 1
-    assert entry_hmac is not None and len(entry_hmac) == 64
-    assert keystore.names == [KEY_NAME]
+def test_every_append_is_unkeyed_and_no_credential_store_is_consulted() -> None:
+    """ADR-0066: step 5 reads no key, so every row is written `keyed=0, hmac=NULL`.
 
-    import hashlib
-    import hmac as hmac_module
-
-    expected = hmac_module.new(KEY, f"job-1|{seq}|{entry_hash}".encode(), hashlib.sha256)
-    assert entry_hmac == expected.hexdigest()
-
-
-def test_t16_an_absent_key_is_a_successful_unkeyed_append_not_a_failure() -> None:
-    """T16 (append half): `KeyStore.read("rqa-record-hmac")` returns `None` during
-    `append` → append returns `Entry`; its row has `keyed=False, hmac=NULL`; `verify`
-    returns `ok=True` with an `unverifiable` segment whose reason is `no key`, not
-    `HMAC_MISMATCH`.
-
-    The `explain` half of T16 belongs to the sibling lane; the append and verify halves
-    are proved here. ADR-0063: an absent key never breaks and never stops a review.
+    This is also #2272's resolution in its final form: there is no platform
+    credential command left to be absent, so an append cannot fail for a key reason
+    on macOS, Linux, Windows, a container, or CI.
     """
-    keystore = FakeKeyStore(key=None)
-    connection, writer, _keystore = memory_writer(keystore=keystore)
+    connection, writer, _ = memory_writer()
     entry = writer.append("job-1", "transition", {"to_state": "queued"})
     assert isinstance(entry, Entry)
 
     stored = rows(connection, "job-1")[0]
-    assert stored[6] is None, "hmac must be NULL on an unkeyed row"
+    assert stored[6] is None, "hmac must be NULL"
     assert stored[7] == 0, "keyed must be stored as 0, never inferred"
 
-    result = verify(connection, "job-1", keystore=keystore)
+    result = verify(connection, "job-1")
     assert result.ok is True
     assert result.bad_seq is None and result.kind is None
-    assert result.hmac_checked is False
-    assert [(s.first_seq, s.last_seq, s.reason) for s in result.unverifiable] == [
-        (1, 1, "no key")
-    ]
 
 
-def test_an_unaskable_key_store_is_append_failed_and_writes_nothing() -> None:
-    """§3.1 step 5's third branch: `KeyStoreExplanationUnavailable` → `AppendFailed`,
-    no row inserted. Distinct from the absent-item branch above, and deliberately not
-    unified with it."""
-    keystore = FakeKeyStore(error=KeyStoreExplanationUnavailable("no keychain here"))
-    connection, writer, _keystore = memory_writer(keystore=keystore)
-    raised = None
-    try:
-        writer.append("job-1", "transition", {"to_state": "queued"})
-    except AppendFailed as exc:
-        raised = exc
-    assert raised is not None
-    assert isinstance(raised.__cause__, KeyStoreExplanationUnavailable)
-    assert rows(connection, "job-1") == []
+def test_the_writer_takes_no_key_store_and_has_no_credential_failure_mode() -> None:
+    """The constructor parameter is gone, not merely defaulted, and `append` no
+    longer has a branch that can raise `AppendFailed` for a credential reason."""
+    import inspect
 
+    parameters = inspect.signature(SQLiteRecordWriter.__init__).parameters
+    assert "keystore" not in parameters
+    assert list(parameters) == ["self", "connection", "clock"]
 
-def test_an_os_error_from_the_key_store_is_append_failed() -> None:
-    keystore = FakeKeyStore(error=OSError("keychain socket gone"))
-    connection, writer, _keystore = memory_writer(keystore=keystore)
-    raised = False
-    try:
-        writer.append("job-1", "transition", {"to_state": "queued"})
-    except AppendFailed:
-        raised = True
-    assert raised
-    assert rows(connection, "job-1") == []
-
-
-def test_no_append_failure_message_can_carry_key_bytes() -> None:
-    """§6 of the lane contract: key material never reaches an error message. The fake
-    raises with the key's own text in it; what `append` reports is its own sentence
-    plus the cause, and the cause is reachable only as `__cause__`."""
-    keystore = FakeKeyStore(error=KeyStoreExplanationUnavailable("the keychain said no"))
-    _connection, writer, _keystore = memory_writer(keystore=keystore)
-    try:
-        writer.append("job-1", "transition", {"to_state": "queued"})
-    except AppendFailed as exc:
-        assert KEY.decode() not in str(exc)
+    source = pathlib.Path(
+        pathlib.Path(__file__).resolve().parent.parent / "rqa" / "record" / "writer.py"
+    ).read_text(encoding="utf-8")
+    for forbidden in ("keychain", "KeyStore", "compute_hmac", "security", "secret-tool"):
+        assert forbidden not in source, f"{forbidden!r} survives in writer.py"
 
 
 # -- §3.1 steps 6 and 7: the row, the head, and the caller's transaction -------
 
 
 def test_t11_three_appends_leave_one_head_row_and_per_row_keyed_state() -> None:
-    """T11: three successive appends, including a final unkeyed append → `record_heads`
-    has one latest `(seq, hash, hmac=NULL, keyed=0)` row, and each `record_entries` row
-    carries its own correct keyed/HMAC state."""
-
-    class RunsOutOfKey(FakeKeyStore):
-        def read(self, name: str) -> bytes | None:
-            self.names.append(name)
-            return KEY if len(self.names) <= 2 else None
-
-    keystore = RunsOutOfKey()
-    connection, writer, _keystore = memory_writer(keystore=keystore)
+    """T11: three successive appends → `record_heads` holds exactly one latest
+    `(seq, hash, hmac=NULL, keyed=0)` row, and every `record_entries` row carries the
+    same unkeyed state. Under ADR-0066 that state is uniform rather than per-row."""
+    connection, writer, _ = memory_writer()
     writer.append("job-1", "transition", {"to_state": "queued"})
     writer.append("job-1", "plan", {"obligations": ["o1"]})
     writer.append("job-1", "transition", {"to_state": "stopped"})
@@ -354,8 +278,8 @@ def test_t11_three_appends_leave_one_head_row_and_per_row_keyed_state() -> None:
     stored = rows(connection, "job-1")
     assert (job, seq, head_hash, head_hmac, head_keyed) == ("job-1", 3, stored[2][5], None, 0)
 
-    assert [row[7] for row in stored] == [1, 1, 0]
-    assert [row[6] is None for row in stored] == [False, False, True]
+    assert [row[7] for row in stored] == [0, 0, 0]
+    assert [row[6] is None for row in stored] == [True, True, True]
 
 
 def test_t4_an_uncommitted_append_disappears_when_the_caller_rolls_back() -> None:
@@ -370,7 +294,7 @@ def test_t4_an_uncommitted_append_disappears_when_the_caller_rolls_back() -> Non
         path = str(pathlib.Path(directory) / "state.db")
         connection = sqlite3.connect(path)
         connection.execute("CREATE TABLE jobs (id TEXT PRIMARY KEY)")
-        writer = SQLiteRecordWriter(connection, keystore=FakeKeyStore())
+        writer = SQLiteRecordWriter(connection)
 
         connection.execute("INSERT INTO jobs (id) VALUES ('job-1')")  # opens the transaction
         entry = writer.append("job-1", "transition", {"to_state": "queued"})
@@ -410,7 +334,7 @@ def test_append_never_commits_the_callers_transaction() -> None:
             super().rollback()
 
     connection = sqlite3.connect(":memory:", factory=WatchedConnection)
-    writer = SQLiteRecordWriter(connection, keystore=FakeKeyStore())
+    writer = SQLiteRecordWriter(connection)
     writer.append("job-1", "transition", {"to_state": "queued"})
     assert calls == []
 

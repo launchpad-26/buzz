@@ -181,7 +181,6 @@ def test_a_database_with_no_leases_table_is_a_database_with_no_lease() -> None:
     The catalog check answers it — no error is swallowed to get there."""
     import sqlite3
 
-    from lifecycle_cascade_bench import NoKeyStore
     from rqa.record.writer import SQLiteRecordWriter
 
     connection = sqlite3.connect(":memory:")
@@ -198,7 +197,7 @@ def test_a_database_with_no_leases_table_is_a_database_with_no_lease() -> None:
          job.head_ref, None, None, job.snapshot_hash, "stopped", "t"),
     )
     connection.commit()
-    record = SQLiteRecordWriter(connection, keystore=NoKeyStore())
+    record = SQLiteRecordWriter(connection)
     _arrival_entry(record, job)
     connection.commit()
     deps = make_deps(connection, record, policy=FakePolicy(make_snapshot()), authority=FakeAuthority())

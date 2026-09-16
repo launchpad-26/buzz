@@ -38,7 +38,6 @@ from rqa.escalation.store import SqliteEscalationStore  # noqa: E402
 # itself calls.
 main_module = importlib.import_module("rqa.cli.main")
 from rqa.intake.store import SqliteJobStore, ensure_schema  # noqa: E402
-from rqa.record.keychain import OSKeyStore  # noqa: E402
 from rqa.record.writer import SQLiteRecordWriter  # noqa: E402
 
 _CLOCK = lambda: datetime(2026, 9, 14, tzinfo=timezone.utc)  # noqa: E731
@@ -101,7 +100,7 @@ def _seed_escalated_job(
     connection = sqlite3.connect(str(state_dir / "state.db"))
     ensure_schema(connection)
     jobs = SqliteJobStore(connection, clock=_CLOCK)
-    record = SQLiteRecordWriter(connection, clock=_CLOCK, keystore=OSKeyStore())
+    record = SQLiteRecordWriter(connection, clock=_CLOCK)
     escalation_store = SqliteEscalationStore(connection)
 
     job = Job(

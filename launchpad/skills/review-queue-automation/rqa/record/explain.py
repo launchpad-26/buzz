@@ -65,7 +65,7 @@ judgement whose `reused_from` names a predecessor job walks that predecessor's o
 trusted prefix (recursively, if the predecessor's own judgement was itself reused),
 merges its harness-shaped attestations ahead of this job's own (oldest predecessor
 first, then nearer predecessors, then this job's own, de-duplicated), and folds its
-`verify` outcome into this job's `verified`/`hmac_checked`/`unverifiable`/`legacy`.
+`verify` outcome into this job's `verified`/`legacy`.
 A missing predecessor, a predecessor with no judgement in its own trusted prefix, a
 malformed `reused_from`, or a repeated job id (a cycle) all raise
 `ReuseResolutionError` — never a guess, never a silent omission.
@@ -79,11 +79,10 @@ from collections.abc import Mapping
 from dataclasses import dataclass
 from typing import Any, Literal
 
-from rqa.contracts import ExplanationUnavailable, KeyStore
-from rqa.record.keychain import OSKeyStore
+from rqa.contracts import ExplanationUnavailable
 from rqa.record.reader import AmbiguousHead, NoRecord, ResolvedJob, resolve_job
 from rqa.record.store import StoredEntry, entries_for_job, is_legacy
-from rqa.record.verify import UnverifiableSegment, VerifyResult, verify
+from rqa.record.verify import VerifyResult, verify
 
 __all__ = ["explain", "explain_job", "resolve_job", "Explanation", "ReuseResolutionError"]
 
@@ -116,8 +115,6 @@ class Explanation:
     # Supporting trust/rendering fields:
     snapshot_hash: str | None
     verified: bool
-    hmac_checked: bool
-    unverifiable: tuple[UnverifiableSegment, ...]
     truncated_at: int | None
     legacy: bool
 
@@ -192,9 +189,7 @@ class _Hop:
     legacy_present: bool
 
 
-def _walk_reuse_chain(
-    connection: sqlite3.Connection, start_job_id: object, *, keystore: KeyStore
-) -> list[_Hop]:
+def _walk_reuse_chain(connection: sqlite3.Connection, start_job_id: object) -> list[_Hop]:
     """Follow `reused_from` links starting at `start_job_id`, oldest predecessor
     first. Raises `ReuseResolutionError` for every malformed, missing, cyclic, or
     judgement-less hop (§3.3 step 3).
@@ -223,7 +218,7 @@ def _walk_reuse_chain(
         if not rows:
             raise ReuseResolutionError(f"predecessor job {current!r} has no record entries")
 
-        vr = verify(connection, current, keystore=keystore)
+        vr = verify(connection, current)
         readable = _readable(rows, vr.bad_seq)
         # Interim (see the docstring above and #2236): the predecessor's *latest*
         # trusted judgement, not the one at a carried source sequence — no such
@@ -252,13 +247,11 @@ def _walk_reuse_chain(
 
 def explain_job(connection: sqlite3.Connection, job_id: str) -> Explanation | ExplanationUnavailable:
     """§3.3's reconstruction, named job first. Every branch returns or raises."""
-    keystore: KeyStore = OSKeyStore()
-
     rows = entries_for_job(connection=connection, job=job_id)
     if not rows:
         return ExplanationUnavailable(repo="", number=0, reason="no_record")
 
-    vr = verify(connection, job_id, keystore=keystore)
+    vr = verify(connection, job_id)
     readable = _readable(rows, vr.bad_seq)
 
     transition = _last_payload_of_kind(readable, "transition")
@@ -297,7 +290,7 @@ def explain_job(connection: sqlite3.Connection, job_id: str) -> Explanation | Ex
     hops: list[_Hop] = []
     reused_from = judgement.get("reused_from") if judgement else None
     if reused_from is not None:
-        hops = _walk_reuse_chain(connection, reused_from, keystore=keystore)
+        hops = _walk_reuse_chain(connection, reused_from)
 
     combined_attestations = _dedup_triples(
         [triple for hop in hops for triple in hop.attestations] + local_attestations
@@ -318,19 +311,15 @@ def explain_job(connection: sqlite3.Connection, job_id: str) -> Explanation | Ex
         reviewer_type = "none"
         reviewer_identity = ()
 
-    local_hmac_checked = vr.ok and vr.unverifiable == ()
-    local_verified = local_hmac_checked and not local_legacy_present
-    hop_hmac_checked = [hop.verify_result.ok and hop.verify_result.unverifiable == () for hop in hops]
-    hop_verified = [
-        checked and not hop.legacy_present for checked, hop in zip(hop_hmac_checked, hops, strict=True)
-    ]
+    # ADR-0066: `verified` is chain integrity, for this job and every reuse hop it
+    # rests on. There is no second, keyed attestation to report separately, so the
+    # former `hmac_checked` and `unverifiable` fields are gone rather than left
+    # permanently false and permanently empty.
+    local_verified = vr.ok and not local_legacy_present
+    hop_verified = [hop.verify_result.ok and not hop.legacy_present for hop in hops]
 
     verified = local_verified and all(hop_verified)
-    hmac_checked = local_hmac_checked and all(hop_hmac_checked)
     legacy = local_legacy_present or any(hop.legacy_present for hop in hops)
-    unverifiable: tuple[UnverifiableSegment, ...] = tuple(vr.unverifiable) + tuple(
-        segment for hop in hops for segment in hop.verify_result.unverifiable
-    )
 
     return Explanation(
         job_id=job_id,
@@ -350,8 +339,6 @@ def explain_job(connection: sqlite3.Connection, job_id: str) -> Explanation | Ex
         disposition=disposition,
         snapshot_hash=snapshot_hash,
         verified=verified,
-        hmac_checked=hmac_checked,
-        unverifiable=unverifiable,
         truncated_at=vr.bad_seq,
         legacy=legacy,
     )

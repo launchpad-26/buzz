@@ -255,11 +255,6 @@ PROTOCOL_METHODS: dict[str, tuple[tuple[tuple[str, object, object], ...], str]] 
         (("self", POS, EMPTY), ("route", POS, "Route"), ("timeout", KW, "float")),
         "bool",
     ),
-    # E-25  class KeyStore(Protocol)
-    "KeyStore.read": (
-        (("self", POS, EMPTY), ("name", POS, "str")),
-        "bytes | None",
-    ),
     # E-26  class ProcessRunner(Protocol)
     "ProcessRunner.run": (
         (
@@ -333,7 +328,7 @@ PROSE_ONLY_EDGES = frozenset({"E-18", "E-19", "E-20", "E-21", "E-22"})
 SECTION_NINE_NAMES = (
     tuple(EDGE_FUNCTIONS)
     + tuple(EMPTY_PROTOCOL_OWNERS)
-    + ("SupplyPort", "HarnessProber", "KeyStore", "ProcessRunner")
+    + ("SupplyPort", "HarnessProber", "ProcessRunner")
     + ("status", "explain", "decide", "onboard", "tick")
 )
 
@@ -493,13 +488,14 @@ def test_e17_surface_callables_constrain_nothing_beyond_their_names() -> None:
 
 
 # --------------------------------------------------------------------------
-# The 26-row account, driven by components.md §6's own table
+# The 25-row account, driven by components.md §6's own table
 # --------------------------------------------------------------------------
 
 
 def test_every_section_six_edge_row_is_accounted_for() -> None:
     ids = _section_six_edge_ids()
-    assert len(ids) == 26, f"components.md §6 has {len(ids)} edge rows, expected 26"
+    # 26 rows until ADR-0066 retired E-25 (the record HMAC key store) with the key.
+    assert len(ids) == 25, f"components.md §6 has {len(ids)} edge rows, expected 25"
     assert len(set(ids)) == len(ids), "duplicate edge id in components.md §6"
     assert set(contracts.EDGES) == set(ids), (
         f"EDGES and components.md §6 disagree: "

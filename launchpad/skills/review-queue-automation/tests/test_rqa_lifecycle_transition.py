@@ -75,14 +75,6 @@ HEAD = "a" * 40
 BASE = "b" * 40
 
 
-class NoKeyStore:
-    """ADR-0063's absent-key path: a successful, explicitly unkeyed append. No OS
-    keychain is consulted and no key material exists in this process."""
-
-    def read(self, name: str) -> bytes | None:
-        return None
-
-
 class FlakyWriter:
     """A `RecordWriter` that fails a chosen append and otherwise delegates to the real
     one — the one failure a real writer cannot be asked for on demand."""
@@ -187,7 +179,7 @@ def bench(
     connection = new_db(path, factory=factory)
     job = make_job(status=status, snapshot_hash=snapshot_hash)
     insert_job(connection, job)
-    return connection, SQLiteRecordWriter(connection, keystore=NoKeyStore()), job
+    return connection, SQLiteRecordWriter(connection), job
 
 
 def stored_status(connection: sqlite3.Connection, job_id: str = "job-1") -> str:
@@ -373,7 +365,7 @@ def test_a_status_write_that_matches_no_row_is_named_not_silent() -> None:
     """A `jobs` row that is not there makes the `UPDATE` a no-op, and a silent no-op here
     is a job the record says moved and the table says did not."""
     connection = new_db()
-    record = SQLiteRecordWriter(connection, keystore=NoKeyStore())
+    record = SQLiteRecordWriter(connection)
     try:
         transition(
             make_job(status=JobStatus.CLAIMED), JobStatus.PLANNED, reason="r",

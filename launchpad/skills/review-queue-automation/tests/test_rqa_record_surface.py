@@ -31,7 +31,7 @@ RECORD = RQA / "record"
 
 #: §1's module list, split by the lane that builds each module.
 APPEND_MODULES = frozenset(
-    {"__init__", "kinds", "hashing", "keychain", "store", "writer", "verify", "reader", "trace"}
+    {"__init__", "kinds", "hashing", "store", "writer", "verify", "reader", "trace"}
 )
 EXPLAIN_MODULES = frozenset({"explain", "migrate"})
 ALL_MODULES = APPEND_MODULES | EXPLAIN_MODULES
@@ -49,8 +49,6 @@ APPEND_EXPORTS = frozenset(
         "UnknownEntryKind",
         "PayloadNotSerializable",
         "ENTRY_KINDS",
-        "KeyStore",
-        "KeyStoreExplanationUnavailable",
         "verify",
         "VerifyResult",
         "BreakKind",
@@ -73,11 +71,12 @@ EXPLAIN_EXPORTS = frozenset(
         "LegacySource",
     }
 )
-#: The two concrete collaborators published beyond §1's list so a composition root can
-#: construct them through the front door. #2211 (the operator CLI) is the module that
+#: The one concrete collaborator published beyond §1's list so a composition root can
+#: construct it through the front door. #2211 (the operator CLI) is the module that
 #: falsified §1's "except through `__init__`" sentence: every part that appends takes its
 #: `RecordWriter` as a parameter and nothing in `rqa/record/` ever builds one.
-PUBLISHED_EXPORTS = frozenset({"SQLiteRecordWriter", "OSKeyStore"})
+#: ADR-0066 removed `OSKeyStore` — there is no key store to construct.
+PUBLISHED_EXPORTS = frozenset({"SQLiteRecordWriter"})
 ALL_EXPORTS = APPEND_EXPORTS | EXPLAIN_EXPORTS | PUBLISHED_EXPORTS
 
 
@@ -170,35 +169,36 @@ def test_every_re_exported_name_actually_resolves() -> None:
     assert missing == [], f"__all__ names that do not resolve: {missing}"
 
 
-def test_the_reader_and_the_segment_type_are_not_public_package_surface() -> None:
-    """`SQLiteRecordReader` and `UnverifiableSegment` stay module names (`rqa.record.
-    reader`, `.verify`), the way `rqa.policy` keeps `StoredSnapshot` a `rqa.policy.store`
-    name. A sibling lane imports `UnverifiableSegment` from `rqa.record.verify`."""
-    for name in ("SQLiteRecordReader", "UnverifiableSegment"):
-        assert name not in rqa.record.__all__, name
+def test_the_reader_is_not_public_package_surface() -> None:
+    """`SQLiteRecordReader` stays a module name (`rqa.record.reader`), the way
+    `rqa.policy` keeps `StoredSnapshot` a `rqa.policy.store` name.
+
+    ADR-0066 retired `UnverifiableSegment` with the key: no row is unverifiable for
+    want of a key any more, because there is no key."""
+    assert "SQLiteRecordReader" not in rqa.record.__all__
 
     from rqa.record.reader import SQLiteRecordReader
-    from rqa.record.verify import UnverifiableSegment
 
-    for implementation in (SQLiteRecordReader, UnverifiableSegment):
-        assert isinstance(implementation, type), implementation
+    assert isinstance(SQLiteRecordReader, type)
+
+    import rqa.record.verify as verify_module
+
+    assert not hasattr(verify_module, "UnverifiableSegment")
 
 
 def test_the_concrete_collaborators_a_composition_root_needs_are_package_surface() -> None:
     """§1's "no other module imports from `rqa.record` except through `__init__`" and a
-    `RecordWriter`/`KeyStore` that every caller receives as a parameter are only jointly
-    satisfiable if the implementations are reachable through `__init__`. The package must
-    publish the modules' own classes, not second copies.
+    `RecordWriter` that every caller receives as a parameter are only jointly
+    satisfiable if the implementation is reachable through `__init__`. The package must
+    publish the module's own class, not a second copy.
 
-    Publishing `OSKeyStore` re-exports the same class under a second name: it widens no
-    capability. The keychain read itself is unchanged and still bounded by
-    `tests/test_rqa_record_keychain.py`."""
-    from rqa.record.keychain import OSKeyStore
+    ADR-0066 removed the second published collaborator, `OSKeyStore`, along with the
+    `rqa/record/keychain.py` module it lived in."""
     from rqa.record.writer import SQLiteRecordWriter
 
     assert PUBLISHED_EXPORTS <= frozenset(rqa.record.__all__)
     assert rqa.record.SQLiteRecordWriter is SQLiteRecordWriter
-    assert rqa.record.OSKeyStore is OSKeyStore
+    assert not hasattr(rqa.record, "OSKeyStore")
 
 
 def test_the_package_declares_nothing_it_only_re_exports() -> None:
@@ -223,9 +223,11 @@ def test_the_seam_types_are_the_ones_contracts_declares() -> None:
         "EntryKind",
         "AppendFailed",
         "ENTRY_KINDS",
-        "KeyStore",
     ):
         assert getattr(rqa.record, name) is getattr(contracts, name), name
+
+    # ADR-0066: `KeyStore` was a seam type here until the key was retired.
+    assert not hasattr(contracts, "KeyStore")
 
 
 def test_the_closed_set_is_section_sixs_fourteen_kinds() -> None:

@@ -74,7 +74,7 @@ from rqa.intake import (
 from rqa.intake import ensure_schema as intake_ensure_schema
 from rqa.lifecycle import LifecycleDeps
 from rqa.policy import SnapshotStore, SqliteSnapshotStore
-from rqa.record import OSKeyStore, SQLiteRecordWriter
+from rqa.record import SQLiteRecordWriter
 from rqa.supply import (
     BreakerStore,
     SpendStore,
@@ -300,7 +300,7 @@ def build_composition(
     pr_facts = SqlitePrFactsStore(connection)
     leases = SqliteLeaseStore(connection)
 
-    record: RecordWriter = SQLiteRecordWriter(connection, clock=clock, keystore=OSKeyStore())
+    record: RecordWriter = SQLiteRecordWriter(connection, clock=clock)
 
     github_ensure_schema(connection)
     transport = Transport(

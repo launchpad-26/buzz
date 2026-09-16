@@ -61,6 +61,11 @@ sqlite3 (stdlib) library version 3.53.4
 | Host clock during the run | `2026-09-14` UTC. Every `raised_at` / `activated_at` below is host-clock. |
 | **Was the record keyed?** | **No.** All 55 record rows have `keyed=0` and `hmac=NULL`. See [§7.2](#72-2272-the-record-was-appended-but-not-keyed). |
 
+> **Superseded by ADR-0066 / #2299 for any run after 2026-09-16.** The macOS dependency
+> described below no longer exists: the key, `keychain.py` and the `sys.platform` branch
+> are all removed, and a reader reproducing Part 1 on Linux or Windows now gets exactly
+> as far as one on macOS. The paragraph is kept as the record of what the #2189 run saw.
+
 **On macOS specifically.** This run could happen at all *because* it ran on macOS.
 `rqa/record/keychain.py:89-92` branches on `sys.platform`; on any other platform the
 key read raises and `rqa/record/writer.py:118-123` turns that into `AppendFailed`, so
@@ -1261,6 +1266,12 @@ Whichever is chosen, the fix must be evaluated against **all six** activities; a
 validated only against `REVIEW` leaves five ungrantable.
 
 ### F-3 — `keychain.py` promises an unkeyed append that `writer.py` refuses to make
+
+> **RESOLVED by ADR-0066 / #2299.** The contradiction below is gone because both sides
+> of it are gone: `rqa/record/keychain.py` is deleted and `append` no longer has a
+> credential-store branch at all. Every append is unkeyed on every platform, so there is
+> no message promising a recovery and no caller refusing it. The observation is kept
+> verbatim as the record of what the #2189 conformance run actually saw.
 
 **Owning behaviour:** the record part (P-12), `rqa/record/keychain.py` and
 `rqa/record/writer.py`. **Carry onto #2272** if not already there, rather than filing
