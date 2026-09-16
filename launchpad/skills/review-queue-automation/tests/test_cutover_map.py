@@ -6,7 +6,8 @@ This file is discovered and run by ``tests/run_all.py`` automatically: any
 defines is run (see ``run_all.py``'s own module docstring). No edit to
 ``run_all.py`` was needed or made.
 
-Three independent failure conditions, matching #2212's issue text exactly:
+Six independent failure conditions. The first three match #2212's issue text
+exactly; conditions 4-6 close bypasses that review found in them:
 
 1. a file present under ``scripts/`` or ``tests/`` (excluding the new estate —
    ``test_rqa_*.py`` and ``lifecycle_cascade_bench.py``, both a stable naming
@@ -16,7 +17,17 @@ Three independent failure conditions, matching #2212's issue text exactly:
    dotted ``rqa.*`` path with no matching file under ``rqa/``, or a
    ``tests/test_rqa_*.py`` path that is absent;
 3. a row's ``status`` disagrees with the filesystem in either direction, or two
-   rows for the same file disagree with each other on ``status``.
+   rows for the same file disagree with each other on ``status``;
+4. a doc/schema row says anything but ``status: present``, checked against the
+   row text alone rather than against the filesystem;
+5. a file the map never authorises the deletion of has no row at all — the
+   bypass conditions 1-4 share, since each of them compares a row that exists
+   against a file that exists, and deleting both halves in one edit leaves
+   nothing to be inconsistent with;
+6. a bare ``rqa.*`` replacement citation resolves on disk but no collected test
+   module imports it — the unenforced half of this map's own deletion rule,
+   which is that a file may go only once its replacement is named *and
+   exercised*.
 
 Condition 1's file-present set is read from the filesystem with ``os.listdir``
 at run time on every invocation — never a hard-coded enumeration of the 118
@@ -40,6 +51,7 @@ condition 3 (their ``status`` still has to agree with the filesystem).
 
 from __future__ import annotations
 
+import ast
 import pathlib
 import re
 import sys
@@ -151,6 +163,29 @@ DOC_SCHEMA_FILES = {
     "schemas/reviewer-verdict.json",
 }
 
+# Files this map must carry a row for *unconditionally* — a row-identity
+# baseline, deliberately a literal rather than anything derived from
+# ``CUTOVER.md`` or from the filesystem.
+#
+# Conditions 1-4 all quantify over rows that exist in ``CUTOVER.md`` today, or
+# over files that exist on disk today. None of them asserts that a row was ever
+# there, so deleting a file *and its own row in the same edit* left nothing for
+# them to be inconsistent with: condition 1 only walks files still on disk,
+# condition 3 only reads rows still in the table, and condition 4's
+# "every doc/schema row says present" is vacuous for a doc/schema file whose
+# row has gone. That is the bypass condition 5 closes, and it is closed with
+# data the guard already held.
+#
+# The set is every file the map is explicitly forbidden from authorising the
+# deletion of: the ten root/docs/schema files of CUTOVER.md §6, plus
+# ``scripts/logging_otel.py``, which §7.3 keeps as the reference implementation
+# for #2273's unmigrated U-DISPATCH-19 half. It is anchored on that
+# non-authorisation, not on the word "retained" appearing in a row's ``status``
+# cell — a row that has been deleted has no ``status`` cell to read, which is
+# precisely the defect, and the status vocabulary is not this guard's to
+# depend on.
+ALWAYS_MAPPED_FILES = DOC_SCHEMA_FILES | {"scripts/logging_otel.py"}
+
 
 def _is_scripts_or_tests(file_: str) -> bool:
     return file_.startswith("scripts/") or file_.startswith("tests/")
@@ -254,11 +289,166 @@ def check_doc_schema_status_is_always_present() -> list[str]:
     return problems
 
 
+COLLECTED_TEST_GLOB = "test_rqa_*.py"
+
+# The four bare ``rqa.*`` citations that no collected test module imports
+# directly today, each exercised one hop away through the module named beside
+# it. They are listed here, by name, so that the exemption is visible to a
+# reader of the guard rather than implied by a laxer rule: condition 6 below
+# would otherwise have to accept *every* transitively-reachable module, which
+# is nearly the whole package and closes nothing.
+#
+# Condition 6 keeps this set honest in two directions. An entry still has to be
+# reachable at one hop from a directly-imported module, so the set cannot hide
+# a citation that nothing exercises at all; and because it is a literal, it
+# cannot grow silently -- a new unexercised citation fails until someone adds
+# it here in a reviewable diff.
+INDIRECTLY_EXERCISED = {
+    "rqa.github.reads": "rqa.github.types",
+    "rqa.judgement.evidence": "rqa.judgement.judge",
+    "rqa.judgement.findings": "rqa.judgement.judge",
+    "rqa.policy.schema": "rqa.policy.validate",
+}
+
+
+def _module_source(dotted: str) -> pathlib.Path | None:
+    rel = dotted.strip().replace(".", "/")
+    for candidate in (SKILL / f"{rel}.py", SKILL / rel / "__init__.py"):
+        if candidate.is_file():
+            return candidate
+    return None
+
+
+def _rqa_imports_in(path: pathlib.Path) -> set[str]:
+    """Every ``rqa.*`` module a source file imports at any point in its body.
+
+    Parsed with ``ast`` rather than executed: this guard must not import the
+    test estate it is reasoning about. Both spellings the estate actually uses
+    are recognised -- ``import rqa.x.y`` / ``from rqa.x import y`` statements,
+    and ``importlib.import_module("rqa.x.y")`` with a literal argument, which
+    is how ``test_rqa_intake_tick.py`` reaches ``rqa.intake.tick``.
+    """
+    found: set[str] = set()
+    tree = ast.parse(path.read_text(encoding="utf-8"))
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Import):
+            for alias in node.names:
+                if alias.name == "rqa" or alias.name.startswith("rqa."):
+                    found.add(alias.name)
+        elif isinstance(node, ast.ImportFrom):
+            if node.level == 0 and node.module and (node.module == "rqa" or node.module.startswith("rqa.")):
+                found.add(node.module)
+                for alias in node.names:
+                    found.add(f"{node.module}.{alias.name}")
+        elif isinstance(node, ast.Call):
+            func = node.func
+            if (
+                isinstance(func, ast.Attribute)
+                and func.attr == "import_module"
+                and node.args
+                and isinstance(node.args[0], ast.Constant)
+                and isinstance(node.args[0].value, str)
+                and node.args[0].value.startswith("rqa.")
+            ):
+                found.add(node.args[0].value)
+    return found
+
+
+def directly_exercised_modules() -> set[str]:
+    """Every ``rqa.*`` module imported by a test module ``run_all.py`` collects.
+
+    Read from the filesystem at run time, exactly as condition 1 reads the
+    legacy set -- never a stored list. A module in this set is loaded whenever
+    the suite runs, because ``run_all.py`` imports every one of these files.
+    """
+    exercised: set[str] = set()
+    for path in sorted((SKILL / "tests").glob(COLLECTED_TEST_GLOB)):
+        exercised |= _rqa_imports_in(path)
+    return exercised
+
+
+def cited_rqa_modules() -> set[str]:
+    """Every bare dotted ``rqa.*`` path the map names as a replacement."""
+    rows = parse_map_rows(_read_cutover_text())
+    cited: set[str] = set()
+    for r in rows:
+        if r["file"] in DOC_SCHEMA_FILES or not _is_scripts_or_tests(r["file"]):
+            continue
+        for clause in r["replacement"].split(";"):
+            clause = clause.strip()
+            if not clause or clause.startswith("none (binned:"):
+                continue
+            for part in clause.split(","):
+                part = part.strip()
+                if part.startswith("rqa."):
+                    cited.add(part.split("(", 1)[0].strip())
+    return cited
+
+
+def check_every_always_mapped_file_has_a_row() -> list[str]:
+    """Condition 5: the row-identity baseline.
+
+    Every file in ``ALWAYS_MAPPED_FILES`` must appear in the map by name,
+    unconditionally -- whatever the row says, and whatever is on disk. Deleting
+    such a file together with its own row is the one edit conditions 1-4 cannot
+    see, because both halves of every comparison they make disappear at once.
+    """
+    rows = parse_map_rows(_read_cutover_text())
+    mapped = {r["file"] for r in rows}
+    return [
+        f"{f}: no CUTOVER.md row at all — this file's row may never be removed "
+        f"(CUTOVER.md never authorises deleting it)"
+        for f in sorted(ALWAYS_MAPPED_FILES - mapped)
+    ]
+
+
+def check_every_cited_replacement_is_exercised() -> list[str]:
+    """Condition 6: a cited replacement must be exercised, not merely present.
+
+    CUTOVER.md's deletion rule is that a legacy file may go only once the map
+    names its replacement *and that replacement is exercised*. Condition 2
+    enforces the first half for a bare ``rqa.*`` citation and stops there — it
+    resolves the dotted path to a file on disk. A module that exists but that
+    the test estate never loads satisfies condition 2 while leaving the
+    deletion it authorises untested, and deleting the sole test module that
+    imports it keeps every other condition green.
+    """
+    exercised = directly_exercised_modules()
+    problems: list[str] = []
+    for dotted in sorted(cited_rqa_modules()):
+        if dotted in exercised:
+            continue
+        via = INDIRECTLY_EXERCISED.get(dotted)
+        if via is None:
+            problems.append(
+                f"{dotted}: cited as a replacement but no collected "
+                f"{COLLECTED_TEST_GLOB} module imports it"
+            )
+            continue
+        # The exemption is only as good as the hop it names.
+        if via not in exercised:
+            problems.append(
+                f"{dotted}: exempted as exercised via {via!r}, but no collected "
+                f"{COLLECTED_TEST_GLOB} module imports {via!r} either"
+            )
+            continue
+        source = _module_source(via)
+        if source is None:
+            problems.append(f"{dotted}: exempted via {via!r}, which does not resolve under rqa/")
+        elif dotted not in _rqa_imports_in(source):
+            problems.append(
+                f"{dotted}: exempted as exercised via {via!r}, but {via!r} does not import it"
+            )
+    return problems
+
+
 CHECKS = (
     ("condition 1 (every legacy file has a row)", check_every_legacy_file_has_a_row),
     ("condition 2 (every replacement resolves)", check_every_replacement_resolves),
     ("condition 3 (status matches the filesystem, and rows agree)", check_status_matches_filesystem_and_is_self_consistent),
     ("condition 4 (every doc/schema row says status=present, unconditionally)", check_doc_schema_status_is_always_present),
+    ("condition 5 (every never-deletable file still has a row at all)", check_every_always_mapped_file_has_a_row),
+    ("condition 6 (every cited rqa.* replacement is exercised by a collected test)", check_every_cited_replacement_is_exercised),
 )
 
 
@@ -297,6 +487,38 @@ def test_status_matches_filesystem_and_is_self_consistent() -> None:
 def test_doc_schema_status_is_always_present() -> None:
     problems = check_doc_schema_status_is_always_present()
     assert not problems, "\n".join(problems)
+
+
+def test_every_always_mapped_file_has_a_row() -> None:
+    problems = check_every_always_mapped_file_has_a_row()
+    assert not problems, "\n".join(problems)
+
+
+def test_every_cited_replacement_is_exercised() -> None:
+    problems = check_every_cited_replacement_is_exercised()
+    assert not problems, "\n".join(problems)
+
+
+def test_indirectly_exercised_exemptions_are_all_still_needed() -> None:
+    """The exemption list may not outlive its reason. Once a collected test
+    imports one of these directly, its entry has to go, or the list slowly
+    becomes a place where unexercised citations can be parked."""
+    exercised = directly_exercised_modules()
+    stale = sorted(d for d in INDIRECTLY_EXERCISED if d in exercised)
+    assert not stale, (
+        "these are now imported directly by a collected test and must be "
+        f"removed from INDIRECTLY_EXERCISED: {stale}"
+    )
+
+
+def test_indirectly_exercised_exemptions_are_all_cited() -> None:
+    """And it may not grow entries for citations the map no longer makes."""
+    cited = cited_rqa_modules()
+    orphaned = sorted(d for d in INDIRECTLY_EXERCISED if d not in cited)
+    assert not orphaned, (
+        "these are no longer cited as a replacement and must be removed from "
+        f"INDIRECTLY_EXERCISED: {orphaned}"
+    )
 
 
 def test_no_mapped_and_migrated_module_is_still_present() -> None:

@@ -62,6 +62,22 @@ Every row below carries two columns that must never be collapsed into one:
     (§8) — because condition 3 alone would accept a doc/schema file that was genuinely deleted with
     its row honestly flipped to `deleted` in the same commit, and that file must never be deletable
     at all, by any lane, ever.
+  - Conditions 1-4 all compare a row that exists today against a file that exists today, so a file
+    deleted **together with its own row in one edit** left nothing for any of them to disagree with.
+    The guard's **fifth condition** closes that: every file this map never authorises the deletion
+    of — the ten root/docs/schema files of §6, plus `scripts/logging_otel.py` (§7.3) — must appear
+    in the table by name, unconditionally, whatever the row says and whatever is on disk. It is a
+    row-identity baseline held as a literal in the guard, so removing a row is itself the failure,
+    not merely a row that has become inconsistent.
+  - A `replacement` cell naming a bare `rqa.*` module was checked only for *resolving* — the module
+    file had to exist on disk. That is half of this map's deletion rule, which is that a legacy file
+    may go only once the map names its replacement **and that replacement is exercised**. The
+    guard's **sixth condition** enforces the other half: every cited `rqa.*` module must be imported
+    by a test module `run_all.py` collects, so deleting the only test that exercises a replacement
+    turns the guard red instead of silently dropping the coverage the deletion rests on. Four
+    citations exercised one hop away rather than directly are named individually in the guard's
+    `INDIRECTLY_EXERCISED` map, each with the module it is reached through; the guard re-checks that
+    hop, and fails if an entry there stops being needed or stops being cited.
 
 **The map authorises deletion only under `scripts/` and `tests/`.** The ten root/docs/schema files
 in §6 are recorded — several handoffs handed them to this document — but never marked `retired`
