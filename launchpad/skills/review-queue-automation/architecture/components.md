@@ -98,7 +98,7 @@ flowchart LR
   P06 -->|bundle in, verdict out| HARN[["Review harness"]]
   P10 -->|git push to the PR head branch| GH
   P08 -->|gh auth token| GHCLI[["GitHub CLI"]]
-  P12 -->|reads the HMAC key| KC[["OS keychain"]]
+  P12 -->|publishes the chain head| P09
   P10 -->|runs formatter and git| TOOLS[["Local tool processes"]]
 ```
 
@@ -271,15 +271,15 @@ flowchart LR
 **Justification (RQA-FR-034).** Serves RQA-FR-013, RQA-FR-025, RQA-FR-026, RQA-BR-011, RQA-BR-013, RQA-NFR-033. Simpler alternative rejected: folding into P-02 puts the human interface inside the state machine; the decision must be a recorded fact P-02 evaluates, not a transition a human triggers. Constraint: C5 (the human reaches it through the local CLI).
 ### P-12 — Record
 
-**Responsibility.** The one review record: a closed fourteen-kind append-only hash chain per job, including bundle/panel cutoff evidence, attempts, judgement, grants, actions, escalations and decisions. Only P-12 performs storage writes; callers construct typed payloads. `explain` reconstructs FR-012 offline. ADR-F / [#2159](https://github.com/launchpad-26/buzz/issues/2159) governs optional operator-key HMAC; an absent key marks a segment unverifiable rather than blocking append. Trace remains non-authoritative.
+**Responsibility.** The one review record: a closed fourteen-kind append-only hash chain per job, including bundle/panel cutoff evidence, attempts, judgement, grants, actions, escalations and decisions. Only P-12 performs record storage writes; callers construct typed payloads. `explain` reconstructs FR-012 offline. ADR-0066 removes the former HMAC key and anchors the chain head outside the operator machine so a removed tail or rebuilt chain is detectable through the last anchor. Trace remains non-authoritative.
 
-**Interfaces.** Provides: E-13, E-17. Consumes: E-27. (E-25 was retired by ADR-0066 with the record HMAC key; E-27 replaced it with the anchored chain head.) (Contracts in §6.)
+**Interfaces.** Provides: E-13, E-17. Consumes: E-27. (Contracts in §6.)
 
 **Accountable for (5).** RQA-BR-003, RQA-FR-012, RQA-NFR-022, RQA-NFR-028, RQA-NFR-032
 
 **Contributes to (14).** RQA-BR-001, RQA-BR-005, RQA-BR-008, RQA-BR-011, RQA-BR-014, RQA-FR-007, RQA-FR-013, RQA-FR-015, RQA-FR-016, RQA-FR-020, RQA-FR-021, RQA-FR-038, RQA-NFR-006, RQA-NFR-010
 
-**Records written.** record_entries, trace
+**Records written.** record_entries, record_anchors, trace
 
 **Units placed or replaced (17).** U-DISPATCH-04, U-DISPATCH-06, U-DISPATCH-19, U-DISPATCH-20, U-DOCS-16, U-DOCS-17, U-DOCS-18, U-DOCS-39, U-DOCS-40, U-DOCS-55, U-QUEUE-13, U-RESILIENCE-06, U-RESILIENCE-07, U-RESILIENCE-08, U-RESILIENCE-14, U-VERDICT-17, U-VERDICT-21
 
