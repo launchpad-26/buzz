@@ -74,8 +74,8 @@ with that branch regardless of which way it goes.
 | Phase | Delivers | Depends on | Status |
 |---|---|---|---|
 | 0 | Group decision: script-only tool layer vs. #1402's dual-mode server (§1a) | — | **Decided, durable record MET** — script-only, recorded in `ADR-0057-professor-script-only-tool-layer.md` |
-| 1 | `tools/professor.py` — the tool layer itself (4 subcommands, no MCP) | 0 | Not started |
-| 1b | Claim verification gate: `verify-claims` (§6.7) | 1 | **Decided 2026-09-04** — mandatory, unskippable; not started |
+| 1 | `tools/professor.py` — the tool layer itself (4 subcommands, no MCP) | 0 | **SHIPPED** — PR #2106 merged 2026-09-08; hardening PR #2133 merged 2026-09-09 |
+| 1b | Claim verification gate: `verify-claims` (§6.7) | 1 | **BUILT, NOT MERGED** — mandatory and unskippable per 2026-09-04; every review-gate criterion below demonstrated 2026-09-16 on branch `feature/2131-professor-verify-claims`, awaiting review |
 | 2 | One real drafted page for a real target repo, end to end | 1, 1b | Not started |
 | 3 | Full-repo scanning, wired automatically to drafting | 2 | Not started |
 | 4 | Change detection + section-scoped updates | 3 | Not started |
@@ -664,7 +664,7 @@ this specific call), not a reason to let an unverified claim reach a target repo
 | **Trigger** | Called by `draft-page` and `update-page`, always, as the third gate — after `check-page` (contract/citation-resolution) and `screen-sensitive` (sensitive-data), never before either, and never in parallel with them. Runs only against content that has already passed both cheaper gates, so the most expensive check never runs against a draft that was going to be rejected anyway. **Called twice per draft, not once** — see "The final, independent pass" below. |
 | **Inputs** | The gated draft content (new page or section patch), already past `screen-sensitive`; for each individual behaviour claim in it, its specific cited source, if it has one (the exact commit + path + span `check-page` already resolved — not the rest of the draft, and not the drafting agent's own reasoning). |
 | **Outputs** | Per claim: a verdict of `SUPPORTED`, `NOT_SUPPORTED`, `PARTIALLY_SUPPORTED`, or **`UNSOURCED`** (decided 2026-09-04, by Serina, reopening Open Questions item 3 — a behaviour claim with no citation at all; identified during step 1, before any per-claim dispatch, since there is nothing to check a citation *against*), each with a one-sentence reason. Any verdict other than `SUPPORTED`, on any claim, blocks the write entirely — same disposition/reporting shape as `screen-sensitive`'s `block` (see the flow diagram above): findings reported to whoever invoked the skill, nothing touches disk. All-`SUPPORTED` passes the draft through to the write step. |
-| **Mechanism** | For each claim that has a citation, dispatch a genuinely separate check in fresh context — only the cited source span and the specific claim sentence, deliberately *not* the rest of the draft, the drafting agent's reasoning, or the other claims' verdicts. This isolation is the point: a verifier that shares context with the drafter inherits the drafter's own blind spots instead of catching them. A claim with no citation skips dispatch entirely — `UNSOURCED` is immediate, cheaper than the per-claim model call every other verdict requires. **Dispatch itself — RESOLVED 2026-09-04, decided by Serina (Open Questions item 9, §3):** a subprocess call to `$PROFESSOR_VERIFIER_CMD` (a target/session-configured headless, single-turn CLI command — no suite-applied default, fails loud if unset, same as `$PROFESSOR_PACK_ROOT`; `claude --print` is the suite's recommended value to configure, not an automatic fallback), fed only the source span and claim text, its stdout captured as the verdict — the same subprocess shape every other tool call in this suite has, even though the logic behind it is a model, not a script. |
+| **Mechanism** | For each claim that has a citation, dispatch a genuinely separate check in fresh context — only the cited source span and the specific claim sentence, deliberately *not* the rest of the draft, the drafting agent's reasoning, or the other claims' verdicts. This isolation is the point: a verifier that shares context with the drafter inherits the drafter's own blind spots instead of catching them. A claim with no citation skips dispatch entirely — `UNSOURCED` is immediate, cheaper than the per-claim model call every other verdict requires. **Dispatch itself — RESOLVED 2026-09-04, decided by Serina (Open Questions item 9, §3):** a subprocess call to `$PROFESSOR_VERIFIER_CMD` (a target/session-configured headless, single-turn CLI command — no suite-applied default, fails loud if unset, same as `$PROFESSOR_PACK_ROOT`; `claude --print` is the suite's recommended value to configure, not an automatic fallback), fed only the source span and claim text — the same subprocess shape every other tool call in this suite has, even though the logic behind it is a model, not a script. **Capturing stdout is not the same as having a verdict — specified 2026-09-16, after measurement, in `verify-claims/SKILL.md` §2b–§2d.** The WHOLE response is matched against a two-line grammar — the one-sentence reason first, the verdict literal alone on the last line — by equality, never by searching inside it; a response that does not wholly match is a parse failure and blocks. The verdict is deliberately **last** so the verifier's reasoning precedes the token that reports it; with the verdict first, `PARTIALLY_SUPPORTED` proved unreachable, because a model generating left to right commits to a literal before doing the work that decides which one is right. Completion is judged separately from content: a non-zero exit, a timeout (120s default, applied by the dispatching agent since dispatch is not a `professor.py` subcommand and so never reaches `proc.py`), or a response that ends mid-grammar each block on their own, however well-formed the text already printed. |
 | **Explicitly not solved by this gate** | The verifier itself can be wrong too — this raises confidence, it is not proof. Opinion/judgement claims are never checked, by design — the mechanical-check test from the original design's §2 ("is being wrong silent and mechanically checkable?") doesn't apply to a claim that's attributed judgement rather than a factual assertion. **Cross-page contradiction is no longer out of scope for the suite** (decided 2026-09-04, reopening item 3) — it is handled by `library-index` `sweep` (§6.6), not here, because it needs the whole library, not one draft in isolation. **Claim identification itself is not independently verified** (named 2026-09-05) — step 1's extraction (which sentences even count as behaviour claims) is done by the same drafting agent being checked, not an isolated pass; a claim it mis-classifies as opinion, or never notices at all, never reaches dispatch. Running the whole gate twice (the final-pass rule, above) catches a transient miss, not a systematic one the same agent would repeat identically both times. |
 | **The final, independent pass** | Decided 2026-09-04, by Serina — Open Questions item 3's second half generalized into a suite-wide rule (§6's flow-diagram note, below): every gate a draft passes during drafting runs **again, independently, as the true final step**, immediately before a write is finalized or a PR opens — on every path, interactive or scheduled, not only Phase 6's CI. The first pass exists so the drafting agent can fix what it flags; the second pass is the actual gate of record, because "unskippable" is a prompt instruction to the agent during drafting, not proof the agent complied. This doubles `verify-claims`' own per-claim model-call cost — accepted deliberately, same reasoning as the gate's original mandatory decision: accuracy first, cost is a build/ops problem to solve, not a reason to trust a single pass. |
 | **The architectural difference this gate introduces, now resolved** | Every other tool in this suite is a plain deterministic script — the entire point of retiring MCP (§1a) was "works identically via Bash, from any harness, no special capability required." `verify-claims` still dispatches a model call, not a script, but the *dispatch itself* is a plain subprocess call to a configured command (`$PROFESSOR_VERIFIER_CMD`, above), same shape as every other tool call — Open Questions item 9's portability concern is answered, not left open. A harness with no headless single-turn CLI at all still cannot run this mandatory gate — a named limitation, not a silent one. |
@@ -1092,7 +1092,12 @@ decisions.
 was already settled before the durable record landed, so Phase 1 was never actually waiting on
 this step, but it's done now regardless.
 
-### Phase 1 — Tool layer
+### Phase 1 — Tool layer — **SHIPPED 2026-09-08, review gate MET**
+
+> PR #2106 merged 2026-09-08; the six deferred findings from its review shipped as PR #2133,
+> merged 2026-09-09. `check_professor.py` now runs in CI (the `professor-tools` job in
+> `.github/workflows/launchpad-agents-tests.yml`). The review gate's out-of-checkout
+> `$PROFESSOR_PACK_ROOT` proof and its deliberately-unset run are both in that harness.
 
 **Delivers:** `tools/professor.py`, four working subcommands (§4) — `resolve-pin` and
 `path-exists-at` are thin ports of the current `server.py` functions minus the `@mcp.tool()`
@@ -1120,7 +1125,21 @@ subprocess calls is made from a working directory outside this fork's checkout w
 never comes up — **and** a separate run with `$PROFESSOR_PACK_ROOT` deliberately unset produces
 the specific required error message, not a crash.
 
-### Phase 1b — Claim verification gate
+### Phase 1b — Claim verification gate — **BUILT 2026-09-16, review gate demonstrated, NOT MERGED**
+
+> Built on branch `feature/2131-professor-verify-claims`. Every criterion in this phase's
+> review gate below has been demonstrated against real dispatches, with the transcripts in
+> `launchpad/plans/evidence/2026-09-16-issue-2131-*.md`: all four verdicts on four distinct
+> claims; a non-`SUPPORTED` verdict blocking a real write with the two earlier gates recorded
+> as having passed first; `$PROFESSOR_VERIFIER_CMD` resolution with a non-default command,
+> plus its unset, not-on-PATH, unparseable, non-zero-exit and timeout failures; and every
+> roster-names candidate resolved by dispatch.
+>
+> **What is demonstrated but not yet independently reviewed or merged**, and so is not a
+> claim this row makes: the branch has not been through the review gate or opened as a pull
+> request. The second-pass re-dispatch observable (decision 10) is specified in
+> `verify-claims/SKILL.md` §4a and wired into both drafting skills, but a full two-pass run
+> over a finished page belongs to Phase 2, which is the first phase that produces one.
 
 **Delivers:** the `verify-claims` (§6.7) tool-side support — the skill's own dispatch logic
 (**not** a `tools/professor.py` subcommand; §4's diagram note explains why this is deliberately
@@ -1521,3 +1540,77 @@ convention, not deleted once answered).
    single-turn CLI available at all still cannot run this suite's mandatory gate — that stays
    true, stated explicitly rather than silently discovered later, same honesty this document
    already applies to every other named limitation.
+
+## Decisions taken after every Open questions item closed
+
+Open questions items 1–9 were all resolved by 2026-09-04. The decisions below came later,
+while Phase 1b was being planned and built, and are recorded here under the same honesty
+convention the rest of this document uses: what was decided, why, and what it does **not**
+solve. They were not Open questions items — three were put to Serina one at a time on
+2026-09-15 when planning Phase 1b, one was raised by an independent review of that plan, and
+the last came out of measurement during the build on 2026-09-16.
+
+10. **The re-dispatch observable — decided 2026-09-15, by Serina.** Each pass stamps a fresh
+    per-pass run identifier alongside its verdicts, bound to **one recorded invocation of
+    `$PROFESSOR_VERIFIER_CMD` per cited claim, per pass**. A verdict carrying a previous
+    pass's identifier, or one with no matching invocation record for that claim in that pass,
+    is a replay rather than a re-run, and blocks. Comparing the two passes' raw stdout was
+    considered and rejected: it fails against the exact thing it would be checking, because a
+    deterministic verifier returning byte-identical output twice is the healthy case, so
+    matching bytes cannot distinguish a real re-run from a cache hit. **Named limitation:** a
+    fresh identifier proves a dispatch happened, not that it was independent of the first
+    pass's reasoning. An agent could re-dispatch carrying the first pass's context and still
+    stamp a new identifier. Recorded in `verify-claims/SKILL.md` §4a.
+
+11. **The roster-names finding shape — decided 2026-09-15, by Serina.** `screen-content`
+    keeps emitting disposition `redact` for every roster-names candidate and gains an explicit
+    `requires_dispatch` flag. `screen-sensitive` dispatches on the flag and drops a candidate
+    only on a dispatch that both completed and parsed cleanly and returned `ATTRIBUTION` for
+    that exact candidate. This is the only shape that serves both consumers: a session
+    following the skill resolves attribution names away, while anything reading the JSON
+    directly — CI, a script, the scheduled workflow (§7.1) — never dispatches and still sees
+    `redact`. Replacing `redact` with a neutral needs-dispatch disposition was rejected as
+    reintroducing the fail-open where a consumer has no defined action and drops the finding
+    silently. **Accepted cost:** the finding shape is a contract, and this adds a field to it,
+    so every consumer of that JSON must tolerate it.
+
+12. **Candidate identity in a roster-names finding — decided 2026-09-15, by Serina**, raised
+    by an independent review rather than by the issues. The finding's `location` gains
+    **line-relative column offsets** — Unicode characters, zero-based, end-exclusive —
+    alongside its line number, and the offsets travel into the dispatch input so the verdict
+    comes back against them. `match` stays `null`. Without this, two candidates on one line
+    are indistinguishable, and an `ATTRIBUTION` verdict earned by a contributor's name can be
+    applied to the access-control entry beside it, silently unprotecting the roster on the one
+    category that exists to prevent exactly that. Offsets are coordinates, not content, which
+    is why they do not reopen the content leak that made `match` null. **Demonstrated
+    2026-09-16:** two candidates on one line, differing only in offsets, resolved to opposite
+    outcomes.
+
+13. **What a missing headless CLI demonstrates — decided 2026-09-15, by Serina.** Phase 1b's
+    review gate proves **two** degrade scenarios, not one: a `$PROFESSOR_VERIFIER_CMD` that is
+    not on PATH (fails at launch) and one that runs to completion but is not a headless
+    single-turn verifier (returns prose carrying no recognisable verdict). Reading the
+    criterion as the unset case was rejected — that is a separate criterion, and would make
+    this one a duplicate. **Honesty requirement carried into the evidence:** what these
+    demonstrate is the *consequences* of a harness without a working headless single-turn CLI,
+    not the absence of one. The limitation this document names elsewhere stays real and
+    unsolved; what is shown is that it fails safely.
+
+14. **The verdict goes last in the response grammar — decided 2026-09-16, by Serina, from
+    measurement.** The grammar was originally `<VERDICT>: <reason>`. That ordering requires the
+    answer before the reasoning that decides it, so a verifier generating left to right commits
+    to a literal at its first token and can only correct itself inside the reason, where the
+    equality rule correctly gives the correction no effect. **`PARTIALLY_SUPPORTED` was
+    unreachable** on every honestly-partial claim tried; one response read
+    `NOT_SUPPORTED: … — wait, the first two assertions are established, so the correct verdict
+    is PARTIALLY_SUPPORTED`. Supplying the verdicts' definitions did not fix it, and nor did
+    supplying an explicit ordered procedure for composing them; the `SUPPORTED` and
+    `NOT_SUPPORTED` controls held throughout, so the cause was positional rather than wording.
+    The grammar is now two lines, reason first, verdict alone on the last line, still matched
+    whole and by equality. Both partial claims then resolved correctly, and a second vendor's
+    CLI parsed cleanly against the same grammar with no accommodation. **Two further
+    consequences, both kept:** truncation is now safer, because a cut-off response loses the
+    verdict itself rather than keeping a complete-looking one above a missing justification;
+    and a rule blocking a verdict whose own reason names a different literal is retained even
+    though the reordering removed its cause, because the contract must hold for any configured
+    `$PROFESSOR_VERIFIER_CMD`, not only the one this was measured on.
