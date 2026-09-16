@@ -73,11 +73,11 @@ EXPLAIN_EXPORTS = frozenset(
         "LegacySource",
     }
 )
-#: The two concrete collaborators published beyond §1's list so a composition root can
+#: The three concrete collaborators published beyond §1's list so callers can
 #: construct them through the front door. #2211 (the operator CLI) is the module that
 #: falsified §1's "except through `__init__`" sentence: every part that appends takes its
 #: `RecordWriter` as a parameter and nothing in `rqa/record/` ever builds one.
-PUBLISHED_EXPORTS = frozenset({"SQLiteRecordWriter", "OSKeyStore"})
+PUBLISHED_EXPORTS = frozenset({"SQLiteRecordWriter", "SQLiteRecordReader", "OSKeyStore"})
 ALL_EXPORTS = APPEND_EXPORTS | EXPLAIN_EXPORTS | PUBLISHED_EXPORTS
 
 
@@ -170,18 +170,12 @@ def test_every_re_exported_name_actually_resolves() -> None:
     assert missing == [], f"__all__ names that do not resolve: {missing}"
 
 
-def test_the_reader_and_the_segment_type_are_not_public_package_surface() -> None:
-    """`SQLiteRecordReader` and `UnverifiableSegment` stay module names (`rqa.record.
-    reader`, `.verify`), the way `rqa.policy` keeps `StoredSnapshot` a `rqa.policy.store`
-    name. A sibling lane imports `UnverifiableSegment` from `rqa.record.verify`."""
-    for name in ("SQLiteRecordReader", "UnverifiableSegment"):
-        assert name not in rqa.record.__all__, name
+def test_the_segment_type_is_not_public_package_surface() -> None:
+    """`UnverifiableSegment` remains internal to verification."""
+    assert "UnverifiableSegment" not in rqa.record.__all__
 
-    from rqa.record.reader import SQLiteRecordReader
     from rqa.record.verify import UnverifiableSegment
-
-    for implementation in (SQLiteRecordReader, UnverifiableSegment):
-        assert isinstance(implementation, type), implementation
+    assert isinstance(UnverifiableSegment, type)
 
 
 def test_the_concrete_collaborators_a_composition_root_needs_are_package_surface() -> None:
@@ -194,10 +188,12 @@ def test_the_concrete_collaborators_a_composition_root_needs_are_package_surface
     capability. The keychain read itself is unchanged and still bounded by
     `tests/test_rqa_record_keychain.py`."""
     from rqa.record.keychain import OSKeyStore
+    from rqa.record.reader import SQLiteRecordReader
     from rqa.record.writer import SQLiteRecordWriter
 
     assert PUBLISHED_EXPORTS <= frozenset(rqa.record.__all__)
     assert rqa.record.SQLiteRecordWriter is SQLiteRecordWriter
+    assert rqa.record.SQLiteRecordReader is SQLiteRecordReader
     assert rqa.record.OSKeyStore is OSKeyStore
 
 

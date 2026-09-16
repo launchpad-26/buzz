@@ -33,7 +33,7 @@ from rqa.protocol.types import (
     Valid,
     Verdict,
 )
-from rqa.protocol.version import PROTOCOL_VERSION, protocol_hash
+from rqa.protocol.version import PROTOCOL_VERSION, protocol_hash, schema_path
 from rqa.protocol.validate import ProtocolError, validate
 
 __all__ = [
@@ -51,6 +51,7 @@ __all__ = [
     "HarnessIdentity",
     "Verdict",
     "PROTOCOL_VERSION",
+    "schema_path",
     "protocol_hash",
     "PROBE_MARKER",
     "envelope",

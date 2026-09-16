@@ -64,8 +64,7 @@ from typing import TYPE_CHECKING
 
 from rqa.contracts import BundleFailure
 from rqa.harness.errors import ProtocolVersionUnknown
-from rqa.protocol import PROTOCOL_VERSION, envelope, protocol_hash
-from rqa.protocol.version import schema_path
+from rqa.protocol import PROTOCOL_VERSION, envelope, protocol_hash, schema_path
 
 if TYPE_CHECKING:  # annotation-only; resolved by type checkers, never at import
     from rqa.contracts import Facts, Snapshot
