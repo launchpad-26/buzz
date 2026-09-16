@@ -305,6 +305,13 @@ DOCUMENTED_DATACLASSES: dict[str, tuple[tuple[str, str], ...]] = {
         ("seq", "int"),
         ("hash", "str"),
     ),
+    # E-27's payload (ADR-0066, #2300): a digest and its position, never payload.
+    "Anchor": (
+        ("job", "str"),
+        ("seq", "int"),
+        ("hash", "str"),
+        ("at", "str"),
+    ),
     "RecordRow": (
         ("seq", "int"),
         ("kind", "EntryKind"),

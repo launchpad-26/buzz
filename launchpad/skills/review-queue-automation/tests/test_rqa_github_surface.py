@@ -27,7 +27,11 @@ GITHUB = RQA / "github"
 #: §1's module list — this lane's finished state; the sibling adds nothing here.
 MODULES = frozenset(
     {"__init__", "types", "conclusions", "transport", "reads", "writes",
-     "capability", "store", "testing"}
+     "capability", "store", "testing",
+     # E-27's publisher (#2300). Deliberately not part of `writes.py`: every
+     # mutation there records an `action` entry, and an anchor that appends
+     # moves the head it just anchored.
+     "anchor_publisher"}
 )
 
 #: §1's re-export list: the §4 shared imports plus the eleven named names.

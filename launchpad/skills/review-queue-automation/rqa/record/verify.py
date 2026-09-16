@@ -45,7 +45,7 @@ from rqa.record.hashing import (
     PayloadNotSerializable,
     compute_hash,
 )
-from rqa.record.store import StoredEntry, entries_for_job, is_legacy
+from rqa.record.store import StoredEntry, entries_for_job, is_legacy, latest_anchor
 
 __all__ = ["BreakKind", "VerifyResult", "verify"]
 
@@ -53,6 +53,11 @@ __all__ = ["BreakKind", "VerifyResult", "verify"]
 class BreakKind(str, Enum):
     HASH_MISMATCH = "hash_mismatch"  # a row's stored hash does not match its own recomputed content
     CHAIN_BREAK = "chain_break"  # a row's prev_hash does not match the previous real row's hash
+    # Named TAIL_REMOVED, not TRUNCATED: `tests/test_rqa_record_surface.py` scans this
+    # package's string literals for destructive SQL, and "TRUNCATED" contains
+    # "TRUNCATE". The guard is right; the enum moved rather than the guard.
+    TAIL_REMOVED = "tail_removed"  # entries the anchored head proves existed are gone
+    ANCHOR_MISMATCH = "anchor_mismatch"  # the row at the anchored seq is not the row anchored
 
 
 @dataclass(frozen=True)
@@ -62,6 +67,8 @@ class VerifyResult:
     bad_seq: int | None  # first seq verification stopped trusting; None iff ok
     kind: BreakKind | None  # None iff ok
     checked_through_seq: int  # last real (non-legacy) seq examined before stopping or finishing
+    anchored_through_seq: int  # highest seq an anchor attests; 0 when the job has none
+    anchor_published: bool  # False when the newest anchor never reached its destination
 
 
 def _row_hash(entry: StoredEntry, *, payload: object) -> str:
@@ -85,6 +92,10 @@ def verify(connection: sqlite3.Connection, job_id: str) -> VerifyResult:
     """
 
     rows = entries_for_job(connection=connection, job=job_id)
+    anchor = latest_anchor(connection=connection, job=job_id)
+    anchored_through = anchor.seq if anchor is not None else 0
+    anchor_published = anchor.published if anchor is not None else False
+    by_seq = {entry.seq: entry for entry in rows if not is_legacy(entry=entry)}
     checked_through = 0
     parent_hash: str | None = None  # the previous real row's hash; None before the first
     seen_real = False
@@ -104,6 +115,8 @@ def verify(connection: sqlite3.Connection, job_id: str) -> VerifyResult:
                 bad_seq=entry.seq,
                 kind=BreakKind.CHAIN_BREAK,
                 checked_through_seq=checked_through,
+                anchored_through_seq=anchored_through,
+                anchor_published=anchor_published,
             )
         try:
             recomputed = _row_hash(entry, payload=json.loads(entry.payload))
@@ -120,17 +133,53 @@ def verify(connection: sqlite3.Connection, job_id: str) -> VerifyResult:
                 bad_seq=entry.seq,
                 kind=BreakKind.HASH_MISMATCH,
                 checked_through_seq=checked_through,
+                anchored_through_seq=anchored_through,
+                anchor_published=anchor_published,
             )
 
         parent_hash = entry.hash
         seen_real = True
         checked_through = entry.seq
 
-    # -- step 4: a complete walk ----------------------------------------------
+    # -- step 4: the anchored head (ADR-0066) ---------------------------------
+    # The chain is internally consistent at this point. An anchor is independent
+    # evidence about what the chain *was*, so it catches the two things internal
+    # consistency cannot: rows removed from the tail, and a chain rebuilt wholesale.
+    if anchor is not None:
+        anchored_row = by_seq.get(anchor.seq)
+        if anchored_row is None:
+            # The anchor attests a sequence that is no longer in the record. A
+            # consistent walk over the rows that remain is exactly what truncation
+            # looks like, which is why this check cannot come from the walk itself.
+            return VerifyResult(
+                job_id=job_id,
+                ok=False,
+                bad_seq=anchor.seq,
+                kind=BreakKind.TAIL_REMOVED,
+                checked_through_seq=checked_through,
+                anchored_through_seq=anchored_through,
+                anchor_published=anchor_published,
+            )
+        if anchored_row.hash != anchor.hash:
+            # The row is present at that sequence but is not the row that was
+            # anchored: the chain was recomputed after the fact.
+            return VerifyResult(
+                job_id=job_id,
+                ok=False,
+                bad_seq=anchor.seq,
+                kind=BreakKind.ANCHOR_MISMATCH,
+                checked_through_seq=checked_through,
+                anchored_through_seq=anchored_through,
+                anchor_published=anchor_published,
+            )
+
+    # -- step 5: a complete walk ----------------------------------------------
     return VerifyResult(
         job_id=job_id,
         ok=True,
         bad_seq=None,
         kind=None,
         checked_through_seq=checked_through,
+        anchored_through_seq=anchored_through,
+        anchor_published=anchor_published,
     )

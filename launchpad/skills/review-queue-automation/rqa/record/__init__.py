@@ -42,6 +42,13 @@ from rqa.contracts import (
     RecordRow,
     RecordWriter,
 )
+from rqa.record.anchor import (
+    Anchor,
+    AnchorPublisher,
+    AnchorResult,
+    PublishFailed,
+    anchor_job,
+)
 from rqa.record.explain import Explanation, ReuseResolutionError, explain, explain_job
 from rqa.record.hashing import PayloadNotSerializable
 from rqa.record.kinds import RecordProgrammingError, UnknownEntryKind
@@ -65,6 +72,11 @@ __all__ = [
     "verify",
     "VerifyResult",
     "BreakKind",
+    "Anchor",
+    "AnchorPublisher",
+    "AnchorResult",
+    "PublishFailed",
+    "anchor_job",
     "explain",
     "explain_job",
     "resolve_job",

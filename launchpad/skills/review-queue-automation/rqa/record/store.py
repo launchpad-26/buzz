@@ -44,6 +44,12 @@ __all__ = [
     "record_row",
     "rows_of_kind_across_jobs",
     "upsert_head",
+    "StoredAnchor",
+    "insert_anchor",
+    "mark_anchor_published",
+    "latest_anchor",
+    "pending_anchors",
+    "anchors_for_job",
 ]
 
 #: §5's DDL, with `IF NOT EXISTS` so a writer can be constructed against a state
@@ -74,6 +80,20 @@ SCHEMA = (
       hmac TEXT, keyed INTEGER NOT NULL CHECK (keyed IN (0, 1))
     )
     """,
+    # ADR-0066's anchored chain head. One row per published (or pending) anchor:
+    # `destination` is NULL until the publish succeeds, which is what makes a failed
+    # publish a recorded, retryable fact rather than a silently dropped one.
+    """
+    CREATE TABLE IF NOT EXISTS record_anchors (
+      job         TEXT NOT NULL,
+      seq         INTEGER NOT NULL,
+      hash        TEXT NOT NULL,
+      at          TEXT NOT NULL,
+      destination TEXT,
+      UNIQUE (job, seq)
+    )
+    """,
+    "CREATE INDEX IF NOT EXISTS record_anchors_by_job ON record_anchors(job, seq)",
 )
 
 _COLUMNS = "job, seq, kind, at, payload, prev_hash, hash, hmac, keyed"
@@ -266,3 +286,86 @@ def record_row(*, entry: StoredEntry) -> RecordRow:
         at=datetime.fromisoformat(entry.at),
         payload=payload,
     )
+
+
+# --------------------------------------------------------------------------
+# ADR-0066: the anchored chain head. These rows are evidence *about* the chain,
+# never part of it — nothing here is hashed into an entry, and `append` neither
+# reads nor writes this table.
+# --------------------------------------------------------------------------
+
+
+@dataclass(frozen=True)
+class StoredAnchor:
+    """One anchor row. `destination` is None while the publish is still pending."""
+
+    job: str
+    seq: int
+    hash: str
+    at: str
+    destination: str | None
+
+    @property
+    def published(self) -> bool:
+        return self.destination is not None
+
+
+def _anchor(row: tuple) -> StoredAnchor:
+    job, seq, hash_, at, destination = row
+    return StoredAnchor(job=job, seq=seq, hash=hash_, at=at, destination=destination)
+
+
+def insert_anchor(
+    *, connection: sqlite3.Connection, job: str, seq: int, hash: str, at: str
+) -> None:
+    """Record the intent to anchor `(job, seq)` before any publish is attempted.
+
+    Written first, on purpose. The local row is what detects a truncated tail with no
+    network at all, so it must survive a publish that never succeeds.
+    """
+    connection.execute(
+        "INSERT OR IGNORE INTO record_anchors (job, seq, hash, at, destination) "
+        "VALUES (?, ?, ?, ?, NULL)",
+        (job, seq, hash, at),
+    )
+
+
+def mark_anchor_published(
+    *, connection: sqlite3.Connection, job: str, seq: int, destination: str
+) -> None:
+    """Record where the anchor was published. Only called after the publish returned."""
+    connection.execute(
+        "UPDATE record_anchors SET destination = ? WHERE job = ? AND seq = ?",
+        (destination, job, seq),
+    )
+
+
+def latest_anchor(*, connection: sqlite3.Connection, job: str) -> StoredAnchor | None:
+    """The highest-`seq` anchor for `job`, published or not."""
+    cursor = connection.execute(
+        "SELECT job, seq, hash, at, destination FROM record_anchors "
+        "WHERE job = ? ORDER BY seq DESC LIMIT 1",
+        (job,),
+    )
+    row = cursor.fetchone()
+    return None if row is None else _anchor(tuple(row))
+
+
+def pending_anchors(*, connection: sqlite3.Connection, job: str) -> tuple[StoredAnchor, ...]:
+    """Anchors recorded but never published, oldest first — the retry queue."""
+    cursor = connection.execute(
+        "SELECT job, seq, hash, at, destination FROM record_anchors "
+        "WHERE job = ? AND destination IS NULL ORDER BY seq",
+        (job,),
+    )
+    return tuple(_anchor(tuple(row)) for row in cursor.fetchall())
+
+
+def anchors_for_job(*, connection: sqlite3.Connection, job: str) -> tuple[StoredAnchor, ...]:
+    """Every anchor for `job`, in sequence order."""
+    cursor = connection.execute(
+        "SELECT job, seq, hash, at, destination FROM record_anchors "
+        "WHERE job = ? ORDER BY seq",
+        (job,),
+    )
+    return tuple(_anchor(tuple(row)) for row in cursor.fetchall())
