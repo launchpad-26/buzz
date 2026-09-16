@@ -14,7 +14,7 @@ could not be written does not return a value (§6).
 **Fixed events (U-AUTHORITY-09's retained registry, U-DOCS-45,
 RQA-NFR-032).** The GraphQL documents below are module literals with their
 review event spelled inside the text — `event:APPROVE`,
-`event:CHANGES_REQUESTED`, `event:COMMENT` — never an interpolated event, so a
+`event:REQUEST_CHANGES`, `event:COMMENT` — never an interpolated event, so a
 caller provably cannot select a more-authoritative review event.
 
 **No escalation, ever (§7, launchpad/AGENTS.md §5, ADR-0052).** There is no
@@ -68,7 +68,7 @@ _APPROVE_MUTATION = (
 )
 _REQUEST_CHANGES_MUTATION = (
     "mutation($pullRequestId:ID!,$body:String!){"
-    "addPullRequestReview(input:{pullRequestId:$pullRequestId,body:$body,event:CHANGES_REQUESTED}){"
+    "addPullRequestReview(input:{pullRequestId:$pullRequestId,body:$body,event:REQUEST_CHANGES}){"
     "pullRequestReview{id state}}}"
 )
 _COMMENT_MUTATION = (

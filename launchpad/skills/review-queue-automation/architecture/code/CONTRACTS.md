@@ -68,7 +68,9 @@ class Remedy:
     tool: str                    # a MECHANICAL_TOOL_SET id
     paths: tuple[str, ...]       # exact normalized repository-relative files; non-empty, unique,
                                  # no glob metacharacters, absolute path, "." or ".." segment
-    check: str                   # the check name that must pass after the fix
+    check: str                   # one canonical check id: ruff-format-check,
+                                 # prettier-check, gofmt-check, rustfmt-check,
+                                 # or dart-format-check
 
 @dataclass(frozen=True)
 class Finding:
@@ -300,6 +302,15 @@ class EscalationCause(str, Enum):
     EVIDENCE_GAP = "evidence_gap"; REQUIRED_INFORMATION = "required_information"
     AUTHORITY_REQUIREMENT = "authority_requirement"
 
+class EscalationSubjectKind(str, Enum):
+    OBLIGATION = "obligation"; FINDING = "finding"; AUTHORITY = "authority"
+    POLICY = "policy"; ASSURANCE = "assurance"; REMEDIATION = "remediation"
+    REVISION = "revision"
+
+@dataclass(frozen=True)
+class EscalationSubject:
+    kind: EscalationSubjectKind; identifier: str
+
 @dataclass(frozen=True)
 class Decision:
     actor: str; basis: str
@@ -308,8 +319,9 @@ class Decision:
 
 @dataclass(frozen=True)
 class Escalation:
-    id: int; job_id: str; cause: EscalationCause; question: str; context: Mapping[str, str]
-    head_sha: str; snapshot_hash: str; entry_seq: int; raised_at: datetime
+    id: int; job_id: str; cause: EscalationCause; subject: EscalationSubject
+    question: str; context: Mapping[str, str]
+    head_sha: str; snapshot_hash: str | None; entry_seq: int; raised_at: datetime
 
 @dataclass(frozen=True)
 class Judgement:
@@ -320,9 +332,9 @@ class Judgement:
     attribution: Mapping[str, Literal["pr", "inherited"]]
     assurance: Assurance
     remediation_candidates: tuple[str, ...]
-    escalation_causes: tuple[tuple[EscalationCause, str], ...]
+    escalation_causes: tuple[tuple[EscalationCause, EscalationSubject, str], ...]
     disposition: Literal["approve", "request_changes", "remediate", "escalate"]
-    reused_from: str | None
+    reused_from: tuple[str, int] | None  # exact predecessor (job id, judgement seq)
 
 @dataclass(frozen=True)
 class CarriedEvidence:
@@ -482,7 +494,8 @@ def remediate(*, job: Job, finding: Finding, grant: Grant, facts: Facts, snapsho
               state_dir: Path, runner: ProcessRunner, record: RecordWriter) -> RemediationPushed | RemediationRefused: ...
 
 # E-11  P-11 provides, P-02 consumes (reverse edge: P-11 calls P-02.resume)
-def raise_(*, job: Job, cause: EscalationCause, question: str, context: Mapping, record: RecordWriter,
+def raise_(*, job: Job, cause: EscalationCause, subject: EscalationSubject, question: str,
+           context: Mapping, record: RecordWriter,
            store: EscalationStore) -> Escalation: ...
 def pending(*, store: EscalationStore) -> tuple[Escalation, ...]: ...
 def resume(*, job_id: str, decision: Decision, deps: LifecycleDeps) -> JobStatus: ...     # P-02 provides
@@ -564,8 +577,11 @@ groups and leaves `extra_tags` open. P-07 may select a **remediation candidate**
 files, its tool and categories are allowed by the snapshot, and `behaviour_changing is False`.
 That model-supplied Boolean is only a conservative veto; it never proves neutrality. Before P-10 may
 commit or push, the closed `ToolSpec` must run its language-specific behavior-equivalence check over
-every changed file and prove the actual before/after pair equivalent. No sound equivalence check means
-the tool is not in `MECHANICAL_TOOL_SET`; a failed check is `RemediationRefused(BEHAVIOUR_CHANGED)`.
+every changed file and prove the actual before/after pair equivalent. Registration in
+`MECHANICAL_TOOL_SET` means policy may name the tool; it does not claim its equivalence oracle is
+available in this implementation. A registered tool without an available sound equivalence oracle
+always refuses before invoking the formatter, commit, or push. A failed check is
+`RemediationRefused(BEHAVIOUR_CHANGED)`.
 Policy cannot weaken that test. A substantive category is never a candidate, and a finding blocks when
 any category blocks under policy.
 

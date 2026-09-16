@@ -42,6 +42,7 @@ from rqa.lifecycle.errors import LifecycleError, UnknownJobError
 from rqa.lifecycle.states import TRANSITIONS, as_status
 from rqa.lifecycle.steps import drive
 from rqa.lifecycle.transition import safe_stop, transition
+from rqa.record import append_trace
 
 __all__ = ["admit"]
 
@@ -54,6 +55,12 @@ def admit(*, job: Job, deps: LifecycleDeps) -> JobStatus:
     machine until a resting status, and return that status."""
     current = job
     try:
+        append_trace(
+            state_dir=deps.state_dir,
+            job_id=job.id,
+            event="queueing",
+            fields={"status": as_status(job.status, what="jobs.status").value},
+        )
         current = _arrive(job=job, deps=deps)
         # Steps 3-13 (§3.2): the dispatch loop runs the job to its resting status,
         # inside this boundary.

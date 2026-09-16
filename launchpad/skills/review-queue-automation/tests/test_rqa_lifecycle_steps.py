@@ -19,6 +19,7 @@ from __future__ import annotations
 import pathlib
 import sqlite3
 import sys
+import tempfile
 import traceback
 
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent.parent))
@@ -72,6 +73,8 @@ from rqa.contracts import (  # noqa: E402
     Category,
     DenyReason,
     EscalationCause,
+    EscalationSubject,
+    EscalationSubjectKind,
     EvidenceState,
     GithubUnavailable,
     JobStatus,
@@ -84,13 +87,14 @@ from rqa.lifecycle.admit import _durable  # noqa: E402
 from rqa.lifecycle.errors import LifecycleError, UnknownJobError  # noqa: E402
 from rqa.lifecycle.status import _reason  # noqa: E402
 from rqa.lifecycle.steps import NO_CONFORMING_TRANSITION  # noqa: E402
+from rqa.record.trace import JOB_EVENTS, REQUIRED_JOB_EVENTS, trace_lines  # noqa: E402
 from rqa.remediation import MECHANICAL_TOOL_SET  # noqa: E402
 
 
 # -- the finished package (wave rule: the post-sibling set, exactly) -------------
 
 
-def test_the_finished_package_exports_exactly_the_fourteen_names() -> None:
+def test_the_finished_package_exports_exactly_the_fifteen_names() -> None:
     """§1's re-export list. This lane completes the package, so the set is asserted
     exactly — never a subset or superset."""
     import rqa.lifecycle
@@ -98,9 +102,9 @@ def test_the_finished_package_exports_exactly_the_fourteen_names() -> None:
     assert set(rqa.lifecycle.__all__) == {
         "admit", "resume", "status", "transition", "JobStatus", "TRANSITIONS",
         "Disposition", "DISPOSITION", "StatusReport", "NotFound", "StaleDecisionError",
-        "LifecycleError", "IllegalTransitionError", "UnknownJobError",
+        "LifecycleError", "IllegalTransitionError", "UnknownJobError", "LifecycleDeps",
     }
-    assert len(rqa.lifecycle.__all__) == 14
+    assert len(rqa.lifecycle.__all__) == 15
 
 
 def test_the_finished_package_has_exactly_the_nine_modules() -> None:
@@ -213,6 +217,29 @@ def test_t7_one_admission_drives_queued_to_approved_with_exactly_one_run() -> No
     state, body, grant = deps.github.submit_calls[0]
     assert state == "APPROVE" and grant.activity is Activity.APPROVE
     assert body == latest_payload(connection, "judgement")["rendered_body"]
+
+
+def test_u_dispatch_19_a_completed_review_emits_every_required_milestone() -> None:
+    """The registry is exercised by the real lifecycle, not only by trace unit tests."""
+    with tempfile.TemporaryDirectory() as state_dir:
+        connection, record, job = bench()
+        deps, _ = happy_deps(
+            connection,
+            record,
+            job,
+            state_dir=pathlib.Path(state_dir),
+        )
+        assert admit(job=job, deps=deps) is JobStatus.APPROVED
+
+        events = [
+            str(entry["event"])
+            for entry in trace_lines(state_dir=state_dir, job_id=job.id)
+        ]
+        assert REQUIRED_JOB_EVENTS <= set(events), sorted(REQUIRED_JOB_EVENTS - set(events))
+        assert set(events) <= set(JOB_EVENTS)
+        assert events[0] == "queueing"
+        assert "lease_acquired" in events
+        assert "mutation" in events
 
 
 def test_every_transition_payload_carries_exactly_the_eight_section_six_fields() -> None:
@@ -376,7 +403,7 @@ def test_t9_empty_regenerated_calls_no_harness_and_the_absent_attestation_proves
     # E-09 received the empty complete panel cut off at fact-capture time (T9).
     assert call["panel"].evidence_cutoff == NOW
     judgement_payload = latest_payload(connection, "judgement", job_id="job-2")
-    assert judgement_payload["reused_from"] == "job-1"
+    assert judgement_payload["reused_from"] == ["job-1", 3]
     assert judgement_payload["disposition"] == "approve"
 
 
@@ -495,8 +522,16 @@ def test_an_escalate_judgement_raises_every_named_cause() -> None:
     judgement = make_judgement(
         disposition="escalate",
         escalation_causes=(
-            (EscalationCause.EVIDENCE_GAP, "obligation ob-1 evidence is unknown"),
-            (EscalationCause.CONFLICTING_JUDGEMENT, "reviewers disagree on ob-1"),
+            (
+                EscalationCause.EVIDENCE_GAP,
+                EscalationSubject(EscalationSubjectKind.OBLIGATION, "ob-1"),
+                "obligation ob-1 evidence is unknown",
+            ),
+            (
+                EscalationCause.CONFLICTING_JUDGEMENT,
+                EscalationSubject(EscalationSubjectKind.OBLIGATION, "ob-1"),
+                "reviewers disagree on ob-1",
+            ),
         ),
         obligations={"ob-1": EvidenceState.UNKNOWN},
     )

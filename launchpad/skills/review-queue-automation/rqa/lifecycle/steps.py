@@ -53,6 +53,8 @@ from rqa.contracts import (
     Deny,
     Decision,
     EscalationCause,
+    EscalationSubject,
+    EscalationSubjectKind,
     EvidenceState,
     Facts,
     Finding,
@@ -80,7 +82,7 @@ from rqa.lifecycle.errors import LifecycleError
 from rqa.lifecycle.rest import enter_rest
 from rqa.lifecycle.states import as_status
 from rqa.lifecycle.transition import transition
-from rqa.record.reader import SQLiteRecordReader
+from rqa.record import SQLiteRecordReader, append_trace
 
 __all__ = ["drive", "Cascade", "read_prior_record", "DISPATCH"]
 
@@ -89,6 +91,49 @@ NO_CONFORMING_TRANSITION = "no source-conforming next transition was available"
 
 #: The stop reason for an E-23 `GithubUnavailable` (§3.2 step 2).
 FACTS_UNAVAILABLE = "facts unavailable"
+
+#: U-DISPATCH-19 retained the legacy bound: a diagnostic event never grows with an
+#: unbounded attempt list. `truncated` records when more routes executed.
+MAX_TRACED_ROUTES = 4
+
+
+def _trace(job: Job, ctx: Cascade, event: str, fields: Mapping | None = None) -> None:
+    """Append a bounded non-authoritative milestone for this lifecycle cascade."""
+    append_trace(
+        state_dir=ctx.deps.state_dir,
+        job_id=job.id,
+        event=event,
+        fields=fields,
+    )
+
+
+def _trace_panel(job: Job, ctx: Cascade, panel: PanelResult) -> None:
+    """Emit the unconditional budget and executed-route milestones from the result."""
+    routes = [
+        {
+            "harness": attempt.route.harness,
+            "model": attempt.route.model,
+            "provider": attempt.route.provider,
+            "family": attempt.route.family,
+        }
+        for attempt in panel.attempts[:MAX_TRACED_ROUTES]
+    ]
+    _trace(
+        job,
+        ctx,
+        "budget",
+        {"bound_reached": panel.bound_reached, "complete": panel.complete},
+    )
+    _trace(
+        job,
+        ctx,
+        "route_selection",
+        {
+            "routes": routes,
+            "unrouted": not routes,
+            "truncated": len(panel.attempts) > MAX_TRACED_ROUTES,
+        },
+    )
 
 
 def read_prior_record(*, job: Job, connection: sqlite3.Connection) -> RecordReader:
@@ -174,9 +219,16 @@ def step3(job: Job, ctx: Cascade) -> tuple[Job, bool]:
         repo=job.repo, job=job, store=deps.policy.store, record=deps.record
     )
     if isinstance(snapshot, ValidationFailure):
+        _trace(
+            job,
+            ctx,
+            "preflight",
+            {"snapshot_hash": None, "review_authority": "not_evaluated"},
+        )
         _escalate_authority_requirement(
             job,
             ctx,
+            subject=EscalationSubject(EscalationSubjectKind.POLICY, job.repo),
             detail="policy validation failed",
         )
         return (
@@ -203,12 +255,24 @@ def step3(job: Job, ctx: Cascade) -> tuple[Job, bool]:
         github=deps.authority.github,
         store=deps.authority.store,
     )
+    if not isinstance(answer, (Grant, Deny)):
+        raise LifecycleError(f"E-04 returned {type(answer).__name__}")
+    _trace(
+        job,
+        ctx,
+        "preflight",
+        {
+            "snapshot_hash": snapshot.hash,
+            "review_authority": "denied" if isinstance(answer, Deny) else "granted",
+        },
+    )
     if isinstance(answer, Deny):
         # 3a. The escalation is raised against the snapshot the job is being pinned
         # to in this same transaction (`P-11-escalation.md` §2 reads it off the job).
         _escalate_authority_requirement(
             job if job.snapshot_hash is not None else replace(job, snapshot_hash=snapshot.hash),
             ctx,
+            subject=EscalationSubject(EscalationSubjectKind.AUTHORITY, Activity.REVIEW.value),
             detail=f"review denied ({answer.reason.value})",
         )
         return (
@@ -222,9 +286,6 @@ def step3(job: Job, ctx: Cascade) -> tuple[Job, bool]:
             ),
             False,
         )
-    if not isinstance(answer, Grant):
-        raise LifecycleError(f"E-04 returned {type(answer).__name__}")
-
     claimed = deps.claim_lease(job=job, grant=answer, record=deps.record)
     if isinstance(claimed, LeaseTaken):
         # §3.2 step 1: "LeaseTaken returns the unchanged QUEUED job."
@@ -235,17 +296,16 @@ def step3(job: Job, ctx: Cascade) -> tuple[Job, bool]:
         return job, True
     if not isinstance(claimed, Mutation) or not claimed.accepted:
         raise LifecycleError(f"E-01 claim returned {type(claimed).__name__}, not accepted")
-    return (
-        transition(
-            job,
-            JobStatus.CLAIMED,
-            reason="review lease claimed under review grant",
-            connection=deps.connection,
-            record=deps.record,
-            snapshot_hash=snapshot.hash,
-        ),
-        False,
+    claimed_job = transition(
+        job,
+        JobStatus.CLAIMED,
+        reason="review lease claimed under review grant",
+        connection=deps.connection,
+        record=deps.record,
+        snapshot_hash=snapshot.hash,
     )
+    _trace(claimed_job, ctx, "lease_acquired", {"mutation_id": claimed.id})
+    return claimed_job, False
 
 
 def step4(job: Job, ctx: Cascade) -> Facts | GithubUnavailable:
@@ -253,6 +313,17 @@ def step4(job: Job, ctx: Cascade) -> Facts | GithubUnavailable:
     facts = ctx.deps.github.facts(job=job, record=ctx.deps.record)
     if isinstance(facts, Facts):
         ctx.facts = facts
+        _trace(
+            job,
+            ctx,
+            "evidence",
+            {
+                "head_sha": facts.pr.head_sha,
+                "changed_paths": len(facts.changed_paths),
+                "checks": len(facts.checks),
+            },
+        )
+        _trace(job, ctx, "verify", {"head_sha": facts.pr.head_sha, "matched": True})
     return facts
 
 
@@ -270,7 +341,12 @@ def step5(job: Job, ctx: Cascade) -> tuple[Job, bool]:
 
     snapshot = _ensure_snapshot(job, ctx)
     if isinstance(snapshot, ValidationFailure):
-        _escalate_authority_requirement(job, ctx, detail="policy validation failed")
+        _escalate_authority_requirement(
+            job,
+            ctx,
+            subject=EscalationSubject(EscalationSubjectKind.POLICY, job.repo),
+            detail="policy validation failed",
+        )
         return (
             transition(
                 job,
@@ -283,6 +359,15 @@ def step5(job: Job, ctx: Cascade) -> tuple[Job, bool]:
         )
 
     if job.predecessor_job is not None:
+        _trace(
+            job,
+            ctx,
+            "rereview",
+            {
+                "predecessor_job": job.predecessor_job,
+                "predecessor_head_sha": job.predecessor_head_sha,
+            },
+        )
         carry = deps.reuse.carry_over(
             job=job, prior=read_prior_record(job=job, connection=deps.connection), facts=facts,
             snapshot=snapshot, record=deps.record,
@@ -294,6 +379,13 @@ def step5(job: Job, ctx: Cascade) -> tuple[Job, bool]:
     plan = deps.harness.plan(
         job=job, facts=facts, snapshot=snapshot, carry=carry, record=deps.record,
     )
+    _trace(
+        job,
+        ctx,
+        "planner",
+        {"obligations": len(plan.obligations), "risk_class": plan.risk_class},
+    )
+    _trace(job, ctx, "strategy", {"strategy": plan.strategy})
 
     if job.predecessor_job is None:
         # §3.2 step 3: the no-predecessor replacement, verbatim fields.
@@ -341,6 +433,7 @@ def step6(job: Job, ctx: Cascade) -> tuple[Job, bool]:
         panel = PanelResult(attempts=(), complete=True, incomplete_reason=None,
                             evidence_cutoff=facts.fetched_at, bound_reached=False)
         ctx.panel = panel
+        _trace_panel(job, ctx, panel)
         judgement = step8(job, ctx, panel=panel, decision=None)
         ctx.judgement = judgement
         return (
@@ -412,6 +505,8 @@ def step7(job: Job, ctx: Cascade) -> tuple[Job, bool]:
             raise LifecycleError(f"E-07 run returned {type(panel_or_failure).__name__}")
         panel = panel_or_failure
 
+    _trace_panel(job, ctx, panel)
+
     if not panel.complete:
         # §3.2's total map: exhausted → STOPPED, budget → STOPPED, bundle → STOPPED.
         if panel.incomplete_reason not in ("exhausted", "budget", "bundle"):
@@ -449,6 +544,7 @@ def step8(job: Job, ctx: Cascade, *, panel: PanelResult, decision: Decision | No
     )
     if not isinstance(result, Judgement):
         raise LifecycleError(f"E-09 returned {type(result).__name__}")
+    _trace(job, ctx, "decision", {"disposition": result.disposition})
     return result
 
 
@@ -474,9 +570,14 @@ def step9(job: Job, ctx: Cascade) -> tuple[Job, bool]:
 
     if judgement.disposition == "escalate":
         # "escalate raises every named cause then ESCALATED" (§3.2).
-        for cause, detail in judgement.escalation_causes:
-            _raise_escalation(job, ctx, cause=cause, question=detail, context={"cause": cause.value})
-        causes = ", ".join(cause.value for cause, _ in judgement.escalation_causes) or "unnamed"
+        for cause, subject, detail in judgement.escalation_causes:
+            _raise_escalation(
+                job, ctx, cause=cause, subject=subject, question=detail,
+                context={"cause": cause.value},
+            )
+        causes = ", ".join(
+            cause.value for cause, _, _ in judgement.escalation_causes
+        ) or "unnamed"
         return (
             transition(
                 job,
@@ -540,6 +641,7 @@ def submit(job: Job, ctx: Cascade) -> tuple[Job, bool]:
 
     state = "APPROVE" if judgement.disposition == "approve" else "REQUEST_CHANGES"
     body = _rendered_body(job, ctx)
+    _trace(job, ctx, "mutation", {"kind": "submit_review", "state": state})
     result = deps.github.submit_review(
         job=job, state=state, body=body, grant=grant, record=deps.record
     )
@@ -566,6 +668,7 @@ def submit(job: Job, ctx: Cascade) -> tuple[Job, bool]:
             job,
             ctx,
             cause=EscalationCause.EVIDENCE_GAP,
+            subject=EscalationSubject(EscalationSubjectKind.REVISION, job.head_sha),
             question="review submission found the head stale; the evidence no longer matches",
             context={"reason": result.reason},
         )
@@ -608,6 +711,7 @@ def step11(job: Job, ctx: Cascade) -> tuple[Job, bool]:
         return job, True
     if not isinstance(answer, Grant):
         raise LifecycleError(f"E-04 returned {type(answer).__name__}")
+    _trace(job, ctx, "mutation", {"kind": "merge"})
     result = deps.github.merge(job=job, grant=answer, record=deps.record)
     if isinstance(result, Mutation):
         if not result.accepted:
@@ -676,7 +780,10 @@ def _remediate(job: Job, ctx: Cascade, judgement: Judgement) -> tuple[Job, bool]
     if isinstance(answer, Deny):
         # §3.2: "A remediation Deny similarly escalates with AUTHORITY_REQUIREMENT."
         _escalate_authority_requirement(
-            job, ctx, detail=f"remediation denied ({answer.reason.value})"
+            job,
+            ctx,
+            subject=EscalationSubject(EscalationSubjectKind.AUTHORITY, Activity.REMEDIATE.value),
+            detail=f"remediation denied ({answer.reason.value})",
         )
         return (
             transition(
@@ -703,6 +810,7 @@ def _remediate(job: Job, ctx: Cascade, judgement: Judgement) -> tuple[Job, bool]
         state_dir=deps.state_dir, runner=deps.runner, record=deps.record,
     )
     if isinstance(push, RemediationPushed):
+        _trace(job, ctx, "mutation", {"kind": "remediation_push"})
         # §3.2: "RemediationPushed leaves the job REMEDIATING" — the push is observed
         # as a new head on the next tick.
         return job, False
@@ -711,6 +819,7 @@ def _remediate(job: Job, ctx: Cascade, judgement: Judgement) -> tuple[Job, bool]
             job,
             ctx,
             cause=EscalationCause.EVIDENCE_GAP,
+            subject=EscalationSubject(EscalationSubjectKind.REMEDIATION, finding.id),
             question=f"remediation was refused ({push.reason.value}); a human must judge",
             context={"reason": push.reason.value},
         )
@@ -740,6 +849,7 @@ def _authority_requirement_escalation(job: Job, ctx: Cascade, *, denied: Activit
     if isinstance(comment_grant, Grant):
         body = _rendered_body(job, ctx)
         if body:
+            _trace(job, ctx, "mutation", {"kind": "comment"})
             posted = deps.github.comment(
                 job=job, body=body, grant=comment_grant, record=deps.record
             )
@@ -747,7 +857,10 @@ def _authority_requirement_escalation(job: Job, ctx: Cascade, *, denied: Activit
                 raise LifecycleError(f"E-12 comment returned {type(posted).__name__}")
             # A GithubUnavailable comment is a lost courtesy, never a lost escalation.
     _escalate_authority_requirement(
-        job, ctx, detail=f"verdict activity {denied.value} denied"
+        job,
+        ctx,
+        subject=EscalationSubject(EscalationSubjectKind.AUTHORITY, denied.value),
+        detail=f"verdict activity {denied.value} denied",
     )
     return transition(
         job,
@@ -764,13 +877,15 @@ def _authority_requirement_escalation(job: Job, ctx: Cascade, *, denied: Activit
 
 
 def _stop(job: Job, ctx: Cascade, *, reason: str) -> Job:
-    return transition(
+    stopped = transition(
         job,
         JobStatus.STOPPED,
         reason=reason,
         connection=ctx.deps.connection,
         record=ctx.deps.record,
     )
+    _trace(stopped, ctx, "safe_stop", {"reason": reason})
+    return stopped
 
 
 def _grant(job: Job, ctx: Cascade, *, activity: Activity) -> Grant | Deny:
@@ -791,25 +906,41 @@ def _grant(job: Job, ctx: Cascade, *, activity: Activity) -> Grant | Deny:
 
 
 def _raise_escalation(
-    job: Job, ctx: Cascade, *, cause: EscalationCause, question: str, context: Mapping
+    job: Job,
+    ctx: Cascade,
+    *,
+    cause: EscalationCause,
+    subject: EscalationSubject,
+    question: str,
+    context: Mapping,
 ) -> None:
     """One E-11 raise. The store rides the injected client the way `deps.supply`
     carries its prober, breakers and spend (§3.2's closures)."""
-    ctx.deps.escalation.raise_(
+    escalation = ctx.deps.escalation.raise_(
         job=job,
         cause=cause,
+        subject=subject,
         question=question,
         context=context,
         record=ctx.deps.record,
         store=ctx.deps.escalation.store,
     )
+    _trace(
+        job,
+        ctx,
+        "human_queue",
+        {"cause": cause.value, "request_id": escalation.id},
+    )
 
 
-def _escalate_authority_requirement(job: Job, ctx: Cascade, *, detail: str) -> None:
+def _escalate_authority_requirement(
+    job: Job, ctx: Cascade, *, subject: EscalationSubject, detail: str
+) -> None:
     _raise_escalation(
         job,
         ctx,
         cause=EscalationCause.AUTHORITY_REQUIREMENT,
+        subject=subject,
         question=f"RQA lacks authority on {job.repo}: {detail}",
         context={"repo": job.repo, "detail": detail},
     )
@@ -869,7 +1000,12 @@ def _require_context(job: Job, ctx: Cascade) -> tuple[Job, bool] | None:
             return _stop(job, ctx, reason=FACTS_UNAVAILABLE), False
     snapshot = _ensure_snapshot(job, ctx)
     if isinstance(snapshot, ValidationFailure):
-        _escalate_authority_requirement(job, ctx, detail="policy validation failed")
+        _escalate_authority_requirement(
+            job,
+            ctx,
+            subject=EscalationSubject(EscalationSubjectKind.POLICY, job.repo),
+            detail="policy validation failed",
+        )
         return (
             transition(
                 job,
@@ -992,11 +1128,22 @@ def _recorded_judgement(job: Job, ctx: Cascade) -> Judgement:
         ),
         remediation_candidates=tuple(payload["remediation_candidates"]),
         escalation_causes=tuple(
-            (EscalationCause(item["cause"]), item["detail"])
+            (
+                EscalationCause(item["cause"]),
+                EscalationSubject(
+                    EscalationSubjectKind(item["subject"]["kind"]),
+                    item["subject"]["identifier"],
+                ),
+                item["detail"],
+            )
             for item in payload["escalation_causes"]
         ),
         disposition=payload["disposition"],
-        reused_from=payload["reused_from"],
+        reused_from=(
+            None
+            if payload["reused_from"] is None
+            else (payload["reused_from"][0], payload["reused_from"][1])
+        ),
     )
 
 

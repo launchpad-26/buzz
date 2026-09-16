@@ -4,13 +4,11 @@ This document maps every legacy `scripts/*` module and every legacy `tests/*` fi
 package (`rqa.<part>`) or disposition unit that replaces or retires it. It is the deletion
 authority for wave 2 (#2213) and the reconciliation of what wave 3 (#2214) still owns in prose.
 
-**This Feature does not fully discharge `architecture/components.md` §7.** One `keep`-recommended
-unit, **U-DISPATCH-19** ("Observability: one otel-jsonl event per orchestration milestone",
-`components.md:486`), has no landed successor anywhere in `rqa/`: the validated `JOB_EVENTS`/
-`REQUIRED_JOB_EVENTS` registry and its `SafeStopSignal` enforcement never made it into
-`rqa/record/trace.py`. Filed as **#2273**. §2's row for `scripts/logging_otel.py` and §7.3 record
-this in full; a tidy-up that claimed completeness while a `keep` unit went unimplemented would be
-exactly the "we didn't finish" #2006's non-goals forbid.
+**This Feature now discharges `architecture/components.md` §7.** Task #2273 restored the one
+`keep`-recommended unit the original cutover found missing: U-DISPATCH-19's closed fifteen-event
+registry, nine-event required subset, rejection at emission, and lifecycle callers now live in
+`rqa.record.trace` and `rqa.lifecycle`. The legacy `scripts/logging_otel.py` reference is therefore
+deleted; §2 and §7.3 name and test the replacement that made deletion sound.
 
 Guarded by `tests/test_cutover_map.py`, which runs inside `tests/run_all.py` automatically (any
 file named `tests/test_*.py` is discovered and its zero-argument `test_*` functions are run — see
@@ -40,22 +38,14 @@ Every row below carries two columns that must never be collapsed into one:
     never a part's own behaviour making it moot.
   - `kept` is reserved for the ten root/doc/schema files of §6, where a handoff found nothing to
     rewrite.
-  - **A row can also state, in its own words, that a `keep`-recommended unit's mechanism has no
-    landed successor at all** — a defect, not a disposition choice; §2's row for
-    `scripts/logging_otel.py` and its `U-DISPATCH-19` share is the one instance (§7.3, #2273). That
-    row is never written as a clean `retired`/`none (binned: …)` pair, because `bin` never
-    recommended dropping it — it is worded plainly instead, and cross-referenced to §7.3.
-- **`status`** ∈ `present` | `deleted` | **`retained`** — the map's claim about the filesystem
+  - A `keep`-recommended unit with no successor is a defect rather than a retirement. The one such
+    case found during this cutover, U-DISPATCH-19, was repaired by #2273 before its reference file
+    was deleted.
+- **`status`** ∈ `present` | `deleted` — the map's claim about the filesystem
   *and* about what wave 2 may do with the file:
   - `present` — on disk today; wave 2 may delete it if `disposition` authorises that.
   - `deleted` — wave 2 deleted it; the file must genuinely be absent. #2213 flips a row to
     `deleted` in the same commit that deletes the file.
-  - **`retained` — on disk, and wave 2 must not delete it**, for the reason stated on the row. The
-    one row carrying this value is `scripts/logging_otel.py` (§7.3): retained as a *reference
-    implementation*, not as live code (it is not importable once wave 2 removes `run_all.py`'s
-    `sys.path` hook and deletes the `scripts/common.py` it depends on — see §7.3). `retained` is
-    never deletion authority, exactly as `present` is deletion authority only when `disposition`
-    says so.
   - All rows for one `file` must agree on `status`; the guard enforces that (§8, condition 3).
     Every doc/schema row (§6) is additionally held to `status: present` **unconditionally**,
     checked against the row text alone rather than the filesystem — the guard's fourth condition
@@ -68,9 +58,7 @@ in §6 are recorded — several handoffs handed them to this document — but ne
 here and never counted as deletion targets: `onboarding/SKILL.md`, `SKILL.md`, `OPERATORS.md`,
 `config.example.json` and every `references/*.md` file are wave 3's (#2214) to rewrite, and
 `schemas/*.json` is recorded but likewise outside this map's deletion authority (it is not a
-wave-3 file either — see §6's note). `scripts/logging_otel.py`'s `retained` status is a *third*
-kind of non-deletion-authorized file, distinct from both: it is neither a document nor scheduled
-for a wave-3 rewrite — it is retained code, and #2213 must drop it from its deletion set.
+wave-3 file either — see §6's note).
 
 ## 0.1 DoD item 1's "exactly one row" reconciled against the shared-lane row model
 
@@ -160,7 +148,7 @@ successor. `unknown` appears nowhere in this table.
 | `scripts/dispatcher.py` | P-08 | #2192 | U-DISPATCH-09, U-DISPATCH-11 | rewritten | rqa.authority.gate | deleted |
 | `scripts/dispatcher.py` | P-09 | #2193 | U-DISPATCH-16 | migrated | rqa.github.writes | deleted |
 | `scripts/dispatcher.py` | P-12 | pre-batch (P-12, 458c500d2) | U-DISPATCH-04, U-DISPATCH-06 | retired | none (binned: U-DISPATCH-04, U-DISPATCH-06) | deleted |
-| `scripts/dispatcher.py` | P-12 | pre-batch (P-12, 458c500d2) | U-DISPATCH-19 | no landed successor (#2273) | none (binned: U-DISPATCH-19 — not an authorized bin, `keep`-recommended but unimplemented, see §7.3) | deleted |
+| `scripts/dispatcher.py` | P-12 | #2273 | U-DISPATCH-19 | migrated | rqa.lifecycle, rqa.record.trace | deleted |
 | `scripts/dispatcher.py` | P-12 | pre-batch (P-12, 458c500d2) | U-DISPATCH-20 | rewritten | rqa.record.writer | deleted |
 | `scripts/errors.py` | P-02 | #2199 | U-RESILIENCE-17 | retired | none (binned: U-RESILIENCE-17) | deleted |
 | `scripts/errors.py` | P-06 | #2190 | U-RESILIENCE-04 | rewritten | rqa.harness.panel | deleted |
@@ -178,7 +166,7 @@ successor. `unknown` appears nowhere in this table.
 | `scripts/launchd.plist.example` | P-01 | #2197, #2198 | U-QUEUE-08 | migrated | rqa.intake.tick | deleted |
 | `scripts/lease.py` | P-01 | #2197, #2198 | U-QUEUE-03, U-QUEUE-04 | migrated | rqa.intake.lease | deleted |
 | `scripts/ledger.py` | P-12 | pre-batch (P-12, 458c500d2) | U-RESILIENCE-06 | rewritten | rqa.record.writer | deleted |
-| `scripts/logging_otel.py` | P-12 | pre-batch (P-12, 458c500d2) | U-RESILIENCE-08, U-DISPATCH-19 | U-RESILIENCE-08 migrated, U-DISPATCH-19 has no landed successor (#2273, see §7.3) | rqa.record.trace (U-RESILIENCE-08); none (binned: U-DISPATCH-19 — not an authorized bin, retained as reference for #2273, see §7.3) | retained |
+| `scripts/logging_otel.py` | P-12 | #2273 | U-RESILIENCE-08, U-DISPATCH-19 | migrated | rqa.record.trace, rqa.lifecycle | deleted |
 | `scripts/model_registry.py` | P-05 | #2205 | U-POLICY-11, U-POLICY-12 | migrated | rqa.supply.aliases | deleted |
 | `scripts/modes.py` | P-06 | #2190 | U-POLICY-09 | migrated | rqa.harness.panel | deleted |
 | `scripts/notify.py` | P-11 | #2195 | U-AUTHORITY-12 | retired | none (binned: U-AUTHORITY-12) | deleted |
@@ -230,7 +218,7 @@ successor. `unknown` appears nowhere in this table.
 | `tests/test_dispatch_flow.py` | P-06 | #2190 | U-DISPATCH-14 | migrated | rqa.harness.panel | deleted |
 | `tests/test_dispatch_flow.py` | P-07 | #2191 | U-DISPATCH-15 | rewritten | rqa.judgement.judge | deleted |
 | `tests/test_dispatch_flow.py` | P-09 | #2193 | U-DISPATCH-16 | migrated | rqa.github.writes | deleted |
-| `tests/test_dispatch_observability.py` | P-12 | pre-batch (P-12, 458c500d2) | U-DISPATCH-19 | no exercised successor (#2273), see §8 | none (binned: U-DISPATCH-19 — deleted by wave 2, coverage debt booked to #2273, see §8) | deleted |
+| `tests/test_dispatch_observability.py` | P-12 | #2273 | U-DISPATCH-19 | migrated | tests/test_rqa_record_trace.py, tests/test_rqa_lifecycle_steps.py | deleted |
 | `tests/test_docs_contract.py` | P-04 | pre-batch (P-04, 0d313897d) | U-DOCS-22 | retired | none (binned: U-DOCS-22) | deleted |
 | `tests/test_e2e_outcomes.py` | P-02 | #2200 | U-DOCS-56, U-DOCS-57 | rewritten | tests/test_rqa_lifecycle_paths.py | deleted |
 | `tests/test_errors_states.py` | P-02 | #2199 | U-QUEUE-11, U-QUEUE-12 | migrated | rqa.lifecycle.states | deleted |
@@ -249,8 +237,8 @@ successor. `unknown` appears nowhere in this table.
 | `tests/test_lease.py` | P-01 | #2197, #2198 | U-QUEUE-03 | migrated | rqa.intake.lease | deleted |
 | `tests/test_lease_lifecycle.py` | P-01 | #2197, #2198 | U-QUEUE-04 | migrated | rqa.intake.lease | deleted |
 | `tests/test_ledger.py` | P-12 | pre-batch (P-12, 458c500d2) | U-RESILIENCE-06 | rewritten | rqa.record.writer | deleted |
-| `tests/test_logging.py` | P-12 | pre-batch (P-12, 458c500d2) | U-RESILIENCE-08 | no exercised successor for this legacy file itself (#2273), see §8 | none (binned: U-RESILIENCE-08 — subject retained and non-operable, deleted by wave 2, debt booked to #2273, see §8) | deleted |
-| `tests/test_logging_concurrency.py` | P-12 | pre-batch (P-12, 458c500d2) | U-RESILIENCE-08 | no exercised successor for this legacy file itself (#2273), see §8 | none (binned: U-RESILIENCE-08 — subject retained and non-operable, deleted by wave 2, debt booked to #2273, see §8) | deleted |
+| `tests/test_logging.py` | P-12 | #2273 | U-RESILIENCE-08 | migrated | tests/test_rqa_record_trace.py | deleted |
+| `tests/test_logging_concurrency.py` | P-12 | #2273 | U-RESILIENCE-08 | migrated | tests/test_rqa_record_trace.py | deleted |
 | `tests/test_model_registry.py` | P-05 | #2205 | U-POLICY-11, U-POLICY-12, U-POLICY-13 | migrated | rqa.supply.aliases, rqa.supply.probe | deleted |
 | `tests/test_modes.py` | P-06 | #2190 | U-POLICY-09 | migrated | rqa.harness.panel | deleted |
 | `tests/test_mutations.py` | P-09 | #2193 | U-AUTHORITY-08 | migrated | rqa.github.writes | deleted |
@@ -518,82 +506,37 @@ record:
   `tests/test_verdict_fence.py`, `tests/test_verdict_schema.py`.
 - **P-12** (`rqa/record`, landed pre-batch at `458c500d2`): `scripts/common.py` (record share),
   `scripts/dispatcher.py` (record share), `scripts/explain.py`, `scripts/history.py`,
-  `scripts/ledger.py`, `scripts/logging_otel.py` (§7.3 — the one entry in this whole document that
-  is not an ordinary retirement candidate), `scripts/risk.py` (record share),
+  `scripts/ledger.py`, `scripts/logging_otel.py` (§7.3 — migrated and deleted by #2273),
+  `scripts/risk.py` (record share),
   `scripts/shadow.py` (record share), `tests/test_dispatch_observability.py`,
   `tests/test_history.py`, `tests/test_integration.py` (record share), `tests/test_ledger.py`,
   `tests/test_logging.py`, `tests/test_logging_concurrency.py`, `tests/test_phase4.py` (record
   share), `tests/test_risk.py` (record share), `tests/test_runtime_ops.py` (record share),
   `tests/test_shadow_cli.py`.
 
-### 7.3 `scripts/logging_otel.py` — a `keep` unit with no landed successor at all (#2273)
+### 7.3 `scripts/logging_otel.py` — the retained reference is now replaced (#2273)
 
-Round 2 review (`F-B6-1`) found what round 1's "§7.2 starkest case" framing got wrong: presence on
-disk was the wrong test. `scripts/logging_otel.py` carries **two** units, not one —
-`components.md:486` places **U-DISPATCH-19** ("Observability: one otel-jsonl event per
-orchestration milestone", `keep`) here alongside `U-RESILIENCE-08`, and round 1's row named only
-the latter.
+Round 2 review (`F-B6-1`) correctly prevented this file's deletion while U-DISPATCH-19 had no
+successor. Task #2273 paid that debt. `rqa.record.trace` now declares the exact fifteen
+`JOB_EVENTS`, the nine-name `REQUIRED_JOB_EVENTS` subset, and rejects unregistered names before a
+write. It also prevents caller fields from replacing `job`, `event`, or `at`.
 
-**What U-RESILIENCE-08 got.** `rqa/record/trace.py` migrated the structured-JSONL-trace-and-safe-
-writers mechanism cleanly: `append_trace` under an exclusive `flock`, `allocate_attempt_number`
-under the same lock, and the temp-file-`fsync`-then-`rename` durability pattern — all exercised by
-`tests/test_rqa_record_trace.py` (verified: `test_u_docs_55_concurrent_writers_allocate_distinct_
-numbers_and_leave_valid_json`, `test_a_write_that_fails_at_the_rename_leaves_the_previous_
-complete_file`, among others).
+The real lifecycle calls the published `rqa.record.append_trace` surface. A completed review emits
+every required milestone; branch-specific paths emit lease, re-review, human-queue, mutation, and
+safe-stop events. Route diagnostics are derived from the attempts that actually ran and capped at
+four. The concurrency, crash-safety, registry, rejection, and completed-lifecycle properties are
+exercised by `tests/test_rqa_record_trace.py` and `tests/test_rqa_lifecycle_steps.py`.
 
-**What U-DISPATCH-19 did not get.** `scripts/logging_otel.py:54` declares `JOB_EVENTS` (15 named
-milestones); `:75` declares `REQUIRED_JOB_EVENTS` (9 mandatory); `gap/dispositions/dispatch.md:
-597-620` records the `keep` reasoning verbatim — event names validated **at emission** against that
-registry, an unregistered name raising `SafeStopSignal` rather than drifting silently.
-`rqa/record/trace.py` implements neither: `append_trace(*, state_dir, job_id, event: str, fields,
-at)` takes a free-form string, `grep -rn 'JOB_EVENTS\|REQUIRED_JOB_EVENTS' rqa/` returns zero
-matches tree-wide, and `append_trace` itself has no caller anywhere in `rqa/` (only
-`tests/test_rqa_record_trace.py` calls it) and is not in `rqa/record/__init__.py`'s `__all__`.
-`trace.py`'s own module docstring already names this: its `ATTEMPT_ALLOCATED` constant comment
-reads "the caller names its own milestones, and this is the one this module names itself
-(U-DISPATCH-19's retained decision)" — the gap was visible in the landed code's own commentary, not
-hidden.
+Those replacements justify deleting `scripts/logging_otel.py`; its map row is now `migrated` and
+`deleted`. No legacy module is retained under `scripts/`.
 
-**The consequence, ruled by the parent session:** `scripts/logging_otel.py` is **retained**, not a
-normal deletion candidate (§2's row, `status: retained`). It stays in the tree as a **reference
-implementation for #2273**, not as live code — it is not importable once wave 2 removes
-`run_all.py`'s `sys.path.insert(…, scripts)` and deletes `scripts/common.py` (which
-`logging_otel.py` depends on for exactly one symbol, `utcnow`, imported at `:36` and called once at
-`:247`). What it preserves for #2273 to reimplement inside `rqa/record`: `JOB_EVENTS` (15
-milestones, `:54`), `REQUIRED_JOB_EVENTS` (9 mandatory, `:75`), the validate-at-emission discipline
-that raises `SafeStopSignal` on an unregistered name, `_MAX_LOGGED_ROUTES=4` with its distinct
-`unrouted` event, and `_emit_panel_trace`'s ledger-sourcing of activities and routes.
+## 8. Coverage debt paid by #2273
 
-**The retained set is this one file, not its transitive closure.** `scripts/logging_otel.py`'s own
-import graph inside `scripts/` is `common`, `errors`, `states`; keeping it *importable* (rather than
-merely present as reference text) would require keeping all three, and `scripts/common.py` alone is
-572 lines, is imported by 20 of the 46 legacy modules, and declares `route_qualifications` at
-`:282` — the very table `#2213`'s own DoD requires dropped (§3 above). Widening the retained set to
-make `logging_otel.py` importable again would keep the legacy `State` layer alive against this
-Feature's own objective, to supply one timestamp helper. Refused by the orchestrator's own
-measurement; not attempted here.
-
-## 8. Coverage debt
-
-`tests/test_logging.py` (5 tests) and `tests/test_logging_concurrency.py` (6 tests) import
-`logging_otel`, which imports `common`; `tests/test_dispatch_observability.py` imports `dispatcher`,
-`common`, `config` and `logging_otel` directly (for `JOB_EVENTS`, `REQUIRED_JOB_EVENTS` and
-`read_events`) to assert exactly U-DISPATCH-19's registry discipline end to end. All three become
-unimportable the moment `run_all.py`'s `sys.path.insert(…, scripts)` is removed and `scripts/common.py`
-is deleted — which #2213 must do regardless, per its own DoD. **This is the one deletion class in
-this Feature not justified by naming an exercised replacement, and it is recorded here rather than
-smoothed over:**
-
-| file | what it covered | replacement | debt |
-|---|---|---|---|
-| `tests/test_logging.py` | `U-RESILIENCE-08`'s JSONL-append/lock mechanism, over `logging_otel.py` directly | `tests/test_rqa_record_trace.py` covers the *equivalent* mechanism in `rqa/record/trace.py` generally, but not this file's own coverage of the now-retained module | deleted by wave 2; no successor for this specific legacy file |
-| `tests/test_logging_concurrency.py` | concurrent-writer safety, over `logging_otel.py` directly | same as above | deleted by wave 2; no successor for this specific legacy file |
-| `tests/test_dispatch_observability.py` | `U-DISPATCH-19`'s `JOB_EVENTS`/`REQUIRED_JOB_EVENTS` validation end to end | **none** — no test anywhere in `tests/test_rqa_*.py` exercises a validated event registry, because no such registry landed (§7.3) | deleted by wave 2; **#2273 owes both the implementation and this coverage** |
-
-`scripts/logging_otel.py`'s own subject is retained precisely so #2273 has the reference
-implementation to work from when it pays this debt; retaining the module without also recording
-that its two direct tests and its one indirect test are being deleted with no replacement would be
-the same "smoothed over" failure the ruling named.
+| deleted legacy test | exercised replacement |
+|---|---|
+| `tests/test_logging.py` | `tests/test_rqa_record_trace.py` covers complete-line appends, canonical serialization, and atomic replacement |
+| `tests/test_logging_concurrency.py` | `tests/test_rqa_record_trace.py` races eight writers and proves distinct attempt numbers plus valid JSON |
+| `tests/test_dispatch_observability.py` | `tests/test_rqa_record_trace.py` pins the exact registries and rejection path; `tests/test_rqa_lifecycle_steps.py` proves a completed review emits every required milestone |
 
 ## 9. The 44 disposition units whose evidence cites no resolvable file (issue says 55; round 1 said 46 and was wrong — measured again, corrected)
 

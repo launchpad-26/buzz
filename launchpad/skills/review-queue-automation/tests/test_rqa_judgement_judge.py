@@ -126,20 +126,14 @@ def test_t4_empty_panel_with_complete_carried_evidence_approves_and_records_the_
     )
     assert result.disposition == "approve"
     assert result.obligations == {"O1": EvidenceState.VERIFIED}
-    assert result.reused_from == "job-0"
+    assert result.reused_from == ("job-0", 3)
     payload = record.of_kind("judgement")[0]
     assert payload["cutoff"] == fx.CUTOFF.isoformat()
 
-# -- #2236 interim (see judge.py's docstring at the `reused_from` assignment) --
+# -- #2236 pinned reuse reference --------------------------------------------
 
 
-def test_2236_reused_from_is_a_bare_job_id_while_the_source_sequence_survives_per_obligation() -> None:
-    """Pins the accepted interim `CONTRACTS.md` §6 leaves until #2236 lands:
-    `Judgement.reused_from` names only the predecessor job, never a
-    `(job, seq)` pair, while each carried item's own `source_judgement_seq`
-    is not lost — it survives into the `judgement` record's
-    `carried_provenance`, keyed by obligation id.
-    """
+def test_2236_reused_from_pins_the_source_job_and_judgement_sequence() -> None:
     carried = fx.make_carried(obligation_id="O1", source_job="job-0", source_judgement_seq=7)
     carry = fx.make_carry(reused=(carried,))
     record = fx.FakeRecord()
@@ -147,12 +141,32 @@ def test_2236_reused_from_is_a_bare_job_id_while_the_source_sequence_survives_pe
         job=fx.make_job(), plan=fx.make_plan(obligations=()), panel=fx.make_panel(attempts=()),
         carry=carry, facts=fx.make_facts(), snapshot=fx.make_snapshot(), decision=None, record=record,
     )
-    assert result.reused_from == "job-0"
-    assert not isinstance(result.reused_from, tuple)
+    assert result.reused_from == ("job-0", 7)
     payload = record.of_kind("judgement")[0]
-    assert payload["reused_from"] == "job-0"
+    assert payload["reused_from"] == ("job-0", 7)
     assert payload["carried_provenance"]["O1"]["source_judgement_seq"] == 7
     assert payload["carried_provenance"]["O1"]["source_job"] == "job-0"
+
+
+def test_2236_carried_items_must_share_one_pinned_source_judgement() -> None:
+    carry = fx.make_carry(
+        reused=(
+            fx.make_carried(obligation_id="O1", source_judgement_seq=7),
+            fx.make_carried(obligation_id="O2", source_judgement_seq=8),
+        )
+    )
+    record = fx.FakeRecord()
+    try:
+        judge(
+            job=fx.make_job(), plan=fx.make_plan(obligations=()), panel=fx.make_panel(attempts=()),
+            carry=carry, facts=fx.make_facts(), snapshot=fx.make_snapshot(), decision=None,
+            record=record,
+        )
+    except JudgementError:
+        pass
+    else:
+        raise AssertionError("carried evidence from two source judgements must be rejected")
+    assert record.entries == []
 
 
 # -- T5 -----------------------------------------------------------------------
@@ -270,7 +284,10 @@ def test_t7c_bound_reached_escalates_an_otherwise_approvable_judgement() -> None
     assert result.disposition == "escalate"
     from rqa.contracts import EscalationCause
 
-    assert any(cause is EscalationCause.EVIDENCE_GAP for cause, _ in result.escalation_causes)
+    assert any(
+        cause is EscalationCause.EVIDENCE_GAP
+        for cause, _subject, _detail in result.escalation_causes
+    )
 
 
 def test_approve_is_unreachable_when_bound_reached_is_true() -> None:

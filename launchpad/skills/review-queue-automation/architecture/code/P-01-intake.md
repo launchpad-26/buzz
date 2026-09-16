@@ -25,7 +25,7 @@ part's internals.
 rqa/intake/
   __init__.py     re-exports: tick, TickResult, AdmissionRefusal, JobFailure, job_id, stable_hash,
                   GithubAdapter, Lease, JobStore, PrFactsStore, LeaseStore, PrFactsRow, LeaseRow,
-                  IntakeError
+                  IntakeError, SqliteJobStore, SqlitePrFactsStore, SqliteLeaseStore, ensure_schema
   identity.py     stable_hash(), job_id() — the deterministic hash this part owns (U-RESILIENCE-13);
                   P-09 imports this module directly for its own mutation ids (`components.md` §7's
                   placement note: "job identity is P-01's; the deterministic mutation-id half is

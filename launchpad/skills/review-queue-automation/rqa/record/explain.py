@@ -61,13 +61,14 @@ provided the stated shape, behaviour and tests hold")**:
   `judgement.disposition` — see above.
 
 **`reused_from` never a pointer to ignore (§3.3 step 3).** A materialised current
-judgement whose `reused_from` names a predecessor job walks that predecessor's own
-trusted prefix (recursively, if the predecessor's own judgement was itself reused),
+judgement whose `reused_from` names a pinned predecessor `(job, judgement sequence)`
+walks that exact row in the predecessor's trusted prefix (recursively, if that judgement
+was itself reused),
 merges its harness-shaped attestations ahead of this job's own (oldest predecessor
 first, then nearer predecessors, then this job's own, de-duplicated), and folds its
 `verify` outcome into this job's `verified`/`hmac_checked`/`unverifiable`/`legacy`.
-A missing predecessor, a predecessor with no judgement in its own trusted prefix, a
-malformed `reused_from`, or a repeated job id (a cycle) all raise
+A missing predecessor, no judgement at the referenced sequence, a malformed
+`reused_from`, or a repeated reference (a cycle) all raise
 `ReuseResolutionError` — never a guess, never a silent omission.
 """
 
@@ -113,6 +114,7 @@ class Explanation:
     findings: tuple[Mapping[str, Any], ...]
     decision_basis: str | None
     disposition: str
+    escalation_subjects: tuple[Mapping[str, str], ...]
     # Supporting trust/rendering fields:
     snapshot_hash: str | None
     verified: bool
@@ -157,6 +159,45 @@ def _last_payload_of_kind(rows: list[StoredEntry], kind: str) -> dict[str, Any] 
     return None
 
 
+def _payload_of_kind_at_seq(
+    rows: list[StoredEntry], kind: str, seq: int
+) -> dict[str, Any] | None:
+    """The payload only when `seq` is a trusted row of exactly `kind`."""
+    for row in rows:
+        if row.seq != seq:
+            continue
+        if row.kind != kind:
+            return None
+        payload = json.loads(row.payload)
+        return payload if isinstance(payload, dict) else None
+    return None
+
+
+def _reuse_reference(value: object) -> tuple[str, int]:
+    if not isinstance(value, (list, tuple)) or len(value) != 2:
+        raise ReuseResolutionError(f"malformed reused_from: {value!r}")
+    job_id, seq = value
+    if type(job_id) is not str or not job_id or type(seq) is not int or seq < 1:
+        raise ReuseResolutionError(f"malformed reused_from: {value!r}")
+    return job_id, seq
+
+
+def _escalation_subjects(rows: list[StoredEntry]) -> tuple[Mapping[str, str], ...]:
+    """Structured subjects from every readable escalation row, in record order."""
+    subjects: list[Mapping[str, str]] = []
+    for row in rows:
+        if row.kind != "escalation":
+            continue
+        payload = json.loads(row.payload)
+        if not isinstance(payload, dict) or not isinstance(payload.get("subject"), dict):
+            continue
+        subject = payload["subject"]
+        subjects.append(
+            {"kind": str(subject.get("kind", "")), "identifier": str(subject.get("identifier", ""))}
+        )
+    return tuple(subjects)
+
+
 def _harness_attestations(rows: list[StoredEntry]) -> list[tuple[str, str, str]]:
     """Every harness-shaped `attestation` row (a `harness` key, never a `login`
     key — §6), in seq order, as `(harness, model, provider)` triples."""
@@ -194,55 +235,39 @@ class _Hop:
 
 
 def _walk_reuse_chain(
-    connection: sqlite3.Connection, start_job_id: object, *, keystore: KeyStore
+    connection: sqlite3.Connection, start_reference: object, *, keystore: KeyStore
 ) -> list[_Hop]:
-    """Follow `reused_from` links starting at `start_job_id`, oldest predecessor
-    first. Raises `ReuseResolutionError` for every malformed, missing, cyclic, or
-    judgement-less hop (§3.3 step 3).
-
-    **Interim, not the pinned reference §3.3 describes.** §3.3 step 3 says to obtain
-    "the predecessor judgement at the carried source sequence"; this resolves the
-    predecessor's *latest* judgement in its own trusted prefix instead, because no
-    carried sequence exists anywhere to read: `Judgement.reused_from`
-    (`CONTRACTS.md` §6) is a bare job id, and `CarriedEvidence.source_judgement_seq`
-    is `CarryOver`'s field (P-13's), never carried onto the judgement itself. The
-    pinned `(job, seq)` reference this step calls for is tracked in **#2236**
-    (a `CONTRACTS.md` §6 change plus `judge()`/`carry_over()` obligations); this
-    accepted-interim behaviour does not change until that lands.
-    """
+    """Follow exact `(job, judgement sequence)` links, oldest predecessor first."""
     hops: list[_Hop] = []
-    visited: set[str] = set()
-    current = start_job_id
+    visited: set[tuple[str, int]] = set()
+    current: object = start_reference
     while True:
-        if not isinstance(current, str) or not current:
-            raise ReuseResolutionError(f"malformed reused_from: {current!r}")
-        if current in visited:
-            raise ReuseResolutionError(f"reuse cycle detected at job {current!r}")
-        visited.add(current)
+        job_id, judgement_seq = _reuse_reference(current)
+        reference = (job_id, judgement_seq)
+        if reference in visited:
+            raise ReuseResolutionError(f"reuse cycle detected at reference {reference!r}")
+        visited.add(reference)
 
-        rows = entries_for_job(connection=connection, job=current)
+        rows = entries_for_job(connection=connection, job=job_id)
         if not rows:
-            raise ReuseResolutionError(f"predecessor job {current!r} has no record entries")
+            raise ReuseResolutionError(f"predecessor job {job_id!r} has no record entries")
 
-        vr = verify(connection, current, keystore=keystore)
+        vr = verify(connection, job_id, keystore=keystore)
         readable = _readable(rows, vr.bad_seq)
-        # Interim (see the docstring above and #2236): the predecessor's *latest*
-        # trusted judgement, not the one at a carried source sequence — no such
-        # sequence is readable from `reused_from` (a bare job id) or from anything
-        # else this payload carries.
-        judgement = _last_payload_of_kind(readable, "judgement")
+        judgement = _payload_of_kind_at_seq(readable, "judgement", judgement_seq)
         if judgement is None:
             raise ReuseResolutionError(
-                f"no judgement in predecessor job {current!r}'s trusted prefix"
+                f"no predecessor judgement at referenced sequence {job_id!r}@{judgement_seq}"
             )
+        cited_rows = [row for row in readable if row.seq <= judgement_seq]
 
         hops.insert(
             0,
             _Hop(
-                attestations=_harness_attestations(readable),
+                attestations=_harness_attestations(cited_rows),
                 verify_result=vr,
-                legacy_present=any(is_legacy(entry=row) for row in readable),
-                has_current_rows=any(not is_legacy(entry=row) for row in readable),
+                legacy_present=any(is_legacy(entry=row) for row in cited_rows),
+                has_current_rows=any(not is_legacy(entry=row) for row in cited_rows),
             ),
         )
 
@@ -298,6 +323,7 @@ def explain_job(connection: sqlite3.Connection, job_id: str, *, keystore: KeySto
         }
         for finding in (judgement.get("findings", []) if judgement else [])
     )
+    escalation_subjects = _escalation_subjects(readable)
 
     local_attestations = _harness_attestations(readable)
     local_legacy_present = any(is_legacy(entry=row) for row in readable)
@@ -357,6 +383,7 @@ def explain_job(connection: sqlite3.Connection, job_id: str, *, keystore: KeySto
         findings=findings,
         decision_basis=decision_basis,
         disposition=disposition,
+        escalation_subjects=escalation_subjects,
         snapshot_hash=snapshot_hash,
         verified=verified,
         hmac_checked=hmac_checked,

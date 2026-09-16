@@ -29,6 +29,8 @@ from rqa.contracts import (
     Decision,
     Escalation,
     EscalationCause,
+    EscalationSubject,
+    EscalationSubjectKind,
     EscalationRefusalReason,
     EscalationRefused,
 )
@@ -42,6 +44,8 @@ __all__ = [
     "pending",
     "decide",
     "EscalationCause",
+    "EscalationSubjectKind",
+    "EscalationSubject",
     "Escalation",
     "Decision",
     "EscalationRefused",

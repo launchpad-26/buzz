@@ -23,7 +23,8 @@ rqa/record/
                  KeyStore, KeyStoreExplanationUnavailable, verify, VerifyResult, BreakKind, explain,
                  explain_job, resolve_job, ResolvedJob, NoRecord, AmbiguousHead, Explanation,
                  ExplanationUnavailable, ReuseResolutionError, migrate_legacy, MigrationSummary,
-                 MigrationTableResult, LegacySource
+                 MigrationTableResult, LegacySource, SQLiteRecordWriter, SQLiteRecordReader,
+                 OSKeyStore, append_trace
   kinds.py       ENTRY_KINDS: the closed fourteen-kind set (§6)
   hashing.py     canonical_json(); compute_hash(); genesis and "legacy" prev_hash sentinels
   keychain.py    E-25 KeyStore implementation backed by the platform keychain command
@@ -32,7 +33,7 @@ rqa/record/
   verify.py      verify(): chain and keyed-segment recomputation
   reader.py      SQLiteRecordReader plus resolve_job()
   explain.py     explain() / explain_job(): FR-012 reconstruction
-  trace.py       jobs/<job>/trace.jsonl: non-authoritative milestone trace
+  trace.py       validated U-DISPATCH-19 milestones in jobs/<job>/trace.jsonl
   migrate.py     one-way legacy migration
 ```
 
@@ -174,6 +175,7 @@ class Explanation:
     findings: tuple[Mapping[str, Any], ...]
     decision_basis: str | None
     disposition: str
+    escalation_subjects: tuple[Mapping[str, str], ...]
     # Supporting trust/rendering fields:
     snapshot_hash: str | None
     verified: bool
@@ -331,10 +333,12 @@ CLI's `explain.py job <job-id>` precedent), and `explain` is defined in terms of
 2. Reduce that prefix: the first/last `transition` supplies identity/disposition; the last `plan`
    supplies pins; harness-shaped `attestation` rows supply the ordered de-duplicated reviewer,
    harness, model, and provider values; the last `judgement` supplies obligations, findings,
-   corroboration/blocking decorations, and decision basis; a terminal human `decision` overrides the
-   reviewer identity/type exactly as before.
+   corroboration/blocking decorations, and decision basis; every readable `escalation` supplies its
+   structured `{kind, identifier}` subject; a terminal human `decision` overrides the reviewer
+   identity/type exactly as before.
 3. A judgement with `reused_from is None` uses only this job's rows. A judgement with
-   `reused_from: str` is a materialised current judgement, not a pointer that may be ignored:
+   `reused_from: tuple[str, int]` pins the predecessor job and exact judgement sequence; it is a
+   materialised current judgement, not a pointer that may be ignored:
    - load and verify the named predecessor's trusted prefix, then obtain the predecessor judgement
      at the carried source sequence and its harness-shaped attestations;
    - merge the current judgement's own obligations/findings/basis with the predecessor attestations
@@ -493,8 +497,14 @@ temp file in the same directory, `fsync`s, and renames over the original (U-RESI
 between writes leaves the previous, complete file in place, never a torn line. `container.md` §5
 attributes the same technique to P-03's `snapshots/<hash>.json`; the two are independent
 implementations of one pattern, not a shared dependency — P-03 does not import `rqa.record.trace`,
-and this part does not write a snapshot. This file is written by this part and read by nobody in
-`rqa/record/`; it exists for an operator's or a future tool's inspection, never for a trust decision.
+and this part does not write a snapshot. `JOB_EVENTS` is the closed fifteen-name orchestration
+vocabulary retained by U-DISPATCH-19; `REQUIRED_JOB_EVENTS` is its nine-name mandatory subset for a
+job that reaches a disposition. `append_trace` rejects a name outside `JOB_EVENTS` before creating
+the trace and rejects caller fields named `job`, `event`, or `at`, so data cannot replace validated
+identity. The lifecycle emits the required set on a completed review, caps recorded routes at four,
+and emits branch-specific lease, re-review, escalation, mutation, and safe-stop milestones where
+those branches run. This file is written by this part and read by nobody in `rqa/record/`; it exists
+for an operator's or a future tool's inspection, never for a trust decision.
 
 ## 7. What P-12 does not do
 
@@ -543,11 +553,14 @@ none touches a real OS keychain or a real network.
 | T16 | `KeyStore.read("rqa-record-hmac")` returns `None` during `append` | append returns `Entry`; its row has `keyed=False, hmac=NULL`; `verify` returns `ok=True` with an `unverifiable` segment whose reason is `no key`, not `HMAC_MISMATCH`; `explain` reports that segment `unverifiable: no key` |
 | T14 | `append(job, "not_a_real_kind", {})` | raises `UnknownEntryKind`; `record_entries` for that job is unchanged (zero new rows) |
 | T15 | `append(job, "spend", {"at": datetime.now()})` (a raw `datetime`, not a string) | raises `PayloadNotSerializable`; zero new rows |
-| T20 | predecessor has a valid plan, harness attestations, and judgement; successor has no `attestation`, a materialised `judgement` with `reused_from=<predecessor job>`, and a transition | `explain_job(successor)` follows `reused_from`, returns all twelve elements, and obtains reviewer identity/harness/model/provider from the predecessor attestations |
+| T20 | predecessor has a valid plan, harness attestations, and judgement; successor has no `attestation`, a materialised `judgement` with `reused_from=(<predecessor job>, <judgement seq>)`, and a transition | `explain_job(successor)` follows the exact referenced judgement, returns all twelve elements, and obtains reviewer identity/harness/model/provider from predecessor attestations through that sequence |
+| T24 | a readable escalation record has a structured subject | `explain_job` returns that `{kind, identifier}` in `escalation_subjects` |
 | T17 | two payload dicts with identical key/value pairs built in different insertion order | `compute_hash` returns byte-identical results for both |
 | T18 | a job with rows `[keyed real seq=1, legacy, unkeyed real seq=2 chained to seq=1]` | `verify` returns `ok=True` with the seq-2 `unverifiable: no key` segment; `explain_job` returns `legacy=True, verified=False` and reports that segment without calling it broken |
 | T19 | a `judgement` row whose `findings` list contains three ids: one in both `blocking` and `corroborated`, one in `corroborated` only, one in neither | `explain_job`'s `findings` tuple marks the first `blocking=True, corroborated=True`, the second `blocking=False, corroborated=True`, the third `blocking=False, corroborated=False` — the three-way split RQA-BR-005/RQA-BR-008 need |
 | T21 | append one minimal JSON-safe payload for each member of `ENTRY_KINDS` | all fourteen are accepted; any fifteenth string raises `UnknownEntryKind` |
+| T22 | `append_trace(..., event="free_form")` | raises `UnknownTraceEvent`; no trace file is created |
+| T23 | one lifecycle admission reaches `approved` | its trace contains every member of `REQUIRED_JOB_EVENTS`, and every emitted orchestration event belongs to `JOB_EVENTS` |
 
 Property that must hold across the suite: `grep -rn "INSERT INTO record_entries\|INSERT INTO
 record_heads" rqa/ --include=*.py` returns hits only inside `rqa/record/store.py`. No other module —

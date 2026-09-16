@@ -24,7 +24,8 @@ rqa/policy/
   __init__.py     re-exports CONTRACTS.md §3's Snapshot, Route, External, Policy, Blocking,
                   Mechanical and Budget, plus snapshot_for, onboard, ValidationError,
                   ValidationErrorCode, ValidationFailure, OnboardResult, Written, OnboardRefusal,
-                  OnboardRefusalReason, PolicyError, SnapshotStoreCorrupted
+                  OnboardRefusalReason, PolicyError, SnapshotStoreCorrupted, SnapshotStore,
+                  SqliteSnapshotStore
   schema.py       the config JSON schema sketch as data: the allowed/required key sets at every
                   level (§2's normative shape)
   validate.py     validate(): the fail-closed schema+semantic checker (E-03's dependency, not an
@@ -291,6 +292,11 @@ and P-10 checks it a third time before running anything (`code/P-10-remediation.
 belt-and-braces on all three sides of a decision no single check may be trusted alone to have made
 correctly.
 
+**The conditional `Route.command` rule is owned by P-05's aliases lane (#2205).** P-03 validates
+only the command's local shape. P-05 decides it against the source-owned alias registry: a command
+is required when `(harness, model)` has no built-in alias and rejected when that alias exists, as
+specified by ADR-0065 and exercised at P-05's routing boundary.
+
 **`RecordWriter.append`, owned by P-12 (E-13).** Its sole definition is
 [`CONTRACTS.md`](CONTRACTS.md) §7. `AppendFailed` always propagates (§3).
 
@@ -299,7 +305,8 @@ correctly.
 ```sql
 CREATE TABLE snapshots (
   hash            TEXT PRIMARY KEY,     -- sha256 hex digest over the entire canonical config
-  repo            TEXT NOT NULL,        -- the repo of first activation; informational, not a key
+  repo            TEXT NOT NULL,        -- reserved compatibility field; activate() has no repo
+                                        -- argument and writes the intentional empty sentinel ""
   policy_version  TEXT NOT NULL,
   protocol_hash   TEXT NOT NULL,
   activated_at    TEXT NOT NULL,        -- ISO-8601 UTC, first time this hash was ever seen
@@ -311,8 +318,9 @@ CREATE TABLE snapshots (
 # store.py
 @dataclass(frozen=True)
 class StoredSnapshot:
-    snapshot: Snapshot           # repo is a placeholder ("") here; snapshot_for() rebuilds it with
-                                 # the caller's own repo before returning
+    snapshot: Snapshot           # repo is the intentional empty sentinel ("") here;
+                                 # snapshot_for() rebuilds it with the caller's own repo
+                                 # before returning
     activated_at: datetime
 
 class SnapshotStore(Protocol):

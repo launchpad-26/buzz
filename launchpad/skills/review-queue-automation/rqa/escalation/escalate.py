@@ -6,11 +6,10 @@ there is no notification code path in this module for any cause. The escalation 
 the durable human request; `pending()` is the whole of the human-facing read, on the
 human's own schedule (U-AUTHORITY-12's binning).
 
-**A closed cause vocabulary and a specific question, always.** `raise_` step 1 rejects
-anything outside the five `EscalationCause` values (RQA-FR-026: no `other`, no sixth
-value coerced past the enum); step 2 rejects a blank or all-whitespace question, because
-a blank string can never be the specific unresolved decision, conflicting judgement,
-evidence gap, required information or authority requirement RQA-FR-026 requires.
+**A closed cause vocabulary and a structured subject, always.** `raise_` rejects
+anything outside the five `EscalationCause` values and every missing, unknown, or blank
+`EscalationSubject`. The free-text question adds operator context; it can no longer be
+the whole description of what is unresolved.
 """
 
 from __future__ import annotations
@@ -18,7 +17,14 @@ from __future__ import annotations
 from collections.abc import Mapping
 from datetime import datetime, timezone
 
-from rqa.contracts import Escalation, EscalationCause, Job, RecordWriter
+from rqa.contracts import (
+    Escalation,
+    EscalationCause,
+    EscalationSubject,
+    EscalationSubjectKind,
+    Job,
+    RecordWriter,
+)
 
 from rqa.escalation.store import EscalationStore
 
@@ -35,6 +41,7 @@ __all__ = ["EscalationError", "raise_", "pending", "utcnow"]
 #: like the real member — only holds if the rest of the function receives the real
 #: member too, since everything past this gate calls `cause.value`.
 _VALID_CAUSES = frozenset(EscalationCause)
+_VALID_SUBJECT_KINDS = frozenset(EscalationSubjectKind)
 
 
 class EscalationError(Exception):
@@ -54,6 +61,7 @@ def raise_(
     *,
     job: Job,
     cause: EscalationCause,
+    subject: EscalationSubject,
     question: str,
     context: Mapping,
     record: RecordWriter,
@@ -66,7 +74,7 @@ def raise_(
         # this frame once the exception is introspected (`del` before `raise`, not
         # after: control never returns to this frame afterwards). `cause` stays
         # bound — it is not PR-derived free text, and the message and T2 both name it.
-        del question, context
+        del subject, question, context
         raise EscalationError(f"{cause!r} is not one of the five EscalationCause values")
     # F-T2: the gate above tolerates a raw string equal to a canonical value exactly
     # like the real member (its own comment says so); coerce here so that tolerance
@@ -74,6 +82,17 @@ def raise_(
     # uncontracted `AttributeError` for that one input shape. A no-op for an
     # already-real member: `EscalationCause(member) is member`.
     cause = EscalationCause(cause)
+    if not isinstance(subject, EscalationSubject):
+        del question, context
+        raise EscalationError("a raised escalation must carry an EscalationSubject")
+    if (
+        subject.kind not in _VALID_SUBJECT_KINDS
+        or not isinstance(subject.identifier, str)
+        or not subject.identifier.strip()
+    ):
+        del subject, question, context
+        raise EscalationError("an escalation subject must have a known kind and non-blank identifier")
+    subject = EscalationSubject(EscalationSubjectKind(subject.kind), subject.identifier)
     if question.strip() == "":
         del context  # F-T1: unused on this branch; unbind before raising.
         raise EscalationError("a raised escalation must name a specific, non-blank question")
@@ -87,6 +106,7 @@ def raise_(
         kind="escalation",
         payload={
             "cause": cause.value,
+            "subject": {"kind": subject.kind.value, "identifier": subject.identifier},
             "question": question,
             "context": dict(context),
             "head_sha": job.head_sha,
@@ -98,6 +118,7 @@ def raise_(
         job_id=job.id,
         entry_seq=entry.seq,
         cause=cause,
+        subject=subject,
         question=question,
         context=context,
         head_sha=job.head_sha,
@@ -108,6 +129,7 @@ def raise_(
         id=escalation_id,
         job_id=job.id,
         cause=cause,
+        subject=subject,
         question=question,
         context=context,
         head_sha=job.head_sha,
@@ -129,6 +151,7 @@ def pending(*, store: EscalationStore) -> tuple[Escalation, ...]:
             id=row.id,
             job_id=row.job_id,
             cause=row.cause,
+            subject=row.subject,
             question=row.question,
             context=row.context,
             head_sha=row.head_sha,

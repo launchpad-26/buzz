@@ -162,4 +162,4 @@ def test_render_lists_only_corroborated_findings_and_renders_reused_from() -> No
     body = render(result)
     assert "## Findings" in body
     assert "- (none)" in body
-    assert "- `job-0`" in body
+    assert "- `job-0@3`" in body

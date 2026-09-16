@@ -18,6 +18,8 @@ from rqa.contracts import (
     CarryOver,
     Decision,
     EscalationCause,
+    EscalationSubject,
+    EscalationSubjectKind,
     EvidenceState,
     Facts,
     Finding,
@@ -80,6 +82,18 @@ def _validate(
         raise JudgementError("carry.reused contains a duplicate obligation id")
     if set(plan_ids) & set(carried_ids):
         raise JudgementError("plan.obligations and carry.reused are not disjoint")
+    if carry.reused:
+        references = {
+            (carried.source_job, carried.source_judgement_seq)
+            for carried in carry.reused
+        }
+        if carry.source_job is None or any(
+            type(job_id) is not str or not job_id or type(seq) is not int or seq < 1
+            for job_id, seq in references
+        ):
+            raise JudgementError("carried evidence has a malformed source judgement reference")
+        if len(references) != 1 or next(iter(references))[0] != carry.source_job:
+            raise JudgementError("carried evidence does not share one pinned source judgement")
 
     for attempt in panel.attempts:
         if attempt.attestation.ended_at > panel.evidence_cutoff:
@@ -104,25 +118,12 @@ def _obligation_definitions(snapshot: Snapshot) -> dict[str, object]:
     return {obligation.id: obligation for obligation in snapshot.policy.obligations}
 
 
-def _reused_from(carry: CarryOver) -> str | None:
-    """§3 step 3: `carry.source_job` when at least one carried item exists,
-    otherwise `None`.
-
-    **Interim, not the pinned reference §3.3 of P-12-record.md describes — see
-    #2236.** `reused_from` is a bare job id (`CONTRACTS.md` §6:
-    `Judgement.reused_from: str | None`), never a `(job, seq)` pair: there is
-    nowhere on `Judgement` to carry the source sequence that
-    `CarriedEvidence.source_judgement_seq` names per obligation. Each carried
-    item's own sequence still survives into `carried_provenance` (built beside
-    this call), so the information is not lost — only `reused_from` itself
-    cannot address a specific predecessor judgement row. #2236 tracks the
-    `CONTRACTS.md` §6 change (a `(job, seq)` reused_from) plus the
-    `judge()`/`carry_over()` obligations that would populate it; this
-    accepted-interim shape does not change until that lands, and
-    `rqa.record.explain._walk_reuse_chain` documents the same seam from its
-    own reading side.
-    """
-    return carry.source_job if carry.reused else None
+def _reused_from(carry: CarryOver) -> tuple[str, int] | None:
+    """§3 step 3: the one pinned source judgement shared by carried evidence."""
+    if not carry.reused:
+        return None
+    first = carry.reused[0]
+    return (first.source_job, first.source_judgement_seq)
 
 
 def _has_evidence_bearing_changed_path(
@@ -332,34 +333,40 @@ def judge(
     required = snapshot.policy.assurance[plan.risk_class]
     assurance = evidence_mod.compute_assurance(states=obligations, required=required)
 
-    causes: list[tuple[EscalationCause, str]] = []
+    causes: list[tuple[EscalationCause, EscalationSubject, str]] = []
     seen_causes: set[EscalationCause] = set()
 
-    def add_cause(cause: EscalationCause, detail: str) -> None:
+    def add_cause(
+        cause: EscalationCause, subject: EscalationSubject, detail: str
+    ) -> None:
         if cause not in seen_causes:
             seen_causes.add(cause)
-            causes.append((cause, detail))
+            causes.append((cause, subject, detail))
 
     for obligation_id in universe_order:
         state = obligations[obligation_id]
         if state is EvidenceState.CONTRADICTORY:
             add_cause(
                 EscalationCause.CONFLICTING_JUDGEMENT,
+                EscalationSubject(EscalationSubjectKind.OBLIGATION, obligation_id),
                 f"obligation {obligation_id} reported contradictory evidence",
             )
         elif state in (EvidenceState.UNAVAILABLE, EvidenceState.INCOMPLETE):
             add_cause(
                 EscalationCause.REQUIRED_INFORMATION,
+                EscalationSubject(EscalationSubjectKind.OBLIGATION, obligation_id),
                 f"obligation {obligation_id} evidence is {state.value}",
             )
         elif state is EvidenceState.FAILED:
             add_cause(
                 EscalationCause.UNRESOLVED_DECISION,
+                EscalationSubject(EscalationSubjectKind.OBLIGATION, obligation_id),
                 f"obligation {obligation_id} evidence failed",
             )
         elif state in (EvidenceState.UNKNOWN, EvidenceState.NOT_VERIFIED):
             add_cause(
                 EscalationCause.EVIDENCE_GAP,
+                EscalationSubject(EscalationSubjectKind.OBLIGATION, obligation_id),
                 f"obligation {obligation_id} evidence is {state.value}",
             )
 
@@ -367,17 +374,23 @@ def judge(
         if finding.behaviour_changing is not False:
             add_cause(
                 EscalationCause.UNRESOLVED_DECISION,
+                EscalationSubject(EscalationSubjectKind.FINDING, finding.id),
                 f"finding {finding.id} is behaviour-changing",
             )
 
     if assurance.achieved < assurance.required:
         add_cause(
             EscalationCause.EVIDENCE_GAP,
+            EscalationSubject(EscalationSubjectKind.ASSURANCE, plan.risk_class),
             f"assurance {assurance.achieved}/{assurance.required} below required",
         )
 
     if panel.bound_reached:
-        add_cause(EscalationCause.EVIDENCE_GAP, "panel reservation bound was reached")
+        add_cause(
+            EscalationCause.EVIDENCE_GAP,
+            EscalationSubject(EscalationSubjectKind.ASSURANCE, "panel-budget"),
+            "panel reservation bound was reached",
+        )
 
     # ---- step 10: disposition ----------------------------------------------
     disposition: Literal["approve", "request_changes", "remediate", "escalate"]
@@ -433,7 +446,12 @@ def judge(
         "assurance": {"required": assurance.required, "achieved": assurance.achieved},
         "remediation_candidates": list(judgement.remediation_candidates),
         "escalation_causes": [
-            {"cause": cause.value, "detail": detail} for cause, detail in judgement.escalation_causes
+            {
+                "cause": cause.value,
+                "subject": {"kind": subject.kind.value, "identifier": subject.identifier},
+                "detail": detail,
+            }
+            for cause, subject, detail in judgement.escalation_causes
         ],
         "disposition": judgement.disposition,
         "rendered_body": rendered_body,
