@@ -85,5 +85,19 @@ class GithubAnchorPublisher:
             )
         except transport_module.Unavailable as failure:
             raise PublishFailed(f"GitHub was unavailable: {failure}") from failure
+        except Exception as failure:  # noqa: BLE001 - the containment boundary
+            # **This is where a misbehaving adapter is contained, and it is here rather
+            # than in `rqa/record/` for a reason.** P-12 forbids `except Exception`
+            # anywhere in its package (U-DISPATCH-20's defect was a swallowed failure
+            # around a ledger write), so `anchor_job` catches only `PublishFailed`.
+            # That makes honouring the contract this class's job: whatever the adapter
+            # or transport throws, the caller sees a failed publish — the anchor stays
+            # pending and is retried — never an exception that could fail a review.
+            #
+            # `BaseException` is deliberately not caught: KeyboardInterrupt and
+            # SystemExit are the operator stopping the process, not a publish outcome.
+            raise PublishFailed(
+                f"publishing the anchor failed: {type(failure).__name__}: {failure}"
+            ) from failure
 
         return f"github:{self._job.repo}#{self._job.number}"
