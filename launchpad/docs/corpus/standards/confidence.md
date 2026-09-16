@@ -68,9 +68,6 @@ evidence:
   - statement: "An INFERENCE whose citation supports the subject of the claim but not the choice the claim makes is a decision in disguise, and belongs in TEAM_KNOWLEDGE attributed to whoever decided it."
     entry_class: TEAM_KNOWLEDGE
     provided_by: "launchpad-26/buzz#636 cross-model final review, relayed in the #1309 task brief: a second INFERENCE on AGENTS.md was rejected as laundering an unsourced policy choice into a class that made it look derived, and was reclassified to TEAM_KNOWLEDGE attributed to the issue's definition of done"
----
-
-# Standard: `confidence`
   - statement: "Per Serina's decision on launchpad-26/buzz#1486, this node reconciles to #1313's documentation-standard: the H1 no longer code-formats the topic, and the normative sections are named MUST and SHOULD rather than Requirements and Guidance."
     entry_class: TEAM_KNOWLEDGE
     provided_by: "launchpad-26/buzz#1486, decided 2026-08-27"

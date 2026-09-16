@@ -68,7 +68,9 @@ class Remedy:
     tool: str                    # a MECHANICAL_TOOL_SET id
     paths: tuple[str, ...]       # exact normalized repository-relative files; non-empty, unique,
                                  # no glob metacharacters, absolute path, "." or ".." segment
-    check: str                   # the check name that must pass after the fix
+    check: str                   # one canonical check id: ruff-format-check,
+                                 # prettier-check, gofmt-check, rustfmt-check,
+                                 # or dart-format-check
 
 @dataclass(frozen=True)
 class Finding:
@@ -564,8 +566,11 @@ groups and leaves `extra_tags` open. P-07 may select a **remediation candidate**
 files, its tool and categories are allowed by the snapshot, and `behaviour_changing is False`.
 That model-supplied Boolean is only a conservative veto; it never proves neutrality. Before P-10 may
 commit or push, the closed `ToolSpec` must run its language-specific behavior-equivalence check over
-every changed file and prove the actual before/after pair equivalent. No sound equivalence check means
-the tool is not in `MECHANICAL_TOOL_SET`; a failed check is `RemediationRefused(BEHAVIOUR_CHANGED)`.
+every changed file and prove the actual before/after pair equivalent. Registration in
+`MECHANICAL_TOOL_SET` means policy may name the tool; it does not claim its equivalence oracle is
+available in this implementation. A registered tool without an available sound equivalence oracle
+always refuses before invoking the formatter, commit, or push. A failed check is
+`RemediationRefused(BEHAVIOUR_CHANGED)`.
 Policy cannot weaken that test. A substantive category is never a candidate, and a finding blocks when
 any category blocks under policy.
 

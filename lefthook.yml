@@ -1,3 +1,9 @@
+# launchpad-26: cohort lanes live in launchpad/lefthook-launchpad.yml, not here,
+# so this upstream file stays as close to upstream as it can (AGENTS.md §3).
+# That file's header records what it adds, and that a hook is not a gate.
+extends:
+  - launchpad/lefthook-launchpad.yml
+
 # Glob patterns below mirror the `changes` job's dorny/paths-filter groups in
 # .github/workflows/ci.yml — keep the two in sync. Each globbed pre-push lane
 # also sets `files: git diff --name-only origin/main...HEAD` so its file set is

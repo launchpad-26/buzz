@@ -354,6 +354,7 @@ def test_t9_a_job_of_only_migrated_rows_is_legacy_and_never_verified() -> None:
     result = explain_job(connection, "job-legacy")
     assert isinstance(result, Explanation)
     assert result.legacy is True
+    assert result.hmac_checked is False
     assert result.verified is False
 
 

@@ -1,5 +1,15 @@
 # Dev deployment SOP — from nothing to a working Buzz environment
 
+> ## ⚠️ ARCHIVED — do not follow this document
+>
+> This is a superseded copy, kept for history. The live procedure is
+> [`launchpad/deploy/runbooks/dev-deployment-SOP.md`](../../runbooks/dev-deployment-SOP.md).
+>
+> It matters that you notice this before reading on: the steps below include destructive
+> commands (`sudo rm -rf` against paths under `/opt/buzz`), and they are written against an
+> environment that has moved. A search result or a retrieved excerpt will not show you the
+> `archived/` in this file's path — this banner is the only thing that will.
+
 **Audience:** you have a **Mac or a Windows PC**, a terminal, and no particular experience with
 virtual machines, Bash, or networking. Every command is written out. Nothing is hidden in a script.
 

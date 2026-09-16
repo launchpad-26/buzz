@@ -1,0 +1,1 @@
+../../../launchpad/agents/the-professor/skills/draft-page/SKILL.md

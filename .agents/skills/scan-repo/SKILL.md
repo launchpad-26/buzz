@@ -1,0 +1,1 @@
+../../../launchpad/agents/the-professor/skills/scan-repo/SKILL.md

@@ -13,6 +13,28 @@ see the redesign document's Summary for why that would also make `$PROFESSOR_PAC
 resolution (Open Questions item 6, already resolved) unnecessary for a session running inside
 that container, not just add a deployment option.
 
+## Configuring `$PROFESSOR_PACK_ROOT`
+
+Every skill that calls the tool layer — `draft-page`, `update-page`, `screen-sensitive` —
+fails loud with `PROFESSOR_PACK_ROOT is not set; see this pack's README for how to
+configure it` before doing anything else. This section is what that message points at.
+
+Set it to this pack's root directory, the one containing `tools/`:
+
+```bash
+export PROFESSOR_PACK_ROOT=launchpad/agents/the-professor
+```
+
+That is the same value `.github/workflows/launchpad-agents-tests.yml` sets for the pack's
+own CI job, so a local session and CI resolve identically. From outside this fork, use the
+absolute path to wherever the pack is installed. There is no default and no fallback — an
+unset variable is always an error, never a guess (redesign document, Open Questions item 6).
+
+The seven skills are registered at the repo root by symlink (issue #1397), so a session
+started anywhere in this fork can discover and load them. **Discovery does not set this
+variable for you:** a skill loaded that way still needs it exported, which is why the check
+fails loud rather than assuming a caller already did it.
+
 ## Adapting on install: the pack's only local references
 
 Three skills' `description:` fields name skills that exist **only in `launchpad-26/buzz`**, so

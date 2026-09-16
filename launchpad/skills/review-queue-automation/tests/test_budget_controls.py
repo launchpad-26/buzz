@@ -24,6 +24,9 @@ from test_dispatch_flow import (  # noqa: E402
     _clean_verdict,
     _config,
     fake_panel,
+    fake_approve,
+    patch_approval,
+    restore_approval,
     patch_dispatcher,
     restore_dispatcher,
     seed_evidence,
@@ -55,12 +58,14 @@ def _dispatch(cfg: dict, state: State, jid: str, number: int) -> tuple[dict, lis
     that a refusal spent nothing."""
     calls: list = []
     saved = patch_dispatcher(run_panel=fake_panel("SUPPORTED", calls=calls))
+    approval = patch_approval(fake_approve(True, "approved"))
     try:
         result = dispatcher.run_job(
             cfg, {"job_id": jid, "repo": "o/r", "number": number, "lane": "incoming_review"},
             state=state,
         )
     finally:
+        restore_approval(approval)
         restore_dispatcher(saved)
     return result, calls
 

@@ -377,3 +377,11 @@ HTTP layer (fixture responses, no network).
 - **RQA-NFR-029** (deny one change's content to an external provider even where the repository allows
   it) — E-23 captures labels in `Facts.pr.labels`, which P-05 receives as a fact and never as an
   instruction.
+
+## Implementation amendment — #2250
+
+P-09 checks repository permissions together with a fresh authenticated
+`X-OAuth-Scopes` response. `repo` permits repository writes; `public_repo`
+permits them only when repository metadata explicitly reports `private: false`.
+An absent scope header permits no write attestation. This is ADR-0062's
+2026-09-15 amendment; the probe remains read-only.

@@ -1253,6 +1253,7 @@ The credential the system holds shall carry pull-request write and repository-co
 
 **Fit criterion:** Inspecting the credential's granted scopes shows, on an authoritative-review-only repository, pull-request write and repository-content read present; on a repository configured for remediation push or merge-after-review, those same two plus exactly the additional write scope those configured operations require; and on an advisory-only repository, pull-requests write present as the base scope. A credential missing any required scope on a repository configured to exercise it fails this check.
 
+**See also:** ADR-0062 amendment, 2026-09-15 (#2250). A GitHub-attested write capability may satisfy this requirement only when authenticated repository permissions and the same OAuth credential's scopes both support the operation. Exercised capabilities and write attestations remain separately recorded; policy and protection checks still apply. Missing or ambiguous evidence denies the activity.
 
 ### RQA-NFR-025
 
@@ -1300,6 +1301,8 @@ The credential the system holds shall carry no permission on a managed repositor
 ## Scope and design baseline
 
 What repository host this covers, and the baseline every kept piece of the design has to justify itself against.
+
+**See also:** ADR-0062 amendment, 2026-09-15 (#2250). A GitHub-attested write capability may satisfy this requirement only when authenticated repository permissions and the same OAuth credential's scopes both support the operation. Exercised capabilities and write attestations remain separately recorded; policy and protection checks still apply. Missing or ambiguous evidence denies the activity.
 
 ### RQA-FR-034
 
