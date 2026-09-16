@@ -377,6 +377,11 @@ ENTRY_KINDS: frozenset[EntryKind]
 class Entry: seq: int; hash: str
 class AppendFailed(Exception): ...
 
+# ADR-0066's anchored chain head (#2300). A digest and its position — never payload.
+@dataclass(frozen=True)
+class Anchor: job: str; seq: int; hash: str; at: str
+class PublishFailed(Exception): ...
+
 class RecordWriter(Protocol):
     def append(self, job_id: str, kind: EntryKind, payload: Mapping) -> Entry: ...
 
@@ -528,6 +533,10 @@ class HarnessProber(Protocol):
 # E-26  P-10 consumes — local tool processes (MECHANICAL_TOOL_SET binaries)   NEW: surfaced by review
 class ProcessRunner(Protocol):
     def run(self, *, cwd: Path, argv: tuple[str, ...], timeout: float) -> ProcessResult: ...
+
+# E-27  P-12 consumes — anchor publication (ADR-0066's chain head)
+class AnchorPublisher(Protocol):
+    def publish(self, *, anchor: Anchor) -> str: ...          # raises PublishFailed; never appends to the record
 ```
 
 ## 10. Ownership of the review loop — decided

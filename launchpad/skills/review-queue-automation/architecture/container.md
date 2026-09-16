@@ -146,6 +146,7 @@ Recorded here so that it is a known trade, not a surprise.
 | credential | `rqa` → GitHub CLI | process execution of `gh auth token` | the operator's GitHub CLI credential, the only credential path by maintainer constraint (P-08); E-22 |
 | config | repository → `rqa` | file read | `.rqa/config.json` re-read every tick (P-03) |
 | tools | `rqa` → local processes | process execution in the worktree | formatters from the closed set and `git` (P-10); E-26 |
+| anchor | `rqa` → anchor destination | one GraphQL mutation, never the recorded-write path | ADR-0066's chain head so truncation is detectable (P-12); E-27 |
 
 There is no path between two containers because there is one container; a library call inside `rqa`
 is, per the corpus template's own note, the sign that two things are not separate containers.

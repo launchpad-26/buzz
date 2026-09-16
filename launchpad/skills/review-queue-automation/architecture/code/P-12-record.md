@@ -28,7 +28,8 @@ rqa/record/
   hashing.py     canonical_json(); compute_hash(); genesis and "legacy" prev_hash sentinels
   store.py       record_entries/record_heads DDL; serialization; ordered row reads
   writer.py      SQLiteRecordWriter: the RecordWriter implementation
-  verify.py      verify(): chain recomputation
+  verify.py      verify(): chain recomputation and the anchored-head checks
+  anchor.py      anchor_job(): records and publishes the chain head (E-27)
   reader.py      SQLiteRecordReader plus resolve_job()
   explain.py     explain() / explain_job(): FR-012 reconstruction
   trace.py       jobs/<job>/trace.jsonl: non-authoritative milestone trace
@@ -270,10 +271,24 @@ link exactly as any other row is, and is never a break merely for carrying an HM
 `HMAC_MISMATCH` is gone from `BreakKind`, and `UnverifiableSegment` with it — no row is unverifiable
 for want of a key when there is no key.
 
-**What this does not detect**, both stated by ADR-0066 rather than discovered later: an actor who
-rewrites a row *and* recomputes every downstream hash, and a removed tail (the walk starts at the
-first row, so a truncated chain is shorter but internally consistent and returns `ok=True`; issue
-#2220). The externally anchored chain head (#2300) is what closes both; nothing in this section does.
+**Step 4, the anchored head.** After a consistent walk, `verify` compares the record against the
+job's newest anchor (§3.4). An anchor is independent evidence about what the chain *was*, so it
+catches the two things internal consistency cannot:
+
+- the anchored sequence is no longer present → `TAIL_REMOVED` at that seq. A consistent walk over the
+  rows that remain is exactly what truncation looks like, which is why this check cannot come from the
+  walk itself (issue #2220).
+- the row at that sequence is present but is not the row that was anchored → `ANCHOR_MISMATCH`. This
+  is the wholly recomputed chain, which the walk alone reports as clean.
+
+`anchored_through_seq` is the highest seq an anchor attests, `0` when the job has none;
+`anchor_published` is False when the newest anchor never reached its destination. **A job with no
+anchor still verifies** — an unanchored record is not a broken one, and entries after the last anchor
+are unattested rather than broken.
+
+`TAIL_REMOVED` is named that, and not `TRUNCATED`, because §8's destructive-SQL guard scans this
+package's string literals for `TRUNCATE` and `"TRUNCATED"` contains it. The guard is right; the enum
+moved rather than the guard.
 
 `verify` never mutates either table, never reads the trace, and never raises for an integrity outcome.
 Store read failures raise `sqlite3.Error`/`OSError`; all other branches above return `VerifyResult`.
@@ -337,9 +352,62 @@ call; never fabricates values; never presents a post-break row as authoritative;
 side-effect-free. Its only named reconstruction failure is `ReuseResolutionError` above; all ordinary
 absence/ambiguity and integrity cases have the returned outcomes specified here.
 
-## 4. Dependencies consumed — none
+### 3.4 `anchor_job` — the anchored chain head, E-27
 
-P-12 calls no other RQA part and consumes no edge.
+```python
+def anchor_job(connection, job_id, *, publisher: AnchorPublisher, clock=utcnow) -> AnchorResult: ...
+```
+
+**Behaviour, in order. Every branch returns.**
+
+1. Retry every pending anchor for the job, oldest first. A failed publish leaves the row pending and
+   contributes a message; it never raises.
+2. Read the job's current head. None → nothing to anchor.
+3. Head already anchored → no new row. Anchoring is idempotent, so a caller may run it as often as it
+   likes without growing the table.
+4. Otherwise insert the local anchor row **first**, then attempt to publish it.
+
+**Why the local row is written before the publish.** That row is what detects a removed tail with no
+network at all, which is what keeps `explain` offline — the parent feature is "tamper-evident record
+*and offline explanation*". `destination` stays NULL until a publish succeeds, which makes a failed
+publish a recorded, retryable fact rather than a silently dropped one.
+
+The two strengths are deliberately different, and the documentation should not blur them:
+
+| What happened | Detected offline? |
+|---|---|
+| A crashed or killed agent truncated the log | **Yes** — the local anchor survives |
+| An actor truncated the log *and* the local anchor rows | No — needs the published copy |
+
+**Three rules this part must keep, and the test that enforces each.**
+
+1. **Publishing appends no record entry.** An entry would move the head, the new head would need an
+   anchor, and publishing that would append again — for ever. The concrete trap is
+   `rqa/github/writes.py`, where every mutation routes through `_dispatch` and calls
+   `record.append(job, "action", …)`; a publisher must reach the transport directly instead. Enforced
+   by `test_publishing_an_anchor_appends_no_record_entry`: append N, publish, still N.
+2. **Anchoring is never triggered by an append.** The caller decides when — on a schedule, at job end,
+   or on an explicit command. So if a recorded write were ever reintroduced the anchor would lag one
+   entry and catch up, rather than chase.
+3. **Bypassing `writes.py` means checking authority directly.** `_dispatch` is also where
+   `_require_grant` runs, so `rqa/github/anchor_publisher.py` calls it explicitly with
+   `Activity.COMMENT`. An advisory-only repository holds no comment authority and must send nothing
+   rather than widen authority silently.
+
+**What an anchor may carry.** A job id, a sequence, a hash and a timestamp — never payload. The hash
+is a digest, which is what makes publishing one the narrowest possible external send; it is still an
+external send, so `RQA-NFR-023`/`027`/`029` govern whether a given repository may make it at all.
+
+**The bound on the claim.** Anchoring is periodic: the guarantee is "complete as at the last anchor",
+never "complete as at the final entry". Entries appended after the most recent anchor are unattested,
+and truncation inside that window is undetectable. Narrowing the window is a frequency choice, not a
+further mechanism.
+
+## 4. Dependencies consumed — E-27 only
+
+P-12 calls no other RQA part. Its one cross-boundary dependency is **E-27**,
+`AnchorPublisher.publish(anchor) -> str`, which publishes the chain head where the
+reviewed agent cannot rewrite it (§3.4).
 
 **E-25 was retired by [ADR-0066](../../../../decisions/ADR-0066-rqa-record-chain-anchoring-without-a-key.md).**
 Until then P-12's sole cross-boundary dependency was `KeyStore.read(name) -> bytes | None`, the
@@ -377,6 +445,24 @@ CREATE TABLE record_heads (
   hmac TEXT, keyed INTEGER NOT NULL CHECK (keyed IN (0, 1))
 );
 ```
+
+```sql
+-- ADR-0066's anchored chain head (#2300). Evidence *about* the chain, never part of
+-- it: nothing here is hashed into an entry, and `append` neither reads nor writes it.
+CREATE TABLE record_anchors (
+  job         TEXT NOT NULL,
+  seq         INTEGER NOT NULL,
+  hash        TEXT NOT NULL,
+  at          TEXT NOT NULL,
+  destination TEXT,              -- NULL until the publish succeeds: a pending anchor
+  UNIQUE (job, seq)
+);
+CREATE INDEX record_anchors_by_job ON record_anchors(job, seq);
+```
+
+**`destination IS NULL` is load-bearing.** It is what makes a failed publish a recorded, retryable
+fact rather than a silently dropped one, and what lets `verify` report `anchor_published=False`
+honestly instead of implying an anchor reached somewhere it did not.
 
 **The `keyed` and `hmac` columns are retained, and the CHECK with them.** ADR-0066 removed the key,
 not the columns: every new row is written `keyed = 0, hmac = NULL` — the branch the CHECK already
@@ -500,7 +586,12 @@ and this part does not write a snapshot. This file is written by this part and r
   exists (§5).
 - Does not read, generate, rotate, or write any key, and does not touch a credential store on any
   platform. ADR-0066 retired the operator-held HMAC key that ADR-F and ADR-0063 introduced.
-- Does not contact GitHub, invoke a harness, or invoke a model anywhere in this package.
+- Does not contact GitHub, invoke a harness, or invoke a model anywhere in this package. Anchoring
+  (§3.4) reaches its destination through an injected `AnchorPublisher`; the GitHub implementation of
+  that port lives in `rqa/github/anchor_publisher.py`, on P-09's side of the seam, so nothing in
+  `rqa/record/` imports GitHub.
+- Does not append a record entry when publishing an anchor, and is never triggered to anchor by an
+  append. Both rules exist to stop the publish/append loop (§3.4).
 - Does not re-run a migration a prior run already completed for a given source table
   (`MigrationTableResult.already_done`), and does not invent a mapping for a table the migration
   doesn't name.
@@ -538,6 +629,12 @@ credential store or a real network. ADR-0066 removed the key, so there is no key
 | T18 | a job with rows `[real seq=1, legacy, real seq=2 chained to seq=1]` | `verify` returns `ok=True`; `explain_job` returns `legacy=True, verified=False` — because of the migrated row, not because of any key |
 | T19 | a `judgement` row whose `findings` list contains three ids: one in both `blocking` and `corroborated`, one in `corroborated` only, one in neither | `explain_job`'s `findings` tuple marks the first `blocking=True, corroborated=True`, the second `blocking=False, corroborated=True`, the third `blocking=False, corroborated=False` — the three-way split RQA-BR-005/RQA-BR-008 need |
 | T21 | append one minimal JSON-safe payload for each member of `ENTRY_KINDS` | all fourteen are accepted; any fifteenth string raises `UnknownEntryKind` |
+| T23 | append N entries, then publish an anchor | the record still holds exactly N entries — **the invariant that stops the publish/append loop**; fails loudly if anyone wires anchoring through `writes.py` |
+| T24 | anchor a 4-entry job, then delete entries after seq 2 | `verify` returns `ok=False, kind=TAIL_REMOVED, bad_seq=4`. The same deletion **without** an anchor returns `ok=True`, pinned as the contrast |
+| T25 | anchor a job, then rebuild its chain consistently under the same seqs | `verify` returns `ok=False, kind=ANCHOR_MISMATCH` — the case the walk alone reports clean |
+| T26 | a publisher that raises `PublishFailed`, then a working one | the anchor is recorded pending, `verify` still detects a removed tail offline, and the next `anchor_job` publishes it |
+| T27 | a payload containing a distinctive string, then publish | neither the `Anchor` nor the published body contains it — a digest and its position, never content |
+| T28 | `GithubAnchorPublisher.publish` with `grant=None` | raises `PublishFailed`, and the adapter is never touched — bypassing `writes.py` does not bypass the authority gate |
 
 Property that must hold across the suite: `grep -rn "INSERT INTO record_entries\|INSERT INTO
 record_heads" rqa/ --include=*.py` returns hits only inside `rqa/record/store.py`. No other module —

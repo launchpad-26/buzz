@@ -189,13 +189,33 @@ from the OS keychain: that key had to be readable by `rqa` on every append, so
 anything running as you could read it too, and it cost a separate credential
 integration per platform.
 
-Two things the chain does **not** detect, stated plainly rather than implied:
-an actor who rewrites a row *and* recomputes every hash after it, and a
-removed tail — a record with its last entries deleted is shorter but
-internally consistent, and verifies clean. Publishing the chain head where a
-reviewed agent cannot rewrite it (#2300) is what closes both; until that
-lands, treat `verified` as "nothing was corrupted", not as "nothing was
-removed".
+On its own the chain does **not** detect two things: an actor who rewrites a
+row *and* recomputes every hash after it, and a removed tail — a record with
+its last entries deleted is shorter but internally consistent, and verifies
+clean. **Anchoring closes both**, up to the last anchor.
+
+**What anchoring is.** RQA periodically publishes the record's current head —
+a job id, a sequence and a hash, never any content — somewhere the reviewed
+agent cannot rewrite it, and keeps a local copy. `verify` then compares the
+two. If entries the anchor proves existed are gone, you get `tail_removed`
+rather than a clean pass; if the chain was rebuilt, `anchor_mismatch`.
+
+**The bound, which matters when you read a report.** Anchoring is periodic,
+so the guarantee is "complete as at the last anchor", never "complete as at
+the final entry". Entries appended after the most recent anchor are
+unattested, and truncation inside that window is undetectable. Anchor more
+often to narrow the window; there is no setting that closes it.
+
+**What works with no network.** The local anchor copy is written before the
+publish is attempted, so a crashed agent's truncated log is detected offline
+— which is the common case. An actor who deleted the local anchors *as well*
+is only caught by comparing against the published copy. A publish that fails
+never blocks a review: the anchor is recorded as pending and retried.
+
+**Authority.** Publishing to a pull request needs comment authority for that
+repository. An advisory-only repository publishes nothing rather than
+widening what RQA may do — you get an unanchored record, honestly reported,
+not a silent escalation of privilege.
 
 **ADR-0064 — the only remedy `rqa` applies and pushes itself is a closed-set
 tool run on exact named files, never a model-supplied patch.** A remedy names

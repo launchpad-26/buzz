@@ -31,7 +31,7 @@ RECORD = RQA / "record"
 
 #: §1's module list, split by the lane that builds each module.
 APPEND_MODULES = frozenset(
-    {"__init__", "kinds", "hashing", "store", "writer", "verify", "reader", "trace"}
+    {"__init__", "kinds", "hashing", "store", "writer", "verify", "reader", "trace", "anchor"}
 )
 EXPLAIN_MODULES = frozenset({"explain", "migrate"})
 ALL_MODULES = APPEND_MODULES | EXPLAIN_MODULES
@@ -52,6 +52,12 @@ APPEND_EXPORTS = frozenset(
         "verify",
         "VerifyResult",
         "BreakKind",
+        # ADR-0066's anchored chain head (#2300).
+        "Anchor",
+        "AnchorPublisher",
+        "AnchorResult",
+        "PublishFailed",
+        "anchor_job",
     }
 )
 EXPLAIN_EXPORTS = frozenset(

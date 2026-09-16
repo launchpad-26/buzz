@@ -534,6 +534,26 @@ class Entry:
     hash: str
 
 
+@dataclass(frozen=True)
+class Anchor:
+    """E-27's payload: what gets published where the reviewed agent cannot rewrite it.
+
+    A job id, a sequence and a chain hash — **no record content, ever**. The hash is a
+    digest, which is what makes publishing an anchor a safe external send even where
+    the record itself must never go (ADR-0066, #2300).
+    """
+
+    job: str
+    seq: int
+    hash: str
+    at: str
+
+
+class PublishFailed(Exception):
+    """An anchor did not reach its destination. Never fatal: the local anchor row is
+    already written, stays pending, and the next run retries it."""
+
+
 class AppendFailed(Exception):
     """The record could not be appended. Always propagates; never a recorded outcome."""
 
@@ -644,6 +664,7 @@ class ExplanationUnavailable:
 # --------------------------------------------------------------------------
 
 from rqa.edges import (  # noqa: E402
+    AnchorPublisher,
     EscalationStore,
     Explanation,
     BreakerStore,
@@ -733,6 +754,7 @@ EDGES: Mapping[str, tuple[object, ...] | str] = {
     "E-23": (facts,),
     "E-24": (HarnessProber,),
     "E-26": (ProcessRunner,),
+    "E-27": (AnchorPublisher,),
 }
 
 __all__ = [
@@ -810,6 +832,9 @@ __all__ = [
     "EntryKind",
     "ENTRY_KINDS",
     "Entry",
+    "Anchor",
+    "AnchorPublisher",
+    "PublishFailed",
     "AppendFailed",
     "RecordWriter",
     "RecordRow",

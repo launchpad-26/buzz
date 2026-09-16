@@ -27,6 +27,8 @@ from typing import TYPE_CHECKING, Protocol
 
 if TYPE_CHECKING:  # annotation-only; resolved by type checkers, never at import
     from collections.abc import Mapping
+
+    from rqa.contracts import Anchor
     from pathlib import Path
     from typing import Literal
 
@@ -276,3 +278,8 @@ class HarnessProber(Protocol):
 # E-26  P-10 consumes — local tool processes (MECHANICAL_TOOL_SET binaries)   NEW: surfaced by review
 class ProcessRunner(Protocol):
     def run(self, *, cwd: Path, argv: tuple[str, ...], timeout: float) -> ProcessResult: ...
+
+
+# E-27  P-12 consumes — anchor publication (ADR-0066's chain head)
+class AnchorPublisher(Protocol):
+    def publish(self, *, anchor: Anchor) -> str: ...          # raises PublishFailed; never appends to the record
