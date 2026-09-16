@@ -551,7 +551,7 @@ def make_snapshot(*, repo: str) -> Snapshot:
         policy=Policy(
             version="policy-1",
             obligations=(),
-            blocking=Blocking(categories=frozenset(), severities=frozenset(), corroboration=1),
+            blocking=Blocking(categories=frozenset()),
             mechanical=Mechanical(categories=frozenset(), tools=frozenset()),
             assurance={"standard": 1},
             remediation=RemediationPolicy(allow_forks=False),

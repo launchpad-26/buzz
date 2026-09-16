@@ -112,7 +112,7 @@ def make_snapshot(*routes, budget: Budget) -> Snapshot:
         policy=Policy(
             version="1",
             obligations=(),
-            blocking=Blocking(categories=frozenset(), severities=frozenset(), corroboration=1),
+            blocking=Blocking(categories=frozenset()),
             mechanical=Mechanical(categories=frozenset(), tools=frozenset()),
             assurance={},
             remediation=RemediationPolicy(allow_forks=False),

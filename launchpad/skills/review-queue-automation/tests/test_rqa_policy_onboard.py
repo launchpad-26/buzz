@@ -136,7 +136,7 @@ def _old_shape_document() -> dict:
         "policy": {
             "version": "1",
             "obligations": [],
-            "blocking": {"categories": [], "severities": [], "corroboration": 1},
+            "blocking": {"categories": []},
             "mechanical": {"categories": [], "tools": []},
             "assurance": {},
         },

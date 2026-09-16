@@ -558,7 +558,7 @@ def _cascade_wiring() -> dict:
         policy=Policy(
             version="1.0.0",
             obligations=(),
-            blocking=Blocking(categories=frozenset(), severities=frozenset(), corroboration=2),
+            blocking=Blocking(categories=frozenset()),
             mechanical=Mechanical(categories=frozenset(), tools=frozenset()),
             assurance={"standard": 2},
             remediation=RemediationPolicy(allow_forks=False),

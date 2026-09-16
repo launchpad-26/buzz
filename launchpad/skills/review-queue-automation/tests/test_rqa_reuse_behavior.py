@@ -180,8 +180,6 @@ def _snapshot(
         obligations=obligations,
         blocking=Blocking(
             categories=frozenset({Category.SECURITY}),
-            severities=frozenset({"high"}),
-            corroboration=1,
         ),
         mechanical=Mechanical(
             categories=frozenset({Category.MECHANICAL}), tools=frozenset({"format"})

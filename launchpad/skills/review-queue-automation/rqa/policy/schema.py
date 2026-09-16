@@ -64,7 +64,7 @@ POLICY_OPTIONAL_KEYS: frozenset[str] = frozenset({"version", "remediation"})
 #: `rqa.protocol.Obligation`'s own fields (P-04 owns the shape).
 OBLIGATION_KEYS: frozenset[str] = frozenset({"id", "paths", "required_for", "evidence"})
 
-BLOCKING_KEYS: frozenset[str] = frozenset({"categories", "severities", "corroboration"})
+BLOCKING_KEYS: frozenset[str] = frozenset({"categories"})
 MECHANICAL_KEYS: frozenset[str] = frozenset({"categories", "tools"})
 REMEDIATION_KEYS: frozenset[str] = frozenset({"allow_forks"})
 

@@ -494,6 +494,16 @@ def test_blocking_categories_materialise_as_a_frozenset_of_category() -> None:
     assert all(isinstance(category, Category) for category in categories)
 
 
+def test_obsolete_blocking_controls_are_rejected_as_unknown_keys() -> None:
+    """C-003: policy may select blocking categories, not judgement mechanics."""
+    for key, value in (("severities", ["high"]), ("corroboration", 2)):
+        config = _config()
+        config["policy"]["blocking"][key] = value
+        failure = _failure(config)
+        assert _codes(failure) == [CODE.UNKNOWN_KEY], (key, failure.errors)
+        assert failure.errors[0].path == f"policy.blocking.{key}"
+
+
 def test_a_missing_blocking_section_is_refused_rather_than_defaulted_to_nothing() -> None:
     config = _config()
     del config["policy"]["blocking"]

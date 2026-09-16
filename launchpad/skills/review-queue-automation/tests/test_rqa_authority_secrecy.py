@@ -91,7 +91,7 @@ def snapshot() -> Snapshot:
         policy=Policy(
             version="unversioned",
             obligations=(),
-            blocking=Blocking(categories=frozenset(), severities=frozenset(), corroboration=1),
+            blocking=Blocking(categories=frozenset()),
             mechanical=Mechanical(
                 categories=frozenset({Category.MECHANICAL}), tools=frozenset({"ruff"})
             ),

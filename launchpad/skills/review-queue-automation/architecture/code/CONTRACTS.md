@@ -143,7 +143,7 @@ class ValidationFailure:
 @dataclass(frozen=True)
 class External: allowed: bool; deny_label: str
 @dataclass(frozen=True)
-class Blocking: categories: frozenset[Category]; severities: frozenset[str]; corroboration: int
+class Blocking: categories: frozenset[Category]
 @dataclass(frozen=True)
 class Mechanical: categories: frozenset[Category]; tools: frozenset[str]
 @dataclass(frozen=True)
@@ -524,7 +524,7 @@ def consumed(*, job: Job, attempt: Attempt, reading: int | None, reservation: Re
 # E-16  P-09 provides, P-08 consumes
 def probe(*, repo: str, credential: str) -> CapabilityReading | GithubUnavailable: ...
 
-# E-17  CLI: P-02 status; P-12 explain → Explanation | ExplanationUnavailable; P-11 decide/pending; P-03 onboard; P-01 tick
+# E-17  CLI: P-02 status; P-12 explain → Explanation | ExplanationUnavailable and anchor; P-11 decide/pending; P-03 onboard; P-01 tick
 
 # E-23  P-09 provides, P-02 consumes
 def facts(*, job: Job, record: RecordWriter) -> Facts | GithubUnavailable: ...   # one coherent GitHub fact capture

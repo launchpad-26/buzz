@@ -140,8 +140,6 @@ class External:
 @dataclass(frozen=True)
 class Blocking:
     categories: frozenset[Category]
-    severities: frozenset[str]
-    corroboration: int
 
 
 @dataclass(frozen=True)

@@ -265,8 +265,6 @@ def make_snapshot(*, merge_enabled: bool = False, tools: frozenset[str] | None =
             ),
             blocking=Blocking(
                 categories=frozenset({Category.SECURITY, Category.CORRECTNESS}),
-                severities=frozenset({"high"}),
-                corroboration=2,
             ),
             mechanical=Mechanical(
                 categories=frozenset({Category.MECHANICAL}),

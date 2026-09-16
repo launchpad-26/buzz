@@ -137,7 +137,7 @@ def make_policy(
     return Policy(
         version="policy-1",
         obligations=obligations,
-        blocking=Blocking(categories=blocking_categories, severities=frozenset({"high"}), corroboration=2),
+        blocking=Blocking(categories=blocking_categories),
         mechanical=Mechanical(categories=mechanical_categories, tools=mechanical_tools),
         assurance=dict(assurance or {"standard": 1}),
         remediation=RemediationPolicy(allow_forks=False),

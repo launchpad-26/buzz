@@ -81,7 +81,7 @@ eighth state.
 Whether a finding blocks a review is a policy decision applied to this protocol's
 vocabulary, not something this package decides (`code/P-04-protocol.md` §7): a
 corroborated finding blocks when any of its categories blocks under the pinned
-policy's `Blocking.categories`/`Blocking.severities` (`CONTRACTS.md` §3), and
+policy's `Blocking.categories` (`CONTRACTS.md` §3), and
 corroboration itself requires either two distinct attested provider families or one
 PR-attributed failing check citing the same fingerprint. An `InjectionAttempt`
 reported by any harness is always converted into a blocking synthetic `EVIDENCE`

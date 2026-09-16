@@ -40,7 +40,7 @@ import tempfile
 
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent.parent))
 
-from rqa.contracts import EvidenceState  # noqa: E402
+from rqa.contracts import Category, EvidenceState  # noqa: E402
 from rqa.judgement.evidence import compute_assurance  # noqa: E402
 from rqa.lifecycle.states import DISPOSITION, Disposition, JobStatus  # noqa: E402
 from rqa.policy import SqliteSnapshotStore, snapshot_for  # noqa: E402
@@ -313,8 +313,8 @@ def _write_blocking(path: pathlib.Path, config: dict, blocking: dict) -> None:
 
 
 def test_ac02_a_policy_edit_is_observed_without_a_rebuild_or_restart() -> None:
-    original = {"categories": ["correctness"], "severities": ["high"], "corroboration": 1}
-    edited = {"categories": ["correctness", "security"], "severities": ["high"], "corroboration": 2}
+    original = {"categories": ["correctness"]}
+    edited = {"categories": ["correctness", "security"]}
     with tempfile.TemporaryDirectory() as directory:
         root = pathlib.Path(directory)
         repo = str(root / "owner" / "name")
@@ -336,7 +336,9 @@ def test_ac02_a_policy_edit_is_observed_without_a_rebuild_or_restart() -> None:
             first=first.hash, second=second.hash, third=third.hash
         )
         assert violations == [], violations
-        assert second.policy.blocking.corroboration == 2, second.policy.blocking
+        assert second.policy.blocking.categories == frozenset(
+            {Category.CORRECTNESS, Category.SECURITY}
+        ), second.policy.blocking
 
 
 # --------------------------------------------------------------------------------

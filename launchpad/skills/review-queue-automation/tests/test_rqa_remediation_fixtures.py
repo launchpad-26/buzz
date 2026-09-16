@@ -160,8 +160,6 @@ def make_policy(*, allow_forks: bool = True, tools: frozenset[str] | None = None
         obligations=(),
         blocking=Blocking(
             categories=frozenset({Category.CORRECTNESS}),
-            severities=frozenset({"high"}),
-            corroboration=1,
         ),
         mechanical=Mechanical(
             categories=frozenset({Category.MECHANICAL}),

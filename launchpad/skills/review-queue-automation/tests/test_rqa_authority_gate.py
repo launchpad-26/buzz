@@ -146,7 +146,7 @@ def snapshot(
         policy=Policy(
             version="unversioned",
             obligations=(),
-            blocking=Blocking(categories=frozenset(), severities=frozenset(), corroboration=1),
+            blocking=Blocking(categories=frozenset()),
             mechanical=Mechanical(categories=categories, tools=tools),
             assurance={},
             remediation=RemediationPolicy(allow_forks=False),

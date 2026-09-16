@@ -68,8 +68,6 @@ DOCUMENTED_DATACLASSES: dict[str, tuple[tuple[str, str], ...]] = {
     ),
     "Blocking": (
         ("categories", "frozenset[Category]"),
-        ("severities", "frozenset[str]"),
-        ("corroboration", "int"),
     ),
     "Mechanical": (
         ("categories", "frozenset[Category]"),
