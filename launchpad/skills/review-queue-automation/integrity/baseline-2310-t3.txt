@@ -1,0 +1,786 @@
+# NOTE: one value in this preserved output is masked. B-INV-003's guard asserts
+# that a fabricated canary token does not escape the authority frame, so the
+# pytest failure below quotes that token in full. It is a test fixture, not a
+# credential, but it matches gitleaks' github-oauth rule and the repository's
+# secret scan fails a PR on any match. The literal is therefore written here as
+# `gho_<T16-CANARY-MASKED>`; its real value is in
+# tests/test_rqa_authority_secrecy.py, and nothing else in this file is altered.
+
+source_commit: ec42a8365eb2a6f33d6cf962d6f745dcd1c49f7f
+source_scope: launchpad/skills/review-queue-automation
+isolation: git archive -> /var/folders/2b/h1cqt5d16m3fp03mc8rd1jfc0000gn/T/rqa-invariant-mutations-htmoxb5g (deleted on exit)
+cases: 19
+
+[B-INV-001] The real remediation entry point verifies the REMEDIATE grant before reading PR-head protection or taking any other action.
+  baseline: /private/tmp/rqa-integrity-2310.ZyNTzQ/venv311/bin/python -m pytest -q tests/test_rqa_remediation_remediate.py::test_t1_a_grant_for_another_activity_raises_and_touches_nothing
+  returncode: 0
+    .                                                                        [100%]
+    1 passed in 0.22s
+  mutant: /private/tmp/rqa-integrity-2310.ZyNTzQ/venv311/bin/python -m pytest -q tests/test_rqa_remediation_remediate.py::test_t1_a_grant_for_another_activity_raises_and_touches_nothing
+  returncode: 0
+    .                                                                        [100%]
+    1 passed in 0.21s
+
+[B-INV-002] Every GitHub write checks its exact Grant before any GitHub call or record append.
+  baseline: /private/tmp/rqa-integrity-2310.ZyNTzQ/venv311/bin/python -m pytest -q tests/test_rqa_github_writes.py::test_t1_every_write_with_grant_none_raises_before_any_call_or_append
+  returncode: 0
+    .                                                                        [100%]
+    1 passed in 0.14s
+  mutant: /private/tmp/rqa-integrity-2310.ZyNTzQ/venv311/bin/python -m pytest -q tests/test_rqa_github_writes.py::test_t1_every_write_with_grant_none_raises_before_any_call_or_append
+  returncode: 1
+    F                                                                        [100%]
+    =================================== FAILURES ===================================
+    _____ test_t1_every_write_with_grant_none_raises_before_any_call_or_append _____
+    
+        def test_t1_every_write_with_grant_none_raises_before_any_call_or_append() -> None:
+            job = make_job()
+            transport = PoisonTransport()
+            record = FakeRecord()
+            mutations = FakeMutations()
+            adapter = GithubAdapter(transport=transport, mutations=mutations, clock=lambda: FIXED_NOW)
+            for name, call in _write_calls(adapter, job, record):
+                try:
+    >               call(None)
+    
+    tests/test_rqa_github_writes.py:203: 
+    _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+    tests/test_rqa_github_writes.py:183: in <lambda>
+        ("claim_lease", lambda grant: adapter.claim_lease(job=job, grant=grant, record=record)),
+    rqa/github/types.py:88: in claim_lease
+        return writes.claim_lease(adapter=self, job=job, grant=grant, record=record)
+    rqa/github/writes.py:330: in claim_lease
+        return _dispatch(
+    rqa/github/writes.py:250: in _dispatch
+        perform(cmid)
+    rqa/github/writes.py:294: in perform
+        node = _read_pr_node(adapter, job=job, operation="claim_lease")
+    rqa/github/writes.py:173: in _read_pr_node
+        data = adapter.transport.graphql(
+    _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+    
+    self = <test_rqa_github_writes.PoisonTransport object at 0x103277c90>
+    args = ('query($owner:String!,$name:String!,$number:Int!){viewer{login id}repository(owner:$owner,name:$name){pullRequest(number:$number){id state headRefOid assignees(first:20){nodes{login id}}}}}', {'name': 'repo', 'number': 7, 'owner': 'octo'})
+    kwargs = {'operation': 'claim_lease'}
+    
+        def _refuse(self, *args, **kwargs):
+    >       raise AssertionError("unexpected GitHub call")
+    E       AssertionError: unexpected GitHub call
+    
+    tests/test_rqa_github_writes.py:135: AssertionError
+    =========================== short test summary info ============================
+    FAILED tests/test_rqa_github_writes.py::test_t1_every_write_with_grant_none_raises_before_any_call_or_append
+    1 failed in 0.26s
+
+[B-INV-003] A GitHub credential is released from the authority frame even when the injected capability probe raises.
+  baseline: /private/tmp/rqa-integrity-2310.ZyNTzQ/venv311/bin/python -m pytest -q tests/test_rqa_authority_secrecy.py::test_t16_the_token_is_not_held_on_the_frame_of_a_propagating_probe_failure
+  returncode: 0
+    .                                                                        [100%]
+    1 passed in 0.10s
+  mutant: /private/tmp/rqa-integrity-2310.ZyNTzQ/venv311/bin/python -m pytest -q tests/test_rqa_authority_secrecy.py::test_t16_the_token_is_not_held_on_the_frame_of_a_propagating_probe_failure
+  returncode: 1
+    F                                                                        [100%]
+    =================================== FAILURES ===================================
+    __ test_t16_the_token_is_not_held_on_the_frame_of_a_propagating_probe_failure __
+    
+        def test_t16_the_token_is_not_held_on_the_frame_of_a_propagating_probe_failure() -> None:
+            """`probe_capability` drops the credential in a `finally`, so a traceback walked by
+            a handler that prints frame locals carries no credential out of this package.
+        
+            Scoped to this package's own frames on purpose: the injected probe is *handed* the
+            credential by E-16, so its frame holds one by contract. What P-08 controls is that
+            its own frames do not keep a copy once the probe has been made.
+            """
+        
+            class Exploding:
+                def probe(self, *, repo: str, credential: str):
+                    raise RuntimeError("the adapter failed")
+        
+            store = SqliteCapabilityStore(sqlite3.connect(":memory:"))
+            with gh_returns(TOKEN):
+                try:
+    >               capability.probe_capability(REPO, Exploding(), store, JOB)
+    
+    tests/test_rqa_authority_secrecy.py:297: 
+    _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+    rqa/authority/capability.py:193: in probe_capability
+        reading = github.probe(repo=repo, credential=token)
+    _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+    
+    self = <test_rqa_authority_secrecy.test_t16_the_token_is_not_held_on_the_frame_of_a_propagating_probe_failure.<locals>.Exploding object at 0x10bf38950>
+    
+        def probe(self, *, repo: str, credential: str):
+    >       raise RuntimeError("the adapter failed")
+    E       RuntimeError: the adapter failed
+    
+    tests/test_rqa_authority_secrecy.py:292: RuntimeError
+    
+    During handling of the above exception, another exception occurred:
+    
+        def test_t16_the_token_is_not_held_on_the_frame_of_a_propagating_probe_failure() -> None:
+            """`probe_capability` drops the credential in a `finally`, so a traceback walked by
+            a handler that prints frame locals carries no credential out of this package.
+        
+            Scoped to this package's own frames on purpose: the injected probe is *handed* the
+            credential by E-16, so its frame holds one by contract. What P-08 controls is that
+            its own frames do not keep a copy once the probe has been made.
+            """
+        
+            class Exploding:
+                def probe(self, *, repo: str, credential: str):
+                    raise RuntimeError("the adapter failed")
+        
+            store = SqliteCapabilityStore(sqlite3.connect(":memory:"))
+            with gh_returns(TOKEN):
+                try:
+                    capability.probe_capability(REPO, Exploding(), store, JOB)
+                except RuntimeError as error:
+                    frames = []
+                    traceback = error.__traceback__
+                    while traceback is not None:
+                        code = traceback.tb_frame.f_code
+                        if "rqa/authority/" in code.co_filename:
+                            frames.append((code.co_name, repr(traceback.tb_frame.f_locals)))
+                        traceback = traceback.tb_next
+                    assert [name for name, _ in frames] == ["probe_capability"], frames
+    >               assert TOKEN not in "".join(locals_ for _, locals_ in frames)
+    E               assert 'gho_T16Cana...000000000000' not in "{'repo': 'l...0000000000'}"
+    E                 
+    E                 'gho_T16CanaryToken...e000000000000000000' is contained here:
+    E                   'token': 'gho_<T16-CANARY-MASKED>'}
+    
+    tests/test_rqa_authority_secrecy.py:307: AssertionError
+    =========================== short test summary info ============================
+    FAILED tests/test_rqa_authority_secrecy.py::test_t16_the_token_is_not_held_on_the_frame_of_a_propagating_probe_failure
+    1 failed in 0.13s
+
+[B-INV-004] Only intake/store.py writes jobs, pr_facts, and leases, apart from lifecycle's two documented jobs updates.
+  baseline: /private/tmp/rqa-integrity-2310.ZyNTzQ/venv311/bin/python -m pytest -q tests/test_rqa_intake_surface.py::test_only_the_intake_store_writes_jobs_pr_facts_and_leases
+  returncode: 0
+    .                                                                        [100%]
+    1 passed in 0.23s
+  mutant: /private/tmp/rqa-integrity-2310.ZyNTzQ/venv311/bin/python -m pytest -q tests/test_rqa_intake_surface.py::test_only_the_intake_store_writes_jobs_pr_facts_and_leases
+  returncode: 1
+    F                                                                        [100%]
+    =================================== FAILURES ===================================
+    __________ test_only_the_intake_store_writes_jobs_pr_facts_and_leases __________
+    
+        def test_only_the_intake_store_writes_jobs_pr_facts_and_leases() -> None:
+            """`P-01-intake.md` §5/§7: `set_status`/`set_snapshot_hash` exist only so
+            `code/P-02-lifecycle.md` can call them, and `jobs`'s "written by P-01" in
+            `container.md` §5 means row creation — those two columns are documented
+            exceptions lifecycle owns after the initial `INSERT`. `P-02-lifecycle.md`
+            §5's write protocol is exactly the two `UPDATE jobs` statements in
+            `rqa/lifecycle/transition.py`. So `rqa/lifecycle/transition.py` writing
+            `jobs` is the contract, not drift; this stays an exact-set assertion so a
+            fifth, unauthorised writer is still caught.
+            """
+            writers = []
+            for name, source in _tree_sources().items():
+                lowered = source.lower()
+                for table in ("jobs", "pr_facts", "leases"):
+                    for verb in (f"insert into {table}", f"update {table} set", f"delete from {table}"):
+                        if verb in lowered:
+                            writers.append((name, table))
+                            break
+    >       assert sorted(set(writers)) == [
+                ("rqa/intake/store.py", "jobs"),
+                ("rqa/intake/store.py", "leases"),
+                ("rqa/intake/store.py", "pr_facts"),
+                ("rqa/lifecycle/transition.py", "jobs"),
+            ], writers
+    E       AssertionError: [('rqa/authority/store.py', 'leases'), ('rqa/intake/store.py', 'jobs'), ('rqa/intake/store.py', 'pr_facts'), ('rqa/intake/store.py', 'leases'), ('rqa/lifecycle/transition.py', 'jobs')]
+    E       assert [('rqa/author....py', 'jobs')] == [('rqa/intake....py', 'jobs')]
+    E         
+    E         At index 0 diff: ('rqa/authority/store.py', 'leases') != ('rqa/intake/store.py', 'jobs')
+    E         Left contains one more item: ('rqa/lifecycle/transition.py', 'jobs')
+    E         Use -v to get more diff
+    
+    tests/test_rqa_intake_surface.py:207: AssertionError
+    =========================== short test summary info ============================
+    FAILED tests/test_rqa_intake_surface.py::test_only_the_intake_store_writes_jobs_pr_facts_and_leases
+    1 failed in 0.25s
+
+[B-INV-005] Only policy/store.py writes the snapshots table and archive.
+  baseline: /private/tmp/rqa-integrity-2310.ZyNTzQ/venv311/bin/python -m pytest -q tests/test_rqa_policy_surface.py::test_only_the_policy_store_writes_the_snapshots_store
+  returncode: 0
+    .                                                                        [100%]
+    1 passed in 0.18s
+  mutant: /private/tmp/rqa-integrity-2310.ZyNTzQ/venv311/bin/python -m pytest -q tests/test_rqa_policy_surface.py::test_only_the_policy_store_writes_the_snapshots_store
+  returncode: 1
+    F                                                                        [100%]
+    =================================== FAILURES ===================================
+    ____________ test_only_the_policy_store_writes_the_snapshots_store _____________
+    
+        def test_only_the_policy_store_writes_the_snapshots_store() -> None:
+            """`container.md` §5: `snapshots` is written by P-03 and by nothing else.
+        
+            Scoped to the `rqa/` tree, which is the new estate. The legacy `scripts/`
+            snapshot store is superseded, not imported by anything here, and is handed to
+            `CUTOVER.md` for deletion.
+            """
+            writers = sorted(
+                str(path.relative_to(RQA.parent))
+                for path in RQA.rglob("*.py")
+                if _SNAPSHOT_WRITE.search(path.read_text(encoding="utf-8"))
+            )
+    >       assert writers == ["rqa/policy/store.py"], writers
+    E       AssertionError: ['rqa/authority/store.py', 'rqa/policy/store.py']
+    E       assert ['rqa/authori...icy/store.py'] == ['rqa/policy/store.py']
+    E         
+    E         At index 0 diff: 'rqa/authority/store.py' != 'rqa/policy/store.py'
+    E         Left contains one more item: 'rqa/policy/store.py'
+    E         Use -v to get more diff
+    
+    tests/test_rqa_policy_surface.py:185: AssertionError
+    =========================== short test summary info ============================
+    FAILED tests/test_rqa_policy_surface.py::test_only_the_policy_store_writes_the_snapshots_store
+    1 failed in 0.21s
+
+[B-INV-006] Only github/store.py writes etags, api_calls, and mutations.
+  baseline: /private/tmp/rqa-integrity-2310.ZyNTzQ/venv311/bin/python -m pytest -q tests/test_rqa_github_surface.py::test_only_the_github_store_writes_etags_api_calls_and_mutations
+  returncode: 0
+    .                                                                        [100%]
+    1 passed in 0.23s
+  mutant: /private/tmp/rqa-integrity-2310.ZyNTzQ/venv311/bin/python -m pytest -q tests/test_rqa_github_surface.py::test_only_the_github_store_writes_etags_api_calls_and_mutations
+  returncode: 1
+    F                                                                        [100%]
+    =================================== FAILURES ===================================
+    _______ test_only_the_github_store_writes_etags_api_calls_and_mutations ________
+    
+        def test_only_the_github_store_writes_etags_api_calls_and_mutations() -> None:
+            """§5 / the task's tree-wide grep: `mutations`, `etags`, `api_calls` are
+            written by `rqa/github/store.py` and by nothing else."""
+            writers = []
+            for name, source in _sources().items():
+                for table in ("etags", "api_calls", "mutations"):
+                    for verb in (f"INSERT INTO {table}", f"UPDATE {table}", f"DELETE FROM {table}",
+                                 f"INSERT INTO {table}(", f"insert into {table}"):
+                        if verb.lower() in source.lower():
+                            writers.append((name, table))
+                            break
+    >       assert sorted(set(writers)) == [
+                ("rqa/github/store.py", "api_calls"),
+                ("rqa/github/store.py", "etags"),
+                ("rqa/github/store.py", "mutations"),
+            ], writers
+    E       AssertionError: [('rqa/authority/store.py', 'mutations'), ('rqa/github/store.py', 'etags'), ('rqa/github/store.py', 'api_calls'), ('rqa/github/store.py', 'mutations')]
+    E       assert [('rqa/author... 'mutations')] == [('rqa/github... 'mutations')]
+    E         
+    E         At index 0 diff: ('rqa/authority/store.py', 'mutations') != ('rqa/github/store.py', 'api_calls')
+    E         Left contains one more item: ('rqa/github/store.py', 'mutations')
+    E         Use -v to get more diff
+    
+    tests/test_rqa_github_surface.py:217: AssertionError
+    =========================== short test summary info ============================
+    FAILED tests/test_rqa_github_surface.py::test_only_the_github_store_writes_etags_api_calls_and_mutations
+    1 failed in 0.25s
+
+[B-INV-007] Only authority/store.py writes the capabilities table.
+  baseline: /private/tmp/rqa-integrity-2310.ZyNTzQ/venv311/bin/python -m pytest -q tests/test_rqa_authority_surface.py::test_only_this_packages_store_writes_the_capabilities_table
+  returncode: 0
+    .                                                                        [100%]
+    1 passed in 0.13s
+  mutant: /private/tmp/rqa-integrity-2310.ZyNTzQ/venv311/bin/python -m pytest -q tests/test_rqa_authority_surface.py::test_only_this_packages_store_writes_the_capabilities_table
+  returncode: 1
+    F                                                                        [100%]
+    =================================== FAILURES ===================================
+    _________ test_only_this_packages_store_writes_the_capabilities_table __________
+    
+        def test_only_this_packages_store_writes_the_capabilities_table() -> None:
+            """§5: written only by P-08. P-02 reads it through `current()` and nothing else
+            touches the rows."""
+            writers = sorted(
+                str(path.relative_to(RQA.parent))
+                for path in RQA.rglob("*.py")
+                if _CAPABILITIES_WRITE.search(path.read_text(encoding="utf-8"))
+            )
+    >       assert writers == ["rqa/authority/store.py"], writers
+    E       AssertionError: ['rqa/authority/store.py', 'rqa/escalation/store.py']
+    E       assert ['rqa/authori...ion/store.py'] == ['rqa/authority/store.py']
+    E         
+    E         Left contains one more item: 'rqa/escalation/store.py'
+    E         Use -v to get more diff
+    
+    tests/test_rqa_authority_surface.py:345: AssertionError
+    =========================== short test summary info ============================
+    FAILED tests/test_rqa_authority_surface.py::test_only_this_packages_store_writes_the_capabilities_table
+    1 failed in 0.16s
+
+[B-INV-008] Only escalation/store.py writes human_requests.
+  baseline: /private/tmp/rqa-integrity-2310.ZyNTzQ/venv311/bin/python -m pytest -q tests/test_rqa_escalation_surface.py::test_this_package_is_the_only_writer_of_human_requests_in_the_tree
+  returncode: 0
+    .                                                                        [100%]
+    1 passed in 0.11s
+  mutant: /private/tmp/rqa-integrity-2310.ZyNTzQ/venv311/bin/python -m pytest -q tests/test_rqa_escalation_surface.py::test_this_package_is_the_only_writer_of_human_requests_in_the_tree
+  returncode: 1
+    F                                                                        [100%]
+    =================================== FAILURES ===================================
+    ______ test_this_package_is_the_only_writer_of_human_requests_in_the_tree ______
+    
+        def test_this_package_is_the_only_writer_of_human_requests_in_the_tree() -> None:
+            """§5: "written only by P-11" — checked tree-wide, not package-locally."""
+            writers = []
+            for path in sorted(RQA.rglob("*.py")):
+                source = path.read_text(encoding="utf-8")
+                if "human_requests" in source and ("INSERT INTO human_requests" in source or "UPDATE human_requests" in source):
+                    writers.append(str(path.relative_to(RQA.parent)))
+    >       assert writers == ["rqa/escalation/store.py"], writers
+    E       AssertionError: ['rqa/authority/store.py', 'rqa/escalation/store.py']
+    E       assert ['rqa/authori...ion/store.py'] == ['rqa/escalation/store.py']
+    E         
+    E         At index 0 diff: 'rqa/authority/store.py' != 'rqa/escalation/store.py'
+    E         Left contains one more item: 'rqa/escalation/store.py'
+    E         Use -v to get more diff
+    
+    tests/test_rqa_escalation_surface.py:206: AssertionError
+    =========================== short test summary info ============================
+    FAILED tests/test_rqa_escalation_surface.py::test_this_package_is_the_only_writer_of_human_requests_in_the_tree
+    1 failed in 0.13s
+
+[B-INV-009] Only record/store.py inserts record_entries or record_heads.
+  baseline: /private/tmp/rqa-integrity-2310.ZyNTzQ/venv311/bin/python -m pytest -q tests/test_rqa_record_surface.py::test_only_the_record_store_writes_the_two_record_tables
+  returncode: 0
+    .                                                                        [100%]
+    1 passed in 0.12s
+  mutant: /private/tmp/rqa-integrity-2310.ZyNTzQ/venv311/bin/python -m pytest -q tests/test_rqa_record_surface.py::test_only_the_record_store_writes_the_two_record_tables
+  returncode: 1
+    F                                                                        [100%]
+    =================================== FAILURES ===================================
+    ___________ test_only_the_record_store_writes_the_two_record_tables ____________
+    
+        def test_only_the_record_store_writes_the_two_record_tables() -> None:
+            """§8: `grep -rn "INSERT INTO record_entries\\|INSERT INTO record_heads" rqa/
+            --include=*.py` returns hits only inside `rqa/record/store.py`.
+        
+            Written as §8 states it — a scan of the whole `rqa/` tree — so it keeps holding
+            when the migration lands: §6 has the one-time migration write through `store.py`'s
+            own primitives, not through a second insert of its own.
+            """
+            writers = sorted(
+                str(path.relative_to(RQA.parent))
+                for path in RQA.rglob("*.py")
+                if _RECORD_INSERT.search(path.read_text(encoding="utf-8"))
+            )
+    >       assert writers == ["rqa/record/store.py"], writers
+    E       AssertionError: ['rqa/authority/store.py', 'rqa/record/store.py']
+    E       assert ['rqa/authori...ord/store.py'] == ['rqa/record/store.py']
+    E         
+    E         At index 0 diff: 'rqa/authority/store.py' != 'rqa/record/store.py'
+    E         Left contains one more item: 'rqa/record/store.py'
+    E         Use -v to get more diff
+    
+    tests/test_rqa_record_surface.py:286: AssertionError
+    =========================== short test summary info ============================
+    FAILED tests/test_rqa_record_surface.py::test_only_the_record_store_writes_the_two_record_tables
+    1 failed in 0.15s
+
+[B-INV-010] Only supply/spend.py writes a review-time spend record entry, apart from the ruled legacy migration.
+  baseline: /private/tmp/rqa-integrity-2310.ZyNTzQ/venv311/bin/python -m pytest -q tests/test_rqa_supply_surface.py::test_only_the_supply_spend_module_writes_a_spend_entry_for_a_review
+  returncode: 0
+    .                                                                        [100%]
+    1 passed in 0.15s
+  mutant: /private/tmp/rqa-integrity-2310.ZyNTzQ/venv311/bin/python -m pytest -q tests/test_rqa_supply_surface.py::test_only_the_supply_spend_module_writes_a_spend_entry_for_a_review
+  returncode: 0
+    .                                                                        [100%]
+    1 passed in 0.15s
+
+[B-INV-011] github/transport.py is the only RQA module that imports an HTTP client.
+  baseline: /private/tmp/rqa-integrity-2310.ZyNTzQ/venv311/bin/python -m pytest -q tests/test_rqa_github_surface.py::test_transport_is_the_only_http_client_import_in_rqa
+  returncode: 0
+    .                                                                        [100%]
+    1 passed in 0.33s
+  mutant: /private/tmp/rqa-integrity-2310.ZyNTzQ/venv311/bin/python -m pytest -q tests/test_rqa_github_surface.py::test_transport_is_the_only_http_client_import_in_rqa
+  returncode: 1
+    F                                                                        [100%]
+    =================================== FAILURES ===================================
+    _____________ test_transport_is_the_only_http_client_import_in_rqa _____________
+    
+        def test_transport_is_the_only_http_client_import_in_rqa() -> None:
+            """§1: `transport.py` is the ONLY module anywhere in RQA that imports an
+            HTTP client — a forever property of the whole tree, safe against every
+            sibling lane because their contracts forbid HTTP clients too."""
+            offenders = []
+            for name, source in _sources().items():
+                clients = _imported_modules(source) & HTTP_CLIENT_MODULES
+                if clients and name != "rqa/github/transport.py":
+                    offenders.append((name, sorted(clients)))
+    >       assert offenders == [], offenders
+    E       AssertionError: [('rqa/authority/store.py', ['urllib.request'])]
+    E       assert [('rqa/author...ib.request'])] == []
+    E         
+    E         Left contains one more item: ('rqa/authority/store.py', ['urllib.request'])
+    E         Use -v to get more diff
+    
+    tests/test_rqa_github_surface.py:168: AssertionError
+    =========================== short test summary info ============================
+    FAILED tests/test_rqa_github_surface.py::test_transport_is_the_only_http_client_import_in_rqa
+    1 failed in 0.33s
+
+[B-INV-012] Remediation cannot construct a force push or a second refspec.
+  baseline: /private/tmp/rqa-integrity-2310.ZyNTzQ/venv311/bin/python -m pytest -q tests/test_rqa_remediation_surface.py::test_no_module_here_can_construct_a_force_a_second_refspec_or_another_ref
+  returncode: 0
+    .                                                                        [100%]
+    1 passed in 0.11s
+  mutant: /private/tmp/rqa-integrity-2310.ZyNTzQ/venv311/bin/python -m pytest -q tests/test_rqa_remediation_surface.py::test_no_module_here_can_construct_a_force_a_second_refspec_or_another_ref
+  returncode: 1
+    F                                                                        [100%]
+    =================================== FAILURES ===================================
+    __ test_no_module_here_can_construct_a_force_a_second_refspec_or_another_ref ___
+    
+        def test_no_module_here_can_construct_a_force_a_second_refspec_or_another_ref() -> None:
+            """Over argv-shaped literals: a docstring explaining the guarantee is not a breach of
+            it, but a literal short enough to be an argument is exactly what would be."""
+            for name, source in _sources().items():
+                for literal in _argv_literals(source):
+                    for forbidden in (
+                        "--force",
+                        "force-with-lease",
+                        "--mirror",
+                        "--delete",
+                        "--no-verify",
+                        "refs/heads/*",
+                        "+refs",
+                        "merge",
+                    ):
+    >                   assert forbidden not in literal, f"{name} contains {literal!r}"
+    E                   AssertionError: push.py contains '--force'
+    E                   assert '--force' not in '--force'
+    E                     
+    E                     '--force' is contained here:
+    E                       --force
+    
+    tests/test_rqa_remediation_surface.py:265: AssertionError
+    =========================== short test summary info ============================
+    FAILED tests/test_rqa_remediation_surface.py::test_no_module_here_can_construct_a_force_a_second_refspec_or_another_ref
+    1 failed in 0.14s
+
+[B-INV-013] Harness subprocesses receive an allow-listed environment, never a copy of the operator environment.
+  baseline: /private/tmp/rqa-integrity-2310.ZyNTzQ/venv311/bin/python -m pytest -q tests/test_rqa_harness_adapters.py::test_the_child_environment_is_an_allow_list_with_no_credential
+  returncode: 0
+    .                                                                        [100%]
+    1 passed in 0.23s
+  mutant: /private/tmp/rqa-integrity-2310.ZyNTzQ/venv311/bin/python -m pytest -q tests/test_rqa_harness_adapters.py::test_the_child_environment_is_an_allow_list_with_no_credential
+  returncode: 1
+    F                                                                        [100%]
+    =================================== FAILURES ===================================
+    ________ test_the_child_environment_is_an_allow_list_with_no_credential ________
+    
+        def test_the_child_environment_is_an_allow_list_with_no_credential() -> None:
+            """`tests/conftest.py` puts sentinel `GITHUB_TOKEN`/`GH_TOKEN` values in this
+            process's environment. Neither may reach a harness."""
+            import json
+            import os
+        
+            with fx.workspace() as raw:
+                directory = pathlib.Path(raw)
+                script = directory / "dumpenv.py"
+                script.write_text(
+                    "import json, os, pathlib, sys\n"
+                    "pathlib.Path(sys.argv[-1]).write_text(json.dumps(dict(os.environ)))\n",
+                    encoding="utf-8",
+                )
+                out = directory / "env.json"
+                os.environ["RQA_HARNESS_LEAK_CANARY"] = "canary"
+                try:
+                    execution = invoke(
+                        argv=(sys.executable, str(script), str(out)),
+                        cwd=directory,
+                        stdout_path=directory / "o.log",
+                        stderr_path=directory / "e.log",
+                        timeout=30,
+                    )
+                finally:
+                    del os.environ["RQA_HARNESS_LEAK_CANARY"]
+                assert execution.exit_code == 0
+                child_env = json.loads(out.read_text())
+    >           assert "GITHUB_TOKEN" not in child_env
+    E           AssertionError: assert 'GITHUB_TOKEN' not in {'CODEX_CI': '1', 'CODEX_PERMISSION_PROFILE': ':workspace', 'CODEX_SANDBOX': 'seatbelt', 'CODEX_SANDBOX_NETWORK_DISABLED': '1', ...}
+    
+    tests/test_rqa_harness_adapters.py:472: AssertionError
+    =========================== short test summary info ============================
+    FAILED tests/test_rqa_harness_adapters.py::test_the_child_environment_is_an_allow_list_with_no_credential
+    1 failed in 0.29s
+
+[B-INV-014] Publishing an anchor never appends a record entry.
+  baseline: /private/tmp/rqa-integrity-2310.ZyNTzQ/venv311/bin/python -m pytest -q tests/test_rqa_record_anchor.py::test_publishing_an_anchor_appends_no_record_entry
+  returncode: 0
+    .                                                                        [100%]
+    1 passed in 0.13s
+  mutant: /private/tmp/rqa-integrity-2310.ZyNTzQ/venv311/bin/python -m pytest -q tests/test_rqa_record_anchor.py::test_publishing_an_anchor_appends_no_record_entry
+  returncode: 1
+    F                                                                        [100%]
+    =================================== FAILURES ===================================
+    ______________ test_publishing_an_anchor_appends_no_record_entry _______________
+    
+        def test_publishing_an_anchor_appends_no_record_entry() -> None:
+            """**The invariant this whole module depends on.**
+        
+            Publishing must not write a record entry. If it did, the entry would move the
+            head, the new head would need an anchor, and publishing that would append again —
+            for ever. `rqa/github/writes.py` is the concrete trap: every mutation there routes
+            through `_dispatch`, which calls `record.append(job, "action", ...)`.
+        
+            If anyone ever wires anchoring through that layer, this test fails and says why.
+            """
+            connection = chained(entries=4)
+            before = rows(connection)
+            assert len(before) == 4
+        
+            publisher = FakePublisher()
+            anchor_job(connection, "job-1", publisher=publisher, clock=lambda: CLOCK)
+        
+            after = rows(connection)
+    >       assert after == before, "publishing an anchor changed the record"
+    E       AssertionError: publishing an anchor changed the record
+    E       assert [(1, '16860ee...00000000000')] == [(1, '16860ee...dcb1c940f8d')]
+    E         
+    E         Left contains one more item: (5, '0000000000000000000000000000000000000000000000000000000000000000')
+    E         Use -v to get more diff
+    
+    tests/test_rqa_record_anchor.py:74: AssertionError
+    =========================== short test summary info ============================
+    FAILED tests/test_rqa_record_anchor.py::test_publishing_an_anchor_appends_no_record_entry
+    1 failed in 0.15s
+
+[B-INV-015] Record verification never mutates record_entries or record_heads.
+  baseline: /private/tmp/rqa-integrity-2310.ZyNTzQ/venv311/bin/python -m pytest -q tests/test_rqa_record_verify.py::test_verify_mutates_neither_table
+  returncode: 0
+    .                                                                        [100%]
+    1 passed in 0.12s
+  mutant: /private/tmp/rqa-integrity-2310.ZyNTzQ/venv311/bin/python -m pytest -q tests/test_rqa_record_verify.py::test_verify_mutates_neither_table
+  returncode: 1
+    F                                                                        [100%]
+    =================================== FAILURES ===================================
+    ______________________ test_verify_mutates_neither_table _______________________
+    
+        def test_verify_mutates_neither_table() -> None:
+            """§3.2: "never mutates either table"."""
+            connection, _keystore = chained(entries=3)
+            snapshot = (
+                connection.execute("SELECT * FROM record_entries ORDER BY job, seq").fetchall(),
+                connection.execute("SELECT * FROM record_heads ORDER BY job").fetchall(),
+            )
+            verify(connection, "job-1")
+    >       assert snapshot == (
+                connection.execute("SELECT * FROM record_entries ORDER BY job, seq").fetchall(),
+                connection.execute("SELECT * FROM record_heads ORDER BY job").fetchall(),
+            )
+    E       AssertionError: assert ([('job-1', 1...9', None, 0)]) == ([('job-1', 1...0', None, 0)])
+    E         
+    E         At index 1 diff: [('job-1', 3, 'fae34923faf0179774f40164ab635a10ab29246db0e412b9189b60ce39eb7a09', None, 0)] != [('job-1', 3, '0000000000000000000000000000000000000000000000000000000000000000', None, 0)]
+    E         Use -v to get more diff
+    
+    tests/test_rqa_record_verify.py:351: AssertionError
+    =========================== short test summary info ============================
+    FAILED tests/test_rqa_record_verify.py::test_verify_mutates_neither_table - A...
+    1 failed in 0.18s
+
+[B-INV-016] Reading an expired circuit breaker half-opens it without writing the store.
+  baseline: /private/tmp/rqa-integrity-2310.ZyNTzQ/venv311/bin/python -m pytest -q tests/test_rqa_supply_breakers.py::test_the_half_open_read_writes_nothing
+  returncode: 0
+    .                                                                        [100%]
+    1 passed in 0.14s
+  mutant: /private/tmp/rqa-integrity-2310.ZyNTzQ/venv311/bin/python -m pytest -q tests/test_rqa_supply_breakers.py::test_the_half_open_read_writes_nothing
+  returncode: 1
+    F                                                                        [100%]
+    =================================== FAILURES ===================================
+    ____________________ test_the_half_open_read_writes_nothing ____________________
+    
+        def test_the_half_open_read_writes_nothing() -> None:
+            """§5, U-DISPATCH-05: `breaker()` never writes on read. The row is byte-identical
+            afterwards, so nothing a later reader sees was decided by this read."""
+            subject = store()
+            seed_open(subject, open_until=(utcnow() - timedelta(minutes=1)).isoformat())
+            before = rows(subject, "circuit_breakers")
+            subject.breaker(SCOPE)
+            subject.breaker(SCOPE)
+    >       assert rows(subject, "circuit_breakers") == before
+    E       AssertionError: assert [('anthropic'...00:00+00:00')] == [('anthropic'...00:00+00:00')]
+    E         
+    E         At index 0 diff: ('anthropic', 3, 'closed', '2026-09-16T14:47:13.279668+00:00', 'provider terminal', '2026-09-12T09:00:00+00:00') != ('anthropic', 3, 'open', '2026-09-16T14:47:13.279668+00:00', 'provider terminal', '2026-09-12T09:00:00+00:00')
+    E         Use -v to get more diff
+    
+    tests/test_rqa_supply_breakers.py:223: AssertionError
+    =========================== short test summary info ============================
+    FAILED tests/test_rqa_supply_breakers.py::test_the_half_open_read_writes_nothing
+    1 failed in 0.17s
+
+[B-INV-017] The authoritative spend record append precedes the local projection and breaker update.
+  baseline: /private/tmp/rqa-integrity-2310.ZyNTzQ/venv311/bin/python -m pytest -q tests/test_rqa_supply_consumed.py::test_the_authoritative_append_precedes_the_projection_which_precedes_the_breaker
+  returncode: 0
+    .                                                                        [100%]
+    1 passed in 0.22s
+  mutant: /private/tmp/rqa-integrity-2310.ZyNTzQ/venv311/bin/python -m pytest -q tests/test_rqa_supply_consumed.py::test_the_authoritative_append_precedes_the_projection_which_precedes_the_breaker
+  returncode: 1
+    F                                                                        [100%]
+    =================================== FAILURES ===================================
+    _ test_the_authoritative_append_precedes_the_projection_which_precedes_the_breaker _
+    
+        def test_the_authoritative_append_precedes_the_projection_which_precedes_the_breaker() -> None:
+            events: list[str] = []
+            consume(reading=57_000, record=FakeRecord(events), spend=FakeSpendSink(events),
+                    breakers=FakeBreakerSink(events))
+    >       assert events == ["record.append", "spend.append", "breakers.record_success"]
+    E       AssertionError: assert ['spend.appen...cord_success'] == ['record.appe...cord_success']
+    E         
+    E         At index 0 diff: 'spend.append' != 'record.append'
+    E         Left contains one more item: 'breakers.record_success'
+    E         Use -v to get more diff
+    
+    tests/test_rqa_supply_consumed.py:249: AssertionError
+    =========================== short test summary info ============================
+    FAILED tests/test_rqa_supply_consumed.py::test_the_authoritative_append_precedes_the_projection_which_precedes_the_breaker
+    1 failed in 0.24s
+
+[B-INV-018] A policy snapshot archive is complete and durable before its database pointer is inserted.
+  baseline: /private/tmp/rqa-integrity-2310.ZyNTzQ/venv311/bin/python -m pytest -q tests/test_rqa_policy_store.py::test_t13_an_interrupted_activation_leaves_a_complete_correct_archive
+  returncode: 0
+    .                                                                        [100%]
+    1 passed in 0.16s
+  mutant: /private/tmp/rqa-integrity-2310.ZyNTzQ/venv311/bin/python -m pytest -q tests/test_rqa_policy_store.py::test_t13_an_interrupted_activation_leaves_a_complete_correct_archive
+  returncode: 1
+    F                                                                        [100%]
+    =================================== FAILURES ===================================
+    _____ test_t13_an_interrupted_activation_leaves_a_complete_correct_archive _____
+    
+        def test_t13_an_interrupted_activation_leaves_a_complete_correct_archive() -> None:
+            with state_and_repo() as (state_dir, repo, document):
+                store = CountingStore(state_dir, fail_first_insert=True)
+                digest = digest_of(document)
+                raised = None
+                try:
+                    snapshot_for(repo=repo, job=None, store=store, record=None)
+                except RuntimeError as exc:
+                    raised = exc
+                assert raised is not None
+                # Step 2 ran: the archive is present, complete and correctly hashed.
+    >           assert archives(state_dir) == [f"{digest}.json"]
+    E           AssertionError: assert [] == ['1daf15ae5aa...5a99ce2.json']
+    E             
+    E             Right contains one more item: '1daf15ae5aad2236e5eaeb9296e88196ba938db12b53faad681536f475a99ce2.json'
+    E             Use -v to get more diff
+    
+    tests/test_rqa_policy_store.py:206: AssertionError
+    =========================== short test summary info ============================
+    FAILED tests/test_rqa_policy_store.py::test_t13_an_interrupted_activation_leaves_a_complete_correct_archive
+    1 failed in 0.19s
+
+[B-INV-019] The production anchor_job_for composition mints and records comment authority before reading the chain head, so the anchor covers its own grant entry.
+  baseline: /private/tmp/rqa-integrity-2310.ZyNTzQ/venv311/bin/python -m pytest -q tests/test_rqa_record_anchor.py::test_anchor_job_for_leaves_nothing_appended_behind_the_anchor
+  returncode: 0
+    .                                                                        [100%]
+    1 passed in 0.25s
+  mutant: /private/tmp/rqa-integrity-2310.ZyNTzQ/venv311/bin/python -m pytest -q tests/test_rqa_record_anchor.py::test_anchor_job_for_leaves_nothing_appended_behind_the_anchor
+  returncode: 1
+    F                                                                        [100%]
+    =================================== FAILURES ===================================
+    ________ test_anchor_job_for_leaves_nothing_appended_behind_the_anchor _________
+    
+        def test_anchor_job_for_leaves_nothing_appended_behind_the_anchor() -> None:
+            """Pins the ORDERING inside `anchor_job_for`, not just the property.
+        
+            The sibling test above proves that an anchor covers a grant entry appended before
+            it. It does not prove the production function mints the grant first — swap the two
+            statements and that test still passes. This one drives `anchor_job_for` itself with
+            an authority stand-in that appends a `grant` entry exactly as E-04 does, and
+            asserts the head is not ahead of the anchor afterwards.
+        
+            If anyone reorders it so the head is read before the grant is minted, the anchor
+            lands one entry short and this fails.
+            """
+            from rqa.cli.composition import anchor_job_for
+            from rqa.contracts import Grant, Job, JobStatus
+            from rqa.record.store import head_entry, latest_anchor
+        
+            connection = chained(entries=2)
+            writer = SQLiteRecordWriter(connection)
+            job = Job(
+                id="job-1",
+                repo="o/r",
+                number=7,
+                head_sha="H1",
+                base_sha="B1",
+                head_repo="o/r",
+                head_ref="feature",
+                predecessor_job=None,
+                predecessor_head_sha=None,
+                snapshot_hash="snap-1",
+                status=JobStatus.QUEUED,
+            )
+        
+            class Authority:
+                github = object()
+                store = object()
+        
+                def grant(self, **kwargs):
+                    # E-04 records its decision. That is the whole hazard: this append moves
+                    # the head, so it must happen before the head is read.
+                    entry = writer.append(
+                        "job-1", "grant", {"activity": "comment", "decision": "granted"}
+                    )
+                    return Grant(
+                        activity=kwargs["activity"],
+                        repo="o/r",
+                        job_id="job-1",
+                        snapshot_hash="snap-1",
+                        capability_proof_id=1,
+                        categories=None,
+                        entry_seq=entry.seq,
+                    )
+        
+            class Jobs:
+                def get(self, job_id):
+                    return job
+        
+            class Comp:
+                connection = None
+                clock = lambda self: CLOCK  # noqa: E731
+                jobs = Jobs()
+                authority = Authority()
+                record = writer
+                github = object()
+        
+            comp = Comp()
+            comp.connection = connection
+        
+            outcome = anchor_job_for(comp, "job-1")
+        
+            head = head_entry(connection=connection, job="job-1")
+            anchor = latest_anchor(connection=connection, job="job-1")
+            assert head is not None and anchor is not None
+    >       assert anchor.seq == head.seq, (
+                f"anchor at seq {anchor.seq} but head is at {head.seq} — the grant entry landed "
+                "after the head was read, which is the loop this ordering exists to prevent"
+            )
+    E       AssertionError: anchor at seq 2 but head is at 3 — the grant entry landed after the head was read, which is the loop this ordering exists to prevent
+    E       assert 2 == 3
+    E        +  where 2 = StoredAnchor(job='job-1', seq=2, hash='0329d3d0a3624a5bb8295d45931e87213b8db6a3f6bf0b9194f33adb41a2b3b2', at='2026-09-16T12:00:00.000000+00:00', destination=None).seq
+    E        +  and   3 = StoredEntry(job='job-1', seq=3, kind='grant', at='2026-09-16T14:48:16.621773+00:00', payload='{"activity":"comment","d...0b9194f33adb41a2b3b2', hash='2dee03ba2b6b1b3dc807ac3393420eb22ff2de56ac6d0bdf45f2a69a37f8b4f3', hmac=None, keyed=False).seq
+    
+    tests/test_rqa_record_anchor.py:481: AssertionError
+    =========================== short test summary info ============================
+    FAILED tests/test_rqa_record_anchor.py::test_anchor_job_for_leaves_nothing_appended_behind_the_anchor
+    1 failed in 0.29s
+
+summary:
+  B-INV-001: SURVIVED - named guard test stayed green
+  B-INV-002: KILLED - named guard failed with the expected invariant assertion
+  B-INV-003: KILLED - named guard failed with the expected invariant assertion
+  B-INV-004: KILLED - named guard failed with the expected invariant assertion
+  B-INV-005: KILLED - named guard failed with the expected invariant assertion
+  B-INV-006: KILLED - named guard failed with the expected invariant assertion
+  B-INV-007: KILLED - named guard failed with the expected invariant assertion
+  B-INV-008: KILLED - named guard failed with the expected invariant assertion
+  B-INV-009: KILLED - named guard failed with the expected invariant assertion
+  B-INV-010: SURVIVED - named guard test stayed green
+  B-INV-011: KILLED - named guard failed with the expected invariant assertion
+  B-INV-012: KILLED - named guard failed with the expected invariant assertion
+  B-INV-013: KILLED - named guard failed with the expected invariant assertion
+  B-INV-014: KILLED - named guard failed with the expected invariant assertion
+  B-INV-015: KILLED - named guard failed with the expected invariant assertion
+  B-INV-016: KILLED - named guard failed with the expected invariant assertion
+  B-INV-017: KILLED - named guard failed with the expected invariant assertion
+  B-INV-018: KILLED - named guard failed with the expected invariant assertion
+  B-INV-019: KILLED - named guard failed with the expected invariant assertion
+totals: killed=17 survived=2 errors=0
+

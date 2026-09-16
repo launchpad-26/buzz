@@ -1,0 +1,103 @@
+F                                                                        [100%]
+=================================== FAILURES ===================================
+____________ test_t1_tested_exports_have_meaningful_production_use _____________
+
+    def test_t1_tested_exports_have_meaningful_production_use() -> None:
+        analysis = ReferenceAnalysis(RQA, _TEST_ROOT)
+        findings = analysis.t1_findings()
+>       assert findings == (), "T1 tested exports lacking production wiring:\n" + format_findings(
+            findings, _SKILL_ROOT
+        )
+E       AssertionError: T1 tested exports lacking production wiring:
+E         T1 rqa.authority.GateError (rqa/authority/gate.py:66) — tested by 9 reference(s); no runtime use outside rqa.authority
+E         T1 rqa.cli.main (rqa/cli/main.py:265) — tested by 3 reference(s); no runtime use outside rqa.cli
+E         T1 rqa.escalation.Decision (rqa/contracts.py:423) — tested by 14 reference(s); no runtime use outside rqa.escalation; 8 annotation-only production reference(s)
+E         T1 rqa.escalation.Escalation (rqa/contracts.py:431) — tested by 4 reference(s); no runtime use outside rqa.escalation; 2 annotation-only production reference(s)
+E         T1 rqa.escalation.EscalationRefusalReason (rqa/contracts.py:506) — tested by 9 reference(s); no runtime use outside rqa.escalation; 1 annotation-only production reference(s)
+E         T1 rqa.github.AdapterError (rqa/github/types.py:59) — tested by 5 reference(s); no runtime use outside rqa.github
+E         T1 rqa.github.MutationKind (rqa/github/types.py:51) — tested by 5 reference(s); no runtime use outside rqa.github
+E         T1 rqa.github.PASSING (rqa/contracts.py:209) — tested by 10 reference(s); no runtime use outside rqa.github
+E         T1 rqa.github.UNSETTLED (rqa/contracts.py:208) — tested by 8 reference(s); no runtime use outside rqa.github
+E         T1 rqa.harness.HarnessAdapter (rqa/harness/adapters.py:97) — tested by 4 reference(s); no runtime use outside rqa.harness
+E         T1 rqa.harness.HarnessError (rqa/harness/errors.py:30) — tested by 8 reference(s); no runtime use outside rqa.harness
+E         T1 rqa.harness.SupplyPort (rqa/harness/__init__.py:1) — tested by 8 reference(s); no runtime use outside rqa.harness; 3 annotation-only production reference(s)
+E         T1 rqa.intake.AdmissionRefusal (rqa/intake/types.py:28) — tested by 4 reference(s); no runtime use outside rqa.intake
+E         T1 rqa.intake.IntakeError (rqa/intake/types.py:52) — tested by 8 reference(s); no runtime use outside rqa.intake
+E         T1 rqa.intake.JobFailure (rqa/intake/types.py:35) — tested by 3 reference(s); no runtime use outside rqa.intake
+E         T1 rqa.intake.JobStore (rqa/intake/store.py:127) — tested by 5 reference(s); no runtime use outside rqa.intake
+E         T1 rqa.intake.LeaseRow (rqa/intake/types.py:78) — tested by 11 reference(s); no runtime use outside rqa.intake
+E         T1 rqa.intake.LeaseStore (rqa/intake/store.py:144) — tested by 5 reference(s); no runtime use outside rqa.intake
+E         T1 rqa.intake.PrFactsRow (rqa/intake/types.py:60) — tested by 5 reference(s); no runtime use outside rqa.intake
+E         T1 rqa.intake.PrFactsStore (rqa/intake/store.py:139) — tested by 5 reference(s); no runtime use outside rqa.intake
+E         T1 rqa.intake.TickResult (rqa/intake/types.py:41) — tested by 2 reference(s); no runtime use outside rqa.intake
+E         T1 rqa.intake.job_id (rqa/intake/identity.py:28) — tested by 12 reference(s); no runtime use outside rqa.intake
+E         T1 rqa.judgement.JudgementError (rqa/judgement/judge.py:42) — tested by 14 reference(s); no runtime use outside rqa.judgement
+E         T1 rqa.judgement.render (rqa/judgement/render.py:55) — tested by 11 reference(s); no runtime use outside rqa.judgement
+E         T1 rqa.lifecycle.DISPOSITION (rqa/lifecycle/states.py:126) — tested by 13 reference(s); no runtime use outside rqa.lifecycle
+E         T1 rqa.lifecycle.Disposition (rqa/lifecycle/states.py:113) — tested by 11 reference(s); no runtime use outside rqa.lifecycle
+E         T1 rqa.lifecycle.IllegalTransitionError (rqa/lifecycle/errors.py:43) — tested by 14 reference(s); no runtime use outside rqa.lifecycle
+E         T1 rqa.lifecycle.StaleDecisionError (rqa/lifecycle/errors.py:38) — tested by 9 reference(s); no runtime use outside rqa.lifecycle
+E         T1 rqa.lifecycle.StatusReport (rqa/lifecycle/status.py:42) — tested by 6 reference(s); no runtime use outside rqa.lifecycle
+E         T1 rqa.lifecycle.TRANSITIONS (rqa/lifecycle/states.py:52) — tested by 16 reference(s); no runtime use outside rqa.lifecycle
+E         T1 rqa.lifecycle.UnknownJobError (rqa/lifecycle/errors.py:48) — tested by 13 reference(s); no runtime use outside rqa.lifecycle
+E         T1 rqa.lifecycle.transition (rqa/lifecycle/transition.py:47) — tested by 48 reference(s); no runtime use outside rqa.lifecycle
+E         T1 rqa.policy.Blocking (rqa/contracts.py:141) — tested by 13 reference(s); no runtime use outside rqa.policy; 1 annotation-only production reference(s)
+E         T1 rqa.policy.Budget (rqa/contracts.py:169) — tested by 36 reference(s); no runtime use outside rqa.policy; 1 annotation-only production reference(s)
+E         T1 rqa.policy.External (rqa/contracts.py:135) — tested by 13 reference(s); no runtime use outside rqa.policy; 1 annotation-only production reference(s)
+E         T1 rqa.policy.Mechanical (rqa/contracts.py:148) — tested by 13 reference(s); no runtime use outside rqa.policy; 1 annotation-only production reference(s)
+E         T1 rqa.policy.OnboardRefusalReason (rqa/policy/onboard.py:39) — tested by 1 reference(s); no runtime use outside rqa.policy
+E         T1 rqa.policy.OnboardResult (rqa/policy/onboard.py:58) — tested by 1 reference(s); no runtime use outside rqa.policy
+E         T1 rqa.policy.Policy (rqa/contracts.py:159) — tested by 19 reference(s); no runtime use outside rqa.policy; 1 annotation-only production reference(s)
+E         T1 rqa.policy.PolicyError (rqa/policy/types.py:53) — tested by 21 reference(s); no runtime use outside rqa.policy
+E         T1 rqa.policy.Route (rqa/contracts.py:304) — tested by 43 reference(s); no runtime use outside rqa.policy; 20 annotation-only production reference(s)
+E         T1 rqa.policy.SnapshotStore (rqa/policy/store.py:70) — tested by 4 reference(s); no runtime use outside rqa.policy; 3 annotation-only production reference(s)
+E         T1 rqa.policy.SnapshotStoreCorrupted (rqa/policy/types.py:59) — tested by 27 reference(s); no runtime use outside rqa.policy
+E         T1 rqa.policy.ValidationError (rqa/contracts.py:122) — tested by 6 reference(s); no runtime use outside rqa.policy; 1 annotation-only production reference(s)
+E         T1 rqa.policy.ValidationErrorCode (rqa/contracts.py:109) — tested by 13 reference(s); no runtime use outside rqa.policy; 1 annotation-only production reference(s)
+E         T1 rqa.policy.Written (rqa/policy/onboard.py:47) — tested by 5 reference(s); no runtime use outside rqa.policy
+E         T1 rqa.protocol.HarnessIdentity (rqa/protocol/types.py:86) — tested by 13 reference(s); no runtime use outside rqa.protocol
+E         T1 rqa.protocol.InjectionAttempt (rqa/protocol/types.py:79) — tested by 13 reference(s); no runtime use outside rqa.protocol; 2 annotation-only production reference(s)
+E         T1 rqa.protocol.Invalid (rqa/protocol/types.py:107) — tested by 31 reference(s); no runtime use outside rqa.protocol; 8 annotation-only production reference(s)
+E         T1 rqa.protocol.PROBE_MARKER (rqa/protocol/interaction.py:19) — tested by 5 reference(s); no runtime use outside rqa.protocol
+E         T1 rqa.protocol.ProtocolError (rqa/protocol/validate.py:28) — tested by 2 reference(s); no runtime use outside rqa.protocol
+E         T1 rqa.protocol.SUBSTANTIVE_GROUP (rqa/protocol/types.py:42) — tested by 11 reference(s); no runtime use outside rqa.protocol
+E         T1 rqa.protocol.extract (rqa/protocol/envelope.py:23) — tested by 19 reference(s); no runtime use outside rqa.protocol
+E         T1 rqa.record.AmbiguousHead (rqa/record/reader.py:122) — tested by 2 reference(s); no runtime use outside rqa.record
+E         T1 rqa.record.Anchor (rqa/record/__init__.py:1) — tested by 11 reference(s); no runtime use outside rqa.record; 6 annotation-only production reference(s)
+E         T1 rqa.record.AnchorResult (rqa/record/anchor.py:77) — tested by 1 reference(s); no runtime use outside rqa.record
+E         T1 rqa.record.BreakKind (rqa/record/verify.py:53) — tested by 1 reference(s); no runtime use outside rqa.record
+E         T1 rqa.record.ENTRY_KINDS (rqa/contracts.py:528) — tested by 15 reference(s); no runtime use outside rqa.record
+E         T1 rqa.record.Entry (rqa/contracts.py:532) — tested by 26 reference(s); no runtime use outside rqa.record; 1 annotation-only production reference(s)
+E         T1 rqa.record.Explanation (rqa/record/explain.py:98) — tested by 13 reference(s); no runtime use outside rqa.record
+E         T1 rqa.record.LegacySource (rqa/record/migrate.py:73) — tested by 1 reference(s); no runtime use outside rqa.record
+E         T1 rqa.record.MigrationSummary (rqa/record/migrate.py:91) — tested by 2 reference(s); no runtime use outside rqa.record
+E         T1 rqa.record.MigrationTableResult (rqa/record/migrate.py:85) — tested by 1 reference(s); no runtime use outside rqa.record
+E         T1 rqa.record.NoRecord (rqa/record/reader.py:117) — tested by 2 reference(s); no runtime use outside rqa.record
+E         T1 rqa.record.PayloadNotSerializable (rqa/record/hashing.py:57) — tested by 11 reference(s); no runtime use outside rqa.record
+E         T1 rqa.record.RecordProgrammingError (rqa/record/kinds.py:33) — tested by 1 reference(s); no runtime use outside rqa.record
+E         T1 rqa.record.RecordReader (rqa/contracts.py:601) — tested by 6 reference(s); no runtime use outside rqa.record; 3 annotation-only production reference(s)
+E         T1 rqa.record.RecordRow (rqa/contracts.py:566) — tested by 12 reference(s); no runtime use outside rqa.record; 8 annotation-only production reference(s)
+E         T1 rqa.record.ResolvedJob (rqa/record/reader.py:110) — tested by 2 reference(s); no runtime use outside rqa.record
+E         T1 rqa.record.UnknownEntryKind (rqa/record/kinds.py:40) — tested by 7 reference(s); no runtime use outside rqa.record
+E         T1 rqa.record.VerifyResult (rqa/record/verify.py:64) — tested by 1 reference(s); no runtime use outside rqa.record
+E         T1 rqa.record.migrate_legacy (rqa/record/migrate.py:249) — tested by 10 reference(s); no runtime use outside rqa.record
+E         T1 rqa.record.resolve_job (rqa/record/reader.py:129) — tested by 4 reference(s); no runtime use outside rqa.record
+E         T1 rqa.record.verify (rqa/record/verify.py:85) — tested by 53 reference(s); no runtime use outside rqa.record
+E         T1 rqa.remediation.RemediationError (rqa/remediation/tools.py:56) — tested by 7 reference(s); no runtime use outside rqa.remediation
+E         T1 rqa.remediation.RemediationRefusalReason (rqa/contracts.py:474) — tested by 10 reference(s); no runtime use outside rqa.remediation; 1 annotation-only production reference(s)
+E         T1 rqa.remediation.ToolSpec (rqa/remediation/tools.py:61) — tested by 3 reference(s); no runtime use outside rqa.remediation
+E         T1 rqa.reuse.Reason (rqa/reuse/obligations.py:12) — tested by 7 reference(s); no runtime use outside rqa.reuse
+E         T1 rqa.reuse.ReuseError (rqa/reuse/obligations.py:25) — tested by 9 reference(s); no runtime use outside rqa.reuse
+E         T1 rqa.supply.BreakerStore (rqa/supply/breakers.py:78) — tested by 7 reference(s); no runtime use outside rqa.supply; 2 annotation-only production reference(s)
+E         T1 rqa.supply.Spend (rqa/contracts.py:341) — tested by 9 reference(s); no runtime use outside rqa.supply; 2 annotation-only production reference(s)
+E         T1 rqa.supply.SpendStore (rqa/supply/spend.py:52) — tested by 6 reference(s); no runtime use outside rqa.supply; 2 annotation-only production reference(s)
+E       assert (Finding(chec...github'), ...) == ()
+E         
+E         Left contains 82 more items, first extra item: Finding(check='T1', symbol='rqa.authority.GateError', source=PosixPath('/private/tmp/rqa-integrity-2310.ZyNTzQ/integra...e-automation/rqa/authority/gate.py'), line=66, detail='tested by 9 reference(s); no runtime use outside rqa.authority')
+E         Use -v to get more diff
+
+tests/test_rqa_reference_integrity.py:115: AssertionError
+=========================== short test summary info ============================
+FAILED tests/test_rqa_reference_integrity.py::test_t1_tested_exports_have_meaningful_production_use
+1 failed in 1.41s
+
