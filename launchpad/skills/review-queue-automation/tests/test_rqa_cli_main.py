@@ -146,6 +146,9 @@ def test_each_command_handler_calls_its_declared_provider_entry_point() -> None:
         # The parser selects one form at runtime; both P-12 entry points must
         # remain represented in this handler.
         "_cmd_explain": ["explain_job", "record_explain"],
+        # ADR-0066's anchored chain head (#2300). The grant-then-read-head ordering
+        # lives in the composition root, not here, so this handler delegates to it.
+        "_cmd_anchor": ["anchor_job_for"],
     }
     provider_names = frozenset(name for names in expected.values() for name in names)
     handlers = {

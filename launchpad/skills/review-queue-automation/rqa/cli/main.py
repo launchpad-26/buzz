@@ -29,7 +29,7 @@ from pathlib import Path
 from typing import Any, NoReturn
 
 from rqa.cli import exitcodes
-from rqa.cli.composition import build_composition
+from rqa.cli.composition import anchor_job_for, build_composition
 from rqa.cli.render import emit
 from rqa.contracts import EscalationRefused, ExplanationUnavailable
 from rqa.escalation import EscalationError, decide as escalation_decide, pending as escalation_pending
@@ -125,6 +125,12 @@ def _build_parser() -> _ArgumentParser:
     decide_parser.add_argument(
         "--outcome", choices=("approved", "changes_requested"), default=None
     )
+
+    anchor_parser = sub.add_parser(
+        "anchor",
+        help="publish a job's record chain head so a removed tail becomes detectable",
+    )
+    anchor_parser.add_argument("job_id", metavar="job-id")
 
     explain_parser = sub.add_parser(
         "explain", help="reconstruct an outcome from the record alone, offline"
@@ -225,6 +231,20 @@ def _cmd_decide(args: argparse.Namespace, state_dir: Path) -> tuple[int, dict[st
     return exitcodes.OK, {"outcome": "decided", "result": result}
 
 
+def _cmd_anchor(args: argparse.Namespace, state_dir: Path) -> tuple[int, dict[str, Any]]:
+    """ADR-0066's anchored chain head (#2300).
+
+    Always exits 0 when it ran: an anchor that could not be published is a reported
+    state, not an error. The local anchor row is written either way, and that is what
+    detects a crash-truncated log with no network at all. Anchoring must never be able
+    to fail a review.
+    """
+    comp = build_composition(state_dir)
+    outcome = anchor_job_for(comp, args.job_id)
+    comp.connection.commit()
+    return exitcodes.OK, {"outcome": "ok", "result": outcome}
+
+
 def _cmd_explain(args: argparse.Namespace, state_dir: Path) -> tuple[int, dict[str, Any]]:
     comp = build_composition(state_dir)
     if args.first == "job":
@@ -263,6 +283,8 @@ def main(argv: list[str] | None = None) -> int:
             code, payload = _cmd_pending(state_dir)
         elif args.command == "decide":
             code, payload = _cmd_decide(args, state_dir)
+        elif args.command == "anchor":
+            code, payload = _cmd_anchor(args, state_dir)
         elif args.command == "explain":
             code, payload = _cmd_explain(args, state_dir)
         else:  # pragma: no cover - argparse's `required=True` makes this unreachable

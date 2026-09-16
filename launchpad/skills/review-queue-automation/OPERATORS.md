@@ -138,6 +138,31 @@ guaranteed to be actionable just because the escalation exists.
 
 ---
 
+## 4a. Anchoring a job's record
+
+```
+rqa anchor <job-id>
+```
+
+Publishes that job's current chain head and records it locally, so a later
+`rqa explain` can tell you whether entries are **missing**, not just whether
+the ones present are intact. Run it on a timer, at the end of a job, or by
+hand — it is idempotent, so running it twice on an unchanged record does
+nothing.
+
+It always exits 0 when it ran. An anchor that could not be published is a
+reported state, not an error:
+
+| `detail` says | What happened | What it still gives you |
+|---|---|---|
+| (nothing) | Published | Full detection, including against a deleted local anchor |
+| `not published: …` | No comment authority for that repository | The local anchor — a crash-truncated log is still detected offline |
+| a failure message | GitHub was unreachable | Same; the anchor stays pending and the next run retries it |
+
+**Anchoring can never fail a review.** That is deliberate: a review that
+stopped because an audit-trail nicety could not reach the network would be a
+worse outcome than an unanchored record.
+
 ## 5. Deciding an escalation
 
 ```bash

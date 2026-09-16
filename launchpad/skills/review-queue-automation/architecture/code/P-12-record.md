@@ -398,6 +398,14 @@ The two strengths are deliberately different, and the documentation should not b
 is a digest, which is what makes publishing one the narrowest possible external send; it is still an
 external send, so `RQA-NFR-023`/`027`/`029` govern whether a given repository may make it at all.
 
+**Who calls it.** `rqa anchor <job-id>`, through `anchor_job_for` in `rqa/cli/composition.py`. That
+function mints the `Activity.COMMENT` grant **before** reading the head, and the ordering is
+load-bearing: `authority.grant` records a `grant` entry (E-04), so minting a grant *moves the head*.
+Mint first and read after, and the anchor covers its own grant entry; do it the other way round and
+every run leaves the head one entry ahead of the anchor, for ever — the same loop as rule 1, arriving
+through the authority path instead of the write path. `test_the_grant_is_minted_before_the_head_is_read`
+pins it.
+
 **The bound on the claim.** Anchoring is periodic: the guarantee is "complete as at the last anchor",
 never "complete as at the final entry". Entries appended after the most recent anchor are unattested,
 and truncation inside that window is undetectable. Narrowing the window is a frequency choice, not a
