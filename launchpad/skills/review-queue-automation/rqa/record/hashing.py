@@ -24,9 +24,7 @@ reproducible from the stored text alone.
 from __future__ import annotations
 
 import hashlib
-import hmac as _hmac
 import json
-import re
 from collections.abc import Mapping
 from typing import Any
 
@@ -39,9 +37,6 @@ __all__ = [
     "PayloadNotSerializable",
     "canonical_json",
     "compute_hash",
-    "compute_hmac",
-    "hmac_matches",
-    "is_hex_digest",
     "prev_hash_for_hash",
 ]
 
@@ -58,10 +53,6 @@ NO_PARENT = ""
 #: A payload nested deeper than this is refused rather than followed. A cycle would
 #: otherwise be a `RecursionError` out of a function documented to raise one error.
 _MAX_DEPTH = 64
-
-#: What a stored SHA-256 hex digest looks like, for the "malformed" branch of §3.2.
-_HEX_DIGEST = re.compile(r"[0-9a-f]{64}")
-
 
 class PayloadNotSerializable(RecordProgrammingError):
     """`payload` contains a value canonical_json() cannot render (anything other than str,
@@ -152,29 +143,3 @@ def compute_hash(
         f"{prev_hash_for_hash(prev_hash=prev_hash)}"
     )
     return hashlib.sha256(material.encode("utf-8")).hexdigest()
-
-
-def compute_hmac(*, key: bytes, job: str, seq: int, hash: str) -> str:
-    """§3.1 step 5: `HMAC-SHA256(key, f"{job_id}|{seq}|{hash}")`, hex.
-
-    The key is used and dropped: it is never stored, never returned, never logged and
-    never part of an error message anywhere in this package (ADR-F — the key is the
-    operator's and never RQA's to write into the record).
-    """
-    material = f"{job}|{seq}|{hash}".encode("utf-8")
-    return _hmac.new(key, material, hashlib.sha256).hexdigest()
-
-
-def is_hex_digest(*, value: object) -> bool:
-    """True for the 64-character lowercase hex text a SHA-256 digest is written as.
-
-    §3.2 step 3 distinguishes a keyed row whose `hmac` is "missing or malformed" —
-    an immediate `HMAC_MISMATCH` — from one that merely fails to authenticate, so
-    "malformed" needs a definition that does not depend on the key being available.
-    """
-    return type(value) is str and _HEX_DIGEST.fullmatch(value) is not None
-
-
-def hmac_matches(*, stored: str, recomputed: str) -> bool:
-    """Constant-time comparison of two hex HMACs (§3.2 step 3)."""
-    return _hmac.compare_digest(stored, recomputed)

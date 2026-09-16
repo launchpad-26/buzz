@@ -667,7 +667,6 @@ from rqa.edges import (  # noqa: E402
     CapabilityStore,
     GithubProbe,
     HarnessProber,
-    KeyStore,
     LifecycleDeps,
     ProcessRunner,
     SnapshotStore,
@@ -750,7 +749,6 @@ EDGES: Mapping[str, tuple[object, ...] | str] = {
             " persisted",
     "E-23": (facts,),
     "E-24": (HarnessProber,),
-    "E-25": (KeyStore,),
     "E-26": (ProcessRunner,),
 }
 
@@ -855,7 +853,6 @@ __all__ = [
     "SupplyPort",
     "Explanation",
     "HarnessProber",
-    "KeyStore",
     "ProcessRunner",
     # §9. Edge signatures (re-exported from rqa.edges)
     "inventory",

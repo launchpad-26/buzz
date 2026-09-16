@@ -4,18 +4,9 @@ T6, T7, T8, T9's `explain_job` half, T18's `explain_job` half, T19, T20.
 
 No pytest: every `test_*` function here takes no arguments, per `tests/run_all.py`.
 
-**Why every test job here is built entirely unkeyed.** `explain`/`explain_job`'s
-signatures are fixed positionally by `code/P-12-record.md` §3.3 —
-`explain_job(connection, job_id)` — with no `keystore` parameter to inject a fake
-through, unlike `verify(connection, job_id, *, keystore=...)`. `verify` never asks
-the key store for an unkeyed row at all (§3.2 step 3), so building every row here
-through a `FakeKeyStore(key=None)` writer makes `explain_job`'s internal `verify`
-call deterministic and keychain-free regardless of which `KeyStore` it happens to
-construct — satisfying §8's "none touches a real OS keychain" without needing one.
-`test_t18_...` is the one row that genuinely needs an authenticated keyed segment;
-it monkeypatches `rqa.record.explain.OSKeyStore` — the one place `explain_job`
-constructs its key store — to a fixed fake for that test's duration, which changes
-nothing about `explain_job`'s public two-argument signature.
+**There is no key anywhere in this file.** ADR-0066 retired the operator-held HMAC,
+so `explain_job` constructs no key store and every row every writer here appends is
+unkeyed. `verified` means the chain held and no migrated row is present.
 """
 
 from __future__ import annotations
@@ -26,38 +17,20 @@ import sys
 
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent.parent))
 
-import importlib  # noqa: E402
 
 from rqa.contracts import ExplanationUnavailable  # noqa: E402
 from rqa.record.explain import Explanation, ReuseResolutionError, explain, explain_job  # noqa: E402
 
-# `rqa/record/__init__.py` imports the name `explain` (the function) from this
-# same-named submodule, which shadows the submodule as an attribute of the
-# `rqa.record` package thereafter (a plain package/attribute name collision, not
-# a bug in the function). `importlib.import_module` resolves the submodule
-# directly from `sys.modules`, bypassing that shadowing, for the one place this
-# file needs the actual module object: patching its `OSKeyStore` default.
-explain_module = importlib.import_module("rqa.record.explain")  # noqa: E402
 from rqa.record.hashing import LEGACY_PREV_HASH  # noqa: E402
 from rqa.record.reader import AmbiguousHead, NoRecord, ResolvedJob, resolve_job  # noqa: E402
 from rqa.record.store import StoredEntry, insert_entry  # noqa: E402
 from rqa.record.writer import SQLiteRecordWriter  # noqa: E402
 
 
-class FakeKeyStore:
-    """§8's fake `KeyStore`. `key=None` means every row this writer appends is
-    unkeyed — no HMAC, and `verify` never asks any key store about it."""
-
-    def __init__(self, *, key: bytes | None = None):
-        self.key = key
-
-    def read(self, name: str) -> bytes | None:
-        return self.key
-
-
 def unkeyed_writer(*, connection: sqlite3.Connection | None = None) -> tuple[sqlite3.Connection, SQLiteRecordWriter]:
+    """ADR-0066: every writer is unkeyed; the name is kept so call sites read the same."""
     connection = connection or sqlite3.connect(":memory:")
-    return connection, SQLiteRecordWriter(connection, keystore=FakeKeyStore(key=None))
+    return connection, SQLiteRecordWriter(connection)
 
 
 TRANSITION = {"repo": "acme/widgets", "number": 42, "head_sha": "sha-abc", "base_sha": "sha-base"}
@@ -366,7 +339,7 @@ def test_t9_a_job_of_only_migrated_rows_is_legacy_and_never_verified() -> None:
     """T9's `explain_job` half: a job with only migrated rows (`legacy`, `decision`,
     `spend`, all `prev_hash="legacy"`) → `legacy=True, verified=False` regardless."""
     connection = sqlite3.connect(":memory:")
-    SQLiteRecordWriter(connection, keystore=FakeKeyStore())
+    SQLiteRecordWriter(connection)
     migrated_row(connection, "job-legacy", 1, "legacy")
     migrated_row(connection, "job-legacy", 2, "decision")
     migrated_row(connection, "job-legacy", 3, "spend")
@@ -374,41 +347,35 @@ def test_t9_a_job_of_only_migrated_rows_is_legacy_and_never_verified() -> None:
     result = explain_job(connection, "job-legacy")
     assert isinstance(result, Explanation)
     assert result.legacy is True
-    assert result.hmac_checked is False
     assert result.verified is False
 
 
-def test_t18_a_keyed_row_a_migrated_row_and_an_unkeyed_row_are_legacy_and_unverified() -> None:
-    """T18's `explain_job` half: rows `[keyed real seq=1, legacy, unkeyed real seq=2
-    chained to seq=1]` → `legacy=True, verified=False`, reporting the unkeyed
-    segment without calling the record broken."""
-    key = b"a-test-key-that-never-leaves-this-process"
+def test_t18_a_real_row_a_migrated_row_and_a_later_real_row_are_legacy_and_unverified() -> None:
+    """T18's `explain_job` half, restated for ADR-0066: rows `[real seq=1, legacy,
+    real seq=2 chained to seq=1]` → `legacy=True, verified=False`, without calling
+    the record broken.
 
+    `verified` is False here because of the *migrated* row, not because of any key:
+    §6's rule that a migrated row is never `verified=True` is untouched by ADR-0066.
+    """
     connection = sqlite3.connect(":memory:")
-    writer = SQLiteRecordWriter(connection, keystore=FakeKeyStore(key=key))
+    writer = SQLiteRecordWriter(connection)
     writer.append(
         "job-1", "transition", {**TRANSITION, "from_state": None, "to_state": "queued", "reason": "x", "predecessor_job": None}
     )
     migrated_row(connection, "job-1", 3, "legacy")
-    # A second unkeyed writer picks up the same live chain (still seq 2, chained to
-    # seq 1) — `head_entry` ignores the migrated seq-3 row entirely.
-    unkeyed = SQLiteRecordWriter(connection, keystore=FakeKeyStore(key=None))
-    unkeyed.append(
+    # A second writer picks up the same live chain (still seq 2, chained to seq 1) —
+    # `head_entry` ignores the migrated seq-3 row entirely.
+    later = SQLiteRecordWriter(connection)
+    later.append(
         "job-1", "transition", {**TRANSITION, "from_state": "queued", "to_state": "claimed", "reason": "y", "predecessor_job": None}
     )
 
-    original_os_keystore = explain_module.OSKeyStore
-    explain_module.OSKeyStore = lambda: FakeKeyStore(key=key)  # type: ignore[assignment]
-    try:
-        result = explain_job(connection, "job-1")
-    finally:
-        explain_module.OSKeyStore = original_os_keystore  # type: ignore[assignment]
+    result = explain_job(connection, "job-1")
 
     assert isinstance(result, Explanation)
     assert result.legacy is True
     assert result.verified is False
-    assert len(result.unverifiable) == 1
-    assert result.unverifiable[0].reason == "no key"
     # Not called broken: the chain-valid, non-legacy real rows still verify ok.
     assert result.truncated_at is None
 

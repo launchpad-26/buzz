@@ -66,7 +66,7 @@ walks that exact row in the predecessor's trusted prefix (recursively, if that j
 was itself reused),
 merges its harness-shaped attestations ahead of this job's own (oldest predecessor
 first, then nearer predecessors, then this job's own, de-duplicated), and folds its
-`verify` outcome into this job's `verified`/`hmac_checked`/`unverifiable`/`legacy`.
+`verify` outcome into this job's `verified`/`legacy`.
 A missing predecessor, no judgement at the referenced sequence, a malformed
 `reused_from`, or a repeated reference (a cycle) all raise
 `ReuseResolutionError` — never a guess, never a silent omission.
@@ -80,11 +80,10 @@ from collections.abc import Mapping
 from dataclasses import dataclass
 from typing import Any, Literal
 
-from rqa.contracts import ExplanationUnavailable, KeyStore
-from rqa.record.keychain import OSKeyStore
+from rqa.contracts import ExplanationUnavailable
 from rqa.record.reader import AmbiguousHead, NoRecord, ResolvedJob, resolve_job
 from rqa.record.store import StoredEntry, entries_for_job, is_legacy
-from rqa.record.verify import UnverifiableSegment, VerifyResult, verify
+from rqa.record.verify import VerifyResult, verify
 
 __all__ = ["explain", "explain_job", "resolve_job", "Explanation", "ReuseResolutionError"]
 
@@ -118,8 +117,6 @@ class Explanation:
     # Supporting trust/rendering fields:
     snapshot_hash: str | None
     verified: bool
-    hmac_checked: bool
-    unverifiable: tuple[UnverifiableSegment, ...]
     truncated_at: int | None
     legacy: bool
 
@@ -235,7 +232,7 @@ class _Hop:
 
 
 def _walk_reuse_chain(
-    connection: sqlite3.Connection, start_reference: object, *, keystore: KeyStore
+    connection: sqlite3.Connection, start_reference: object
 ) -> list[_Hop]:
     """Follow exact `(job, judgement sequence)` links, oldest predecessor first."""
     hops: list[_Hop] = []
@@ -252,7 +249,7 @@ def _walk_reuse_chain(
         if not rows:
             raise ReuseResolutionError(f"predecessor job {job_id!r} has no record entries")
 
-        vr = verify(connection, job_id, keystore=keystore)
+        vr = verify(connection, job_id)
         readable = _readable(rows, vr.bad_seq)
         judgement = _payload_of_kind_at_seq(readable, "judgement", judgement_seq)
         if judgement is None:
@@ -277,16 +274,13 @@ def _walk_reuse_chain(
         current = next_link
 
 
-def explain_job(connection: sqlite3.Connection, job_id: str, *, keystore: KeyStore | None = None) -> Explanation | ExplanationUnavailable:
+def explain_job(connection: sqlite3.Connection, job_id: str) -> Explanation | ExplanationUnavailable:
     """§3.3's reconstruction, named job first. Every branch returns or raises."""
-    if keystore is None:
-        keystore = OSKeyStore()
-
     rows = entries_for_job(connection=connection, job=job_id)
     if not rows:
         return ExplanationUnavailable(repo="", number=0, reason="no_record")
 
-    vr = verify(connection, job_id, keystore=keystore)
+    vr = verify(connection, job_id)
     readable = _readable(rows, vr.bad_seq)
 
     transition = _last_payload_of_kind(readable, "transition")
@@ -331,7 +325,7 @@ def explain_job(connection: sqlite3.Connection, job_id: str, *, keystore: KeySto
     hops: list[_Hop] = []
     reused_from = judgement.get("reused_from") if judgement else None
     if reused_from is not None:
-        hops = _walk_reuse_chain(connection, reused_from, keystore=keystore)
+        hops = _walk_reuse_chain(connection, reused_from)
 
     combined_attestations = _dedup_triples(
         [triple for hop in hops for triple in hop.attestations] + local_attestations
@@ -353,19 +347,15 @@ def explain_job(connection: sqlite3.Connection, job_id: str, *, keystore: KeySto
         reviewer_type = "none"
         reviewer_identity = ()
 
-    local_hmac_checked = vr.ok and vr.unverifiable == () and not all(is_legacy(entry=row) for row in readable)
-    local_verified = local_hmac_checked and not local_legacy_present
-    hop_hmac_checked = [hop.verify_result.ok and hop.verify_result.unverifiable == () and hop.has_current_rows for hop in hops]
-    hop_verified = [
-        checked and not hop.legacy_present for checked, hop in zip(hop_hmac_checked, hops, strict=True)
-    ]
+    # ADR-0066: `verified` is chain integrity, for this job and every reuse hop it
+    # rests on. There is no second, keyed attestation to report separately, so the
+    # former `hmac_checked` and `unverifiable` fields are gone rather than left
+    # permanently false and permanently empty.
+    local_verified = vr.ok and not local_legacy_present
+    hop_verified = [hop.verify_result.ok and not hop.legacy_present for hop in hops]
 
     verified = local_verified and all(hop_verified)
-    hmac_checked = local_hmac_checked and all(hop_hmac_checked)
     legacy = local_legacy_present or any(hop.legacy_present for hop in hops)
-    unverifiable: tuple[UnverifiableSegment, ...] = tuple(vr.unverifiable) + tuple(
-        segment for hop in hops for segment in hop.verify_result.unverifiable
-    )
 
     return Explanation(
         job_id=job_id,
@@ -386,14 +376,12 @@ def explain_job(connection: sqlite3.Connection, job_id: str, *, keystore: KeySto
         escalation_subjects=escalation_subjects,
         snapshot_hash=snapshot_hash,
         verified=verified,
-        hmac_checked=hmac_checked,
-        unverifiable=unverifiable,
         truncated_at=vr.bad_seq,
         legacy=legacy,
     )
 
 
-def explain(connection: sqlite3.Connection, repo: str, number: int, *, keystore: KeyStore | None = None) -> Explanation | ExplanationUnavailable:
+def explain(connection: sqlite3.Connection, repo: str, number: int) -> Explanation | ExplanationUnavailable:
     """§3.3: resolve the current head job for `(repo, number)`, then reconstruct it.
 
     Every ordinary absence/ambiguity case is a returned `ExplanationUnavailable`,
@@ -407,7 +395,7 @@ def explain(connection: sqlite3.Connection, repo: str, number: int, *, keystore:
         return ExplanationUnavailable(repo=repo, number=number, reason="ambiguous_head")
     assert isinstance(resolved, ResolvedJob)
 
-    result = explain_job(connection, resolved.job_id, keystore=keystore)
+    result = explain_job(connection, resolved.job_id)
     if isinstance(result, ExplanationUnavailable):
         # `explain_job` cannot itself know `repo`/`number` when it has nothing to
         # read; `explain` does, and fills them in (§3.3).

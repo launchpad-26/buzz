@@ -145,7 +145,6 @@ Recorded here so that it is a known trade, not a surprise.
 | provider | review harness → external model provider | the harness's own API client | RQA never calls a provider directly; it names the route before handing over the bundle (RQA-FR-032) |
 | credential | `rqa` → GitHub CLI | process execution of `gh auth token` | the operator's GitHub CLI credential, the only credential path by maintainer constraint (P-08); E-22 |
 | config | repository → `rqa` | file read | `.rqa/config.json` re-read every tick (P-03) |
-| keychain | `rqa` → OS keychain | platform keychain tool | the record HMAC key (P-12); E-25 |
 | tools | `rqa` → local processes | process execution in the worktree | formatters from the closed set and `git` (P-10); E-26 |
 
 There is no path between two containers because there is one container; a library call inside `rqa`

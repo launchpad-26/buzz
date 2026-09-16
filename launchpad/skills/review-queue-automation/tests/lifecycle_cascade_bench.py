@@ -119,13 +119,6 @@ CREATE TABLE leases (
 """
 
 
-class NoKeyStore:
-    """ADR-0063's absent-key path: unkeyed appends, no OS keychain, no key material."""
-
-    def read(self, name: str) -> bytes | None:
-        return None
-
-
 # --------------------------------------------------------------------------
 # Rows and shared values
 # --------------------------------------------------------------------------
@@ -196,7 +189,7 @@ def bench(
         status=status, snapshot_hash=snapshot_hash, predecessor_job=predecessor_job
     )
     insert_job(connection, job)
-    return connection, SQLiteRecordWriter(connection, keystore=NoKeyStore()), job
+    return connection, SQLiteRecordWriter(connection), job
 
 
 def stored_status(connection: sqlite3.Connection, job_id: str = "job-1") -> str:
@@ -527,7 +520,7 @@ def record_escalation(
     assert not (unpinned and snapshot_hash is not None), (
         "unpinned records a NULL pin; it cannot also carry an override"
     )
-    writer = SQLiteRecordWriter(connection, clock=lambda: raised_at, keystore=NoKeyStore())
+    writer = SQLiteRecordWriter(connection, clock=lambda: raised_at)
     writer.append(job.id, "escalation", {
         "cause": cause.value,
         "subject": {"kind": SUBJECT.kind.value, "identifier": SUBJECT.identifier},

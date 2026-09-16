@@ -181,14 +181,22 @@ repository outside its configured set and never persists the credential.
 What the token could do on an unmanaged repository is a known, accepted, and
 unclosed residual (RQA-NFR-030) — not something `rqa` can narrow.
 
-**ADR-0063 — the record is a hash chain plus an operator-held HMAC.** Every
-record entry is chained and, when the operator's OS keychain holds the HMAC
-secret, additionally authenticated; `rqa` never writes or rotates that
-secret itself. A missing key degrades an append to explicitly unkeyed —
-`rqa explain` then reports that span `unverifiable: no key`, never as a
-break and never as a stopped review. Neither the hash chain nor the HMAC
-detects truncation of the record's tail; both detect edits and reordering of
-the rows that remain.
+**ADR-0066 — the record is a hash chain, and there is no key to keep.** Every
+record entry is chained to the one before it, so an edit, a reordering, an
+interrupted write, or an accidental corruption is detected. **You hold no
+secret and there is nothing to lose or rotate.** ADR-0066 superseded ADR-0063,
+which additionally authenticated each entry with an operator-held HMAC key
+from the OS keychain: that key had to be readable by `rqa` on every append, so
+anything running as you could read it too, and it cost a separate credential
+integration per platform.
+
+Two things the chain does **not** detect, stated plainly rather than implied:
+an actor who rewrites a row *and* recomputes every hash after it, and a
+removed tail — a record with its last entries deleted is shorter but
+internally consistent, and verifies clean. Publishing the chain head where a
+reviewed agent cannot rewrite it (#2300) is what closes both; until that
+lands, treat `verified` as "nothing was corrupted", not as "nothing was
+removed".
 
 **ADR-0064 — the only remedy `rqa` applies and pushes itself is a closed-set
 tool run on exact named files, never a model-supplied patch.** A remedy names
@@ -261,18 +269,17 @@ contents, credentials, environment values, and model output are absent.
 
 ## 10. Platform
 
-Supported backends are macOS Keychain (`security`) and Linux Secret Service
-(`secret-tool`, with a running user Secret Service session). The operator-held
-item is identified by service `rqa-record-hmac`; RQA reads it and never creates
-or rotates it. Linux lookup failure is checked with a metadata search so a
-locked matching item cannot be mistaken for an absent item.
+**No platform constraint.** `rqa` reads no credential store, spawns no
+platform-specific process, and has no `sys.platform` branch in its record
+path. Appending works identically on macOS, Linux, Windows, in a container,
+and in CI, with nothing to install and no daemon to run.
 
-A missing tool, unavailable session, locked matching item or timeout stops
-`onboard`, `tick` and `decide` before work. An absent key permits explicitly
-unkeyed records; `explain` marks them unverifiable. `status` and `pending` need
-no key, and `explain` reports integrity using the same backend as the writer.
-A typo in `--state-dir` on a read or decision command is an input error and
-creates no database.
+This was not always true. Until ADR-0066 the record read an HMAC key from the
+OS keychain: macOS-only at first, so every append failed on Linux (#2272),
+then macOS plus Linux Secret Service (PR #2287), which would have needed a
+third integration for Windows and left headless Linux operators needing a
+running Secret Service session. Removing the key removed the whole class of
+problem rather than adding a third backend.
 
 ---
 

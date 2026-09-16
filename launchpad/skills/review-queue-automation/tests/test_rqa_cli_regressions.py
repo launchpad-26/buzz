@@ -13,7 +13,7 @@ sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent.parent))
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
 
 import test_rqa_authority_gate as authority_fx
-from test_rqa_cli_main import _run, _FAKE_KEYSTORE
+from test_rqa_cli_main import _run
 from rqa.cli.composition import build_composition
 from rqa.contracts import Activity, Deny, DenyReason, GithubUnavailable, Grant
 from rqa.github import GithubAdapter
@@ -51,22 +51,9 @@ def test_tick_reports_inventory_outage_and_authentication_failure():
             assert payload["result"]["repos_failed"][0]["reason"] == reason
 
 
-def test_default_linux_keychain_is_checked_before_creating_state():
-    keychain_module = importlib.import_module("rqa.record.keychain")
-    with tempfile.TemporaryDirectory() as directory:
-        state = pathlib.Path(directory) / "absent"
-        with patch.object(keychain_module.sys, "platform", "linux"), patch.object(
-            keychain_module.subprocess, "run", side_effect=FileNotFoundError("secret-tool")
-        ), contextlib.redirect_stdout(io.StringIO()) as output:
-            code = main_module.main(["--state-dir", str(state), "tick", "--repo", "o/r"])
-        assert code == 4, output.getvalue()
-        assert "Secret Service" in output.getvalue()
-        assert not state.exists()
-
-
 def test_real_composition_grants_only_configured_repository_with_scoped_attestation():
     with tempfile.TemporaryDirectory() as directory:
-        comp = build_composition(pathlib.Path(directory), repos=(authority_fx.REPO,), keystore=_FAKE_KEYSTORE)
+        comp = build_composition(pathlib.Path(directory), repos=(authority_fx.REPO,))
         calls = []
 
         def exchange(self, request, **kwargs):
@@ -102,7 +89,7 @@ def test_real_composition_grants_only_configured_repository_with_scoped_attestat
 def test_explain_unknown_job_echoes_requested_subject():
     with tempfile.TemporaryDirectory() as directory:
         state = pathlib.Path(directory)
-        build_composition(state, keystore=_FAKE_KEYSTORE).connection.close()
+        build_composition(state).connection.close()
         code, payload = _run(state, "explain", "job", "requested-job")
         assert code == 1 and payload["subject"] == {"job_id": "requested-job"}
 

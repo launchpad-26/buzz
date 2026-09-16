@@ -533,9 +533,8 @@ class HarnessProber(Protocol):
 # E-21  OS scheduler → P-01: process launch `rqa tick`; no payload
 # E-22  P-08 → GitHub CLI: process execution `gh auth token`; value held in memory for one probe, never persisted
 
-# E-25  P-12 consumes — the OS keychain (ADR-F key)          NEW: surfaced by review
-class KeyStore(Protocol):
-    def read(self, name: str) -> bytes | None: ...            # None: key absent → verify/explain report unverifiable, append proceeds unkeyed and says so
+# E-25  RETIRED by ADR-0066. P-12 consumed the OS keychain for the record HMAC key;
+#       the key is gone, so the edge is gone and P-12 consumes nothing.
 
 # E-26  P-10 consumes — local tool processes (MECHANICAL_TOOL_SET binaries)   NEW: surfaced by review
 class ProcessRunner(Protocol):

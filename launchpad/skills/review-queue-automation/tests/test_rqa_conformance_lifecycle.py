@@ -96,7 +96,15 @@ AC06_RECONSTRUCTION_ELEMENTS: tuple[str, ...] = (
 #: could not be authenticated is not authoritative, so a reconstruction that cannot
 #: say whether it was authenticated cannot honour the criterion: the disclosure is
 #: part of the answer, not decoration.
-TRUST_DISCLOSURE_FIELDS: tuple[str, ...] = ("verified", "hmac_checked", "unverifiable", "legacy")
+#:
+#: ADR-0066 changed what the disclosure consists of, not whether it exists. It retired
+#: `hmac_checked` (nothing is keyed any more, so the field could only ever be False)
+#: and `unverifiable` (no row is unverifiable for want of a key, because there is no
+#: key). What remains still lets a reconstruction refuse to assert trust it has not
+#: established: `verified` says whether the chain held, `truncated_at` names the seq
+#: where verification stopped trusting, and `legacy` flags migrated rows that carry no
+#: chain at all.
+TRUST_DISCLOSURE_FIELDS: tuple[str, ...] = ("verified", "truncated_at", "legacy")
 
 
 # --------------------------------------------------------------------------------

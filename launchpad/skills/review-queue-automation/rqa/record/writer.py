@@ -15,11 +15,20 @@ estate's defect — `except Exception: pass` around the ledger write, so a revie
 complete authoritatively with a knowingly incomplete record — and the responsibility
 carried here with that shape corrected (U-RESILIENCE-06's rework).
 
-**An absent key is not a failure.** §3.1 step 5: the key store returning `None` makes
-a successful, explicitly unkeyed append — `keyed=0`, `hmac=NULL` — which opens an
-`unverifiable: no key` segment for `verify` to report honestly (ADR-0063). Only a key
-store that could not be *asked* is `AppendFailed`. No key is ever generated to fill
-the gap.
+**There is no key (ADR-0066).** §3.1 step 5 once read an operator-held HMAC key from
+the platform credential store. ADR-0066 retired it: the review record is a hash chain
+with an externally anchored head, and the key defended an actor already outside
+#2006's stated trust boundary while costing a per-platform credential integration.
+
+Two consequences worth stating here rather than leaving to be discovered:
+
+- **`append` has no credential-store failure mode.** It cannot fail for a key reason
+  on any platform, which is the whole of #2272. Every entry is written `keyed=0`,
+  `hmac=NULL`, the branch the store's CHECK on `(keyed, hmac)` already allowed.
+- **Historical `keyed=1` rows are left exactly as they are.** Their HMAC column is
+  not cleared and the schema is not migrated; `verify` reports them as unattested
+  rather than as a break, so a record written before this change stays readable and
+  is never presented as tampered with.
 """
 
 from __future__ import annotations
@@ -28,14 +37,12 @@ import sqlite3
 from collections.abc import Callable, Mapping
 from datetime import datetime, timezone
 
-from rqa.contracts import AppendFailed, Entry, EntryKind, KeyStore
+from rqa.contracts import AppendFailed, Entry, EntryKind
 from rqa.record.hashing import (
     GENESIS_PREV_HASH,
     canonical_json,
     compute_hash,
-    compute_hmac,
 )
-from rqa.record.keychain import KEY_NAME, KeyStoreExplanationUnavailable, OSKeyStore
 from rqa.record.kinds import require_kind
 from rqa.record.store import StoredEntry, ensure_schema, head_entry, insert_entry, upsert_head
 
@@ -62,9 +69,13 @@ def _stamp(moment: datetime) -> str:
 class SQLiteRecordWriter:
     """P-12's `RecordWriter` over one caller-owned connection.
 
-    `connection`, `clock` and `keystore` are constructor-only dependencies; they are
-    not E-13 parameters (§3.1). The schema is ensured here, once, so no DDL runs
-    inside the transaction `append` joins.
+    `connection` and `clock` are constructor-only dependencies; they are not E-13
+    parameters (§3.1). The schema is ensured here, once, so no DDL runs inside the
+    transaction `append` joins.
+
+    ADR-0066: there is no key. Every entry this writer produces is unkeyed
+    (`keyed=0`, `hmac=NULL`), and `append` has no credential-store failure mode on
+    any platform.
     """
 
     def __init__(
@@ -72,11 +83,9 @@ class SQLiteRecordWriter:
         connection: sqlite3.Connection,
         *,
         clock: Callable[[], datetime] = utcnow,
-        keystore: KeyStore = OSKeyStore(),
     ):
         self._connection = connection
         self._clock = clock
-        self._keystore = keystore
         ensure_schema(connection=connection)
 
     def append(self, job_id: str, kind: EntryKind, payload: Mapping) -> Entry:
@@ -113,22 +122,13 @@ class SQLiteRecordWriter:
             job=job_id, seq=seq, kind=kind, at=at, payload=payload, prev_hash=prev_hash
         )
 
-        # 5. The operator's key: present, absent, or unaskable — three outcomes,
-        #    two of them successful appends and only the third a failure.
-        try:
-            key = self._keystore.read(KEY_NAME)
-        except (KeyStoreExplanationUnavailable, OSError) as exc:
-            raise AppendFailed(
-                f"the key store could not be read while appending {kind!r} for job "
-                f"{job_id!r}: {exc}"
-            ) from exc
-        if key is None:
-            keyed = False
-            entry_hmac: str | None = None
-        else:
-            keyed = True
-            entry_hmac = compute_hmac(key=key, job=job_id, seq=seq, hash=entry_hash)
-        del key
+        # 5. ADR-0066 retired the operator-held key, so this step no longer reads
+        #    one and no longer has a failure mode. Every entry is unkeyed, which the
+        #    store's CHECK on `(keyed, hmac)` accepts as the `keyed = 0` branch.
+        #    Historical `keyed = 1` rows keep their HMAC and stay readable; `verify`
+        #    reports them as unattested rather than as a break.
+        keyed = False
+        entry_hmac: str | None = None
 
         entry = StoredEntry(
             job=job_id,

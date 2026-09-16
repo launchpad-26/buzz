@@ -31,7 +31,7 @@ RECORD = RQA / "record"
 
 #: §1's module list, split by the lane that builds each module.
 APPEND_MODULES = frozenset(
-    {"__init__", "kinds", "hashing", "keychain", "store", "writer", "verify", "reader", "trace"}
+    {"__init__", "kinds", "hashing", "store", "writer", "verify", "reader", "trace"}
 )
 EXPLAIN_MODULES = frozenset({"explain", "migrate"})
 ALL_MODULES = APPEND_MODULES | EXPLAIN_MODULES
@@ -49,8 +49,6 @@ APPEND_EXPORTS = frozenset(
         "UnknownEntryKind",
         "PayloadNotSerializable",
         "ENTRY_KINDS",
-        "KeyStore",
-        "KeyStoreExplanationUnavailable",
         "verify",
         "VerifyResult",
         "BreakKind",
@@ -73,12 +71,13 @@ EXPLAIN_EXPORTS = frozenset(
         "LegacySource",
     }
 )
-#: The three concrete collaborators and the trace writer published beyond §1's list so
+#: The concrete record collaborators and trace writer published beyond §1's list so
 #: callers can reach them through the front door. #2211 (the operator CLI) is the module that
 #: falsified §1's "except through `__init__`" sentence: every part that appends takes its
 #: `RecordWriter` as a parameter and nothing in `rqa/record/` ever builds one.
+#: ADR-0066 removed `OSKeyStore` — there is no key store to construct.
 PUBLISHED_EXPORTS = frozenset(
-    {"SQLiteRecordWriter", "SQLiteRecordReader", "OSKeyStore", "append_trace"}
+    {"SQLiteRecordWriter", "SQLiteRecordReader", "append_trace"}
 )
 ALL_EXPORTS = APPEND_EXPORTS | EXPLAIN_EXPORTS | PUBLISHED_EXPORTS
 
@@ -172,35 +171,30 @@ def test_every_re_exported_name_actually_resolves() -> None:
     assert missing == [], f"__all__ names that do not resolve: {missing}"
 
 
-def test_the_segment_type_is_not_public_package_surface() -> None:
-    """`UnverifiableSegment` remains internal to verification."""
-    assert "UnverifiableSegment" not in rqa.record.__all__
+def test_the_segment_type_was_retired_with_the_key() -> None:
+    """ADR-0066: no row is unverifiable for want of a key any more."""
+    import rqa.record.verify as verify_module
 
-    from rqa.record.verify import UnverifiableSegment
-    assert isinstance(UnverifiableSegment, type)
+    assert not hasattr(verify_module, "UnverifiableSegment")
 
 
 def test_the_concrete_collaborators_and_trace_writer_are_package_surface() -> None:
     """§1's "no other module imports from `rqa.record` except through `__init__`" and a
-    `RecordWriter`/`KeyStore` that every caller receives as a parameter are only jointly
-    satisfiable if the implementations are reachable through `__init__`. The package must
-    publish the modules' own classes, not second copies.
+    `RecordWriter` that every caller receives as a parameter are only jointly
+    satisfiable if the implementation is reachable through `__init__`. The package must
+    publish the module's own class, not a second copy.
 
-    Publishing `OSKeyStore` re-exports the same class under a second name: it widens no
-    capability. The keychain read itself is unchanged and still bounded by
-    `tests/test_rqa_record_keychain.py`. U-DISPATCH-19 likewise requires lifecycle to
+    ADR-0066 removed `OSKeyStore` and its module. U-DISPATCH-19 requires lifecycle to
     reach `append_trace` without importing through the package boundary."""
-    from rqa.record.keychain import OSKeyStore
     from rqa.record.reader import SQLiteRecordReader
+    from rqa.record.trace import append_trace
     from rqa.record.writer import SQLiteRecordWriter
 
     assert PUBLISHED_EXPORTS <= frozenset(rqa.record.__all__)
     assert rqa.record.SQLiteRecordWriter is SQLiteRecordWriter
     assert rqa.record.SQLiteRecordReader is SQLiteRecordReader
-    assert rqa.record.OSKeyStore is OSKeyStore
-    from rqa.record.trace import append_trace
-
     assert rqa.record.append_trace is append_trace
+    assert not hasattr(rqa.record, "OSKeyStore")
 
 
 def test_the_package_declares_nothing_it_only_re_exports() -> None:
@@ -225,9 +219,11 @@ def test_the_seam_types_are_the_ones_contracts_declares() -> None:
         "EntryKind",
         "AppendFailed",
         "ENTRY_KINDS",
-        "KeyStore",
     ):
         assert getattr(rqa.record, name) is getattr(contracts, name), name
+
+    # ADR-0066: `KeyStore` was a seam type here until the key was retired.
+    assert not hasattr(contracts, "KeyStore")
 
 
 def test_the_closed_set_is_section_sixs_fourteen_kinds() -> None:

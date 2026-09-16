@@ -37,7 +37,7 @@ from rqa.escalation import EscalationError, decide as escalation_decide, pending
 from rqa.intake import tick as intake_tick
 from rqa.lifecycle import LifecycleError, NotFound, status as lifecycle_status
 from rqa.policy import OnboardRefusal, onboard as policy_onboard
-from rqa.record import OSKeyStore, AppendFailed, ReuseResolutionError, explain as record_explain, explain_job
+from rqa.record import AppendFailed, ReuseResolutionError, explain as record_explain, explain_job
 
 __all__ = ["main"]
 
@@ -159,7 +159,7 @@ def _build_parser() -> _ArgumentParser:
 
 def _cmd_tick(args: argparse.Namespace, state_dir: Path) -> tuple[int, dict[str, Any]]:
     repos = tuple(args.repos) if args.repos else _configured_repos(state_dir)
-    comp = build_composition(state_dir, repos=repos, require_record=True)
+    comp = build_composition(state_dir, repos=repos)
     kwargs: dict[str, Any] = {}
     if args.batch_size is not None:
         kwargs["batch_size"] = args.batch_size
@@ -207,7 +207,6 @@ def _cmd_tick(args: argparse.Namespace, state_dir: Path) -> tuple[int, dict[str,
 def _cmd_onboard(args: argparse.Namespace) -> tuple[int, dict[str, Any]]:
     if not args.repo.strip() or not Path(args.repo).is_dir():
         raise _UsageError("onboard requires an existing local repository directory")
-    OSKeyStore().read("rqa-record-hmac")
     result = policy_onboard(repo=args.repo, migrate=args.migrate)
     if isinstance(result, OnboardRefusal):
         return exitcodes.INPUT_ERROR, {"outcome": "refused", "result": result}
@@ -229,7 +228,7 @@ def _cmd_pending(state_dir: Path) -> tuple[int, dict[str, Any]]:
 
 
 def _cmd_decide(args: argparse.Namespace, state_dir: Path) -> tuple[int, dict[str, Any]]:
-    comp = build_composition(state_dir, repos=_configured_repos(state_dir), require_record=True)
+    comp = build_composition(state_dir, repos=_configured_repos(state_dir))
     try:
         result = escalation_decide(
             args.escalation_id,
@@ -262,7 +261,7 @@ def _cmd_decide(args: argparse.Namespace, state_dir: Path) -> tuple[int, dict[st
 def _cmd_explain(args: argparse.Namespace, state_dir: Path) -> tuple[int, dict[str, Any]]:
     comp = build_composition(state_dir)
     if args.first == "job":
-        result = explain_job(comp.connection, args.second, keystore=comp.keystore)
+        result = explain_job(comp.connection, args.second)
     else:
         try:
             number = _positive_int(args.second)
@@ -270,7 +269,7 @@ def _cmd_explain(args: argparse.Namespace, state_dir: Path) -> tuple[int, dict[s
             raise _UsageError(
                 f"explain: PR number must be an integer, got {args.second!r}"
             ) from exc
-        result = record_explain(comp.connection, _repo_slug(args.first), number, keystore=comp.keystore)
+        result = record_explain(comp.connection, _repo_slug(args.first), number)
     if isinstance(result, ExplanationUnavailable):
         return exitcodes.INPUT_ERROR, {"outcome": "unavailable", "subject": {"job_id": args.second} if args.first == "job" else {"repo": args.first, "number": number}, "result": result}
     return exitcodes.OK, {"outcome": "ok", "result": result}

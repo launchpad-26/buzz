@@ -49,7 +49,6 @@ from rqa.authority import SqliteCapabilityStore
 from rqa.contracts import (
     Grant,
     Job,
-    KeyStore,
     Plan,
     RecordWriter,
     Reservation,
@@ -75,7 +74,7 @@ from rqa.intake import (
 from rqa.intake import ensure_schema as intake_ensure_schema
 from rqa.lifecycle import LifecycleDeps
 from rqa.policy import SnapshotStore, SqliteSnapshotStore
-from rqa.record import OSKeyStore, SQLiteRecordWriter
+from rqa.record import SQLiteRecordWriter
 from rqa.supply import (
     BreakerStore,
     SpendStore,
@@ -238,7 +237,6 @@ class Composition:
     pr_facts: SqlitePrFactsStore
     leases: SqliteLeaseStore
     record: RecordWriter
-    keystore: KeyStore
     github: GithubAdapter
     runner: SubprocessProcessRunner
     policy: PolicyClient
@@ -291,9 +289,7 @@ def build_composition(
     state_dir: Path,
     *,
     clock: Callable[[], datetime] = utcnow,
-    keystore: KeyStore = OSKeyStore(),
     repos: tuple[str, ...] = (),
-    require_record: bool = False,
 ) -> Composition:
     """Bootstrap every table this state directory needs and wire every real
     collaborator over it. Idempotent: every store's own constructor runs its
@@ -301,8 +297,6 @@ def build_composition(
     directory (the normal case — one process per `rqa` invocation) never
     loses or duplicates schema.
     """
-    if require_record:
-        keystore.read("rqa-record-hmac")
     state_dir.mkdir(parents=True, exist_ok=True)
     connection = sqlite3.connect(str(state_dir / "state.db"))
 
@@ -311,24 +305,7 @@ def build_composition(
     pr_facts = SqlitePrFactsStore(connection)
     leases = SqliteLeaseStore(connection)
 
-    # The `KeyStore` (E-25) arrives the same way every other collaborator in
-    # this function does — constructed or injected right here, like `clock`,
-    # `jobs`, `pr_facts` and `leases` three lines above. `rqa/record/__init__.py`
-    # names this module as the reason `OSKeyStore` is importable at all: its
-    # public surface is the re-export list "plus the two concrete collaborators
-    # a composition root must construct", because "nothing inside `rqa/record/`
-    # constructs one, so something outside this package always must", and
-    # `tests/test_rqa_record_surface.py` pins that publication as a contract
-    # (`PUBLISHED_EXPORTS = frozenset({"SQLiteRecordWriter", "OSKeyStore"})`).
-    # Taking it as a parameter means a caller that cannot reach a platform
-    # keychain (CI on Linux, a test process) supplies its own, rather than this
-    # module deciding what a missing keychain means. That judgement stays in
-    # `rqa/record/keychain.py`, where absent-key and machine-cannot-answer
-    # remain deliberately distinct. The `OSKeyStore()` default is evaluated once
-    # at definition time, matching what `SQLiteRecordWriter.__init__`,
-    # `verify()` and `SQLiteRecordReader.__init__` already do, so no existing
-    # caller's behaviour changes.
-    record: RecordWriter = SQLiteRecordWriter(connection, clock=clock, keystore=keystore)
+    record: RecordWriter = SQLiteRecordWriter(connection, clock=clock)
 
     github_ensure_schema(connection)
     transport = Transport(
@@ -370,7 +347,6 @@ def build_composition(
         pr_facts=pr_facts,
         leases=leases,
         record=record,
-        keystore=keystore,
         github=github,
         runner=runner,
         policy=policy,

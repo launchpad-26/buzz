@@ -31,26 +31,14 @@ from rqa.record.reader import SQLiteRecordReader  # noqa: E402
 from rqa.record.store import StoredEntry, insert_entry  # noqa: E402
 from rqa.record.writer import SQLiteRecordWriter  # noqa: E402
 
-KEY = b"a-test-key-that-never-leaves-this-process"
-
-
-class FakeKeyStore:
-    def __init__(self, *, key: bytes | None = KEY):
-        self.key = key
-
-    def read(self, name: str) -> bytes | None:
-        return self.key
-
-
-def populated(*, key: bytes | None = KEY):
-    keystore = FakeKeyStore(key=key)
+def populated():
     connection = sqlite3.connect(":memory:")
-    writer = SQLiteRecordWriter(connection, keystore=keystore)
+    writer = SQLiteRecordWriter(connection)
     writer.append("job-1", "transition", {"to_state": "queued", "repo": "o/r", "number": 7})
     writer.append("job-1", "plan", {"obligations": ["o1"], "policy_version": "1.2.0"})
     writer.append("job-1", "judgement", {"disposition": "approve"})
     writer.append("job-1", "transition", {"to_state": "approved", "repo": "o/r", "number": 7})
-    return connection, SQLiteRecordReader(connection, keystore=keystore)
+    return connection, SQLiteRecordReader(connection)
 
 
 def test_the_reader_implements_the_protocol_signatures_contracts_declares() -> None:
@@ -122,15 +110,18 @@ def test_a_tampered_row_is_an_integrity_break_naming_where_it_stopped() -> None:
     assert "3" in untrusted.detail
 
 
-def test_an_unkeyed_history_is_unverifiable_rather_than_trusted_or_broken() -> None:
-    """The ADR-0063 middle ground: the record reads fine, and it is honestly not
-    authenticated. `trusted_prefix` refuses to call that verified, and refuses to call
-    it tampered."""
-    _connection, reader = populated(key=None)
-    untrusted = reader.trusted_prefix("job-1")
-    assert isinstance(untrusted, RecordUntrusted)
-    assert untrusted.reason is RecordTrustFailureReason.UNVERIFIABLE
-    assert "no key" in untrusted.detail
+def test_a_chain_valid_history_is_trusted_without_any_key(monkeypatch) -> None:
+    """ADR-0066 replaces ADR-0063's middle ground.
+
+    Under ADR-0063 a history nobody could authenticate came back `UNVERIFIABLE` —
+    honestly not verified, honestly not tampered with. There is no key now, so that
+    outcome is unreachable: a chain-valid, non-legacy history is a
+    `VerifiedRecordPrefix`, and `verified` means the chain held.
+    """
+    _connection, reader = populated()
+    prefix = reader.trusted_prefix("job-1")
+    assert isinstance(prefix, VerifiedRecordPrefix)
+    assert prefix.checked_through_seq == 4
 
 
 def test_a_migrated_row_makes_the_history_legacy_even_when_it_verifies() -> None:
@@ -197,10 +188,9 @@ def test_a_row_stored_with_an_unparseable_payload_is_a_corrupt_store_not_an_empt
 
 
 def test_the_stored_timestamp_round_trips_to_an_aware_utc_datetime() -> None:
-    keystore = FakeKeyStore()
     connection = sqlite3.connect(":memory:")
     moment = datetime(2026, 9, 12, 8, 30, 15, 123456, tzinfo=timezone.utc)
-    writer = SQLiteRecordWriter(connection, clock=lambda: moment, keystore=keystore)
+    writer = SQLiteRecordWriter(connection, clock=lambda: moment)
     writer.append("job-1", "transition", {"to_state": "queued"})
-    reader = SQLiteRecordReader(connection, keystore=keystore)
+    reader = SQLiteRecordReader(connection)
     assert reader.entries("job-1")[0].at == moment

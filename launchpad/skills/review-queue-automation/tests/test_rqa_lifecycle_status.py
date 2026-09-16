@@ -70,17 +70,10 @@ OLD_HEAD = "c" * 40
 BASE = "b" * 40
 
 
-class NoKeyStore:
-    """ADR-0063's absent-key path. No OS keychain, no key material in this process."""
-
-    def read(self, name: str) -> bytes | None:
-        return None
-
-
 def new_db() -> tuple[sqlite3.Connection, SQLiteRecordWriter]:
     connection = sqlite3.connect(":memory:")
     connection.executescript(DDL)
-    return connection, SQLiteRecordWriter(connection, keystore=NoKeyStore())
+    return connection, SQLiteRecordWriter(connection)
 
 
 def add_pr_facts(connection: sqlite3.Connection, *, head_sha: str = HEAD) -> None:

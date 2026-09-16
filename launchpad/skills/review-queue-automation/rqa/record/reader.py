@@ -10,12 +10,16 @@ migrated rows. That is deliberate and it is why `trusted_prefix` exists: §2 —
 "Operational consumers such as P-13 must use this method rather than treating
 `latest()` as authenticated."
 
-`trusted_prefix` runs `verify` with this reader's key store and converts its outcome
-into `CONTRACTS.md` §7's vocabulary: no rows is `MISSING`, a chain or HMAC break is
-`INTEGRITY_BREAK`, any `unverifiable: no key` segment is `UNVERIFIABLE`, and any
-migrated row is `LEGACY`. Only a complete, chain-valid, key-authenticated, non-legacy
-history returns a `VerifiedRecordPrefix`, whose `latest(kind)` searches its own
-immutable rows and nothing else.
+`trusted_prefix` runs `verify` and converts its outcome into `CONTRACTS.md` §7's
+vocabulary: no rows is `MISSING`, a chain break or hash mismatch is `INTEGRITY_BREAK`,
+and any migrated row is `LEGACY`. Only a complete, chain-valid, non-legacy history
+returns a `VerifiedRecordPrefix`, whose `latest(kind)` searches its own immutable rows
+and nothing else.
+
+ADR-0066 retired the key, and with it the `UNVERIFIABLE` outcome this method used to
+return for an `unverifiable: no key` segment: there is no key, so no row is
+unverifiable for want of one. `RecordTrustFailureReason.UNVERIFIABLE` remains in
+`CONTRACTS.md` §7's enum and is simply no longer reachable from here.
 
 **`resolve_job`** answers "which job is the current head for this (repo, number)?"
 without ever reading P-01's `jobs` table (`container.md` §5 does not list P-12 as a
@@ -32,13 +36,11 @@ from dataclasses import dataclass
 
 from rqa.contracts import (
     EntryKind,
-    KeyStore,
     RecordRow,
     RecordTrustFailureReason,
     RecordUntrusted,
     VerifiedRecordPrefix,
 )
-from rqa.record.keychain import OSKeyStore
 from rqa.record.store import (
     entries_for_job,
     entries_of_kind,
@@ -55,9 +57,8 @@ __all__ = ["SQLiteRecordReader", "resolve_job", "ResolvedJob", "NoRecord", "Ambi
 class SQLiteRecordReader:
     """Immutable record reader. Basic reads make no trust claim."""
 
-    def __init__(self, connection: sqlite3.Connection, *, keystore: KeyStore = OSKeyStore()):
+    def __init__(self, connection: sqlite3.Connection):
         self._connection = connection
-        self._keystore = keystore
 
     def entries(self, job_id: str, kind: EntryKind | None = None) -> tuple[RecordRow, ...]:
         """Every row for `job_id`, in sequence order; one kind when `kind` is given."""
@@ -84,21 +85,12 @@ class SQLiteRecordReader:
                 reason=RecordTrustFailureReason.MISSING,
                 detail=f"no record entries for job {job_id!r}",
             )
-        result = verify(self._connection, job_id, keystore=self._keystore)
+        result = verify(self._connection, job_id)
         if not result.ok:
             return RecordUntrusted(
                 reason=RecordTrustFailureReason.INTEGRITY_BREAK,
                 detail=(
                     f"{result.kind.value if result.kind else 'break'} at seq {result.bad_seq}"
-                ),
-            )
-        if result.unverifiable:
-            first = result.unverifiable[0]
-            return RecordUntrusted(
-                reason=RecordTrustFailureReason.UNVERIFIABLE,
-                detail=(
-                    f"unverifiable: {first.reason} over seq {first.first_seq}-{first.last_seq}"
-                    f" ({len(result.unverifiable)} segment(s))"
                 ),
             )
         legacy = [entry.seq for entry in stored if is_legacy(entry=entry)]

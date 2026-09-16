@@ -270,9 +270,8 @@ class HarnessProber(Protocol):
     def probe(self, route: Route, *, timeout: float) -> bool: ...
 
 
-# E-25  P-12 consumes — the OS keychain (ADR-F key)          NEW: surfaced by review
-class KeyStore(Protocol):
-    def read(self, name: str) -> bytes | None: ...            # None: key absent → verify/explain report unverifiable, append proceeds unkeyed and says so
+# E-25  RETIRED by ADR-0066. P-12 consumed the OS keychain for the ADR-F/ADR-0063
+#       HMAC key. The key is gone, so the edge is gone; P-12 now consumes nothing.
 
 
 # E-26  P-10 consumes — local tool processes (MECHANICAL_TOOL_SET binaries)   NEW: surfaced by review
