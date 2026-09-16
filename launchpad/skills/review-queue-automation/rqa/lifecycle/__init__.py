@@ -5,9 +5,13 @@ mapping to `rqa status`'s six dispositions, contains every persistence failure i
 stop, and drives one job through flow steps 3-13 by calling its neighbours — never
 deciding what their answers mean beyond the transition those answers license.
 
-No other module in RQA imports from `rqa.lifecycle` except through this file, and no
-module in `rqa.lifecycle` imports another part's package (§1): the import graph is the
-Contract's shared types (`rqa.contracts`) and nothing else. Every exchanged value type —
+No other module in RQA imports from `rqa.lifecycle` except through this file. Inside
+the package, neighbour decisions are reached through the Contract's shared types
+(`rqa.contracts`) and injected clients. The one other part imported here is
+`rqa.record`, and only through its front door: `append_trace` in `admit.py`,
+`rest.py` and `steps.py` for P-12's non-authoritative milestones, and
+`SQLiteRecordReader` in `steps.py`, constructed over the caller-owned connection for
+E-05. Neither is a neighbour decision call. Every exchanged value type —
 `Job`, `Snapshot`, `Facts`, `Grant`, `Deny`, `Judgement`, `GithubUnavailable`, the lot —
 is imported from there, never redefined here. `JobStatus` is re-exported below for the
 same reason `rqa.record` re-exports `Entry`: a consumer gets the status set and the table

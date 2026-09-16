@@ -37,7 +37,9 @@ rqa/record/
   migrate.py     one-way legacy migration
 ```
 
-No other module in RQA imports from `rqa.record` except through `__init__`. No module in
+Other parts import from `rqa.record` only through `__init__`, which is why §1's re-export list
+carries `SQLiteRecordReader` and `append_trace` as surface: P-02 constructs the reader over its
+caller-owned connection for E-05 and emits milestones through the tracer. No module in
 `rqa.record` imports from any other part's package, calls another part's `E-NN` contract, or reads
 `jobs`, `snapshots`, `capabilities`, or any other table `container.md` §5 assigns to a different
 writer. Every value that crosses into or out of this package — `payload` in, the fields of
@@ -203,9 +205,10 @@ at all, confirming the `spend` payload is this package's own shape, never a seri
 
 ## 3. Entry points — E-13 and E-17
 
-P-12 provides two of the architecture's contracts: `append` (E-13, called by every other part except
-P-04) and the `explain` half of the shared operator edge E-17 (`status` is P-02's, `decide` is
-P-11's, `onboard` is P-03's — this contract covers `explain` alone). `verify` is not a separately
+P-12 provides `append` (E-13, called by every other part except P-04) and the `explain` and `anchor`
+halves of the shared operator edge E-17 (`status` is P-02's, `decide`/`pending` are P-11's,
+`onboard` is P-03's and `tick` is P-01's). `anchor` reaches `anchor_job` through the composition
+root described in §3.4. `verify` is not a separately
 named `E-NN` edge; it is the mechanism `explain` calls, exposed publicly because tests, and an
 operator who wants to check tamper-evidence without a full reconstruction, both need it directly.
 

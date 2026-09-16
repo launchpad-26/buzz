@@ -41,12 +41,11 @@ flowchart TB
     end
   end
   TIMER(["OS scheduler"]) -->|launches a sweep every few minutes| proc
-  OPER["Operator / human decider"] -->|runs commands: status, explain, decide, onboard| proc
+  OPER["Operator / human decider"] -->|runs commands: tick, status, pending, decide, anchor, explain, onboard| proc
   proc -->|reads PRs and checks; writes reviews, comments, merges; pushes fixes| GH[["GitHub"]]
   proc -->|hands over the PR evidence, gets a verdict back| HARN[["Review harness"]]
   HARN -->|calls the model, if one is configured| PROV[["External model provider"]]
   proc -->|borrows the operator's GitHub login| GHCLI[["GitHub CLI"]]
-  proc -->|reads the record-sealing key| KC[["OS keychain"]]
   proc -->|runs formatters and git in a scratch checkout| TOOLS[["Local tool processes"]]
   REPO[["Repository (.rqa/config.json)"]] -->|supplies the rules, re-read every sweep| proc
 ```
@@ -92,7 +91,7 @@ the operator's `gh auth token` by maintainer constraint; RQA holds no token of i
 | `lock` | file `state/lock` | P-01 | - | runtime lock (U-DISPATCH-02) | carried as a mechanism: exclusive non-blocking `flock`, kernel-released |
 | `jobs.status` | the state column of `jobs` P-01 does not write, mirrored by a `transition` entry; the same writer also sets `jobs.snapshot_hash` once, immediately after E-03's first pin | P-02 | P-01, P-11, P-12, P-13 | `states.py` transition table (U-QUEUE-11), `snapshot_hash` pin (U-QUEUE-10) | carried; closed transition table, legacy `action` path removed (U-QUEUE-12); the pin is write-once per job |
 | `snapshots` | SQLite table plus `state/snapshots/<hash>.json` | P-03 | P-02, P-05, P-06, P-07, P-08 | snapshot archive, `snapshot_hash` pin (U-QUEUE-09, U-QUEUE-10) | carried unchanged; atomic activation with last-known-good retention |
-| `record_entries` | SQLite append-only table, hash-chained (ADR-F / [#2159](https://github.com/launchpad-26/buzz/issues/2159)) | P-12 | P-02, P-11, P-13, P-07 | migrated ledger/decision/spend sources | fourteen closed entry kinds; legacy rows unattested; current rows chained, optionally HMAC-keyed |
+| `record_entries` | SQLite append-only table, hash-chained (ADR-0066 / [#2300](https://github.com/launchpad-26/buzz/issues/2300)) | P-12 | P-02, P-11, P-13, P-07 | migrated ledger/decision/spend sources | fourteen closed entry kinds; legacy rows unattested; current rows use the unkeyed chain and may be covered by a `record_anchors` head |
 | `trace` | file `state/jobs/<job>/trace.jsonl` | P-12 | - | locked JSONL trace (U-RESILIENCE-08), otel milestones (U-DISPATCH-19) | carried unchanged; observability, never authoritative |
 | `human_requests` | SQLite table (pending index over `record_entries`) | P-11 | P-02 | `human_requests` (scripts/common.py:288) | carried; `decision_actor` (:311) and `rationale` (:308) become the `actor` and `basis` of the `decision` entry; notification transport columns dropped (U-AUTHORITY-12) |
 | `mutations` | SQLite table | P-09 | - | `mutations` (scripts/common.py:260) | carried unchanged; `client_mutation_id` primary key; gains `review_submit` and `merge` event kinds |
@@ -138,7 +137,7 @@ Recorded here so that it is a known trade, not a surprise.
 | Path | Between | Mechanism | Detail |
 |---|---|---|---|
 | tick | OS scheduler → `rqa` | process launch | one launch per fixed interval; E-21 in `components.md` §6 |
-| CLI | operator → `rqa` | process launch with arguments | `status`, `explain`, `decide`, `onboard`; E-17 |
+| CLI | operator → `rqa` | process launch with arguments | `tick`, `status`, `pending`, `decide`, `anchor`, `explain`, `onboard`; E-17 |
 | GitHub API | `rqa` → GitHub | HTTPS: REST v3 and GraphQL v4 | reads and mutations, one adapter (P-09); E-18 |
 | git | `rqa` → GitHub | git smart HTTP | remediation fetch and push (P-10); E-20 |
 | harness | `rqa` → review harness | process execution, files in and out | the published interaction contract: review invocation (P-06); E-19, and content-free route probe (P-05); E-24 |

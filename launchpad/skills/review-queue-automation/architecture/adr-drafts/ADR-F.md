@@ -1,6 +1,6 @@
 # ADR-F — Provenance integrity mechanism for the review record
 
-**Status:** decided 2026-09-11 — recommendation (b) accepted; recorded as [ADR-0063](../../../../decisions/ADR-0063-rqa-record-provenance-integrity.md), which closes [issue #2159](https://github.com/launchpad-26/buzz/issues/2159). This draft is retained as the architecture's rationale, not as an open question.
+**Status:** historical — recommendation (b) was accepted as [ADR-0063](../../../../decisions/ADR-0063-rqa-record-provenance-integrity.md), then superseded by [ADR-0066](../../../../decisions/ADR-0066-rqa-record-chain-anchoring-without-a-key.md). This draft is retained as the rationale for the superseded choice, not as current architecture or an open question.
 **Parent:** [#2006](https://github.com/launchpad-26/buzz/issues/2006) · **Raised by:** #2071 architecture · **Decomposition-blocking:** **not blocking**
 **Parts affected:** P-12 · **Requirements:** RQA-NFR-028, RQA-NFR-022, RQA-NFR-032
 

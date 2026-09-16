@@ -1,11 +1,9 @@
 #!/usr/bin/env python3
 """`rqa.intake.identity` — `code/P-01-intake.md` §1 (U-RESILIENCE-13).
 
-`stable_hash`/`job_id` are the one hashing mechanism this part owns; P-09's
-`rqa.github.writes` resolves them at call time and falls back to the same
-formula while this package was unlanded (§1). Now that it is landed, both
-paths must be byte-identical — that fallback is dead code from this point on,
-never a second definition.
+`stable_hash`/`job_id` are the one hashing mechanism this part owns; the
+assembled P-09 writer imports that canonical owner directly, so mutation and
+job identities cannot drift through competing formulas.
 """
 
 from __future__ import annotations

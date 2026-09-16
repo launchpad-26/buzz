@@ -12,8 +12,11 @@ failure into a safe stop, and drive one job through flow steps 3–13 by calling
 never deciding what their answers mean beyond the transition those answers license.
 
 **Depends on.** ADR-D ([#2157](https://github.com/launchpad-26/buzz/issues/2157), assumed): steps
-10a/12b use its no-verdict-authority outcome. No neighbour implementation is imported; dependency
-protocols and shared `CONTRACTS.md` values define every seam.
+10a/12b use its no-verdict-authority outcome. Neighbour decisions are reached through dependency
+protocols and shared `CONTRACTS.md` values. The one part imported directly is P-12, through
+`rqa.record`'s front door only: `append_trace` for the non-authoritative milestones §7 describes,
+and `SQLiteRecordReader` to supply E-05's `RecordReader` over the caller-owned connection. Neither
+is a neighbour decision call.
 
 ## 1. Modules
 
@@ -36,15 +39,15 @@ rqa/lifecycle/
   status.py      status(): E-17
 ```
 
-No other module in RQA imports from `rqa.lifecycle` except through `__init__`. No module in
-`rqa.lifecycle` imports from another part's package, reads `snapshots`, `capabilities`, `spend`,
+No other module in RQA imports from `rqa.lifecycle` except through `__init__`. Apart from the two
+documented `rqa.record` front-door names above, no module in `rqa.lifecycle` imports from another part's package, reads `snapshots`, `capabilities`, `spend`,
 `breakers`, `mutations`, `etags`, `api_calls`, `human_requests`'s row content (only its existence is
 read, per §5), or any table `container.md` §5 assigns to a different owner, except the three tables
 named in §5 below (`jobs`, `pr_facts`, `leases` — read-only, owned by P-01; `record_entries` —
 read-only, owned by P-12) and the one column this part writes (`jobs.status`). This is deliberate:
 `architecture.md` §15 names this the largest, most safety-critical part precisely because it
 concentrates every transition, recovery and degradation rule; keeping its import graph to "the
-Contract's shared types plus `rqa.record`'s three names" is what makes "one part is one proof" true
+Contract's shared types plus the two documented `rqa.record` names" is what makes "one part is one proof" true
 rather than aspirational.
 
 ## 2. Types

@@ -2,10 +2,9 @@
 """`rqa.intake.lock` — `code/P-01-intake.md` §1, §3 step 1, §5 (U-DISPATCH-02).
 
 Integration tests against a real `flock`, per §8's note that T3's lock half
-is tested this way rather than with a fake. This file's `tick()`-return-value
-half (`sweep_already_running`) is out of scope here — that is #2198's
-`tick.py`, which does not exist on this branch (the wave-invariant rule: this
-suite asserts only what this lane owns, never `tick()`'s absence)."""
+is tested this way rather than with a fake. The assembled `tick()` path has
+its `sweep_already_running` coverage in `test_rqa_intake_tick.py`; this file
+stays focused on the operating-system lock primitive itself."""
 
 from __future__ import annotations
 
