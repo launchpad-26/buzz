@@ -23,7 +23,7 @@ configuration lives at `<repo>/.rqa/config.json`, written by `rqa onboard` and
 read by `rqa.policy.validate`; `config.example.json` is the tracked example of
 that file's shape, never itself a populated config.
 
-## The six commands
+## The seven commands
 
 Every command exists in `rqa/cli/main.py` and nothing else does. Global flag:
 `--state-dir <path>`.
@@ -100,6 +100,21 @@ There is no `supersede` command and none is planned as a port of the retired
 estate's. Supersession is detected structurally, by P-01 at inventory time on
 a head change, not by an operator invoking anything.
 
+### `rqa anchor`
+
+Records the named job's current record-chain head locally and, when comment
+authority is available, publishes that digest to the job's pull request.
+
+```bash
+python3 -m rqa.cli anchor <job-id>
+```
+
+Publication is advisory: an unavailable destination or denied comment grant
+leaves the local anchor pending for a later retry and does not fail a review.
+The command reports the anchored sequence, published count, pending count and
+any publication detail. It never appends a record entry, because doing so would
+move the head it just anchored.
+
 ### `rqa explain`
 
 Reconstructs an outcome from the tamper-evident record alone — no GitHub
@@ -120,18 +135,20 @@ target returns `outcome: "unavailable"` (exit 1).
 network or availability failure; `3` means authentication failed; `4` means an
 internal, persistence or job failure. A partial or wholly unavailable inventory
 reports `outcome: "incomplete"` and names failed repositories. A failed job cannot
-produce a successful tick exit code.
+produce a successful tick exit code. All five are emitted: `tick` maps an
+`unauthenticated` inventory outage to `3` and any other unreachable one to `2`
+(`rqa/cli/main.py`), which `tests/test_rqa_cli_regressions.py` pins.
 
 ## Platform and state
 
-macOS Keychain and Linux Secret Service (`secret-tool`) are supported.
-`onboard`, `tick` and `decide` check keychain availability before work; an absent
-key is explicitly unkeyed, while an unavailable backend is an error.
+RQA reads no OS keychain. ADR-0066 retired the record-sealing key, so no command
+checks a credential store before work and no record segment is "unkeyed" — the
+chain is unkeyed by design and its head is anchored externally by `anchor`.
 `onboard` requires an existing local directory. Read and decision commands require
 an existing state database so a mistyped state directory creates nothing.
-`explain` uses the writer's keychain and reports the stored human decision basis.
-Control characters in operator text render as visible escapes, preserving line
-boundaries without activating terminal controls.
+`explain` reconstructs from the record alone, reporting the stored human decision
+basis. Control characters in operator text render as visible escapes, preserving
+line boundaries without activating terminal controls.
 
 ## Configuration and policy
 

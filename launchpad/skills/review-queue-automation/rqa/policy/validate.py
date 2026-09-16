@@ -77,8 +77,6 @@ POLICY_VERSION_DEFAULT = "unversioned"
 EXTERNAL_ALLOWED_DEFAULT = False
 DENY_LABEL_DEFAULT = ""
 ALLOW_FORKS_DEFAULT = False
-#: One corroborating finding, i.e. the finding itself.
-CORROBORATION_DEFAULT = 1
 #: No configured ceiling on a budget axis.
 BUDGET_AXIS_DEFAULT: int | None = None
 
@@ -110,11 +108,7 @@ def starter_config() -> dict[str, Any]:
         "policy": {
             "version": POLICY_VERSION_DEFAULT,
             "obligations": [],
-            "blocking": {
-                "categories": [],
-                "severities": [],
-                "corroboration": CORROBORATION_DEFAULT,
-            },
+            "blocking": {"categories": []},
             "mechanical": {"categories": [], "tools": []},
             "assurance": {},
             "remediation": {"allow_forks": ALLOW_FORKS_DEFAULT},
@@ -394,21 +388,9 @@ def _blocking(value: Any, errors: list[ValidationError]) -> Blocking | None:
         if "categories" in value
         else None
     )
-    severities = (
-        _texts(value["severities"], f"{base}.severities", errors) if "severities" in value else None
-    )
-    corroboration = (
-        _count(value["corroboration"], f"{base}.corroboration", errors)
-        if "corroboration" in value
-        else None
-    )
-    if not ok or categories is None or severities is None or corroboration is None:
+    if not ok or categories is None:
         return None
-    return Blocking(
-        categories=categories,
-        severities=frozenset(severities),
-        corroboration=corroboration,
-    )
+    return Blocking(categories=categories)
 
 
 def _mechanical(

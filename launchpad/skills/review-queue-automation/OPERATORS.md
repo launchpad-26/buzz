@@ -78,7 +78,7 @@ together, never one per run.
 | `authority` | `review`, `comment`, `approve`, `request_changes`, `remediate`, `merge` (each `true`/`false`) | Derived from the closed `Activity` enum, so this key set cannot drift from what the authority gate names. Every omitted key defaults `false` — nothing is granted by omission. Every grant also requires credential evidence and membership in the configured repository set — see §8. |
 | `routes` | array of `{harness, model, provider, family, external, command?}` | `harness`, `model`, `provider`, `family` are required non-empty strings; `external` is required Boolean. `command` is **optional** — the operator-declared argv for a harness `rqa` ships no built-in alias for; its absence means a built-in alias is used. |
 | `external` | `allowed` (bool), `deny_label` (string) | Whether an external (non-subscription) route may be used, and the label recorded when one is denied. |
-| `policy` | `version?` (default `"unversioned"`), `obligations` (array), `blocking` (`{categories, severities, corroboration}`), `mechanical` (`{categories, tools}`), `assurance` (object), `remediation?` (`{allow_forks}`, default `allow_forks: false`) | `obligations`, `blocking`, `mechanical` and `assurance` are required — an absent one would *widen* what a review has to satisfy, not narrow it. `categories` values are drawn from the closed `Category` enum: `mechanical`, `procedural`, `creation_time`. |
+| `policy` | `version?` (default `"unversioned"`), `obligations` (array), `blocking` (`{categories}`), `mechanical` (`{categories, tools}`), `assurance` (object), `remediation?` (`{allow_forks}`, default `allow_forks: false`) | `obligations`, `blocking`, `mechanical` and `assurance` are required — an absent one would *widen* what a review has to satisfy, not narrow it. `categories` values are drawn from the closed `Category` enum: `mechanical`, `procedural`, `creation_time`. Corroboration is fixed by the protocol rather than configurable. |
 | `budget` | `per_pr_tokens`, `per_repo_daily_tokens`, `per_model_daily_tokens` (each an integer or `null`) | `null` means no configured ceiling on that axis; all three are checked in order by `rqa/supply/budget.py`, and an axis with no configured bound is never checked. |
 
 No secret belongs in this file; nothing in `rqa.policy.validate` inspects it
@@ -176,7 +176,7 @@ whose head has moved since the escalation was raised, or a job whose policy
 snapshot has moved — each of the last two means the escalation's own premise
 is stale, and re-running `rqa tick` will raise a fresh one against the
 current head if the condition still holds. A successful decision is recorded
-in the tamper-evident record (§6.3, ADR-0063) and resumes the job's
+in the tamper-evident record (§6.3, ADR-0066) and resumes the job's
 lifecycle; supplying an input a raised escalation names never restarts the
 review from the beginning.
 

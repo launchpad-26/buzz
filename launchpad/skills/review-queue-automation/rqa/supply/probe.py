@@ -44,7 +44,6 @@ if TYPE_CHECKING:  # annotation-only; nothing here is needed at runtime
 
 __all__ = [
     "PROBE_COOLDOWN",
-    "PROBE_MARKER_NAME",
     "PROBE_TIMEOUT_SECONDS",
     "SubprocessProcessRunner",
     "SubprocessHarnessProber",
@@ -58,9 +57,6 @@ PROBE_TIMEOUT_SECONDS: float = 300
 #: §4, verbatim: the `providers` cooldown set on a failed probe.
 PROBE_COOLDOWN = timedelta(seconds=300)
 
-#: The marker that stands in for a bundle. Its presence is the harness's instruction to
-#: exit zero without writing a verdict (`P-06-harness-interface.md` §3.3's closing line).
-PROBE_MARKER_NAME = "PROBE"
 #: The one file whose presence fails a probe.
 VERDICT_FILENAME = "verdict.json"
 
@@ -117,7 +113,10 @@ class SubprocessHarnessProber:
     subprocess-backed one above, which is the only form a deployment uses.
     """
 
-    def __init__(self, *, runner: ProcessRunner | None = None) -> None:
+    def __init__(self, *, marker_name: str, runner: ProcessRunner | None = None) -> None:
+        if not marker_name or Path(marker_name).name != marker_name:
+            raise ValueError("marker_name must be one non-empty filename")
+        self._marker_name = marker_name
         self._runner = runner if runner is not None else SubprocessProcessRunner()
 
     def probe(self, route: Route, *, timeout: float) -> bool:
@@ -127,7 +126,7 @@ class SubprocessHarnessProber:
             bundle.mkdir()
             # The bundle holds the marker and nothing else — no PR-derived byte exists here
             # to leave out, which is the point of probing before a bundle is ever built.
-            (bundle / PROBE_MARKER_NAME).write_text("probe\n", encoding="utf-8")
+            (bundle / self._marker_name).write_text("probe\n", encoding="utf-8")
             verdict = root / "out" / VERDICT_FILENAME
             verdict.parent.mkdir()
             try:

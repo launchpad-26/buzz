@@ -26,6 +26,7 @@ sys.path.insert(0, str(_SKILL_ROOT))
 from rqa.cli import exitcodes  # noqa: E402
 from rqa.cli.main import main  # noqa: E402
 from rqa.contracts import (  # noqa: E402
+    EDGES,
     EscalationCause,
     EscalationSubject,
     EscalationSubjectKind,
@@ -181,6 +182,18 @@ def test_each_command_handler_calls_its_declared_provider_entry_point() -> None:
             and node.func.id in provider_names
         )
         assert calls == sorted(expected[handler_name]), (handler_name, calls)
+
+
+def test_parser_commands_match_the_e17_contract() -> None:
+    """The parser and the machine-readable operator edge are one public surface."""
+    parser = main_module._build_parser()
+    choices = {
+        name
+        for action in parser._actions
+        for name in (getattr(action, "choices", None) or {})
+    }
+    contracted = {provider.__name__ for provider in EDGES["E-17"]}
+    assert choices == contracted
 
 
 def test_composition_repr_elides_every_live_collaborator() -> None:

@@ -1,0 +1,24 @@
+F                                                                        [100%]
+=================================== FAILURES ===================================
+____________ test_t2_public_definitions_have_a_recognised_reference ____________
+
+    def test_t2_public_definitions_have_a_recognised_reference() -> None:
+        analysis = ReferenceAnalysis(RQA, _TEST_ROOT)
+        findings = analysis.t2_findings()
+>       assert findings == (), "T2 public definitions with zero recognised references:\n" + format_findings(
+            findings, _SKILL_ROOT
+        )
+E       AssertionError: T2 public definitions with zero recognised references:
+E         T2 rqa.cli.exitcodes.AUTH (rqa/cli/exitcodes.py:11) — zero recognised references
+E         T2 rqa.cli.exitcodes.NETWORK (rqa/cli/exitcodes.py:10) — zero recognised references
+E         T2 rqa.harness.adapters.BUILTIN_HARNESSES (rqa/harness/adapters.py:490) — zero recognised references
+E       assert (Finding(chec... references')) == ()
+E         
+E         Left contains 3 more items, first extra item: Finding(check='T2', symbol='rqa.cli.exitcodes.AUTH', source=PosixPath('/private/tmp/rqa-integrity-2310.ZyNTzQ/integration/launchpad/skills/review-queue-automation/rqa/cli/exitcodes.py'), line=11, detail='zero recognised references')
+E         Use -v to get more diff
+
+tests/test_rqa_reference_integrity.py:123: AssertionError
+=========================== short test summary info ============================
+FAILED tests/test_rqa_reference_integrity.py::test_t2_public_definitions_have_a_recognised_reference
+1 failed in 1.53s
+

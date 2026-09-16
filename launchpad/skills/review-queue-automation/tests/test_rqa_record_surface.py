@@ -4,15 +4,8 @@ and §8's closing property.
 
 No pytest: every `test_*` function here takes no arguments, per `tests/run_all.py`.
 
-**Why the module and export assertions name two states.** §1 specifies eleven modules
-and twenty-eight re-exports for the finished package. The `explain`/`migrate` half —
-`explain.py`, `migrate.py`, `reader.py`'s `resolve_job`, and their thirteen names — is a
-sibling lane's, landing separately. A test frozen to the nine-module / fifteen-name
-state this lane produces would have to be edited when that lane merges, and a test
-frozen to the finished state would fail until it does. Asserting membership of exactly
-those two real states catches both a lane adding surface §1 does not specify and a
-botched merge that lands half a package — while never asserting that a sibling's
-contract-required work is absent.
+The package is fully assembled. Its module set and `__all__` must equal the final §1
+surface; historical partial-wave states are no longer accepted.
 """
 
 from __future__ import annotations
@@ -156,18 +149,17 @@ def _statement_literals(source: str) -> list[str]:
 # -- §1: the package surface ---------------------------------------------------
 
 
-def test_the_module_set_is_one_of_the_two_states_section_one_specifies() -> None:
+def test_the_module_set_is_exactly_the_final_state_section_one_specifies() -> None:
     found = frozenset(path.stem for path in RECORD.glob("*.py"))
-    assert found in (APPEND_MODULES, ALL_MODULES), (
-        f"rqa/record holds {sorted(found)}; §1 specifies {sorted(ALL_MODULES)}, of which "
-        f"{sorted(APPEND_MODULES)} is the pre-explain state"
+    assert found == ALL_MODULES, (
+        f"rqa/record holds {sorted(found)}; §1 specifies {sorted(ALL_MODULES)}"
     )
 
 
-def test_all_is_one_of_the_two_states_section_one_specifies() -> None:
+def test_all_is_exactly_the_final_state_section_one_specifies() -> None:
     exported = list(rqa.record.__all__)
     assert len(exported) == len(set(exported)), f"duplicate re-export: {exported}"
-    assert frozenset(exported) in (APPEND_EXPORTS, ALL_EXPORTS), (
+    assert frozenset(exported) == ALL_EXPORTS, (
         f"__all__ is {sorted(exported)}; §1 specifies {sorted(ALL_EXPORTS)}"
     )
 

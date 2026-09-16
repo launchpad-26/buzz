@@ -175,7 +175,7 @@ Each is a unit test with frozen shared-contract values, a fake `RecordReader` wh
 | T11 | `record.append` raises `AppendFailed` | exception propagates and no result is returned |
 | T12 | repository/snapshot mismatch | `ReuseError`; reader and writer are untouched |
 | T13 | identical facts and immutable trusted prefix twice | byte-identical results and equivalent payloads |
-| T14 | predecessor has a chain/HMAC break, an unavailable-key/unkeyed segment, legacy rows, or no rows | every obligation regenerates as `untrusted_predecessor`; no judgement/pin row is read |
+| T14 | predecessor has a chain or anchored-head break, legacy rows, or no rows | every obligation regenerates as `untrusted_predecessor`; no judgement/pin row is read |
 
 ## 9. Requirements this part answers for
 

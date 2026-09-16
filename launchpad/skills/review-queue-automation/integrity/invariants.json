@@ -1,0 +1,269 @@
+{
+  "version": 1,
+  "source_scope": "launchpad/skills/review-queue-automation/rqa",
+  "cases": [
+    {
+      "id": "B-INV-001",
+      "invariant": "The real remediation entry point verifies the REMEDIATE grant before reading PR-head protection or taking any other action.",
+      "source": {"path": "rqa/remediation/remediate.py", "line": 5},
+      "test": "tests/test_rqa_remediation_remediate.py::test_t1_a_grant_for_another_activity_raises_and_touches_nothing",
+      "expected_assertion": "head protection was read before the grant gate",
+      "mutation": {
+        "path": "rqa/remediation/remediate.py",
+        "before": "    # -- step 1 ------------------------------------------------------------\n    _require_verified_grant(job=job, finding=finding, grant=grant, facts=facts, snapshot=snapshot)\n",
+        "after": "    # -- step 1 ------------------------------------------------------------\n    _ = facts.pr.head_protected\n    _require_verified_grant(job=job, finding=finding, grant=grant, facts=facts, snapshot=snapshot)\n"
+      }
+    },
+    {
+      "id": "B-INV-002",
+      "invariant": "Every GitHub write checks its exact Grant before any GitHub call or record append.",
+      "source": {"path": "rqa/github/writes.py", "line": 4},
+      "test": "tests/test_rqa_github_writes.py::test_t1_every_write_with_grant_none_raises_before_any_call_or_append",
+      "expected_assertion": "unexpected GitHub call",
+      "mutation": {
+        "path": "rqa/github/writes.py",
+        "before": "    _require_grant(grant, activity, job)\n    cmid = _client_mutation_id(job=job, kind=kind, payload=payload)\n",
+        "after": "    cmid = _client_mutation_id(job=job, kind=kind, payload=payload)\n    perform(cmid)\n    _require_grant(grant, activity, job)\n"
+      }
+    },
+    {
+      "id": "B-INV-003",
+      "invariant": "A GitHub credential is released from the authority frame even when the injected capability probe raises.",
+      "source": {"path": "rqa/authority/capability.py", "line": 5},
+      "test": "tests/test_rqa_authority_secrecy.py::test_t16_the_token_is_not_held_on_the_frame_of_a_propagating_probe_failure",
+      "expected_assertion": "gho_T16CanaryTokenValue",
+      "mutation": {
+        "path": "rqa/authority/capability.py",
+        "before": "    finally:\n        del token\n    if isinstance(reading, CapabilityReading):",
+        "after": "    finally:\n        pass\n    if isinstance(reading, CapabilityReading):"
+      }
+    },
+    {
+      "id": "B-INV-004",
+      "invariant": "Only intake/store.py writes jobs, pr_facts, and leases, apart from lifecycle's two documented jobs updates.",
+      "source": {"path": "rqa/intake/store.py", "line": 5},
+      "test": "tests/test_rqa_intake_surface.py::test_only_the_intake_store_writes_jobs_pr_facts_and_leases",
+      "expected_assertion": "rqa/authority/store.py",
+      "mutation": {
+        "path": "rqa/authority/store.py",
+        "before": "INSERT INTO capabilities (repo, job_id, capabilities, attested, login, probed_at, evidence_version)",
+        "after": "INSERT INTO leases (repo, job_id, capabilities, attested, login, probed_at, evidence_version)"
+      }
+    },
+    {
+      "id": "B-INV-005",
+      "invariant": "Only policy/store.py writes the snapshots table and archive.",
+      "source": {"path": "rqa/policy/store.py", "line": 5},
+      "test": "tests/test_rqa_policy_surface.py::test_only_the_policy_store_writes_the_snapshots_store",
+      "expected_assertion": "rqa/authority/store.py",
+      "mutation": {
+        "path": "rqa/authority/store.py",
+        "before": "INSERT INTO capabilities (repo, job_id, capabilities, attested, login, probed_at, evidence_version)",
+        "after": "INSERT INTO snapshots (repo, job_id, capabilities, attested, login, probed_at, evidence_version)"
+      }
+    },
+    {
+      "id": "B-INV-006",
+      "invariant": "Only github/store.py writes etags, api_calls, and mutations.",
+      "source": {"path": "rqa/github/store.py", "line": 3},
+      "test": "tests/test_rqa_github_surface.py::test_only_the_github_store_writes_etags_api_calls_and_mutations",
+      "expected_assertion": "rqa/authority/store.py",
+      "mutation": {
+        "path": "rqa/authority/store.py",
+        "before": "INSERT INTO capabilities (repo, job_id, capabilities, attested, login, probed_at, evidence_version)",
+        "after": "INSERT INTO mutations (repo, job_id, capabilities, attested, login, probed_at, evidence_version)"
+      }
+    },
+    {
+      "id": "B-INV-007",
+      "invariant": "Only authority/store.py writes the capabilities table.",
+      "source": {"path": "rqa/authority/store.py", "line": 9},
+      "test": "tests/test_rqa_authority_surface.py::test_only_this_packages_store_writes_the_capabilities_table",
+      "expected_assertion": "rqa/escalation/store.py",
+      "mutation": {
+        "path": "rqa/escalation/store.py",
+        "before": "INSERT INTO human_requests ",
+        "after": "INSERT INTO capabilities "
+      }
+    },
+    {
+      "id": "B-INV-008",
+      "invariant": "Only escalation/store.py writes human_requests.",
+      "source": {"path": "rqa/escalation/store.py", "line": 10},
+      "test": "tests/test_rqa_escalation_surface.py::test_this_package_is_the_only_writer_of_human_requests_in_the_tree",
+      "expected_assertion": "rqa/authority/store.py",
+      "mutation": {
+        "path": "rqa/authority/store.py",
+        "before": "INSERT INTO capabilities (repo, job_id, capabilities, attested, login, probed_at, evidence_version)",
+        "after": "INSERT INTO human_requests (repo, job_id, capabilities, attested, login, probed_at, evidence_version)"
+      }
+    },
+    {
+      "id": "B-INV-009",
+      "invariant": "Only record/store.py inserts record_entries or record_heads.",
+      "source": {"path": "rqa/record/store.py", "line": 4},
+      "test": "tests/test_rqa_record_surface.py::test_only_the_record_store_writes_the_two_record_tables",
+      "expected_assertion": "rqa/authority/store.py",
+      "mutation": {
+        "path": "rqa/authority/store.py",
+        "before": "INSERT INTO capabilities (repo, job_id, capabilities, attested, login, probed_at, evidence_version)",
+        "after": "INSERT INTO record_entries (repo, job_id, capabilities, attested, login, probed_at, evidence_version)"
+      }
+    },
+    {
+      "id": "B-INV-010",
+      "invariant": "Only supply/spend.py writes a review-time spend record entry, apart from the ruled legacy migration.",
+      "source": {"path": "rqa/supply/spend.py", "line": 16},
+      "test": "tests/test_rqa_supply_surface.py::test_only_the_supply_spend_module_writes_a_spend_entry_for_a_review",
+      "expected_assertion": "rqa/authority/gate.py",
+      "mutation": {
+        "path": "rqa/authority/gate.py",
+        "before": "            \"grant\",\n            {\n                \"activity\": activity.value,",
+        "after": "            \"spend\",\n            {\n                \"activity\": activity.value,"
+      }
+    },
+    {
+      "id": "B-INV-011",
+      "invariant": "github/transport.py is the only RQA module that imports an HTTP client.",
+      "source": {"path": "rqa/github/transport.py", "line": 1},
+      "test": "tests/test_rqa_github_surface.py::test_transport_is_the_only_http_client_import_in_rqa",
+      "expected_assertion": "rqa/authority/store.py",
+      "mutation": {
+        "path": "rqa/authority/store.py",
+        "before": "import json\nimport sqlite3",
+        "after": "import json\nimport urllib.request\nimport sqlite3"
+      }
+    },
+    {
+      "id": "B-INV-012",
+      "invariant": "Remediation cannot construct a force push or a second refspec.",
+      "source": {"path": "rqa/remediation/remediate.py", "line": 21},
+      "test": "tests/test_rqa_remediation_surface.py::test_no_module_here_can_construct_a_force_a_second_refspec_or_another_ref",
+      "expected_assertion": "push.py contains '--force'",
+      "mutation": {
+        "path": "rqa/remediation/push.py",
+        "before": "            argv=(\"git\", \"push\", remote, f\"HEAD:refs/heads/{head_ref}\"),",
+        "after": "            argv=(\"git\", \"push\", \"--force\", remote, f\"HEAD:refs/heads/{head_ref}\"),"
+      }
+    },
+    {
+      "id": "B-INV-013",
+      "invariant": "Harness subprocesses receive an allow-listed environment, never a copy of the operator environment.",
+      "source": {"path": "rqa/harness/invoke.py", "line": 8},
+      "test": "tests/test_rqa_harness_adapters.py::test_the_child_environment_is_an_allow_list_with_no_credential",
+      "expected_assertion": "GITHUB_TOKEN",
+      "mutation": {
+        "path": "rqa/harness/invoke.py",
+        "before": "def _child_env() -> dict[str, str]:\n    return {name: os.environ[name] for name in _ENV_ALLOWLIST if name in os.environ}",
+        "after": "def _child_env() -> dict[str, str]:\n    return dict(os.environ)"
+      }
+    },
+    {
+      "id": "B-INV-014",
+      "invariant": "Publishing an anchor never appends a record entry.",
+      "source": {"path": "rqa/record/anchor.py", "line": 37},
+      "test": "tests/test_rqa_record_anchor.py::test_publishing_an_anchor_appends_no_record_entry",
+      "expected_assertion": "publishing an anchor changed the record",
+      "mutation": {
+        "path": "rqa/record/anchor.py",
+        "before": "    fresh = latest_anchor(connection=connection, job=job_id)\n    assert fresh is not None  # noqa: S101 - just inserted, in this transaction",
+        "after": "    connection.execute(\n        \"INSERT INTO record_entries \"\n        \"(job, seq, kind, at, payload, prev_hash, hash, hmac, keyed) \"\n        \"VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)\",\n        (job_id, head.seq + 1, \"action\", _stamp(clock()), \"{}\", head.hash, \"0\" * 64, None, 0),\n    )\n    fresh = latest_anchor(connection=connection, job=job_id)\n    assert fresh is not None  # noqa: S101 - just inserted, in this transaction"
+      }
+    },
+    {
+      "id": "B-INV-015",
+      "invariant": "Record verification never mutates record_entries or record_heads.",
+      "source": {"path": "rqa/record/verify.py", "line": 32},
+      "test": "tests/test_rqa_record_verify.py::test_verify_mutates_neither_table",
+      "expected_assertion": "assert snapshot ==",
+      "mutation": {
+        "path": "rqa/record/verify.py",
+        "before": "    rows = entries_for_job(connection=connection, job=job_id)\n    anchor = latest_anchor(connection=connection, job=job_id)",
+        "after": "    rows = entries_for_job(connection=connection, job=job_id)\n    connection.execute(\"UPDATE record_heads SET hash = ? WHERE job = ?\", (\"0\" * 64, job_id))\n    anchor = latest_anchor(connection=connection, job=job_id)"
+      }
+    },
+    {
+      "id": "B-INV-016",
+      "invariant": "Reading an expired circuit breaker half-opens it without writing the store.",
+      "source": {"path": "rqa/supply/breakers.py", "line": 28},
+      "test": "tests/test_rqa_supply_breakers.py::test_the_half_open_read_writes_nothing",
+      "expected_assertion": "assert rows(subject, \"circuit_breakers\") == before",
+      "mutation": {
+        "path": "rqa/supply/breakers.py",
+        "before": "        if row[1] == \"open\" and open_until is not None and open_until > utcnow():\n            return BreakerState(scope=scope, failures=failures, status=\"open\", open_until=open_until)\n        # Half-open: an expired, missing or unparseable deadline reads back as usable\n        # again, with the failure count intact. No write happens here (§5, U-DISPATCH-05).\n        return BreakerState(scope=scope, failures=failures, status=\"closed\", open_until=None)",
+        "after": "        if row[1] == \"open\" and open_until is not None and open_until > utcnow():\n            return BreakerState(scope=scope, failures=failures, status=\"open\", open_until=open_until)\n        # Half-open: an expired, missing or unparseable deadline reads back as usable\n        # again, with the failure count intact. No write happens here (§5, U-DISPATCH-05).\n        self._connection.execute(\"UPDATE circuit_breakers SET status='closed' WHERE scope=?\", (scope,))\n        return BreakerState(scope=scope, failures=failures, status=\"closed\", open_until=None)"
+      }
+    },
+    {
+      "id": "B-INV-017",
+      "invariant": "The authoritative spend record append precedes the local projection and breaker update.",
+      "source": {"path": "rqa/supply/spend.py", "line": 14},
+      "test": "tests/test_rqa_supply_consumed.py::test_the_authoritative_append_precedes_the_projection_which_precedes_the_breaker",
+      "expected_assertion": "At index 0 diff",
+      "mutation": {
+        "path": "rqa/supply/spend.py",
+        "before": "    record.append(job.id, kind=\"spend\", payload={\n        \"tokens\": tokens,",
+        "after": "    spend.append(job_id=job.id, repo=job.repo, number=job.number,\n                 model=attempt.route.model, tokens=tokens, measured=measured,\n                 source=source, recorded_at=utcnow())\n    record.append(job.id, kind=\"spend\", payload={\n        \"tokens\": tokens,"
+      }
+    },
+    {
+      "id": "B-INV-018",
+      "invariant": "A policy snapshot archive is complete and durable before its database pointer is inserted.",
+      "source": {"path": "rqa/policy/store.py", "line": 15},
+      "test": "tests/test_rqa_policy_store.py::test_t13_an_interrupted_activation_leaves_a_complete_correct_archive",
+      "expected_assertion": "assert archives(state_dir)",
+      "mutation": {
+        "path": "rqa/policy/store.py",
+        "before": "        self._archive(hash, body)\n        self._insert_row(\n            hash=hash,\n            policy_version=snapshot.policy.version,\n            protocol=snapshot.protocol_hash,\n            at=at,\n        )",
+        "after": "        self._insert_row(\n            hash=hash,\n            policy_version=snapshot.policy.version,\n            protocol=snapshot.protocol_hash,\n            at=at,\n        )\n        self._archive(hash, body)"
+      }
+    },
+    {
+      "id": "B-INV-019",
+      "invariant": "The production anchor_job_for composition mints and records comment authority before reading the chain head, so the anchor covers its own grant entry.",
+      "source": {"path": "rqa/cli/composition.py", "line": 376},
+      "test": "tests/test_rqa_record_anchor.py::test_anchor_job_for_leaves_nothing_appended_behind_the_anchor",
+      "expected_assertion": "the grant entry landed after the head was read",
+      "mutation": {
+        "path": "rqa/cli/composition.py",
+        "before": "    answer = comp.authority.grant(\n        repo=job.repo,\n        activity=Activity.COMMENT,\n        snapshot=None,\n        job_id=job.id,\n        categories=None,\n        record=comp.record,\n        github=comp.authority.github,\n        store=comp.authority.store,\n    )\n    grant = answer if isinstance(answer, Grant) else None\n    detail = None\n    if isinstance(answer, Deny):\n        # Fail-closed, and say so. The anchor is still recorded locally, which is\n        # what detects a crash-truncated log offline; it simply never leaves the\n        # machine. An advisory-only repository lands here by design.\n        detail = f\"not published: {answer.reason.value if hasattr(answer.reason, 'value') else answer.reason}\"\n\n    publisher = GithubAnchorPublisher(adapter=comp.github, job=job, grant=grant)\n    result = anchor_job(comp.connection, job.id, publisher=publisher, clock=comp.clock)",
+        "after": "    publisher = GithubAnchorPublisher(adapter=comp.github, job=job, grant=None)\n    result = anchor_job(comp.connection, job.id, publisher=publisher, clock=comp.clock)\n\n    answer = comp.authority.grant(\n        repo=job.repo,\n        activity=Activity.COMMENT,\n        snapshot=None,\n        job_id=job.id,\n        categories=None,\n        record=comp.record,\n        github=comp.authority.github,\n        store=comp.authority.store,\n    )\n    grant = answer if isinstance(answer, Grant) else None\n    detail = None\n    if isinstance(answer, Deny):\n        # Fail-closed, and say so. The anchor is still recorded locally, which is\n        # what detects a crash-truncated log offline; it simply never leaves the\n        # machine. An advisory-only repository lands here by design.\n        detail = f\"not published: {answer.reason.value if hasattr(answer.reason, 'value') else answer.reason}\""
+      }
+    }
+,
+    {
+      "id": "B-INV-020",
+      "invariant": "rqa/lifecycle holds exactly P-02 \u00a71's final ten modules; a lost module is a broken package, never an accepted earlier assembly wave.",
+      "source": {"path": "rqa/lifecycle/__init__.py", "line": 5},
+      "test": "tests/test_rqa_assembled_surface.py::test_lifecycle_has_exact_final_module_set",
+      "expected_assertion": "rqa/lifecycle module set is not final",
+      "mutation": {
+        "path": "rqa/lifecycle/steps.py",
+        "delete": true
+      }
+    },
+    {
+      "id": "B-INV-021",
+      "invariant": "rqa/policy holds exactly P-03 \u00a71's final seven modules; the onboard half belongs to the finished package, not to a pending sibling lane.",
+      "source": {"path": "rqa/policy/__init__.py", "line": 5},
+      "test": "tests/test_rqa_assembled_surface.py::test_policy_has_exact_final_module_set",
+      "expected_assertion": "rqa/policy module set is not final",
+      "mutation": {
+        "path": "rqa/policy/onboard.py",
+        "delete": true
+      }
+    },
+    {
+      "id": "B-INV-022",
+      "invariant": "rqa/intake's __all__ is exactly P-01 \u00a71's final re-export list; dropping a published name is a surface break, never an accepted earlier assembly wave.",
+      "source": {"path": "rqa/intake/__init__.py", "line": 60},
+      "test": "tests/test_rqa_intake_surface.py::test_all_is_exactly_the_final_export_state",
+      "expected_assertion": "rqa/intake __all__ is not final",
+      "mutation": {
+        "path": "rqa/intake/__init__.py",
+        "before": "__all__ = [\n    \"tick\",\n",
+        "after": "__all__ = [\n"
+      }
+    }
+  ]
+}

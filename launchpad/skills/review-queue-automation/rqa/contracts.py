@@ -140,8 +140,6 @@ class External:
 @dataclass(frozen=True)
 class Blocking:
     categories: frozenset[Category]
-    severities: frozenset[str]
-    corroboration: int
 
 
 @dataclass(frozen=True)
@@ -694,6 +692,7 @@ from rqa.edges import (  # noqa: E402
     SpendStore,
     SupplyPort,
     admit,
+    anchor,
     carry_over,
     checks,
     claim_lease,
@@ -753,7 +752,7 @@ EDGES: Mapping[str, tuple[object, ...] | str] = {
     "E-16": (probe,),
     # E-17 is a command surface, not one signature (CONTRACTS.md §9): the
     # concrete provider callables. `pending` is P-11's E-11 `pending()`.
-    "E-17": (status, explain, decide, pending, onboard, tick),
+    "E-17": (status, explain, anchor, decide, pending, onboard, tick),
     "E-18": "prose-only external edge: P-09 → GitHub, HTTPS REST v3 / GraphQL"
             " v4 with the operator's `gh auth token`; the only HTTP client"
             " import in RQA",
@@ -907,6 +906,7 @@ __all__ = [
     # E-17 command surface (re-exported from rqa.edges)
     "status",
     "explain",
+    "anchor",
     "decide",
     "onboard",
     "tick",

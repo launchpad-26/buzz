@@ -153,7 +153,6 @@ def full_config() -> dict:
     config["policy"]["version"] = "2026-09-01"
     config["policy"]["mechanical"]["categories"] = ["mechanical", "procedural"]
     config["policy"]["blocking"]["categories"] = ["security"]
-    config["policy"]["blocking"]["severities"] = ["high"]
     config["policy"]["assurance"] = {"high": 2}
     config["budget"]["per_pr_tokens"] = 100_000
     return config

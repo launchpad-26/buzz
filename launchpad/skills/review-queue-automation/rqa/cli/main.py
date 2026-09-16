@@ -15,6 +15,7 @@ lane states them:
               `tests/test_rqa_intake_surface.py`'s corrected premise).
 * `status`  -> `rqa.lifecycle.status.status`
 * `explain` -> `rqa.record.explain.explain` / `.explain_job`
+* `anchor`  -> `rqa.cli.composition.anchor_job_for` (P-12 anchor plus E-27 publisher)
 * `decide`  -> `rqa.escalation.decide.decide`
 * `pending` -> `rqa.escalation.escalate.pending` (E-17's `pending` IS E-11's)
 * `onboard` -> `rqa.policy.onboard.onboard`

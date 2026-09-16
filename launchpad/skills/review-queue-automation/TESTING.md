@@ -1,5 +1,9 @@
 # RQA conformance proof — recorded runbook
 
+For the current implementation-integrity checks and mutation runner, see
+[`integrity/README.md`](integrity/README.md). The live runs below retain their
+original commits and historical conclusions.
+
 This document records what Review Queue Automation **did**, on a named machine, at a
 named commit, against real GitHub pull requests. It is not a description of what RQA
 is designed to do; the architecture under `architecture/` and the requirements under
@@ -28,6 +32,14 @@ it is labelled a counterfactual everywhere it appears and contributes to no verd
 
 Parts 2 and 3 conform to the re-run contract defined in [§3](#3-the-re-run-contract).
 They do not rewrite Part 1; later evidence annotates or supersedes its conclusions.
+
+> **Current-status note (2026-09-17).** The captures and criterion verdicts below
+> remain the evidence from commit `b9c98f423`; they are not rewritten as later code
+> changes. F-1 is now resolved by the snapshot-row fallback in `explain_job`, and
+> F-2 is superseded by ADR-0062's #2250 amendment and its scope-checked write
+> attestations. References to either as a blocker describe the named historical run,
+> not the current remediation map. F-3 carries the same kind of status annotation at
+> its finding.
 
 ---
 
@@ -814,7 +826,7 @@ observations, and they pull in opposite directions:
   from the pinned snapshot, and runs before any harness is invoked. The information is
   available at the right moment in the design.
 - But **RQA emits no pre-send provider identification through its operator surface.**
-  None of the six commands reports the active provider path, and the `snapshot` record
+  None of the six commands at the named commit reports the active provider path, and the `snapshot` record
   row it does write carries only `hash`, `policy_version`, `protocol_hash`, `repo` and
   `activated_at` — no routes, no providers (see §6.7's row dump). An operator deciding
   "may this private repository's content be sent to this provider at all" must read
@@ -1127,6 +1139,11 @@ GitHub writes.** Each is written to be filed from this text alone.
 
 ### F-1 — `explain` reports `null` for three pins the record demonstrably holds
 
+> **RESOLVED after the named run.** Current `explain_job` falls back to the last
+> trusted `snapshot` row when no `plan` row exists, recovering `protocol_hash`,
+> `policy_version` and `snapshot_hash`. The observation below is retained verbatim as
+> evidence of what commit `b9c98f423` did.
+
 **Owning behaviour:** the record and reconstruction part (P-12), `rqa/record/explain.py`.
 Not #2273, though it was found while testing AC06 against the record rather than
 against the architecture, which is what #2273's absence made necessary.
@@ -1175,6 +1192,12 @@ prefix. Deciding whether that is the right reading of §3.3 step 2, or whether �
 itself should be amended, belongs to the owning Feature.
 
 ### F-2 — the authority gate can never grant *any* activity: 6 of 6, even with #2274 fixed
+
+> **SUPERSEDED after the named run by ADR-0062's #2250 amendment and #2252.** The
+> accepted amendment permits authenticated, scope-checked GitHub write attestations,
+> and the current gate includes those attestations for write requirements while
+> preserving them separately in provenance. The enumeration below remains accurate
+> evidence for commit `b9c98f423`, not a current blocker after #2274.
 
 **Owning behaviour:** the authority gate (P-08, `rqa/authority/gate.py`,
 `rqa/authority/activities.py`) together with the GitHub capability probe (P-09,
@@ -1313,9 +1336,10 @@ repository has to make, and this run used a private repository
 (`tucktuck101/agent-trust-platform`).
 
 **Observed.** Two things, both from this run:
-- **No command reports it.** RQA's surface is exactly six commands
+- **No command reports it.** At the named commit RQA's surface was exactly six commands
   (`tick`, `onboard`, `status`, `pending`, `decide`, `explain` — `rqa/cli/main.py:90-134`).
-  None of them answers "which provider would this repository's content be sent to?".
+  The current seventh command, `anchor`, also does not answer "which provider would
+  this repository's content be sent to?".
   An operator must open `.rqa/config.json` and read `routes` and `external` themselves
   — that is the operator inspecting their own input, not RQA identifying its active
   path.

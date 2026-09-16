@@ -75,6 +75,7 @@ from rqa.intake import (
 from rqa.intake import ensure_schema as intake_ensure_schema
 from rqa.lifecycle import LifecycleDeps
 from rqa.policy import SnapshotStore, SqliteSnapshotStore
+from rqa.protocol import PROBE_MARKER
 from rqa.record import SQLiteRecordWriter, anchor_job
 from rqa.supply import (
     BreakerStore,
@@ -338,7 +339,7 @@ def build_composition(
     capability_store = SqliteCapabilityStore(connection)
     authority = AuthorityClient(github=github, store=capability_store, repos=repos)
 
-    prober = SubprocessHarnessProber()
+    prober = SubprocessHarnessProber(marker_name=PROBE_MARKER)
     breakers = SqliteBreakerStore(connection=connection)
     spend = SqliteSpendStore(connection=connection)
     supply = SupplyClient(prober=prober, breakers=breakers, spend=spend)

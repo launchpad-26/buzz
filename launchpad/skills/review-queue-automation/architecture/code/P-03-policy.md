@@ -62,7 +62,7 @@ routes:      ordered list of { harness, model, provider, family, external: bool,
              built-in alias. Each element is a non-empty string; the first is the executable
 external:    { allowed: bool, deny_label: "<label>" }
 policy:      { version, obligations: [ { id, paths, required_for, evidence } ],
-               blocking: { categories, severities, corroboration },
+               blocking: { categories },
                mechanical: { categories, tools: [ "<tool id from RQA's closed set>" ] },
                assurance: { <risk class>: participants },
                remediation: { allow_forks: bool } }
@@ -228,7 +228,7 @@ or a lease (U-POLICY-06).**
    2. Build the starter dict from the same literal defaults `validate.py` falls back to for a maximally
       sparse config (U-POLICY-05): all six `authority` keys `false`, `routes: []`, `external:
       {allowed: false, deny_label: ""}`, an inline `policy` with `version: "unversioned"`, empty
-      `obligations`, `blocking: {categories: [], severities: [], corroboration: 1}`, `mechanical:
+      `obligations`, `blocking: {categories: []}`, `mechanical:
       {categories: [], tools: []}`, `assurance: {}`, `remediation: {allow_forks: false}`, and `budget`
       with all three axes `null`. The generated dict carries every section — in particular an inline
       `policy`, because `snapshot_for` is fail-closed on a missing one (step 3 above) and a starter

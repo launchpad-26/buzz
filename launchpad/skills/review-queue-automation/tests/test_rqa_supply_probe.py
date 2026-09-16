@@ -19,10 +19,10 @@ sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent.parent))
 
 from rqa import edges  # noqa: E402
 from rqa.contracts import ProcessResult, Route  # noqa: E402
+from rqa.protocol import PROBE_MARKER  # noqa: E402
 from rqa.supply import route  # noqa: E402
 from rqa.supply.probe import (  # noqa: E402
     PROBE_COOLDOWN,
-    PROBE_MARKER_NAME,
     PROBE_TIMEOUT_SECONDS,
     VERDICT_FILENAME,
     SubprocessHarnessProber,
@@ -98,39 +98,51 @@ def test_the_adapter_implements_e24s_protocol_method_character_for_character() -
 
 def test_t12_the_probe_carries_an_empty_bundle_and_a_marker_and_nothing_else() -> None:
     runner = RecordingRunner()
-    assert SubprocessHarnessProber(runner=runner).probe(ALIVE, timeout=PROBE_TIMEOUT_SECONDS)
-    assert runner.bundles == [[PROBE_MARKER_NAME]]
+    assert SubprocessHarnessProber(marker_name=PROBE_MARKER, runner=runner).probe(
+        ALIVE, timeout=PROBE_TIMEOUT_SECONDS
+    )
+    assert runner.bundles == [[PROBE_MARKER]]
     assert runner.timeouts == [PROBE_TIMEOUT_SECONDS]
 
 
 def test_t12_exit_zero_with_no_verdict_written_is_alive() -> None:
-    assert SubprocessHarnessProber(runner=RecordingRunner(returncode=0)).probe(ALIVE, timeout=1.0)
+    assert SubprocessHarnessProber(
+        marker_name=PROBE_MARKER, runner=RecordingRunner(returncode=0)
+    ).probe(ALIVE, timeout=1.0)
 
 
 def test_t12_a_verdict_written_despite_the_marker_is_not_alive() -> None:
     """A harness that reviews a probe bundle does not honour E-19's published contract, so
     it is unavailable exactly like an absent one."""
     runner = RecordingRunner(returncode=0, write_verdict=True)
-    assert SubprocessHarnessProber(runner=runner).probe(ALIVE, timeout=1.0) is False
+    assert SubprocessHarnessProber(marker_name=PROBE_MARKER, runner=runner).probe(
+        ALIVE, timeout=1.0
+    ) is False
 
 
 def test_t12_a_non_zero_exit_is_not_alive() -> None:
-    assert SubprocessHarnessProber(runner=RecordingRunner(returncode=2)).probe(ALIVE, timeout=1.0) is False
+    assert SubprocessHarnessProber(
+        marker_name=PROBE_MARKER, runner=RecordingRunner(returncode=2)
+    ).probe(ALIVE, timeout=1.0) is False
 
 
 def test_t12_exceeding_the_timeout_is_not_alive() -> None:
     runner = RecordingRunner(raises=subprocess.TimeoutExpired(cmd="claude", timeout=1.0))
-    assert SubprocessHarnessProber(runner=runner).probe(ALIVE, timeout=1.0) is False
+    assert SubprocessHarnessProber(marker_name=PROBE_MARKER, runner=runner).probe(
+        ALIVE, timeout=1.0
+    ) is False
 
 
 def test_t12_a_spawn_failure_is_not_alive_and_never_raises() -> None:
     runner = RecordingRunner(raises=OSError(2, "No such file or directory: 'claude'"))
-    assert SubprocessHarnessProber(runner=runner).probe(ALIVE, timeout=1.0) is False
+    assert SubprocessHarnessProber(marker_name=PROBE_MARKER, runner=runner).probe(
+        ALIVE, timeout=1.0
+    ) is False
 
 
 def test_t12_the_probe_leaves_no_workspace_behind() -> None:
     runner = RecordingRunner()
-    SubprocessHarnessProber(runner=runner).probe(ALIVE, timeout=1.0)
+    SubprocessHarnessProber(marker_name=PROBE_MARKER, runner=runner).probe(ALIVE, timeout=1.0)
     bundle = pathlib.Path(runner.calls[0][-2])
     assert not bundle.exists() and not bundle.parent.exists()
 
@@ -140,14 +152,14 @@ def test_t12_the_probe_leaves_no_workspace_behind() -> None:
 
 def test_a_registered_harness_is_spawned_by_its_own_name() -> None:
     runner = RecordingRunner()
-    SubprocessHarnessProber(runner=runner).probe(ALIVE, timeout=1.0)
+    SubprocessHarnessProber(marker_name=PROBE_MARKER, runner=runner).probe(ALIVE, timeout=1.0)
     assert runner.calls[0][0] == "claude"
 
 
 def test_an_operator_declared_command_is_spawned_verbatim() -> None:
     """`RQA-FR-030`: the operator's argv is what runs, in the order they wrote it."""
     runner = RecordingRunner()
-    SubprocessHarnessProber(runner=runner).probe(DECLARED, timeout=1.0)
+    SubprocessHarnessProber(marker_name=PROBE_MARKER, runner=runner).probe(DECLARED, timeout=1.0)
     assert runner.calls[0][: len(DECLARED.command)] == DECLARED.command
 
 
@@ -184,7 +196,9 @@ def test_a_failed_probe_returns_false_without_re_raising_anything() -> None:
     carrier = Route(harness="tersely", model="tersely-1", provider="tersely", family="tersely",
                     external=False, command=("/opt/tersely/bin/review", "--token", secret))
     runner = RecordingRunner(raises=RuntimeError(f"spawn failed for --token {secret}"))
-    answer = SubprocessHarnessProber(runner=runner).probe(carrier, timeout=1.0)
+    answer = SubprocessHarnessProber(marker_name=PROBE_MARKER, runner=runner).probe(
+        carrier, timeout=1.0
+    )
     assert answer is False
     assert secret not in repr(answer)
 
@@ -192,14 +206,16 @@ def test_a_failed_probe_returns_false_without_re_raising_anything() -> None:
 def test_an_interrupt_is_not_swallowed_as_a_liveness_answer() -> None:
     runner = RecordingRunner(raises=KeyboardInterrupt())
     try:
-        SubprocessHarnessProber(runner=runner).probe(ALIVE, timeout=1.0)
+        SubprocessHarnessProber(marker_name=PROBE_MARKER, runner=runner).probe(ALIVE, timeout=1.0)
     except KeyboardInterrupt:
         return
     raise AssertionError("KeyboardInterrupt must propagate, not read as 'not alive'")
 
 
 def test_the_default_runner_is_the_subprocess_one() -> None:
-    assert isinstance(SubprocessHarnessProber()._runner, SubprocessProcessRunner)
+    assert isinstance(
+        SubprocessHarnessProber(marker_name=PROBE_MARKER)._runner, SubprocessProcessRunner
+    )
 
 
 # -- E-24 through `route()` -----------------------------------------------------
@@ -213,9 +229,9 @@ def test_route_drives_the_real_prober_and_returns_the_live_candidate() -> None:
         snapshot=make_snapshot(ALIVE),
         facts=make_facts(),
         cursor=EMPTY_CURSOR,
-        prober=SubprocessHarnessProber(runner=runner),
+        prober=SubprocessHarnessProber(marker_name=PROBE_MARKER, runner=runner),
         breakers=FakeBreakers(),
     )
     selected, _ = answer
     assert selected == ALIVE
-    assert runner.bundles == [[PROBE_MARKER_NAME]]
+    assert runner.bundles == [[PROBE_MARKER]]

@@ -5,13 +5,10 @@ parts import protocol types and pure functions only through this module, except 
 the deliberately qualified `rqa.protocol.paths.matches` import P-04 §2 mandates —
 `paths` is reachable only as a submodule and is never re-exported by name here.
 
-This module currently re-exports only §§1-2's names. `validate`, `Valid`, `Invalid`
-and `ProtocolError` (P-04 §3, the structural/coherence validation entry point) are
-owned by a sibling implementation lane building `schema.py`, `contradictions.py` and
-`validate.py`, none of which exist in this tree yet — importing them here would make
-this package unimportable before that lane merges. That lane appends `validate` and
-`ProtocolError` to this file once it lands. `Valid` and `Invalid` are §2's shared
-result types and are already re-exported below; they are never redefined.
+The package now exposes both halves of the completed P-04 surface: §§1-2's shared
+types and protocol artefacts, plus §3's structural/coherence `validate` entry point
+and `ProtocolError`. `Valid` and `Invalid` remain the shared result types from
+`types.py`; they are re-exported here and never redefined.
 """
 
 from __future__ import annotations

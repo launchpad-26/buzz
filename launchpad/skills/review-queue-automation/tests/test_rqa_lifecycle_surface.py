@@ -4,14 +4,8 @@
 
 No pytest: every `test_*` function here takes no arguments, per `tests/run_all.py`.
 
-**Why the module and export assertions name two states.** §1 specifies nine modules and
-fifteen re-exports for the finished package. The cascade half — `steps.py`, `rest.py`,
-`resume.py` and the `resume` re-export — is a sibling lane's, landing separately. A test
-frozen to the seven-module / thirteen-name state this lane produces would have to be
-edited when that lane merges, and a test frozen to the finished state would fail until it
-does. Asserting membership of exactly those two real states catches both a lane adding
-surface §1 does not specify and a botched merge that lands half a package — while never
-asserting that a sibling's contract-required work is absent.
+The package is fully assembled. Its module set and `__all__` must equal the final §1
+surface; historical partial-wave states are no longer accepted.
 
 **Why the `jobs.status` property is asserted twice, two different ways.** §8's closing
 property is a literal grep: `jobs.status\\s*=` must hit nothing outside
@@ -154,18 +148,17 @@ def _statement_literals(source: str) -> list[str]:
 # -- §1: the package surface ---------------------------------------------------
 
 
-def test_the_module_set_is_one_of_the_two_states_section_one_specifies() -> None:
+def test_the_module_set_is_exactly_the_final_state_section_one_specifies() -> None:
     found = frozenset(path.stem for path in LIFECYCLE.glob("*.py"))
-    assert found in (KERNEL_MODULES, ALL_MODULES), (
-        f"rqa/lifecycle holds {sorted(found)}; §1 specifies {sorted(ALL_MODULES)}, of "
-        f"which {sorted(KERNEL_MODULES)} is the pre-cascade state"
+    assert found == ALL_MODULES, (
+        f"rqa/lifecycle holds {sorted(found)}; §1 specifies {sorted(ALL_MODULES)}"
     )
 
 
-def test_all_is_one_of_the_two_states_section_one_specifies() -> None:
+def test_all_is_exactly_the_final_state_section_one_specifies() -> None:
     exported = list(rqa.lifecycle.__all__)
     assert len(exported) == len(set(exported)), f"duplicate re-export: {exported}"
-    assert frozenset(exported) in (KERNEL_EXPORTS, ALL_EXPORTS), (
+    assert frozenset(exported) == ALL_EXPORTS, (
         f"__all__ is {sorted(exported)}; §1 specifies {sorted(ALL_EXPORTS)}"
     )
 

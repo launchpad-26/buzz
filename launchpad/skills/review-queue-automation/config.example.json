@@ -32,9 +32,7 @@
     "version": "v1",
     "obligations": [],
     "blocking": {
-      "categories": [],
-      "severities": [],
-      "corroboration": 1
+      "categories": []
     },
     "mechanical": {
       "categories": [],

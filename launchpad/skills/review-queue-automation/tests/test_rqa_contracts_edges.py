@@ -325,7 +325,7 @@ EMPTY_PROTOCOL_OWNERS: dict[str, str] = {
 
 # CONTRACTS.md §9's E-17 prose line: the concrete provider callables of the
 # command surface, in the order the line names them.
-E17_CALLABLES = ("status", "explain", "decide", "pending", "onboard", "tick")
+E17_CALLABLES = ("status", "explain", "anchor", "decide", "pending", "onboard", "tick")
 
 # components.md §6: the edges that are prose-only and external — no Python
 # signature exists for them anywhere in §9.
@@ -335,7 +335,7 @@ SECTION_NINE_NAMES = (
     tuple(EDGE_FUNCTIONS)
     + tuple(EMPTY_PROTOCOL_OWNERS)
     + ("SupplyPort", "HarnessProber", "ProcessRunner", "AnchorPublisher")
-    + ("status", "explain", "decide", "onboard", "tick")
+    + ("status", "explain", "anchor", "decide", "onboard", "tick")
 )
 
 
@@ -483,7 +483,7 @@ def test_e17_surface_callables_constrain_nothing_beyond_their_names() -> None:
     # nothing required, nothing narrowed, and no positional acceptance — the
     # CONTRACTS.md preamble's "every function keyword-only" rule binds free
     # functions, with rqa.protocol.paths.matches its single named exception.
-    for name in ("status", "explain", "decide", "onboard", "tick"):
+    for name in ("status", "explain", "anchor", "decide", "onboard", "tick"):
         fn = getattr(edges, name)
         kinds = {p.kind for p in inspect.signature(fn).parameters.values()}
         assert kinds <= {VAR_KW}, (

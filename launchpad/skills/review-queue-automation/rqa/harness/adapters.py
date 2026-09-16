@@ -66,7 +66,6 @@ if TYPE_CHECKING:  # annotation-only; resolved by type checkers, never at import
 
 __all__ = [
     "AUTHORITY_MODES",
-    "BUILTIN_HARNESSES",
     "CONFORMANCE_GATE_CASE",
     "CONFORMANCE_SUITE",
     "CONFORMANCE_SUITE_ID",
@@ -485,6 +484,3 @@ register(
         enforceable_efforts=frozenset(EFFORTS),
     )
 )
-
-#: The names registered at import. A snapshot for introspection, not the registry.
-BUILTIN_HARNESSES: tuple[str, ...] = builtin_harnesses()

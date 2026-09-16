@@ -2,14 +2,8 @@
 """`rqa.intake`'s public surface and its exclusions — `code/P-01-intake.md`
 §1, §5, §7.
 
-Wave-invariant by construction (the issue's §4). This lane implements §§1-2
-and §5's queue primitives and store: five of §1's ten modules and eleven of
-its fourteen re-exports. The sibling lane (`admission.py`, `inventory.py`,
-`lease.py`, `batch.py`, `tick.py`, plus `tick`/`Lease`/`GithubAdapter`) lands
-after this one merges. Every assertion below checks membership of exactly one
-of the two legitimate states — this lane's state, or the full state once the
-sibling lands — never a subset relation, never "at least these", and never
-that a sibling file or name is absent.
+The package is fully assembled. Its module set and `__all__` must equal the final §1
+surface; historical partial-wave states are no longer accepted.
 """
 
 from __future__ import annotations
@@ -28,13 +22,13 @@ from rqa.intake.store import JobStore, LeaseStore, PrFactsStore  # noqa: E402
 RQA = pathlib.Path(__file__).resolve().parent.parent / "rqa"
 INTAKE = RQA / "intake"
 
-#: §1's ten-module list, split by lane. Never assert the sibling's files are
-#: absent; assert membership of one of these two sets instead.
-MODULES_THIS_LANE = frozenset({"__init__", "identity", "lock", "store", "types"})
-MODULES_FULL = MODULES_THIS_LANE | frozenset({"admission", "inventory", "lease", "batch", "tick"})
+#: §1's final ten-module list.
+MODULES_FULL = frozenset(
+    {"__init__", "identity", "lock", "store", "types", "admission", "inventory", "lease", "batch", "tick"}
+)
 
 #: §1's fourteen-name re-export list, split the same way.
-EXPORTS_THIS_LANE = frozenset(
+EXPORTS_SECTION_ONE = frozenset(
     {
         "TickResult", "AdmissionRefusal", "JobFailure", "job_id", "stable_hash",
         "JobStore", "PrFactsStore", "LeaseStore", "PrFactsRow", "LeaseRow", "IntakeError",
@@ -48,7 +42,7 @@ EXPORTS_THIS_LANE = frozenset(
 PUBLISHED = frozenset(
     {"SqliteJobStore", "SqlitePrFactsStore", "SqliteLeaseStore", "ensure_schema"}
 )
-EXPORTS_FULL = EXPORTS_THIS_LANE | frozenset({"tick", "Lease", "GithubAdapter"}) | PUBLISHED
+EXPORTS_FULL = EXPORTS_SECTION_ONE | frozenset({"tick", "Lease", "GithubAdapter"}) | PUBLISHED
 
 #: §1: the only parts this package may import at all, at any point in the wave.
 #: `rqa.lifecycle` is deliberately included: P-01 §1's closing "never imports ...
@@ -87,17 +81,17 @@ def _imported_modules(source: str) -> set[str]:
     return imported
 
 
-# -- §1: module set and re-export list, membership of exactly one of two states ----
+# -- §1: final module set and re-export list ------------------------------------
 
 
-def test_the_module_set_is_one_of_the_two_legitimate_wave_states() -> None:
+def test_the_module_set_is_exactly_the_final_state() -> None:
     found = frozenset(path.stem for path in INTAKE.glob("*.py"))
-    assert found in (MODULES_THIS_LANE, MODULES_FULL), sorted(found)
+    assert found == MODULES_FULL, f"rqa/intake module set is not final: {sorted(found)}"
 
 
-def test_all_is_one_of_the_two_legitimate_export_states() -> None:
+def test_all_is_exactly_the_final_export_state() -> None:
     exported = frozenset(intake.__all__)
-    assert exported in (EXPORTS_THIS_LANE, EXPORTS_FULL), sorted(exported)
+    assert exported == EXPORTS_FULL, f"rqa/intake __all__ is not final: {sorted(exported)}"
     assert len(intake.__all__) == len(set(intake.__all__))
 
 
