@@ -80,6 +80,18 @@ def _validate(
         raise JudgementError("carry.reused contains a duplicate obligation id")
     if set(plan_ids) & set(carried_ids):
         raise JudgementError("plan.obligations and carry.reused are not disjoint")
+    if carry.reused:
+        references = {
+            (carried.source_job, carried.source_judgement_seq)
+            for carried in carry.reused
+        }
+        if carry.source_job is None or any(
+            type(job_id) is not str or not job_id or type(seq) is not int or seq < 1
+            for job_id, seq in references
+        ):
+            raise JudgementError("carried evidence has a malformed source judgement reference")
+        if len(references) != 1 or next(iter(references))[0] != carry.source_job:
+            raise JudgementError("carried evidence does not share one pinned source judgement")
 
     for attempt in panel.attempts:
         if attempt.attestation.ended_at > panel.evidence_cutoff:
@@ -104,25 +116,12 @@ def _obligation_definitions(snapshot: Snapshot) -> dict[str, object]:
     return {obligation.id: obligation for obligation in snapshot.policy.obligations}
 
 
-def _reused_from(carry: CarryOver) -> str | None:
-    """§3 step 3: `carry.source_job` when at least one carried item exists,
-    otherwise `None`.
-
-    **Interim, not the pinned reference §3.3 of P-12-record.md describes — see
-    #2236.** `reused_from` is a bare job id (`CONTRACTS.md` §6:
-    `Judgement.reused_from: str | None`), never a `(job, seq)` pair: there is
-    nowhere on `Judgement` to carry the source sequence that
-    `CarriedEvidence.source_judgement_seq` names per obligation. Each carried
-    item's own sequence still survives into `carried_provenance` (built beside
-    this call), so the information is not lost — only `reused_from` itself
-    cannot address a specific predecessor judgement row. #2236 tracks the
-    `CONTRACTS.md` §6 change (a `(job, seq)` reused_from) plus the
-    `judge()`/`carry_over()` obligations that would populate it; this
-    accepted-interim shape does not change until that lands, and
-    `rqa.record.explain._walk_reuse_chain` documents the same seam from its
-    own reading side.
-    """
-    return carry.source_job if carry.reused else None
+def _reused_from(carry: CarryOver) -> tuple[str, int] | None:
+    """§3 step 3: the one pinned source judgement shared by carried evidence."""
+    if not carry.reused:
+        return None
+    first = carry.reused[0]
+    return (first.source_job, first.source_judgement_seq)
 
 
 def _has_evidence_bearing_changed_path(

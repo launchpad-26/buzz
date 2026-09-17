@@ -412,10 +412,8 @@ def test_t19_findings_get_the_three_way_blocking_corroborated_split() -> None:
 
 def test_t20_a_carry_only_successor_obtains_attestations_from_its_predecessor() -> None:
     """T20: predecessor has a valid plan, harness attestations, and judgement;
-    successor has no attestation, a materialised judgement with
-    `reused_from=<predecessor>`, and a transition → `explain_job(successor)`
-    follows `reused_from`, returns all twelve elements, and obtains reviewer
-    identity/harness/model/provider from the predecessor's attestations."""
+    predecessor later gains a second judgement; successor pins the first one and
+    therefore reconstructs only the attestations available through that row."""
     connection, writer = unkeyed_writer()
 
     # Predecessor: plan, harness attestation, judgement.
@@ -447,6 +445,27 @@ def test_t20_a_carry_only_successor_obtains_attestations_from_its_predecessor() 
             "rendered_body": "predecessor basis",
         },
     )
+    writer.append(
+        "job-pred", "attestation",
+        {
+            "attempt_id": "attempt-later", "harness": "codex", "model": "gpt-later",
+            "provider": "openai", "route_family": "later", "external": False,
+            "effort": "high", "started_at": "2026-01-01T00:06:00+00:00",
+            "ended_at": "2026-01-01T00:07:00+00:00", "exit_code": 0,
+            "self_reported_identity": None,
+        },
+    )
+    writer.append(
+        "job-pred", "judgement",
+        {
+            "obligations": {"ob1": "verified"}, "findings": [], "corroborated": [],
+            "blocking": [], "attribution": {}, "assurance": {"required": 1, "achieved": 1},
+            "remediation_candidates": [], "escalation_causes": [], "disposition": "approve",
+            "reused_from": None, "snapshot_hash": "snap-pred", "protocol_hash": "proto-pred",
+            "facts_fetched_at": "2026-01-01T00:07:00+00:00",
+            "cutoff": "2026-01-01T00:07:01+00:00", "rendered_body": "later basis",
+        },
+    )
 
     # Successor: no attestation of its own, a carry-only judgement, and a transition.
     writer.append(
@@ -455,7 +474,7 @@ def test_t20_a_carry_only_successor_obtains_attestations_from_its_predecessor() 
             "obligations": {"ob1": "verified"}, "findings": [], "corroborated": [], "blocking": [],
             "attribution": {}, "assurance": {"required": 1, "achieved": 1},
             "remediation_candidates": [], "escalation_causes": [], "disposition": "approve",
-            "reused_from": "job-pred", "snapshot_hash": None, "protocol_hash": None,
+            "reused_from": ["job-pred", 3], "snapshot_hash": None, "protocol_hash": None,
             "facts_fetched_at": "2026-01-01T00:05:02+00:00", "cutoff": "2026-01-01T00:05:02+00:00",
             "rendered_body": "carried forward from predecessor",
         },
@@ -483,7 +502,7 @@ def test_reused_from_a_missing_predecessor_raises_reuse_resolution_error() -> No
         {
             "obligations": {}, "findings": [], "corroborated": [], "blocking": [], "attribution": {},
             "assurance": {"required": 0, "achieved": 0}, "remediation_candidates": [],
-            "escalation_causes": [], "disposition": "approve", "reused_from": "job-nonexistent",
+            "escalation_causes": [], "disposition": "approve", "reused_from": ["job-nonexistent", 1],
             "snapshot_hash": None, "protocol_hash": None, "facts_fetched_at": "2026-01-01T00:00:00+00:00",
             "cutoff": "2026-01-01T00:00:00+00:00", "rendered_body": "x",
         },
@@ -507,7 +526,7 @@ def test_reused_from_a_predecessor_with_no_judgement_raises_reuse_resolution_err
         {
             "obligations": {}, "findings": [], "corroborated": [], "blocking": [], "attribution": {},
             "assurance": {"required": 0, "achieved": 0}, "remediation_candidates": [],
-            "escalation_causes": [], "disposition": "approve", "reused_from": "job-pred",
+            "escalation_causes": [], "disposition": "approve", "reused_from": ["job-pred", 1],
             "snapshot_hash": None, "protocol_hash": None, "facts_fetched_at": "2026-01-01T00:00:00+00:00",
             "cutoff": "2026-01-01T00:00:00+00:00", "rendered_body": "x",
         },
@@ -527,7 +546,7 @@ def test_reused_from_a_cycle_raises_reuse_resolution_error() -> None:
         {
             "obligations": {}, "findings": [], "corroborated": [], "blocking": [], "attribution": {},
             "assurance": {"required": 0, "achieved": 0}, "remediation_candidates": [],
-            "escalation_causes": [], "disposition": "approve", "reused_from": "job-b",
+            "escalation_causes": [], "disposition": "approve", "reused_from": ["job-b", 1],
             "snapshot_hash": None, "protocol_hash": None, "facts_fetched_at": "2026-01-01T00:00:00+00:00",
             "cutoff": "2026-01-01T00:00:00+00:00", "rendered_body": "x",
         },
@@ -537,7 +556,7 @@ def test_reused_from_a_cycle_raises_reuse_resolution_error() -> None:
         {
             "obligations": {}, "findings": [], "corroborated": [], "blocking": [], "attribution": {},
             "assurance": {"required": 0, "achieved": 0}, "remediation_candidates": [],
-            "escalation_causes": [], "disposition": "approve", "reused_from": "job-a",
+            "escalation_causes": [], "disposition": "approve", "reused_from": ["job-a", 1],
             "snapshot_hash": None, "protocol_hash": None, "facts_fetched_at": "2026-01-01T00:00:00+00:00",
             "cutoff": "2026-01-01T00:00:00+00:00", "rendered_body": "x",
         },
