@@ -32,6 +32,7 @@ from typing import Any, NoReturn
 from rqa.cli import exitcodes
 from rqa.cli.composition import anchor_job_for, build_composition
 from rqa.cli.render import emit
+from rqa.authority import GateError
 from rqa.contracts import EscalationRefused, ExplanationUnavailable
 from rqa.escalation import EscalationError, decide as escalation_decide, pending as escalation_pending
 from rqa.intake import tick as intake_tick
@@ -272,8 +273,15 @@ def _cmd_anchor(args: argparse.Namespace, state_dir: Path) -> tuple[int, dict[st
     detects a crash-truncated log with no network at all. Anchoring must never be able
     to fail a review.
     """
-    comp = build_composition(state_dir)
-    outcome = anchor_job_for(comp, args.job_id)
+    comp = build_composition(state_dir, repos=_configured_repos(state_dir))
+    try:
+        outcome = anchor_job_for(comp, args.job_id)
+    except Exception:
+        # A gate or record failure is not an anchor outcome.  Preserve the CLI's
+        # atomic boundary rather than leaving an in-process caller with a partial
+        # grant/attestation transaction after the error has been rendered.
+        comp.connection.rollback()
+        raise
     comp.connection.commit()
     return exitcodes.OK, {"outcome": "ok", "result": outcome}
 
@@ -327,13 +335,13 @@ def main(argv: list[str] | None = None) -> int:
     except _UsageError as exc:
         emit({"outcome": "usage_error", "detail": str(exc)})
         return exitcodes.INPUT_ERROR
-    except (LifecycleError, AppendFailed, ReuseResolutionError) as exc:
+    except (LifecycleError, GateError, AppendFailed, ReuseResolutionError) as exc:
         # A part's own programming-error exception, never suppressed and never
         # retried here: `LifecycleError` (a corrupted or illegally-transitioned
-        # job), `AppendFailed` (the record itself could not be written) and
-        # `ReuseResolutionError` (a broken `reused_from` chain) are all genuine
-        # defects this CLI did not anticipate, not a value any provider
-        # licenses the CLI to interpret. Reported, never fabricated.
+        # job), `GateError` (wrong-shaped authority call), `AppendFailed` (the
+        # record itself could not be written), and `ReuseResolutionError` (a
+        # broken `reused_from` chain) are genuine defects this CLI did not
+        # anticipate, not values any provider licenses it to interpret.
         emit({"outcome": "error", "error_type": type(exc).__name__, "detail": str(exc)})
         return exitcodes.OTHER
     except Exception as exc:

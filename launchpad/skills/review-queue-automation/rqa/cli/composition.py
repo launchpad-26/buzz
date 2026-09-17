@@ -30,9 +30,10 @@ tick.py's already-landed call sites.
 
 from __future__ import annotations
 
+import json
 import sqlite3
 from collections.abc import Callable, Mapping
-from dataclasses import dataclass, fields
+from dataclasses import dataclass, fields, replace
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
@@ -47,6 +48,7 @@ from rqa import reuse as reuse_mod
 from rqa import supply as supply_mod
 from rqa.authority import SqliteCapabilityStore
 from rqa.contracts import (
+    Activity,
     Grant,
     Job,
     Plan,
@@ -54,6 +56,7 @@ from rqa.contracts import (
     Reservation,
     Route,
     RouteCursor,
+    Snapshot,
     Spend,
 )
 from rqa.escalation import SqliteEscalationStore
@@ -76,6 +79,7 @@ from rqa.intake import ensure_schema as intake_ensure_schema
 from rqa.lifecycle import LifecycleDeps
 from rqa.policy import SnapshotStore, SqliteSnapshotStore
 from rqa.record import SQLiteRecordWriter, anchor_job
+from rqa.record.store import entries_for_job, head_entry, latest_anchor, pending_anchors
 from rqa.supply import (
     BreakerStore,
     SpendStore,
@@ -377,47 +381,159 @@ def build_composition(
 def anchor_job_for(comp: "Composition", job_id: str) -> "AnchorOutcome":
     """Publish this job's chain head where the reviewed agent cannot rewrite it.
 
-    **Order matters, and it is the whole reason this lives here rather than
-    inside `rqa/record/`.** `authority.grant` records a `grant` entry (E-04), so
-    minting the grant *moves the head*. The grant is therefore minted **first**
-    and the head read **after**, so the anchor covers its own grant entry and
-    nothing is appended behind it. Mint it the other way round and every anchor
-    run leaves the head one entry ahead of the anchor, for ever.
+    The current head and latest anchor are inspected before authority. A head that
+    is already successfully anchored is a true no-op: no new grant, anchor row, or
+    GitHub call. A pending anchor retries with the recorded COMMENT grant that
+    created it, so a retry never grows the record merely to re-authorise it.
 
-    Returns an outcome rather than raising: an unanchorable job — unknown, not yet
-    on GitHub, or a repository with no comment authority — is a reportable state,
-    never a reason to fail a review. ADR-0066: anchoring cannot break anything.
+    Returns an outcome rather than raising for an unanchorable job. Missing or
+    malformed pinned snapshots, unmanaged repositories, and missing grant evidence
+    fail closed: none can produce an external publication. Programming and record
+    failures still propagate to the CLI boundary for normal error rendering.
     """
-    from rqa.contracts import Activity, Deny, Grant
+    from rqa.contracts import Deny
+
     job = comp.jobs.get(job_id)
     if job is None:
         return AnchorOutcome(job_id=job_id, anchored_seq=None, published=0, pending=0,
                              detail="no such job")
 
+    # A completed anchor is deliberately checked before policy lookup or the gate:
+    # a repeat invocation must not even mint a redundant grant entry.
+    head = head_entry(connection=comp.connection, job=job.id)
+    latest = latest_anchor(connection=comp.connection, job=job.id)
+    pending = pending_anchors(connection=comp.connection, job=job.id)
+    if head is None:
+        return AnchorOutcome(job_id=job.id, anchored_seq=None, published=0, pending=0,
+                             detail="no record head")
+    if latest is not None and latest.seq >= head.seq and latest.published:
+        return AnchorOutcome(job_id=job.id, anchored_seq=None, published=0, pending=0,
+                             detail=None)
+
+    # A retry still makes an external write. The real client exposes the exact
+    # configured set through its gate, so a repository removed from configuration
+    # after a pending failure cannot be published merely because it once had a grant.
+    managed = getattr(getattr(comp.authority, "gate", None), "repos", None)
+    if managed is not None and job.repo not in managed:
+        return AnchorOutcome(
+            job_id=job.id,
+            anchored_seq=None,
+            published=0,
+            pending=_pending_anchor_count(comp, job.id),
+            detail="not published: repo_not_managed",
+        )
+
+    snapshot, failure = _anchor_snapshot_for(comp, job)
+    if failure is not None:
+        return AnchorOutcome(job_id=job.id, anchored_seq=None, published=0,
+                             pending=_pending_anchor_count(comp, job.id), detail=failure)
+
+    # A failed publication already has durable local authorization evidence. Recover
+    # it rather than calling the gate, even if later record activity moved the head:
+    # `anchor_job` retries the old row and then anchors that newer head without adding
+    # a fresh grant entry.
+    if pending:
+        grant = _recorded_comment_grant(comp, job, snapshot)
+        if grant is None:
+            return AnchorOutcome(
+                job_id=job.id,
+                anchored_seq=None,
+                published=0,
+                pending=_pending_anchor_count(comp, job.id),
+                detail="not published: pending anchor has no recorded comment grant",
+            )
+        publisher = GithubAnchorPublisher(adapter=comp.github, job=job, grant=grant)
+        result = anchor_job(comp.connection, job.id, publisher=publisher, clock=comp.clock)
+        return AnchorOutcome(
+            job_id=job.id,
+            anchored_seq=result.anchored_seq,
+            published=result.published,
+            pending=result.pending,
+            detail=result.failures[0] if result.failures else None,
+        )
+
     answer = comp.authority.grant(
         repo=job.repo,
         activity=Activity.COMMENT,
-        snapshot=None,
+        snapshot=snapshot,
         job_id=job.id,
         categories=None,
         record=comp.record,
         github=comp.authority.github,
         store=comp.authority.store,
     )
-    grant = answer if isinstance(answer, Grant) else None
-    detail = None
     if isinstance(answer, Deny):
-        # Fail-closed, and say so. The anchor is still recorded locally, which is
-        # what detects a crash-truncated log offline; it simply never leaves the
-        # machine. An advisory-only repository lands here by design.
-        detail = f"not published: {answer.reason.value if hasattr(answer.reason, 'value') else answer.reason}"
+        # Do not delegate a denied grant even to a publisher fake. The production
+        # publisher independently checks this too, but this is the composition's
+        # fail-closed boundary.
+        reason = answer.reason.value if hasattr(answer.reason, "value") else answer.reason
+        return AnchorOutcome(
+            job_id=job.id,
+            anchored_seq=None,
+            published=0,
+            pending=_pending_anchor_count(comp, job.id),
+            detail=f"not published: {reason}",
+        )
 
-    publisher = GithubAnchorPublisher(adapter=comp.github, job=job, grant=grant)
+    publisher = GithubAnchorPublisher(adapter=comp.github, job=job, grant=answer)
     result = anchor_job(comp.connection, job.id, publisher=publisher, clock=comp.clock)
     return AnchorOutcome(
         job_id=job.id,
         anchored_seq=result.anchored_seq,
         published=result.published,
         pending=result.pending,
-        detail=detail or (result.failures[0] if result.failures else None),
+        detail=result.failures[0] if result.failures else None,
     )
+
+
+def _anchor_snapshot_for(comp: "Composition", job: Job) -> tuple[Snapshot | None, str | None]:
+    """Return the exact snapshot pinned to `job`, or an inert failure detail."""
+    if not job.snapshot_hash:
+        return None, "not published: job has no pinned policy snapshot"
+    try:
+        stored = comp.snapshot_store.get(job.snapshot_hash)
+    except Exception as exc:  # a corrupt archive must fail closed, never publish
+        return None, f"not published: pinned policy snapshot is unreadable ({type(exc).__name__})"
+    if stored is None:
+        return None, "not published: pinned policy snapshot is missing"
+    candidate = getattr(stored, "snapshot", None)
+    if not isinstance(candidate, Snapshot) or candidate.hash != job.snapshot_hash:
+        return None, "not published: pinned policy snapshot is malformed"
+    # Stored snapshots intentionally use repo="" because hashes are shared by
+    # byte-identical configs. The gate needs the job's actual managed repository.
+    return replace(candidate, repo=job.repo), None
+
+
+def _recorded_comment_grant(comp: "Composition", job: Job, snapshot: Snapshot) -> Grant | None:
+    """Recover only evidence that can authorise this exact pending publication."""
+    for entry in reversed(entries_for_job(connection=comp.connection, job=job.id)):
+        if entry.kind != "grant":
+            continue
+        try:
+            payload = json.loads(entry.payload)
+            proof_id = payload["capability_proof_id"]
+        except (KeyError, TypeError, ValueError):
+            return None
+        if (
+            payload.get("activity") != Activity.COMMENT.value
+            or payload.get("decision") != "granted"
+            or payload.get("snapshot_hash") != snapshot.hash
+            or payload.get("categories") is not None
+            or not isinstance(proof_id, int)
+        ):
+            continue
+        return Grant(
+            activity=Activity.COMMENT,
+            repo=job.repo,
+            job_id=job.id,
+            snapshot_hash=snapshot.hash,
+            capability_proof_id=proof_id,
+            categories=None,
+            entry_seq=entry.seq,
+        )
+    return None
+
+
+def _pending_anchor_count(comp: "Composition", job_id: str) -> int:
+    """Report pending anchors without creating any new record state."""
+    return len(pending_anchors(connection=comp.connection, job=job_id))
