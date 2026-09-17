@@ -31,7 +31,7 @@ MODULES = frozenset(
      # E-27's publisher (#2300). Deliberately not part of `writes.py`: every
      # mutation there records an `action` entry, and an anchor that appends
      # moves the head it just anchored.
-     "anchor_publisher"}
+     "anchor_publisher", "anchor_reader"}
 )
 
 #: §1's re-export list: the §4 shared imports plus the eleven named names.
@@ -49,7 +49,7 @@ NAMED_EXPORTS = frozenset(
 #: so `rqa.github.ensure_schema` and `rqa.intake.ensure_schema` never collide.
 PUBLISHED_EXPORTS = frozenset(
     {"SqliteEtagStore", "SqliteApiCallStore", "SqliteMutationStore", "ensure_schema",
-     "Transport", "GithubAnchorPublisher"}
+     "Transport", "GithubAnchorPublisher", "GithubAnchorReader"}
 )
 ALL_EXPORTS = SHARED_EXPORTS | NAMED_EXPORTS | PUBLISHED_EXPORTS
 
@@ -122,6 +122,7 @@ def test_the_concrete_collaborators_a_composition_root_needs_are_package_surface
         ensure_schema,
     )
     from rqa.github.anchor_publisher import GithubAnchorPublisher
+    from rqa.github.anchor_reader import GithubAnchorReader
     from rqa.github.transport import Transport
 
     assert PUBLISHED_EXPORTS <= frozenset(github.__all__)
@@ -131,6 +132,7 @@ def test_the_concrete_collaborators_a_composition_root_needs_are_package_surface
     assert github.ensure_schema is ensure_schema
     assert github.Transport is Transport
     assert github.GithubAnchorPublisher is GithubAnchorPublisher
+    assert github.GithubAnchorReader is GithubAnchorReader
 
 
 # -- §2/§7: MutationKind has exactly five members; no estate kinds ---------------

@@ -11,7 +11,7 @@ No other module in RQA imports from `rqa.github` except through this file
 `LeaseTaken`, `GithubUnavailable`, `CapabilityReading` and `AdapterError` —
 plus the concrete collaborators a composition root must construct:
 `SqliteEtagStore`, `SqliteApiCallStore`, `SqliteMutationStore`,
-`ensure_schema`, `Transport` and `GithubAnchorPublisher`.
+`ensure_schema`, `Transport`, `GithubAnchorPublisher` and `GithubAnchorReader`.
 
 **Why those six are surface.** P-09 never constructs its own stores or its own
 transport; `GithubAdapter`'s implementation takes each as a parameter, so
@@ -50,6 +50,7 @@ from rqa.contracts import (
     Stale,
 )
 from rqa.github.anchor_publisher import GithubAnchorPublisher
+from rqa.github.anchor_reader import GithubAnchorReader
 from rqa.github.store import (
     SqliteApiCallStore,
     SqliteEtagStore,
@@ -68,6 +69,7 @@ __all__ = [
     "FAILING",
     "GithubAdapter",
     "GithubAnchorPublisher",
+    "GithubAnchorReader",
     "GithubUnavailable",
     "Grant",
     "Job",

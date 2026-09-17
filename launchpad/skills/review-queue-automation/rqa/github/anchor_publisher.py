@@ -32,11 +32,16 @@ from rqa.github import transport as transport_module
 from rqa.github.writes import _COMMENT_MUTATION, _read_pr_node, _require_grant
 from rqa.record import Anchor, PublishFailed
 
-__all__ = ["GithubAnchorPublisher", "anchor_body"]
+__all__ = ["GithubAnchorPublisher", "anchor_body", "review_locator"]
 
 #: Marks the comment as a machine-written anchor rather than review prose, so an
 #: operator reading the thread knows what it is and RQA can find it again.
 ANCHOR_MARKER = "<!-- rqa:record-anchor -->"
+
+
+def review_locator(review_id: str) -> str:
+    """The immutable GitHub node locator for one published review."""
+    return f"github:pull-request-review:{review_id}"
 
 
 def anchor_body(*, anchor: Anchor) -> str:
@@ -78,11 +83,16 @@ class GithubAnchorPublisher:
 
         try:
             node = _read_pr_node(self._adapter, job=self._job, operation="anchor")
-            self._adapter.transport.mutate(
+            response = self._adapter.transport.mutate(
                 _COMMENT_MUTATION,
                 {"pullRequestId": node.pr_id, "body": anchor_body(anchor=anchor)},
                 operation="anchor",
             )
+            result = response.get("addPullRequestReview") if hasattr(response, "get") else None
+            review = result.get("pullRequestReview") if hasattr(result, "get") else None
+            review_id = review.get("id") if hasattr(review, "get") else None
+            if not isinstance(review_id, str) or not review_id:
+                raise ValueError("anchor mutation returned no review id")
         except transport_module.Unavailable as failure:
             raise PublishFailed(f"GitHub was unavailable: {failure}") from failure
         except Exception as failure:  # noqa: BLE001 - the containment boundary
@@ -100,4 +110,4 @@ class GithubAnchorPublisher:
                 f"publishing the anchor failed: {type(failure).__name__}: {failure}"
             ) from failure
 
-        return f"github:{self._job.repo}#{self._job.number}"
+        return review_locator(review_id)
