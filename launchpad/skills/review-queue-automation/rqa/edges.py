@@ -28,7 +28,7 @@ from typing import TYPE_CHECKING, Protocol
 if TYPE_CHECKING:  # annotation-only; resolved by type checkers, never at import
     from collections.abc import Mapping
 
-    from rqa.contracts import Anchor
+    from rqa.contracts import Anchor, AnchorRead
     from pathlib import Path
     from typing import Literal
 
@@ -284,3 +284,15 @@ class ProcessRunner(Protocol):
 # E-27  P-12 consumes — anchor publication (ADR-0066's chain head)
 class AnchorPublisher(Protocol):
     def publish(self, *, anchor: Anchor) -> str: ...          # raises PublishFailed; never appends to the record
+
+
+class AnchorSource(Protocol):
+    """E-27's read half, used only by explicit online recovery.
+
+    Implementations authenticate the exact repository, pull request, anchor
+    marker grammar, and accepted publisher identity before returning ``FOUND``.
+    They return ``CONFLICT`` for one sequence with different valid digests and
+    never choose one by timestamp.
+    """
+
+    def read(self, *, repo: str, number: int, job_id: str, publisher: str) -> AnchorRead: ...

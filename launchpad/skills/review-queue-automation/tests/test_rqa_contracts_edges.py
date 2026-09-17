@@ -261,6 +261,16 @@ PROTOCOL_METHODS: dict[str, tuple[tuple[tuple[str, object, object], ...], str]] 
         (("self", POS, EMPTY), ("anchor", KW, "Anchor")),
         "str",
     ),
+    "AnchorSource.read": (
+        (
+            ("self", POS, EMPTY),
+            ("repo", KW, "str"),
+            ("number", KW, "int"),
+            ("job_id", KW, "str"),
+            ("publisher", KW, "str"),
+        ),
+        "AnchorRead",
+    ),
     # E-26  class ProcessRunner(Protocol)
     "ProcessRunner.run": (
         (
@@ -334,7 +344,7 @@ PROSE_ONLY_EDGES = frozenset({"E-18", "E-19", "E-20", "E-21", "E-22"})
 SECTION_NINE_NAMES = (
     tuple(EDGE_FUNCTIONS)
     + tuple(EMPTY_PROTOCOL_OWNERS)
-    + ("SupplyPort", "HarnessProber", "ProcessRunner", "AnchorPublisher")
+    + ("SupplyPort", "HarnessProber", "ProcessRunner", "AnchorPublisher", "AnchorSource")
     + ("status", "explain", "decide", "onboard", "tick")
 )
 

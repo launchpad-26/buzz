@@ -312,6 +312,18 @@ DOCUMENTED_DATACLASSES: dict[str, tuple[tuple[str, str], ...]] = {
         ("hash", "str"),
         ("at", "str"),
     ),
+    "AnchorEvidence": (
+        ("anchor", "Anchor"),
+        ("repo", "str"),
+        ("number", "int"),
+        ("publisher", "str"),
+        ("locator", "str"),
+    ),
+    "AnchorRead": (
+        ("outcome", "AnchorReadOutcome"),
+        ("evidence", "tuple[AnchorEvidence, ...]"),
+        ("detail", "str"),
+    ),
     "RecordRow": (
         ("seq", "int"),
         ("kind", "EntryKind"),
@@ -447,6 +459,14 @@ DOCUMENTED_ENUMS: dict[str, tuple[tuple[str, str], ...]] = {
         ("INTEGRITY_BREAK", "integrity_break"),
         ("UNVERIFIABLE", "unverifiable"),
         ("LEGACY", "legacy"),
+    ),
+    "AnchorReadOutcome": (
+        ("FOUND", "found"),
+        ("NONE", "none"),
+        ("UNAVAILABLE", "unavailable"),
+        ("UNAUTHENTICATED", "unauthenticated"),
+        ("MALFORMED", "malformed"),
+        ("CONFLICT", "conflict"),
     ),
     "DenyReason": (
         ("NOT_ENABLED", "not_enabled"),

@@ -415,11 +415,31 @@ never "complete as at the final entry". Entries appended after the most recent a
 and truncation inside that window is undetectable. Narrowing the window is a frequency choice, not a
 further mechanism.
 
+### 3.5 External-anchor recovery is explicit; verification remains offline
+
+`verify` and `explain` never contact an external service. When local anchor rows are missing, an
+explicit recovery command consumes E-27's `AnchorSource.read(repo, number, job_id, publisher)` and
+persists only authenticated `AnchorEvidence` locally; it adds **zero** `record_entries`. The source
+accepts an anchor only when its repository, pull request, marker grammar and publisher identity match
+the request. Its closed outcomes are `found`, `none`, `unavailable`, `unauthenticated`, `malformed`
+and `conflict`. A conflict is two otherwise valid anchors for one sequence with different hashes; it is
+never resolved by timestamp selection. A failed recovery mutates nothing.
+
+Normal publication preflights this same source before publishing a new head. It must refuse a
+conflicting external anchor rather than blessing the local chain over it. A retry of a pending anchor
+reuses the recorded authorization evidence and must not append a new `grant` row merely to retry. A
+head already successfully anchored is a true no-op: no grant, anchor, or GitHub call.
+
+Cadence is an all-due, per-job sweep invoked by an OS timer, not by `append`. It selects heads newer
+than their latest successful anchor and pending publications; one job's failure does not stop the rest.
+The configured timer interval plus any publication outage is the unattested window.
+
 ## 4. Dependencies consumed — E-27 only
 
-P-12 calls no other RQA part. Its one cross-boundary dependency is **E-27**,
-`AnchorPublisher.publish(anchor) -> str`, which publishes the chain head where the
-reviewed agent cannot rewrite it (§3.4).
+P-12 calls no other RQA part. Its one cross-boundary dependency is **E-27**:
+`AnchorPublisher.publish(anchor) -> str` publishes the chain head where the reviewed agent cannot
+rewrite it (§3.4), while `AnchorSource.read(repo, number, job_id, publisher) -> AnchorRead` is used
+only by explicit online recovery (§3.5). P-12 itself remains offline between recoveries.
 
 **E-25 was retired by [ADR-0066](../../../../decisions/ADR-0066-rqa-record-chain-anchoring-without-a-key.md).**
 Until then P-12's sole cross-boundary dependency was `KeyStore.read(name) -> bytes | None`, the

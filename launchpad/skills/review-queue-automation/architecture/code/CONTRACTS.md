@@ -390,6 +390,16 @@ class AppendFailed(Exception): ...
 # ADR-0066's anchored chain head (#2300). A digest and its position — never payload.
 @dataclass(frozen=True)
 class Anchor: job: str; seq: int; hash: str; at: str
+
+class AnchorReadOutcome(str, Enum):
+    FOUND = "found"; NONE = "none"; UNAVAILABLE = "unavailable"
+    UNAUTHENTICATED = "unauthenticated"; MALFORMED = "malformed"; CONFLICT = "conflict"
+@dataclass(frozen=True)
+class AnchorEvidence:
+    anchor: Anchor; repo: str; number: int; publisher: str; locator: str
+@dataclass(frozen=True)
+class AnchorRead:
+    outcome: AnchorReadOutcome; evidence: tuple[AnchorEvidence, ...]; detail: str
 class PublishFailed(Exception): ...
 
 class RecordWriter(Protocol):
@@ -548,6 +558,13 @@ class ProcessRunner(Protocol):
 # E-27  P-12 consumes — anchor publication (ADR-0066's chain head)
 class AnchorPublisher(Protocol):
     def publish(self, *, anchor: Anchor) -> str: ...          # raises PublishFailed; never appends to the record
+
+# E-27's read half is explicit recovery only. `verify` and `explain` use persisted
+# AnchorEvidence and remain offline. A source returns FOUND only after authenticating
+# the exact repo/PR, exact anchor marker grammar and accepted publisher identity. It
+# returns CONFLICT, never timestamp selection, for one sequence with distinct valid hashes.
+class AnchorSource(Protocol):
+    def read(self, *, repo: str, number: int, job_id: str, publisher: str) -> AnchorRead: ...
 ```
 
 ## 10. Ownership of the review loop — decided
