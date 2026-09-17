@@ -292,6 +292,11 @@ and P-10 checks it a third time before running anything (`code/P-10-remediation.
 belt-and-braces on all three sides of a decision no single check may be trusted alone to have made
 correctly.
 
+**The conditional `Route.command` rule is owned by P-05's aliases lane (#2205).** P-03 validates
+only the command's local shape. P-05 decides it against the source-owned alias registry: a command
+is required when `(harness, model)` has no built-in alias and rejected when that alias exists, as
+specified by ADR-0065 and exercised at P-05's routing boundary.
+
 **`RecordWriter.append`, owned by P-12 (E-13).** Its sole definition is
 [`CONTRACTS.md`](CONTRACTS.md) §7. `AppendFailed` always propagates (§3).
 
