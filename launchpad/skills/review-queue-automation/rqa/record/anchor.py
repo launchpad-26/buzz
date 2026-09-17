@@ -54,9 +54,20 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import datetime, timezone
 
-from rqa.contracts import Anchor, AnchorPublisher, PublishFailed
+from rqa.contracts import (
+    Anchor,
+    AnchorEvidence,
+    AnchorPublisher,
+    AnchorRead,
+    AnchorReadOutcome,
+    AnchorSource,
+    PublishFailed,
+)
 from rqa.record.store import (
+    AnchorConflict,
     StoredAnchor,
+    StoredAnchorEvidence,
+    import_external_anchors,
     head_entry,
     insert_anchor,
     latest_anchor,
@@ -70,6 +81,8 @@ __all__ = [
     "AnchorResult",
     "PublishFailed",
     "anchor_job",
+    "AnchorConflict",
+    "recover_external_anchors",
 ]
 
 
@@ -82,6 +95,41 @@ class AnchorResult:
     published: int  # anchors that reached their destination this call, retries included
     pending: int  # anchors still unpublished after this call
     failures: tuple[str, ...]  # one message per failed publish; never carries record content
+
+
+def recover_external_anchors(
+    connection: sqlite3.Connection,
+    *,
+    source: AnchorSource,
+    repo: str,
+    number: int,
+    job_id: str,
+    publisher: str,
+) -> AnchorRead:
+    """Explicitly recover authenticated external anchor evidence for one job.
+
+    Only ``FOUND`` can write.  Every other source result is returned unchanged and
+    writes nothing; in particular, a source-reported conflict is never narrowed by a
+    timestamp choice.  The imported rows hold only anchor position, digest and source
+    provenance, so recovery adds no ``record_entries``.
+    """
+    read = source.read(repo=repo, number=number, job_id=job_id, publisher=publisher)
+    if read.outcome is not AnchorReadOutcome.FOUND:
+        return read
+
+    # The source contract already authenticates this binding.  Re-checking it at the
+    # persistence boundary means a malformed or substituted implementation cannot
+    # cross the local trust boundary merely by returning FOUND.
+    for item in read.evidence:
+        if (
+            item.anchor.job != job_id
+            or item.repo != repo
+            or item.number != number
+            or item.publisher != publisher
+        ):
+            raise AnchorConflict("external anchor evidence does not match the recovery request")
+    import_external_anchors(connection=connection, job=job_id, evidence=read.evidence)
+    return read
 
 
 def _utcnow() -> datetime:

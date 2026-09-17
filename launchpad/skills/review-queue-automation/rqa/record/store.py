@@ -50,6 +50,11 @@ __all__ = [
     "latest_anchor",
     "pending_anchors",
     "anchors_for_job",
+    "StoredAnchorEvidence",
+    "AnchorConflict",
+    "external_anchors_for_job",
+    "import_external_anchors",
+    "latest_trusted_anchor",
 ]
 
 #: §5's DDL, with `IF NOT EXISTS` so a writer can be constructed against a state
@@ -94,6 +99,24 @@ SCHEMA = (
     )
     """,
     "CREATE INDEX IF NOT EXISTS record_anchors_by_job ON record_anchors(job, seq)",
+    # E-27 recovery stores only the authenticated anchor and the immutable locator
+    # where it was found.  It never copies a record payload from the external source.
+    # More than one locator may attest the same `(job, seq, hash)`, but a locator may
+    # name only one immutable piece of evidence.
+    """
+    CREATE TABLE IF NOT EXISTS record_anchor_evidence (
+      job       TEXT NOT NULL,
+      seq       INTEGER NOT NULL,
+      hash      TEXT NOT NULL,
+      at        TEXT NOT NULL,
+      repo      TEXT NOT NULL,
+      number    INTEGER NOT NULL,
+      publisher TEXT NOT NULL,
+      locator   TEXT NOT NULL UNIQUE,
+      UNIQUE (job, seq, hash, locator)
+    )
+    """,
+    "CREATE INDEX IF NOT EXISTS record_anchor_evidence_by_job ON record_anchor_evidence(job, seq)",
 )
 
 _COLUMNS = "job, seq, kind, at, payload, prev_hash, hash, hmac, keyed"
@@ -310,6 +333,32 @@ class StoredAnchor:
         return self.destination is not None
 
 
+class AnchorConflict(ValueError):
+    """Anchor evidence disagrees with evidence already stored for that sequence.
+
+    A conflict is deliberately an error rather than a best-effort update: choosing a
+    newer timestamp would make an externally supplied contradiction look trusted.
+    """
+
+
+@dataclass(frozen=True)
+class StoredAnchorEvidence:
+    """Authenticated external anchor metadata, including its immutable locator.
+
+    This is provenance only.  In particular, no record entry kind or payload is ever
+    retained here.
+    """
+
+    job: str
+    seq: int
+    hash: str
+    at: str
+    repo: str
+    number: int
+    publisher: str
+    locator: str
+
+
 def _anchor(row: tuple) -> StoredAnchor:
     job, seq, hash_, at, destination = row
     return StoredAnchor(job=job, seq=seq, hash=hash_, at=at, destination=destination)
@@ -323,21 +372,43 @@ def insert_anchor(
     Written first, on purpose. The local row is what detects a truncated tail with no
     network at all, so it must survive a publish that never succeeds.
     """
-    connection.execute(
-        "INSERT OR IGNORE INTO record_anchors (job, seq, hash, at, destination) "
-        "VALUES (?, ?, ?, ?, NULL)",
-        (job, seq, hash, at),
-    )
+    existing = connection.execute(
+        "SELECT hash, at FROM record_anchors WHERE job = ? AND seq = ?", (job, seq)
+    ).fetchone()
+    if existing is None:
+        connection.execute(
+            "INSERT INTO record_anchors (job, seq, hash, at, destination) "
+            "VALUES (?, ?, ?, ?, NULL)",
+            (job, seq, hash, at),
+        )
+        return
+    existing_hash, existing_at = existing
+    if existing_hash != hash or existing_at != at:
+        raise AnchorConflict(
+            f"local anchor conflict for {job!r}@{seq}: existing anchor is immutable"
+        )
 
 
 def mark_anchor_published(
     *, connection: sqlite3.Connection, job: str, seq: int, destination: str
 ) -> None:
     """Record where the anchor was published. Only called after the publish returned."""
-    connection.execute(
-        "UPDATE record_anchors SET destination = ? WHERE job = ? AND seq = ?",
-        (destination, job, seq),
-    )
+    row = connection.execute(
+        "SELECT destination FROM record_anchors WHERE job = ? AND seq = ?", (job, seq)
+    ).fetchone()
+    if row is None:
+        raise AnchorConflict(f"cannot publish unknown local anchor {job!r}@{seq}")
+    existing_destination = row[0]
+    if existing_destination is None:
+        connection.execute(
+            "UPDATE record_anchors SET destination = ? WHERE job = ? AND seq = ?",
+            (destination, job, seq),
+        )
+        return
+    if existing_destination != destination:
+        raise AnchorConflict(
+            f"local anchor destination conflict for {job!r}@{seq}: locator is immutable"
+        )
 
 
 def latest_anchor(*, connection: sqlite3.Connection, job: str) -> StoredAnchor | None:
@@ -369,3 +440,150 @@ def anchors_for_job(*, connection: sqlite3.Connection, job: str) -> tuple[Stored
         (job,),
     )
     return tuple(_anchor(tuple(row)) for row in cursor.fetchall())
+
+
+def _evidence(row: tuple) -> StoredAnchorEvidence:
+    job, seq, hash_, at, repo, number, publisher, locator = row
+    return StoredAnchorEvidence(
+        job=job,
+        seq=int(seq),
+        hash=hash_,
+        at=at,
+        repo=repo,
+        number=int(number),
+        publisher=publisher,
+        locator=locator,
+    )
+
+
+def _validate_evidence(*, job: str, evidence: object) -> StoredAnchorEvidence:
+    """Convert an ``AnchorEvidence``-shaped value without retaining record content."""
+    anchor = getattr(evidence, "anchor", None)
+    candidate = StoredAnchorEvidence(
+        job=str(getattr(anchor, "job", "")),
+        seq=int(getattr(anchor, "seq", 0)),
+        hash=str(getattr(anchor, "hash", "")),
+        at=str(getattr(anchor, "at", "")),
+        repo=str(getattr(evidence, "repo", "")),
+        number=int(getattr(evidence, "number", -1)),
+        publisher=str(getattr(evidence, "publisher", "")),
+        locator=str(getattr(evidence, "locator", "")),
+    )
+    if (
+        candidate.job != job
+        or candidate.seq < 1
+        or not candidate.hash
+        or not candidate.at
+        or not candidate.repo
+        or candidate.number < 1
+        or not candidate.publisher
+        or not candidate.locator
+    ):
+        raise AnchorConflict("external anchor evidence is incomplete or names another job")
+    return candidate
+
+
+def _validate_external_batch(
+    *, connection: sqlite3.Connection, job: str, evidence: tuple[object, ...]
+) -> tuple[StoredAnchorEvidence, ...]:
+    """Validate all evidence before inserting any of it, so refusal is atomic."""
+    candidates = tuple(_validate_evidence(job=job, evidence=item) for item in evidence)
+    if not candidates:
+        raise AnchorConflict("a found external-anchor result carried no evidence")
+
+    by_seq: dict[int, str] = {}
+    by_locator: dict[str, StoredAnchorEvidence] = {}
+    unique: list[StoredAnchorEvidence] = []
+    for candidate in candidates:
+        known_hash = by_seq.setdefault(candidate.seq, candidate.hash)
+        if known_hash != candidate.hash:
+            raise AnchorConflict(
+                f"external anchor conflict for {job!r}@{candidate.seq}: different hashes"
+            )
+        known_locator = by_locator.get(candidate.locator)
+        if known_locator is not None and known_locator != candidate:
+            raise AnchorConflict("external anchor locator was reused with different provenance")
+        if known_locator is None:
+            by_locator[candidate.locator] = candidate
+            unique.append(candidate)
+
+    for candidate in unique:
+        locator_row = connection.execute(
+            "SELECT job, seq, hash, at, repo, number, publisher, locator "
+            "FROM record_anchor_evidence WHERE locator = ?",
+            (candidate.locator,),
+        ).fetchone()
+        if locator_row is not None and _evidence(tuple(locator_row)) != candidate:
+            raise AnchorConflict("external anchor locator was reused with different provenance")
+        seq_rows = connection.execute(
+            "SELECT hash FROM record_anchor_evidence WHERE job = ? AND seq = ?",
+            (job, candidate.seq),
+        ).fetchall()
+        if any(row[0] != candidate.hash for row in seq_rows):
+            raise AnchorConflict(
+                f"external anchor conflict for {job!r}@{candidate.seq}: different hashes"
+            )
+    return tuple(unique)
+
+
+def import_external_anchors(
+    *, connection: sqlite3.Connection, job: str, evidence: tuple[object, ...]
+) -> tuple[StoredAnchorEvidence, ...]:
+    """Persist authenticated external anchor provenance without touching the record.
+
+    Exact re-imports are no-ops.  Any change to an immutable locator, or two external
+    hashes for one `(job, seq)`, raises ``AnchorConflict`` before this function writes.
+    """
+    candidates = _validate_external_batch(connection=connection, job=job, evidence=evidence)
+    for candidate in candidates:
+        existing = connection.execute(
+            "SELECT 1 FROM record_anchor_evidence WHERE locator = ?", (candidate.locator,)
+        ).fetchone()
+        if existing is None:
+            connection.execute(
+                "INSERT INTO record_anchor_evidence "
+                "(job, seq, hash, at, repo, number, publisher, locator) "
+                "VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+                (
+                    candidate.job,
+                    candidate.seq,
+                    candidate.hash,
+                    candidate.at,
+                    candidate.repo,
+                    candidate.number,
+                    candidate.publisher,
+                    candidate.locator,
+                ),
+            )
+    return candidates
+
+
+def external_anchors_for_job(
+    *, connection: sqlite3.Connection, job: str
+) -> tuple[StoredAnchorEvidence, ...]:
+    """Every recovered external anchor for ``job``, ordered by sequence and locator."""
+    cursor = connection.execute(
+        "SELECT job, seq, hash, at, repo, number, publisher, locator "
+        "FROM record_anchor_evidence WHERE job = ? ORDER BY seq, locator",
+        (job,),
+    )
+    return tuple(_evidence(tuple(row)) for row in cursor.fetchall())
+
+
+def latest_trusted_anchor(
+    *, connection: sqlite3.Connection, job: str
+) -> StoredAnchor | StoredAnchorEvidence | None:
+    """The highest anchor trusted locally or through authenticated external evidence.
+
+    At an equal sequence an external source wins, so a surviving but rewritten local
+    anchor cannot mask recovered evidence.  Import rejects contradicting *external*
+    evidence before it reaches this selection point.
+    """
+    local = latest_anchor(connection=connection, job=job)
+    external = external_anchors_for_job(connection=connection, job=job)
+    newest_external = external[-1] if external else None
+    if newest_external is None:
+        return local
+    if local is None or newest_external.seq >= local.seq:
+        return newest_external
+    return local

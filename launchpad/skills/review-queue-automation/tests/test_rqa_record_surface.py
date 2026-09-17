@@ -55,9 +55,11 @@ APPEND_EXPORTS = frozenset(
         # ADR-0066's anchored chain head (#2300).
         "Anchor",
         "AnchorPublisher",
+        "AnchorConflict",
         "AnchorResult",
         "PublishFailed",
         "anchor_job",
+        "recover_external_anchors",
     }
 )
 EXPLAIN_EXPORTS = frozenset(

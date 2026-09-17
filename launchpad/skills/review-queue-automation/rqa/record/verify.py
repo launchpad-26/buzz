@@ -45,7 +45,14 @@ from rqa.record.hashing import (
     PayloadNotSerializable,
     compute_hash,
 )
-from rqa.record.store import StoredEntry, entries_for_job, is_legacy, latest_anchor
+from rqa.record.store import (
+    StoredAnchor,
+    StoredAnchorEvidence,
+    StoredEntry,
+    entries_for_job,
+    is_legacy,
+    latest_trusted_anchor,
+)
 
 __all__ = ["BreakKind", "VerifyResult", "verify"]
 
@@ -92,9 +99,12 @@ def verify(connection: sqlite3.Connection, job_id: str) -> VerifyResult:
     """
 
     rows = entries_for_job(connection=connection, job=job_id)
-    anchor = latest_anchor(connection=connection, job=job_id)
+    anchor = latest_trusted_anchor(connection=connection, job=job_id)
     anchored_through = anchor.seq if anchor is not None else 0
-    anchor_published = anchor.published if anchor is not None else False
+    anchor_published = (
+        isinstance(anchor, StoredAnchorEvidence)
+        or (isinstance(anchor, StoredAnchor) and anchor.published)
+    )
     by_seq = {entry.seq: entry for entry in rows if not is_legacy(entry=entry)}
     checked_through = 0
     parent_hash: str | None = None  # the previous real row's hash; None before the first

@@ -14,9 +14,21 @@ from datetime import datetime, timezone
 
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent.parent))
 
+from rqa.contracts import AnchorEvidence, AnchorRead, AnchorReadOutcome  # noqa: E402
 from rqa.record import BreakKind, verify  # noqa: E402
-from rqa.record.anchor import Anchor, PublishFailed, anchor_job  # noqa: E402
-from rqa.record.store import anchors_for_job, latest_anchor  # noqa: E402
+from rqa.record.anchor import (  # noqa: E402
+    Anchor,
+    AnchorConflict,
+    PublishFailed,
+    anchor_job,
+    recover_external_anchors,
+)
+from rqa.record.store import (  # noqa: E402
+    anchors_for_job,
+    external_anchors_for_job,
+    insert_anchor,
+    latest_anchor,
+)
 from rqa.record.writer import SQLiteRecordWriter  # noqa: E402
 
 CLOCK = datetime(2026, 9, 16, 12, 0, 0, tzinfo=timezone.utc)
@@ -36,6 +48,20 @@ class FakePublisher:
         return f"fake:{anchor.job}/{anchor.seq}"
 
 
+class FakeSource:
+    """An E-27 read half for local recovery tests; it never reaches a network."""
+
+    def __init__(self, result: AnchorRead):
+        self.result = result
+        self.calls: list[dict[str, object]] = []
+
+    def read(self, *, repo: str, number: int, job_id: str, publisher: str) -> AnchorRead:
+        self.calls.append(
+            {"repo": repo, "number": number, "job_id": job_id, "publisher": publisher}
+        )
+        return self.result
+
+
 def chained(entries: int = 3, job: str = "job-1"):
     connection = sqlite3.connect(":memory:")
     writer = SQLiteRecordWriter(connection)
@@ -48,6 +74,34 @@ def rows(connection: sqlite3.Connection, job: str = "job-1") -> list[tuple]:
     return connection.execute(
         "SELECT seq, hash FROM record_entries WHERE job = ? ORDER BY seq", (job,)
     ).fetchall()
+
+
+def found(*anchors: Anchor, locator_prefix: str = "fake:anchor") -> AnchorRead:
+    return AnchorRead(
+        outcome=AnchorReadOutcome.FOUND,
+        evidence=tuple(
+            AnchorEvidence(
+                anchor=anchor,
+                repo="acme/widgets",
+                number=42,
+                publisher="rqa-anchor-bot",
+                locator=f"{locator_prefix}:{index}",
+            )
+            for index, anchor in enumerate(anchors)
+        ),
+        detail="authenticated test anchor",
+    )
+
+
+def recover(connection: sqlite3.Connection, read: AnchorRead) -> AnchorRead:
+    return recover_external_anchors(
+        connection,
+        source=FakeSource(read),
+        repo="acme/widgets",
+        number=42,
+        job_id="job-1",
+        publisher="rqa-anchor-bot",
+    )
 
 
 # -- the rule that stops the publish/append loop --------------------------------
@@ -172,6 +226,159 @@ def test_entries_after_the_last_anchor_are_unattested_not_broken() -> None:
     assert result.ok is True, "an unanchored tail is not a break"
     assert result.anchored_through_seq == 2
     assert result.checked_through_seq == 3, "the newer entry is read, just not attested"
+
+
+# -- recovery: authenticated external anchor evidence, persisted locally --------
+
+
+def test_external_recovery_restores_deleted_anchor_rows_without_record_payload_or_append() -> None:
+    """The recovery proof: publish, lose local rows, import source evidence, then
+    detect the removed tail.  Recovery persists provenance only and never appends a
+    record entry, so it cannot move the chain head it is meant to check."""
+    connection = chained(entries=4)
+    publisher = FakePublisher()
+    anchor_job(connection, "job-1", publisher=publisher, clock=lambda: CLOCK)
+    published = publisher.published[0]
+    before_entries = rows(connection)
+
+    connection.execute("DELETE FROM record_anchors WHERE job = ?", ("job-1",))
+    recovered = recover(connection, found(published))
+
+    assert recovered.outcome is AnchorReadOutcome.FOUND
+    assert rows(connection) == before_entries, "recovery added or changed a record entry"
+    evidence = external_anchors_for_job(connection=connection, job="job-1")
+    assert len(evidence) == 1
+    assert evidence[0].locator == "fake:anchor:0"
+    assert evidence[0].publisher == "rqa-anchor-bot"
+    assert evidence[0].hash == published.hash
+    columns = {
+        row[1]
+        for row in connection.execute("PRAGMA table_info(record_anchor_evidence)").fetchall()
+    }
+    assert "payload" not in columns, "external recovery must never retain record payload"
+
+    connection.execute("DELETE FROM record_entries WHERE job = ? AND seq > ?", ("job-1", 2))
+    result = verify(connection, "job-1")
+    assert (result.ok, result.kind, result.bad_seq) == (False, BreakKind.TAIL_REMOVED, 4)
+    assert result.anchor_published is True, "recovered evidence is externally published"
+
+
+def test_external_recovery_detects_a_rebuilt_chain_at_the_anchored_sequence() -> None:
+    """External evidence wins at its sequence after local anchors are gone, so a
+    consistently rebuilt local chain cannot turn a recovery into a clean pass."""
+    connection = chained(entries=2)
+    publisher = FakePublisher()
+    anchor_job(connection, "job-1", publisher=publisher, clock=lambda: CLOCK)
+    published = publisher.published[0]
+    connection.execute("DELETE FROM record_anchors WHERE job = ?", ("job-1",))
+    recover(connection, found(published))
+
+    connection.execute("DELETE FROM record_entries WHERE job = ?", ("job-1",))
+    connection.execute("DELETE FROM record_heads WHERE job = ?", ("job-1",))
+    writer = SQLiteRecordWriter(connection)
+    writer.append("job-1", "transition", {"to_state": "rebuilt", "step": 0})
+    writer.append("job-1", "transition", {"to_state": "rebuilt", "step": 1})
+
+    result = verify(connection, "job-1")
+    assert (result.ok, result.kind, result.bad_seq) == (False, BreakKind.ANCHOR_MISMATCH, 2)
+
+
+def test_entries_after_a_recovered_anchor_are_unattested_not_broken() -> None:
+    """The recovered anchor bounds the claim just like a locally retained one: later
+    local content remains readable but is outside external attestation."""
+    connection = chained(entries=2)
+    publisher = FakePublisher()
+    anchor_job(connection, "job-1", publisher=publisher, clock=lambda: CLOCK)
+    published = publisher.published[0]
+    connection.execute("DELETE FROM record_anchors WHERE job = ?", ("job-1",))
+    recover(connection, found(published))
+    SQLiteRecordWriter(connection).append("job-1", "transition", {"to_state": "later", "step": 2})
+
+    result = verify(connection, "job-1")
+    assert result.ok is True
+    assert (result.anchored_through_seq, result.checked_through_seq) == (2, 3)
+
+
+def test_same_external_anchor_recovery_is_idempotent_but_conflicts_fail_closed() -> None:
+    """Repeated authenticated evidence is harmless; conflicting evidence leaves both
+    the record and persisted external provenance exactly as they were."""
+    connection = chained(entries=2)
+    publisher = FakePublisher()
+    anchor_job(connection, "job-1", publisher=publisher, clock=lambda: CLOCK)
+    published = publisher.published[0]
+    connection.execute("DELETE FROM record_anchors WHERE job = ?", ("job-1",))
+    good = found(published)
+
+    recover(connection, good)
+    recover(connection, good)
+    before_entries = rows(connection)
+    before_evidence = external_anchors_for_job(connection=connection, job="job-1")
+    assert len(before_evidence) == 1
+
+    conflicting = Anchor(
+        job="job-1", seq=published.seq, hash="0" * 64, at=published.at
+    )
+    raised = None
+    try:
+        recover(connection, found(conflicting, locator_prefix="fake:conflict"))
+    except AnchorConflict as error:
+        raised = error
+    assert raised is not None
+    assert rows(connection) == before_entries
+    assert external_anchors_for_job(connection=connection, job="job-1") == before_evidence
+
+
+def test_non_found_external_results_fail_closed_without_any_local_mutation() -> None:
+    connection = chained(entries=2)
+    before_entries = rows(connection)
+    unavailable = AnchorRead(
+        outcome=AnchorReadOutcome.UNAVAILABLE, evidence=(), detail="test source unavailable"
+    )
+
+    assert recover(connection, unavailable) is unavailable
+    assert rows(connection) == before_entries
+    assert external_anchors_for_job(connection=connection, job="job-1") == ()
+
+
+def test_source_reported_external_conflict_is_not_selected_or_imported() -> None:
+    connection = chained(entries=2)
+    before_entries = rows(connection)
+    conflicting = AnchorRead(
+        outcome=AnchorReadOutcome.CONFLICT,
+        evidence=(
+            AnchorEvidence(
+                anchor=Anchor(job="job-1", seq=2, hash="a" * 64, at="first"),
+                repo="acme/widgets",
+                number=42,
+                publisher="rqa-anchor-bot",
+                locator="fake:first",
+            ),
+            AnchorEvidence(
+                anchor=Anchor(job="job-1", seq=2, hash="b" * 64, at="second"),
+                repo="acme/widgets",
+                number=42,
+                publisher="rqa-anchor-bot",
+                locator="fake:second",
+            ),
+        ),
+        detail="same sequence, different digests",
+    )
+
+    assert recover(connection, conflicting) is conflicting
+    assert rows(connection) == before_entries
+    assert external_anchors_for_job(connection=connection, job="job-1") == ()
+
+
+def test_local_anchor_insert_does_not_silently_ignore_a_conflicting_hash() -> None:
+    connection = chained(entries=1)
+    head = rows(connection)[0]
+    insert_anchor(connection=connection, job="job-1", seq=head[0], hash=head[1], at="same")
+    raised = None
+    try:
+        insert_anchor(connection=connection, job="job-1", seq=head[0], hash="f" * 64, at="same")
+    except AnchorConflict as error:
+        raised = error
+    assert raised is not None
 
 
 # -- a failed publish never blocks anything -------------------------------------
@@ -419,7 +626,8 @@ def test_anchor_job_for_leaves_nothing_appended_behind_the_anchor() -> None:
     lands one entry short and this fails.
     """
     from rqa.cli.composition import anchor_job_for
-    from rqa.contracts import Grant, Job, JobStatus
+    from rqa.contracts import Grant, Job, JobStatus, Snapshot
+    from rqa.policy.store import StoredSnapshot
     from rqa.record.store import head_entry, latest_anchor
 
     connection = chained(entries=2)
@@ -462,6 +670,25 @@ def test_anchor_job_for_leaves_nothing_appended_behind_the_anchor() -> None:
         def get(self, job_id):
             return job
 
+    class SnapshotStore:
+        """The CLI's stored-snapshot preflight needs only this pinned snapshot."""
+
+        def get(self, hash):
+            assert hash == "snap-1"
+            return StoredSnapshot(
+                snapshot=Snapshot(
+                    hash="snap-1",
+                    repo="",
+                    protocol_hash="protocol-1",
+                    authority={},
+                    routes=(),
+                    external=None,
+                    policy=None,
+                    budget=None,
+                ),
+                activated_at=CLOCK,
+            )
+
     class Comp:
         connection = None
         clock = lambda self: CLOCK  # noqa: E731
@@ -469,6 +696,7 @@ def test_anchor_job_for_leaves_nothing_appended_behind_the_anchor() -> None:
         authority = Authority()
         record = writer
         github = object()
+        snapshot_store = SnapshotStore()
 
     comp = Comp()
     comp.connection = connection

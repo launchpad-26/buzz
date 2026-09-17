@@ -45,9 +45,11 @@ from rqa.contracts import (
 from rqa.record.anchor import (
     Anchor,
     AnchorPublisher,
+    AnchorConflict,
     AnchorResult,
     PublishFailed,
     anchor_job,
+    recover_external_anchors,
 )
 from rqa.record.explain import Explanation, ReuseResolutionError, explain, explain_job
 from rqa.record.hashing import PayloadNotSerializable
@@ -75,8 +77,10 @@ __all__ = [
     "Anchor",
     "AnchorPublisher",
     "AnchorResult",
+    "AnchorConflict",
     "PublishFailed",
     "anchor_job",
+    "recover_external_anchors",
     "explain",
     "explain_job",
     "resolve_job",
