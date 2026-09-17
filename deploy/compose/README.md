@@ -8,11 +8,13 @@ the root `docker-compose.yml`, which remains local development infrastructure.
 ```bash
 cd deploy/compose
 cp .env.example .env
+cp .env.minio.example .env.minio
 $EDITOR .env
+$EDITOR .env.minio
 cd ../..
 ```
 
-In `.env`, replace every `CHANGE_ME` value and set `BUZZ_IMAGE` to either the
+In `.env` and `.env.minio`, replace every `CHANGE_ME` value and set `BUZZ_IMAGE` to either the
 published image digest or the full 40-character commit-SHA tag. From the
 repository root, validate and start through the Launchpad guard:
 
