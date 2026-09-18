@@ -83,7 +83,7 @@ def _snapshot() -> Snapshot:
         protocol_hash="b" * 64,
         authority={activity: activity is Activity.COMMENT for activity in Activity},
         routes=(),
-        external=External(allowed=False, deny_label=""),
+        external=External(allowed=True, deny_label=""),
         policy=Policy(
             version="wave-3-test",
             obligations=(),

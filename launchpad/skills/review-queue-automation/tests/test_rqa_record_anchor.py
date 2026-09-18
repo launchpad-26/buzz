@@ -626,7 +626,7 @@ def test_anchor_job_for_leaves_nothing_appended_behind_the_anchor() -> None:
     lands one entry short and this fails.
     """
     from rqa.cli.composition import anchor_job_for
-    from rqa.contracts import Grant, Job, JobStatus, Snapshot
+    from rqa.contracts import External, Grant, Job, JobStatus, Snapshot
     from rqa.policy.store import StoredSnapshot
     from rqa.record.store import head_entry, latest_anchor
 
@@ -682,7 +682,7 @@ def test_anchor_job_for_leaves_nothing_appended_behind_the_anchor() -> None:
                     protocol_hash="protocol-1",
                     authority={},
                     routes=(),
-                    external=None,
+                        external=External(allowed=True, deny_label=""),
                     policy=None,
                     budget=None,
                 ),

@@ -10,9 +10,12 @@ from __future__ import annotations
 
 import contextlib
 import importlib
+import io
+import json
 import pathlib
 import sqlite3
 import sys
+import tempfile
 from datetime import datetime, timedelta, timezone
 from unittest.mock import patch
 
@@ -39,6 +42,7 @@ from rqa.record import PublishFailed, SQLiteRecordWriter, verify  # noqa: E402
 from rqa.record.store import anchors_for_job, entries_for_job  # noqa: E402
 
 composition_module = importlib.import_module("rqa.cli.composition")
+main_module = importlib.import_module("rqa.cli.main")
 
 _CLOCK = datetime(2026, 9, 18, tzinfo=timezone.utc)
 _HASH = "a" * 64
@@ -51,7 +55,7 @@ def _snapshot() -> Snapshot:
         protocol_hash="b" * 64,
         authority={activity: activity is Activity.COMMENT for activity in Activity},
         routes=(),
-        external=External(allowed=False, deny_label=""),
+        external=External(allowed=True, deny_label=""),
         policy=Policy(
             version="test",
             obligations=(),
@@ -248,3 +252,23 @@ def test_all_due_sweep_reports_unmanaged_and_missing_snapshot_jobs_without_recor
     assert {job.id: _record_count(comp, job.id) for job in (unmanaged, missing_snapshot)} == before
     assert anchors_for_job(connection=comp.connection, job=unmanaged.id) == ()
     assert anchors_for_job(connection=comp.connection, job=missing_snapshot.id) == ()
+
+
+def test_anchor_all_cli_wires_the_os_timer_sweep_and_repeats_as_a_no_op() -> None:
+    """The provider is not merely future wiring: the public command invokes it."""
+    comp = _Comp(managed=("acme/available",), snapshot=_stored_snapshot())
+    job = comp.add_job(job_id="available", repo="acme/available", number=1)
+    with tempfile.TemporaryDirectory() as directory:
+        state_dir = pathlib.Path(directory)
+        (state_dir / "repos.json").write_text(json.dumps([job.repo]), encoding="utf-8")
+        output = io.StringIO()
+        with _publisher(), patch.object(main_module, "build_composition", return_value=comp), contextlib.redirect_stdout(output):
+            first_code = main_module.main(["--state-dir", str(state_dir), "anchor", "--all"])
+            first = json.loads(output.getvalue())
+            output.seek(0)
+            output.truncate(0)
+            second_code = main_module.main(["--state-dir", str(state_dir), "anchor", "--all"])
+            second = json.loads(output.getvalue())
+    assert first_code == second_code == 0
+    assert [item["job_id"] for item in first["result"]["outcomes"]] == [job.id]
+    assert second["result"]["outcomes"] == []

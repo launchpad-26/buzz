@@ -29,6 +29,7 @@ import sys
 from pathlib import Path
 from typing import Any, NoReturn
 
+from rqa.anchor_cadence import sweep_due_anchors
 from rqa.cli import exitcodes
 from rqa.cli.composition import anchor_job_for, build_composition
 from rqa.cli.render import emit
@@ -156,6 +157,7 @@ def _build_parser() -> _ArgumentParser:
     anchor_parser.add_argument(
         "anchor_target",
         metavar="job-id|recover",
+        nargs="?",
         help="job id to publish, or 'recover' for external-anchor recovery",
     )
     anchor_parser.add_argument(
@@ -167,6 +169,11 @@ def _build_parser() -> _ArgumentParser:
     anchor_parser.add_argument(
         "--publisher",
         help="accepted GitHub login for anchor recovery; defaults to the job's stored capability proof",
+    )
+    anchor_parser.add_argument(
+        "--all",
+        action="store_true",
+        help="sweep every due head and pending publication once; invoke this from an OS timer",
     )
 
     explain_parser = sub.add_parser(
@@ -287,6 +294,21 @@ def _cmd_anchor(args: argparse.Namespace, state_dir: Path) -> tuple[int, dict[st
     detects a crash-truncated log with no network at all. Anchoring must never be able
     to fail a review.
     """
+    if args.all:
+        if args.anchor_target is not None or args.recovery_job_id is not None:
+            raise _UsageError("anchor --all accepts no job-id")
+        comp = build_composition(state_dir, repos=_configured_repos(state_dir))
+        try:
+            sweep = sweep_due_anchors(
+                jobs=comp.jobs,
+                anchor=lambda job_id: anchor_job_for(comp, job_id, publisher=args.publisher),
+            )
+        except Exception:
+            comp.connection.rollback()
+            raise
+        comp.connection.commit()
+        return exitcodes.OK, {"outcome": "ok", "result": sweep}
+
     job_id, recovery = _anchor_request(args)
     comp = build_composition(state_dir, repos=_configured_repos(state_dir))
     try:
@@ -325,6 +347,8 @@ def _cmd_anchor(args: argparse.Namespace, state_dir: Path) -> tuple[int, dict[st
 
 def _anchor_request(args: argparse.Namespace) -> tuple[str, bool]:
     """Normalise the legacy publish form and explicit ``anchor recover`` form."""
+    if args.anchor_target is None:
+        raise _UsageError("anchor requires a job-id, 'recover <job-id>', or --all")
     if args.anchor_target == "recover":
         if args.recovery_job_id is None:
             raise _UsageError("anchor recover requires a job-id")
@@ -361,7 +385,7 @@ def main(argv: list[str] | None = None) -> int:
 
     try:
         state_dir = args.state_dir if args.state_dir is not None else _default_state_dir()
-        recovery = args.command == "anchor" and _anchor_request(args)[1]
+        recovery = args.command == "anchor" and args.anchor_target == "recover"
         if args.command in {"status", "pending", "decide", "explain"} or recovery:
             if not (state_dir / "state.db").exists():
                 raise _UsageError(f"no RQA state database at {state_dir}; check --state-dir or run tick to initialise it")

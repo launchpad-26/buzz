@@ -440,7 +440,11 @@ def anchor_job_for(
     if head is None:
         return AnchorOutcome(job_id=job.id, anchored_seq=None, published=0, pending=0,
                              detail="no record head")
-    if latest is not None and latest.seq >= head.seq and latest.published:
+    # A later successful anchor does not discharge an older pending publication.
+    # `anchor_job()` retries every pending row first, and an all-due sweep must not
+    # turn that durable retry obligation into an unreachable row merely because a
+    # newer head was anchored meanwhile.
+    if not pending and latest is not None and latest.seq >= head.seq and latest.published:
         return AnchorOutcome(job_id=job.id, anchored_seq=None, published=0, pending=0,
                              detail=None)
 
@@ -461,6 +465,11 @@ def anchor_job_for(
     if failure is not None:
         return AnchorOutcome(job_id=job.id, anchored_seq=None, published=0,
                              pending=_pending_anchor_count(comp, job.id), detail=failure)
+
+    external_failure = _anchor_external_send_granted(comp, job=job, snapshot=snapshot)
+    if external_failure is not None:
+        return AnchorOutcome(job_id=job.id, anchored_seq=None, published=0,
+                             pending=_pending_anchor_count(comp, job.id), detail=external_failure)
 
     # A failed publication already has durable local authorization evidence. Recover
     # it rather than calling the gate, even if later record activity moved the head:
@@ -674,6 +683,55 @@ def _anchor_snapshot_for(comp: "Composition", job: Job) -> tuple[Snapshot | None
     # Stored snapshots intentionally use repo="" because hashes are shared by
     # byte-identical configs. The gate needs the job's actual managed repository.
     return replace(candidate, repo=job.repo), None
+
+
+def _anchor_external_send_granted(comp: "Composition", *, job: Job, snapshot: Snapshot) -> str | None:
+    """Record and enforce the per-change external-send decision for E-27.
+
+    An anchor is a digest-only external send, but it is still a send.  The decision
+    therefore uses the job's pinned policy and the PR labels captured for this job,
+    and is persisted as an attestation before the transport can be reached.  A retry
+    over unchanged policy/labels reuses that attestation rather than growing the hash
+    chain merely to repeat an already-recorded decision.
+    """
+    labels: tuple[str, ...] = ()
+    facts_reader = getattr(getattr(comp, "pr_facts", None), "get", None)
+    if facts_reader is not None:
+        facts = facts_reader(job.repo, job.number)
+        raw_labels = getattr(facts, "labels", ()) if facts is not None else ()
+        if isinstance(raw_labels, (tuple, list, frozenset, set)) and all(
+            isinstance(label, str) for label in raw_labels
+        ):
+            labels = tuple(sorted(raw_labels))
+
+    allowed = snapshot.external.allowed and (
+        not snapshot.external.deny_label or snapshot.external.deny_label not in labels
+    )
+    reason = (
+        "external_send_not_enabled"
+        if not snapshot.external.allowed
+        else "external_send_denied_for_change"
+        if snapshot.external.deny_label in labels
+        else ""
+    )
+    evidence = {
+        "external_send": "record_anchor",
+        "snapshot_hash": snapshot.hash,
+        "deny_label": snapshot.external.deny_label,
+        "labels": list(labels),
+        "allowed": allowed,
+        "reason": reason,
+    }
+    for entry in reversed(entries_for_job(connection=comp.connection, job=job.id)):
+        if entry.kind != "attestation":
+            continue
+        try:
+            if json.loads(entry.payload) == evidence:
+                return None if allowed else f"not published: {reason}"
+        except ValueError:
+            continue
+    comp.record.append(job.id, "attestation", evidence)
+    return None if allowed else f"not published: {reason}"
 
 
 def _recorded_comment_grant(comp: "Composition", job: Job, snapshot: Snapshot) -> Grant | None:

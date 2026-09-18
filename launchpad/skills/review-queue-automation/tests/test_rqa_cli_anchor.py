@@ -62,7 +62,7 @@ def _snapshot(*, repo: str = "") -> Snapshot:
         protocol_hash="b" * 64,
         authority={activity: activity is Activity.COMMENT for activity in Activity},
         routes=(),
-        external=External(allowed=False, deny_label=""),
+        external=External(allowed=True, deny_label=""),
         policy=Policy(
             version="test",
             obligations=(),
@@ -301,6 +301,34 @@ def test_anchor_missing_snapshot_and_unmanaged_repo_fail_closed() -> None:
     assert anchors_for_job(connection=unmanaged.connection, job=unmanaged.job.id) == ()
 
 
+def test_anchor_records_and_enforces_external_send_policy_before_any_publish() -> None:
+    """The digest is still an external send: disabled policy or deny label wins."""
+    disabled_snapshot = StoredSnapshot(
+        snapshot=replace(_snapshot(), external=External(allowed=False, deny_label="")),
+        activated_at=_CLOCK(),
+    )
+    disabled = _Comp(snapshot=disabled_snapshot)
+    with _fake_publisher() as publisher:
+        outcome = anchor_job_for(disabled, disabled.job.id)
+    assert outcome.detail == "not published: external_send_not_enabled"
+    assert disabled.authority.calls == [] and publisher.calls == []
+    decision = entries_for_job(connection=disabled.connection, job=disabled.job.id)[-1]
+    assert json.loads(decision.payload)["external_send"] == "record_anchor"
+    assert json.loads(decision.payload)["allowed"] is False
+
+    label_denied = _Comp(snapshot=StoredSnapshot(
+        snapshot=replace(_snapshot(), external=External(allowed=True, deny_label="sensitive")),
+        activated_at=_CLOCK(),
+    ))
+    label_denied.pr_facts = type(
+        "Facts", (), {"get": staticmethod(lambda repo, number: type("Pr", (), {"labels": ("sensitive",)})())}
+    )()
+    with _fake_publisher() as publisher:
+        outcome = anchor_job_for(label_denied, label_denied.job.id)
+    assert outcome.detail == "not published: external_send_denied_for_change"
+    assert label_denied.authority.calls == [] and publisher.calls == []
+
+
 def test_successful_unchanged_anchor_is_a_true_no_op() -> None:
     comp = _Comp(snapshot=_stored_snapshot())
     with _fake_publisher() as publisher:
@@ -330,6 +358,22 @@ def test_pending_retry_reuses_recorded_grant_without_chain_growth() -> None:
     assert publisher.calls[1][0] is not None
     assert _record_count(comp) == after_first
     assert len(anchors_for_job(connection=comp.connection, job=comp.job.id)) == 1
+
+
+def test_an_older_pending_anchor_is_retried_even_after_a_later_head_landed() -> None:
+    """A newer published head must not strand an older durable retry obligation."""
+    comp = _Comp(snapshot=_stored_snapshot())
+    with _fake_publisher(failures=1) as publisher:
+        first = anchor_job_for(comp, comp.job.id)
+        assert first.pending == 1
+        comp.record.append(comp.job.id, "transition", {"to_state": "later"})
+        before_retry = _record_count(comp)
+        second = anchor_job_for(comp, comp.job.id)
+    assert second.published == 2
+    assert second.pending == 0
+    assert _record_count(comp) == before_retry
+    assert all(anchor.published for anchor in anchors_for_job(connection=comp.connection, job=comp.job.id))
+    assert len(publisher.calls) == 3
 
 
 def test_anchor_normalizes_gate_and_record_failures_at_the_cli_boundary() -> None:
@@ -400,6 +444,7 @@ def test_anchor_recover_restores_external_evidence_then_offline_explain_reports_
         writer = SQLiteRecordWriter(comp.connection, clock=_CLOCK)
         writer.append(comp.job.id, "transition", {"to_state": "rewritten", "step": 0})
         writer.append(comp.job.id, "transition", {"to_state": "rewritten", "step": 1})
+        writer.append(comp.job.id, "transition", {"to_state": "rewritten", "step": 2})
         integrity = verify(comp.connection, comp.job.id)
         assert integrity.ok is False
         assert integrity.kind.value == "anchor_mismatch"
