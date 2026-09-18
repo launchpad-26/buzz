@@ -84,10 +84,13 @@ from rqa.record import (
     AnchorConflict,
     SQLiteRecordWriter,
     anchor_job,
+    entries_for_job,
+    head_entry,
+    latest_anchor,
+    pending_anchors,
     recover_external_anchors,
     verify,
 )
-from rqa.record.store import entries_for_job, head_entry, latest_anchor, pending_anchors
 from rqa.supply import (
     BreakerStore,
     SpendStore,

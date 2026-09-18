@@ -56,6 +56,7 @@ from rqa.record.hashing import PayloadNotSerializable
 from rqa.record.kinds import RecordProgrammingError, UnknownEntryKind
 from rqa.record.migrate import LegacySource, MigrationSummary, MigrationTableResult, migrate_legacy
 from rqa.record.reader import AmbiguousHead, NoRecord, ResolvedJob, SQLiteRecordReader, resolve_job
+from rqa.record.store import entries_for_job, head_entry, latest_anchor, pending_anchors
 from rqa.record.trace import append_trace
 from rqa.record.verify import BreakKind, VerifyResult, verify
 from rqa.record.writer import SQLiteRecordWriter
@@ -96,5 +97,9 @@ __all__ = [
     "LegacySource",
     "SQLiteRecordWriter",
     "SQLiteRecordReader",
+    "entries_for_job",
+    "head_entry",
+    "latest_anchor",
+    "pending_anchors",
     "append_trace",
 ]
