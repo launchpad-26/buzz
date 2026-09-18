@@ -100,6 +100,57 @@ from rqa.supply import (
 __all__ = ["Composition", "build_composition", "utcnow"]
 
 
+class _CallerOwnedConnection:
+    """A view of the composition's connection whose transaction control is inert.
+
+    `build_composition` hands one `sqlite3.Connection` to every collaborator, and
+    the *caller* — `rqa/cli/main.py`'s `_cmd_*`, or `rqa.intake.tick` — owns the
+    transaction on it. A collaborator that commits that connection ends the
+    owner's transaction out from under it, which is not a local mistake: it makes
+    provisional work durable and leaves the owner's later `rollback()` a no-op.
+
+    `decide()` is where that bites. It appends the decision entry and closes the
+    escalation row *uncommitted* on purpose, so that a `resume()` which cannot
+    verify the decision leaves nothing behind. `resume()`'s first action is a live
+    GitHub read, so any store that commits while servicing that read commits the
+    decision too — after which a failed validation can no longer be undone, the
+    escalation is durably closed, and the retry is refused `ALREADY_CLOSED`.
+
+    The three `rqa/github/store.py` stores each end their write with
+    `self._connection.commit()`. That is correct for a standalone caller that
+    constructs them over its own connection, and wrong for this composition root,
+    which owns the transaction. Rather than strip the commits from the stores —
+    which would change behaviour for every other caller of that module — the
+    composition root hands them a connection whose `commit()` does nothing. Their
+    rows become durable when whoever owns the transaction commits: `tick.py`
+    commits after every admitted repository, and `main.py` commits at the end of
+    each command.
+
+    `rollback()` raises rather than silently doing nothing: a collaborator asking
+    to discard the owner's transaction is unambiguously wrong, and no store does
+    it today, so failing loud costs nothing and hides nothing. Every other
+    attribute delegates to the real connection unchanged.
+    """
+
+    __slots__ = ("_connection",)
+
+    def __init__(self, connection: sqlite3.Connection) -> None:
+        object.__setattr__(self, "_connection", connection)
+
+    def commit(self) -> None:
+        """Deliberately inert — the transaction belongs to this connection's owner."""
+        return None
+
+    def rollback(self) -> None:
+        raise RuntimeError(
+            "a collaborator may not roll back the composition's connection; "
+            "transaction control belongs to the caller that owns it"
+        )
+
+    def __getattr__(self, name: str) -> Any:
+        return getattr(object.__getattribute__(self, "_connection"), name)
+
+
 def utcnow() -> datetime:
     """The one clock every constructor below defaults to, mirroring every
     other part's own `utcnow()`."""
@@ -352,13 +403,19 @@ def build_composition(
     record: RecordWriter = SQLiteRecordWriter(connection, clock=clock)
 
     github_ensure_schema(connection)
+    # P-09's three stores each commit at the end of their own write. Over this
+    # connection that would end a transaction they do not own — see
+    # `_CallerOwnedConnection`. They get the inert view; everything else here
+    # keeps the real connection, so `tick.py`'s per-repository commits and
+    # `main.py`'s end-of-command commit/rollback are unchanged.
+    github_connection = _CallerOwnedConnection(connection)
     transport = Transport(
-        etags=SqliteEtagStore(connection),
-        api_calls=SqliteApiCallStore(connection),
+        etags=SqliteEtagStore(github_connection),
+        api_calls=SqliteApiCallStore(github_connection),
     )
     github = GithubAdapter(
         transport=transport,
-        mutations=SqliteMutationStore(connection),
+        mutations=SqliteMutationStore(github_connection),
         clock=clock,
     )
 

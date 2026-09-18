@@ -25,19 +25,21 @@ Contents:
 10. [Platform](#10-platform)
 11. [Tests](#11-tests)
 
-`<repo>` below is the repository being reviewed, named as `owner/repo` to
-`rqa status`/`rqa explain` and as a filesystem path to `rqa onboard`.
+`<repo>` below is the repository being reviewed, always named as an
+`owner/repo` slug. Commands resolve that slug relative to the current working
+directory, so run RQA from the directory containing the `owner/` checkout
+directory.
 
 ---
 
 ## 1. Onboarding
 
 ```bash
-python3 -m rqa.cli onboard <repo-path>
-python3 -m rqa.cli onboard <repo-path> --migrate
+python3 -m rqa.cli onboard <owner/repo>
+python3 -m rqa.cli onboard <owner/repo> --migrate
 ```
 
-Writes `<repo-path>/.rqa/config.json` — the starter document
+Writes `<owner/repo>/.rqa/config.json` — the starter document
 `rqa.policy.validate.starter_config()` builds, with every `authority` entry
 `false`, every `routes` entry absent, `external.allowed` `false`, an empty
 `policy.obligations`, and every `budget` axis unset (`null`, meaning no
@@ -54,9 +56,9 @@ named at all (`comment`/`approve`/`request_changes`/`merge`), and refuses
 (`no_config_to_migrate` / `unreadable_existing` / `migrated_config_invalid`, exit 1) if there is
 nothing to migrate or the result itself fails validation.
 
-The path must already be an existing local directory. Onboarding makes no
-GitHub call and mutates nothing outside the one file it writes; the keyless
-record design reads no keychain or credential store.
+The slug must resolve to an existing local checkout; onboarding never creates
+one. It makes no GitHub call and mutates nothing outside the one config file it
+writes; the keyless record design reads no keychain or credential store.
 
 ---
 

@@ -233,9 +233,17 @@ def _cmd_tick(args: argparse.Namespace, state_dir: Path) -> tuple[int, dict[str,
 
 
 def _cmd_onboard(args: argparse.Namespace) -> tuple[int, dict[str, Any]]:
-    if not args.repo.strip() or not Path(args.repo).is_dir():
-        raise _UsageError("onboard requires an existing local repository directory")
-    result = policy_onboard(repo=args.repo, migrate=args.migrate)
+    # Keep onboarding and `tick --repo` on the same identifier contract.  A
+    # checkout path such as ``/work/acme/widget`` cannot later be named by
+    # `tick`, whereas the owner/repo slug resolves to that checkout relative to
+    # the caller's working directory.
+    repo = _repo_slug(args.repo)
+    if not Path(repo).is_dir():
+        raise _UsageError(
+            f"onboard requires an existing checkout at {repo!r}, relative to the "
+            "directory rqa is run from; it never creates one"
+        )
+    result = policy_onboard(repo=repo, migrate=args.migrate)
     if isinstance(result, OnboardRefusal):
         return exitcodes.INPUT_ERROR, {"outcome": "refused", "result": result}
     return exitcodes.OK, {"outcome": "written", "result": result}

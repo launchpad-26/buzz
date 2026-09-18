@@ -52,8 +52,9 @@ Writes a starter `<repo>/.rqa/config.json`.
 python3 -m rqa.cli onboard <repo> [--migrate]
 ```
 
-`<repo>` is the repository root. Plain `onboard` refuses if a config already
-exists (`already_exists`). `--migrate` instead converts an old-shape config in
+`<repo>` is an `owner/repo` slug resolved relative to the current working
+directory, and it must name an existing checkout. Plain `onboard` refuses if a
+config already exists (`already_exists`). `--migrate` instead converts an old-shape config in
 place — dropping the notification-transport and retention-window keys and
 zeroing every `authority` entry the old shape never named — and refuses if no
 old config is present, or if the migrated result itself fails validation.
