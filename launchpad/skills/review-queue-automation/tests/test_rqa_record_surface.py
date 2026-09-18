@@ -60,6 +60,12 @@ APPEND_EXPORTS = frozenset(
         "PublishFailed",
         "anchor_job",
         "recover_external_anchors",
+        # Composition needs these read-only record queries without crossing the
+        # package boundary to ``rqa.record.store``.
+        "entries_for_job",
+        "head_entry",
+        "latest_anchor",
+        "pending_anchors",
     }
 )
 EXPLAIN_EXPORTS = frozenset(

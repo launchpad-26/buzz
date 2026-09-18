@@ -24,7 +24,8 @@ rqa/record/
                  explain_job, resolve_job, ResolvedJob, NoRecord, AmbiguousHead, Explanation,
                  ExplanationUnavailable, ReuseResolutionError, migrate_legacy, MigrationSummary,
                  MigrationTableResult, LegacySource, SQLiteRecordWriter, SQLiteRecordReader,
-                 Anchor, AnchorPublisher, AnchorResult, anchor_job, append_trace
+                 Anchor, AnchorPublisher, AnchorResult, anchor_job, append_trace,
+                 entries_for_job, head_entry, latest_anchor, pending_anchors
   kinds.py       ENTRY_KINDS: the closed fourteen-kind set (§6)
   hashing.py     canonical_json(); compute_hash(); genesis and "legacy" prev_hash sentinels
   store.py       record_entries/record_heads DDL; serialization; ordered row reads
