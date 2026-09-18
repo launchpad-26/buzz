@@ -46,7 +46,7 @@ flowchart TB
   proc -->|hands over the PR evidence, gets a verdict back| HARN[["Review harness"]]
   HARN -->|calls the model, if one is configured| PROV[["External model provider"]]
   proc -->|borrows the operator's GitHub login| GHCLI[["GitHub CLI"]]
-  proc -->|reads the record-sealing key| KC[["OS keychain"]]
+  proc -->|publishes heads; explicit recovery retrieves evidence| ANCHOR[["External anchor destination"]]
   proc -->|runs formatters and git in a scratch checkout| TOOLS[["Local tool processes"]]
   REPO[["Repository (.rqa/config.json)"]] -->|supplies the rules, re-read every sweep| proc
 ```
@@ -92,7 +92,8 @@ the operator's `gh auth token` by maintainer constraint; RQA holds no token of i
 | `lock` | file `state/lock` | P-01 | - | runtime lock (U-DISPATCH-02) | carried as a mechanism: exclusive non-blocking `flock`, kernel-released |
 | `jobs.status` | the state column of `jobs` P-01 does not write, mirrored by a `transition` entry; the same writer also sets `jobs.snapshot_hash` once, immediately after E-03's first pin | P-02 | P-01, P-11, P-12, P-13 | `states.py` transition table (U-QUEUE-11), `snapshot_hash` pin (U-QUEUE-10) | carried; closed transition table, legacy `action` path removed (U-QUEUE-12); the pin is write-once per job |
 | `snapshots` | SQLite table plus `state/snapshots/<hash>.json` | P-03 | P-02, P-05, P-06, P-07, P-08 | snapshot archive, `snapshot_hash` pin (U-QUEUE-09, U-QUEUE-10) | carried unchanged; atomic activation with last-known-good retention |
-| `record_entries` | SQLite append-only table, hash-chained (ADR-F / [#2159](https://github.com/launchpad-26/buzz/issues/2159)) | P-12 | P-02, P-11, P-13, P-07 | migrated ledger/decision/spend sources | fourteen closed entry kinds; legacy rows unattested; current rows chained, optionally HMAC-keyed |
+| `record_entries` | SQLite append-only table, hash-chained (ADR-0066 / [#2298](https://github.com/launchpad-26/buzz/issues/2298)) | P-12 | P-02, P-11, P-13, P-07 | migrated ledger/decision/spend sources | fourteen closed entry kinds; legacy rows are historical; every current row is keyless and chained |
+| `record_anchors` and external evidence | SQLite anchor rows plus locally persisted external provenance | P-12 | P-12 | ADR-0066 anchor delivery | a local anchor is minted before publication; failed publications remain pending; recovered evidence never carries a record payload or appends a record entry |
 | `trace` | file `state/jobs/<job>/trace.jsonl` | P-12 | - | locked JSONL trace (U-RESILIENCE-08), otel milestones (U-DISPATCH-19) | carried unchanged; observability, never authoritative |
 | `human_requests` | SQLite table (pending index over `record_entries`) | P-11 | P-02 | `human_requests` (scripts/common.py:288) | carried; `decision_actor` (:311) and `rationale` (:308) become the `actor` and `basis` of the `decision` entry; notification transport columns dropped (U-AUTHORITY-12) |
 | `mutations` | SQLite table | P-09 | - | `mutations` (scripts/common.py:260) | carried unchanged; `client_mutation_id` primary key; gains `review_submit` and `merge` event kinds |
@@ -146,7 +147,7 @@ Recorded here so that it is a known trade, not a surprise.
 | credential | `rqa` → GitHub CLI | process execution of `gh auth token` | the operator's GitHub CLI credential, the only credential path by maintainer constraint (P-08); E-22 |
 | config | repository → `rqa` | file read | `.rqa/config.json` re-read every tick (P-03) |
 | tools | `rqa` → local processes | process execution in the worktree | formatters from the closed set and `git` (P-10); E-26 |
-| anchor | `rqa` → anchor destination | one GraphQL mutation, never the recorded-write path | ADR-0066's chain head so truncation is detectable (P-12); E-27 |
+| anchor | `rqa` → anchor destination | direct publish and explicit recovery through the P-09 adapter, never the recorded-write path | ADR-0066's content-free chain head; all-due OS-timer sweep retries pending/newer heads, while `verify`/`explain` stay offline (P-12); E-27 |
 
 There is no path between two containers because there is one container; a library call inside `rqa`
 is, per the corpus template's own note, the sign that two things are not separate containers.

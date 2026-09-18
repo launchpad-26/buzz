@@ -353,11 +353,12 @@ The CLI constructs the published `authority.Gate` with its configured repository
 set. A missing state database on a read or decision command is an input error;
 only a tick bootstraps state. Inventory outages are reported as incomplete with
 exit 2 (network) or 3 (authentication); they cannot report a successful sweep.
-`onboard` requires an existing local directory and checks the platform keychain;
-`tick` and `decide` check it before building stateful collaborators.
+`onboard` requires an existing local directory. The keyless record design has no
+platform-keychain preflight; `tick` and `decide` build stateful collaborators without
+credential-store access.
 
 Decision actor and basis text is persisted with visible Unicode escapes for
 C0/C1 controls, line separators and bidi directives. CLI rendering uses the same
 escaping convention instead of deleting boundaries. `explain` uses the
-composition's injected keychain, reports the recorded human basis and echoes an
-unknown job id. Raw control text from older records is escaped when rendered.
+local record state, reports the recorded human basis and echoes an unknown job id.
+Raw control text from older records is escaped when rendered.

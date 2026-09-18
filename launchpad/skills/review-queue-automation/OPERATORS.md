@@ -54,9 +54,9 @@ named at all (`comment`/`approve`/`request_changes`/`merge`), and refuses
 (`no_config_to_migrate` / `unreadable_existing` / `migrated_config_invalid`, exit 1) if there is
 nothing to migrate or the result itself fails validation.
 
-The path must already be an existing local directory. Onboarding checks the
-keychain before writing and makes no GitHub call and mutates nothing outside the one file it
-writes.
+The path must already be an existing local directory. Onboarding makes no
+GitHub call and mutates nothing outside the one file it writes; the keyless
+record design reads no keychain or credential store.
 
 ---
 
@@ -141,28 +141,39 @@ guaranteed to be actionable just because the escalation exists.
 
 ## 4a. Anchoring a job's record
 
-```
-rqa anchor <job-id>
+```bash
+python3 -m rqa.cli anchor <job-id>
+python3 -m rqa.cli anchor recover <job-id> [--publisher <GitHub-login>]
 ```
 
-Publishes that job's current chain head and records it locally, so a later
-`rqa explain` can tell you whether entries are **missing**, not just whether
-the ones present are intact. Run it on a timer, at the end of a job, or by
-hand — it is idempotent, so running it twice on an unchanged record does
-nothing.
+Publishes that job's current chain head and records it locally, so offline
+`rqa verify` and `rqa explain` can tell you whether entries are **missing**,
+not just whether the ones present are intact. The OS-timer cadence sweeps all
+jobs whose head is newer than its latest successful anchor, plus every pending
+publication; an earlier job's failed destination never prevents later due jobs
+from being attempted. A direct run is idempotent, so running it twice on an
+unchanged, successfully anchored job does nothing.
 
 It always exits 0 when it ran. An anchor that could not be published is a
 reported state, not an error:
 
 | `detail` says | What happened | What it still gives you |
 |---|---|---|
-| (nothing) | Published | Full detection, including against a deleted local anchor |
+| (nothing) | Published | Full detection through the latest successful anchor, including after local anchor loss once recovered |
 | `not published: …` | No comment authority for that repository | The local anchor — a crash-truncated log is still detected offline |
 | a failure message | GitHub was unreachable | Same; the anchor stays pending and the next run retries it |
 
 **Anchoring can never fail a review.** That is deliberate: a review that
 stopped because an audit-trail nicety could not reach the network would be a
 worse outcome than an unanchored record.
+
+**External recovery is explicit and online.** `rqa anchor recover <job-id>`
+retrieves authenticated external evidence only when local anchor rows are
+missing or insufficient. It accepts matching repository, PR, job and publisher
+evidence; it imports only anchor position, digest and source provenance, never
+record content or a record entry. `verify` and `explain` never make that call.
+A recovery that is unavailable, malformed, absent or conflicting changes no
+local state; a conflict is never resolved by choosing the newest timestamp.
 
 ## 5. Deciding an escalation
 
@@ -176,7 +187,7 @@ whose head has moved since the escalation was raised, or a job whose policy
 snapshot has moved — each of the last two means the escalation's own premise
 is stale, and re-running `rqa tick` will raise a fresh one against the
 current head if the condition still holds. A successful decision is recorded
-in the tamper-evident record (§6.3, ADR-0063) and resumes the job's
+in the tamper-evident record (§6.3, ADR-0066) and resumes the job's
 lifecycle; supplying an input a raised escalation names never restarts the
 review from the beginning.
 
@@ -227,16 +238,18 @@ two. If entries the anchor proves existed are gone, you get `tail_removed`
 rather than a clean pass; if the chain was rebuilt, `anchor_mismatch`.
 
 **The bound, which matters when you read a report.** Anchoring is periodic,
-so the guarantee is "complete as at the last anchor", never "complete as at
-the final entry". Entries appended after the most recent anchor are
+so the exact guarantee is "complete as at the latest successful anchor",
+never "complete as at the final entry". Entries appended after the most recent
+successful anchor are
 unattested, and truncation inside that window is undetectable. Anchor more
 often to narrow the window; there is no setting that closes it.
 
 **What works with no network.** The local anchor copy is written before the
 publish is attempted, so a crashed agent's truncated log is detected offline
 — which is the common case. An actor who deleted the local anchors *as well*
-is only caught by comparing against the published copy. A publish that fails
-never blocks a review: the anchor is recorded as pending and retried.
+is only caught after the operator explicitly recovers the published copy. A
+publish that fails never blocks a review: the anchor is recorded as pending and
+retried by the all-due OS-timer sweep.
 
 **Authority.** Publishing to a pull request needs comment authority for that
 repository. An advisory-only repository publishes nothing rather than
