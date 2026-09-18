@@ -148,7 +148,9 @@ python3 -m rqa.cli anchor recover <job-id> [--publisher <GitHub-login>]
 
 Publishes that job's current chain head and records it locally, so offline
 `rqa verify` and `rqa explain` can tell you whether entries are **missing**,
-not just whether the ones present are intact. The OS-timer cadence sweeps all
+not just whether the ones present are intact. Configure your OS timer (for
+example cron or a systemd timer) to run `python3 -m rqa.cli anchor --all` at
+the interval appropriate to the acceptable unattested window. The OS-timer cadence sweeps all
 jobs whose head is newer than its latest successful anchor, plus every pending
 publication; an earlier job's failed destination never prevents later due jobs
 from being attempted. A direct run is idempotent, so running it twice on an

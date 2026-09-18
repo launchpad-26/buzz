@@ -30,8 +30,8 @@ Parts 2 and 3 conform to the re-run contract defined in [§3](#3-the-re-run-cont
 They do not rewrite Part 1; later evidence annotates or supersedes its conclusions.
 
 > **Current implementation validation (2026-09-18, separate from the historical Part 1 capture).**
-> `python3 -m pytest tests --collect-only -qq` collected **1528 tests**. The final
-> #2299/#2300 focused command ran 172 tests, and `architecture/validate.py`,
+> `python3 -m pytest tests --collect-only -qq` collected **1529 tests**. The final
+> #2299/#2300 focused command ran 173 tests, and `architecture/validate.py`,
 > `requirements/validate.py`, and `tests/test_cutover_map.py` passed. The all-at-once
 > pytest and dependency-free runner did not emit a final summary within this execution
 > environment's time window, so this document does not claim they passed.

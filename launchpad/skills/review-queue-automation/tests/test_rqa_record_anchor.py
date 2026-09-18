@@ -408,6 +408,21 @@ def test_a_failed_publish_is_recorded_and_retried_never_silently_dropped() -> No
     assert latest_anchor(connection=connection, job="job-1").published is True
 
 
+def test_a_failed_publish_never_blocks_a_following_record_append() -> None:
+    """E-27 availability changes anchoring only; the review record keeps advancing."""
+    connection = chained(entries=2)
+    result = anchor_job(
+        connection,
+        "job-1",
+        publisher=FakePublisher(error=PublishFailed("destination unavailable")),
+        clock=lambda: CLOCK,
+    )
+    assert result.pending == 1
+    SQLiteRecordWriter(connection).append("job-1", "transition", {"to_state": "continues"})
+    assert len(rows(connection)) == 3
+    assert verify(connection, "job-1").ok is True
+
+
 def test_a_pending_anchor_still_detects_a_removed_tail_offline() -> None:
     """The offline half of the guarantee, and the reason the local row is written
     before the publish is attempted. `explain` must work with no network — the parent
