@@ -551,6 +551,73 @@ class Entry:
     hash: str
 
 
+@dataclass(frozen=True)
+class Anchor:
+    """E-27's payload: what gets published where the reviewed agent cannot rewrite it.
+
+    A job id, a sequence and a chain hash — **no record content, ever**. The hash is a
+    digest, which is what makes publishing an anchor a safe external send even where
+    the record itself must never go (ADR-0066, #2300).
+    """
+
+    job: str
+    seq: int
+    hash: str
+    at: str
+
+
+class AnchorReadOutcome(str, Enum):
+    """The complete result vocabulary for reading externally published anchors.
+
+    A reader returns ``FOUND`` only for anchors whose repository, pull request,
+    marker grammar, and publishing identity all match its request.  It returns
+    ``CONFLICT`` rather than selecting by timestamp when valid anchors name one
+    sequence with different chain hashes.
+    """
+
+    FOUND = "found"
+    NONE = "none"
+    UNAVAILABLE = "unavailable"
+    UNAUTHENTICATED = "unauthenticated"
+    MALFORMED = "malformed"
+    CONFLICT = "conflict"
+
+
+@dataclass(frozen=True)
+class AnchorEvidence:
+    """One authenticated external anchor and its immutable source locator.
+
+    This is deliberately only the anchor's position and digest plus the source
+    identity.  Record content is never carried across E-27.
+    """
+
+    anchor: Anchor
+    repo: str
+    number: int
+    publisher: str
+    locator: str
+
+
+@dataclass(frozen=True)
+class AnchorRead:
+    """The external-anchor read result consumed by explicit recovery only.
+
+    ``verify`` and ``explain`` consume persisted ``AnchorEvidence`` and remain
+    offline.  A ``CONFLICT`` result carries the conflicting valid evidence;
+    every other non-``FOUND`` result carries no evidence and explains why in
+    ``detail``.
+    """
+
+    outcome: AnchorReadOutcome
+    evidence: tuple[AnchorEvidence, ...]
+    detail: str
+
+
+class PublishFailed(Exception):
+    """An anchor did not reach its destination. Never fatal: the local anchor row is
+    already written, stays pending, and the next run retries it."""
+
+
 class AppendFailed(Exception):
     """The record could not be appended. Always propagates; never a recorded outcome."""
 
@@ -661,13 +728,14 @@ class ExplanationUnavailable:
 # --------------------------------------------------------------------------
 
 from rqa.edges import (  # noqa: E402
+    AnchorPublisher,
+    AnchorSource,
     EscalationStore,
     Explanation,
     BreakerStore,
     CapabilityStore,
     GithubProbe,
     HarnessProber,
-    KeyStore,
     LifecycleDeps,
     ProcessRunner,
     SnapshotStore,
@@ -750,8 +818,8 @@ EDGES: Mapping[str, tuple[object, ...] | str] = {
             " persisted",
     "E-23": (facts,),
     "E-24": (HarnessProber,),
-    "E-25": (KeyStore,),
     "E-26": (ProcessRunner,),
+    "E-27": (AnchorPublisher, AnchorSource),
 }
 
 __all__ = [
@@ -831,6 +899,13 @@ __all__ = [
     "EntryKind",
     "ENTRY_KINDS",
     "Entry",
+    "Anchor",
+    "AnchorReadOutcome",
+    "AnchorEvidence",
+    "AnchorRead",
+    "AnchorPublisher",
+    "AnchorSource",
+    "PublishFailed",
     "AppendFailed",
     "RecordWriter",
     "RecordRow",
@@ -855,7 +930,6 @@ __all__ = [
     "SupplyPort",
     "Explanation",
     "HarnessProber",
-    "KeyStore",
     "ProcessRunner",
     # §9. Edge signatures (re-exported from rqa.edges)
     "inventory",

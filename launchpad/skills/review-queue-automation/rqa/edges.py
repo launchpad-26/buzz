@@ -27,6 +27,8 @@ from typing import TYPE_CHECKING, Protocol
 
 if TYPE_CHECKING:  # annotation-only; resolved by type checkers, never at import
     from collections.abc import Mapping
+
+    from rqa.contracts import Anchor, AnchorRead
     from pathlib import Path
     from typing import Literal
 
@@ -270,11 +272,27 @@ class HarnessProber(Protocol):
     def probe(self, route: Route, *, timeout: float) -> bool: ...
 
 
-# E-25  P-12 consumes — the OS keychain (ADR-F key)          NEW: surfaced by review
-class KeyStore(Protocol):
-    def read(self, name: str) -> bytes | None: ...            # None: key absent → verify/explain report unverifiable, append proceeds unkeyed and says so
+# E-25  RETIRED by ADR-0066. P-12 consumed the OS keychain for the ADR-F/ADR-0063
+#       HMAC key. The key is gone, so the edge is gone; P-12 now consumes nothing.
 
 
 # E-26  P-10 consumes — local tool processes (MECHANICAL_TOOL_SET binaries)   NEW: surfaced by review
 class ProcessRunner(Protocol):
     def run(self, *, cwd: Path, argv: tuple[str, ...], timeout: float) -> ProcessResult: ...
+
+
+# E-27  P-12 consumes — anchor publication (ADR-0066's chain head)
+class AnchorPublisher(Protocol):
+    def publish(self, *, anchor: Anchor) -> str: ...          # raises PublishFailed; never appends to the record
+
+
+class AnchorSource(Protocol):
+    """E-27's read half, used only by explicit online recovery.
+
+    Implementations authenticate the exact repository, pull request, anchor
+    marker grammar, and accepted publisher identity before returning ``FOUND``.
+    They return ``CONFLICT`` for one sequence with different valid digests and
+    never choose one by timestamp.
+    """
+
+    def read(self, *, repo: str, number: int, job_id: str, publisher: str) -> AnchorRead: ...

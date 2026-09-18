@@ -12,6 +12,7 @@ import contextlib
 import importlib
 import io
 import json
+import os
 import pathlib
 import sqlite3
 import subprocess
@@ -67,33 +68,6 @@ class _OfflineGithub:
         return GithubUnavailable(op="facts", reason="test-offline", retriable=False)
 
 
-class _FakeKeyStore:
-    """The E-25 `KeyStore` seam, answered in-process, so nothing in this file
-    depends on the host having a platform keychain (`rqa/record/keychain.py`
-    raises `KeyStoreExplanationUnavailable` off Darwin, which `append` turns
-    into `AppendFailed` — `P-12-record.md` §3.1 step 5).
-
-    It returns **real key bytes and never `None`**. `None` is the distinct
-    ADR-0063 absent-key path: it would append *unkeyed* rows, these tests would
-    go green, and they would have quietly stopped exercising the branch the CLI
-    takes on an operator's machine. Same shape as the `FakeKeyStore` in
-    `tests/test_rqa_record_append.py` / `test_rqa_record_keychain.py`, plus a
-    record of the item names it was asked for so a test can prove it was the
-    store actually consulted.
-    """
-
-    def __init__(self, *, key: bytes = b"cli-test-record-hmac-key") -> None:
-        self.key = key
-        self.names: list[str] = []
-
-    def read(self, name: str) -> bytes | None:
-        self.names.append(name)
-        return self.key
-
-
-_FAKE_KEYSTORE = _FakeKeyStore()
-
-
 @contextlib.contextmanager
 def _offline_composition():
     """Patch `rqa.cli.main.build_composition` so every command built during
@@ -110,53 +84,11 @@ def _offline_composition():
         yield
 
 
-@contextlib.contextmanager
-def _injected_keystore():
-    """Patch `rqa.cli.main.build_composition` so every composition a command
-    builds takes `_FAKE_KEYSTORE` instead of the host's `OSKeyStore`.
-
-    **Why it lives in `_run_raw` rather than in each test.** `_cmd_pending`,
-    `_cmd_decide` and `_cmd_explain` each build their own composition, and the
-    decide path appends a `decision` entry through it; three of the tests that
-    reach an append call `_run` with no other patching at all. Hanging the
-    injection off the one funnel every in-process `main()` call in this file
-    goes through covers all of those paths at once, and a test added later
-    cannot forget it. It nests correctly inside `_offline_composition`, whose
-    wrapper forwards `**kwargs` to the real builder, so the keystore travels
-    through that helper unchanged.
-    """
-    real_build = main_module.build_composition
-
-    def patched(state_dir, **kwargs):
-        kwargs.setdefault("keystore", _FAKE_KEYSTORE)
-        return real_build(state_dir, **kwargs)
-
-    with unittest.mock.patch.object(main_module, "build_composition", patched), unittest.mock.patch.object(main_module, "OSKeyStore", return_value=_FAKE_KEYSTORE):
-        yield
-
-
-def _assert_every_entry_is_keyed(connection: sqlite3.Connection, job_id: str) -> None:
-    """The stored proof that `_FAKE_KEYSTORE` put these rows on the *keyed*
-    branch: `keyed = 1` and a real 64-hex `hmac` on every entry, and the only
-    item ever asked of the key store is `rqa-record-hmac`. A writer that stopped
-    keying — or a stub that started returning `None` — fails here."""
-    rows = connection.execute(
-        "SELECT seq, keyed, hmac FROM record_entries WHERE job = ? ORDER BY seq",
-        (job_id,),
-    ).fetchall()
-    assert rows, f"no record entries for {job_id!r}"
-    for seq, keyed, hmac in rows:
-        assert keyed == 1, (job_id, seq, keyed)
-        assert hmac is not None and len(hmac) == 64, (job_id, seq, hmac)
-    assert set(_FAKE_KEYSTORE.names) == {"rqa-record-hmac"}, _FAKE_KEYSTORE.names
-
-
 def _run_raw(state_dir: pathlib.Path, *args: str) -> tuple[int, str]:
     """`main()` in-process, argv exactly as a real invocation would pass it,
-    stdout captured verbatim, and every composition built along the way handed
-    the in-process key store (see `_injected_keystore`)."""
+    with stdout captured verbatim."""
     buffer = io.StringIO()
-    with _injected_keystore(), contextlib.redirect_stdout(buffer):
+    with contextlib.redirect_stdout(buffer):
         code = main(["--state-dir", str(state_dir), *args])
     return code, buffer.getvalue()
 
@@ -178,13 +110,11 @@ def _seed_escalated_job(
     context: dict,
 ) -> int:
     """A real `ESCALATED` job with one real open escalation, written through
-    RQA's own real stores — never a hand-built row. The writer takes the
-    in-process `_FAKE_KEYSTORE`, so seeding proves the keyed append path rather
-    than whatever key material the host machine happens to hold."""
+    RQA's own real stores — never a hand-built row."""
     connection = sqlite3.connect(str(state_dir / "state.db"))
     ensure_schema(connection)
     jobs = SqliteJobStore(connection, clock=_CLOCK)
-    record = SQLiteRecordWriter(connection, clock=_CLOCK, keystore=_FAKE_KEYSTORE)
+    record = SQLiteRecordWriter(connection, clock=_CLOCK)
     escalation_store = SqliteEscalationStore(connection)
 
     job = Job(
@@ -215,7 +145,6 @@ def _seed_escalated_job(
         store=escalation_store,
     )
     connection.commit()
-    _assert_every_entry_is_keyed(connection, job_id)
     connection.close()
     return escalation.id
 
@@ -233,6 +162,9 @@ def test_each_command_handler_calls_its_declared_provider_entry_point() -> None:
         # The parser selects one form at runtime; both P-12 entry points must
         # remain represented in this handler.
         "_cmd_explain": ["explain_job", "record_explain"],
+        # ADR-0066's anchored chain head (#2300). The grant-then-read-head ordering
+        # lives in the composition root, not here, so this handler delegates to it.
+            "_cmd_anchor": ["anchor_job_for", "anchor_job_for"],
     }
     provider_names = frozenset(name for names in expected.values() for name in names)
     handlers = {
@@ -256,33 +188,110 @@ def test_composition_repr_elides_every_live_collaborator() -> None:
     with tempfile.TemporaryDirectory() as state:
         comp = main_module.build_composition(pathlib.Path(state))
         try:
-            assert repr(comp) == "Composition(<20 injected collaborators; fields elided>)"
+            assert repr(comp) == "Composition(<19 injected collaborators; fields elided>)"
         finally:
             comp.connection.close()
 
 
 
 def test_onboard_writes_then_refuses_the_second_call() -> None:
+    """`onboard` names a repository the way `tick --repo` does: an `owner/repo`
+    slug resolved against the working directory. The slug must already be a
+    checkout; `onboard` never creates one."""
     with tempfile.TemporaryDirectory() as state, tempfile.TemporaryDirectory() as repos:
         state_dir = pathlib.Path(state)
-        repo = str(pathlib.Path(repos) / "acme" / "widget")
-        pathlib.Path(repo).mkdir(parents=True)
+        pathlib.Path(repos, "acme", "widget").mkdir(parents=True)
+        previous = os.getcwd()
+        os.chdir(repos)
+        try:
+            code, payload = _run(state_dir, "onboard", "acme/widget")
+            assert code == exitcodes.OK
+            assert payload["outcome"] == "written"
+            assert payload["result"]["path"] == "acme/widget/.rqa/config.json"
+            assert pathlib.Path(payload["result"]["path"]).is_file()
 
-        code, payload = _run(state_dir, "onboard", repo)
-        assert code == exitcodes.OK
-        assert payload["outcome"] == "written"
-        assert pathlib.Path(payload["result"]["path"]).is_file()
+            code, payload = _run(state_dir, "onboard", "acme/widget")
+            assert code == exitcodes.INPUT_ERROR
+            assert payload["outcome"] == "refused"
+            assert payload["result"]["reason"] == "already_exists"
+        finally:
+            os.chdir(previous)
 
-        code, payload = _run(state_dir, "onboard", repo)
-        assert code == exitcodes.INPUT_ERROR
-        assert payload["outcome"] == "refused"
-        assert payload["result"]["reason"] == "already_exists"
+
+def test_onboard_and_tick_agree_on_what_a_repository_is() -> None:
+    """The cycle this feature exists to ship: a repository onboarded through
+    `rqa onboard` is admitted by `rqa tick`, because both resolve the identical
+    slug through `policy.snapshot.config_path`.
+
+    Before this was fixed, `onboard` took a checkout path and `tick --repo` took
+    an `owner/repo` slug, so a repository onboarded as `checkouts/widget` was
+    refused at admission as unreadable `acme/widget/.rqa/config.json` — and the
+    refusal's own `onboarding_command` named a form `onboard` then rejected.
+
+    Honest about its own strength: this test passes against the pre-fix code too,
+    because a slug that *is* also a real checkout path always agreed. It is a
+    forward guard on the cycle, not the regression pin. The pin is
+    `test_onboard_refuses_anything_that_is_not_an_existing_slug_checkout`, whose
+    non-slug case fails against the pre-fix contract.
+    """
+    from rqa.intake.admission import _check_admission
+    from rqa.policy import SqliteSnapshotStore
+
+    class _NullRecord:
+        def append(self, *args, **kwargs):
+            del args, kwargs
+
+    with tempfile.TemporaryDirectory() as state, tempfile.TemporaryDirectory() as repos:
+        state_dir = pathlib.Path(state)
+        pathlib.Path(repos, "acme", "widget").mkdir(parents=True)
+        previous = os.getcwd()
+        os.chdir(repos)
+        try:
+            code, _ = _run(state_dir, "onboard", "acme/widget")
+            assert code == exitcodes.OK
+            refusal = _check_admission(
+                "acme/widget",
+                store=SqliteSnapshotStore(state_dir),
+                record=_NullRecord(),
+            )
+            assert refusal is None, f"tick refused a repo rqa onboard just wrote: {refusal}"
+        finally:
+            os.chdir(previous)
+
+
+def test_onboard_refuses_anything_that_is_not_an_existing_slug_checkout() -> None:
+    """Empty, traversal, shell-shaped and non-existent arguments are all usage
+    errors, and none of them creates a directory."""
+    with tempfile.TemporaryDirectory() as state, tempfile.TemporaryDirectory() as repos:
+        state_dir = pathlib.Path(state)
+        previous = os.getcwd()
+        os.chdir(repos)
+        try:
+            for argument in ("", "../../../../tmp/x", "a; rm -rf /tmp/nope", "acme/absent"):
+                code, payload = _run(state_dir, "onboard", argument)
+                assert code == exitcodes.INPUT_ERROR, (argument, code)
+                assert payload["outcome"] == "usage_error", (argument, payload)
+            assert sorted(pathlib.Path(repos).iterdir()) == []
+
+            # The discriminating case: a directory that really exists but is not
+            # an `owner/repo` slug. `tick --repo` cannot name it, so a config
+            # written under it could never be read back — which is precisely the
+            # cycle that used to be impossible to complete.
+            pathlib.Path(repos, "widget").mkdir()
+            code, payload = _run(state_dir, "onboard", "widget")
+            assert code == exitcodes.INPUT_ERROR, (code, payload)
+            assert payload["outcome"] == "usage_error", payload
+            assert not pathlib.Path(repos, "widget", ".rqa").exists(), (
+                "onboard wrote a config under a path `tick --repo` can never name"
+            )
+        finally:
+            os.chdir(previous)
 
 
 def test_status_reports_not_found_for_an_unknown_pr() -> None:
     with tempfile.TemporaryDirectory() as state:
         state_dir = pathlib.Path(state)
-        main_module.build_composition(state_dir, keystore=_FAKE_KEYSTORE).connection.close()
+        main_module.build_composition(state_dir).connection.close()
         code, payload = _run(state_dir, "status", "some/repo", "7")
         assert code == exitcodes.INPUT_ERROR
         assert payload["outcome"] == "not_found"
@@ -390,10 +399,8 @@ def test_pending_decide_pending_round_trip_and_exit_codes() -> None:
         assert code == exitcodes.OK
         assert payload["result"] == []
 
-        # The `decision` entry the CLI itself appended through `comp.record`
-        # must be keyed too: that is the second hardcoded `OSKeyStore()` this
-        # change removed, and only a run through `build_composition` exercises
-        # it.
+        # The `decision` entry must be appended through the production composition
+        # root, rather than existing only in provider-level tests.
         connection = sqlite3.connect(str(state_dir / "state.db"))
         try:
             kinds = [
@@ -403,7 +410,6 @@ def test_pending_decide_pending_round_trip_and_exit_codes() -> None:
                 )
             ]
             assert "decision" in kinds, kinds
-            _assert_every_entry_is_keyed(connection, "job-loop")
         finally:
             connection.close()
 
@@ -412,7 +418,7 @@ def test_pending_decide_pending_round_trip_and_exit_codes() -> None:
 def test_decide_refuses_an_unknown_escalation_id() -> None:
     with tempfile.TemporaryDirectory() as state:
         state_dir = pathlib.Path(state)
-        main_module.build_composition(state_dir, keystore=_FAKE_KEYSTORE).connection.close()
+        main_module.build_composition(state_dir).connection.close()
         code, payload = _run(
             state_dir, "decide", "999", "--actor", "jeff", "--basis", "no such row",
         )

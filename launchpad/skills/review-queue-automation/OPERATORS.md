@@ -25,19 +25,21 @@ Contents:
 10. [Platform](#10-platform)
 11. [Tests](#11-tests)
 
-`<repo>` below is the repository being reviewed, named as `owner/repo` to
-`rqa status`/`rqa explain` and as a filesystem path to `rqa onboard`.
+`<repo>` below is the repository being reviewed, always named as an
+`owner/repo` slug. Commands resolve that slug relative to the current working
+directory, so run RQA from the directory containing the `owner/` checkout
+directory.
 
 ---
 
 ## 1. Onboarding
 
 ```bash
-python3 -m rqa.cli onboard <repo-path>
-python3 -m rqa.cli onboard <repo-path> --migrate
+python3 -m rqa.cli onboard <owner/repo>
+python3 -m rqa.cli onboard <owner/repo> --migrate
 ```
 
-Writes `<repo-path>/.rqa/config.json` — the starter document
+Writes `<owner/repo>/.rqa/config.json` — the starter document
 `rqa.policy.validate.starter_config()` builds, with every `authority` entry
 `false`, every `routes` entry absent, `external.allowed` `false`, an empty
 `policy.obligations`, and every `budget` axis unset (`null`, meaning no
@@ -54,9 +56,9 @@ named at all (`comment`/`approve`/`request_changes`/`merge`), and refuses
 (`no_config_to_migrate` / `unreadable_existing` / `migrated_config_invalid`, exit 1) if there is
 nothing to migrate or the result itself fails validation.
 
-The path must already be an existing local directory. Onboarding checks the
-keychain before writing and makes no GitHub call and mutates nothing outside the one file it
-writes.
+The slug must resolve to an existing local checkout; onboarding never creates
+one. It makes no GitHub call and mutates nothing outside the one config file it
+writes; the keyless record design reads no keychain or credential store.
 
 ---
 
@@ -139,6 +141,44 @@ guaranteed to be actionable just because the escalation exists.
 
 ---
 
+## 4a. Anchoring a job's record
+
+```bash
+python3 -m rqa.cli anchor <job-id>
+python3 -m rqa.cli anchor recover <job-id> [--publisher <GitHub-login>]
+```
+
+Publishes that job's current chain head and records it locally, so offline
+`rqa verify` and `rqa explain` can tell you whether entries are **missing**,
+not just whether the ones present are intact. Configure your OS timer (for
+example cron or a systemd timer) to run `python3 -m rqa.cli anchor --all` at
+the interval appropriate to the acceptable unattested window. The OS-timer cadence sweeps all
+jobs whose head is newer than its latest successful anchor, plus every pending
+publication; an earlier job's failed destination never prevents later due jobs
+from being attempted. A direct run is idempotent, so running it twice on an
+unchanged, successfully anchored job does nothing.
+
+It always exits 0 when it ran. An anchor that could not be published is a
+reported state, not an error:
+
+| `detail` says | What happened | What it still gives you |
+|---|---|---|
+| (nothing) | Published | Full detection through the latest successful anchor, including after local anchor loss once recovered |
+| `not published: …` | No comment authority for that repository | The local anchor — a crash-truncated log is still detected offline |
+| a failure message | GitHub was unreachable | Same; the anchor stays pending and the next run retries it |
+
+**Anchoring can never fail a review.** That is deliberate: a review that
+stopped because an audit-trail nicety could not reach the network would be a
+worse outcome than an unanchored record.
+
+**External recovery is explicit and online.** `rqa anchor recover <job-id>`
+retrieves authenticated external evidence only when local anchor rows are
+missing or insufficient. It accepts matching repository, PR, job and publisher
+evidence; it imports only anchor position, digest and source provenance, never
+record content or a record entry. `verify` and `explain` never make that call.
+A recovery that is unavailable, malformed, absent or conflicting changes no
+local state; a conflict is never resolved by choosing the newest timestamp.
+
 ## 5. Deciding an escalation
 
 ```bash
@@ -151,7 +191,7 @@ whose head has moved since the escalation was raised, or a job whose policy
 snapshot has moved — each of the last two means the escalation's own premise
 is stale, and re-running `rqa tick` will raise a fresh one against the
 current head if the condition still holds. A successful decision is recorded
-in the tamper-evident record (§6.3, ADR-0063) and resumes the job's
+in the tamper-evident record (§6.3, ADR-0066) and resumes the job's
 lifecycle; supplying an input a raised escalation names never restarts the
 review from the beginning.
 
@@ -181,14 +221,44 @@ repository outside its configured set and never persists the credential.
 What the token could do on an unmanaged repository is a known, accepted, and
 unclosed residual (RQA-NFR-030) — not something `rqa` can narrow.
 
-**ADR-0063 — the record is a hash chain plus an operator-held HMAC.** Every
-record entry is chained and, when the operator's OS keychain holds the HMAC
-secret, additionally authenticated; `rqa` never writes or rotates that
-secret itself. A missing key degrades an append to explicitly unkeyed —
-`rqa explain` then reports that span `unverifiable: no key`, never as a
-break and never as a stopped review. Neither the hash chain nor the HMAC
-detects truncation of the record's tail; both detect edits and reordering of
-the rows that remain.
+**ADR-0066 — the record is a hash chain, and there is no key to keep.** Every
+record entry is chained to the one before it, so an edit, a reordering, an
+interrupted write, or an accidental corruption is detected. **You hold no
+secret and there is nothing to lose or rotate.** ADR-0066 superseded ADR-0063,
+**Historical:** ADR-0063 additionally authenticated each entry with an operator-held HMAC key
+from the OS keychain: that key had to be readable by `rqa` on every append, so
+anything running as you could read it too, and it cost a separate credential
+integration per platform.
+
+On its own the chain does **not** detect two things: an actor who rewrites a
+row *and* recomputes every hash after it, and a removed tail — a record with
+its last entries deleted is shorter but internally consistent, and verifies
+clean. **Anchoring closes both**, up to the last anchor.
+
+**What anchoring is.** RQA periodically publishes the record's current head —
+a job id, a sequence and a hash, never any content — somewhere the reviewed
+agent cannot rewrite it, and keeps a local copy. `verify` then compares the
+two. If entries the anchor proves existed are gone, you get `tail_removed`
+rather than a clean pass; if the chain was rebuilt, `anchor_mismatch`.
+
+**The bound, which matters when you read a report.** Anchoring is periodic,
+so the exact guarantee is "complete as at the latest successful anchor",
+never "complete as at the final entry". Entries appended after the most recent
+successful anchor are
+unattested, and truncation inside that window is undetectable. Anchor more
+often to narrow the window; there is no setting that closes it.
+
+**What works with no network.** The local anchor copy is written before the
+publish is attempted, so a crashed agent's truncated log is detected offline
+— which is the common case. An actor who deleted the local anchors *as well*
+is only caught after the operator explicitly recovers the published copy. A
+publish that fails never blocks a review: the anchor is recorded as pending and
+retried by the all-due OS-timer sweep.
+
+**Authority.** Publishing to a pull request needs comment authority for that
+repository. An advisory-only repository publishes nothing rather than
+widening what RQA may do — you get an unanchored record, honestly reported,
+not a silent escalation of privilege.
 
 **ADR-0064 — the only remedy `rqa` applies and pushes itself is a closed-set
 tool run on exact named files, never a model-supplied patch.** A remedy names
@@ -261,18 +331,17 @@ contents, credentials, environment values, and model output are absent.
 
 ## 10. Platform
 
-Supported backends are macOS Keychain (`security`) and Linux Secret Service
-(`secret-tool`, with a running user Secret Service session). The operator-held
-item is identified by service `rqa-record-hmac`; RQA reads it and never creates
-or rotates it. Linux lookup failure is checked with a metadata search so a
-locked matching item cannot be mistaken for an absent item.
+**No platform constraint.** `rqa` reads no credential store, spawns no
+platform-specific process, and has no `sys.platform` branch in its record
+path. Appending works identically on macOS, Linux, Windows, in a container,
+and in CI, with nothing to install and no daemon to run.
 
-A missing tool, unavailable session, locked matching item or timeout stops
-`onboard`, `tick` and `decide` before work. An absent key permits explicitly
-unkeyed records; `explain` marks them unverifiable. `status` and `pending` need
-no key, and `explain` reports integrity using the same backend as the writer.
-A typo in `--state-dir` on a read or decision command is an input error and
-creates no database.
+This was not always true. Until ADR-0066 the record read an HMAC key from the
+OS keychain: macOS-only at first, so every append failed on Linux (#2272),
+then macOS plus Linux Secret Service (PR #2287), which would have needed a
+third integration for Windows and left headless Linux operators needing a
+running Secret Service session. Removing the key removed the whole class of
+problem rather than adding a third backend.
 
 ---
 

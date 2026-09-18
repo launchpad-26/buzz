@@ -82,8 +82,8 @@ class SqliteSnapshotStore:
     alone.
 
     The `snapshots.repo` column is written as `""`. §5 fixes `activate(hash, raw, at)`
-    with no repository argument and documents the column as "informational, not a
-    key", so the store genuinely never learns a repo; `snapshot_for` puts the
+    with no repository argument and documents the column as a "reserved compatibility
+    field", so the store genuinely never learns a repo; `snapshot_for` puts the
     caller's own `repo` on the `Snapshot` it returns. Nothing reads the column.
     """
 

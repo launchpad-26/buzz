@@ -1,6 +1,6 @@
 # ADR-F — Provenance integrity mechanism for the review record
 
-**Status:** decided 2026-09-11 — recommendation (b) accepted; recorded as [ADR-0063](../../../../decisions/ADR-0063-rqa-record-provenance-integrity.md), which closes [issue #2159](https://github.com/launchpad-26/buzz/issues/2159). This draft is retained as the architecture's rationale, not as an open question.
+**Status:** **historical draft**, decided 2026-09-11 as [ADR-0063](../../../../decisions/ADR-0063-rqa-record-provenance-integrity.md), then superseded 2026-09-16 by [ADR-0066](../../../../decisions/ADR-0066-rqa-record-chain-anchoring-without-a-key.md). This draft preserves the rationale for the retired HMAC option; it is not an open question or a description of the delivered design.
 **Parent:** [#2006](https://github.com/launchpad-26/buzz/issues/2006) · **Raised by:** #2071 architecture · **Decomposition-blocking:** **not blocking**
 **Parts affected:** P-12 · **Requirements:** RQA-NFR-028, RQA-NFR-022, RQA-NFR-032
 
@@ -26,6 +26,11 @@ security consequences the maintainer owns.
 | (c) | Signed entries with a per-installation asymmetric key. | As (b), plus third-party verifiability. | Key custody as (b); more machinery for a property no requirement asks for (nothing outside the operator machine verifies). |
 
 ## Recommendation — (b)
+
+> **Historical recommendation, superseded.** The following was ADR-0063's
+> recommendation. ADR-0066 instead delivers a keyless hash chain with externally
+> published/retrieved anchors, explicit online recovery, offline verification and
+> explanation, and retryable all-due OS-timer publication.
 
 It is the smallest mechanism that meets RQA-NFR-028's "detected and refused" for the threat the
 specification names — an actor on the operator's machine lacking the operator's authority — and no

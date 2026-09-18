@@ -387,6 +387,21 @@ ENTRY_KINDS: frozenset[EntryKind]
 class Entry: seq: int; hash: str
 class AppendFailed(Exception): ...
 
+# ADR-0066's anchored chain head (#2300). A digest and its position — never payload.
+@dataclass(frozen=True)
+class Anchor: job: str; seq: int; hash: str; at: str
+
+class AnchorReadOutcome(str, Enum):
+    FOUND = "found"; NONE = "none"; UNAVAILABLE = "unavailable"
+    UNAUTHENTICATED = "unauthenticated"; MALFORMED = "malformed"; CONFLICT = "conflict"
+@dataclass(frozen=True)
+class AnchorEvidence:
+    anchor: Anchor; repo: str; number: int; publisher: str; locator: str
+@dataclass(frozen=True)
+class AnchorRead:
+    outcome: AnchorReadOutcome; evidence: tuple[AnchorEvidence, ...]; detail: str
+class PublishFailed(Exception): ...
+
 class RecordWriter(Protocol):
     def append(self, job_id: str, kind: EntryKind, payload: Mapping) -> Entry: ...
 
@@ -533,13 +548,23 @@ class HarnessProber(Protocol):
 # E-21  OS scheduler → P-01: process launch `rqa tick`; no payload
 # E-22  P-08 → GitHub CLI: process execution `gh auth token`; value held in memory for one probe, never persisted
 
-# E-25  P-12 consumes — the OS keychain (ADR-F key)          NEW: surfaced by review
-class KeyStore(Protocol):
-    def read(self, name: str) -> bytes | None: ...            # None: key absent → verify/explain report unverifiable, append proceeds unkeyed and says so
+# E-25  RETIRED by ADR-0066. P-12 consumed the OS keychain for the record HMAC key;
+#       the key is gone, so the edge is gone and P-12 consumes nothing.
 
 # E-26  P-10 consumes — local tool processes (MECHANICAL_TOOL_SET binaries)   NEW: surfaced by review
 class ProcessRunner(Protocol):
     def run(self, *, cwd: Path, argv: tuple[str, ...], timeout: float) -> ProcessResult: ...
+
+# E-27  P-12 consumes — anchor publication (ADR-0066's chain head)
+class AnchorPublisher(Protocol):
+    def publish(self, *, anchor: Anchor) -> str: ...          # raises PublishFailed; never appends to the record
+
+# E-27's read half is explicit recovery only. `verify` and `explain` use persisted
+# AnchorEvidence and remain offline. A source returns FOUND only after authenticating
+# the exact repo/PR, exact anchor marker grammar and accepted publisher identity. It
+# returns CONFLICT, never timestamp selection, for one sequence with distinct valid hashes.
+class AnchorSource(Protocol):
+    def read(self, *, repo: str, number: int, job_id: str, publisher: str) -> AnchorRead: ...
 ```
 
 ## 10. Ownership of the review loop — decided

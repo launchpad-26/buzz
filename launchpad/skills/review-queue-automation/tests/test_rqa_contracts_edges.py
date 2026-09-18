@@ -256,10 +256,20 @@ PROTOCOL_METHODS: dict[str, tuple[tuple[tuple[str, object, object], ...], str]] 
         (("self", POS, EMPTY), ("route", POS, "Route"), ("timeout", KW, "float")),
         "bool",
     ),
-    # E-25  class KeyStore(Protocol)
-    "KeyStore.read": (
-        (("self", POS, EMPTY), ("name", POS, "str")),
-        "bytes | None",
+    # E-27  class AnchorPublisher(Protocol)
+    "AnchorPublisher.publish": (
+        (("self", POS, EMPTY), ("anchor", KW, "Anchor")),
+        "str",
+    ),
+    "AnchorSource.read": (
+        (
+            ("self", POS, EMPTY),
+            ("repo", KW, "str"),
+            ("number", KW, "int"),
+            ("job_id", KW, "str"),
+            ("publisher", KW, "str"),
+        ),
+        "AnchorRead",
     ),
     # E-26  class ProcessRunner(Protocol)
     "ProcessRunner.run": (
@@ -334,7 +344,7 @@ PROSE_ONLY_EDGES = frozenset({"E-18", "E-19", "E-20", "E-21", "E-22"})
 SECTION_NINE_NAMES = (
     tuple(EDGE_FUNCTIONS)
     + tuple(EMPTY_PROTOCOL_OWNERS)
-    + ("SupplyPort", "HarnessProber", "KeyStore", "ProcessRunner")
+    + ("SupplyPort", "HarnessProber", "ProcessRunner", "AnchorPublisher", "AnchorSource")
     + ("status", "explain", "decide", "onboard", "tick")
 )
 
@@ -500,6 +510,7 @@ def test_e17_surface_callables_constrain_nothing_beyond_their_names() -> None:
 
 def test_every_section_six_edge_row_is_accounted_for() -> None:
     ids = _section_six_edge_ids()
+    # 26 rows until ADR-0066 retired E-25 (the record HMAC key store) with the key.
     assert len(ids) == 26, f"components.md §6 has {len(ids)} edge rows, expected 26"
     assert len(set(ids)) == len(ids), "duplicate edge id in components.md §6"
     assert set(contracts.EDGES) == set(ids), (

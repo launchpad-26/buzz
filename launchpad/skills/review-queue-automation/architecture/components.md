@@ -98,7 +98,7 @@ flowchart LR
   P06 -->|bundle in, verdict out| HARN[["Review harness"]]
   P10 -->|git push to the PR head branch| GH
   P08 -->|gh auth token| GHCLI[["GitHub CLI"]]
-  P12 -->|reads the HMAC key| KC[["OS keychain"]]
+  P12 -->|publishes the chain head| P09
   P10 -->|runs formatter and git| TOOLS[["Local tool processes"]]
 ```
 
@@ -271,15 +271,15 @@ flowchart LR
 **Justification (RQA-FR-034).** Serves RQA-FR-013, RQA-FR-025, RQA-FR-026, RQA-BR-011, RQA-BR-013, RQA-NFR-033. Simpler alternative rejected: folding into P-02 puts the human interface inside the state machine; the decision must be a recorded fact P-02 evaluates, not a transition a human triggers. Constraint: C5 (the human reaches it through the local CLI).
 ### P-12 — Record
 
-**Responsibility.** The one review record: a closed fourteen-kind append-only hash chain per job, including bundle/panel cutoff evidence, attempts, judgement, grants, actions, escalations and decisions. Only P-12 performs storage writes; callers construct typed payloads. `explain` reconstructs FR-012 offline. ADR-F / [#2159](https://github.com/launchpad-26/buzz/issues/2159) governs optional operator-key HMAC; an absent key marks a segment unverifiable rather than blocking append. Trace remains non-authoritative.
+**Responsibility.** The one review record: a closed fourteen-kind append-only keyless hash chain per job, including bundle/panel cutoff evidence, attempts, judgement, grants, actions, escalations and decisions. Only P-12 performs record storage writes; callers construct typed payloads. `verify` and `explain` reconstruct from local evidence offline. ADR-0066 publishes the chain head outside the operator machine and supports explicit authenticated recovery, so a removed tail or rebuilt chain is detectable through the latest successful anchor. Trace remains non-authoritative.
 
-**Interfaces.** Provides: E-13, E-17. Consumes: E-25. (Contracts in §6.)
+**Interfaces.** Provides: E-13, E-17. Consumes: E-27. (Contracts in §6.)
 
 **Accountable for (5).** RQA-BR-003, RQA-FR-012, RQA-NFR-022, RQA-NFR-028, RQA-NFR-032
 
 **Contributes to (14).** RQA-BR-001, RQA-BR-005, RQA-BR-008, RQA-BR-011, RQA-BR-014, RQA-FR-007, RQA-FR-013, RQA-FR-015, RQA-FR-016, RQA-FR-020, RQA-FR-021, RQA-FR-038, RQA-NFR-006, RQA-NFR-010
 
-**Records written.** record_entries, trace
+**Records written.** record_entries, record_anchors, trace
 
 **Units placed or replaced (17).** U-DISPATCH-04, U-DISPATCH-06, U-DISPATCH-19, U-DISPATCH-20, U-DOCS-16, U-DOCS-17, U-DOCS-18, U-DOCS-39, U-DOCS-40, U-DOCS-55, U-QUEUE-13, U-RESILIENCE-06, U-RESILIENCE-07, U-RESILIENCE-08, U-RESILIENCE-14, U-VERDICT-17, U-VERDICT-21
 
@@ -411,7 +411,7 @@ Python signature of every edge, and every type two parts exchange, is in [`code/
 this table is the prose view of that file and the checker verifies the two agree. The published
 harness interaction contract (RQA-FR-030) is E-19 and is stated at the same level as every other edge.
 An edge that is not listed does not exist: a part reaches another part only through a listed edge, and
-reaches the outside only through E-18, E-19, E-20, E-22, E-24, E-25 or E-26.
+reaches the outside only through E-18, E-19, E-20, E-22, E-24, E-26 or E-27.
 
 | edge | from | to | contract | shape | invocation |
 |---|---|---|---|---|---|
@@ -439,8 +439,8 @@ reaches the outside only through E-18, E-19, E-20, E-22, E-24, E-25 or E-26.
 | E-22 | P-08 | GitHub CLI | `gh auth token` | the operator's GitHub CLI credential | process execution of `gh auth token`; the only credential path (maintainer constraint); RQA never persists the value |
 | E-23 | P-02 | P-09 | `facts(job, record)` | coherent `Facts`: exact target/protection, PR-wide and predecessor-to-current path sets, files, timestamped checks, submitted reviews, labels, capture time | once per admission/resume; P-07 bounds checks to panel cutoff; P-13 uses only revision paths |
 | E-24 | P-05 | review harness | `probe(route)` | a no-content liveness probe: the harness is invoked with an empty bundle directory and a probe marker file, and must exit 0 without writing a verdict | process execution; the marker is part of the published interaction contract (E-19) so an external harness can honour it |
-| E-25 | P-12 | OS keychain | `KeyStore.read(name)` | the operator-held key for the record HMAC, or `None` | process execution of the platform keychain tool; key absent → append proceeds unkeyed and the entry says so, `verify`/`explain` report the segment unverifiable (ADR-F) |
 | E-26 | P-10 | local tool processes | canonical `ProcessRunner.run` | closed formatter/git argv on exact files; missing binary is `RemediationRefused(TOOL_UNAVAILABLE)`; registered semantic oracle must prove before/after equivalence | isolated worktree; no network except E-20 |
+| E-27 | P-12 | anchor destination | `AnchorPublisher.publish(anchor)`; explicit recovery uses `AnchorSource.read(repo, number, job_id, publisher)` | an opaque destination locator, `PublishFailed`, or authenticated recovery evidence | ADR-0066's chain head, published where the reviewed agent cannot rewrite it; carries a digest and its position, never payload; a failed publish leaves the anchor pending for the all-due OS-timer sweep and never blocks an append; `verify`/`explain` stay offline, recovery persists no record entry, and the publisher must not route through a recorded write (#2300) |
 
 ## 7. Disposition reconciliation
 

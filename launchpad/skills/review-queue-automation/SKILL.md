@@ -23,7 +23,7 @@ configuration lives at `<repo>/.rqa/config.json`, written by `rqa onboard` and
 read by `rqa.policy.validate`; `config.example.json` is the tracked example of
 that file's shape, never itself a populated config.
 
-## The six commands
+## The seven commands
 
 Every command exists in `rqa/cli/main.py` and nothing else does. Global flag:
 `--state-dir <path>`.
@@ -52,8 +52,9 @@ Writes a starter `<repo>/.rqa/config.json`.
 python3 -m rqa.cli onboard <repo> [--migrate]
 ```
 
-`<repo>` is the repository root. Plain `onboard` refuses if a config already
-exists (`already_exists`). `--migrate` instead converts an old-shape config in
+`<repo>` is an `owner/repo` slug resolved relative to the current working
+directory, and it must name an existing checkout. Plain `onboard` refuses if a
+config already exists (`already_exists`). `--migrate` instead converts an old-shape config in
 place — dropping the notification-transport and retention-window keys and
 zeroing every `authority` entry the old shape never named — and refuses if no
 old config is present, or if the migrated result itself fails validation.
@@ -114,6 +115,28 @@ The first positional is `repo` (an `owner/repo` slug) or the literal `job`;
 the second is the PR number or the job id accordingly. An unreconstructable
 target returns `outcome: "unavailable"` (exit 1).
 
+### `rqa anchor`
+
+Publish one job's keyless record-chain head, or explicitly recover externally
+published anchor evidence after local anchor rows are lost.
+
+```bash
+python3 -m rqa.cli anchor <job-id>
+python3 -m rqa.cli anchor --all
+python3 -m rqa.cli anchor recover <job-id> [--publisher <GitHub-login>]
+```
+
+Normal anchoring records the head locally before publishing it. A publication
+failure leaves that anchor pending, never blocks a review, and is retried by a
+later anchor run. `anchor --all` is the OS-timer entry point: it sweeps every
+newer head and pending publication independently. Before publication, RQA records
+the pinned policy's external-send decision (including its per-change deny label)
+and the comment grant. The guarantee is complete **as at the latest successful
+anchor**; newer entries are unattested. `verify` and `explain` remain offline: recovery is the only
+operation that reads the external destination, and it persists only matching
+anchor position/digest/provenance — never record content and never a new record
+entry. A recovery result other than `recovered` changes no local state.
+
 ## Exit codes
 
 `0` means success; `1` means input error or policy refusal; `2` means a GitHub
@@ -124,14 +147,13 @@ produce a successful tick exit code.
 
 ## Platform and state
 
-macOS Keychain and Linux Secret Service (`secret-tool`) are supported.
-`onboard`, `tick` and `decide` check keychain availability before work; an absent
-key is explicitly unkeyed, while an unavailable backend is an error.
-`onboard` requires an existing local directory. Read and decision commands require
-an existing state database so a mistyped state directory creates nothing.
-`explain` uses the writer's keychain and reports the stored human decision basis.
-Control characters in operator text render as visible escapes, preserving line
-boundaries without activating terminal controls.
+The record is a keyless hash chain: RQA reads no keychain or credential store.
+`onboard` requires an existing local directory. Read and decision commands, plus
+explicit anchor recovery, require an existing state database so a mistyped state
+directory creates nothing. `verify` and `explain` use local chain and anchor
+evidence only; recovery is explicitly online. Control characters in operator text
+render as visible escapes, preserving line boundaries without activating terminal
+controls.
 
 ## Configuration and policy
 

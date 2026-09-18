@@ -305,6 +305,25 @@ DOCUMENTED_DATACLASSES: dict[str, tuple[tuple[str, str], ...]] = {
         ("seq", "int"),
         ("hash", "str"),
     ),
+    # E-27's payload (ADR-0066, #2300): a digest and its position, never payload.
+    "Anchor": (
+        ("job", "str"),
+        ("seq", "int"),
+        ("hash", "str"),
+        ("at", "str"),
+    ),
+    "AnchorEvidence": (
+        ("anchor", "Anchor"),
+        ("repo", "str"),
+        ("number", "int"),
+        ("publisher", "str"),
+        ("locator", "str"),
+    ),
+    "AnchorRead": (
+        ("outcome", "AnchorReadOutcome"),
+        ("evidence", "tuple[AnchorEvidence, ...]"),
+        ("detail", "str"),
+    ),
     "RecordRow": (
         ("seq", "int"),
         ("kind", "EntryKind"),
@@ -440,6 +459,14 @@ DOCUMENTED_ENUMS: dict[str, tuple[tuple[str, str], ...]] = {
         ("INTEGRITY_BREAK", "integrity_break"),
         ("UNVERIFIABLE", "unverifiable"),
         ("LEGACY", "legacy"),
+    ),
+    "AnchorReadOutcome": (
+        ("FOUND", "found"),
+        ("NONE", "none"),
+        ("UNAVAILABLE", "unavailable"),
+        ("UNAUTHENTICATED", "unauthenticated"),
+        ("MALFORMED", "malformed"),
+        ("CONFLICT", "conflict"),
     ),
     "DenyReason": (
         ("NOT_ENABLED", "not_enabled"),

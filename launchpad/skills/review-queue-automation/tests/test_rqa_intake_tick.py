@@ -123,11 +123,6 @@ class FakeGithub:
         raise AssertionError("P-01 must not issue an unauthorised release")
 
 
-class NoKeyStore:
-    def read(self, name):
-        return None
-
-
 class NeverTouch:
     def __getattribute__(self, name):
         raise AssertionError(f"lock-contention path touched dependency attribute {name}")
@@ -638,7 +633,7 @@ def test_real_lifecycle_admit_reaches_a_resting_status_through_tick() -> None:
     job = make_job("job-1", 1)
     jobs.create(job)
     connection.commit()
-    record = SQLiteRecordWriter(connection, clock=lambda: NOW, keystore=NoKeyStore())
+    record = SQLiteRecordWriter(connection, clock=lambda: NOW)
     snapshot = make_snapshot(repo=job.repo)
     policy = FakePolicyClient(snapshot)
     authority = FakeAuthorityClient(

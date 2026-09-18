@@ -11,7 +11,7 @@ connection's implicit transaction, so a failure in either leaves neither durable
 writer cannot demonstrate that — it would prove only that this file's own fake behaves as
 this file's own fake was written to. The two places a fake *is* used are the two failures
 a real writer cannot be asked to produce on demand: an append that fails, and a read that
-fails. Nothing here touches a network, a keychain or a credential: the injected key store
+fails. Nothing here touches a network, a keychain or a credential: the record writer
 returns `None`, which is `P-12-record.md` §3.1's explicitly unkeyed append.
 """
 
@@ -73,14 +73,6 @@ CREATE TABLE jobs (
 
 HEAD = "a" * 40
 BASE = "b" * 40
-
-
-class NoKeyStore:
-    """ADR-0063's absent-key path: a successful, explicitly unkeyed append. No OS
-    keychain is consulted and no key material exists in this process."""
-
-    def read(self, name: str) -> bytes | None:
-        return None
 
 
 class FlakyWriter:
@@ -187,7 +179,7 @@ def bench(
     connection = new_db(path, factory=factory)
     job = make_job(status=status, snapshot_hash=snapshot_hash)
     insert_job(connection, job)
-    return connection, SQLiteRecordWriter(connection, keystore=NoKeyStore()), job
+    return connection, SQLiteRecordWriter(connection), job
 
 
 def stored_status(connection: sqlite3.Connection, job_id: str = "job-1") -> str:
@@ -373,7 +365,7 @@ def test_a_status_write_that_matches_no_row_is_named_not_silent() -> None:
     """A `jobs` row that is not there makes the `UPDATE` a no-op, and a silent no-op here
     is a job the record says moved and the table says did not."""
     connection = new_db()
-    record = SQLiteRecordWriter(connection, keystore=NoKeyStore())
+    record = SQLiteRecordWriter(connection)
     try:
         transition(
             make_job(status=JobStatus.CLAIMED), JobStatus.PLANNED, reason="r",

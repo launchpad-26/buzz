@@ -29,15 +29,17 @@ import sys
 from pathlib import Path
 from typing import Any, NoReturn
 
+from rqa.anchor_cadence import sweep_due_anchors
 from rqa.cli import exitcodes
-from rqa.cli.composition import build_composition
+from rqa.cli.composition import anchor_job_for, build_composition
 from rqa.cli.render import emit
+from rqa.authority import GateError
 from rqa.contracts import EscalationRefused, ExplanationUnavailable
 from rqa.escalation import EscalationError, decide as escalation_decide, pending as escalation_pending
 from rqa.intake import tick as intake_tick
 from rqa.lifecycle import LifecycleError, NotFound, status as lifecycle_status
 from rqa.policy import OnboardRefusal, onboard as policy_onboard
-from rqa.record import OSKeyStore, AppendFailed, ReuseResolutionError, explain as record_explain, explain_job
+from rqa.record import AppendFailed, ReuseResolutionError, explain as record_explain, explain_job
 
 __all__ = ["main"]
 
@@ -148,6 +150,32 @@ def _build_parser() -> _ArgumentParser:
         "--outcome", choices=("approved", "changes_requested"), default=None
     )
 
+    anchor_parser = sub.add_parser(
+        "anchor",
+        help="publish a job's record chain head so a removed tail becomes detectable",
+    )
+    anchor_parser.add_argument(
+        "anchor_target",
+        metavar="job-id|recover",
+        nargs="?",
+        help="job id to publish, or 'recover' for external-anchor recovery",
+    )
+    anchor_parser.add_argument(
+        "recovery_job_id",
+        metavar="job-id",
+        nargs="?",
+        help="job id to recover after the literal 'recover'",
+    )
+    anchor_parser.add_argument(
+        "--publisher",
+        help="accepted GitHub login for anchor recovery; defaults to the job's stored capability proof",
+    )
+    anchor_parser.add_argument(
+        "--all",
+        action="store_true",
+        help="sweep every due head and pending publication once; invoke this from an OS timer",
+    )
+
     explain_parser = sub.add_parser(
         "explain", help="reconstruct an outcome from the record alone, offline"
     )
@@ -159,7 +187,7 @@ def _build_parser() -> _ArgumentParser:
 
 def _cmd_tick(args: argparse.Namespace, state_dir: Path) -> tuple[int, dict[str, Any]]:
     repos = tuple(args.repos) if args.repos else _configured_repos(state_dir)
-    comp = build_composition(state_dir, repos=repos, require_record=True)
+    comp = build_composition(state_dir, repos=repos)
     kwargs: dict[str, Any] = {}
     if args.batch_size is not None:
         kwargs["batch_size"] = args.batch_size
@@ -205,10 +233,17 @@ def _cmd_tick(args: argparse.Namespace, state_dir: Path) -> tuple[int, dict[str,
 
 
 def _cmd_onboard(args: argparse.Namespace) -> tuple[int, dict[str, Any]]:
-    if not args.repo.strip() or not Path(args.repo).is_dir():
-        raise _UsageError("onboard requires an existing local repository directory")
-    OSKeyStore().read("rqa-record-hmac")
-    result = policy_onboard(repo=args.repo, migrate=args.migrate)
+    # Keep onboarding and `tick --repo` on the same identifier contract.  A
+    # checkout path such as ``/work/acme/widget`` cannot later be named by
+    # `tick`, whereas the owner/repo slug resolves to that checkout relative to
+    # the caller's working directory.
+    repo = _repo_slug(args.repo)
+    if not Path(repo).is_dir():
+        raise _UsageError(
+            f"onboard requires an existing checkout at {repo!r}, relative to the "
+            "directory rqa is run from; it never creates one"
+        )
+    result = policy_onboard(repo=repo, migrate=args.migrate)
     if isinstance(result, OnboardRefusal):
         return exitcodes.INPUT_ERROR, {"outcome": "refused", "result": result}
     return exitcodes.OK, {"outcome": "written", "result": result}
@@ -229,7 +264,7 @@ def _cmd_pending(state_dir: Path) -> tuple[int, dict[str, Any]]:
 
 
 def _cmd_decide(args: argparse.Namespace, state_dir: Path) -> tuple[int, dict[str, Any]]:
-    comp = build_composition(state_dir, repos=_configured_repos(state_dir), require_record=True)
+    comp = build_composition(state_dir, repos=_configured_repos(state_dir))
     try:
         result = escalation_decide(
             args.escalation_id,
@@ -259,10 +294,82 @@ def _cmd_decide(args: argparse.Namespace, state_dir: Path) -> tuple[int, dict[st
     return exitcodes.OK, {"outcome": "decided", "escalation_id": args.escalation_id, "result": result}
 
 
+def _cmd_anchor(args: argparse.Namespace, state_dir: Path) -> tuple[int, dict[str, Any]]:
+    """ADR-0066's anchored chain head (#2300).
+
+    Always exits 0 when it ran: an anchor that could not be published is a reported
+    state, not an error. The local anchor row is written either way, and that is what
+    detects a crash-truncated log with no network at all. Anchoring must never be able
+    to fail a review.
+    """
+    if args.all:
+        if args.anchor_target is not None or args.recovery_job_id is not None:
+            raise _UsageError("anchor --all accepts no job-id")
+        comp = build_composition(state_dir, repos=_configured_repos(state_dir))
+        try:
+            sweep = sweep_due_anchors(
+                jobs=comp.jobs,
+                anchor=lambda job_id: anchor_job_for(comp, job_id, publisher=args.publisher),
+            )
+        except Exception:
+            comp.connection.rollback()
+            raise
+        comp.connection.commit()
+        return exitcodes.OK, {"outcome": "ok", "result": sweep}
+
+    job_id, recovery = _anchor_request(args)
+    comp = build_composition(state_dir, repos=_configured_repos(state_dir))
+    try:
+        outcome = anchor_job_for(
+            comp, job_id, publisher=args.publisher, recover=recovery
+        )
+    except Exception:
+        # A gate or record failure is not an anchor outcome.  Preserve the CLI's
+        # atomic boundary rather than leaving an in-process caller with a partial
+        # grant/attestation transaction after the error has been rendered.
+        comp.connection.rollback()
+        raise
+    if not recovery:
+        comp.connection.commit()
+        return exitcodes.OK, {"outcome": "ok", "result": outcome}
+
+    # Recovery is allowed to commit only the authenticated evidence imported for a
+    # FOUND result. Every other result is explicitly rolled back so a failed recovery
+    # cannot mutate the local state it is supposed to repair.
+    recovery_outcome = outcome.outcome
+    if recovery_outcome == "recovered":
+        comp.connection.commit()
+        return exitcodes.OK, {"outcome": recovery_outcome, "result": outcome}
+    comp.connection.rollback()
+    code = {
+        "none": exitcodes.INPUT_ERROR,
+        "unavailable": exitcodes.NETWORK,
+        "unauthenticated": exitcodes.AUTH,
+        "malformed": exitcodes.OTHER,
+        "conflict": exitcodes.OTHER,
+        "no_job": exitcodes.INPUT_ERROR,
+        "publisher_unavailable": exitcodes.INPUT_ERROR,
+    }.get(recovery_outcome, exitcodes.OTHER)
+    return code, {"outcome": recovery_outcome, "result": outcome}
+
+
+def _anchor_request(args: argparse.Namespace) -> tuple[str, bool]:
+    """Normalise the legacy publish form and explicit ``anchor recover`` form."""
+    if args.anchor_target is None:
+        raise _UsageError("anchor requires a job-id, 'recover <job-id>', or --all")
+    if args.anchor_target == "recover":
+        if args.recovery_job_id is None:
+            raise _UsageError("anchor recover requires a job-id")
+        return args.recovery_job_id, True
+    if args.recovery_job_id is not None:
+        raise _UsageError("anchor accepts one job-id, or 'anchor recover <job-id>'")
+    return args.anchor_target, False
+
+
 def _cmd_explain(args: argparse.Namespace, state_dir: Path) -> tuple[int, dict[str, Any]]:
     comp = build_composition(state_dir)
     if args.first == "job":
-        result = explain_job(comp.connection, args.second, keystore=comp.keystore)
+        result = explain_job(comp.connection, args.second)
     else:
         try:
             number = _positive_int(args.second)
@@ -270,7 +377,7 @@ def _cmd_explain(args: argparse.Namespace, state_dir: Path) -> tuple[int, dict[s
             raise _UsageError(
                 f"explain: PR number must be an integer, got {args.second!r}"
             ) from exc
-        result = record_explain(comp.connection, _repo_slug(args.first), number, keystore=comp.keystore)
+        result = record_explain(comp.connection, _repo_slug(args.first), number)
     if isinstance(result, ExplanationUnavailable):
         return exitcodes.INPUT_ERROR, {"outcome": "unavailable", "subject": {"job_id": args.second} if args.first == "job" else {"repo": args.first, "number": number}, "result": result}
     return exitcodes.OK, {"outcome": "ok", "result": result}
@@ -286,7 +393,8 @@ def main(argv: list[str] | None = None) -> int:
 
     try:
         state_dir = args.state_dir if args.state_dir is not None else _default_state_dir()
-        if args.command in {"status", "pending", "decide", "explain"}:
+        recovery = args.command == "anchor" and args.anchor_target == "recover"
+        if args.command in {"status", "pending", "decide", "explain"} or recovery:
             if not (state_dir / "state.db").exists():
                 raise _UsageError(f"no RQA state database at {state_dir}; check --state-dir or run tick to initialise it")
         if args.command == "onboard":
@@ -299,6 +407,8 @@ def main(argv: list[str] | None = None) -> int:
             code, payload = _cmd_pending(state_dir)
         elif args.command == "decide":
             code, payload = _cmd_decide(args, state_dir)
+        elif args.command == "anchor":
+            code, payload = _cmd_anchor(args, state_dir)
         elif args.command == "explain":
             code, payload = _cmd_explain(args, state_dir)
         else:  # pragma: no cover - argparse's `required=True` makes this unreachable
@@ -306,13 +416,13 @@ def main(argv: list[str] | None = None) -> int:
     except _UsageError as exc:
         emit({"outcome": "usage_error", "detail": str(exc)})
         return exitcodes.INPUT_ERROR
-    except (LifecycleError, AppendFailed, ReuseResolutionError) as exc:
+    except (LifecycleError, GateError, AppendFailed, ReuseResolutionError) as exc:
         # A part's own programming-error exception, never suppressed and never
         # retried here: `LifecycleError` (a corrupted or illegally-transitioned
-        # job), `AppendFailed` (the record itself could not be written) and
-        # `ReuseResolutionError` (a broken `reused_from` chain) are all genuine
-        # defects this CLI did not anticipate, not a value any provider
-        # licenses the CLI to interpret. Reported, never fabricated.
+        # job), `GateError` (wrong-shaped authority call), `AppendFailed` (the
+        # record itself could not be written), and `ReuseResolutionError` (a
+        # broken `reused_from` chain) are genuine defects this CLI did not
+        # anticipate, not values any provider licenses it to interpret.
         emit({"outcome": "error", "error_type": type(exc).__name__, "detail": str(exc)})
         return exitcodes.OTHER
     except Exception as exc:

@@ -64,7 +64,7 @@ Around it sit eight things it talks to:
 | **An external model provider**, if the repository allows one | RQA never calls a provider itself. It decides *whether* the repository's content may leave the machine and names the route before handing the bundle to the harness; the harness does the sending. |
 | **Each managed repository** | Supplies its rules in a file, `.rqa/config.json`, re-read on every sweep. Changing the rules needs no rebuild or redeploy. |
 | **The OS scheduler** | Launches a sweep every few minutes. |
-| **The OS keychain** | Holds the one key that seals the review record; RQA reads it, never writes it. Absent key means "unverifiable", never "stopped". |
+| **The external anchor destination** | Receives a content-free chain head that the reviewed agent cannot rewrite; it is read only by explicit online recovery. |
 | **Local tool processes** | The formatters in RQA's closed set, and `git`, run in a scratch checkout for a mechanical fix. |
 
 Everything else — the parts described in §5 — lives inside the one process.
@@ -511,7 +511,7 @@ caught, so it surfaces loudly rather than becoming a routine stop.
 | Remediation target/push unsafe | Invalid exact path, symlink/escape, protected head, disallowed fork or invalid ref refuses before formatter/push; rejection is never force-retried. | Named `RemediationRefused`; no wrong destination |
 | Formatter diff out of scope or behavior differs | Exact changed-set and registered semantic fingerprints are checked before commit. | `SCOPE_EXCEEDED` or `BEHAVIOUR_CHANGED`; cleaned worktree |
 | Tool binary missing | `RemediationRefused(TOOL_UNAVAILABLE)`; the finding goes to a human. | Named escalation |
-| Keychain key absent | Appends proceed unkeyed and say so; `verify`/`explain` report that segment as unverifiable rather than refusing it. | `explain` shows *unverifiable: no key* |
+| Anchor publication unavailable | The local anchor remains pending; the all-due OS-timer sweep retries it without blocking a review or other due jobs. | `verify`/`explain` stay offline and report local evidence; explicit recovery can retrieve published evidence once available. |
 
 ## 13. Operations
 
@@ -608,7 +608,7 @@ capabilities and re-pins snapshots; in-flight jobs resume at their recorded stat
 | The record grows without bound | Disk fills; `explain` slows | Nothing; deliberate — no requirement permits deleting provenance | Operator monitors disk; retention is a future decision |
 | Advisory-only repositories accumulate open escalations | Noise for the operator | Escalations are durable, not notifications; `pending` groups them | Inherent to "no verdict-less success"; revisit with the ADR |
 | Mechanical fixes limited to a closed tool/oracle set | Many cheap fixes still go to humans | Additions require a design decision plus behavior-equivalence fixtures; policy can only narrow | Accepted fail-closed trade |
-| Tamper-evidence depends on operator key | Key loss makes rows unverifiable | OS keychain; explicit segment status | Accepted operator-machine threat model |
+| A tail is newer than the latest successful anchor, or publication is unavailable | That tail is not externally attested until a later successful publication | Keyless hash chain plus local anchor; all-due OS-timer retries; explicit online recovery restores deleted local anchor evidence | The exact guarantee is complete as at the latest successful anchor, never the final entry |
 | External harness misbehaves | Wasted budget or hostile output | Role-separated data, schema, RQA attestation, paired injection conformance, blocking injection reports | Slow/expensive behavior remains bounded by timeout/budget |
 | Obligation-to-path mapping is policy content | Poor mapping under/over-reviews | Versioned snapshot and job record | Repository owns mapping quality |
 
@@ -651,8 +651,8 @@ authoritative gate and carries the parts and requirements each one shapes.
 - [#2158](https://github.com/launchpad-26/buzz/issues/2158) → **[ADR-0062](../../../decisions/ADR-0062-rqa-credential-floor-and-ceiling.md).** `gh auth token`: prove
   exercised per-repository authority and record the broader-token residual, which RQA-NFR-030's
   ceiling half accepts rather than meets. Was blocking.
-- [#2159](https://github.com/launchpad-26/buzz/issues/2159) → **[ADR-0063](../../../decisions/ADR-0063-rqa-record-provenance-integrity.md).** Record integrity: hash
-  chain plus an operator-held HMAC. Was not blocking.
+- [#2159](https://github.com/launchpad-26/buzz/issues/2159) → **[ADR-0066](../../../decisions/ADR-0066-rqa-record-chain-anchoring-without-a-key.md).** Record integrity: a keyless hash
+  chain with externally published/retrieved anchors. ADR-0066 superseded ADR-0063. Was not blocking.
 - [#2160](https://github.com/launchpad-26/buzz/issues/2160) → **[ADR-0064](../../../decisions/ADR-0064-rqa-exact-automatic-remedy.md).** Automatic remedies: exact
   files, closed formatter/check and an actual-diff semantic oracle; never a model patch. Was blocking.
 

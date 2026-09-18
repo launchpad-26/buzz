@@ -131,6 +131,7 @@ class JobStore(Protocol):
     def current_for_pr(self, repo: str, number: int) -> Job | None: ...  # latest job for (repo, number)
     def select_batch(self, limit: int) -> list[Job]: ...  # §3 step 3
     def pending_followup(self) -> list[Job]: ...  # §3 step 4
+    def anchor_due(self) -> list[Job]: ...  # anchored-head cadence: changed heads or pending publication
     def set_status(self, job_id: str, status: JobStatus) -> None: ...  # P-02's exclusive write
     def set_snapshot_hash(self, job_id: str, snapshot_hash: str) -> None: ...  # P-02's exclusive
     # write, once, at first pin
@@ -250,6 +251,37 @@ class SqliteJobStore:
             if has_unsuperseded_successor or job_id in leased_job_ids:
                 followup.append(_row_to_job(row))
         return followup
+
+    def anchor_due(self) -> list[Job]:
+        """Return every job whose head still needs external anchor coverage.
+
+        A job is due when its current non-legacy record head is later than its
+        latest *successfully* published anchor, or when it has a local anchor whose
+        publication is still pending.  The latter clause is deliberately separate:
+        a failed publication must be retried even when the current head is exactly
+        the locally recorded anchor.
+
+        This is only selection.  It neither creates an anchor nor decides whether
+        publication is authorised; the cadence provider delegates each selected job
+        to the existing single-job anchor composition for those checks.
+        """
+        rows = self._connection.execute(
+            "SELECT * FROM jobs AS job WHERE "
+            "EXISTS ("
+            "SELECT 1 FROM record_entries AS head "
+            "WHERE head.job = job.id "
+            "AND (head.prev_hash IS NULL OR head.prev_hash <> ?) "
+            "AND head.seq > COALESCE(("
+            "SELECT MAX(anchor.seq) FROM record_anchors AS anchor "
+            "WHERE anchor.job = job.id AND anchor.destination IS NOT NULL"
+            "), 0)"
+            ") OR EXISTS ("
+            "SELECT 1 FROM record_anchors AS pending "
+            "WHERE pending.job = job.id AND pending.destination IS NULL"
+            ") ORDER BY job.created_at, job.id",
+            ("legacy",),
+        ).fetchall()
+        return [_row_to_job(row) for row in rows]
 
     def set_status(self, job_id: str, status: JobStatus) -> None:
         self._connection.execute("UPDATE jobs SET status = ? WHERE id = ?", (status.value, job_id))

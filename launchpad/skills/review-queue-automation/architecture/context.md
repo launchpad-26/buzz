@@ -31,7 +31,7 @@ flowchart LR
   HARN[["Review harness\nbuilt-in default or external"]]
   PROV[["External model provider"]]
   GHCLI[["GitHub CLI\n(gh auth token)"]]
-  KC[["OS keychain\n(record HMAC key)"]]
+  ANCHOR[["External anchor destination\n(content-free chain heads)"]]
   TOOLS[["Local tool processes\n(formatters, git)"]]
   REPO[["Managed repository\n.rqa/config.json"]]
   TRACKER[["Issue tracker\n(delivery-time only)"]]
@@ -43,7 +43,7 @@ flowchart LR
   RQA -->|borrows the operator's GitHub login| GHCLI
   REPO -->|supplies the rules, re-read every sweep| RQA
   OPER -.->|closes or re-parents #109 — a one-off, not runtime| TRACKER
-  RQA -->|reads the key that seals the record| KC
+  RQA -->|publishes heads; explicit recovery reads evidence| ANCHOR
   RQA -->|runs a formatter in a scratch checkout| TOOLS
 ```
 
@@ -72,7 +72,7 @@ technical channel is §5.
 | B-5 | External model provider | nothing directly | policy-permitted repository content through a pre-named route and data channel | RQA chooses whether/where content leaves; harness owns provider transport |
 | B-6 | GitHub CLI | ephemeral operator credential via `gh auth token` | nothing | ADR-E / [#2158](https://github.com/launchpad-26/buzz/issues/2158); RQA confines exercised authority but not token breadth |
 | B-7 | Managed repository | `.rqa/config.json` | starter config on onboarding, never overwrite | edits apply to the next review |
-| B-9 | OS keychain | operator record-HMAC key | nothing | ADR-F / [#2159](https://github.com/launchpad-26/buzz/issues/2159); absent key yields explicit unverifiable segment |
+| B-9 | External anchor destination | published job id, sequence, hash and timestamp; explicit recovery returns authenticated evidence | a content-free chain head, never record payload | ADR-0066 / [#2298](https://github.com/launchpad-26/buzz/issues/2298); `verify` and `explain` remain offline |
 | B-10 | Local tool processes | exact formatter/git effects in scratch worktree | closed argv and exact paths | ADR-G / [#2160](https://github.com/launchpad-26/buzz/issues/2160); semantic oracle/check/fixpoint required |
 | B-8 | Issue tracker | nothing at runtime | nothing at runtime | RQA-FR-035 is satisfied by closing or re-parenting #109 and reconciling #535/#536 — #2068's work — and by nothing RQA does; drawn so a reader does not look for it inside the box |
 
@@ -87,7 +87,7 @@ technical channel is §5.
 | B-5 | the harness's own provider client | whatever the harness sends; RQA bounds it by what it put in the bundle | RQA records the route it named, and the harness's self-reported identity, in the record it writes itself (RQA-NFR-032) |
 | B-6 | process execution of `gh auth token` | the GitHub CLI's stored authentication for the operator | read per run, never persisted by RQA; ADR-E assumed |
 | B-7 | local file read from the repository checkout the operator configured | JSON | validated fail-closed; an unreadable file yields no snapshot and therefore no authority (RQA-NFR-018) |
-| B-9 | the platform keychain tool (`security` on macOS or equivalent) | one key, read per run | never persisted by RQA outside the keychain |
+| B-9 | HTTPS anchor publisher/source | content-free chain heads and authenticated recovery evidence | publication is periodic; retrieval occurs only through explicit online recovery |
 | B-10 | process execution in `state/worktrees/<job>/` | argv and exit code | tool binaries are the operator's installation; RQA pins none |
 | B-8 | the GitHub issue tracker, by a human | issue state | delivery-time only |
 
@@ -127,7 +127,7 @@ id in this table appears and names a part or `ARCH`.
 | SEC-1 | PR content is untrusted data | P-06 | P-07 | provider role separation plus nonce envelopes; mandatory semantic injection reports; paired clean/adversarial conformance for every adapter and authority mode; reported attempts/envelope breaks block before policy. No phrase-list or self-attestation shortcut |
 | SEC-2 | Authority is per-activity and fail-closed | P-08 | P-03 | one gate, six activities, no grant without a validated pinned snapshot and a proven credential; unreadable policy yields no snapshot and therefore no grant |
 | SEC-3 | Remediation is the largest new exposure | P-10 | P-08, P-07 | pinned fork/protection policy, exact confined changed files, closed tool, semantic before/after oracle, check and fixpoint; push only to validated PR head repo/ref, never force/merge |
-| SEC-4 | Provenance must be forgeable-proof | P-12 | P-06 | one writer and operator-bound HMAC under ADR-F / #2159; harness identity is untrusted input separately attested |
+| SEC-4 | Provenance must be forgeable-proof | P-12 | P-06 | one writer, keyless hash chain, and externally published/retrieved anchors under ADR-0066; harness identity is untrusted input separately attested |
 | SEC-5 | External providers receive repository content | P-05 | P-03 | per-repository grant, per-change deny, route named before handoff |
 | SEC-6 | Credentials stay narrow and follow configured authority | P-08 | P-09 | ADR-E / #2158: ephemeral `gh auth token`, per-job capability proof, configured repositories only; broader reach explicit residual |
 | SEC-7 | A resource bound must never produce a successful review | P-05 | P-02 | reservation before spend, refusal as a value, inclusive bounds on every configured axis, and P-02 has no transition from a refused reservation to a success state |

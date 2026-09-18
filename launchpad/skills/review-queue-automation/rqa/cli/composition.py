@@ -30,9 +30,10 @@ tick.py's already-landed call sites.
 
 from __future__ import annotations
 
+import json
 import sqlite3
 from collections.abc import Callable, Mapping
-from dataclasses import dataclass, fields
+from dataclasses import dataclass, fields, replace
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
@@ -47,18 +48,22 @@ from rqa import reuse as reuse_mod
 from rqa import supply as supply_mod
 from rqa.authority import SqliteCapabilityStore
 from rqa.contracts import (
+    Activity,
+    AnchorReadOutcome,
     Grant,
     Job,
-    KeyStore,
     Plan,
     RecordWriter,
     Reservation,
     Route,
     RouteCursor,
+    Snapshot,
     Spend,
 )
 from rqa.escalation import SqliteEscalationStore
 from rqa.github import (
+    GithubAnchorReader,
+    GithubAnchorPublisher,
     GithubAdapter,
     SqliteApiCallStore,
     SqliteEtagStore,
@@ -75,7 +80,17 @@ from rqa.intake import (
 from rqa.intake import ensure_schema as intake_ensure_schema
 from rqa.lifecycle import LifecycleDeps
 from rqa.policy import SnapshotStore, SqliteSnapshotStore
-from rqa.record import OSKeyStore, SQLiteRecordWriter
+from rqa.record import (
+    AnchorConflict,
+    SQLiteRecordWriter,
+    anchor_job,
+    entries_for_job,
+    head_entry,
+    latest_anchor,
+    pending_anchors,
+    recover_external_anchors,
+    verify,
+)
 from rqa.supply import (
     BreakerStore,
     SpendStore,
@@ -86,6 +101,57 @@ from rqa.supply import (
 )
 
 __all__ = ["Composition", "build_composition", "utcnow"]
+
+
+class _CallerOwnedConnection:
+    """A view of the composition's connection whose transaction control is inert.
+
+    `build_composition` hands one `sqlite3.Connection` to every collaborator, and
+    the *caller* — `rqa/cli/main.py`'s `_cmd_*`, or `rqa.intake.tick` — owns the
+    transaction on it. A collaborator that commits that connection ends the
+    owner's transaction out from under it, which is not a local mistake: it makes
+    provisional work durable and leaves the owner's later `rollback()` a no-op.
+
+    `decide()` is where that bites. It appends the decision entry and closes the
+    escalation row *uncommitted* on purpose, so that a `resume()` which cannot
+    verify the decision leaves nothing behind. `resume()`'s first action is a live
+    GitHub read, so any store that commits while servicing that read commits the
+    decision too — after which a failed validation can no longer be undone, the
+    escalation is durably closed, and the retry is refused `ALREADY_CLOSED`.
+
+    The three `rqa/github/store.py` stores each end their write with
+    `self._connection.commit()`. That is correct for a standalone caller that
+    constructs them over its own connection, and wrong for this composition root,
+    which owns the transaction. Rather than strip the commits from the stores —
+    which would change behaviour for every other caller of that module — the
+    composition root hands them a connection whose `commit()` does nothing. Their
+    rows become durable when whoever owns the transaction commits: `tick.py`
+    commits after every admitted repository, and `main.py` commits at the end of
+    each command.
+
+    `rollback()` raises rather than silently doing nothing: a collaborator asking
+    to discard the owner's transaction is unambiguously wrong, and no store does
+    it today, so failing loud costs nothing and hides nothing. Every other
+    attribute delegates to the real connection unchanged.
+    """
+
+    __slots__ = ("_connection",)
+
+    def __init__(self, connection: sqlite3.Connection) -> None:
+        object.__setattr__(self, "_connection", connection)
+
+    def commit(self) -> None:
+        """Deliberately inert — the transaction belongs to this connection's owner."""
+        return None
+
+    def rollback(self) -> None:
+        raise RuntimeError(
+            "a collaborator may not roll back the composition's connection; "
+            "transaction control belongs to the caller that owns it"
+        )
+
+    def __getattr__(self, name: str) -> Any:
+        return getattr(object.__getattribute__(self, "_connection"), name)
 
 
 def utcnow() -> datetime:
@@ -217,6 +283,37 @@ class LifecycleResumeAdapter:
         return lifecycle_resume(**kwargs)
 
 
+@dataclass(frozen=True)
+class AnchorOutcome:
+    """What one `rqa anchor` run did. Every field is an observed outcome, never a
+    claim: `pending` above zero means the anchor exists locally but never left the
+    machine, which still detects a removed tail offline."""
+
+    job_id: str
+    anchored_seq: int | None
+    published: int
+    pending: int
+    detail: str | None
+    preflight: str | None = None
+
+
+@dataclass(frozen=True)
+class RecoveryOutcome:
+    """The explicit, non-publishing result of one external-anchor recovery.
+
+    ``outcome`` mirrors the closed ``AnchorReadOutcome`` vocabulary where the
+    source was reached.  A recovered anchor can truthfully report an integrity
+    failure: the recovery itself succeeded in restoring evidence, and the
+    offline comparison is what exposed the damaged local chain.
+    """
+
+    job_id: str
+    outcome: str
+    detail: str
+    publisher: str | None
+    integrity: str | None = None
+
+
 @dataclass
 class Composition:
     """Every real collaborator the E-17 command surface and the E-21 `tick`
@@ -238,7 +335,6 @@ class Composition:
     pr_facts: SqlitePrFactsStore
     leases: SqliteLeaseStore
     record: RecordWriter
-    keystore: KeyStore
     github: GithubAdapter
     runner: SubprocessProcessRunner
     policy: PolicyClient
@@ -291,9 +387,7 @@ def build_composition(
     state_dir: Path,
     *,
     clock: Callable[[], datetime] = utcnow,
-    keystore: KeyStore = OSKeyStore(),
     repos: tuple[str, ...] = (),
-    require_record: bool = False,
 ) -> Composition:
     """Bootstrap every table this state directory needs and wire every real
     collaborator over it. Idempotent: every store's own constructor runs its
@@ -301,8 +395,6 @@ def build_composition(
     directory (the normal case — one process per `rqa` invocation) never
     loses or duplicates schema.
     """
-    if require_record:
-        keystore.read("rqa-record-hmac")
     state_dir.mkdir(parents=True, exist_ok=True)
     connection = sqlite3.connect(str(state_dir / "state.db"))
 
@@ -311,33 +403,22 @@ def build_composition(
     pr_facts = SqlitePrFactsStore(connection)
     leases = SqliteLeaseStore(connection)
 
-    # The `KeyStore` (E-25) arrives the same way every other collaborator in
-    # this function does — constructed or injected right here, like `clock`,
-    # `jobs`, `pr_facts` and `leases` three lines above. `rqa/record/__init__.py`
-    # names this module as the reason `OSKeyStore` is importable at all: its
-    # public surface is the re-export list "plus the two concrete collaborators
-    # a composition root must construct", because "nothing inside `rqa/record/`
-    # constructs one, so something outside this package always must", and
-    # `tests/test_rqa_record_surface.py` pins that publication as a contract
-    # (`PUBLISHED_EXPORTS = frozenset({"SQLiteRecordWriter", "OSKeyStore"})`).
-    # Taking it as a parameter means a caller that cannot reach a platform
-    # keychain (CI on Linux, a test process) supplies its own, rather than this
-    # module deciding what a missing keychain means. That judgement stays in
-    # `rqa/record/keychain.py`, where absent-key and machine-cannot-answer
-    # remain deliberately distinct. The `OSKeyStore()` default is evaluated once
-    # at definition time, matching what `SQLiteRecordWriter.__init__`,
-    # `verify()` and `SQLiteRecordReader.__init__` already do, so no existing
-    # caller's behaviour changes.
-    record: RecordWriter = SQLiteRecordWriter(connection, clock=clock, keystore=keystore)
+    record: RecordWriter = SQLiteRecordWriter(connection, clock=clock)
 
     github_ensure_schema(connection)
+    # P-09's three stores each commit at the end of their own write. Over this
+    # connection that would end a transaction they do not own — see
+    # `_CallerOwnedConnection`. They get the inert view; everything else here
+    # keeps the real connection, so `tick.py`'s per-repository commits and
+    # `main.py`'s end-of-command commit/rollback are unchanged.
+    github_connection = _CallerOwnedConnection(connection)
     transport = Transport(
-        etags=SqliteEtagStore(connection),
-        api_calls=SqliteApiCallStore(connection),
+        etags=SqliteEtagStore(github_connection),
+        api_calls=SqliteApiCallStore(github_connection),
     )
     github = GithubAdapter(
         transport=transport,
-        mutations=SqliteMutationStore(connection),
+        mutations=SqliteMutationStore(github_connection),
         clock=clock,
     )
 
@@ -370,7 +451,6 @@ def build_composition(
         pr_facts=pr_facts,
         leases=leases,
         record=record,
-        keystore=keystore,
         github=github,
         runner=runner,
         policy=policy,
@@ -384,3 +464,366 @@ def build_composition(
         escalation_store=escalation_store,
         snapshot_store=snapshot_store,
     )
+def anchor_job_for(
+    comp: "Composition",
+    job_id: str,
+    *,
+    publisher: str | None = None,
+    recover: bool = False,
+) -> "AnchorOutcome | RecoveryOutcome":
+    """Publish this job's chain head where the reviewed agent cannot rewrite it.
+
+    The current head and latest anchor are inspected before authority. A head that
+    is already successfully anchored is a true no-op: no new grant, anchor row, or
+    GitHub call. A pending anchor retries with the recorded COMMENT grant that
+    created it, so a retry never grows the record merely to re-authorise it.
+
+    Returns an outcome rather than raising for an unanchorable job. Missing or
+    malformed pinned snapshots, unmanaged repositories, and missing grant evidence
+    fail closed: none can produce an external publication. Programming and record
+    failures still propagate to the CLI boundary for normal error rendering.
+    """
+    from rqa.contracts import Deny
+
+    job = comp.jobs.get(job_id)
+    if recover:
+        return _recover_anchor_for(comp, job=job, job_id=job_id, publisher=publisher)
+    if job is None:
+        return AnchorOutcome(job_id=job_id, anchored_seq=None, published=0, pending=0,
+                             detail="no such job")
+
+    # A completed anchor is deliberately checked before policy lookup or the gate:
+    # a repeat invocation must not even mint a redundant grant entry.
+    head = head_entry(connection=comp.connection, job=job.id)
+    latest = latest_anchor(connection=comp.connection, job=job.id)
+    pending = pending_anchors(connection=comp.connection, job=job.id)
+    if head is None:
+        return AnchorOutcome(job_id=job.id, anchored_seq=None, published=0, pending=0,
+                             detail="no record head")
+    # A later successful anchor does not discharge an older pending publication.
+    # `anchor_job()` retries every pending row first, and an all-due sweep must not
+    # turn that durable retry obligation into an unreachable row merely because a
+    # newer head was anchored meanwhile.
+    if not pending and latest is not None and latest.seq >= head.seq and latest.published:
+        return AnchorOutcome(job_id=job.id, anchored_seq=None, published=0, pending=0,
+                             detail=None)
+
+    # A retry still makes an external write. The real client exposes the exact
+    # configured set through its gate, so a repository removed from configuration
+    # after a pending failure cannot be published merely because it once had a grant.
+    managed = getattr(getattr(comp.authority, "gate", None), "repos", None)
+    if managed is not None and job.repo not in managed:
+        return AnchorOutcome(
+            job_id=job.id,
+            anchored_seq=None,
+            published=0,
+            pending=_pending_anchor_count(comp, job.id),
+            detail="not published: repo_not_managed",
+        )
+
+    snapshot, failure = _anchor_snapshot_for(comp, job)
+    if failure is not None:
+        return AnchorOutcome(job_id=job.id, anchored_seq=None, published=0,
+                             pending=_pending_anchor_count(comp, job.id), detail=failure)
+
+    external_failure = _anchor_external_send_granted(comp, job=job, snapshot=snapshot)
+    if external_failure is not None:
+        return AnchorOutcome(job_id=job.id, anchored_seq=None, published=0,
+                             pending=_pending_anchor_count(comp, job.id), detail=external_failure)
+
+    # A failed publication already has durable local authorization evidence. Recover
+    # it rather than calling the gate, even if later record activity moved the head:
+    # `anchor_job` retries the old row and then anchors that newer head without adding
+    # a fresh grant entry.
+    if pending:
+        grant = _recorded_comment_grant(comp, job, snapshot)
+        if grant is None:
+            return AnchorOutcome(
+                job_id=job.id,
+                anchored_seq=None,
+                published=0,
+                pending=_pending_anchor_count(comp, job.id),
+                detail="not published: pending anchor has no recorded comment grant",
+            )
+        expected_publisher = _publisher_for(comp, job=job, requested=publisher)
+        preflight = _preflight_external_anchors(
+            comp, job=job, publisher=expected_publisher
+        )
+        if preflight.blocked:
+            return AnchorOutcome(
+                job_id=job.id,
+                anchored_seq=None,
+                published=0,
+                pending=_pending_anchor_count(comp, job.id),
+                detail=preflight.detail,
+                preflight=preflight.outcome,
+            )
+        publisher_client = GithubAnchorPublisher(adapter=comp.github, job=job, grant=grant)
+        result = anchor_job(comp.connection, job.id, publisher=publisher_client, clock=comp.clock)
+        return AnchorOutcome(
+            job_id=job.id,
+            anchored_seq=result.anchored_seq,
+            published=result.published,
+            pending=result.pending,
+            detail=result.failures[0] if result.failures else None,
+            preflight=preflight.outcome,
+        )
+
+    answer = comp.authority.grant(
+        repo=job.repo,
+        activity=Activity.COMMENT,
+        snapshot=snapshot,
+        job_id=job.id,
+        categories=None,
+        record=comp.record,
+        github=comp.authority.github,
+        store=comp.authority.store,
+    )
+    if isinstance(answer, Deny):
+        # Do not delegate a denied grant even to a publisher fake. The production
+        # publisher independently checks this too, but this is the composition's
+        # fail-closed boundary.
+        reason = answer.reason.value if hasattr(answer.reason, "value") else answer.reason
+        return AnchorOutcome(
+            job_id=job.id,
+            anchored_seq=None,
+            published=0,
+            pending=_pending_anchor_count(comp, job.id),
+            detail=f"not published: {reason}",
+        )
+
+    expected_publisher = _publisher_for(comp, job=job, requested=publisher)
+    preflight = _preflight_external_anchors(comp, job=job, publisher=expected_publisher)
+    if preflight.blocked:
+        return AnchorOutcome(
+            job_id=job.id,
+            anchored_seq=None,
+            published=0,
+            pending=_pending_anchor_count(comp, job.id),
+            detail=preflight.detail,
+            preflight=preflight.outcome,
+        )
+
+    publisher_client = GithubAnchorPublisher(adapter=comp.github, job=job, grant=answer)
+    result = anchor_job(comp.connection, job.id, publisher=publisher_client, clock=comp.clock)
+    return AnchorOutcome(
+        job_id=job.id,
+        anchored_seq=result.anchored_seq,
+        published=result.published,
+        pending=result.pending,
+        detail=result.failures[0] if result.failures else None,
+        preflight=preflight.outcome,
+    )
+
+
+@dataclass(frozen=True)
+class _Preflight:
+    outcome: str | None
+    detail: str | None
+    blocked: bool
+
+
+def _recover_anchor_for(
+    comp: "Composition", *, job: Job | None, job_id: str, publisher: str | None
+) -> RecoveryOutcome:
+    """Read and import evidence only; recovery never constructs a publisher."""
+    if job is None:
+        return RecoveryOutcome(job_id=job_id, outcome="no_job", detail="no such job", publisher=None)
+
+    expected_publisher = _publisher_for(comp, job=job, requested=publisher)
+    if expected_publisher is None:
+        return RecoveryOutcome(
+            job_id=job.id,
+            outcome="publisher_unavailable",
+            detail="no authenticated anchor publisher is available; pass --publisher",
+            publisher=None,
+        )
+
+    preflight = _read_external_anchors(comp, job=job, publisher=expected_publisher)
+    if preflight.outcome != AnchorReadOutcome.FOUND.value:
+        return RecoveryOutcome(
+            job_id=job.id,
+            outcome=preflight.outcome or "malformed",
+            detail=preflight.detail or "external anchor recovery failed",
+            publisher=expected_publisher,
+        )
+
+    verified = verify(comp.connection, job.id)
+    integrity = "verified" if verified.ok else f"integrity_failure:{verified.kind.value}"
+    return RecoveryOutcome(
+        job_id=job.id,
+        outcome="recovered",
+        detail=preflight.detail or "trusted anchor recovered",
+        publisher=expected_publisher,
+        integrity=integrity,
+    )
+
+
+def _preflight_external_anchors(
+    comp: "Composition", *, job: Job, publisher: str | None
+) -> _Preflight:
+    """Import and compare trusted external evidence before an external write.
+
+    A missing, unavailable, or unauthenticated source does not block publication:
+    ADR-0066 makes anchoring best effort.  Malformed or conflicting accepted evidence,
+    and a local chain that disagrees with found evidence, do block it fail-closed.
+    Test doubles predating recovery may not expose an authenticated publisher; they
+    remain publication-only doubles and cannot exercise this preflight.
+    """
+    if publisher is None:
+        return _Preflight(None, None, False)
+    result = _read_external_anchors(comp, job=job, publisher=publisher)
+    if result.outcome in {
+        AnchorReadOutcome.CONFLICT.value,
+        AnchorReadOutcome.MALFORMED.value,
+    }:
+        return _Preflight(result.outcome, f"not published: {result.detail}", True)
+    if result.outcome != AnchorReadOutcome.FOUND.value:
+        return result
+
+    checked = verify(comp.connection, job.id)
+    if not checked.ok:
+        kind = checked.kind.value if checked.kind is not None else "integrity_failure"
+        return _Preflight(
+            "integrity_failure",
+            f"not published: external anchor disagrees with local record ({kind})",
+            True,
+        )
+    return result
+
+
+def _read_external_anchors(
+    comp: "Composition", *, job: Job, publisher: str
+) -> _Preflight:
+    """Delegate fetch, authentication, parsing, and import to E-27's reader/source."""
+    try:
+        read = recover_external_anchors(
+            comp.connection,
+            source=GithubAnchorReader(adapter=comp.github),
+            repo=job.repo,
+            number=job.number,
+            job_id=job.id,
+            publisher=publisher,
+        )
+    except AnchorConflict as exc:
+        return _Preflight(AnchorReadOutcome.CONFLICT.value, str(exc), True)
+    return _Preflight(read.outcome.value, read.detail, False)
+
+
+def _publisher_for(comp: "Composition", *, job: Job, requested: str | None) -> str | None:
+    """Use an explicit accepted publisher, or the job's stored capability proof.
+
+    The proof is produced by the same authority grant that authorises the anchor
+    publication, so its login is the authenticated GitHub identity to which the
+    reader binds recovery.  It is a read-only lookup and therefore safe on recovery.
+    """
+    if requested is not None:
+        return requested
+    current = getattr(getattr(comp.authority, "store", None), "current", None)
+    if current is None:
+        return None
+    proof = current(job.repo, job.id)
+    login = getattr(proof, "login", None)
+    return login if isinstance(login, str) and login else None
+
+
+def _anchor_snapshot_for(comp: "Composition", job: Job) -> tuple[Snapshot | None, str | None]:
+    """Return the exact snapshot pinned to `job`, or an inert failure detail."""
+    if not job.snapshot_hash:
+        return None, "not published: job has no pinned policy snapshot"
+    try:
+        stored = comp.snapshot_store.get(job.snapshot_hash)
+    except Exception as exc:  # a corrupt archive must fail closed, never publish
+        return None, f"not published: pinned policy snapshot is unreadable ({type(exc).__name__})"
+    if stored is None:
+        return None, "not published: pinned policy snapshot is missing"
+    candidate = getattr(stored, "snapshot", None)
+    if not isinstance(candidate, Snapshot) or candidate.hash != job.snapshot_hash:
+        return None, "not published: pinned policy snapshot is malformed"
+    # Stored snapshots intentionally use repo="" because hashes are shared by
+    # byte-identical configs. The gate needs the job's actual managed repository.
+    return replace(candidate, repo=job.repo), None
+
+
+def _anchor_external_send_granted(comp: "Composition", *, job: Job, snapshot: Snapshot) -> str | None:
+    """Record and enforce the per-change external-send decision for E-27.
+
+    An anchor is a digest-only external send, but it is still a send.  The decision
+    therefore uses the job's pinned policy and the PR labels captured for this job,
+    and is persisted as an attestation before the transport can be reached.  A retry
+    over unchanged policy/labels reuses that attestation rather than growing the hash
+    chain merely to repeat an already-recorded decision.
+    """
+    labels: tuple[str, ...] = ()
+    facts_reader = getattr(getattr(comp, "pr_facts", None), "get", None)
+    if facts_reader is not None:
+        facts = facts_reader(job.repo, job.number)
+        raw_labels = getattr(facts, "labels", ()) if facts is not None else ()
+        if isinstance(raw_labels, (tuple, list, frozenset, set)) and all(
+            isinstance(label, str) for label in raw_labels
+        ):
+            labels = tuple(sorted(raw_labels))
+
+    allowed = snapshot.external.allowed and (
+        not snapshot.external.deny_label or snapshot.external.deny_label not in labels
+    )
+    reason = (
+        "external_send_not_enabled"
+        if not snapshot.external.allowed
+        else "external_send_denied_for_change"
+        if snapshot.external.deny_label in labels
+        else ""
+    )
+    evidence = {
+        "external_send": "record_anchor",
+        "snapshot_hash": snapshot.hash,
+        "deny_label": snapshot.external.deny_label,
+        "labels": list(labels),
+        "allowed": allowed,
+        "reason": reason,
+    }
+    for entry in reversed(entries_for_job(connection=comp.connection, job=job.id)):
+        if entry.kind != "attestation":
+            continue
+        try:
+            if json.loads(entry.payload) == evidence:
+                return None if allowed else f"not published: {reason}"
+        except ValueError:
+            continue
+    comp.record.append(job.id, "attestation", evidence)
+    return None if allowed else f"not published: {reason}"
+
+
+def _recorded_comment_grant(comp: "Composition", job: Job, snapshot: Snapshot) -> Grant | None:
+    """Recover only evidence that can authorise this exact pending publication."""
+    for entry in reversed(entries_for_job(connection=comp.connection, job=job.id)):
+        if entry.kind != "grant":
+            continue
+        try:
+            payload = json.loads(entry.payload)
+            proof_id = payload["capability_proof_id"]
+        except (KeyError, TypeError, ValueError):
+            return None
+        if (
+            payload.get("activity") != Activity.COMMENT.value
+            or payload.get("decision") != "granted"
+            or payload.get("snapshot_hash") != snapshot.hash
+            or payload.get("categories") is not None
+            or not isinstance(proof_id, int)
+        ):
+            continue
+        return Grant(
+            activity=Activity.COMMENT,
+            repo=job.repo,
+            job_id=job.id,
+            snapshot_hash=snapshot.hash,
+            capability_proof_id=proof_id,
+            categories=None,
+            entry_seq=entry.seq,
+        )
+    return None
+
+
+def _pending_anchor_count(comp: "Composition", job_id: str) -> int:
+    """Report pending anchors without creating any new record state."""
+    return len(pending_anchors(connection=comp.connection, job=job_id))

@@ -7,7 +7,6 @@ No pytest: every `test_*` function here takes no arguments, per `tests/run_all.p
 from __future__ import annotations
 
 import hashlib
-import hmac as hmac_module
 import json
 import pathlib
 import sys
@@ -24,9 +23,6 @@ from rqa.record.hashing import (  # noqa: E402
     NO_PARENT,
     canonical_json,
     compute_hash,
-    compute_hmac,
-    hmac_matches,
-    is_hex_digest,
     prev_hash_for_hash,
 )
 
@@ -181,38 +177,3 @@ def test_every_hashed_field_changes_the_hash() -> None:
         ("prev_hash", "b" * 64),
     ):
         assert compute_hash(**{**base, field: altered}) != reference, field
-
-
-# -- the keyed layer -----------------------------------------------------------
-
-
-def test_compute_hmac_is_hmac_sha256_over_job_seq_and_hash() -> None:
-    key = b"a-test-key-that-never-leaves-this-process"
-    entry_hash = "a" * 64
-    assert compute_hmac(key=key, job="job-1", seq=3, hash=entry_hash) == hmac_module.new(
-        key, f"job-1|3|{entry_hash}".encode("utf-8"), hashlib.sha256
-    ).hexdigest()
-
-
-def test_a_different_key_produces_a_different_hmac() -> None:
-    arguments = dict(job="job-1", seq=3, hash="a" * 64)
-    assert compute_hmac(key=b"one", **arguments) != compute_hmac(key=b"two", **arguments)
-
-
-def test_is_hex_digest_accepts_only_a_sha256_hex_string() -> None:
-    assert is_hex_digest(value="a" * 64)
-    assert not is_hex_digest(value="A" * 64)
-    assert not is_hex_digest(value="a" * 63)
-    assert not is_hex_digest(value="a" * 65)
-    assert not is_hex_digest(value=None)
-    assert not is_hex_digest(value=b"a" * 64)
-    assert not is_hex_digest(value="not-a-digest")
-
-
-def test_hmac_comparison_is_the_constant_time_one() -> None:
-    assert hmac_matches(stored="a" * 64, recomputed="a" * 64)
-    assert not hmac_matches(stored="a" * 64, recomputed="b" * 64)
-    source = pathlib.Path(
-        pathlib.Path(__file__).resolve().parent.parent / "rqa" / "record" / "hashing.py"
-    ).read_text(encoding="utf-8")
-    assert "compare_digest" in source

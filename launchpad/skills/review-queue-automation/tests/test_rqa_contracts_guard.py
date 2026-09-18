@@ -74,7 +74,6 @@ SECTION_9_NAMES = frozenset(
         "probe",
         "facts",
         "HarnessProber",
-        "KeyStore",
         "ProcessRunner",
         "LifecycleDeps",
         "SupplyPort",

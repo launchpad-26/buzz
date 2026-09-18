@@ -11,8 +11,8 @@ append-only, hash-chained record per job — inside the same transaction as the 
 and reconstruct any authoritative outcome from that record alone, contacting neither GitHub nor a
 model.
 
-**Depends on.** ADR-F ([#2159](https://github.com/launchpad-26/buzz/issues/2159), assumed) for
-provenance integrity. It consumes no other part implementation or store.
+**Depends on.** ADR-0066 ([#2298](https://github.com/launchpad-26/buzz/issues/2298)) for
+keyless provenance integrity and external anchoring. It consumes no other part implementation or store.
 
 ## 1. Modules
 
@@ -20,17 +20,18 @@ provenance integrity. It consumes no other part implementation or store.
 rqa/record/
   __init__.py    re-exports: RecordWriter, RecordReader, Entry, RecordRow, EntryKind, AppendFailed,
                  RecordProgrammingError, UnknownEntryKind, PayloadNotSerializable, ENTRY_KINDS,
-                 KeyStore, KeyStoreExplanationUnavailable, verify, VerifyResult, BreakKind, explain,
+                 verify, VerifyResult, BreakKind, explain,
                  explain_job, resolve_job, ResolvedJob, NoRecord, AmbiguousHead, Explanation,
                  ExplanationUnavailable, ReuseResolutionError, migrate_legacy, MigrationSummary,
                  MigrationTableResult, LegacySource, SQLiteRecordWriter, SQLiteRecordReader,
-                 OSKeyStore, append_trace
+                 Anchor, AnchorPublisher, AnchorResult, anchor_job, append_trace,
+                 entries_for_job, head_entry, latest_anchor, pending_anchors
   kinds.py       ENTRY_KINDS: the closed fourteen-kind set (§6)
   hashing.py     canonical_json(); compute_hash(); genesis and "legacy" prev_hash sentinels
-  keychain.py    E-25 KeyStore implementation backed by the platform keychain command
   store.py       record_entries/record_heads DDL; serialization; ordered row reads
   writer.py      SQLiteRecordWriter: the RecordWriter implementation
-  verify.py      verify(): chain and keyed-segment recomputation
+  verify.py      verify(): chain recomputation and the anchored-head checks
+  anchor.py      anchor_job(): records and publishes the chain head (E-27)
   reader.py      SQLiteRecordReader plus resolve_job()
   explain.py     explain() / explain_job(): FR-012 reconstruction
   trace.py       validated U-DISPATCH-19 milestones in jobs/<job>/trace.jsonl
@@ -49,9 +50,10 @@ one part that must not be able to break because another part's type changed shap
 `evidence` and `findings` fields mirror `EvidenceState` and `Finding` by field-name and by-value
 convention only.
 
-Nothing in this package opens a socket, spawns `gh` or `git`, or invokes a model. `keychain.py`'s one
-subprocess (`security`, macOS's local keychain CLI) is local-only and does not count as network
-access; §8's T7 proves this behaviourally with a socket guard, not by this sentence alone.
+Nothing in this package opens a socket, spawns `gh` or `git`, invokes a model, or runs a subprocess
+of any kind. ADR-0066 removed the last one — `keychain.py`'s local credential-store call — along with
+the key it read. §8's T7 proves the no-network half behaviourally with a socket guard, not by this
+sentence alone.
 
 ## 2. Types
 
@@ -84,20 +86,6 @@ class PayloadNotSerializable(RecordProgrammingError):
 ```
 
 ```python
-# keychain.py — E-25 KeyStore is defined only in CONTRACTS.md §9 and imported here.
-from rqa.contracts import KeyStore
-
-class KeyStoreExplanationUnavailable(Exception):
-    """The platform keychain command could not be invoked or queried. This differs from an absent
-    item, for which `KeyStore.read()` returns None."""
-
-class OSKeyStore:
-    """Reads only `rqa-record-hmac` through the platform keychain command. It returns None only for
-    that absent item and never writes, rotates, generates, or logs a key."""
-    def read(self, name: str) -> bytes | None: ...
-```
-
-```python
 # reader.py — shared values come from CONTRACTS.md §7.
 class SQLiteRecordReader:
     """Immutable record reader. Basic reads make no trust claim."""
@@ -106,25 +94,19 @@ class SQLiteRecordReader:
     def trusted_prefix(self, job_id: str) -> VerifiedRecordPrefix | RecordUntrusted: ...
 ```
 
-`trusted_prefix` calls `verify` with the reader's key store. No rows returns `MISSING`; any chain/HMAC
-break returns `INTEGRITY_BREAK`; any unverifiable segment returns `UNVERIFIABLE`; any legacy row
-returns `LEGACY`. Only a complete, chain-valid, available-key HMAC-authenticated non-legacy history
+`trusted_prefix` calls `verify`. No rows returns `MISSING`; any chain break or hash mismatch returns
+`INTEGRITY_BREAK`; any legacy row returns `LEGACY`. Only a complete, chain-valid, non-legacy history
 returns `VerifiedRecordPrefix`; its `latest(kind)` searches only its immutable `rows`. Operational
 consumers such as P-13 must use this method rather than treating `latest()` as authenticated.
+`UNVERIFIABLE` is no longer reachable from here: ADR-0066 retired the key, so no row is unverifiable
+for want of one. The value remains in `CONTRACTS.md` §7's enum.
 
 ```python
 # verify.py
 class BreakKind(str, Enum):
     HASH_MISMATCH = "hash_mismatch"     # a row's stored hash does not match its own recomputed content
     CHAIN_BREAK = "chain_break"         # a row's prev_hash does not match the previous real row's hash
-    HMAC_MISMATCH = "hmac_mismatch"     # a keyed row does not authenticate under the available key
-
-@dataclass(frozen=True)
-class UnverifiableSegment:
-    job_id: str
-    first_seq: int
-    last_seq: int
-    reason: Literal["no key"] = "no key"
+    # HMAC_MISMATCH and UnverifiableSegment were retired by ADR-0066 with the key.
 
 @dataclass(frozen=True)
 class VerifyResult:
@@ -132,9 +114,7 @@ class VerifyResult:
     ok: bool
     bad_seq: int | None          # first seq verification stopped trusting; None iff ok
     kind: BreakKind | None       # None iff ok
-    hmac_checked: bool           # True iff at least one keyed row was checked this run
     checked_through_seq: int     # last real (non-legacy) seq examined before stopping or finishing
-    unverifiable: tuple[UnverifiableSegment, ...]  # unkeyed or unavailable-key segments; never breaks
 ```
 
 
@@ -179,8 +159,6 @@ class Explanation:
     # Supporting trust/rendering fields:
     snapshot_hash: str | None
     verified: bool
-    hmac_checked: bool
-    unverifiable: tuple[UnverifiableSegment, ...]  # each has reason "no key"
     truncated_at: int | None
     legacy: bool
 
@@ -240,7 +218,7 @@ operator who wants to check tamper-evidence without a full reconstruction, both 
 #     def append(self, job_id: str, kind: str, payload: Mapping) -> Entry: ...
 #
 # SQLiteRecordWriter is P-12's implementation. Its constructor-only dependencies are
-# connection, clock=utcnow, and keystore=OSKeyStore(); they are not E-13 parameters.
+# connection and clock=utcnow; they are not E-13 parameters.
 ```
 
 The caller constructs (or is handed) a `RecordWriter` over the **same** `sqlite3.Connection` its own
@@ -254,12 +232,9 @@ transaction commits. `append` never calls `connection.commit()` or `connection.r
 3. Read the highest-`seq` non-legacy row for `job_id`. None → `seq=1`, `prev_hash_for_hash=""`;
    found → `seq=found.seq+1`, `prev_hash_for_hash=found.hash`.
 4. Set `at` from `clock()` as UTC ISO-8601 with microseconds and compute `hash` by §5.
-5. `key = keystore.read("rqa-record-hmac")`:
-   - returns `bytes` → `keyed=True`; `hmac` is `HMAC-SHA256(key, f"{job_id}|{seq}|{hash}")`, hex;
-   - returns `None` → `keyed=False`; `hmac=NULL`. This is a successful, explicitly unkeyed append,
-     not `AppendFailed`;
-   - raises `KeyStoreExplanationUnavailable`, `OSError`, or a keychain-process error → raise
-     `AppendFailed(job_id, kind, cause=exc)`. No row is inserted.
+5. Set `keyed=False` and `hmac=NULL`. ADR-0066 retired the operator-held key, so this step reads no
+   credential store, spawns no process, and has no failure mode. An append cannot fail for a key
+   reason on any platform.
 6. Insert one `record_entries` row with `job`, `seq`, `kind`, `at`, canonical `payload`,
    `prev_hash`, `hash`, `hmac`, and `keyed`. A `sqlite3.Error`/`OSError` → raise `AppendFailed`.
    No commit is issued.
@@ -267,42 +242,56 @@ transaction commits. `append` never calls `connection.commit()` or `connection.r
    `sqlite3.Error`/`OSError` → raise `AppendFailed`.
 8. Return `Entry(seq, hash)`.
 
-The explicit `keyed` bit and nullable `hmac` are part of every stored entry; an implementation MUST
-NOT infer key absence from a missing head row. A `None` result opens an `unverifiable: no key` segment
-at this sequence; consecutive unkeyed rows form one segment and a later keyed row closes it. The hash
-chain still covers every entry, so this degradation does not create a chain break or a partial append.
+The `keyed` bit and nullable `hmac` columns remain in the schema and are written `0`/`NULL` on every
+new row. They are **not** dropped: a record written under ADR-0063 holds `keyed=1` rows with real
+HMACs, and those rows must stay readable and keep verifying by their chain. §5 records that carry as
+a deliberate decision rather than an oversight.
 
 **Guarantees.** `append` is deterministic for identical hashed inputs, re-reads its head on every
 call, never inspects payload semantics, and is the only non-migration writer to `record_entries`.
 The entry and head upsert are one caller-controlled transaction: either both persist on commit or an
-`AppendFailed` propagates for the caller to roll back. An absent key is expressly not an error.
+`AppendFailed` propagates for the caller to roll back.
 
-### 3.2 `verify` — chain and keyed-segment checks
+### 3.2 `verify` — chain checks
 
 ```python
-def verify(connection: sqlite3.Connection, job_id: str, *, keystore: KeyStore = OSKeyStore()) -> VerifyResult: ...
+def verify(connection: sqlite3.Connection, job_id: str) -> VerifyResult: ...
 ```
 
 **Behaviour, in order. Every branch returns or raises.**
 
 1. Read every row for `job_id`, ordered by `seq`. No rows → return `VerifyResult(ok=True,
-   bad_seq=None, kind=None, hmac_checked=False, checked_through_seq=0, unverifiable=())`.
+   bad_seq=None, kind=None, checked_through_seq=0)`.
 2. Walk non-legacy rows in sequence order, validating expected `prev_hash` and recomputed hash. The
    first wrong parent returns `CHAIN_BREAK`; the first wrong hash returns `HASH_MISMATCH`. Both set
-   `bad_seq` to that row, preserve all accumulated `unverifiable` segments, and set
-   `hmac_checked` only if a preceding keyed row was checked.
-3. For each chain-valid row:
-   - `keyed=False, hmac is NULL` → accumulate it into an `UnverifiableSegment(..., reason="no key")`;
-     do not call the key store and do not mark the record broken.
-   - `keyed=True, hmac` missing or malformed → return `HMAC_MISMATCH` at that row.
-   - `keyed=True` → call `keystore.read("rqa-record-hmac")`. `None` makes that consecutive keyed
-     run an `UnverifiableSegment(..., "no key")`; it is not a break. A `KeyStoreExplanationUnavailable` or
-     platform/store read error does the same: verification remains readable and reports the run
-     `unverifiable: no key`, rather than refusing the record.
-   - keyed row and available key → recompute and constant-time compare the row HMAC. Mismatch returns
-     `HMAC_MISMATCH` at that row; match sets `hmac_checked=True`.
-4. A complete walk returns `ok=True`, `bad_seq=None`, `kind=None`, all accumulated segments, and the
-   last examined sequence. Legacy-only rows return `ok=True`, no break and no keyed check.
+   `bad_seq` to that row.
+3. A complete walk returns `ok=True`, `bad_seq=None`, `kind=None`, and the last examined sequence.
+   Legacy-only rows return `ok=True` with no break.
+
+A row's `keyed` bit and stored `hmac` are **not consulted**. ADR-0066 retired the key, so there is
+nothing to authenticate against: a historical `keyed=1` row is checked by its own hash and its parent
+link exactly as any other row is, and is never a break merely for carrying an HMAC nothing can verify.
+`HMAC_MISMATCH` is gone from `BreakKind`, and `UnverifiableSegment` with it — no row is unverifiable
+for want of a key when there is no key.
+
+**Step 4, the anchored head.** After a consistent walk, `verify` compares the record against the
+job's newest anchor (§3.4). An anchor is independent evidence about what the chain *was*, so it
+catches the two things internal consistency cannot:
+
+- the anchored sequence is no longer present → `TAIL_REMOVED` at that seq. A consistent walk over the
+  rows that remain is exactly what truncation looks like, which is why this check cannot come from the
+  walk itself (issue #2220).
+- the row at that sequence is present but is not the row that was anchored → `ANCHOR_MISMATCH`. This
+  is the wholly recomputed chain, which the walk alone reports as clean.
+
+`anchored_through_seq` is the highest seq an anchor attests, `0` when the job has none;
+`anchor_published` is False when the newest anchor never reached its destination. **A job with no
+anchor still verifies** — an unanchored record is not a broken one, and entries after the last anchor
+are unattested rather than broken.
+
+`TAIL_REMOVED` is named that, and not `TRUNCATED`, because §8's destructive-SQL guard scans this
+package's string literals for `TRUNCATE` and `"TRUNCATED"` contains it. The guard is right; the enum
+moved rather than the guard.
 
 `verify` never mutates either table, never reads the trace, and never raises for an integrity outcome.
 Store read failures raise `sqlite3.Error`/`OSError`; all other branches above return `VerifyResult`.
@@ -350,12 +339,14 @@ CLI's `explain.py job <job-id>` precedent), and `explain` is defined in terms of
      `ReuseResolutionError`. `explain` must never guess, silently omit, or follow an untrusted
      predecessor tail.
 4. No transition in the trusted prefix → `disposition="unknown"`. Every contribution from legacy rows
-   sets `legacy=True`. `truncated_at` is `bad_seq` or None. `unverifiable` is the ordered union of
-   current and predecessor `VerifyResult.unverifiable` segments, annotated with their job id; it
-   renders each as `unverifiable: no key`, not as a hash/HMAC break.
-5. `verified` is true only if every contributing current and predecessor prefix is chain-valid,
-   non-legacy, and has no `unverifiable` segment. `hmac_checked` is true only if every keyed
-   contributing row was checked with an available key. Return the assembled `Explanation`.
+   sets `legacy=True`. `truncated_at` is `bad_seq` or None.
+5. `verified` is true only if every contributing current and predecessor prefix is chain-valid and
+   non-legacy. Return the assembled `Explanation`.
+
+ADR-0066 retired `hmac_checked` and `unverifiable` from `Explanation`. Neither could carry
+information once the key was gone: the first could only ever be `False`, and the second only ever
+empty. `verified`, `truncated_at` and `legacy` remain, and are what let a reconstruction decline to
+assert trust it has not established (AC06).
 
 `explain(connection, repo, number)` dispatches `resolve_job`: `NoRecord` →
 `ExplanationUnavailable(repo, number, "no_record")`; `AmbiguousHead` → `ExplanationUnavailable(repo, number,
@@ -366,13 +357,108 @@ call; never fabricates values; never presents a post-break row as authoritative;
 side-effect-free. Its only named reconstruction failure is `ReuseResolutionError` above; all ordinary
 absence/ambiguity and integrity cases have the returned outcomes specified here.
 
-## 4. Dependencies consumed — E-25 only
+### 3.4 `anchor_job` — the anchored chain head, E-27
 
-P-12 calls no other RQA part. Its sole cross-boundary dependency is **E-25**,
-`KeyStore.read(name) -> bytes | None`, for the operator-held HMAC key; the platform keychain command
-is local-only and RQA never writes the key. It also receives an injected wall clock and reads legacy
-tables only through `LegacySource` during the one-way migration. It does not use GitHub, a harness, a
-model, another part's store, or the trace as an authority source.
+```python
+def anchor_job(connection, job_id, *, publisher: AnchorPublisher, clock=utcnow) -> AnchorResult: ...
+```
+
+**Behaviour, in order. Every branch returns.**
+
+1. Retry every pending anchor for the job, oldest first. A failed publish leaves the row pending and
+   contributes a message; it never raises.
+2. Read the job's current head. None → nothing to anchor.
+3. Head already anchored → no new row. Anchoring is idempotent, so a caller may run it as often as it
+   likes without growing the table.
+4. Otherwise insert the local anchor row **first**, then attempt to publish it.
+
+**Why the local row is written before the publish.** That row is what detects a removed tail with no
+network at all, which is what keeps `explain` offline — the parent feature is "tamper-evident record
+*and offline explanation*". `destination` stays NULL until a publish succeeds, which makes a failed
+publish a recorded, retryable fact rather than a silently dropped one.
+
+**Publication boundary.** P-09 posts the digest-only body as a pull-request review using the
+operator's authenticated GitHub identity, after the pinned per-job external-send decision and comment
+grant are recorded. Reviewed content never supplies that credential or publisher identity; explicit
+recovery accepts only matching repository, PR, marker grammar and publisher. That boundary is why the
+reviewed agent cannot rewrite an anchor through this path.
+
+The two strengths are deliberately different, and the documentation should not blur them:
+
+| What happened | Detected offline? |
+|---|---|
+| A crashed or killed agent truncated the log | **Yes** — the local anchor survives |
+| An actor truncated the log *and* the local anchor rows | No — needs the published copy |
+
+**Three rules this part must keep, and the test that enforces each.**
+
+1. **Publishing appends no record entry.** An entry would move the head, the new head would need an
+   anchor, and publishing that would append again — for ever. The concrete trap is
+   `rqa/github/writes.py`, where every mutation routes through `_dispatch` and calls
+   `record.append(job, "action", …)`; a publisher must reach the transport directly instead. Enforced
+   by `test_publishing_an_anchor_appends_no_record_entry`: append N, publish, still N.
+2. **Anchoring is never triggered by an append.** The caller decides when — on a schedule, at job end,
+   or on an explicit command. So if a recorded write were ever reintroduced the anchor would lag one
+   entry and catch up, rather than chase.
+3. **Bypassing `writes.py` means checking authority directly.** `_dispatch` is also where
+   `_require_grant` runs, so `rqa/github/anchor_publisher.py` calls it explicitly with
+   `Activity.COMMENT`. An advisory-only repository holds no comment authority and must send nothing
+   rather than widen authority silently.
+
+**What an anchor may carry.** A job id, a sequence, a hash and a timestamp — never payload. The hash
+is a digest, which is what makes publishing one the narrowest possible external send; it is still an
+external send, so `RQA-NFR-023`/`027`/`029` govern whether a given repository may make it at all.
+
+**Who calls it.** `rqa anchor <job-id>`, through `anchor_job_for` in `rqa/cli/composition.py`. That
+function mints the `Activity.COMMENT` grant **before** reading the head, and the ordering is
+load-bearing: `authority.grant` records a `grant` entry (E-04), so minting a grant *moves the head*.
+Mint first and read after, and the anchor covers its own grant entry; do it the other way round and
+every run leaves the head one entry ahead of the anchor, for ever — the same loop as rule 1, arriving
+through the authority path instead of the write path. `test_the_grant_is_minted_before_the_head_is_read`
+pins it.
+
+**The bound on the claim.** Anchoring is periodic: the guarantee is "complete as at the last anchor",
+never "complete as at the final entry". Entries appended after the most recent anchor are unattested,
+and truncation inside that window is undetectable. Narrowing the window is a frequency choice, not a
+further mechanism.
+
+### 3.5 External-anchor recovery is explicit; verification remains offline
+
+`verify` and `explain` never contact an external service. When local anchor rows are missing, an
+explicit recovery command consumes E-27's `AnchorSource.read(repo, number, job_id, publisher)` and
+persists only authenticated `AnchorEvidence` locally; it adds **zero** `record_entries`. The source
+accepts an anchor only when its repository, pull request, marker grammar and publisher identity match
+the request. Its closed outcomes are `found`, `none`, `unavailable`, `unauthenticated`, `malformed`
+and `conflict`. A conflict is two otherwise valid anchors for one sequence with different hashes; it is
+never resolved by timestamp selection. A failed recovery mutates nothing.
+
+Normal publication preflights this same source before publishing a new head. It must refuse a
+conflicting external anchor rather than blessing the local chain over it. A retry of a pending anchor
+reuses the recorded authorization evidence and must not append a new `grant` row merely to retry. A
+head already successfully anchored is a true no-op: no grant, anchor, or GitHub call.
+
+Cadence is an all-due, per-job sweep invoked by an OS timer, not by `append`. It selects heads newer
+than their latest successful anchor and pending publications; one job's failure does not stop the rest.
+The configured timer interval plus any publication outage is the unattested window.
+
+## 4. Dependencies consumed — E-27 only
+
+P-12 calls no other RQA part. Its one cross-boundary dependency is **E-27**:
+`AnchorPublisher.publish(anchor) -> str` publishes the chain head where the reviewed agent cannot
+rewrite it (§3.4), while `AnchorSource.read(repo, number, job_id, publisher) -> AnchorRead` is used
+only by explicit online recovery (§3.5). P-12 itself remains offline between recoveries.
+
+**Historical — E-25 was retired by [ADR-0066](../../../../decisions/ADR-0066-rqa-record-chain-anchoring-without-a-key.md).**
+Before ADR-0066 P-12's sole cross-boundary dependency was `KeyStore.read(name) -> bytes | None`, the
+operator-held HMAC key read from the platform credential store. ADR-0066 removed the key: it defended
+an actor already outside #2006's stated trust boundary — RQA had to read the key on every append, so
+anything running as the operator could read it too — while costing a separate credential integration
+per platform (#2272, PR #2287).
+
+P-12 still receives an injected wall clock, and reads legacy tables through `LegacySource` during the
+one-way migration. It does not use GitHub, a harness, a model, another part's store, or the trace as
+an authority source. It reads no credential store, spawns no subprocess, and has no platform-specific
+code path.
 
 ## 5. Store
 
@@ -399,6 +485,48 @@ CREATE TABLE record_heads (
 );
 ```
 
+```sql
+-- ADR-0066's anchored chain head (#2300). Evidence *about* the chain, never part of
+-- it: nothing here is hashed into an entry, and `append` neither reads nor writes it.
+CREATE TABLE record_anchors (
+  job         TEXT NOT NULL,
+  seq         INTEGER NOT NULL,
+  hash        TEXT NOT NULL,
+  at          TEXT NOT NULL,
+  destination TEXT,              -- NULL until the publish succeeds: a pending anchor
+  UNIQUE (job, seq)
+);
+CREATE INDEX record_anchors_by_job ON record_anchors(job, seq);
+```
+
+```sql
+-- Authenticated evidence recovered from the external destination. It carries an
+-- immutable source locator and never stores a record payload or participates in
+-- the hash chain.
+CREATE TABLE record_anchor_evidence (
+  job       TEXT NOT NULL,
+  seq       INTEGER NOT NULL,
+  hash      TEXT NOT NULL,
+  at        TEXT NOT NULL,
+  repo      TEXT NOT NULL,
+  number    INTEGER NOT NULL,
+  publisher TEXT NOT NULL,
+  locator   TEXT NOT NULL UNIQUE,
+  UNIQUE (job, seq, hash, locator)
+);
+CREATE INDEX record_anchor_evidence_by_job ON record_anchor_evidence(job, seq);
+```
+
+**`destination IS NULL` is load-bearing.** It is what makes a failed publish a recorded, retryable
+fact rather than a silently dropped one, and what lets `verify` report `anchor_published=False`
+honestly instead of implying an anchor reached somewhere it did not.
+
+**The `keyed` and `hmac` columns are retained, and the CHECK with them.** ADR-0066 removed the key,
+not the columns: every new row is written `keyed = 0, hmac = NULL` — the branch the CHECK already
+allowed — while records written under ADR-0063 keep their `keyed = 1` rows and real HMACs. Dropping
+the columns would mean migrating those records for no gain and would make them unreadable; `verify`
+simply does not consult either column. This is a deliberate carry, not an oversight.
+
 **Hash formula** [ADR-F assumed]:
 `sha256(f"{job}|{seq}|{kind}|{at}|{canonical_json(payload)}|{prev_hash_for_hash}")`, as UTF-8 hex.
 `prev_hash_for_hash` is `""` for `NULL`, otherwise the stored value. `canonical_json` is
@@ -406,9 +534,9 @@ CREATE TABLE record_heads (
 
 **Read protocol.** `append` reads the last non-legacy row; `verify`, `SQLiteRecordReader.entries`,
 and `explain_job` range-scan rows by `(job, seq)`; `SQLiteRecordReader.latest` reads the greatest
-matching sequence or `None`; `resolve_job` scans transition rows. `verify` reads each row's `keyed`
-and `hmac`, rather than treating `record_heads` as proof for a later unkeyed segment. The trace is
-never read by any authoritative reconstruction.
+matching sequence or `None`; `resolve_job` scans transition rows. `verify` reads neither `keyed` nor
+`hmac`, and never treats `record_heads` as proof about an entry. The trace is never read by any
+authoritative reconstruction.
 
 **Retention: none.** U-DISPATCH-06 is binned — there is no delete, purge, vacuum, or compaction
 statement anywhere in `rqa/record/`, and none is added by this contract. `record_entries`,
@@ -519,9 +647,14 @@ for an operator's or a future tool's inspection, never for a trust decision.
   only from this part and never authoritative (`architecture.md` §8).
 - Does not retain, purge, compact, or vacuum anything; U-DISPATCH-06 is binned and no such path
   exists (§5).
-- Does not generate, rotate, or write the operator's HMAC key into the OS keychain — only reads it
-  (ADR-F: "the key is the operator's and never RQA's to write into the record").
-- Does not contact GitHub, invoke a harness, or invoke a model anywhere in this package.
+- Does not read, generate, rotate, or write any key, and does not touch a credential store on any
+  platform. **Historical:** ADR-0066 retired the operator-held HMAC key that ADR-F and ADR-0063 introduced.
+- Does not contact GitHub, invoke a harness, or invoke a model anywhere in this package. Anchoring
+  (§3.4) reaches its destination through an injected `AnchorPublisher`; the GitHub implementation of
+  that port lives in `rqa/github/anchor_publisher.py`, on P-09's side of the seam, so nothing in
+  `rqa/record/` imports GitHub.
+- Does not append a record entry when publishing an anchor, and is never triggered to anchor by an
+  append. Both rules exist to stop the publish/append loop (§3.4).
 - Does not re-run a migration a prior run already completed for a given source table
   (`MigrationTableResult.already_done`), and does not invent a mapping for a table the migration
   doesn't name.
@@ -533,14 +666,14 @@ for an operator's or a future tool's inspection, never for a trust decision.
 
 ## 8. Tests that prove it
 
-Each is a unit test against a real (in-memory or temp-file) SQLite connection and a fake `KeyStore`;
-none touches a real OS keychain or a real network.
+Each is a unit test against a real (in-memory or temp-file) SQLite connection; none touches a
+credential store or a real network. ADR-0066 removed the key, so there is no key store to fake.
 
 | # | Given | Then |
 |---|---|---|
 | T1 | three chained entries for one job; row 2's stored `payload` edited in place, its `hash` left unchanged | `verify` returns `ok=False, bad_seq=2, kind=HASH_MISMATCH` |
 | T2 | three chained entries; row 2 replaced with a new payload and a freshly, correctly recomputed own `hash`, but row 3's `prev_hash` left pointing at row 2's *original* hash | `verify` returns `ok=False, bad_seq=3, kind=CHAIN_BREAK` |
-| T3 | row 2 and every downstream hash are consistently recomputed after a rewrite, but the original keyed HMAC remains on the rewritten head row | `verify` returns `ok=False, bad_seq=<head seq>, kind=HMAC_MISMATCH, hmac_checked=True` — a keyed entry catches the internally consistent rewrite |
+| T3 | row 2 and every downstream hash are consistently recomputed after a rewrite | `verify` returns `ok=True` — **ADR-0066 accepts this**. Under ADR-0063 the untouched HMAC caught it; there is no key now, so the test pins the gap rather than a detection. #2300's anchor is what closes it |
 | T4 | a connection with an open transaction: `append(job, "transition", ...)` succeeds (uncommitted), then the caller's own next statement fails and the caller rolls back | a fresh read of `record_entries` for that job returns zero rows |
 | T5 | `append`'s `INSERT` raises `sqlite3.OperationalError` (monkeypatched) | `AppendFailed` is observed propagating out of the call at the test's own call site — nothing inside `rqa.record` caught it |
 | T6 | a normal job with transition, plan, bundle, attestations, panel, judgement, action and terminal transition | `explain` returns all twelve fields and uses the recorded panel/judgement cutoff |
@@ -548,19 +681,26 @@ none touches a real OS keychain or a real network.
 | T8 | integrity break at judgement | explanation truncates there and does not source later facts |
 | T9 | a job with only migrated rows (`legacy`, `decision`, `spend`, all `prev_hash="legacy"`), zero real chained entries | `verify` returns `ok=True` (nothing chained to break); `explain_job` returns `legacy=True, verified=False` regardless — never `verified=True` |
 | T10 | one fixture row from each of `ledger_entries`, `approval_decisions`, `cost_ledger` | `migrate_legacy` produces exactly: `kind="legacy"` with `legacy_kind`/`fields` set; `kind="decision"` with `actor="unknown"`; `kind="spend"` with `measured=False` — each with `prev_hash="legacy"` |
-| T11 | three successive appends, including a final unkeyed append | `record_heads` has one latest `(seq, hash, hmac=NULL, keyed=0)` row, and each `record_entries` row carries its own correct keyed/HMAC state |
-| T12 | `verify` on a job with zero rows | `ok=True, bad_seq=None, hmac_checked=False, checked_through_seq=0` |
-| T16 | `KeyStore.read("rqa-record-hmac")` returns `None` during `append` | append returns `Entry`; its row has `keyed=False, hmac=NULL`; `verify` returns `ok=True` with an `unverifiable` segment whose reason is `no key`, not `HMAC_MISMATCH`; `explain` reports that segment `unverifiable: no key` |
+| T11 | three successive appends | `record_heads` has one latest `(seq, hash, hmac=NULL, keyed=0)` row, and every `record_entries` row carries the same unkeyed state |
+| T12 | `verify` on a job with zero rows | `ok=True, bad_seq=None, checked_through_seq=0` |
+| T16 | any `append`, on any platform, with no credential store present | append returns `Entry`; its row has `keyed=False, hmac=NULL`; `verify` returns `ok=True`. #2272's failure is structurally impossible: no credential store is consulted |
+| T25 | a record written under ADR-0063: `keyed=1` rows carrying real HMACs | `verify` returns `ok=True` — the rows are checked by hash and parent link, and are never a break for carrying an HMAC nothing can verify. A malformed stored `hmac` is likewise inert |
 | T14 | `append(job, "not_a_real_kind", {})` | raises `UnknownEntryKind`; `record_entries` for that job is unchanged (zero new rows) |
 | T15 | `append(job, "spend", {"at": datetime.now()})` (a raw `datetime`, not a string) | raises `PayloadNotSerializable`; zero new rows |
 | T20 | predecessor has a valid plan, harness attestations, and judgement; successor has no `attestation`, a materialised `judgement` with `reused_from=(<predecessor job>, <judgement seq>)`, and a transition | `explain_job(successor)` follows the exact referenced judgement, returns all twelve elements, and obtains reviewer identity/harness/model/provider from predecessor attestations through that sequence |
 | T24 | a readable escalation record has a structured subject | `explain_job` returns that `{kind, identifier}` in `escalation_subjects` |
 | T17 | two payload dicts with identical key/value pairs built in different insertion order | `compute_hash` returns byte-identical results for both |
-| T18 | a job with rows `[keyed real seq=1, legacy, unkeyed real seq=2 chained to seq=1]` | `verify` returns `ok=True` with the seq-2 `unverifiable: no key` segment; `explain_job` returns `legacy=True, verified=False` and reports that segment without calling it broken |
+| T18 | a job with rows `[real seq=1, legacy, real seq=2 chained to seq=1]` | `verify` returns `ok=True`; `explain_job` returns `legacy=True, verified=False` — because of the migrated row, not because of any key |
 | T19 | a `judgement` row whose `findings` list contains three ids: one in both `blocking` and `corroborated`, one in `corroborated` only, one in neither | `explain_job`'s `findings` tuple marks the first `blocking=True, corroborated=True`, the second `blocking=False, corroborated=True`, the third `blocking=False, corroborated=False` — the three-way split RQA-BR-005/RQA-BR-008 need |
 | T21 | append one minimal JSON-safe payload for each member of `ENTRY_KINDS` | all fourteen are accepted; any fifteenth string raises `UnknownEntryKind` |
 | T22 | `append_trace(..., event="free_form")` | raises `UnknownTraceEvent`; no trace file is created |
 | T23 | one lifecycle admission reaches `approved` | its trace contains every member of `REQUIRED_JOB_EVENTS`, and every emitted orchestration event belongs to `JOB_EVENTS` |
+| T26 | append N entries, then publish an anchor | the record still holds exactly N entries — **the invariant that stops the publish/append loop**; fails loudly if anyone wires anchoring through `writes.py` |
+| T27 | anchor a 4-entry job, then delete entries after seq 2 | `verify` returns `ok=False, kind=TAIL_REMOVED, bad_seq=4`. The same deletion **without** an anchor returns `ok=True`, pinned as the contrast |
+| T28 | anchor a job, then rebuild its chain consistently under the same seqs | `verify` returns `ok=False, kind=ANCHOR_MISMATCH` — the case the walk alone reports clean |
+| T29 | a publisher that raises `PublishFailed`, then a working one | the anchor is recorded pending, `verify` still detects a removed tail offline, and the next `anchor_job` publishes it |
+| T30 | a payload containing a distinctive string, then publish | neither the `Anchor` nor the published body contains it — a digest and its position, never content |
+| T31 | `GithubAnchorPublisher.publish` with `grant=None` | raises `PublishFailed`, and the adapter is never touched — bypassing `writes.py` does not bypass the authority gate |
 
 Property that must hold across the suite: `grep -rn "INSERT INTO record_entries\|INSERT INTO
 record_heads" rqa/ --include=*.py` returns hits only inside `rqa/record/store.py`. No other module —
@@ -598,9 +738,18 @@ Accountable: RQA-BR-003, RQA-FR-012, RQA-NFR-022, RQA-NFR-028, RQA-NFR-032.
   without detection; tamper-evidence satisfies this check … This row does not require the underlying
   storage bytes to be physically unalterable; it requires that an unauthorised alteration, if made,
   cannot pass as authentic … does not defend against a compromised operator machine."* Served by the
-  hash chain plus the keyed HMAC on each keyed record entry (§5, §3.1) [ADR-F assumed]. `verify`
-  detects an internally consistent rewrite as `HMAC_MISMATCH`; an unkeyed segment is instead honestly
-  reported `unverifiable: no key`, never accepted as keyed-authentic. T1–T3 and T16 cover both paths.
+  hash chain over every entry (§5, §3.1), per
+  [ADR-0066](../../../../decisions/ADR-0066-rqa-record-chain-anchoring-without-a-key.md), which
+  superseded ADR-0063's additional keyed HMAC. The fit criterion is mechanism-free — tamper-evidence
+  is satisfied by *"a signed **or otherwise integrity-checked** record"* — and a hash chain is one, so
+  no requirement changed when the key was removed.
+
+  **The bound, stated rather than implied.** The chain detects accidental corruption, an interrupted
+  write, reordering, and any edit by an actor who does not recompute it. It does not detect an actor
+  who recomputes the whole chain, nor a removed tail. Both are ADR-0066's accepted position and
+  #2006's Security bullet 4 already places an actor controlling the operator's machine outside this
+  row's threat model. The externally anchored chain head (#2300) is what closes the remaining two
+  cases. T1–T3, T16 and T22 cover these paths, including T3 which pins the accepted gap.
 - **RQA-NFR-032** — *"The authoritative provenance record shall be written by the system itself; a
   harness's or model's self-reported identity is input the system records, not a write of its own."*
   Fit criterion: **"Every element … is constructed and committed by the system itself. A harness or
@@ -619,23 +768,18 @@ RQA-FR-007/RQA-FR-015/RQA-FR-020 (the `carry_over`/`judgement` kinds make reused
 inherited-check state inspectable, §6), RQA-FR-016 (the closed disposition-rendering table, §3.3
 step 4), RQA-FR-021/RQA-FR-038 (the `spend` kind's `measured` flag; a `transition` to `stopped` is
 recordable and resumable like any other, §6), RQA-NFR-006 (nothing here requires anything beyond one
-local SQLite file and one local keychain call), RQA-NFR-010 (`append`'s all-or-nothing transaction
+local SQLite file — ADR-0066 removed even the local keychain call), RQA-NFR-010 (`append`'s all-or-nothing transaction
 contract and `AppendFailed`'s uncaught propagation, §3.1, are exactly the "no partially authoritative
 outcome" mechanism U-DISPATCH-20/21 name).
 
-## Implementation amendments — #2272, #2280 and conformance F-1
+## Implementation amendments — #2280, #2299 and conformance F-1
 
-ADR-0063's 2026-09-15 platform amendment adds Linux Secret Service via
-`secret-tool`, alongside macOS Keychain. Both backends preserve the distinction
-between an absent item and a query that cannot establish absence. Linux needs
-`secret-tool` and an unlocked Secret Service session. The item is selected by
-`service rqa-record-hmac`; RQA never stores or generates it. Lookup failure
-with diagnostics and a locked matching item both refuse appends. The Linux
-lookup/search behavior follows the
-[libsecret implementation](https://github.com/GNOME/libsecret/blob/main/tool/secret-tool.c).
+ADR-0066 superseded #2272's platform credential-store amendment. The record
+has no key, `append` and `explain` take no keystore, and neither macOS Keychain
+nor Linux Secret Service is part of the runtime path. Historical keyed/HMAC
+columns remain readable migration data and do not require the former key.
 
-`explain` and `explain_job` accept an optional keyword-only `keystore`, allowing
-the composition root to provide the same keychain used for appends. When no
-plan exists, reconstruction reads policy/protocol pins from the last trusted
-snapshot entry. A tampered entry is excluded rather than used as a fallback.
-Legacy-only records do not claim that an HMAC was checked.
+When no plan exists, reconstruction reads policy/protocol pins from the last
+trusted snapshot entry. A tampered entry is excluded rather than used as a
+fallback. Legacy-only records make no claim beyond the integrity checks that
+can be performed on their migrated representation.
