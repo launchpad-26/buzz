@@ -153,7 +153,21 @@ def _build_parser() -> _ArgumentParser:
         "anchor",
         help="publish a job's record chain head so a removed tail becomes detectable",
     )
-    anchor_parser.add_argument("job_id", metavar="job-id")
+    anchor_parser.add_argument(
+        "anchor_target",
+        metavar="job-id|recover",
+        help="job id to publish, or 'recover' for external-anchor recovery",
+    )
+    anchor_parser.add_argument(
+        "recovery_job_id",
+        metavar="job-id",
+        nargs="?",
+        help="job id to recover after the literal 'recover'",
+    )
+    anchor_parser.add_argument(
+        "--publisher",
+        help="accepted GitHub login for anchor recovery; defaults to the job's stored capability proof",
+    )
 
     explain_parser = sub.add_parser(
         "explain", help="reconstruct an outcome from the record alone, offline"
@@ -273,17 +287,51 @@ def _cmd_anchor(args: argparse.Namespace, state_dir: Path) -> tuple[int, dict[st
     detects a crash-truncated log with no network at all. Anchoring must never be able
     to fail a review.
     """
+    job_id, recovery = _anchor_request(args)
     comp = build_composition(state_dir, repos=_configured_repos(state_dir))
     try:
-        outcome = anchor_job_for(comp, args.job_id)
+        outcome = anchor_job_for(
+            comp, job_id, publisher=args.publisher, recover=recovery
+        )
     except Exception:
         # A gate or record failure is not an anchor outcome.  Preserve the CLI's
         # atomic boundary rather than leaving an in-process caller with a partial
         # grant/attestation transaction after the error has been rendered.
         comp.connection.rollback()
         raise
-    comp.connection.commit()
-    return exitcodes.OK, {"outcome": "ok", "result": outcome}
+    if not recovery:
+        comp.connection.commit()
+        return exitcodes.OK, {"outcome": "ok", "result": outcome}
+
+    # Recovery is allowed to commit only the authenticated evidence imported for a
+    # FOUND result. Every other result is explicitly rolled back so a failed recovery
+    # cannot mutate the local state it is supposed to repair.
+    recovery_outcome = outcome.outcome
+    if recovery_outcome == "recovered":
+        comp.connection.commit()
+        return exitcodes.OK, {"outcome": recovery_outcome, "result": outcome}
+    comp.connection.rollback()
+    code = {
+        "none": exitcodes.INPUT_ERROR,
+        "unavailable": exitcodes.NETWORK,
+        "unauthenticated": exitcodes.AUTH,
+        "malformed": exitcodes.OTHER,
+        "conflict": exitcodes.OTHER,
+        "no_job": exitcodes.INPUT_ERROR,
+        "publisher_unavailable": exitcodes.INPUT_ERROR,
+    }.get(recovery_outcome, exitcodes.OTHER)
+    return code, {"outcome": recovery_outcome, "result": outcome}
+
+
+def _anchor_request(args: argparse.Namespace) -> tuple[str, bool]:
+    """Normalise the legacy publish form and explicit ``anchor recover`` form."""
+    if args.anchor_target == "recover":
+        if args.recovery_job_id is None:
+            raise _UsageError("anchor recover requires a job-id")
+        return args.recovery_job_id, True
+    if args.recovery_job_id is not None:
+        raise _UsageError("anchor accepts one job-id, or 'anchor recover <job-id>'")
+    return args.anchor_target, False
 
 
 def _cmd_explain(args: argparse.Namespace, state_dir: Path) -> tuple[int, dict[str, Any]]:
@@ -313,7 +361,8 @@ def main(argv: list[str] | None = None) -> int:
 
     try:
         state_dir = args.state_dir if args.state_dir is not None else _default_state_dir()
-        if args.command in {"status", "pending", "decide", "explain"}:
+        recovery = args.command == "anchor" and _anchor_request(args)[1]
+        if args.command in {"status", "pending", "decide", "explain"} or recovery:
             if not (state_dir / "state.db").exists():
                 raise _UsageError(f"no RQA state database at {state_dir}; check --state-dir or run tick to initialise it")
         if args.command == "onboard":

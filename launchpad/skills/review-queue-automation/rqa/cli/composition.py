@@ -49,6 +49,7 @@ from rqa import supply as supply_mod
 from rqa.authority import SqliteCapabilityStore
 from rqa.contracts import (
     Activity,
+    AnchorReadOutcome,
     Grant,
     Job,
     Plan,
@@ -61,6 +62,7 @@ from rqa.contracts import (
 )
 from rqa.escalation import SqliteEscalationStore
 from rqa.github import (
+    GithubAnchorReader,
     GithubAnchorPublisher,
     GithubAdapter,
     SqliteApiCallStore,
@@ -78,7 +80,13 @@ from rqa.intake import (
 from rqa.intake import ensure_schema as intake_ensure_schema
 from rqa.lifecycle import LifecycleDeps
 from rqa.policy import SnapshotStore, SqliteSnapshotStore
-from rqa.record import SQLiteRecordWriter, anchor_job
+from rqa.record import (
+    AnchorConflict,
+    SQLiteRecordWriter,
+    anchor_job,
+    recover_external_anchors,
+    verify,
+)
 from rqa.record.store import entries_for_job, head_entry, latest_anchor, pending_anchors
 from rqa.supply import (
     BreakerStore,
@@ -232,6 +240,24 @@ class AnchorOutcome:
     published: int
     pending: int
     detail: str | None
+    preflight: str | None = None
+
+
+@dataclass(frozen=True)
+class RecoveryOutcome:
+    """The explicit, non-publishing result of one external-anchor recovery.
+
+    ``outcome`` mirrors the closed ``AnchorReadOutcome`` vocabulary where the
+    source was reached.  A recovered anchor can truthfully report an integrity
+    failure: the recovery itself succeeded in restoring evidence, and the
+    offline comparison is what exposed the damaged local chain.
+    """
+
+    job_id: str
+    outcome: str
+    detail: str
+    publisher: str | None
+    integrity: str | None = None
 
 
 @dataclass
@@ -378,7 +404,13 @@ def build_composition(
         escalation_store=escalation_store,
         snapshot_store=snapshot_store,
     )
-def anchor_job_for(comp: "Composition", job_id: str) -> "AnchorOutcome":
+def anchor_job_for(
+    comp: "Composition",
+    job_id: str,
+    *,
+    publisher: str | None = None,
+    recover: bool = False,
+) -> "AnchorOutcome | RecoveryOutcome":
     """Publish this job's chain head where the reviewed agent cannot rewrite it.
 
     The current head and latest anchor are inspected before authority. A head that
@@ -394,6 +426,8 @@ def anchor_job_for(comp: "Composition", job_id: str) -> "AnchorOutcome":
     from rqa.contracts import Deny
 
     job = comp.jobs.get(job_id)
+    if recover:
+        return _recover_anchor_for(comp, job=job, job_id=job_id, publisher=publisher)
     if job is None:
         return AnchorOutcome(job_id=job_id, anchored_seq=None, published=0, pending=0,
                              detail="no such job")
@@ -442,14 +476,28 @@ def anchor_job_for(comp: "Composition", job_id: str) -> "AnchorOutcome":
                 pending=_pending_anchor_count(comp, job.id),
                 detail="not published: pending anchor has no recorded comment grant",
             )
-        publisher = GithubAnchorPublisher(adapter=comp.github, job=job, grant=grant)
-        result = anchor_job(comp.connection, job.id, publisher=publisher, clock=comp.clock)
+        expected_publisher = _publisher_for(comp, job=job, requested=publisher)
+        preflight = _preflight_external_anchors(
+            comp, job=job, publisher=expected_publisher
+        )
+        if preflight.blocked:
+            return AnchorOutcome(
+                job_id=job.id,
+                anchored_seq=None,
+                published=0,
+                pending=_pending_anchor_count(comp, job.id),
+                detail=preflight.detail,
+                preflight=preflight.outcome,
+            )
+        publisher_client = GithubAnchorPublisher(adapter=comp.github, job=job, grant=grant)
+        result = anchor_job(comp.connection, job.id, publisher=publisher_client, clock=comp.clock)
         return AnchorOutcome(
             job_id=job.id,
             anchored_seq=result.anchored_seq,
             published=result.published,
             pending=result.pending,
             detail=result.failures[0] if result.failures else None,
+            preflight=preflight.outcome,
         )
 
     answer = comp.authority.grant(
@@ -475,15 +523,139 @@ def anchor_job_for(comp: "Composition", job_id: str) -> "AnchorOutcome":
             detail=f"not published: {reason}",
         )
 
-    publisher = GithubAnchorPublisher(adapter=comp.github, job=job, grant=answer)
-    result = anchor_job(comp.connection, job.id, publisher=publisher, clock=comp.clock)
+    expected_publisher = _publisher_for(comp, job=job, requested=publisher)
+    preflight = _preflight_external_anchors(comp, job=job, publisher=expected_publisher)
+    if preflight.blocked:
+        return AnchorOutcome(
+            job_id=job.id,
+            anchored_seq=None,
+            published=0,
+            pending=_pending_anchor_count(comp, job.id),
+            detail=preflight.detail,
+            preflight=preflight.outcome,
+        )
+
+    publisher_client = GithubAnchorPublisher(adapter=comp.github, job=job, grant=answer)
+    result = anchor_job(comp.connection, job.id, publisher=publisher_client, clock=comp.clock)
     return AnchorOutcome(
         job_id=job.id,
         anchored_seq=result.anchored_seq,
         published=result.published,
         pending=result.pending,
         detail=result.failures[0] if result.failures else None,
+        preflight=preflight.outcome,
     )
+
+
+@dataclass(frozen=True)
+class _Preflight:
+    outcome: str | None
+    detail: str | None
+    blocked: bool
+
+
+def _recover_anchor_for(
+    comp: "Composition", *, job: Job | None, job_id: str, publisher: str | None
+) -> RecoveryOutcome:
+    """Read and import evidence only; recovery never constructs a publisher."""
+    if job is None:
+        return RecoveryOutcome(job_id=job_id, outcome="no_job", detail="no such job", publisher=None)
+
+    expected_publisher = _publisher_for(comp, job=job, requested=publisher)
+    if expected_publisher is None:
+        return RecoveryOutcome(
+            job_id=job.id,
+            outcome="publisher_unavailable",
+            detail="no authenticated anchor publisher is available; pass --publisher",
+            publisher=None,
+        )
+
+    preflight = _read_external_anchors(comp, job=job, publisher=expected_publisher)
+    if preflight.outcome != AnchorReadOutcome.FOUND.value:
+        return RecoveryOutcome(
+            job_id=job.id,
+            outcome=preflight.outcome or "malformed",
+            detail=preflight.detail or "external anchor recovery failed",
+            publisher=expected_publisher,
+        )
+
+    verified = verify(comp.connection, job.id)
+    integrity = "verified" if verified.ok else f"integrity_failure:{verified.kind.value}"
+    return RecoveryOutcome(
+        job_id=job.id,
+        outcome="recovered",
+        detail=preflight.detail or "trusted anchor recovered",
+        publisher=expected_publisher,
+        integrity=integrity,
+    )
+
+
+def _preflight_external_anchors(
+    comp: "Composition", *, job: Job, publisher: str | None
+) -> _Preflight:
+    """Import and compare trusted external evidence before an external write.
+
+    A missing, unavailable, or unauthenticated source does not block publication:
+    ADR-0066 makes anchoring best effort.  Malformed or conflicting accepted evidence,
+    and a local chain that disagrees with found evidence, do block it fail-closed.
+    Test doubles predating recovery may not expose an authenticated publisher; they
+    remain publication-only doubles and cannot exercise this preflight.
+    """
+    if publisher is None:
+        return _Preflight(None, None, False)
+    result = _read_external_anchors(comp, job=job, publisher=publisher)
+    if result.outcome in {
+        AnchorReadOutcome.CONFLICT.value,
+        AnchorReadOutcome.MALFORMED.value,
+    }:
+        return _Preflight(result.outcome, f"not published: {result.detail}", True)
+    if result.outcome != AnchorReadOutcome.FOUND.value:
+        return result
+
+    checked = verify(comp.connection, job.id)
+    if not checked.ok:
+        kind = checked.kind.value if checked.kind is not None else "integrity_failure"
+        return _Preflight(
+            "integrity_failure",
+            f"not published: external anchor disagrees with local record ({kind})",
+            True,
+        )
+    return result
+
+
+def _read_external_anchors(
+    comp: "Composition", *, job: Job, publisher: str
+) -> _Preflight:
+    """Delegate fetch, authentication, parsing, and import to E-27's reader/source."""
+    try:
+        read = recover_external_anchors(
+            comp.connection,
+            source=GithubAnchorReader(adapter=comp.github),
+            repo=job.repo,
+            number=job.number,
+            job_id=job.id,
+            publisher=publisher,
+        )
+    except AnchorConflict as exc:
+        return _Preflight(AnchorReadOutcome.CONFLICT.value, str(exc), True)
+    return _Preflight(read.outcome.value, read.detail, False)
+
+
+def _publisher_for(comp: "Composition", *, job: Job, requested: str | None) -> str | None:
+    """Use an explicit accepted publisher, or the job's stored capability proof.
+
+    The proof is produced by the same authority grant that authorises the anchor
+    publication, so its login is the authenticated GitHub identity to which the
+    reader binds recovery.  It is a read-only lookup and therefore safe on recovery.
+    """
+    if requested is not None:
+        return requested
+    current = getattr(getattr(comp.authority, "store", None), "current", None)
+    if current is None:
+        return None
+    proof = current(job.repo, job.id)
+    login = getattr(proof, "login", None)
+    return login if isinstance(login, str) and login else None
 
 
 def _anchor_snapshot_for(comp: "Composition", job: Job) -> tuple[Snapshot | None, str | None]:
