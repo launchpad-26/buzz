@@ -11,8 +11,8 @@ append-only, hash-chained record per job — inside the same transaction as the 
 and reconstruct any authoritative outcome from that record alone, contacting neither GitHub nor a
 model.
 
-**Depends on.** ADR-F ([#2159](https://github.com/launchpad-26/buzz/issues/2159), assumed) for
-provenance integrity. It consumes no other part implementation or store.
+**Depends on.** ADR-0066 ([#2298](https://github.com/launchpad-26/buzz/issues/2298)) for
+keyless provenance integrity and external anchoring. It consumes no other part implementation or store.
 
 ## 1. Modules
 
@@ -24,7 +24,7 @@ rqa/record/
                  explain_job, resolve_job, ResolvedJob, NoRecord, AmbiguousHead, Explanation,
                  ExplanationUnavailable, ReuseResolutionError, migrate_legacy, MigrationSummary,
                  MigrationTableResult, LegacySource, SQLiteRecordWriter, SQLiteRecordReader,
-                 OSKeyStore, append_trace
+                 Anchor, AnchorPublisher, AnchorResult, anchor_job, append_trace
   kinds.py       ENTRY_KINDS: the closed fourteen-kind set (§6)
   hashing.py     canonical_json(); compute_hash(); genesis and "legacy" prev_hash sentinels
   store.py       record_entries/record_heads DDL; serialization; ordered row reads
@@ -376,6 +376,12 @@ network at all, which is what keeps `explain` offline — the parent feature is 
 *and offline explanation*". `destination` stays NULL until a publish succeeds, which makes a failed
 publish a recorded, retryable fact rather than a silently dropped one.
 
+**Publication boundary.** P-09 posts the digest-only body as a pull-request review using the
+operator's authenticated GitHub identity, after the pinned per-job external-send decision and comment
+grant are recorded. Reviewed content never supplies that credential or publisher identity; explicit
+recovery accepts only matching repository, PR, marker grammar and publisher. That boundary is why the
+reviewed agent cannot rewrite an anchor through this path.
+
 The two strengths are deliberately different, and the documentation should not blur them:
 
 | What happened | Detected offline? |
@@ -441,8 +447,8 @@ P-12 calls no other RQA part. Its one cross-boundary dependency is **E-27**:
 rewrite it (§3.4), while `AnchorSource.read(repo, number, job_id, publisher) -> AnchorRead` is used
 only by explicit online recovery (§3.5). P-12 itself remains offline between recoveries.
 
-**E-25 was retired by [ADR-0066](../../../../decisions/ADR-0066-rqa-record-chain-anchoring-without-a-key.md).**
-Until then P-12's sole cross-boundary dependency was `KeyStore.read(name) -> bytes | None`, the
+**Historical — E-25 was retired by [ADR-0066](../../../../decisions/ADR-0066-rqa-record-chain-anchoring-without-a-key.md).**
+Before ADR-0066 P-12's sole cross-boundary dependency was `KeyStore.read(name) -> bytes | None`, the
 operator-held HMAC key read from the platform credential store. ADR-0066 removed the key: it defended
 an actor already outside #2006's stated trust boundary — RQA had to read the key on every append, so
 anything running as the operator could read it too — while costing a separate credential integration
@@ -490,6 +496,24 @@ CREATE TABLE record_anchors (
   UNIQUE (job, seq)
 );
 CREATE INDEX record_anchors_by_job ON record_anchors(job, seq);
+```
+
+```sql
+-- Authenticated evidence recovered from the external destination. It carries an
+-- immutable source locator and never stores a record payload or participates in
+-- the hash chain.
+CREATE TABLE record_anchor_evidence (
+  job       TEXT NOT NULL,
+  seq       INTEGER NOT NULL,
+  hash      TEXT NOT NULL,
+  at        TEXT NOT NULL,
+  repo      TEXT NOT NULL,
+  number    INTEGER NOT NULL,
+  publisher TEXT NOT NULL,
+  locator   TEXT NOT NULL UNIQUE,
+  UNIQUE (job, seq, hash, locator)
+);
+CREATE INDEX record_anchor_evidence_by_job ON record_anchor_evidence(job, seq);
 ```
 
 **`destination IS NULL` is load-bearing.** It is what makes a failed publish a recorded, retryable
@@ -623,7 +647,7 @@ for an operator's or a future tool's inspection, never for a trust decision.
 - Does not retain, purge, compact, or vacuum anything; U-DISPATCH-06 is binned and no such path
   exists (§5).
 - Does not read, generate, rotate, or write any key, and does not touch a credential store on any
-  platform. ADR-0066 retired the operator-held HMAC key that ADR-F and ADR-0063 introduced.
+  platform. **Historical:** ADR-0066 retired the operator-held HMAC key that ADR-F and ADR-0063 introduced.
 - Does not contact GitHub, invoke a harness, or invoke a model anywhere in this package. Anchoring
   (§3.4) reaches its destination through an injected `AnchorPublisher`; the GitHub implementation of
   that port lives in `rqa/github/anchor_publisher.py`, on P-09's side of the seam, so nothing in

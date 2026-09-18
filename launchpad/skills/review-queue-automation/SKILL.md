@@ -121,12 +121,17 @@ published anchor evidence after local anchor rows are lost.
 
 ```bash
 python3 -m rqa.cli anchor <job-id>
+python3 -m rqa.cli anchor --all
 python3 -m rqa.cli anchor recover <job-id> [--publisher <GitHub-login>]
 ```
 
 Normal anchoring records the head locally before publishing it. A publication
 failure leaves that anchor pending, never blocks a review, and is retried by a
-later anchor run. `verify` and `explain` remain offline: recovery is the only
+later anchor run. `anchor --all` is the OS-timer entry point: it sweeps every
+newer head and pending publication independently. Before publication, RQA records
+the pinned policy's external-send decision (including its per-change deny label)
+and the comment grant. The guarantee is complete **as at the latest successful
+anchor**; newer entries are unattested. `verify` and `explain` remain offline: recovery is the only
 operation that reads the external destination, and it persists only matching
 anchor position/digest/provenance — never record content and never a new record
 entry. A recovery result other than `recovered` changes no local state.

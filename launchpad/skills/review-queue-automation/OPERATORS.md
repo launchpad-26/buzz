@@ -221,7 +221,7 @@ unclosed residual (RQA-NFR-030) — not something `rqa` can narrow.
 record entry is chained to the one before it, so an edit, a reordering, an
 interrupted write, or an accidental corruption is detected. **You hold no
 secret and there is nothing to lose or rotate.** ADR-0066 superseded ADR-0063,
-which additionally authenticated each entry with an operator-held HMAC key
+**Historical:** ADR-0063 additionally authenticated each entry with an operator-held HMAC key
 from the OS keychain: that key had to be readable by `rqa` on every append, so
 anything running as you could read it too, and it cost a separate credential
 integration per platform.

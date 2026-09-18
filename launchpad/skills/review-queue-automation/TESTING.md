@@ -29,6 +29,13 @@ it is labelled a counterfactual everywhere it appears and contributes to no verd
 Parts 2 and 3 conform to the re-run contract defined in [§3](#3-the-re-run-contract).
 They do not rewrite Part 1; later evidence annotates or supersedes its conclusions.
 
+> **Current implementation validation (2026-09-18, separate from the historical Part 1 capture).**
+> `python3 -m pytest tests --collect-only -qq` collected **1528 tests**. The final
+> #2299/#2300 focused command ran 172 tests, and `architecture/validate.py`,
+> `requirements/validate.py`, and `tests/test_cutover_map.py` passed. The all-at-once
+> pytest and dependency-free runner did not emit a final summary within this execution
+> environment's time window, so this document does not claim they passed.
+
 ---
 
 ## 1. Front matter — where and when this run happened
@@ -215,7 +222,7 @@ and against rule 2. Result:
 - **Seven captures name no job id because none applies**, and each now says so
   explicitly rather than leaving the field silently absent: 01 and 12 run no RQA
   command at all; 02 (`onboard`) writes a config file and no record row; 04
-  (`status`), 06 (`explain`) and 09 are read-only; 13 probes `OSKeyStore` in-process
+  (`status`), 06 (`explain`) and 09 are read-only; **historical** capture 13 probes `OSKeyStore` in-process
   with no append attempted. "Not applicable, because nothing touched the record" is a
   value this field can take; "absent" is not.
 - **Five captures already conformed**: 03, 05, 07, 08 and F-2's enumeration block,
@@ -947,9 +954,9 @@ not sufficient**. A second, independent defect sits immediately behind it, and i
 not confined to `REVIEW` — **all six** of RQA's activities are ungrantable for the
 same structural reason. See Finding F-2.
 
-### 7.2 #2272 — the record was appended but not keyed
+### 7.2 Historical capture — #2272: the record was appended but not keyed
 
-All 55 rows: `keyed=0`, `hmac=NULL` (§6.7). `explain` reports this itself rather than
+**Historical at commit `b9c98f423`; superseded by ADR-0066 / #2299.** All 55 rows: `keyed=0`, `hmac=NULL` (§6.7). `explain` reported this itself rather than
 hiding it: `verified: false`, `hmac_checked: false`,
 `unverifiable: [{"reason": "no key", …}]` (§6.2).
 
